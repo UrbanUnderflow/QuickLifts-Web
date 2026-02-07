@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Calendar, ChevronDown, Users, Clock, Flag, Share2, Map as MapIcon, Flame, Target, TrendingUp } from 'lucide-react';
 import { SweatlistCollection, SweatlistIdentifiers } from '../../api/firebase/workout/types';
-import { 
-  ChallengeStatus, 
-  UserChallenge, 
-  Challenge, 
+import {
+  ChallengeStatus,
+  UserChallenge,
+  Challenge,
   ChallengeType,
   RunRoundTypeInfo,
   RunLeaderboardMetricInfo
@@ -13,6 +13,7 @@ import { StackCard, RestDayCard } from '../../components/Rounds/StackCard';
 import { Workout, WorkoutStatus, BodyZone } from '../../api/firebase/workout/types';
 import { Exercise, ExerciseReference } from '../../api/firebase/exercise/types';
 import ParticipantsSection from '../../components/Rounds/ParticipantsSection';
+import RunRoundLeaderboard from '../../components/Rounds/RunRoundLeaderboard';
 import RoundChatView from '../../components/Rounds/RoundChatView';
 import { GroupMessage, MessageMediaType } from '../../api/firebase/chat/types';
 import { workoutService } from '../../api/firebase/workout/service';
@@ -33,7 +34,7 @@ const ChallengeDetailView = () => {
   const router = useRouter();
   const { id } = router.query;
   const dispatch = useDispatch();
-  
+
   const [collection, setCollection] = useState<SweatlistCollection | null>(null);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +73,7 @@ const ChallengeDetailView = () => {
         }
       }
     };
-    
+
     fetchMessages();
     const unsubscribe = setupRealtimeUpdates();
     return () => unsubscribe();
@@ -112,12 +113,12 @@ const ChallengeDetailView = () => {
           }
         }
 
-        console.log("[ChallengeDetailView] Final collection data:", {...collectionData});
+        console.log("[ChallengeDetailView] Final collection data:", { ...collectionData });
         if (!collectionData || !collectionData.challenge) {
           console.error('[ChallengeDetailView] Invalid challenge data received');
           throw new Error('Invalid challenge data received');
         }
-        
+
         setCollection(collectionData);
 
         // Wrap fetchWorkouts in its own try...catch
@@ -156,7 +157,7 @@ const ChallengeDetailView = () => {
       fetchData();
     }
     return () => {
-        dispatch(hideLoader());
+      dispatch(hideLoader());
     };
   }, [id, router.isReady, dispatch]);
 
@@ -166,9 +167,9 @@ const ChallengeDetailView = () => {
       calculateUnread(newMessages);
     });
   };
-  
+
   const calculateUnread = (messages: GroupMessage[]) => {
-    const count = messages.filter(msg => 
+    const count = messages.filter(msg =>
       !msg.readBy[currentUser?.id || '']
     ).length;
     setUnreadCount(count);
@@ -208,9 +209,9 @@ const ChallengeDetailView = () => {
   const fetchWorkouts = async (collectionData: SweatlistCollection) => {
     console.log('[ChallengeDetailView] fetchWorkouts optimized starting with video mapping');
     if (!collectionData || !collectionData.sweatlistIds || collectionData.sweatlistIds.length === 0) {
-        setWorkouts([]);
-        console.log('[ChallengeDetailView] No sweatlist IDs found.');
-        return;
+      setWorkouts([]);
+      console.log('[ChallengeDetailView] No sweatlist IDs found.');
+      return;
     }
 
     // --- Step 2: Fetch all exercise videos --- 
@@ -222,7 +223,7 @@ const ChallengeDetailView = () => {
     } catch (videoError) {
       console.error('[ChallengeDetailView] Error fetching exercise videos:', videoError);
       // Decide how to proceed - maybe show workouts without videos or show error
-      setError('Failed to load exercise video data.'); 
+      setError('Failed to load exercise video data.');
     }
     // ----------------------------------------
 
@@ -231,42 +232,42 @@ const ChallengeDetailView = () => {
 
     // 1. Separate IDs and identify rest days
     collectionData.sweatlistIds.forEach((idInfo, index) => {
-        const name = idInfo.sweatlistName || (idInfo as any).id;
-        const id = idInfo.id;
-        if (name === "Rest" || id === "rest") {
-            restDayPlaceholders.push({ index, idInfo });
-        } else if (id && id !== "rest") {
-            workoutIdsToFetch.push(id);
-        }
+      const name = idInfo.sweatlistName || (idInfo as any).id;
+      const id = idInfo.id;
+      if (name === "Rest" || id === "rest") {
+        restDayPlaceholders.push({ index, idInfo });
+      } else if (id && id !== "rest") {
+        workoutIdsToFetch.push(id);
+      }
     });
 
     // 3. Batch IDs and Fetch Workouts from 'stacks'
     const MAX_IN_QUERY_SIZE = 30;
     const fetchedDocsData: any[] = [];
     for (let i = 0; i < workoutIdsToFetch.length; i += MAX_IN_QUERY_SIZE) {
-        const chunkOfIds = workoutIdsToFetch.slice(i, i + MAX_IN_QUERY_SIZE);
-        if (chunkOfIds.length > 0) {
-            try {
-                const stacksCollectionRef = firestoreCollection(db, 'stacks'); 
-                const q = query(stacksCollectionRef, where(documentId(), 'in', chunkOfIds));
-                const snapshot = await getDocs(q);
-                snapshot.docs.forEach(doc => fetchedDocsData.push({ id: doc.id, ...doc.data() }));
-            } catch (batchError) {
-                console.error(`[ChallengeDetailView] Error fetching workout batch:`, batchError);
-                setError(`Failed to fetch some workouts.`);
-            }
+      const chunkOfIds = workoutIdsToFetch.slice(i, i + MAX_IN_QUERY_SIZE);
+      if (chunkOfIds.length > 0) {
+        try {
+          const stacksCollectionRef = firestoreCollection(db, 'stacks');
+          const q = query(stacksCollectionRef, where(documentId(), 'in', chunkOfIds));
+          const snapshot = await getDocs(q);
+          snapshot.docs.forEach(doc => fetchedDocsData.push({ id: doc.id, ...doc.data() }));
+        } catch (batchError) {
+          console.error(`[ChallengeDetailView] Error fetching workout batch:`, batchError);
+          setError(`Failed to fetch some workouts.`);
         }
+      }
     }
 
     // 4. Instantiate Initial Workouts
     const fetchedWorkoutsMap: Map<string, Workout> = new Map();
     fetchedDocsData.forEach(data => {
-        try {
-            const workoutInstance = new Workout(data);
-            fetchedWorkoutsMap.set(data.id, workoutInstance);
-        } catch (instantiationError) {
-             console.error(`[ChallengeDetailView] Error instantiating workout ${data.id}:`, instantiationError);
-        }
+      try {
+        const workoutInstance = new Workout(data);
+        fetchedWorkoutsMap.set(data.id, workoutInstance);
+      } catch (instantiationError) {
+        console.error(`[ChallengeDetailView] Error instantiating workout ${data.id}:`, instantiationError);
+      }
     });
 
     // --- Step 5: Map Videos to Exercises in each Fetched Workout --- 
@@ -289,10 +290,10 @@ const ChallengeDetailView = () => {
           });
 
           // Return a new ExerciseReference with the updated Exercise instance
-          return new ExerciseReference({ 
-              ...exerciseRef, // Keep original groupId etc.
-              exercise: exerciseWithVideos 
-          }); 
+          return new ExerciseReference({
+            ...exerciseRef, // Keep original groupId etc.
+            exercise: exerciseWithVideos
+          });
         });
       }
     });
@@ -301,35 +302,35 @@ const ChallengeDetailView = () => {
 
     // 6 & 7. Combine Fetched (with videos), Rest Days, Handle Missing
     const finalWorkouts: Workout[] = collectionData.sweatlistIds.map((idInfo, index) => {
-        const name = idInfo.sweatlistName || (idInfo as any).id;
-        const id = idInfo.id;
+      const name = idInfo.sweatlistName || (idInfo as any).id;
+      const id = idInfo.id;
 
-        if (name === "Rest" || id === "rest") {
-            // Create rest workout placeholder
-            return new Workout({
-                id: "rest", roundWorkoutId: `rest-${index}`,
-                title: "Rest Day", description: "Recovery day",
-                author: idInfo.sweatlistAuthorId || currentUser?.id || '',
-                exercises: [], logs: [], duration: 0, useAuthorContent: true, isCompleted: false,
-                workoutStatus: WorkoutStatus.QueuedUp, createdAt: new Date(), updatedAt: new Date(),
-                zone: BodyZone.FullBody, order: index
-            });
-        } else if (id && fetchedWorkoutsMap.has(id)) {
-            // Get the workout instance (which now has videos mapped)
-            const workoutWithVideos = fetchedWorkoutsMap.get(id)!;
-            // Ensure order is preserved/added correctly
-            const workoutDataForConstructor = { ...workoutWithVideos, order: index }; 
-            return new Workout(workoutDataForConstructor);
-        } else {
-            console.warn(`[ChallengeDetailView] Workout data not found for ID: ${id}. Rendering placeholder.`);
-            return new Workout({ 
-                 id: id || `missing-${index}`, title: "Workout Not Found", order: index, 
-                 author: idInfo.sweatlistAuthorId || currentUser?.id || '', 
-                 exercises: [], logs: [], duration: 0, useAuthorContent: false, isCompleted: false,
-                 workoutStatus: WorkoutStatus.Archived, createdAt: new Date(), updatedAt: new Date(),
-                 zone: BodyZone.FullBody
-             });
-        }
+      if (name === "Rest" || id === "rest") {
+        // Create rest workout placeholder
+        return new Workout({
+          id: "rest", roundWorkoutId: `rest-${index}`,
+          title: "Rest Day", description: "Recovery day",
+          author: idInfo.sweatlistAuthorId || currentUser?.id || '',
+          exercises: [], logs: [], duration: 0, useAuthorContent: true, isCompleted: false,
+          workoutStatus: WorkoutStatus.QueuedUp, createdAt: new Date(), updatedAt: new Date(),
+          zone: BodyZone.FullBody, order: index
+        });
+      } else if (id && fetchedWorkoutsMap.has(id)) {
+        // Get the workout instance (which now has videos mapped)
+        const workoutWithVideos = fetchedWorkoutsMap.get(id)!;
+        // Ensure order is preserved/added correctly
+        const workoutDataForConstructor = { ...workoutWithVideos, order: index };
+        return new Workout(workoutDataForConstructor);
+      } else {
+        console.warn(`[ChallengeDetailView] Workout data not found for ID: ${id}. Rendering placeholder.`);
+        return new Workout({
+          id: id || `missing-${index}`, title: "Workout Not Found", order: index,
+          author: idInfo.sweatlistAuthorId || currentUser?.id || '',
+          exercises: [], logs: [], duration: 0, useAuthorContent: false, isCompleted: false,
+          workoutStatus: WorkoutStatus.Archived, createdAt: new Date(), updatedAt: new Date(),
+          zone: BodyZone.FullBody
+        });
+      }
     }).filter((w): w is Workout => w !== null);
 
     // 8. Update State
@@ -339,10 +340,10 @@ const ChallengeDetailView = () => {
 
   const formatDate = (date: Date | string | number): string => {
     // If it's a timestamp (number), convert to milliseconds if needed
-    const dateObj = typeof date === 'number' 
+    const dateObj = typeof date === 'number'
       ? new Date(date * 1000) // Convert seconds to milliseconds
       : new Date(date);
-  
+
     return dateObj.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric'
@@ -351,25 +352,25 @@ const ChallengeDetailView = () => {
 
   const calculateProgress = (): number => {
     if (!collection?.challenge?.startDate || !collection?.challenge?.endDate) return 0;
-    
+
     const start = new Date(collection.challenge.startDate);
     const end = new Date(collection.challenge.endDate);
     const now = new Date();
     const totalDuration = end.getTime() - start.getTime();
     const elapsed = now.getTime() - start.getTime();
-    
+
     return Math.min(Math.max(elapsed / totalDuration, 0), 1);
   };
-  
+
   // And update the daysInfo calculation too
   // Then use it for daysInfo calculation
   const calculateDays = () => {
     if (!collection?.challenge?.startDate || !collection?.challenge?.endDate) return null;
-  
+
     const start = new Date(collection.challenge.startDate);
     const end = new Date(collection.challenge.endDate);
     const now = new Date();
-  
+
     if (now < start) {
       const days = Math.ceil((start.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       return { type: 'until-start', days };
@@ -411,7 +412,7 @@ const ChallengeDetailView = () => {
 
   const handleSendMessage = async (message: string, image?: File) => {
     if (!collection?.challenge?.id || !currentUser) return;
-  
+
     try {
       let mediaUrl: string | null = null;
       if (image) {
@@ -421,7 +422,7 @@ const ChallengeDetailView = () => {
           return; // Or handle this case as appropriate for your app
         }
       }
-  
+
       const messageData: Omit<GroupMessage, 'id'> = {
         sender: currentUser.toShortUser(),
         content: message,
@@ -432,7 +433,7 @@ const ChallengeDetailView = () => {
         checkinId: null,
         gymName: null
       };
-  
+
       await ChatService.getInstance().sendMessage(collection.challenge.id, messageData);
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -449,7 +450,7 @@ const ChallengeDetailView = () => {
       dispatch(showToast({ message: "Cannot generate share link: Challenge data not loaded.", type: 'error' }));
       return;
     }
-    
+
     // Find the current user's challenge data from the state array
     const currentUserChallenge = userChallenges?.find(uc => uc.userId === currentUser.id);
     console.log('[ChallengeDetailView] currentUserChallenge', currentUserChallenge);
@@ -471,17 +472,17 @@ const ChallengeDetailView = () => {
         console.log("Attempting to award first share bonus points...");
         // Deep copy for immutability
         const updatedChallengeData = JSON.parse(JSON.stringify(currentUserChallenge.toDictionary()));
-        
+
         // --- Explicitly set the ID ---
         if (currentUserChallenge.id && !updatedChallengeData.id) {
-           updatedChallengeData.id = currentUserChallenge.id;
-           console.log(`[Share Points] Copied ID from original userChallenge: ${updatedChallengeData.id}`);
+          updatedChallengeData.id = currentUserChallenge.id;
+          console.log(`[Share Points] Copied ID from original userChallenge: ${updatedChallengeData.id}`);
         } else if (!currentUserChallenge.id) {
-           console.error("[Share Points] Original userChallenge object is missing its ID!");
-           throw new Error("Original user challenge data is missing ID."); // Throw to prevent update attempt
+          console.error("[Share Points] Original userChallenge object is missing its ID!");
+          throw new Error("Original user challenge data is missing ID."); // Throw to prevent update attempt
         } else if (updatedChallengeData.id !== currentUserChallenge.id) {
-           console.warn("[Share Points] Mismatch between original ID and ID after JSON processing. Using original.");
-           updatedChallengeData.id = currentUserChallenge.id;
+          console.warn("[Share Points] Mismatch between original ID and ID after JSON processing. Using original.");
+          updatedChallengeData.id = currentUserChallenge.id;
         }
         // -----------------------------
 
@@ -500,13 +501,13 @@ const ChallengeDetailView = () => {
         } else {
           // --- Update in Firestore ---
           await workoutService.updateUserChallenge(challengeToUpdate);
-          
+
           // --- Update local state array immutably --- 
-          setUserChallenges(prevChallenges => 
+          setUserChallenges(prevChallenges =>
             prevChallenges
-              ? prevChallenges.map(p => 
-                  p.id === challengeToUpdate.id ? challengeToUpdate : p
-                )
+              ? prevChallenges.map(p =>
+                p.id === challengeToUpdate.id ? challengeToUpdate : p
+              )
               : null // Keep it null if it was null
           );
           console.log("[Share Points] Updated userChallenges state with points.");
@@ -541,21 +542,21 @@ const ChallengeDetailView = () => {
         // Copy to clipboard
         try {
           await navigator.clipboard.writeText(generatedUrl);
-          
+
           // Show success feedback (if points weren't already awarded)
           if (!awardedPoints) {
-             dispatch(showToast({ message: "Link copied to clipboard! Ready to paste.", type: 'success' })); 
+            dispatch(showToast({ message: "Link copied to clipboard! Ready to paste.", type: 'success' }));
           }
         } catch (clipboardError) {
-            console.error('Clipboard write failed:', clipboardError);
-            const manualCopyMsg = `Please copy this link manually:\n\n${generatedUrl}`;
-            if (clipboardError instanceof DOMException && clipboardError.name === 'NotAllowedError') {
-              dispatch(showToast({ message: `Copy failed (permission denied). ${manualCopyMsg}`, type: 'warning', duration: 6000 }));
-            } else {
-              dispatch(showToast({ message: `Copy failed. ${manualCopyMsg}`, type: 'warning', duration: 6000 }));
-            }
+          console.error('Clipboard write failed:', clipboardError);
+          const manualCopyMsg = `Please copy this link manually:\n\n${generatedUrl}`;
+          if (clipboardError instanceof DOMException && clipboardError.name === 'NotAllowedError') {
+            dispatch(showToast({ message: `Copy failed (permission denied). ${manualCopyMsg}`, type: 'warning', duration: 6000 }));
+          } else {
+            dispatch(showToast({ message: `Copy failed. ${manualCopyMsg}`, type: 'warning', duration: 6000 }));
+          }
         }
-        
+
       } else {
         // Handle case where link generation failed
         console.error('Share link generation returned null.');
@@ -573,7 +574,7 @@ const ChallengeDetailView = () => {
   const generateRoundWorkoutId = (workoutId: string, index: number, isRestDay: boolean = false): string => {
     const isCohort = collection?.challenge?.id !== collection?.challenge?.originalId;
     const cohortId = collection?.id;
-    
+
     if (isRestDay) {
       // Rest day format from iOS code
       return isCohort ? `rest-${cohortId}-${index}` : `rest-${index}`;
@@ -585,8 +586,8 @@ const ChallengeDetailView = () => {
 
   // Helper function to safely get user challenge
   const getUserChallenge = () => {
-    return userChallenges && currentUser?.id 
-      ? userChallenges.find(uc => uc.userId === currentUser.id) 
+    return userChallenges && currentUser?.id
+      ? userChallenges.find(uc => uc.userId === currentUser.id)
       : undefined;
   };
 
@@ -599,40 +600,40 @@ const ChallengeDetailView = () => {
   const getCompletedStacksCount = (): number => {
     const userChallenge = getUserChallenge();
     if (!userChallenge) return 0;
-    
+
     return userChallenge.completedWorkouts?.length || 0;
   };
-  
+
   const getMissedStacksCount = (): number => {
     if (!collection?.challenge?.startDate || !workouts.length) return 0;
-    
+
     const userChallenge = getUserChallenge();
     if (!userChallenge) return 0;
-    
+
     const startDate = new Date(collection.challenge.startDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     startDate.setHours(0, 0, 0, 0);
-    
+
     // Days since start (excluding today)
     const daysSinceStart = Math.floor((today.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
     if (daysSinceStart <= 0) return 0;
-    
+
     // Check workouts that should have been completed by now (excluding rest days)
     let missedCount = 0;
     for (let i = 0; i < Math.min(daysSinceStart, workouts.length); i++) {
       const workout = workouts[i];
       if (workout.title.toLowerCase() === 'rest') continue;
-      
+
       const expectedId = generateRoundWorkoutId(workout.id, i);
       const isCompleted = userChallenge.completedWorkouts?.some(cw => cw.workoutId === expectedId) ?? false;
-      
+
       if (!isCompleted) missedCount++;
     }
-    
+
     return missedCount;
   };
-  
+
   const computeCurrentStreak = (): number => {
     const userChallenge = getUserChallenge();
     // Use workouts array directly, ensure challenge dates are valid
@@ -689,22 +690,22 @@ const ChallengeDetailView = () => {
       return 0;
     }
   };
-  
+
   const computeLongestStreak = (): number => {
     const userChallenge = getUserChallenge();
     if (!userChallenge || !workouts.length) return 0;
-    
+
     let currentStreak = 0;
     let longestStreak = 0;
-    
+
     for (let i = 0; i < workouts.length; i++) {
       const workout = workouts[i];
       const expectedId = generateRoundWorkoutId(workout.id, i);
-      
+
       // Rest days or completed workouts maintain streak
       const isRestDay = workout.title.toLowerCase() === 'rest';
       const isCompleted = userChallenge.completedWorkouts?.some(cw => cw.workoutId === expectedId) ?? false;
-      
+
       if (isRestDay || isCompleted) {
         currentStreak++;
         longestStreak = Math.max(longestStreak, currentStreak);
@@ -712,25 +713,25 @@ const ChallengeDetailView = () => {
         currentStreak = 0;
       }
     }
-    
+
     return longestStreak;
   };
-  
+
   const getRankInLeaderboard = (): number => {
     if (!userChallenges || userChallenges.length === 0) return 0;
-    
+
     const userChallenge = getUserChallenge();
     if (!userChallenge) return 0;
-    
+
     // Sort users by points in descending order
-    const sortedUsers = [...userChallenges].sort((a, b) => 
+    const sortedUsers = [...userChallenges].sort((a, b) =>
       (b.pulsePoints?.totalPoints || 0) - (a.pulsePoints?.totalPoints || 0)
     );
-    
+
     // Find the index of the current user
     return sortedUsers.findIndex(uc => uc.userId === currentUser?.id) + 1;
   };
-  
+
   const getMotivationalMessage = (completedCount: number): string => {
     if (completedCount === 0) {
       return "Ready to start your journey! Let's crush this round together! 💪";
@@ -792,7 +793,7 @@ const ChallengeDetailView = () => {
         if (collection?.challenge?.id) {
           ChatService.getInstance()
             .fetchChallengeMessages(collection.challenge.id)
-            .then(() => {})
+            .then(() => { })
             .catch((err: any) => console.error('Error fetching messages in VM:', err));
         } else {
           console.warn('Cannot fetch messages, challenge ID is missing.');
@@ -809,14 +810,14 @@ const ChallengeDetailView = () => {
             completion(null);
           })
           .catch((err: any) => {
-            console.error('Error joining challenge:', err); 
+            console.error('Error joining challenge:', err);
             completion(null);
           });
       },
     };
-  
+
     return (
-      <ChallengeWaitingRoomView 
+      <ChallengeWaitingRoomView
         viewModel={waitingRoomVM}
         initialParticipants={userChallenges || []}
         isOwner={isOwner}
@@ -829,7 +830,7 @@ const ChallengeDetailView = () => {
   return (
     <div className="min-h-screen bg-zinc-900">
       <div className="h-48 bg-gradient-to-b from-zinc-800 to-zinc-900" />
-      
+
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="relative -mt-24">
           {/* Header Section */}
@@ -847,8 +848,8 @@ const ChallengeDetailView = () => {
                   </button>
                 )}
               </div>
-              
-              <button 
+
+              <button
                 onClick={() => setShowMenu(!showMenu)}
                 className="p-2 hover:bg-zinc-800 rounded-full transition-colors"
               >
@@ -903,9 +904,9 @@ const ChallengeDetailView = () => {
               <div className="flex items-center p-4 pb-2">
                 {/* User profile image */}
                 {currentUser?.profileImage?.profileImageURL ? (
-                  <img 
-                    src={currentUser.profileImage.profileImageURL} 
-                    alt={currentUser.username || 'User'} 
+                  <img
+                    src={currentUser.profileImage.profileImageURL}
+                    alt={currentUser.username || 'User'}
                     className="w-10 h-10 rounded-full border-2 border-[#E0FE10]"
                   />
                 ) : (
@@ -915,18 +916,18 @@ const ChallengeDetailView = () => {
                     </span>
                   </div>
                 )}
-                
+
                 <div className="ml-4">
                   <h3 className="text-white font-semibold">Your Progress</h3>
                   <p className="text-zinc-400 text-sm">
-                    {daysInfo?.type === 'until-start' 
-                      ? `${daysInfo.days} Days Until Start` 
-                      : daysInfo?.type === 'remaining' 
-                        ? `${daysInfo.days} Days Left` 
+                    {daysInfo?.type === 'until-start'
+                      ? `${daysInfo.days} Days Until Start`
+                      : daysInfo?.type === 'remaining'
+                        ? `${daysInfo.days} Days Left`
                         : 'Challenge Ended'}
                   </p>
                 </div>
-                
+
                 <div className="ml-auto">
                   <button className="text-[#E0FE10] hover:text-white transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -935,39 +936,39 @@ const ChallengeDetailView = () => {
                   </button>
                 </div>
               </div>
-              
+
               {/* Progress indicators section */}
               <div className="flex p-4 pt-2 pb-6">
                 {/* Progress Circular Chart */}
                 <div className="relative w-24 h-24 flex-shrink-0">
                   {/* Background circle */}
                   <div className="absolute inset-0 rounded-full border-4 border-zinc-700"></div>
-                  
+
                   {/* Progress arc - using conic-gradient */}
-                  <div 
+                  <div
                     className="absolute inset-0 rounded-full"
-                    style={{ 
+                    style={{
                       background: `conic-gradient(#E0FE10 0% ${Math.round(calculateProgress() * 100)}%, transparent ${Math.round(calculateProgress() * 100)}% 100%)`,
                       borderRadius: '50%',
                       border: '4px solid #E0FE10',
                       clipPath: 'circle(50% at center)'
                     }}
                   ></div>
-                  
+
                   {/* Inner content */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <span className="text-[#E0FE10] text-xl font-bold">{Math.round(calculateProgress() * 100)}%</span>
                     <span className="text-zinc-400 text-xs">Complete</span>
                   </div>
                 </div>
-                
+
                 {/* Stats section */}
                 <div className="ml-6 flex flex-col justify-center">
                   {/* Progress counter - different for Run vs Lift rounds */}
                   {isRunRound() ? (
                     <div className="flex items-center mb-2">
                       <svg className="h-5 w-5 text-blue-500" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+                        <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z" />
                       </svg>
                       <span className="ml-2 text-white font-semibold">{getCompletedStacksCount()}</span>
                       <span className="ml-1 text-zinc-400">Runs</span>
@@ -983,7 +984,7 @@ const ChallengeDetailView = () => {
                   )}
                 </div>
               </div>
-              
+
               {/* Stats rows */}
               {getUserChallenge() && (
                 <>
@@ -1001,7 +1002,7 @@ const ChallengeDetailView = () => {
                       </div>
                       <div className="text-zinc-400 text-xs">Points</div>
                     </div>
-                    
+
                     {/* Current Streak */}
                     <div className="p-3 text-center">
                       <div className="flex justify-center mb-1">
@@ -1012,7 +1013,7 @@ const ChallengeDetailView = () => {
                       <div className="text-white font-bold">{computeCurrentStreak()}</div>
                       <div className="text-zinc-400 text-xs">Day Streak</div>
                     </div>
-                    
+
                     {/* Longest Streak */}
                     <div className="p-3 text-center">
                       <div className="flex justify-center mb-1">
@@ -1024,7 +1025,7 @@ const ChallengeDetailView = () => {
                       <div className="text-zinc-400 text-xs">Longest</div>
                     </div>
                   </div>
-                  
+
                   {/* Second row with additional stats */}
                   <div className="border-t border-zinc-700"></div>
                   <div className="grid grid-cols-3 divide-x divide-zinc-700">
@@ -1038,7 +1039,7 @@ const ChallengeDetailView = () => {
                       <div className="text-white font-bold">#{getRankInLeaderboard()}</div>
                       <div className="text-zinc-400 text-xs">Rank</div>
                     </div>
-                    
+
                     {/* Completed count */}
                     <div className="p-3 text-center">
                       <div className="flex justify-center mb-1">
@@ -1049,7 +1050,7 @@ const ChallengeDetailView = () => {
                       <div className="text-white font-bold">{getCompletedStacksCount()}</div>
                       <div className="text-zinc-400 text-xs">Completed</div>
                     </div>
-                    
+
                     {/* Missed stacks */}
                     <div className="p-3 text-center">
                       <div className="flex justify-center mb-1">
@@ -1061,7 +1062,7 @@ const ChallengeDetailView = () => {
                       <div className="text-zinc-400 text-xs">Missed</div>
                     </div>
                   </div>
-                  
+
                   {/* Motivational message */}
                   <div className="p-4">
                     <div className="bg-[#E0FE10]/10 rounded p-3 text-center text-white text-sm">
@@ -1073,26 +1074,40 @@ const ChallengeDetailView = () => {
             </div>
 
             {/* Share Section - New */}
-            <div className="mt-6 px-2"> {/* Adjusted margin */} 
-              <button 
+            <div className="mt-6 px-2"> {/* Adjusted margin */}
+              <button
                 onClick={handleShare}
                 className="w-full flex items-center space-x-3 p-4 rounded-lg bg-[#DFFD10]/10 border border-[#DFFD10]/50 hover:bg-[#DFFD10]/20 transition-colors"
               >
                 <Share2 className="h-5 w-5 text-[#DFFD10]" />
                 <div className="text-left">
                   <p className="font-semibold text-[#DFFD10]">Invite Friends to Join</p>
-                  <p className="text-sm text-gray-300">Share your link & earn +25 points per join! </p> 
+                  <p className="text-sm text-gray-300">Share your link & earn +25 points per join! </p>
                 </div>
               </button>
             </div>
 
-            {/* Participants Section */}
-            <ParticipantsSection
+            {/* Participants/Leaderboard Section */}
+            {isRunRound() && collection?.runRoundConfig ? (
+              <RunRoundLeaderboard
+                challengeId={collection.challenge?.id || collection.id}
+                startDate={collection.challenge?.startDate || null}
+                endDate={collection.challenge?.endDate || null}
+                runRoundConfig={collection.runRoundConfig}
+                participants={userChallenges || []}
+                currentUserId={currentUser?.id}
+                onParticipantClick={(userId: string, username: string) => {
+                  router.push(`/profile/${username}`);
+                }}
+              />
+            ) : (
+              <ParticipantsSection
                 participants={userChallenges || []}
                 onParticipantClick={(participant: UserChallenge) => {
                   router.push(`/profile/${participant.username}`);
                 }}
               />
+            )}
 
             {/* Chat Section */}
             {collection && (
@@ -1117,7 +1132,7 @@ const ChallengeDetailView = () => {
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-semibold flex items-center gap-2">
                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#3B82F6' }}>
-                      <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+                      <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z" />
                     </svg>
                     Run Round Details
                   </h2>
@@ -1126,14 +1141,14 @@ const ChallengeDetailView = () => {
                 {/* Run Round Type Info */}
                 <div className="bg-zinc-800 rounded-xl p-6 mb-4">
                   <div className="flex items-center gap-4 mb-4">
-                    <div 
+                    <div
                       className="w-14 h-14 rounded-xl flex items-center justify-center"
-                      style={{ 
+                      style={{
                         background: `linear-gradient(135deg, ${RunRoundTypeInfo[collection.runRoundConfig.roundType]?.colors[0] || '#3B82F6'}, ${RunRoundTypeInfo[collection.runRoundConfig.roundType]?.colors[1] || '#2563EB'})`
                       }}
                     >
                       <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+                        <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z" />
                       </svg>
                     </div>
                     <div>
@@ -1194,7 +1209,7 @@ const ChallengeDetailView = () => {
                       <h4 className="text-white font-semibold">Ready to Run?</h4>
                       <p className="text-zinc-400 text-sm">Complete a run to earn points in this round</p>
                     </div>
-                    <button 
+                    <button
                       onClick={() => router.push('/run')}
                       className="px-4 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors"
                     >
@@ -1207,149 +1222,149 @@ const ChallengeDetailView = () => {
 
             {/* Stacks Section (for non-Run rounds) */}
             {!isRunRound() && (
-            <div className="mt-8">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold">Stacks in this Round ({collection?.sweatlistIds.length})</h2>
-              </div>
+              <div className="mt-8">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-semibold">Stacks in this Round ({collection?.sweatlistIds.length})</h2>
+                </div>
 
-              <div className="space-y-4 pb-[100px]">
-                {collection?.sweatlistIds.map((sweatlistId, index) => {
-                  const workoutDate = collection?.challenge?.startDate 
-                    ? new Date(new Date(collection.challenge.startDate).getTime() + (index * 24 * 60 * 60 * 1000))
-                    : new Date();
+                <div className="space-y-4 pb-[100px]">
+                  {collection?.sweatlistIds.map((sweatlistId, index) => {
+                    const workoutDate = collection?.challenge?.startDate
+                      ? new Date(new Date(collection.challenge.startDate).getTime() + (index * 24 * 60 * 60 * 1000))
+                      : new Date();
 
-                  const currentDayIndex = collection?.challenge?.startDate ? (() => {
-                    const startDate = new Date(collection.challenge.startDate);
-                    startDate.setHours(0, 0, 0, 0);
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    const diffTime = Math.abs(today.getTime() - startDate.getTime());
-                    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                  })() : 0;
-                  
-                  // Calculate isToday for highlighting
-                  const isToday = index === currentDayIndex;
-                  const shouldHighlight = challengeHasStarted && isToday;
+                    const currentDayIndex = collection?.challenge?.startDate ? (() => {
+                      const startDate = new Date(collection.challenge.startDate);
+                      startDate.setHours(0, 0, 0, 0);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      const diffTime = Math.abs(today.getTime() - startDate.getTime());
+                      return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                    })() : 0;
 
-                  // Check if this is a rest day
-                  if (sweatlistId.sweatlistName === "Rest") {
-                    // For rest days, they're complete if the date is in the past
-                    const isRestDayComplete = workoutDate < new Date();
-                    
-                    // Generate rest day id
-                    const restDayRoundWorkoutId = generateRoundWorkoutId("rest", index, true);
-                    console.log(`[RestDay Debug] Generated roundWorkoutId: ${restDayRoundWorkoutId}`);
-                    
-                    // Get the user challenge for the current user
+                    // Calculate isToday for highlighting
+                    const isToday = index === currentDayIndex;
+                    const shouldHighlight = challengeHasStarted && isToday;
+
+                    // Check if this is a rest day
+                    if (sweatlistId.sweatlistName === "Rest") {
+                      // For rest days, they're complete if the date is in the past
+                      const isRestDayComplete = workoutDate < new Date();
+
+                      // Generate rest day id
+                      const restDayRoundWorkoutId = generateRoundWorkoutId("rest", index, true);
+                      console.log(`[RestDay Debug] Generated roundWorkoutId: ${restDayRoundWorkoutId}`);
+
+                      // Get the user challenge for the current user
+                      const userChallenge = getUserChallenge();
+
+                      // Check if this rest day is marked as complete in userChallenge
+                      const isRestDayMarkedComplete = userChallenge?.completedWorkouts?.some(
+                        completed => {
+                          const isMatch = completed.workoutId === restDayRoundWorkoutId;
+                          console.log(`[RestDay Debug] Comparing: ${completed.workoutId} vs ${restDayRoundWorkoutId} => ${isMatch}`);
+                          return isMatch;
+                        }
+                      ) || false;
+
+                      // Rest days can be complete based on time or if explicitly marked
+                      const finalRestDayComplete = isRestDayComplete || isRestDayMarkedComplete;
+                      console.log(`[RestDay Debug] Final completion: ${finalRestDayComplete} (time: ${isRestDayComplete}, marked: ${isRestDayMarkedComplete})`);
+
+                      return (
+                        <RestDayCard
+                          key={`rest-${index}`}
+                          selectedOrder={index}
+                          maxOrder={collection.sweatlistIds.length}
+                          showArrows={editMode}
+                          showCalendar={true}
+                          workoutDate={workoutDate}
+                          isComplete={finalRestDayComplete}
+                          challengeStartDate={collection?.challenge?.startDate}
+                          challengeHasStarted={challengeHasStarted}
+                          currentDayIndex={currentDayIndex}
+                          index={index}
+                          highlightBorder={shouldHighlight}
+                          onPrimaryAction={() => console.log('Rest day clicked')}
+                          onCalendarTap={(date) => console.log('Rest day calendar tapped:', date)}
+                          onUpdateOrder={(newOrder) => handleSwapOrder(
+                            new Workout({ id: sweatlistId.id, title: "Rest" }),
+                            newOrder
+                          )}
+                        />
+                      );
+                    }
+
+                    // Find the corresponding workout for non-rest days
+                    const workout = workouts.find(w => w.id === sweatlistId.id);
+                    if (!workout) return null;
+
+                    // Get the userChallenge for the current user
                     const userChallenge = getUserChallenge();
-                    
-                    // Check if this rest day is marked as complete in userChallenge
-                    const isRestDayMarkedComplete = userChallenge?.completedWorkouts?.some(
+
+                    // Add detailed logging
+                    console.log(`[Workout Completion Debug] Workout: ${workout.title} (ID: ${workout.id})`);
+                    console.log(`[Workout Completion Debug] Round Workout ID: ${workout.roundWorkoutId}`);
+                    console.log(`[Workout Completion Debug] UserChallenge found:`, !!userChallenge);
+                    console.log(`[Workout Completion Debug] CompletedWorkouts:`, userChallenge?.completedWorkouts);
+
+                    // Set the roundWorkoutId if it's missing
+                    if (!workout.roundWorkoutId) {
+                      workout.roundWorkoutId = generateRoundWorkoutId(workout.id, index);
+                      console.log(`[Workout Completion Debug] Generated roundWorkoutId: ${workout.roundWorkoutId}`);
+                    }
+
+                    console.log(`[Workout Completion Debug] Using roundWorkoutId: ${workout.roundWorkoutId}`);
+
+                    // Check if this workout is completed according to userChallenge
+                    const isWorkoutComplete = userChallenge?.completedWorkouts?.some(
                       completed => {
-                        const isMatch = completed.workoutId === restDayRoundWorkoutId;
-                        console.log(`[RestDay Debug] Comparing: ${completed.workoutId} vs ${restDayRoundWorkoutId} => ${isMatch}`);
+                        const isMatch = completed.workoutId === workout.roundWorkoutId;
+                        console.log(`[Workout Completion Debug] Comparing: ${completed.workoutId} vs ${workout.roundWorkoutId} => ${isMatch}`);
                         return isMatch;
                       }
                     ) || false;
-                    
-                    // Rest days can be complete based on time or if explicitly marked
-                    const finalRestDayComplete = isRestDayComplete || isRestDayMarkedComplete;
-                    console.log(`[RestDay Debug] Final completion: ${finalRestDayComplete} (time: ${isRestDayComplete}, marked: ${isRestDayMarkedComplete})`);
-                    
+
+                    console.log(`[Workout Completion Debug] Final completion status for ${workout.title}: ${isWorkoutComplete}`);
+
+                    // Add more detailed logging to inspect the entire workout object
+                    console.log(`[Workout Completion Debug] Full Workout object:`, workout);
+                    console.log(`[Workout Completion Debug] Full userChallenge:`, userChallenge);
+
                     return (
-                      <RestDayCard
-                        key={`rest-${index}`}
+                      <StackCard
+                        key={workout.id}
+                        workout={workout}
+                        gifUrls={workout.exercises?.map(ex => ex.exercise?.videos?.[0]?.gifURL || '') || []}
                         selectedOrder={index}
                         maxOrder={collection.sweatlistIds.length}
                         showArrows={editMode}
                         showCalendar={true}
                         workoutDate={workoutDate}
-                        isComplete={finalRestDayComplete}
+                        isComplete={isWorkoutComplete}
+                        isChallengeEnabled={true}
                         challengeStartDate={collection?.challenge?.startDate}
                         challengeHasStarted={challengeHasStarted}
                         currentDayIndex={currentDayIndex}
+                        userChallenge={userChallenge}
+                        allWorkoutSummaries={[]} // Would be great to fetch these for completion check
                         index={index}
                         highlightBorder={shouldHighlight}
-                        onPrimaryAction={() => console.log('Rest day clicked')}
-                        onCalendarTap={(date) => console.log('Rest day calendar tapped:', date)}
-                        onUpdateOrder={(newOrder) => handleSwapOrder(
-                          new Workout({ id: sweatlistId.id, title: "Rest" }), 
-                          newOrder
-                        )}
+                        onPrimaryAction={async () => {
+                          try {
+                            const user = await userService.getUserById(workout.author);
+                            router.push(`/workout/${user.username}/${workout.id}`);
+                          } catch (error) {
+                            console.error('Error getting user:', error);
+                          }
+                        }}
+                        onCalendarTap={(date) => handleCalendarTap(workout, date)}
+                        onUpdateOrder={(newOrder) => handleSwapOrder(workout, newOrder)}
                       />
                     );
-                  }
-
-                  // Find the corresponding workout for non-rest days
-                  const workout = workouts.find(w => w.id === sweatlistId.id);
-                  if (!workout) return null;
-
-                  // Get the userChallenge for the current user
-                  const userChallenge = getUserChallenge();
-                  
-                  // Add detailed logging
-                  console.log(`[Workout Completion Debug] Workout: ${workout.title} (ID: ${workout.id})`);
-                  console.log(`[Workout Completion Debug] Round Workout ID: ${workout.roundWorkoutId}`);
-                  console.log(`[Workout Completion Debug] UserChallenge found:`, !!userChallenge);
-                  console.log(`[Workout Completion Debug] CompletedWorkouts:`, userChallenge?.completedWorkouts);
-                  
-                  // Set the roundWorkoutId if it's missing
-                  if (!workout.roundWorkoutId) {
-                    workout.roundWorkoutId = generateRoundWorkoutId(workout.id, index);
-                    console.log(`[Workout Completion Debug] Generated roundWorkoutId: ${workout.roundWorkoutId}`);
-                  }
-                  
-                  console.log(`[Workout Completion Debug] Using roundWorkoutId: ${workout.roundWorkoutId}`);
-
-                  // Check if this workout is completed according to userChallenge
-                  const isWorkoutComplete = userChallenge?.completedWorkouts?.some(
-                    completed => {
-                      const isMatch = completed.workoutId === workout.roundWorkoutId;
-                      console.log(`[Workout Completion Debug] Comparing: ${completed.workoutId} vs ${workout.roundWorkoutId} => ${isMatch}`);
-                      return isMatch;
-                    }
-                  ) || false;
-                  
-                  console.log(`[Workout Completion Debug] Final completion status for ${workout.title}: ${isWorkoutComplete}`);
-
-                  // Add more detailed logging to inspect the entire workout object
-                  console.log(`[Workout Completion Debug] Full Workout object:`, workout);
-                  console.log(`[Workout Completion Debug] Full userChallenge:`, userChallenge);
-                  
-                  return (
-                    <StackCard
-                      key={workout.id}
-                      workout={workout}
-                      gifUrls={workout.exercises?.map(ex => ex.exercise?.videos?.[0]?.gifURL || '') || []}
-                      selectedOrder={index}
-                      maxOrder={collection.sweatlistIds.length}
-                      showArrows={editMode}
-                      showCalendar={true}
-                      workoutDate={workoutDate}
-                      isComplete={isWorkoutComplete}
-                      isChallengeEnabled={true}
-                      challengeStartDate={collection?.challenge?.startDate}
-                      challengeHasStarted={challengeHasStarted}
-                      currentDayIndex={currentDayIndex}
-                      userChallenge={userChallenge}
-                      allWorkoutSummaries={[]} // Would be great to fetch these for completion check
-                      index={index}
-                      highlightBorder={shouldHighlight}
-                      onPrimaryAction={async () => {
-                        try {
-                          const user = await userService.getUserById(workout.author);
-                          router.push(`/workout/${user.username}/${workout.id}`);
-                        } catch (error) {
-                          console.error('Error getting user:', error);
-                        }
-                      }}
-                      onCalendarTap={(date) => handleCalendarTap(workout, date)}
-                      onUpdateOrder={(newOrder) => handleSwapOrder(workout, newOrder)}
-                    />
-                  );
-                })}
+                  })}
+                </div>
               </div>
-            </div>
             )}
           </div>
         </div>

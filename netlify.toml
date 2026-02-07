@@ -255,6 +255,27 @@
   # The function itself enforces "only once per day" at the chosen time.
   schedule = "*/30 * * * *"
 
+# Lifecycle email schedulers
+[functions.schedule-joined-round-no-workout-email]
+  # Runs every 30 minutes and finds users who joined a round but still have no completed workout after ~24h.
+  schedule = "*/30 * * * *"
+
+[functions.schedule-first-workout-celebration-email]
+  # Runs every 30 minutes and sends first-workout celebration after first completion event is detected.
+  schedule = "*/30 * * * *"
+
+[functions.schedule-streak-milestone-email]
+  # Runs every 30 minutes and sends 3/7/14/30-day streak milestone emails.
+  schedule = "*/30 * * * *"
+
+[functions.schedule-challenge-ending-soon-email]
+  # Runs every 30 minutes and sends challenge-ending reminders at ~72h and ~24h remaining.
+  schedule = "*/30 * * * *"
+
+[functions.schedule-inactivity-winback-email]
+  # Runs every 30 minutes and sends inactivity winback emails at ~3/7/14 days.
+  schedule = "*/30 * * * *"
+
 [functions.trigger-review-checkin]
   # Manual trigger for weekly check-in email (no schedule)
 
