@@ -179,6 +179,29 @@ Use clear, technical language appropriate for engineering teams. Include diagram
 Structure the document so it can serve as both a design spec and implementation guide.`,
     defaultTitle: 'System Design Document'
   },
+  'spreadsheet': {
+    systemPrompt: `You are a data organization assistant specializing in structured spreadsheet content.
+Generate a well-organized spreadsheet-style document with:
+- Clear column headers for each data category
+- Organized rows with consistent data formatting
+- Logical groupings and sections
+- Summary rows or totals where appropriate
+- Data validation notes if needed
+Format using markdown tables for structure. Each table should have clear headers.
+Use pipe (|) characters to separate columns and dashes for header separators.`,
+    defaultTitle: 'Spreadsheet Document'
+  },
+  'word-doc': {
+    systemPrompt: `You are a professional document drafting assistant creating Word-compatible documents.
+Generate a well-formatted document that includes:
+- Professional title and headers
+- Clear section organization
+- Proper paragraph structure
+- Bullet points and numbered lists where appropriate
+- Professional business language
+Format with clear markdown: headers, paragraphs, lists. The document should be ready for export to Word format.`,
+    defaultTitle: 'Word Document'
+  },
   'custom': {
     systemPrompt: `You are a document formatting assistant. The user will paste an existing document.
 Your job is to preserve the original wording, tone, and structure as much as possible while applying clean formatting.
@@ -202,8 +225,8 @@ export default async function handler(
     return res.status(400).json({ error: 'Missing required fields: prompt and documentType' });
   }
 
-    const openaiApiKey = process.env.OPEN_AI_SECRET_KEY;
-  
+  const openaiApiKey = process.env.OPENAI_API_KEY;
+
   if (!openaiApiKey) {
     return res.status(500).json({ error: 'OpenAI API key not configured' });
   }
@@ -216,7 +239,7 @@ export default async function handler(
 
   try {
     const wantsSignature = Boolean(requiresSignature);
-    
+
     // Universal formatting rules for proper markdown rendering
     const bulletFormattingRules = `
 BULLET & LIST FORMATTING (CRITICAL - follow exactly):
@@ -302,7 +325,7 @@ Generate a complete, professionally formatted legal document.`
     // Extract title from the generated content (first line or use default)
     const lines = generatedContent.split('\n').filter((line: string) => line.trim());
     let title = template.defaultTitle;
-    
+
     // Try to extract title from first line if it looks like a title
     if (lines[0] && !lines[0].includes('EFFECTIVE DATE') && !lines[0].toLowerCase().startsWith('this')) {
       const potentialTitle = lines[0].replace(/^#+\s*/, '').replace(/\*+/g, '').trim();
@@ -320,8 +343,8 @@ Generate a complete, professionally formatted legal document.`
 
   } catch (error) {
     console.error('Error generating legal document:', error);
-    return res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Failed to generate document' 
+    return res.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to generate document'
     });
   }
 }

@@ -33,6 +33,14 @@ const SEQUENCES: SequenceRow[] = [
     templateDocId: 'username-reminder-v1',
     scheduleConfigDocId: 'username-reminder-v1',
   },
+  {
+    id: 'new-follower-v1',
+    name: 'New Follower Notification',
+    trigger: 'When someone follows a user',
+    defaultSubject: '{{followerName}} is now following you on Pulse',
+    functionPath: '/.netlify/functions/send-new-follower-email',
+    templateDocId: 'new-follower-v1',
+  },
 ];
 
 const EmailSequencesAdmin: React.FC = () => {
@@ -285,13 +293,12 @@ const EmailSequencesAdmin: React.FC = () => {
 
           {message && (
             <div
-              className={`mb-6 p-4 rounded-xl border ${
-                message.type === 'success'
+              className={`mb-6 p-4 rounded-xl border ${message.type === 'success'
                   ? 'bg-green-900/20 border-green-800 text-green-400'
                   : message.type === 'error'
-                  ? 'bg-red-900/20 border-red-800 text-red-400'
-                  : 'bg-blue-900/20 border-blue-800 text-blue-400'
-              }`}
+                    ? 'bg-red-900/20 border-red-800 text-red-400'
+                    : 'bg-blue-900/20 border-blue-800 text-blue-400'
+                }`}
             >
               <div className="flex items-center gap-2">
                 {message.type === 'success' ? (
@@ -421,11 +428,10 @@ const EmailSequencesAdmin: React.FC = () => {
               <button
                 onClick={sendTest}
                 disabled={sending || !testEmail.trim()}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  sending || !testEmail.trim()
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${sending || !testEmail.trim()
                     ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
                     : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
-                }`}
+                  }`}
               >
                 {sending ? (
                   <>
@@ -496,9 +502,8 @@ const EmailSequencesAdmin: React.FC = () => {
               <button
                 onClick={saveScheduleTime}
                 disabled={savingSchedule}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  savingSchedule ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed' : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${savingSchedule ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed' : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
+                  }`}
               >
                 {savingSchedule ? (
                   <>
@@ -541,13 +546,12 @@ const EmailSequencesAdmin: React.FC = () => {
             {message && (
               <div className="px-6 pt-6">
                 <div
-                  className={`p-4 rounded-xl border ${
-                    message.type === 'success'
+                  className={`p-4 rounded-xl border ${message.type === 'success'
                       ? 'bg-green-900/20 border-green-800 text-green-400'
                       : message.type === 'error'
-                      ? 'bg-red-900/20 border-red-800 text-red-400'
-                      : 'bg-blue-900/20 border-blue-800 text-blue-400'
-                  }`}
+                        ? 'bg-red-900/20 border-red-800 text-red-400'
+                        : 'bg-blue-900/20 border-blue-800 text-blue-400'
+                    }`}
                 >
                   <div className="flex items-center gap-2">
                     {message.type === 'success' ? (
@@ -649,11 +653,10 @@ const EmailSequencesAdmin: React.FC = () => {
               <button
                 onClick={saveTemplate}
                 disabled={savingTemplate || loadingTemplate || !templateSubject.trim() || !templateHtml.trim()}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  savingTemplate || loadingTemplate || !templateSubject.trim() || !templateHtml.trim()
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${savingTemplate || loadingTemplate || !templateSubject.trim() || !templateHtml.trim()
                     ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
                     : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
-                }`}
+                  }`}
               >
                 {savingTemplate ? (
                   <>
