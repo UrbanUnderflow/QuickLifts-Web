@@ -10,15 +10,16 @@ import { UserChallenge } from '../../../api/firebase/workout/types';
 import { User } from '../../../api/firebase/user/types';
 import { Challenge } from '../../../api/firebase/workout/types';
 import { DocumentSnapshot } from 'firebase/firestore';
-import { 
-  CheckIcon, 
-  ExclamationCircleIcon, 
-  MagnifyingGlassIcon, 
-  SparklesIcon, 
-  UserGroupIcon, 
-  CircleStackIcon, 
-  BoltIcon, 
+import {
+  CheckIcon,
+  ExclamationCircleIcon,
+  MagnifyingGlassIcon,
+  SparklesIcon,
+  UserGroupIcon,
+  CircleStackIcon,
+  BoltIcon,
   XCircleIcon,
+  XMarkIcon,
   SunIcon,
   MoonIcon,
   CalendarDaysIcon,
@@ -48,7 +49,7 @@ const Discover: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState(CategoryTab.ALL);
   const [searchText, setSearchText] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  
+
   // Data states
   const [trendingExercises, setTrendingExercises] = useState<Exercise[]>([]);
   const [trendingRounds, setTrendingRounds] = useState<SweatlistCollection[]>([]);
@@ -58,7 +59,7 @@ const Discover: React.FC = () => {
   const [moveOfTheDay, setMoveOfTheDay] = useState<{ exercise: Exercise, video: ExerciseVideo } | null>(null);
   const [loadingMoveOfTheDay, setLoadingMoveOfTheDay] = useState(true);
   const [todaysMissions, setTodaysMissions] = useState<any[]>([]);
-  
+
   // Search results
   const [filteredExercises, setFilteredExercises] = useState<Exercise[]>([]);
   const [filteredRounds, setFilteredRounds] = useState<Challenge[]>([]);
@@ -79,7 +80,7 @@ const Discover: React.FC = () => {
   const [showContentCategorySelector, setShowContentCategorySelector] = useState(false);
   const [showWorkoutTypeSelector, setShowWorkoutTypeSelector] = useState(false);
   const [selectedContentCategory, setSelectedContentCategory] = useState<ContentCategoryType | null>(null);
-  
+
   // Time-based greeting
   const getTimeBasedGreeting = () => {
     const hour = new Date().getHours();
@@ -90,7 +91,7 @@ const Discover: React.FC = () => {
 
   const getTimeBasedIcon = () => {
     const hour = new Date().getHours();
-    
+
     if (hour < 6) {
       return <MoonIcon className="w-5 h-5 text-blue-300" />;
     } else if (hour < 10) {
@@ -114,7 +115,7 @@ const Discover: React.FC = () => {
       "What's your fitness focus today?"
     ];
     const dayOfYear = Math.floor(
-      (new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 
+      (new Date().getTime() - new Date(new Date().getFullYear(), 0, 0).getTime()) /
       (1000 * 60 * 60 * 24)
     );
     return messages[dayOfYear % messages.length];
@@ -128,25 +129,25 @@ const Discover: React.FC = () => {
   // Process today's missions from active rounds
   const processTodaysMissions = async (userChallenges: UserChallenge[]) => {
     const missions: any[] = [];
-    
+
     // TODO: In the future, fetch round workouts from a separate collection
     // For now, we'll return empty missions since the web app doesn't have 
     // the same round workout structure as iOS
-    
+
     // The iOS app stores workouts separately in a rounds/roundId/workouts collection
     // We would need to fetch those workouts based on the current day of the challenge
-    
+
     for (const userChallenge of userChallenges) {
       if (!userChallenge.challenge) continue;
-      
+
       // Calculate what day of the challenge we're on
       const startDate = new Date(userChallenge.challenge.startDate);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       startDate.setHours(0, 0, 0, 0);
-      
+
       const dayIndex = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-      
+
       // Check if today's workout is already completed based on dayIndex
       // Note: This assumes completedWorkouts would have a dayIndex property in the future
       const isCompleted = userChallenge.completedWorkouts?.some(
@@ -156,7 +157,7 @@ const Discover: React.FC = () => {
           return completedDate.toDateString() === today.toDateString();
         }
       ) || false;
-      
+
       // We would fetch the actual workout here from rounds/roundId/workouts
       // For now, create a placeholder mission
       if (dayIndex >= 0 && dayIndex < userChallenge.challenge.durationInDays) {
@@ -171,7 +172,7 @@ const Discover: React.FC = () => {
         // });
       }
     }
-    
+
     return missions;
   };
 
@@ -208,10 +209,10 @@ const Discover: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true);
-    
+
     try {
       // First, load non-user-specific data that doesn't require authentication
-      
+
       // Load trending exercises
       // const { exercises, lastVisible } = await exerciseService.fetchPaginatedExercises(null, 10);
       // setTrendingExercises(exercises);
@@ -219,20 +220,20 @@ const Discover: React.FC = () => {
 
       // Fetch Move of the Day
       await fetchMoveOfTheDayData();
-      
+
       // Load trending rounds
       const trendingRoundsData = await workoutService.fetchTrendingRounds();
       setTrendingRounds(trendingRoundsData || []);
-      
+
       // Load featured creators
       const creatorsData = await userService.fetchFeaturedUsers();
       setFeaturedCreators(creatorsData || []);
-      
+
       // Load featured rounds
       const collections = await workoutService.fetchLiveRounds();
       const challenges = collections.map(collection => collection.challenge).filter((c): c is Challenge => !!c);
       setFeaturedRounds(challenges);
-      
+
       // Then, load user-specific data only if a user is signed in
       if (isUserAuthenticated() && currentUser?.id) {
         // Load current workout *only if* status is InProgress
@@ -244,15 +245,15 @@ const Discover: React.FC = () => {
             setCurrentWorkout(null); // Ensure it's null if no workout is InProgress
           }
         } catch (error) {
-           console.log('Could not fetch current workout session:', error);
-           setCurrentWorkout(null);
+          console.log('Could not fetch current workout session:', error);
+          setCurrentWorkout(null);
         }
-        
+
         // Load active rounds using the dedicated method
         try {
           const activeUserRounds = await workoutService.fetchActiveUserChallenges();
           setActiveRounds(activeUserRounds);
-          
+
           // Process today's missions from active rounds
           const missions = await processTodaysMissions(activeUserRounds);
           setTodaysMissions(missions);
@@ -267,7 +268,7 @@ const Discover: React.FC = () => {
         setActiveRounds([]);
         setTodaysMissions([]);
       }
-      
+
     } catch (error) {
       console.error('Error loading discover data:', error);
     } finally {
@@ -278,11 +279,11 @@ const Discover: React.FC = () => {
   const loadMoreTrendingExercises = async () => {
     // This function is no longer needed and will be removed.
     // if (!hasMore || loadingMore) return;
-    
+
     // setLoadingMore(true);
     // try {
     //   const { exercises: newExercises, lastVisible } = await exerciseService.fetchPaginatedExercises(lastDoc, 10);
-      
+
     //   setTrendingExercises(prev => [...prev, ...newExercises]);
     //   setLastDoc(lastVisible);
     //   setHasMore(newExercises.length > 0);
@@ -301,7 +302,7 @@ const Discover: React.FC = () => {
       const day = String(today.getUTCDate()).padStart(2, "0");
       const year = today.getUTCFullYear();
       const documentId = `${month}-${day}-${year}`;
-      
+
       const motdDocRef = doc(db, "moveOfTheDay", documentId);
       const motdSnapshot = await getDoc(motdDocRef);
 
@@ -310,7 +311,7 @@ const Discover: React.FC = () => {
         // Assuming data structure is { exercise: ExerciseData, video: VideoData }
         // We might need to construct Exercise and ExerciseVideo instances if methods are needed
         // For now, direct data usage for rendering might be okay if types align
-        setMoveOfTheDay({ 
+        setMoveOfTheDay({
           exercise: new Exercise(data.exercise), // Construct to ensure methods/types
           video: new ExerciseVideo(data.video)   // Construct to ensure methods/types
         });
@@ -331,9 +332,9 @@ const Discover: React.FC = () => {
       clearSearch();
       return;
     }
-    
+
     const lowerQuery = query.toLowerCase().trim();
-    
+
     // Filter moves (exercises) similar to iOS HomePulseView using the in-memory exercise cache
     try {
       let all = exerciseService.allExercises || [];
@@ -390,38 +391,38 @@ const Discover: React.FC = () => {
       console.error('Error searching exercises:', error);
       setFilteredExercises([]);
     }
-    
+
     // Filter rounds
-    const matchingUserChallenges = activeRounds.filter(round => 
-      (round.challenge?.title || '').toLowerCase().includes(lowerQuery) || 
+    const matchingUserChallenges = activeRounds.filter(round =>
+      (round.challenge?.title || '').toLowerCase().includes(lowerQuery) ||
       (round.challenge?.subtitle || '').toLowerCase().includes(lowerQuery)
     ).map(round => round.challenge).filter((c): c is Challenge => !!c);
 
-    const matchingFeaturedRounds = featuredRounds.filter(round => 
-      (round.title || '').toLowerCase().includes(lowerQuery) || 
+    const matchingFeaturedRounds = featuredRounds.filter(round =>
+      (round.title || '').toLowerCase().includes(lowerQuery) ||
       (round.subtitle || '').toLowerCase().includes(lowerQuery)
     );
 
     setFilteredRounds([...matchingUserChallenges, ...matchingFeaturedRounds]);
-    
+
     // Filter people
-    const matchingPeople = featuredCreators.filter(creator => 
+    const matchingPeople = featuredCreators.filter(creator =>
       creator.username.toLowerCase().includes(lowerQuery)
     );
-    
+
     // If less than 3 users found, query more from database
     if (matchingPeople.length < 3) {
       try {
         const additionalUsers = await userService.queryUsers(lowerQuery);
         const allUsers = [...matchingPeople];
-        
+
         // Add any new users not already in the list
         additionalUsers.forEach(user => {
           if (!allUsers.find(existing => existing.id === user.id)) {
             allUsers.push(user);
           }
         });
-        
+
         setFilteredPeople(allUsers);
       } catch (error) {
         console.error('Error querying additional users:', error);
@@ -443,7 +444,7 @@ const Discover: React.FC = () => {
     // For now, assuming moveOfTheDay has one primary video.
     // const updatedExercises = [...trendingExercises];
     // const exercise = updatedExercises[exerciseIndex];
-    
+
     // if (exercise && exercise.videos && exercise.videos[videoIndex]) {
     //   updatedExercises[exerciseIndex] = new Exercise({
     //     ...exercise,
@@ -466,14 +467,14 @@ const Discover: React.FC = () => {
       .replace(/-/g, '%2D') // First encode any existing hyphens to their URL encoded form
       .toLowerCase()
       .replace(/\s+/g, '-'); // Then replace spaces with hyphens
-    
+
     router.push(`/exercise/${slug}`);
   };
 
   const selectWorkout = (workout: Workout) => {
     router.push(`/workout/${workout.id}`);
   };
-  
+
   const selectCreator = (creator: User) => {
     router.push(`/profile/${creator.username}`);
   };
@@ -494,17 +495,17 @@ const Discover: React.FC = () => {
       <div className="mb-8 group">
         {/* Chromatic glow background on hover */}
         <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-30 transition-all duration-700 bg-gradient-to-br from-[#E0FE10]/40 via-transparent to-[#3B82F6]/20 pointer-events-none" />
-        
+
         <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-zinc-900/40 border border-white/10">
           {/* Chromatic reflection line at top */}
-          <div 
+          <div
             className="absolute top-0 left-0 right-0 h-[1px] opacity-60"
             style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.6), transparent)' }}
           />
-          
+
           {/* Inner highlight gradient */}
           <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent pointer-events-none" />
-          
+
           {/* Floating accent orbs */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-[#E0FE10]/15 blur-3xl animate-pulse" />
@@ -551,7 +552,7 @@ const Discover: React.FC = () => {
     <div className="relative mb-6 group">
       {/* Subtle focus glow */}
       <div className="absolute -inset-0.5 rounded-2xl blur-md opacity-0 group-focus-within:opacity-40 transition-all duration-500 bg-gradient-to-r from-[#E0FE10]/30 to-[#3B82F6]/20 pointer-events-none" />
-      
+
       <div className="relative flex items-center rounded-2xl backdrop-blur-xl bg-zinc-900/60 border border-white/10 focus-within:border-white/20 transition-colors">
         <MagnifyingGlassIcon className="w-5 h-5 ml-4 text-zinc-400" />
         <input
@@ -563,7 +564,7 @@ const Discover: React.FC = () => {
           onFocus={() => setIsSearching(true)}
         />
         {searchText && (
-          <button 
+          <button
             onClick={() => {
               setSearchText('');
               setIsSearching(false);
@@ -588,8 +589,8 @@ const Discover: React.FC = () => {
             key={tab}
             onClick={() => setSelectedCategory(tab)}
             className={`relative flex items-center px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 flex-shrink-0
-              ${isActive 
-                ? 'bg-[#E0FE10] text-zinc-900' 
+              ${isActive
+                ? 'bg-[#E0FE10] text-zinc-900'
                 : 'bg-zinc-900/60 backdrop-blur-sm text-white border border-white/10 hover:border-white/20 hover:bg-zinc-800/60'}`}
             style={isActive ? {
               boxShadow: '0 0 20px rgba(224, 254, 16, 0.3), 0 2px 8px rgba(224, 254, 16, 0.2)'
@@ -630,18 +631,18 @@ const Discover: React.FC = () => {
       <div className="relative group">
         {/* Chromatic glow on hover */}
         <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-40 transition-all duration-700 bg-gradient-to-r from-[#E0FE10]/30 via-transparent to-[#8B5CF6]/20 pointer-events-none" />
-        
+
         {/* Glass card */}
         <div className="relative overflow-hidden rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-white/10">
           {/* Chromatic top reflection */}
-          <div 
+          <div
             className="absolute top-0 left-0 right-0 h-[1px] opacity-50"
             style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.5), transparent)' }}
           />
-          
+
           {/* Gradient wash overlay */}
           <div className="absolute inset-0 bg-gradient-to-br from-[#E0FE10]/8 via-transparent to-[#8B5CF6]/5 pointer-events-none" />
-          
+
           <div className="relative p-5 sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-4">
@@ -699,24 +700,24 @@ const Discover: React.FC = () => {
         <div className="relative">
           <div className="carousel flex gap-4 overflow-x-auto pb-4 scrollbar-none">
             {/* AI Powered Workouts Card - Always shown first */}
-            <div 
+            <div
               className="min-w-[320px] snap-start relative overflow-hidden cursor-pointer transition-all group"
               onClick={() => router.push('/stacks')}
             >
               {/* Chromatic glow on hover */}
               <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-50 transition-all duration-500 bg-gradient-to-br from-[#E0FE10]/40 to-[#3B82F6]/20 pointer-events-none" />
-              
+
               {/* Glass card */}
               <div className="relative rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-[#E0FE10]/30 p-6 transition-all duration-300 group-hover:border-[#E0FE10]/50 overflow-hidden h-full">
                 {/* Gradient top line */}
-                <div 
+                <div
                   className="absolute top-0 left-0 right-0 h-[1px] opacity-70"
                   style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.6), transparent)' }}
                 />
-                
+
                 {/* Glow effect */}
                 <div className="absolute -top-20 -right-20 w-40 h-40 bg-[#E0FE10]/15 rounded-full blur-3xl"></div>
-                
+
                 <div className="relative z-10">
                   <div className="flex items-start gap-4 mb-4">
                     <div className="relative">
@@ -725,18 +726,18 @@ const Discover: React.FC = () => {
                         <SparklesIcon className="w-7 h-7 text-zinc-900" />
                       </div>
                     </div>
-                    
+
                     <div className="flex-1">
                       <h4 className="text-white font-bold text-lg mb-1">AI Powered Workouts</h4>
                       <p className="text-zinc-400 text-sm">Customized just for you</p>
                     </div>
                   </div>
-                  
+
                   <p className="text-zinc-300 text-sm mb-6 leading-relaxed">
                     Instantly generate a custom Movelist with AI, blending your favorite creator moves to match your goals for today.
                   </p>
-                  
-                  <button 
+
+                  <button
                     className="w-full bg-[#E0FE10] text-zinc-900 font-bold py-3 px-4 rounded-full flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
                     style={{
                       boxShadow: '0 0 20px rgba(224,254,16,0.4), 0 4px 12px rgba(224,254,16,0.3)'
@@ -751,7 +752,7 @@ const Discover: React.FC = () => {
 
             {/* Mission Cards */}
             {todaysMissions.map((mission, index) => (
-              <div 
+              <div
                 key={mission.id}
                 className="min-w-[280px] snap-start cursor-pointer group relative"
                 onClick={() => {
@@ -762,7 +763,7 @@ const Discover: React.FC = () => {
               >
                 {/* Hover glow */}
                 <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-40 transition-all duration-500 bg-gradient-to-br from-[#8B5CF6]/30 to-[#3B82F6]/20 pointer-events-none" />
-                
+
                 <div className="relative rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 p-5 transition-all duration-300 group-hover:border-white/20 overflow-hidden h-full">
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
@@ -777,7 +778,7 @@ const Discover: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  
+
                   {mission.workout && (
                     <div className="space-y-2">
                       <div className="text-white font-medium text-sm">
@@ -809,7 +810,7 @@ const Discover: React.FC = () => {
     console.log('Rendering Continue Workout Card for:', currentWorkout);
 
     const completedExercises = currentWorkout.exercises?.filter(ex => ex.isCompleted) || [];
-    const progress = currentWorkout.exercises?.length 
+    const progress = currentWorkout.exercises?.length
       ? Math.round((completedExercises.length / currentWorkout.exercises.length) * 100)
       : 0;
 
@@ -821,8 +822,8 @@ const Discover: React.FC = () => {
         </div>
 
         <div className="w-full bg-zinc-700 h-2 rounded-full mb-3">
-          <div 
-            className="bg-[#E0FE10] h-2 rounded-full" 
+          <div
+            className="bg-[#E0FE10] h-2 rounded-full"
             style={{ width: `${progress}%` }}
           ></div>
         </div>
@@ -842,7 +843,7 @@ const Discover: React.FC = () => {
             </div>
           </div>
 
-          <button 
+          <button
             onClick={() => router.push(`/workout/${currentWorkout.id}`)}
             className="bg-[#E0FE10] text-zinc-900 py-2 px-4 rounded-md font-medium"
           >
@@ -874,7 +875,7 @@ const Discover: React.FC = () => {
                 </div>
                 <h4 className="text-white font-semibold mb-2">No Active Rounds</h4>
                 <p className="text-zinc-400 text-sm mb-5">Join a round to track your progress with friends</p>
-                <button 
+                <button
                   onClick={() => router.push('/rounds')}
                   className="bg-[#E0FE10] text-zinc-900 px-6 py-2.5 rounded-full font-bold text-sm transition-all hover:scale-[1.03] active:scale-[0.98]"
                   style={{
@@ -910,7 +911,7 @@ const Discover: React.FC = () => {
                 0,
                 Math.floor(
                   (challengeEnd.getTime() - now.getTime()) /
-                    (1000 * 60 * 60 * 24)
+                  (1000 * 60 * 60 * 24)
                 )
               );
 
@@ -925,7 +926,7 @@ const Discover: React.FC = () => {
               // Calculate days passed since challenge started
               const rawDaysPassed = Math.floor(
                 (today.getTime() - startDate.getTime()) /
-                  (1000 * 60 * 60 * 24)
+                (1000 * 60 * 60 * 24)
               );
               const daysPassed = Math.max(0, rawDaysPassed);
 
@@ -961,15 +962,15 @@ const Discover: React.FC = () => {
                 >
                   {/* Chromatic hover glow */}
                   <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-50 transition-all duration-500 bg-gradient-to-br from-[#E0FE10]/30 to-[#10B981]/20 pointer-events-none" />
-                  
+
                   {/* Glass card */}
                   <div className="relative rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 p-5 transition-all duration-300 group-hover:border-[#E0FE10]/30 overflow-hidden h-full">
                     {/* Top chromatic line */}
-                    <div 
+                    <div
                       className="absolute top-0 left-0 right-0 h-[1px] opacity-50"
                       style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.4), transparent)' }}
                     />
-                    
+
                     {/* Subtle gradient wash */}
                     <div className="absolute inset-0 bg-gradient-to-br from-[#E0FE10]/5 via-transparent to-transparent pointer-events-none" />
 
@@ -1093,10 +1094,10 @@ const Discover: React.FC = () => {
     return (
       <div className="mb-8">
         <h3 className="text-white font-bold mb-4">Trending Rounds</h3>
-        
+
         <div className="carousel flex gap-4 overflow-x-auto pb-4 scrollbar-none">
           {trendingRounds.map((roundCollection, index) => (
-            <div 
+            <div
               key={roundCollection.id || index}
               className="min-w-[320px] bg-gradient-to-br from-red-600/20 via-orange-500/10 to-zinc-800 rounded-xl overflow-hidden cursor-pointer transition-transform shadow-lg"
               onClick={() => router.push(`/round/${roundCollection.challenge?.id || roundCollection.id}`)}
@@ -1108,13 +1109,13 @@ const Discover: React.FC = () => {
                   <div className="absolute -top-8 -left-8 w-24 h-24 bg-white/10 rounded-full"></div>
                   <div className="absolute -bottom-6 -right-6 w-20 h-20 bg-white/5 rounded-full"></div>
                 </div>
-                
+
                 {/* Content */}
                 <div className="relative z-10 flex items-start gap-3">
                   <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
                     <CircleStackIcon className="w-6 h-6 text-white" />
                   </div>
-                  
+
                   <div className="flex-1">
                     <h4 className="text-white font-bold text-lg mb-1 line-clamp-1">
                       {roundCollection.title}
@@ -1134,12 +1135,12 @@ const Discover: React.FC = () => {
                   </div>
                 </div>
               </div>
-              
+
               {/* Description section */}
               <div className="p-4 bg-zinc-800">
                 {roundCollection.challenge?.subtitle ? (
                   <p className="text-zinc-300 text-sm mb-4 line-clamp-3">
-                    {roundCollection.challenge.subtitle.length > 120 
+                    {roundCollection.challenge.subtitle.length > 120
                       ? `${roundCollection.challenge.subtitle.substring(0, 120)}...`
                       : roundCollection.challenge.subtitle
                     }
@@ -1149,7 +1150,7 @@ const Discover: React.FC = () => {
                     Join this featured training program and challenge yourself with other fitness enthusiasts!
                   </p>
                 )}
-                
+
                 {/* CTA */}
                 <div className="flex items-center justify-end">
                   <span className="text-orange-400 font-medium text-sm">View Details</span>
@@ -1171,10 +1172,10 @@ const Discover: React.FC = () => {
     return (
       <div className="mb-8">
         <h3 className="text-white font-bold text-lg mb-4">Featured Fitness Creators</h3>
-        
+
         <div className="carousel flex gap-5 overflow-x-auto pb-2 scrollbar-none">
           {featuredCreators.map((creator, index) => (
-            <div 
+            <div
               key={creator.id || index}
               className="flex flex-col items-center w-20 cursor-pointer group"
               onClick={() => selectCreator(creator)}
@@ -1183,15 +1184,15 @@ const Discover: React.FC = () => {
               <div className="relative mb-2">
                 {/* Hover glow */}
                 <div className="absolute -inset-1 rounded-full bg-gradient-to-br from-[#E0FE10]/40 to-[#8B5CF6]/40 blur-md opacity-0 group-hover:opacity-60 transition-all duration-300" />
-                
+
                 {/* Gradient border ring */}
                 <div className="relative w-20 h-20 rounded-full p-[2px] bg-gradient-to-br from-[#E0FE10]/60 via-[#3B82F6]/40 to-[#8B5CF6]/60">
                   <div className="w-full h-full rounded-full overflow-hidden bg-zinc-900">
                     {creator.profileImage?.profileImageURL ? (
-                      <img 
-                        src={creator.profileImage.profileImageURL} 
+                      <img
+                        src={creator.profileImage.profileImageURL}
                         alt={creator.username}
-                        className="w-full h-full object-cover" 
+                        className="w-full h-full object-cover"
                       />
                     ) : (
                       <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
@@ -1255,15 +1256,15 @@ const Discover: React.FC = () => {
       <div className="mb-8 group relative">
         {/* Hover glow */}
         <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-40 transition-all duration-700 bg-gradient-to-br from-[#E0FE10]/30 to-[#8B5CF6]/20 pointer-events-none" />
-        
+
         {/* Glass card */}
         <div className="relative rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 overflow-hidden transition-all duration-300 group-hover:border-[#E0FE10]/30">
           {/* Top chromatic line */}
-          <div 
+          <div
             className="absolute top-0 left-0 right-0 h-[1px] opacity-50 z-10"
             style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.5), transparent)' }}
           />
-          
+
           <div className="p-5">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-3">
@@ -1285,7 +1286,7 @@ const Discover: React.FC = () => {
             </div>
           </div>
 
-          <div 
+          <div
             className="relative aspect-video w-full cursor-pointer"
             onClick={() => selectExercise(exercise)}
           >
@@ -1309,9 +1310,9 @@ const Discover: React.FC = () => {
               <PlayIcon className="w-16 h-16 text-white/80" />
             </div>
           </div>
-          
+
           <div className="p-5">
-            <h3 
+            <h3
               className="text-xl font-bold text-white mb-1 hover:text-[#E0FE10] cursor-pointer transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
@@ -1320,9 +1321,9 @@ const Discover: React.FC = () => {
             >
               {exercise.name}
             </h3>
-            
+
             {/* Creator Info */}
-            <div 
+            <div
               className="flex items-center gap-3 mt-3 mb-4 cursor-pointer group/creator"
               onClick={(e) => {
                 e.stopPropagation();
@@ -1333,7 +1334,7 @@ const Discover: React.FC = () => {
               <div className="relative">
                 <div className="absolute -inset-0.5 rounded-full bg-gradient-to-br from-[#E0FE10]/40 to-[#8B5CF6]/40 opacity-0 group-hover/creator:opacity-100 transition-opacity" />
                 {video.profileImage?.profileImageURL ? (
-                  <img 
+                  <img
                     src={video.profileImage.profileImageURL}
                     alt={video.username || "Creator"}
                     className="relative w-9 h-9 rounded-full object-cover border border-white/10"
@@ -1352,7 +1353,7 @@ const Discover: React.FC = () => {
             <p className="text-zinc-400 text-sm mb-4 line-clamp-2 leading-relaxed">
               {exercise.description || "Check out this amazing move to boost your workout!"}
             </p>
-            
+
             <button
               onClick={() => selectExercise(exercise)}
               className="w-full bg-[#E0FE10] text-zinc-900 py-3 px-4 rounded-full font-bold text-sm transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
@@ -1382,23 +1383,23 @@ const Discover: React.FC = () => {
             </span>
           )}
         </div>
-        
+
         <div className="carousel flex gap-4 overflow-x-auto pb-4 scrollbar-none">
           {featuredRounds.map((round, index) => (
-            <div 
+            <div
               key={round.id || index}
               className="min-w-[280px] cursor-pointer group relative"
               onClick={() => selectRound(round)}
             >
               {/* Hover glow */}
               <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-40 transition-all duration-500 bg-gradient-to-br from-[#3B82F6]/30 to-[#8B5CF6]/20 pointer-events-none" />
-              
+
               {/* Glass card */}
               <div className="relative rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 p-5 transition-all duration-300 group-hover:border-[#3B82F6]/30 overflow-hidden h-full">
                 <h4 className="text-white font-semibold mb-3">
                   {round.title || round.title || "Featured Round"}
                 </h4>
-                
+
                 <div className="flex justify-between text-sm text-zinc-400 mb-3">
                   <span className="flex items-center gap-1.5">
                     <CalendarDaysIcon className="w-4 h-4 text-[#3B82F6]" />
@@ -1408,15 +1409,15 @@ const Discover: React.FC = () => {
                     {round.privacy || "Public"}
                   </span>
                 </div>
-                
+
                 <div className="flex items-center mb-3">
                   <div className="flex -space-x-2 mr-3">
                     {(round.participants || []).slice(0, 3).map((participant, i) => (
                       <div key={i} className="w-7 h-7 rounded-full border-2 border-zinc-900 bg-zinc-800 overflow-hidden">
                         {participant.profileImage ? (
-                          <img 
-                            src={participant.profileImage.profileImageURL} 
-                            alt="Participant" 
+                          <img
+                            src={participant.profileImage.profileImageURL}
+                            alt="Participant"
                             className="w-full h-full object-cover"
                           />
                         ) : (
@@ -1429,12 +1430,12 @@ const Discover: React.FC = () => {
                       </div>
                     ))}
                   </div>
-                  
+
                   <span className="text-sm text-zinc-400">
                     {(round.participants || []).length} participants
                   </span>
                 </div>
-                
+
                 <div className="flex items-center text-sm text-zinc-400">
                   <CalendarDaysIcon className="w-4 h-4 mr-1.5 text-[#8B5CF6]" />
                   <span>
@@ -1451,17 +1452,17 @@ const Discover: React.FC = () => {
 
   const renderSearchResults = () => {
     if (!searchText) return null;
-    
+
     // Filter results based on selected category
     const showPeople = selectedCategory === CategoryTab.ALL || selectedCategory === CategoryTab.PEOPLE;
     const showRounds = selectedCategory === CategoryTab.ALL || selectedCategory === CategoryTab.ROUNDS;
     const showMoves = selectedCategory === CategoryTab.ALL || selectedCategory === CategoryTab.MOVES;
-    
-    const hasResults = 
-      (showPeople && filteredPeople.length > 0) || 
-      (showRounds && filteredRounds.length > 0) || 
+
+    const hasResults =
+      (showPeople && filteredPeople.length > 0) ||
+      (showRounds && filteredRounds.length > 0) ||
       (showMoves && filteredExercises.length > 0);
-    
+
     if (!hasResults) {
       return (
         <div className="flex flex-col items-center justify-center py-16">
@@ -1484,34 +1485,34 @@ const Discover: React.FC = () => {
         </div>
       );
     }
-    
+
     return (
       <div>
         {/* People Results */}
         {showPeople && filteredPeople.length > 0 && (
           <div className="mb-8">
             <h3 className="text-white font-bold text-lg mb-4">People</h3>
-            
+
             <div className="space-y-3">
               {filteredPeople.map((user) => (
-                <div 
+                <div
                   key={user.id}
                   className="group relative cursor-pointer"
                   onClick={() => selectCreator(user)}
                 >
                   {/* Hover glow */}
                   <div className="absolute -inset-1 rounded-2xl blur-lg opacity-0 group-hover:opacity-30 transition-all duration-500 bg-gradient-to-r from-[#E0FE10]/30 to-[#8B5CF6]/20 pointer-events-none" />
-                  
+
                   <div className="relative flex items-center p-4 rounded-2xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 group-hover:border-white/20 transition-all">
                     {/* Avatar with gradient border */}
                     <div className="relative mr-4">
                       <div className="absolute -inset-0.5 rounded-full bg-gradient-to-br from-[#E0FE10]/40 to-[#8B5CF6]/40 opacity-0 group-hover:opacity-100 transition-opacity" />
                       <div className="relative w-12 h-12 rounded-full overflow-hidden border border-white/10">
                         {user.profileImage?.profileImageURL ? (
-                          <img 
-                            src={user.profileImage.profileImageURL} 
+                          <img
+                            src={user.profileImage.profileImageURL}
                             alt={user.username}
-                            className="w-full h-full object-cover" 
+                            className="w-full h-full object-cover"
                           />
                         ) : (
                           <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
@@ -1522,7 +1523,7 @@ const Discover: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    
+
                     <div>
                       <h4 className="text-white font-semibold group-hover:text-[#E0FE10] transition-colors">{user.username}</h4>
                       {user.bio && (
@@ -1535,12 +1536,12 @@ const Discover: React.FC = () => {
             </div>
           </div>
         )}
-        
+
         {/* Rounds Results */}
         {showRounds && filteredRounds.length > 0 && (
           <div className="mb-8">
             <h3 className="text-white font-bold text-lg mb-4">Rounds</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               {filteredRounds.map((round) => (
                 <div
@@ -1550,19 +1551,19 @@ const Discover: React.FC = () => {
                 >
                   {/* Hover glow */}
                   <div className="absolute -inset-1 rounded-2xl blur-lg opacity-0 group-hover:opacity-30 transition-all duration-500 bg-gradient-to-br from-[#3B82F6]/30 to-[#8B5CF6]/20 pointer-events-none" />
-                  
+
                   <div className="relative rounded-2xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 p-4 group-hover:border-[#3B82F6]/30 transition-all h-full">
                     <h4 className="text-white font-semibold text-sm mb-2 line-clamp-1">
                       {round.title || "Round"}
                     </h4>
-                    
+
                     <div className="flex justify-between items-center mb-3">
                       <span className="text-xs text-zinc-400">{round.durationInDays || 30} days</span>
                       <span className="text-[10px] py-1 px-2 rounded-full bg-[#E0FE10]/15 text-[#E0FE10] border border-[#E0FE10]/30 font-semibold">
                         {round.privacy || "Public"}
                       </span>
                     </div>
-                    
+
                     <div className="flex items-center text-xs text-zinc-400">
                       <UserGroupIcon className="w-3.5 h-3.5 mr-1.5 text-[#3B82F6]" />
                       <span>{(round.participants || []).length} participants</span>
@@ -1573,22 +1574,22 @@ const Discover: React.FC = () => {
             </div>
           </div>
         )}
-        
+
         {/* Moves Results */}
         {showMoves && filteredExercises.length > 0 && (
           <div className="mb-8">
             <h3 className="text-white font-bold text-lg mb-4">Moves</h3>
-            
+
             <div className="grid grid-cols-2 gap-4">
               {filteredExercises.map((exercise) => (
-                <div 
+                <div
                   key={exercise.id}
                   className="group relative cursor-pointer"
                   onClick={() => selectExercise(exercise)}
                 >
                   {/* Hover glow */}
                   <div className="absolute -inset-1 rounded-2xl blur-lg opacity-0 group-hover:opacity-30 transition-all duration-500 bg-gradient-to-br from-[#8B5CF6]/30 to-[#E0FE10]/20 pointer-events-none" />
-                  
+
                   <div className="relative rounded-2xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 overflow-hidden group-hover:border-[#8B5CF6]/30 transition-all">
                     <div className="relative aspect-square w-full">
                       {exercise.videos && exercise.videos.length > 0 && (
@@ -1609,7 +1610,7 @@ const Discover: React.FC = () => {
                         />
                       )}
                     </div>
-                    
+
                     <div className="p-3">
                       <h4 className="text-white font-medium text-sm mb-1 line-clamp-1">{exercise.name}</h4>
                       {exercise.primaryBodyParts && (
@@ -1632,7 +1633,7 @@ const Discover: React.FC = () => {
   const handleCategorySelect = (category: ContentCategoryType) => {
     setSelectedContentCategory(category);
     setShowContentCategorySelector(false);
-    
+
     if (category === ContentCategoryType.Lift) {
       // For Lift, show body part selection
       setShowWorkoutTypeSelector(true);
@@ -1662,10 +1663,10 @@ const Discover: React.FC = () => {
       <div className="mb-6 flex items-center justify-between">
         {/* Desktop: Pulse logo (no dropdown) */}
         <div className="hidden md:block">
-          <img 
-            src="/pulse-logo-white.svg" 
-            alt="Pulse" 
-            className="h-7 w-auto" 
+          <img
+            src="/pulse-logo-white.svg"
+            alt="Pulse"
+            className="h-7 w-auto"
           />
         </div>
 
@@ -1676,10 +1677,10 @@ const Discover: React.FC = () => {
             onClick={() => setShowMobileMoreMenu((v) => !v)}
             className="inline-flex items-center gap-1"
           >
-            <img 
-              src="/pulse-logo-white.svg" 
-              alt="Pulse" 
-              className="h-6 w-auto" 
+            <img
+              src="/pulse-logo-white.svg"
+              alt="Pulse"
+              className="h-6 w-auto"
             />
             {showMobileMoreMenu ? (
               <ChevronUpIcon className="w-4 h-4 text-zinc-300" />
@@ -1783,7 +1784,11 @@ const Discover: React.FC = () => {
           }}
           className="ml-3 inline-flex h-10 w-10 items-center justify-center rounded-full backdrop-blur-xl bg-zinc-900/60 border border-white/10 text-zinc-300 hover:border-white/20 hover:text-white transition-all"
         >
-          <MagnifyingGlassIcon className="h-5 w-5" />
+          {isSearching ? (
+            <XMarkIcon className="h-5 w-5" />
+          ) : (
+            <MagnifyingGlassIcon className="h-5 w-5" />
+          )}
         </button>
       </div>
 

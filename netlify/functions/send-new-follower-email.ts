@@ -57,10 +57,11 @@ function renderNewFollowerEmail(opts: {
     ? `https://fitwithpulse.ai/@${encodeURIComponent(followerUsername)}`
     : 'https://fitwithpulse.ai/profile';
 
-  // Avatar section - show image if available, otherwise show initials
+  // Avatar section - show image if available, otherwise show centered initials
+  // Using table-based centering for email client compatibility
   const avatarHtml = followerProfileImageUrl
     ? `<img src="${escapeHtml(followerProfileImageUrl)}" alt="${escapeHtml(followerName)}" width="80" height="80" style="width:80px;height:80px;border-radius:50%;object-fit:cover;display:block;" />`
-    : `<div style="width:80px;height:80px;border-radius:50%;background:#27272a;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-weight:700;font-size:28px;color:#E0FE10;">${escapeHtml(initials)}</div>`;
+    : `<table role="presentation" cellpadding="0" cellspacing="0" width="80" height="80" style="width:80px;height:80px;border-radius:50%;background:#27272a;"><tr><td align="center" valign="middle" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-weight:700;font-size:28px;color:#E0FE10;text-align:center;vertical-align:middle;">${escapeHtml(initials)}</td></tr></table>`;
 
   const html = `
   <!doctype html>
@@ -80,70 +81,77 @@ function renderNewFollowerEmail(opts: {
           <td align="center" style="padding: 0 16px;">
             <table role="presentation" cellpadding="0" cellspacing="0" width="640" style="max-width:640px;width:100%;">
               <tr>
-                <td style="padding: 6px 8px 18px 8px;">
-                  <div style="display:flex;align-items:center;justify-content:center;gap:12px;">
-                    <div style="width:44px;height:44px;border-radius:12px;background:#E0FE10;display:inline-flex;align-items:center;justify-content:center;">
-                      <span style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-weight:900;color:#0a0a0b;font-size:20px;">P</span>
-                    </div>
-                    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-weight:800;color:#ffffff;font-size:18px;letter-spacing:0.2px;">
-                      Pulse
-                    </div>
-                  </div>
+                <td align="center" style="padding: 6px 8px 18px 8px;">
+                  <!-- Pulse Logo -->
+                  <table role="presentation" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td align="center" valign="middle">
+                        <img src="https://fitwithpulse.ai/PulseProgrammingLogoWhite.png" alt="Pulse" width="140" height="auto" style="display:block;width:140px;height:auto;" />
+                      </td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
 
               <tr>
-                <td style="border:1px solid rgba(255,255,255,0.08);background:rgba(24,24,27,0.75);backdrop-filter: blur(12px);border-radius:20px;overflow:hidden;">
+                <td style="border:1px solid rgba(255,255,255,0.08);background:rgba(24,24,27,0.95);border-radius:20px;overflow:hidden;">
                   <div style="height:2px;background:linear-gradient(90deg, transparent, rgba(224,254,16,0.7), transparent);"></div>
                   
-                  <div style="padding:32px 22px;text-align:center;">
-                    <!-- Profile Avatar -->
-                    <div style="display:inline-block;margin-bottom:16px;">
-                      ${avatarHtml}
-                    </div>
-                    
-                    <!-- Follower Name -->
-                    <h1 style="margin:0 0 4px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:24px;line-height:1.2;color:#E0FE10;font-weight:900;">
-                      ${escapeHtml(followerName)}
-                    </h1>
-                    
-                    ${followerLocation ? `
-                    <p style="margin:0 0 16px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:14px;color:#A1A1AA;">
-                      ${escapeHtml(followerLocation)}
-                    </p>
-                    ` : '<div style="margin-bottom:16px;"></div>'}
-                    
-                    <!-- Message -->
-                    <p style="margin:0 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:16px;line-height:1.6;color:#E4E4E7;">
-                      ${escapeHtml(followerName)} now follows you.
-                    </p>
-                    
-                    <!-- CTA Button -->
-                    <a href="${viewProfileUrl}" style="display:inline-block;background:#E0FE10;color:#0a0a0b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-weight:900;font-size:14px;text-decoration:none;padding:14px 28px;border-radius:12px;">
-                      VIEW PROFILE
-                    </a>
-                  </div>
+                  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="padding:32px 22px;">
+                    <tr>
+                      <td align="center">
+                        <!-- Profile Avatar -->
+                        <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+                          <tr>
+                            <td align="center">
+                              ${avatarHtml}
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <!-- Follower Name -->
+                        <h1 style="margin:0 0 4px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:24px;line-height:1.2;color:#E0FE10;font-weight:900;">
+                          ${escapeHtml(followerName)}
+                        </h1>
+                        
+                        ${followerLocation ? `
+                        <p style="margin:0 0 16px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:14px;color:#A1A1AA;">
+                          ${escapeHtml(followerLocation)}
+                        </p>
+                        ` : '<div style="margin-bottom:16px;"></div>'}
+                        
+                        <!-- Message -->
+                        <p style="margin:0 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:16px;line-height:1.6;color:#E4E4E7;">
+                          ${escapeHtml(followerName)} now follows you.
+                        </p>
+                        
+                        <!-- CTA Button -->
+                        <a href="${viewProfileUrl}" style="display:inline-block;background:#E0FE10;color:#0a0a0b;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-weight:900;font-size:14px;text-decoration:none;padding:14px 28px;border-radius:12px;">
+                          VIEW PROFILE
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
 
               <tr>
-                <td style="padding:24px 22px 0 22px;">
-                  <div style="text-align:center;">
-                    <p style="margin:0 0 16px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:13px;color:#71717A;">
-                      Follow Pulse
-                    </p>
-                    <div style="display:flex;align-items:center;justify-content:center;gap:16px;">
-                      <a href="https://instagram.com/fitwithpulse" style="display:inline-block;width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,0.15);text-decoration:none;" title="Instagram">
-                        <img src="https://fitwithpulse.ai/email-assets/instagram-icon.png" alt="Instagram" width="36" height="36" style="display:block;width:36px;height:36px;" />
-                      </a>
-                      <a href="https://twitter.com/fitwithpulse" style="display:inline-block;width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,0.15);text-decoration:none;" title="Twitter">
-                        <img src="https://fitwithpulse.ai/email-assets/twitter-icon.png" alt="Twitter" width="36" height="36" style="display:block;width:36px;height:36px;" />
-                      </a>
-                      <a href="https://tiktok.com/@fitwithpulse" style="display:inline-block;width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,0.15);text-decoration:none;" title="TikTok">
-                        <img src="https://fitwithpulse.ai/email-assets/tiktok-icon.png" alt="TikTok" width="36" height="36" style="display:block;width:36px;height:36px;" />
-                      </a>
-                    </div>
-                  </div>
+                <td align="center" style="padding:24px 22px 0 22px;">
+                  <p style="margin:0 0 12px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:13px;color:#71717A;">
+                    Follow Pulse
+                  </p>
+                  <!-- Social Links as Text -->
+                  <table role="presentation" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td align="center" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif;font-size:12px;">
+                        <a href="https://instagram.com/fitwithpulse" style="color:#A1A1AA;text-decoration:none;padding:0 8px;">Instagram</a>
+                        <span style="color:#52525B;">•</span>
+                        <a href="https://youtube.com/@fitwithpulse" style="color:#A1A1AA;text-decoration:none;padding:0 8px;">YouTube</a>
+                        <span style="color:#52525B;">•</span>
+                        <a href="https://tiktok.com/@fitwithpulse" style="color:#A1A1AA;text-decoration:none;padding:0 8px;">TikTok</a>
+                      </td>
+                    </tr>
+                  </table>
                 </td>
               </tr>
 

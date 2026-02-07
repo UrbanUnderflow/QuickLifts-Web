@@ -41,6 +41,14 @@ const SEQUENCES: SequenceRow[] = [
     functionPath: '/.netlify/functions/send-new-follower-email',
     templateDocId: 'new-follower-v1',
   },
+  {
+    id: 'password-reset-v1',
+    name: 'Password Reset',
+    trigger: 'When user requests password reset',
+    defaultSubject: 'Reset your Pulse password',
+    functionPath: '/.netlify/functions/send-password-reset-email',
+    templateDocId: 'password-reset-v1',
+  },
 ];
 
 const EmailSequencesAdmin: React.FC = () => {
@@ -294,10 +302,10 @@ const EmailSequencesAdmin: React.FC = () => {
           {message && (
             <div
               className={`mb-6 p-4 rounded-xl border ${message.type === 'success'
-                  ? 'bg-green-900/20 border-green-800 text-green-400'
-                  : message.type === 'error'
-                    ? 'bg-red-900/20 border-red-800 text-red-400'
-                    : 'bg-blue-900/20 border-blue-800 text-blue-400'
+                ? 'bg-green-900/20 border-green-800 text-green-400'
+                : message.type === 'error'
+                  ? 'bg-red-900/20 border-red-800 text-red-400'
+                  : 'bg-blue-900/20 border-blue-800 text-blue-400'
                 }`}
             >
               <div className="flex items-center gap-2">
@@ -429,8 +437,8 @@ const EmailSequencesAdmin: React.FC = () => {
                 onClick={sendTest}
                 disabled={sending || !testEmail.trim()}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${sending || !testEmail.trim()
-                    ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-                    : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
+                  ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                  : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
                   }`}
               >
                 {sending ? (
@@ -547,10 +555,10 @@ const EmailSequencesAdmin: React.FC = () => {
               <div className="px-6 pt-6">
                 <div
                   className={`p-4 rounded-xl border ${message.type === 'success'
-                      ? 'bg-green-900/20 border-green-800 text-green-400'
-                      : message.type === 'error'
-                        ? 'bg-red-900/20 border-red-800 text-red-400'
-                        : 'bg-blue-900/20 border-blue-800 text-blue-400'
+                    ? 'bg-green-900/20 border-green-800 text-green-400'
+                    : message.type === 'error'
+                      ? 'bg-red-900/20 border-red-800 text-red-400'
+                      : 'bg-blue-900/20 border-blue-800 text-blue-400'
                     }`}
                 >
                   <div className="flex items-center gap-2">
@@ -654,8 +662,8 @@ const EmailSequencesAdmin: React.FC = () => {
                 onClick={saveTemplate}
                 disabled={savingTemplate || loadingTemplate || !templateSubject.trim() || !templateHtml.trim()}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${savingTemplate || loadingTemplate || !templateSubject.trim() || !templateHtml.trim()
-                    ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-                    : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
+                  ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                  : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
                   }`}
               >
                 {savingTemplate ? (
