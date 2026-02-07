@@ -6,7 +6,7 @@ import { RootState } from '../../redux/store';
 import { FollowRequest, CheckinsPrivacy } from '../../api/firebase/user';
 import { User, userService } from '../../api/firebase/user';
 import ExerciseGrid from '../../components/ExerciseGrid';
-import { Exercise } from '../../api/firebase/exercise/types'; 
+import { Exercise } from '../../api/firebase/exercise/types';
 import { Challenge, Workout, SweatlistCollection, ChallengeType } from '../../api/firebase/workout/types';
 import { workoutService } from '../../api/firebase/workout/service';
 import { ChallengesTab } from '../../components/ChallengesTab';
@@ -23,6 +23,7 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc
 import FollowButton from '../../components/FollowButton';
 import SideNav from '../../components/Navigation/SideNav';
 import { StackCard } from '../../components/Rounds/StackCard';
+import CheckinDetailModal from '../../components/CheckinDetailModal';
 
 // Body weight check-in type
 interface BodyWeightCheckin {
@@ -62,7 +63,7 @@ type TabType = typeof TABS[keyof typeof TABS];
 const getRoundStatus = (round: SweatlistCollection): 'upcoming' | 'active' | 'completed' => {
   const challenge = round.challenge;
   if (!challenge) return 'completed';
-  
+
   const now = new Date();
   const startDate = challenge.startDate ? new Date(challenge.startDate) : null;
   const endDate = challenge.endDate ? new Date(challenge.endDate) : null;
@@ -100,7 +101,7 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [showProfileImageModal, setShowProfileImageModal] = useState(false);
   const [resolvedUsername, setResolvedUsername] = useState<string | null>(null);
-  
+
   // New state for iOS-matching features
   const [userRounds, setUserRounds] = useState<SweatlistCollection[]>([]);
   const [checkins, setCheckins] = useState<BodyWeightCheckin[]>([]);
@@ -109,9 +110,10 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('');
+  const [selectedCheckin, setSelectedCheckin] = useState<BodyWeightCheckin | null>(null);
 
 
-  const API_BASE_URL = process.env.NODE_ENV === 'development' 
+  const API_BASE_URL = process.env.NODE_ENV === 'development'
     ? 'http://localhost:8888/.netlify/functions'
     : 'https://fitwithpulse.ai/.netlify/functions';
 
@@ -121,21 +123,21 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
       console.log('[Username Resolution] Starting...');
       console.log('[Username Resolution] username from query:', username);
       console.log('[Username Resolution] user object:', user);
-      
+
       // If we have username from URL, use it
       if (username && typeof username === 'string') {
         console.log('[Username Resolution] Using username from URL:', username);
         setResolvedUsername(username);
         return;
       }
-      
+
       // If no username in URL but we have user object, use user.username
       if (user?.username) {
         console.log('[Username Resolution] Using username from user object:', user.username);
         setResolvedUsername(user.username);
         return;
       }
-      
+
       // If we have user ID but no username, fetch the user to get username
       if (user?.id) {
         console.log('[Username Resolution] Fetching user by ID to get username:', user.id);
@@ -152,7 +154,7 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
         }
       }
     };
-    
+
     resolveUsername();
   }, [username, user?.id, user?.username]);
 
@@ -165,7 +167,7 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   // });
 
   useEffect(() => {
-    const fetchUserProfile = async () => { 
+    const fetchUserProfile = async () => {
       if (!username || initialUserData) return;
 
       try {
@@ -190,40 +192,40 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
     fetchUserProfile();
   }, [username, API_BASE_URL, initialUserData])
 
-// Update the fetchBodyWeight useEffect
-useEffect(() => {
-  const fetchBodyWeight = async () => {
-    if (!user?.id) return;
+  // Update the fetchBodyWeight useEffect
+  useEffect(() => {
+    const fetchBodyWeight = async () => {
+      if (!user?.id) return;
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/get-body-weight?userId=${user.id}`);
-      if (!response.ok) throw new Error('Failed to fetch body weight data');
-      
-      const data = await response.json();
-      if (data.success) {
-        // Assuming the API returns an array and we want the latest entry
-        // const latestWeight = data.bodyWeight[0];
-        // if (latestWeight) {
-        //   setStats(prevStats => ({
-        //     ...prevStats,
-        //     bodyWeight: latestWeight.newWeight,
-        //     date: latestWeight.createdAt
-        //   }));
-        // }
+      try {
+        const response = await fetch(`${API_BASE_URL}/get-body-weight?userId=${user.id}`);
+        if (!response.ok) throw new Error('Failed to fetch body weight data');
+
+        const data = await response.json();
+        if (data.success) {
+          // Assuming the API returns an array and we want the latest entry
+          // const latestWeight = data.bodyWeight[0];
+          // if (latestWeight) {
+          //   setStats(prevStats => ({
+          //     ...prevStats,
+          //     bodyWeight: latestWeight.newWeight,
+          //     date: latestWeight.createdAt
+          //   }));
+          // }
+        }
+      } catch (error) {
+        console.error('Error fetching body weight:', error);
       }
-    } catch (error) {
-      console.error('Error fetching body weight:', error);
-    }
-  };
+    };
 
-  fetchBodyWeight();
-}, [user?.id, API_BASE_URL]);
+    fetchBodyWeight();
+  }, [user?.id, API_BASE_URL]);
 
   // Fetch user's rounds (SweatlistCollections) - matching iOS
   useEffect(() => {
     const fetchUserRounds = async () => {
       if (!user?.id) return;
-      
+
       try {
         const collections = await workoutService.fetchCollections(user.id);
         // Filter to rounds where user is owner or cohort author (like iOS)
@@ -233,7 +235,7 @@ useEffect(() => {
           return (isOwner || isCohortAuthor) && collection.challenge;
         });
         setUserRounds(userCreatedRounds);
-        
+
         // Also set activeChallenges for backward compatibility
         const challenges = userCreatedRounds.map(c => c.challenge).filter((c): c is Challenge => !!c);
         setActiveChallenges(challenges);
@@ -249,15 +251,15 @@ useEffect(() => {
   useEffect(() => {
     const checkCheckinAccess = () => {
       if (!user) return;
-      
+
       // If viewing own profile, always allow
       if (isOwnProfile) {
         setCanViewCheckins(true);
         return;
       }
-      
+
       const privacy = user.checkinsPrivacy || CheckinsPrivacy.privateOnly;
-      
+
       switch (privacy) {
         case CheckinsPrivacy.publicAccess:
           setCanViewCheckins(true);
@@ -265,9 +267,9 @@ useEffect(() => {
         case CheckinsPrivacy.followersOnly:
           // Check if current user follows this profile
           if (currentUser?.id) {
-            const isFollowing = followers.some(f => 
+            const isFollowing = followers.some(f =>
               f.fromUser?.id === currentUser.id && f.status === 'accepted'
-            ) || following.some(f => 
+            ) || following.some(f =>
               f.toUser?.id === user.id && f.status === 'accepted'
             );
             // Also check explicit access list
@@ -296,12 +298,12 @@ useEffect(() => {
   useEffect(() => {
     const fetchCheckins = async () => {
       if (!user?.id || !canViewCheckins) return;
-      
+
       setCheckinsLoading(true);
       try {
         const response = await fetch(`${API_BASE_URL}/get-body-weight?userId=${user.id}&limit=50`);
         if (!response.ok) throw new Error('Failed to fetch check-ins');
-        
+
         const data = await response.json();
         if (data.success) {
           // Sort by date, newest first
@@ -323,11 +325,11 @@ useEffect(() => {
   useEffect(() => {
     const fetchUserVideos = async () => {
       if (!user?.id) return;
-      
+
       try {
         const response = await fetch(`${API_BASE_URL}/get-user-videos?userId=${user.id}`);
         if (!response.ok) throw new Error('Failed to fetch videos');
-        
+
         const data = await response.json();
         if (data.success) {
           setUserVideos(data.exercises);
@@ -346,10 +348,10 @@ useEffect(() => {
         console.log('[Fetch Stacks] No user ID available yet');
         return;
       }
-      
+
       console.log('[Fetch Stacks] Fetching stacks for user ID:', user.id);
       console.log('[Fetch Stacks] User username:', user.username);
-      
+
       try {
         const stacks = await userService.fetchUserStacks(user.id);
         console.log('[Fetch Stacks] Fetched stacks count:', stacks.length);
@@ -379,19 +381,19 @@ useEffect(() => {
             'Content-Type': 'application/json'
           },
         };
-  
+
         const [followersRes, followingRes] = await Promise.all([
           fetch(`${API_BASE_URL}/get-followers?userId=${userId}`, fetchOptions),
           fetch(`${API_BASE_URL}/get-following?userId=${userId}`, fetchOptions)
         ]);
-  
+
         if (!followersRes.ok || !followingRes.ok) {
           throw new Error('Failed to fetch follow data');
         }
-  
+
         const followersData = await followersRes.json();
         const followingData = await followingRes.json();
-  
+
         if (followersData.success && followingData.success) {
           setFollowers(followersData.followers);
           setFollowing(followingData.following);
@@ -400,7 +402,7 @@ useEffect(() => {
         console.error('Error fetching follow data:', error);
       }
     };
-  
+
     if (user?.id) {
       fetchFollowData(user.id);
     }
@@ -409,21 +411,21 @@ useEffect(() => {
   useEffect(() => {
     const fetchWorkoutSummaries = async () => {
       if (!user?.id) return;
-      
+
       try {
         const response = await fetch(`${API_BASE_URL}/get-workout-summaries?userId=${user.id}`);
         if (!response.ok) throw new Error('Failed to fetch workout summaries');
-        
+
         const data = await response.json();
         if (data.success) {
           const summaries = data.summaries.map((summary: any) =>
             new WorkoutSummary(summary)
           );
           setWorkoutSummaries(summaries);
-          
+
           if (userVideos.length > 0 || followers.length > 0 || following.length > 0) {
             const followRequests = [...followers, ...following];
-            
+
             const parsedActivities = parseActivityType(
               summaries,
               userVideos,
@@ -438,7 +440,7 @@ useEffect(() => {
         console.error('Error fetching workout summaries:', error);
       }
     };
-  
+
     fetchWorkoutSummaries();
   }, [user?.id, API_BASE_URL, followers, following, userVideos]);
 
@@ -454,7 +456,7 @@ useEffect(() => {
 
     return (
       <>
-        <UserProfileMeta 
+        <UserProfileMeta
           userData={defaultMetaData}
           bio={defaultMetaData.bio}
           username={defaultMetaData.username}
@@ -541,7 +543,7 @@ useEffect(() => {
               {userRounds.length > 0 ? 'No Featured Rounds' : 'No Rounds Yet'}
             </h3>
             <p className="text-zinc-400 text-center text-sm">
-              {userRounds.length > 0 
+              {userRounds.length > 0
                 ? `${user.username} hasn't featured any rounds on their profile`
                 : `${user.username} hasn't created any rounds yet`}
             </p>
@@ -554,7 +556,7 @@ useEffect(() => {
                 const status = getRoundStatus(round);
                 const challengeType = (round.challenge as any)?.challengeType?.toLowerCase() || 'workout';
                 const config = typeConfig[challengeType] || typeConfig.workout;
-                
+
                 return (
                   <button
                     key={round.id}
@@ -568,15 +570,14 @@ useEffect(() => {
                           <span className={config.iconColor}>{getTypeIcon(challengeType)}</span>
                           <span className={`text-xs font-medium ${config.iconColor}`}>{config.label}</span>
                         </div>
-                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-                          status === 'active' ? 'bg-green-500/20 text-green-400' :
+                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${status === 'active' ? 'bg-green-500/20 text-green-400' :
                           status === 'upcoming' ? 'bg-blue-500/20 text-blue-400' :
-                          'bg-zinc-500/20 text-zinc-400'
-                        }`}>
+                            'bg-zinc-500/20 text-zinc-400'
+                          }`}>
                           {status.charAt(0).toUpperCase() + status.slice(1)}
                         </span>
                       </div>
-                      
+
                       {/* Title & Description */}
                       <h4 className="text-white font-semibold mb-1 line-clamp-1">
                         {round.challenge?.title || 'Untitled Round'}
@@ -584,23 +585,23 @@ useEffect(() => {
                       <p className="text-zinc-400 text-sm line-clamp-2 mb-3">
                         {round.challenge?.subtitle || ''}
                       </p>
-                      
+
                       {/* Date Range */}
                       <div className="flex items-center gap-2 text-xs text-zinc-500">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                         <span>
-                          {round.challenge?.startDate 
-                            ? new Date(round.challenge.startDate).toLocaleDateString() 
+                          {round.challenge?.startDate
+                            ? new Date(round.challenge.startDate).toLocaleDateString()
                             : 'TBD'}
                           {' → '}
-                          {round.challenge?.endDate 
-                            ? new Date(round.challenge.endDate).toLocaleDateString() 
+                          {round.challenge?.endDate
+                            ? new Date(round.challenge.endDate).toLocaleDateString()
                             : 'TBD'}
                         </span>
                       </div>
-                      
+
                       {/* Participants */}
                       {round.challenge?.participants && round.challenge.participants.length > 0 && (
                         <div className="mt-3 flex items-center gap-2">
@@ -660,18 +661,19 @@ useEffect(() => {
         {checkins.map((checkin) => {
           const change = checkin.newWeight - checkin.oldWeight;
           const hasPhotos = checkin.frontUrl || checkin.backUrl || checkin.sideUrl;
-          
+
           return (
-            <div 
+            <button
               key={checkin.id}
-              className="bg-zinc-800/50 rounded-xl p-4 border border-zinc-700/50"
+              onClick={() => setSelectedCheckin(checkin)}
+              className="w-full text-left bg-zinc-800/50 rounded-xl p-4 border border-zinc-700/50 hover:border-[#E0FE10]/30 hover:bg-zinc-800/70 transition-all cursor-pointer group"
             >
               {/* Header */}
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <p className="text-zinc-500 text-sm">
-                    {new Date(checkin.createdAt * 1000).toLocaleDateString('en-US', { 
-                      month: 'short', day: 'numeric', year: 'numeric' 
+                    {new Date(checkin.createdAt * 1000).toLocaleDateString('en-US', {
+                      month: 'short', day: 'numeric', year: 'numeric'
                     })}
                   </p>
                   <div className="flex items-center gap-3 mt-1">
@@ -679,11 +681,10 @@ useEffect(() => {
                       {checkin.newWeight.toFixed(1)} lbs
                     </span>
                     {Math.abs(change) > 0.1 && (
-                      <span className={`flex items-center gap-1 text-sm px-2 py-0.5 rounded-full ${
-                        change > 0 
-                          ? 'bg-orange-500/20 text-orange-400' 
-                          : 'bg-green-500/20 text-green-400'
-                      }`}>
+                      <span className={`flex items-center gap-1 text-sm px-2 py-0.5 rounded-full ${change > 0
+                        ? 'bg-orange-500/20 text-orange-400'
+                        : 'bg-green-500/20 text-green-400'
+                        }`}>
                         <svg className={`w-3 h-3 ${change > 0 ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 17l5-5 5 5" />
                         </svg>
@@ -692,25 +693,31 @@ useEffect(() => {
                     )}
                   </div>
                 </div>
-                
-                {hasPhotos && (
-                  <span className="flex items-center gap-1 text-xs text-[#E0FE10] bg-[#E0FE10]/10 px-2 py-1 rounded-lg">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    Photos
-                  </span>
-                )}
+
+                <div className="flex items-center gap-2">
+                  {hasPhotos && (
+                    <span className="flex items-center gap-1 text-xs text-[#E0FE10] bg-[#E0FE10]/10 px-2 py-1 rounded-lg">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Photos
+                    </span>
+                  )}
+                  {/* View indicator */}
+                  <svg className="w-5 h-5 text-zinc-500 group-hover:text-[#E0FE10] transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
               </div>
-              
-              {/* Progress Photos */}
+
+              {/* Progress Photos Preview */}
               {hasPhotos && (
                 <div className="flex gap-2 mt-3 overflow-x-auto">
                   {checkin.frontUrl && (
                     <div className="flex-shrink-0 w-20">
-                      <img 
-                        src={checkin.frontUrl} 
-                        alt="Front" 
+                      <img
+                        src={checkin.frontUrl}
+                        alt="Front"
                         className="w-20 h-24 object-cover rounded-lg"
                       />
                       <p className="text-xs text-zinc-500 text-center mt-1">Front</p>
@@ -718,9 +725,9 @@ useEffect(() => {
                   )}
                   {checkin.sideUrl && (
                     <div className="flex-shrink-0 w-20">
-                      <img 
-                        src={checkin.sideUrl} 
-                        alt="Side" 
+                      <img
+                        src={checkin.sideUrl}
+                        alt="Side"
                         className="w-20 h-24 object-cover rounded-lg"
                       />
                       <p className="text-xs text-zinc-500 text-center mt-1">Side</p>
@@ -728,9 +735,9 @@ useEffect(() => {
                   )}
                   {checkin.backUrl && (
                     <div className="flex-shrink-0 w-20">
-                      <img 
-                        src={checkin.backUrl} 
-                        alt="Back" 
+                      <img
+                        src={checkin.backUrl}
+                        alt="Back"
                         className="w-20 h-24 object-cover rounded-lg"
                       />
                       <p className="text-xs text-zinc-500 text-center mt-1">Back</p>
@@ -738,7 +745,7 @@ useEffect(() => {
                   )}
                 </div>
               )}
-            </div>
+            </button>
           );
         })}
       </div>
@@ -747,7 +754,7 @@ useEffect(() => {
 
   return (
     <div className="min-h-screen bg-zinc-900">
-      <UserProfileMeta 
+      <UserProfileMeta
         userData={{
           displayName: user.displayName,
           bio: user.bio || 'User bio goes here',
@@ -763,11 +770,11 @@ useEffect(() => {
 
       <div className="relative md:ml-20 lg:ml-64 pb-16 md:pb-0">
         <div className="h-48 bg-gradient-to-b from-zinc-800 to-zinc-900" />
-        
+
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative -mt-24">
             <div className="relative inline-block">
-              <img 
+              <img
                 src={user.profileImage?.profileImageURL || "/api/placeholder/96/96"}
                 alt={user.displayName}
                 className="w-24 h-24 rounded-full border-4 border-zinc-900"
@@ -780,17 +787,17 @@ useEffect(() => {
                 <div>
                   <h1 className="text-2xl font-bold">{user.displayName}</h1>
                   <p className="text-zinc-400">@{user.username}</p>
-                  
+
                   <div className="mt-2 flex items-center gap-4 text-sm text-zinc-400">
                     <span>{followers.length} followers</span>
                     <span className="w-1 h-1 bg-zinc-600 rounded-full" />
                     <span>{following.length} following</span>
                   </div>
                 </div>
-                
+
                 {/* Follow / Message / Options Actions */}
                 <div className="mt-2 flex items-center gap-2">
-                  <FollowButton 
+                  <FollowButton
                     targetUser={user}
                     onFollowSuccess={(isFollowing) => {
                       // Update followers count optimistically
@@ -849,7 +856,7 @@ useEffect(() => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
                       </button>
-                      
+
                       {/* Options Menu Button */}
                       <div className="relative">
                         <button
@@ -859,12 +866,12 @@ useEffect(() => {
                         >
                           <EllipsisHorizontalIcon className="w-5 h-5" />
                         </button>
-                        
+
                         {/* Options Dropdown */}
                         {showOptionsMenu && (
                           <>
-                            <div 
-                              className="fixed inset-0 z-40" 
+                            <div
+                              className="fixed inset-0 z-40"
                               onClick={() => setShowOptionsMenu(false)}
                             />
                             <div className="absolute right-0 top-full mt-2 w-56 bg-zinc-800 rounded-xl border border-zinc-700 shadow-xl z-50 overflow-hidden">
@@ -892,7 +899,7 @@ useEffect(() => {
                                   <p className="text-xs text-zinc-500">Share {user.username}'s profile</p>
                                 </div>
                               </button>
-                              
+
                               <button
                                 onClick={() => {
                                   setShowReportModal(true);
@@ -906,7 +913,7 @@ useEffect(() => {
                                   <p className="text-xs text-zinc-500">Report inappropriate behavior</p>
                                 </div>
                               </button>
-                              
+
                               <button
                                 onClick={async () => {
                                   if (!currentUser?.id) return;
@@ -957,14 +964,14 @@ useEffect(() => {
                   if (!handle) return null;
 
                   return (
-                    <a 
+                    <a
                       key={platform}
                       href={getSocialLink(platform, handle)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-zinc-400 hover:text-white transition-colors"
                     >
-                      <img 
+                      <img
                         src={`/${platform}.svg`}
                         alt={platform}
                         className="w-6 h-6 hover:opacity-80"
@@ -998,7 +1005,7 @@ useEffect(() => {
             <div className="mt-8">
               {/* Moves Tab */}
               {selectedTab === TABS.MOVES && renderExercisesTab()}
-              
+
               {/* Timeline/Activity Tab */}
               {selectedTab === TABS.TIMELINE && (
                 <div className="px-5">
@@ -1032,13 +1039,13 @@ useEffect(() => {
                   )}
                 </div>
               )}
-              
+
               {/* Rounds Tab */}
               {selectedTab === TABS.ROUNDS && renderRoundsTab()}
-              
+
               {/* Weigh-ins Tab */}
               {selectedTab === TABS.WEIGHINS && renderWeighinsTab()}
-              
+
               {/* Legacy Stacks Tab - keeping for backward compatibility but hidden */}
               {false && (() => {
                 console.log('[Stacks Tab] Current username from router.query:', username);
@@ -1046,8 +1053,8 @@ useEffect(() => {
                 console.log('[Stacks Tab] User object:', user);
                 console.log('[Stacks Tab] User.username:', user?.username);
                 console.log('[Stacks Tab] Total userStacks:', userStacks.length);
-                
-                const filteredStacks = userStacks.filter(stack => 
+
+                const filteredStacks = userStacks.filter(stack =>
                   stack.title.toLowerCase().includes(stackSearchQuery.toLowerCase()) ||
                   stack.description.toLowerCase().includes(stackSearchQuery.toLowerCase())
                 );
@@ -1214,7 +1221,7 @@ useEffect(() => {
                   </button>
                 </div>
               </div>
-              
+
               <div className="p-6">
                 <p className="text-zinc-400 mb-4">
                   Why are you reporting {user.username}?
@@ -1225,7 +1232,7 @@ useEffect(() => {
                   placeholder="Describe the issue..."
                   className="w-full h-32 bg-zinc-800 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#E0FE10] placeholder-zinc-500 resize-none"
                 />
-                
+
                 <div className="flex gap-3 mt-6">
                   <button
                     onClick={() => {
@@ -1239,7 +1246,7 @@ useEffect(() => {
                   <button
                     onClick={async () => {
                       if (!currentUser?.id || !reportReason.trim()) return;
-                      
+
                       try {
                         // Create report in Firestore
                         const reportsRef = collection(db, 'user-reports');
@@ -1253,7 +1260,7 @@ useEffect(() => {
                           createdAt: serverTimestamp(),
                           updatedAt: serverTimestamp(),
                         });
-                        
+
                         alert('Report submitted. Thank you for helping keep our community safe.');
                         setShowReportModal(false);
                         setReportReason('');
@@ -1271,6 +1278,16 @@ useEffect(() => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Check-in Detail Modal */}
+        {selectedCheckin && (
+          <CheckinDetailModal
+            checkin={selectedCheckin}
+            isOpen={!!selectedCheckin}
+            onClose={() => setSelectedCheckin(null)}
+            username={user?.username}
+          />
         )}
       </div>
     </div>
@@ -1301,18 +1318,18 @@ export const getServerSideProps: GetServerSideProps<ProfileViewProps> = async (c
   }
 
   try {
-    const API_BASE_URL = process.env.NODE_ENV === 'development' 
+    const API_BASE_URL = process.env.NODE_ENV === 'development'
       ? 'http://localhost:8888/.netlify/functions'
       : 'https://fitwithpulse.ai/.netlify/functions';
 
     const response = await fetch(`${API_BASE_URL}/get-user-profile?username=${username}`);
-    
+
     if (!response.ok) {
       throw new Error('Profile not found');
     }
 
     const data = await response.json();
-    
+
     if (!data.success) {
       throw new Error(data.error || 'Failed to load profile');
     }
