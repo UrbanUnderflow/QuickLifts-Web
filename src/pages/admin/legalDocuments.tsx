@@ -89,6 +89,8 @@ const DOCUMENT_TYPES = [
   { id: 'license', label: 'License Agreement', icon: '📄' },
   { id: 'proposal', label: 'Proposal Document', icon: '📋' },
   { id: 'system-design', label: 'System Design', icon: '🏗️' },
+  { id: 'spreadsheet', label: 'Spreadsheet', icon: '📊', exportFormat: 'xlsx' },
+  { id: 'word-doc', label: 'Word Document', icon: '📝', exportFormat: 'docx' },
   { id: 'custom', label: 'Custom Document', icon: '✏️' },
 ];
 
@@ -103,12 +105,12 @@ const formatDate = (date: Timestamp | Date | undefined): string => {
   } else {
     return 'Invalid Date';
   }
-  return dateObject.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric', 
-    hour: '2-digit', 
-    minute: '2-digit' 
+  return dateObject.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
   });
 };
 
@@ -121,7 +123,7 @@ const StatusBadge: React.FC<{ status: LegalDocument['status'] }> = ({ status }) 
   };
   const config = configs[status] || configs.generating;
   const Icon = config.icon;
-  
+
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-1 ${config.bg} ${config.text} rounded-full text-xs font-medium border ${config.border}`}>
       <Icon className={`w-3 h-3 ${status === 'generating' ? 'animate-spin' : ''}`} />
@@ -139,7 +141,7 @@ const AuditStatusBadge: React.FC<{ status: AuditResult['overallStatus']; score: 
   };
   const config = configs[status] || configs['needs-work'];
   const Icon = config.icon;
-  
+
   return (
     <div className={`inline-flex items-center gap-2 px-3 py-2 ${config.bg} ${config.text} rounded-lg border ${config.border}`}>
       <Icon className="w-5 h-5" />
@@ -178,7 +180,7 @@ const LegalDocumentsAdmin: React.FC = () => {
     mode?: 'patches' | 'full' | 'error' | 'sections';
   } | null>(null);
   const [showRevisionDebug, setShowRevisionDebug] = useState(false);
-  
+
   // Diagram Insert State
   const [showDiagramSection, setShowDiagramSection] = useState(false);
   const [diagramInput, setDiagramInput] = useState('');
@@ -444,39 +446,39 @@ const LegalDocumentsAdmin: React.FC = () => {
     if (!editingDocument || !diagramInput.trim()) {
       return;
     }
-    
+
     const formattedDiagram = formatDiagram(diagramInput);
-    
-    const position = diagramPosition === 'start' || diagramPosition === 'end' 
-      ? diagramPosition 
+
+    const position = diagramPosition === 'start' || diagramPosition === 'end'
+      ? diagramPosition
       : { afterHeader: diagramPosition };
-    
+
     const newContent = insertDiagramIntoDocument(
       editingDocument.content,
       formattedDiagram,
       position
     );
-    
+
     // Verify content actually changed
     if (newContent === editingDocument.content) {
       setMessage({ type: 'error', text: 'Diagram insertion failed. Please check the insertion position and try again.' });
       return;
     }
-    
+
     // Update the editing document with new content
     setEditingDocument({
       ...editingDocument,
       content: newContent,
     });
-    
+
     // Mark that content was manually modified (so save doesn't call AI revision)
     setContentManuallyModified(true);
-    
+
     // Clear diagram input after insertion
     setDiagramInput('');
     setDiagramPreview('');
     setShowDiagramSection(false);
-    
+
     setMessage({ type: 'success', text: 'Diagram inserted into document. Click Save to apply changes.' });
   };
 
@@ -600,7 +602,7 @@ const LegalDocumentsAdmin: React.FC = () => {
 
     try {
       let newContent = editingDocument.content;
-      
+
       // Only call API if there's a revision prompt AND content wasn't manually modified
       // (If content was manually modified via diagram insert, we just save the new content directly)
       if (hasRevisionPrompt && !contentManuallyModified) {
@@ -651,7 +653,7 @@ const LegalDocumentsAdmin: React.FC = () => {
         let debugInfo: typeof revisionDebugInfo = {
           mode: 'sections',
         };
-        
+
         try {
           // Primary: Use section-based editing (fast, reliable)
           // eslint-disable-next-line no-console
@@ -697,19 +699,19 @@ const LegalDocumentsAdmin: React.FC = () => {
         updatedAt: Timestamp.now(),
       };
       updateData.requiresSignature = Boolean(editRequiresSignature);
-      
+
       // Update content if there's a revision prompt OR if content was manually modified (e.g., diagram inserted)
       if (hasRevisionPrompt || contentManuallyModified) {
         updateData.content = newContent;
       }
-      
+
       // Only update revision history if there's an actual revision prompt
       if (hasRevisionPrompt) {
         // Convert existing revision history timestamps to Timestamp if needed
         const convertedHistory = revisionHistory.map(rev => ({
           prompt: rev.prompt,
-          timestamp: rev.timestamp instanceof Timestamp 
-            ? rev.timestamp 
+          timestamp: rev.timestamp instanceof Timestamp
+            ? rev.timestamp
             : Timestamp.fromDate(rev.timestamp instanceof Date ? rev.timestamp : new Date(rev.timestamp))
         }));
         updateData.revisionHistory = [...convertedHistory, { prompt: editPrompt, timestamp: Timestamp.now() }];
@@ -739,6 +741,99 @@ const LegalDocumentsAdmin: React.FC = () => {
     } finally {
       setIsRevising(false);
     }
+  };
+
+  // Format document content with proper markdown
+  const handleFormatDocument = () => {
+    if (!editingDocument) return;
+
+    let content = editingDocument.content;
+
+    // Split into lines for processing
+    const lines = content.split('\n');
+    const formattedLines: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i];
+      const trimmedLine = line.trim();
+
+      // Skip empty lines
+      if (!trimmedLine) {
+        formattedLines.push('');
+        continue;
+      }
+
+      // Check if already formatted (has markdown)
+      if (trimmedLine.startsWith('#') || trimmedLine.startsWith('**') || trimmedLine.startsWith('•') || trimmedLine.startsWith('-') || trimmedLine.startsWith('*')) {
+        formattedLines.push(line);
+        continue;
+      }
+
+      // Detect main section headers (e.g., "1. Executive Summary", "2. Problem Statement")
+      const mainSectionMatch = trimmedLine.match(/^(\d+)\.\s+([A-Z][^.!?]*?)$/);
+      if (mainSectionMatch) {
+        formattedLines.push('');
+        formattedLines.push('---');
+        formattedLines.push('');
+        formattedLines.push(`## ${mainSectionMatch[1]}. ${mainSectionMatch[2]}`);
+        formattedLines.push('');
+        continue;
+      }
+
+      // Detect subsection headers (e.g., "3.1 Data Foundation")
+      const subsectionMatch = trimmedLine.match(/^(\d+\.\d+)\s+([A-Z][^.!?]*?)$/);
+      if (subsectionMatch) {
+        formattedLines.push('');
+        formattedLines.push(`### ${subsectionMatch[1]} ${subsectionMatch[2]}`);
+        formattedLines.push('');
+        continue;
+      }
+
+      // Detect bold label lines (e.g., "Submitted by: Pulse Labs")
+      const labelMatch = trimmedLine.match(/^([A-Z][^:]+):\s*(.+)$/);
+      if (labelMatch && labelMatch[1].split(' ').length <= 5) {
+        formattedLines.push(`**${labelMatch[1]}:** ${labelMatch[2]}`);
+        continue;
+      }
+
+      // Detect standalone bold headers (all caps or title case at start of section)
+      if (trimmedLine === trimmedLine.toUpperCase() && trimmedLine.length > 3 && trimmedLine.length < 60 && !trimmedLine.includes('.')) {
+        formattedLines.push('');
+        formattedLines.push(`**${trimmedLine}**`);
+        formattedLines.push('');
+        continue;
+      }
+
+      // Detect "We will:" or "This includes:" style headers
+      if (trimmedLine.endsWith(':') && trimmedLine.length < 60) {
+        formattedLines.push('');
+        formattedLines.push(`**${trimmedLine}**`);
+        continue;
+      }
+
+      // Detect bullet points with • character or starting with dash
+      if (trimmedLine.startsWith('•') || trimmedLine.startsWith('-') || trimmedLine.startsWith('*')) {
+        formattedLines.push(line);
+        continue;
+      }
+
+      // Regular paragraph
+      formattedLines.push(line);
+    }
+
+    const formattedContent = formattedLines.join('\n')
+      // Clean up multiple consecutive empty lines
+      .replace(/\n{4,}/g, '\n\n\n')
+      // Ensure proper spacing around headers
+      .replace(/\n(##[^\n]+)\n([^\n])/g, '\n$1\n\n$2')
+      .replace(/([^\n])\n(##[^\n]+)/g, '$1\n\n$2');
+
+    setEditingDocument({
+      ...editingDocument,
+      content: formattedContent,
+    });
+    setContentManuallyModified(true);
+    setMessage({ type: 'success', text: 'Document formatted! Review changes and click Save.' });
   };
 
   // Open Audit Modal
@@ -779,7 +874,7 @@ const LegalDocumentsAdmin: React.FC = () => {
   // Delete document
   const handleDelete = async (docId: string) => {
     if (!confirm('Are you sure you want to delete this document?')) return;
-    
+
     setDeletingId(docId);
     try {
       await deleteDoc(doc(db, 'legal-documents', docId));
@@ -827,39 +922,39 @@ const LegalDocumentsAdmin: React.FC = () => {
         let requestId = signer.signingRequestId;
         if (!requestId) {
           const requestData: any = {
-        documentType: signingDocument.documentType,
-        documentName: signingDocument.title,
+            documentType: signingDocument.documentType,
+            documentName: signingDocument.title,
             recipientName: signer.name,
             recipientEmail: signer.email,
-        status: 'pending',
-        createdAt: serverTimestamp(),
-        legalDocumentId: signingDocument.id,
-        documentContent: signingDocument.content,
+            status: 'pending',
+            createdAt: serverTimestamp(),
+            legalDocumentId: signingDocument.id,
+            documentContent: signingDocument.content,
             signerRole: signer.role,
             stakeholderId: signer.stakeholderId || null,
             signingGroupId,
             signingOrder: i + 1,
-      };
+          };
 
-      const docRef = await addDoc(collection(db, 'signingRequests'), requestData);
+          const docRef = await addDoc(collection(db, 'signingRequests'), requestData);
           requestId = docRef.id;
         }
 
         signingRequestIds.push(requestId);
 
-      const response = await fetch('/.netlify/functions/send-signing-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        const response = await fetch('/.netlify/functions/send-signing-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             documentId: requestId,
-          documentName: signingDocument.title,
-          documentType: signingDocument.documentType,
+            documentName: signingDocument.title,
+            documentType: signingDocument.documentType,
             recipientName: signer.name,
             recipientEmail: signer.email,
-        }),
-      });
+          }),
+        });
 
-      if (!response.ok) {
+        if (!response.ok) {
           throw new Error(`Failed to send email to ${signer.email}`);
         }
       }
@@ -912,12 +1007,12 @@ const LegalDocumentsAdmin: React.FC = () => {
   // Copy shareable link to clipboard
   const handleShareDocument = async (document: LegalDocument) => {
     const shareUrl = `${window.location.origin}/legal-doc/${document.id}`;
-    
+
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopiedLinkId(document.id);
       setMessage({ type: 'success', text: 'Shareable link copied to clipboard!' });
-      
+
       // Reset the copied state after 2 seconds
       setTimeout(() => {
         setCopiedLinkId(null);
@@ -937,8 +1032,8 @@ const LegalDocumentsAdmin: React.FC = () => {
 
   // Toggle exhibit selection
   const toggleExhibit = (exhibitId: string) => {
-    setSelectedExhibits(prev => 
-      prev.includes(exhibitId) 
+    setSelectedExhibits(prev =>
+      prev.includes(exhibitId)
         ? prev.filter(id => id !== exhibitId)
         : [...prev, exhibitId]
     );
@@ -983,7 +1078,7 @@ const LegalDocumentsAdmin: React.FC = () => {
   const formatContentForPdf = (content: string, isProject: boolean = false): string => {
     // Normalize line endings
     let result = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    
+
     // First, extract and preserve code blocks (for ASCII diagrams)
     const codeBlocks: string[] = [];
     const codeBlockPlaceholder = '___CODE_BLOCK___';
@@ -992,25 +1087,25 @@ const LegalDocumentsAdmin: React.FC = () => {
       codeBlocks.push(match);
       return `${codeBlockPlaceholder}${index}${codeBlockPlaceholder}`;
     });
-    
+
     // Also detect and preserve ASCII diagrams that are NOT in code blocks
     // Look for patterns like box-drawing characters, numbered items with boxes, etc.
     const allLines = result.split('\n');
     const diagramBlocks: Array<{ start: number; end: number; placeholder: string }> = [];
     let diagramStart = -1;
     let diagramLines: string[] = [];
-    
+
     for (let i = 0; i < allLines.length; i++) {
       const line = allLines[i];
       const trimmed = line.trim();
-      
+
       // Check if this line looks like part of an ASCII diagram
       // More lenient detection - any line with box chars, or patterns like "DATA →", or numbered items with vertical bars
       const hasBoxChars = /[┌┐└┘│─├┤┬┴┼]/.test(line) || /^[\+\|][\-\|]+[\+\|]/.test(trimmed);
       const hasDiagramTitle = /(DATA\s*→|DELIVERY\s*LOOP|Implementation\s+Diagram)/i.test(trimmed);
       const hasNumberedBox = /^\d+\)\s+.*\|/.test(trimmed) || /^\|\s*\d+\)/.test(trimmed);
       const hasBoxStructure = /^\|[\s\S]*\|$/.test(trimmed) && trimmed.length > 10;
-      
+
       if (hasBoxChars || hasDiagramTitle || hasNumberedBox || hasBoxStructure) {
         if (diagramStart === -1) {
           diagramStart = i;
@@ -1024,29 +1119,29 @@ const LegalDocumentsAdmin: React.FC = () => {
           const diagramContent = diagramLines.join('\n');
           const index = codeBlocks.length;
           codeBlocks.push(diagramContent);
-          diagramBlocks.push({ 
-            start: diagramStart, 
-            end: i - 1, 
-            placeholder: `${codeBlockPlaceholder}${index}${codeBlockPlaceholder}` 
+          diagramBlocks.push({
+            start: diagramStart,
+            end: i - 1,
+            placeholder: `${codeBlockPlaceholder}${index}${codeBlockPlaceholder}`
           });
         }
         diagramStart = -1;
         diagramLines = [];
       }
     }
-    
+
     // Handle diagram at end of document
     if (diagramStart !== -1 && diagramLines.length >= 5) {
       const diagramContent = diagramLines.join('\n');
       const index = codeBlocks.length;
       codeBlocks.push(diagramContent);
-      diagramBlocks.push({ 
-        start: diagramStart, 
-        end: allLines.length - 1, 
-        placeholder: `${codeBlockPlaceholder}${index}${codeBlockPlaceholder}` 
+      diagramBlocks.push({
+        start: diagramStart,
+        end: allLines.length - 1,
+        placeholder: `${codeBlockPlaceholder}${index}${codeBlockPlaceholder}`
       });
     }
-    
+
     // Replace detected diagram blocks with placeholders (in reverse order to preserve indices)
     const newLines = [...allLines];
     for (let i = diagramBlocks.length - 1; i >= 0; i--) {
@@ -1054,32 +1149,32 @@ const LegalDocumentsAdmin: React.FC = () => {
       newLines.splice(block.start, block.end - block.start + 1, block.placeholder);
     }
     result = newLines.join('\n');
-    
+
     // Convert **bold** to <strong>
     result = result.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    
+
     // Convert *italic* to <em>
     result = result.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    
+
     // Convert headers (must be done before other processing)
     result = result.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
     result = result.replace(/^### (.+)$/gm, '<h3>$1</h3>');
     result = result.replace(/^## (.+)$/gm, '<h2>$1</h2>');
     result = result.replace(/^# (.+)$/gm, '<h2>$1</h2>');
-    
+
     // Convert horizontal rules
     result = result.replace(/^---+$/gm, '<hr>');
-    
+
     // Process the content line by line for better list handling
     const lines = result.split('\n');
     const processedLines: string[] = [];
     let inList = false;
     let listType: 'ul' | 'ol' | null = null;
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmedLine = line.trim();
-      
+
       // Check for code block placeholder
       const codeBlockMatch = line.match(new RegExp(`${codeBlockPlaceholder}(\\d+)${codeBlockPlaceholder}`));
       if (codeBlockMatch) {
@@ -1089,7 +1184,7 @@ const LegalDocumentsAdmin: React.FC = () => {
           inList = false;
           listType = null;
         }
-        
+
         // Extract code block content (remove ``` markers)
         const codeBlockIndex = parseInt(codeBlockMatch[1], 10);
         const codeBlockContent = codeBlocks[codeBlockIndex];
@@ -1099,12 +1194,12 @@ const LegalDocumentsAdmin: React.FC = () => {
           .replace(/&/g, '&amp;')      // Escape HTML entities
           .replace(/</g, '&lt;')
           .replace(/>/g, '&gt;');
-        
+
         // Wrap in <pre> tag with monospace styling
         processedLines.push(`<pre class="ascii-diagram">${codeContent}</pre>`);
         continue;
       }
-      
+
       // Skip empty lines but close lists
       if (!trimmedLine) {
         if (inList) {
@@ -1115,7 +1210,7 @@ const LegalDocumentsAdmin: React.FC = () => {
         processedLines.push('');
         continue;
       }
-      
+
       // Check for bullet points (-, •, *, en-dash, em-dash). Allow missing space after marker.
       // Examples:
       // - Item
@@ -1134,7 +1229,7 @@ const LegalDocumentsAdmin: React.FC = () => {
         processedLines.push(`<li>${bulletMatch[2]}</li>`);
         continue;
       }
-      
+
       // Check for numbered lists:
       // 1. Item
       // 1) Item
@@ -1151,20 +1246,20 @@ const LegalDocumentsAdmin: React.FC = () => {
         processedLines.push(`<li>${numberedMatch[2]}</li>`);
         continue;
       }
-      
+
       // Close list if we hit non-list content
       if (inList) {
         processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
         inList = false;
         listType = null;
       }
-      
+
       // Pass through headers and hr unchanged
       if (trimmedLine.startsWith('<h') || trimmedLine === '<hr>') {
         processedLines.push(trimmedLine);
         continue;
       }
-      
+
       // If line has box-drawing characters, preserve it with monospace (even if not in a full diagram block)
       // This catches individual diagram lines that might have been missed by the block detection
       if (/[┌┐└┘│─├┤┬┴┼]/.test(line) || /^[\+\|][\-\|]+[\+\|]/.test(trimmedLine) || /^\|[\s\S]*\|$/.test(trimmedLine)) {
@@ -1175,25 +1270,25 @@ const LegalDocumentsAdmin: React.FC = () => {
         processedLines.push(`<pre class="ascii-diagram" style="margin: 0; padding: 4px 0; background: transparent; border: none;">${escapedLine}</pre>`);
         continue;
       }
-      
+
       // Regular text becomes a paragraph
       processedLines.push(`<p>${trimmedLine}</p>`);
     }
-    
+
     // Close any open list
     if (inList) {
       processedLines.push(listType === 'ol' ? '</ol>' : '</ul>');
     }
-    
+
     // Join and clean up
     result = processedLines.join('\n');
-    
+
     // Remove empty paragraphs
     result = result.replace(/<p><\/p>/g, '');
-    
+
     // Merge consecutive empty lines
     result = result.replace(/\n{3,}/g, '\n\n');
-    
+
     return result;
   };
 
@@ -1202,9 +1297,9 @@ const LegalDocumentsAdmin: React.FC = () => {
     const includeSignature = requiresSignature(document);
     const isProject = isProjectDocument(document.documentType);
     const exhibitDocs = getExhibitDocuments(document.id);
-    
+
     // Use different styling based on document type
-    const html = isProject 
+    const html = isProject
       ? generateProjectStylePdf(document, includeSignature, exhibitDocs)
       : generateLegalStylePdf(document, includeSignature, exhibitDocs);
 
@@ -1215,7 +1310,7 @@ const LegalDocumentsAdmin: React.FC = () => {
       printWindow.document.open();
       printWindow.document.write(html);
       printWindow.document.close();
-      
+
       // Function to clean up and print
       const cleanupAndPrint = () => {
         // Remove any "about:blank" text from the document
@@ -1234,13 +1329,13 @@ const LegalDocumentsAdmin: React.FC = () => {
         } catch (e) {
           // Ignore errors
         }
-        
+
         printWindow.focus();
         setTimeout(() => {
           printWindow.print();
         }, 100);
       };
-      
+
       // Wait for the document to be ready, then print
       if (printWindow.document.readyState === 'complete') {
         cleanupAndPrint();
@@ -1255,7 +1350,7 @@ const LegalDocumentsAdmin: React.FC = () => {
   // Generate exhibits HTML for PDF
   const generateExhibitsHtml = (exhibits: LegalDocument[]): string => {
     if (!exhibits.length) return '';
-    
+
     return exhibits.map((exhibit, index) => `
       <div class="exhibit" style="page-break-before: always;">
         <div class="exhibit-header" style="text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #333;">
@@ -1283,7 +1378,7 @@ const LegalDocumentsAdmin: React.FC = () => {
     const contentForPdf = document.documentType === 'custom'
       ? stripNumberedHeaders(document.content)
       : document.content;
-    
+
     return `
       <!DOCTYPE html>
       <html>
@@ -1541,7 +1636,7 @@ const LegalDocumentsAdmin: React.FC = () => {
     const exhibitsHtml = generateExhibitsHtml(exhibits);
     const hasExhibits = exhibits.length > 0;
     const showFooter = document.documentType !== 'custom';
-    
+
     return `
       <!DOCTYPE html>
       <html>
@@ -1784,7 +1879,7 @@ const LegalDocumentsAdmin: React.FC = () => {
       <Head>
         <title>Legal Document Generator | Pulse Admin</title>
       </Head>
-      
+
       <div className="min-h-screen bg-[#111417] text-white py-10 px-4">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
@@ -1810,17 +1905,16 @@ const LegalDocumentsAdmin: React.FC = () => {
 
           {/* Message Banner */}
           {message && (
-            <div className={`mb-6 p-4 rounded-xl border ${
-              message.type === 'success' 
-                ? 'bg-green-900/20 border-green-800 text-green-400'
-                : message.type === 'error'
+            <div className={`mb-6 p-4 rounded-xl border ${message.type === 'success'
+              ? 'bg-green-900/20 border-green-800 text-green-400'
+              : message.type === 'error'
                 ? 'bg-red-900/20 border-red-800 text-red-400'
                 : 'bg-blue-900/20 border-blue-800 text-blue-400'
-            }`}>
+              }`}>
               <div className="flex items-center gap-2">
-                {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : 
-                 message.type === 'error' ? <AlertCircle className="w-5 h-5" /> : 
-                 <AlertCircle className="w-5 h-5" />}
+                {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> :
+                  message.type === 'error' ? <AlertCircle className="w-5 h-5" /> :
+                    <AlertCircle className="w-5 h-5" />}
                 {message.text}
               </div>
             </div>
@@ -1832,7 +1926,7 @@ const LegalDocumentsAdmin: React.FC = () => {
               <Sparkles className="w-5 h-5 text-[#d7ff00]" />
               Generate New Document
             </h2>
-            
+
             {/* Document Type Selection */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-zinc-400 mb-2">
@@ -1843,11 +1937,10 @@ const LegalDocumentsAdmin: React.FC = () => {
                   <button
                     key={type.id}
                     onClick={() => setSelectedType(type.id)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
-                      selectedType === type.id
-                        ? 'bg-[#d7ff00] text-black font-medium'
-                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-                    }`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${selectedType === type.id
+                      ? 'bg-[#d7ff00] text-black font-medium'
+                      : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                      }`}
                   >
                     <span>{type.icon}</span>
                     <span className="truncate">{type.label}</span>
@@ -1897,11 +1990,10 @@ const LegalDocumentsAdmin: React.FC = () => {
             <button
               onClick={handleGenerate}
               disabled={generating || !prompt.trim()}
-              className={`flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-xl font-semibold transition-all ${
-                generating || !prompt.trim()
-                  ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-                  : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
-              }`}
+              className={`flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-xl font-semibold transition-all ${generating || !prompt.trim()
+                ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
+                }`}
             >
               {generating ? (
                 <>
@@ -1945,187 +2037,185 @@ const LegalDocumentsAdmin: React.FC = () => {
                   const signingRequestsForDoc = getSigningRequestsForDocument(document.id);
                   const signingRequest = signingRequestsForDoc[0];
                   const needsSignature = requiresSignature(document);
-                  
+
                   return (
-                  <div key={document.id} className="p-4 hover:bg-zinc-900/50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-1 flex-wrap">
-                          <h3 className="font-medium text-white truncate">
-                            {document.title}
-                          </h3>
-                          <StatusBadge status={document.status} />
-                          {document.updatedAt && (
-                            <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">
-                              Revised
+                    <div key={document.id} className="p-4 hover:bg-zinc-900/50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-1 flex-wrap">
+                            <h3 className="font-medium text-white truncate">
+                              {document.title}
+                            </h3>
+                            <StatusBadge status={document.status} />
+                            {document.updatedAt && (
+                              <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">
+                                Revised
+                              </span>
+                            )}
+                            {signingRequest && getSigningStatusBadge(signingRequest.status)}
+                            {needsSignature && !signingRequest && document.status === 'completed' && (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-900/30 text-orange-400 rounded-full text-xs font-medium border border-orange-800">
+                                <PenTool className="w-3 h-3" />
+                                Signature Required
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-zinc-500 flex-wrap">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              {formatDate(document.createdAt)}
                             </span>
-                          )}
-                          {signingRequest && getSigningStatusBadge(signingRequest.status)}
-                          {needsSignature && !signingRequest && document.status === 'completed' && (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-900/30 text-orange-400 rounded-full text-xs font-medium border border-orange-800">
-                              <PenTool className="w-3 h-3" />
-                              Signature Required
+                            <span className="px-2 py-0.5 bg-zinc-800 rounded text-xs">
+                              {DOCUMENT_TYPES.find(t => t.id === document.documentType)?.label || document.documentType}
                             </span>
-                          )}
+                            {signingRequest && (
+                              <span className="text-xs text-zinc-500">
+                                {signingRequestsForDoc.length > 1
+                                  ? `Sent to: ${signingRequestsForDoc.length} signers`
+                                  : `Sent to: ${signingRequest.recipientEmail}`}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-zinc-500 flex-wrap">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {formatDate(document.createdAt)}
-                          </span>
-                          <span className="px-2 py-0.5 bg-zinc-800 rounded text-xs">
-                            {DOCUMENT_TYPES.find(t => t.id === document.documentType)?.label || document.documentType}
-                          </span>
-                          {signingRequest && (
-                            <span className="text-xs text-zinc-500">
-                              {signingRequestsForDoc.length > 1
-                                ? `Sent to: ${signingRequestsForDoc.length} signers`
-                                : `Sent to: ${signingRequest.recipientEmail}`}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 ml-4 flex-wrap justify-end">
-                        {document.status === 'completed' && (
-                          <>
-                            <button
-                              onClick={() => window.open(`/legal-doc/${document.id}`, '_blank')}
-                              className="flex items-center gap-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
-                            >
-                              <Eye className="w-4 h-4" />
-                              Preview
-                            </button>
-                            <button
-                              onClick={() => openEditModal(document)}
-                              className="flex items-center gap-1 px-3 py-2 bg-blue-900/30 hover:bg-blue-900/50 text-blue-400 rounded-lg text-sm transition-colors"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => openAuditModal(document)}
-                              className="flex items-center gap-1 px-3 py-2 bg-purple-900/30 hover:bg-purple-900/50 text-purple-400 rounded-lg text-sm transition-colors"
-                            >
-                              <ClipboardCheck className="w-4 h-4" />
-                              Audit
-                            </button>
-                            
-                            {/* Signing Actions */}
-                            {signingRequest?.status === 'signed' ? (
+
+                        <div className="flex items-center gap-2 ml-4 flex-wrap justify-end">
+                          {document.status === 'completed' && (
+                            <>
                               <button
-                                onClick={() => window.open(`/sign/${signingRequest.id}?download=true`, '_blank')}
-                                className="flex items-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors"
-                              >
-                                <Download className="w-4 h-4" />
-                                Download Signed
-                              </button>
-                            ) : needsSignature && !signingRequest ? (
-                              <button
-                                onClick={() => openSigningModal(document)}
-                                className="flex items-center gap-1 px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-medium transition-colors"
-                              >
-                                <Send className="w-4 h-4" />
-                                Send for Signature
-                              </button>
-                            ) : signingRequest ? (
-                              <button
-                                onClick={() => window.open(`/sign/${signingRequest.id}`, '_blank')}
-                                className="flex items-center gap-1 px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors"
+                                onClick={() => window.open(`/legal-doc/${document.id}`, '_blank')}
+                                className="flex items-center gap-1 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
                               >
                                 <Eye className="w-4 h-4" />
-                                View Signing Page
+                                Preview
                               </button>
-                            ) : null}
-                            
-                            <button
-                              onClick={() => handleShareDocument(document)}
-                              className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                copiedLinkId === document.id
+                              <button
+                                onClick={() => openEditModal(document)}
+                                className="flex items-center gap-1 px-3 py-2 bg-blue-900/30 hover:bg-blue-900/50 text-blue-400 rounded-lg text-sm transition-colors"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => openAuditModal(document)}
+                                className="flex items-center gap-1 px-3 py-2 bg-purple-900/30 hover:bg-purple-900/50 text-purple-400 rounded-lg text-sm transition-colors"
+                              >
+                                <ClipboardCheck className="w-4 h-4" />
+                                Audit
+                              </button>
+
+                              {/* Signing Actions */}
+                              {signingRequest?.status === 'signed' ? (
+                                <button
+                                  onClick={() => window.open(`/sign/${signingRequest.id}?download=true`, '_blank')}
+                                  className="flex items-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors"
+                                >
+                                  <Download className="w-4 h-4" />
+                                  Download Signed
+                                </button>
+                              ) : needsSignature && !signingRequest ? (
+                                <button
+                                  onClick={() => openSigningModal(document)}
+                                  className="flex items-center gap-1 px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-medium transition-colors"
+                                >
+                                  <Send className="w-4 h-4" />
+                                  Send for Signature
+                                </button>
+                              ) : signingRequest ? (
+                                <button
+                                  onClick={() => window.open(`/sign/${signingRequest.id}`, '_blank')}
+                                  className="flex items-center gap-1 px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  View Signing Page
+                                </button>
+                              ) : null}
+
+                              <button
+                                onClick={() => handleShareDocument(document)}
+                                className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${copiedLinkId === document.id
                                   ? 'bg-green-600 text-white'
                                   : 'bg-indigo-600 hover:bg-indigo-500 text-white'
-                              }`}
-                            >
-                              {copiedLinkId === document.id ? (
-                                <>
-                                  <Check className="w-4 h-4" />
-                                  Copied!
-                                </>
-                              ) : (
-                                <>
-                                  <Share2 className="w-4 h-4" />
-                                  Share
-                                </>
-                              )}
-                            </button>
-                            <button
-                              onClick={() => openExhibitsModal(document)}
-                              className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                document.exhibits?.length
+                                  }`}
+                              >
+                                {copiedLinkId === document.id ? (
+                                  <>
+                                    <Check className="w-4 h-4" />
+                                    Copied!
+                                  </>
+                                ) : (
+                                  <>
+                                    <Share2 className="w-4 h-4" />
+                                    Share
+                                  </>
+                                )}
+                              </button>
+                              <button
+                                onClick={() => openExhibitsModal(document)}
+                                className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${document.exhibits?.length
                                   ? 'bg-cyan-600 hover:bg-cyan-500 text-white'
                                   : 'bg-zinc-700 hover:bg-zinc-600 text-white'
-                              }`}
-                            >
-                              <Paperclip className="w-4 h-4" />
-                              Exhibits {document.exhibits?.length ? `(${document.exhibits.length})` : ''}
-                            </button>
-                            <button
-                              onClick={() => generatePdf(document)}
-                              className="flex items-center gap-1 px-3 py-2 bg-[#d7ff00] text-black hover:bg-[#c5eb00] rounded-lg text-sm font-medium transition-colors"
-                            >
-                              <Download className="w-4 h-4" />
-                              Download PDF
-                            </button>
-                          </>
-                        )}
-                        <button
-                          onClick={() => handleDelete(document.id)}
-                          disabled={deletingId === document.id}
-                          className="flex items-center gap-1 px-3 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg text-sm transition-colors"
-                        >
-                          {deletingId === document.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
+                                  }`}
+                              >
+                                <Paperclip className="w-4 h-4" />
+                                Exhibits {document.exhibits?.length ? `(${document.exhibits.length})` : ''}
+                              </button>
+                              <button
+                                onClick={() => generatePdf(document)}
+                                className="flex items-center gap-1 px-3 py-2 bg-[#d7ff00] text-black hover:bg-[#c5eb00] rounded-lg text-sm font-medium transition-colors"
+                              >
+                                <Download className="w-4 h-4" />
+                                Download PDF
+                              </button>
+                            </>
                           )}
-                        </button>
+                          <button
+                            onClick={() => handleDelete(document.id)}
+                            disabled={deletingId === document.id}
+                            className="flex items-center gap-1 px-3 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg text-sm transition-colors"
+                          >
+                            {deletingId === document.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Expanded Preview */}
+                      {expandedDoc === document.id && document.status === 'completed' && (
+                        <div className="mt-4 p-4 bg-zinc-900 rounded-xl border border-zinc-700">
+                          <div className="prose prose-invert prose-sm max-w-none max-h-96 overflow-y-auto">
+                            <div
+                              className="text-zinc-200 leading-relaxed"
+                              dangerouslySetInnerHTML={{ __html: formatContentForPdf(document.content, true) }}
+                            />
+                          </div>
+                          <div className="mt-4 pt-4 border-t border-zinc-700">
+                            <p className="text-xs text-zinc-500">
+                              <strong>Original Prompt:</strong> {document.prompt}
+                            </p>
+                            {document.revisionHistory && document.revisionHistory.length > 0 && (
+                              <div className="mt-2">
+                                <p className="text-xs text-zinc-400 font-medium">Revision History:</p>
+                                {document.revisionHistory.map((rev, idx) => (
+                                  <p key={idx} className="text-xs text-zinc-500 mt-1">
+                                    • {rev.prompt}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Error Message */}
+                      {document.status === 'error' && document.errorMessage && (
+                        <div className="mt-2 p-3 bg-red-900/20 border border-red-800 rounded-lg text-sm text-red-400">
+                          {document.errorMessage}
+                        </div>
+                      )}
                     </div>
-
-                    {/* Expanded Preview */}
-                    {expandedDoc === document.id && document.status === 'completed' && (
-                      <div className="mt-4 p-4 bg-zinc-900 rounded-xl border border-zinc-700">
-                        <div className="prose prose-invert prose-sm max-w-none max-h-96 overflow-y-auto">
-                          <div
-                            className="text-zinc-200 leading-relaxed"
-                            dangerouslySetInnerHTML={{ __html: formatContentForPdf(document.content, true) }}
-                          />
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-zinc-700">
-                          <p className="text-xs text-zinc-500">
-                            <strong>Original Prompt:</strong> {document.prompt}
-                          </p>
-                          {document.revisionHistory && document.revisionHistory.length > 0 && (
-                            <div className="mt-2">
-                              <p className="text-xs text-zinc-400 font-medium">Revision History:</p>
-                              {document.revisionHistory.map((rev, idx) => (
-                                <p key={idx} className="text-xs text-zinc-500 mt-1">
-                                  • {rev.prompt}
-                                </p>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Error Message */}
-                    {document.status === 'error' && document.errorMessage && (
-                      <div className="mt-2 p-3 bg-red-900/20 border border-red-800 rounded-lg text-sm text-red-400">
-                        {document.errorMessage}
-                      </div>
-                    )}
-                  </div>
                   );
                 })}
               </div>
@@ -2258,7 +2348,7 @@ const LegalDocumentsAdmin: React.FC = () => {
                   </span>
                   <ChevronUp className={`w-4 h-4 transition-transform ${showDiagramSection ? '' : 'rotate-180'}`} />
                 </button>
-                
+
                 {showDiagramSection && (
                   <div className="mt-4 space-y-4">
                     {/* Diagram Input */}
@@ -2331,11 +2421,10 @@ const LegalDocumentsAdmin: React.FC = () => {
                       <button
                         onClick={handleInsertDiagram}
                         disabled={!diagramInput.trim()}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                          diagramInput.trim()
-                            ? 'bg-green-600 hover:bg-green-500 text-white'
-                            : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
-                        }`}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${diagramInput.trim()
+                          ? 'bg-green-600 hover:bg-green-500 text-white'
+                          : 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                          }`}
                       >
                         <span>📊</span>
                         Insert Diagram
@@ -2358,7 +2447,7 @@ const LegalDocumentsAdmin: React.FC = () => {
                     </span>
                     <ChevronUp className={`w-4 h-4 transition-transform ${showRevisionDebug ? '' : 'rotate-180'}`} />
                   </button>
-                  
+
                   {showRevisionDebug && (
                     <div className="mt-3 p-4 bg-zinc-900/50 rounded-xl border border-zinc-700 space-y-3">
                       <div>
@@ -2367,7 +2456,7 @@ const LegalDocumentsAdmin: React.FC = () => {
                           {revisionDebugInfo.mode === 'patches' ? '✅ Patch-based' : revisionDebugInfo.mode === 'full' ? '📄 Full document' : revisionDebugInfo.mode === 'sections' ? '📑 Section-based' : '❌ Error'}
                         </p>
                       </div>
-                      
+
                       {revisionDebugInfo.excerptCounts && (
                         <div>
                           <p className="text-xs font-semibold text-zinc-400 mb-1">Excerpts Used:</p>
@@ -2379,7 +2468,7 @@ const LegalDocumentsAdmin: React.FC = () => {
                           </p>
                         </div>
                       )}
-                      
+
                       {revisionDebugInfo.patchCounts && (
                         <div>
                           <p className="text-xs font-semibold text-zinc-400 mb-1">Patches Generated:</p>
@@ -2391,7 +2480,7 @@ const LegalDocumentsAdmin: React.FC = () => {
                           </p>
                         </div>
                       )}
-                      
+
                       {revisionDebugInfo.excerptsUsed && revisionDebugInfo.excerptsUsed.length > 0 && (
                         <div>
                           <p className="text-xs font-semibold text-zinc-400 mb-1">Excerpt Previews:</p>
@@ -2404,7 +2493,7 @@ const LegalDocumentsAdmin: React.FC = () => {
                           </div>
                         </div>
                       )}
-                      
+
                       {revisionDebugInfo.patchFailures && revisionDebugInfo.patchFailures.length > 0 && (
                         <div>
                           <p className="text-xs font-semibold text-red-400 mb-1">Patch Failures:</p>
@@ -2438,44 +2527,54 @@ const LegalDocumentsAdmin: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700">
+            <div className="flex items-center justify-between gap-3 p-6 border-t border-zinc-700">
               <button
-                onClick={() => setIsEditModalOpen(false)}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+                onClick={handleFormatDocument}
+                disabled={isRevising}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 border border-purple-600/30 rounded-lg text-sm font-medium transition-all"
+                title="Apply markdown formatting to document content"
               >
-                Cancel
+                <Edit3 className="w-4 h-4" />
+                Format
               </button>
-              <button
-                onClick={handleRevise}
-                disabled={
-                  isRevising ||
-                  (!editPrompt.trim() &&
-                    !contentManuallyModified &&
-                    editTitle.trim() === editingDocument?.title &&
-                    editRequiresSignature === Boolean(editingDocument?.requiresSignature ?? SIGNATURE_REQUIRED_TYPES.includes(editingDocument?.documentType || '')))
-                }
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isRevising ||
-                  (!editPrompt.trim() &&
-                    !contentManuallyModified &&
-                    editTitle.trim() === editingDocument?.title &&
-                    editRequiresSignature === Boolean(editingDocument?.requiresSignature ?? SIGNATURE_REQUIRED_TYPES.includes(editingDocument?.documentType || '')))
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRevise}
+                  disabled={
+                    isRevising ||
+                    (!editPrompt.trim() &&
+                      !contentManuallyModified &&
+                      editTitle.trim() === editingDocument?.title &&
+                      editRequiresSignature === Boolean(editingDocument?.requiresSignature ?? SIGNATURE_REQUIRED_TYPES.includes(editingDocument?.documentType || '')))
+                  }
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isRevising ||
+                    (!editPrompt.trim() &&
+                      !contentManuallyModified &&
+                      editTitle.trim() === editingDocument?.title &&
+                      editRequiresSignature === Boolean(editingDocument?.requiresSignature ?? SIGNATURE_REQUIRED_TYPES.includes(editingDocument?.documentType || '')))
                     ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-500'
-                }`}
-              >
-                {isRevising ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {editPrompt.trim() && !contentManuallyModified ? 'Revising...' : 'Saving...'}
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    {editPrompt.trim() && !contentManuallyModified ? 'Apply Changes' : 'Save'}
-                  </>
-                )}
-              </button>
+                    }`}
+                >
+                  {isRevising ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      {editPrompt.trim() && !contentManuallyModified ? 'Revising...' : 'Saving...'}
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      {editPrompt.trim() && !contentManuallyModified ? 'Apply Changes' : 'Save'}
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2705,7 +2804,7 @@ const LegalDocumentsAdmin: React.FC = () => {
                       </button>
                     </div>
 
-                <div>
+                    <div>
                       <label className="block text-xs text-zinc-400 mb-1">Stakeholder (optional)</label>
                       <select
                         value={s.stakeholderId || ''}
@@ -2733,24 +2832,24 @@ const LegalDocumentsAdmin: React.FC = () => {
                     <div className="grid grid-cols-1 gap-3">
                       <div>
                         <label className="block text-xs text-zinc-400 mb-1">Name</label>
-                  <input
-                    type="text"
+                        <input
+                          type="text"
                           value={s.name}
                           onChange={(e) => setSigners(prev => prev.map(x => x.id === s.id ? { ...x, name: e.target.value } : x))}
-                    placeholder="Enter the signer's full name"
+                          placeholder="Enter the signer's full name"
                           className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 transition-colors"
-                  />
-                </div>
-                <div>
+                        />
+                      </div>
+                      <div>
                         <label className="block text-xs text-zinc-400 mb-1">Email</label>
-                  <input
-                    type="email"
+                        <input
+                          type="email"
                           value={s.email}
                           onChange={(e) => setSigners(prev => prev.map(x => x.id === s.id ? { ...x, email: e.target.value } : x))}
-                    placeholder="Enter email address"
+                          placeholder="Enter email address"
                           className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-orange-500 transition-colors"
-                  />
-                </div>
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -2781,11 +2880,10 @@ const LegalDocumentsAdmin: React.FC = () => {
               <button
                 onClick={handleSendForSignature}
                 disabled={isSending || signers.length === 0 || signers.some(s => !s.name.trim() || !s.email.trim())}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isSending || signers.length === 0 || signers.some(s => !s.name.trim() || !s.email.trim())
-                    ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-                    : 'bg-orange-600 text-white hover:bg-orange-500'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isSending || signers.length === 0 || signers.some(s => !s.name.trim() || !s.email.trim())
+                  ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                  : 'bg-orange-600 text-white hover:bg-orange-500'
+                  }`}
               >
                 {isSending ? (
                   <>
@@ -2848,22 +2946,20 @@ const LegalDocumentsAdmin: React.FC = () => {
                     .map((doc, index) => {
                       const isSelected = selectedExhibits.includes(doc.id);
                       const exhibitIndex = selectedExhibits.indexOf(doc.id);
-                      
+
                       return (
                         <button
                           key={doc.id}
                           onClick={() => toggleExhibit(doc.id)}
-                          className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left ${
-                            isSelected
-                              ? 'bg-cyan-900/30 border-cyan-600'
-                              : 'bg-zinc-900/50 border-zinc-700 hover:border-zinc-600'
-                          }`}
+                          className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left ${isSelected
+                            ? 'bg-cyan-900/30 border-cyan-600'
+                            : 'bg-zinc-900/50 border-zinc-700 hover:border-zinc-600'
+                            }`}
                         >
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${
-                            isSelected
-                              ? 'bg-cyan-600 text-white'
-                              : 'bg-zinc-800 text-zinc-400'
-                          }`}>
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-sm ${isSelected
+                            ? 'bg-cyan-600 text-white'
+                            : 'bg-zinc-800 text-zinc-400'
+                            }`}>
                             {isSelected ? String.fromCharCode(65 + exhibitIndex) : (index + 1)}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -2874,11 +2970,10 @@ const LegalDocumentsAdmin: React.FC = () => {
                               {DOCUMENT_TYPES.find(t => t.id === doc.documentType)?.label || doc.documentType} • {formatDate(doc.createdAt)}
                             </p>
                           </div>
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${
-                            isSelected
-                              ? 'bg-cyan-600 border-cyan-600'
-                              : 'border-zinc-600'
-                          }`}>
+                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected
+                            ? 'bg-cyan-600 border-cyan-600'
+                            : 'border-zinc-600'
+                            }`}>
                             {isSelected && <Check className="w-4 h-4 text-white" />}
                           </div>
                         </button>
@@ -2914,11 +3009,10 @@ const LegalDocumentsAdmin: React.FC = () => {
               <button
                 onClick={handleSaveExhibits}
                 disabled={isSavingExhibits}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                  isSavingExhibits
-                    ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-                    : 'bg-cyan-600 text-white hover:bg-cyan-500'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isSavingExhibits
+                  ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                  : 'bg-cyan-600 text-white hover:bg-cyan-500'
+                  }`}
               >
                 {isSavingExhibits ? (
                   <>

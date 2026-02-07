@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database } from 'lucide-react';
+import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -24,13 +24,13 @@ const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link })
     >
       {/* Top gradient border */}
       <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 via-purple-500 to-[#d7ff00]"></div>
-      
+
       {/* Left gradient border */}
       <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-blue-500 via-purple-500 to-[#d7ff00]"></div>
-      
+
       {/* Hover effect */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-[#d7ff00]/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-      
+
       <div className="flex items-center mb-4">
         <div className="w-10 h-10 flex items-center justify-center rounded-full bg-[#262a30] text-[#d7ff00] mr-3 group-hover:scale-110 transition-transform duration-300 flex-shrink-0">
           {icon}
@@ -38,7 +38,7 @@ const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link })
         <h3 className="text-lg font-semibold text-white">{title}</h3>
       </div>
       <p className="text-gray-400 group-hover:text-gray-300 transition-colors flex-grow">{description}</p>
-      
+
       {/* Bottom gradient animation on hover */}
       <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-[#40c9ff] to-[#d7ff00] transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></div>
     </Link>
@@ -327,6 +327,12 @@ const adminCardsData = [
     description: "Import, transform, and push leads to Instantly campaigns. Massage lead data with AI and export to outreach tools.",
     icon: <Database className="w-5 h-5" />,
     link: "/admin/leadMassaging"
+  },
+  {
+    title: "Email Sequences",
+    description: "View and manage automated email sequences, customize templates, and send test emails.",
+    icon: <Mail className="w-5 h-5" />,
+    link: "/admin/emailSequences"
   }
 ];
 
@@ -353,9 +359,9 @@ const EnvironmentSwitcher: React.FC = () => {
     window.localStorage.setItem('devMode', String(newMode));
     dispatch(toggleDevMode());
     initializeFirebase(newMode);
-    
+
     setIsDropdownOpen(false);
-    
+
     // Add a slight delay before reloading to ensure Firebase initialization completes
     setTimeout(() => {
       window.location.reload();
@@ -379,21 +385,20 @@ const EnvironmentSwitcher: React.FC = () => {
       {isDropdownOpen && (
         <>
           {/* Backdrop */}
-          <div 
-            className="fixed inset-0 z-10" 
+          <div
+            className="fixed inset-0 z-10"
             onClick={() => setIsDropdownOpen(false)}
           />
-          
+
           {/* Dropdown */}
           <div className="absolute top-full mt-1 right-0 w-64 bg-[#1a1e24] border border-zinc-700 rounded-lg shadow-xl z-20">
             <div className="p-2">
               <button
                 onClick={() => handleEnvironmentSwitch(false)}
-                className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
-                  !isDevelopment 
-                    ? 'bg-[#E0FE10] text-black font-medium' 
+                className={`w-full text-left px-3 py-2 rounded-md transition-colors ${!isDevelopment
+                    ? 'bg-[#E0FE10] text-black font-medium'
                     : 'text-zinc-300 hover:bg-[#262a30] hover:text-white'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${!isDevelopment ? 'bg-black' : 'bg-zinc-600'}`} />
@@ -403,14 +408,13 @@ const EnvironmentSwitcher: React.FC = () => {
                   </div>
                 </div>
               </button>
-              
+
               <button
                 onClick={() => handleEnvironmentSwitch(true)}
-                className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
-                  isDevelopment 
-                    ? 'bg-[#E0FE10] text-black font-medium' 
+                className={`w-full text-left px-3 py-2 rounded-md transition-colors ${isDevelopment
+                    ? 'bg-[#E0FE10] text-black font-medium'
                     : 'text-zinc-300 hover:bg-[#262a30] hover:text-white'
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${isDevelopment ? 'bg-black' : 'bg-zinc-600'}`} />
@@ -421,7 +425,7 @@ const EnvironmentSwitcher: React.FC = () => {
                 </div>
               </button>
             </div>
-            
+
             <div className="border-t border-zinc-700 p-2">
               <div className="text-xs text-zinc-500 px-3 py-1">
                 Config source: {isLocalhost ? '.env.local' : (isDevelopment ? 'firebaseConfigs' : 'Netlify')}
@@ -465,7 +469,7 @@ const AdminHome: React.FC = () => {
               </span>
               Admin Dashboard
             </h1>
-            
+
             <EnvironmentSwitcher />
           </div>
 
@@ -497,7 +501,7 @@ const AdminHome: React.FC = () => {
               <span className="text-white font-medium">{adminCardsData.length}</span>
             </div>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAdminCards.map((func, index) => (
               <AdminCard

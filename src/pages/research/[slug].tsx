@@ -367,18 +367,30 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
         </header>
 
         {/* Featured Image */}
-        <div className="max-w-2xl mx-auto px-6 md:px-8 mb-10">
+        <div className="max-w-4xl mx-auto px-6 md:px-8 mb-12">
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="relative max-w-sm mx-auto opacity-80"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="relative w-full max-w-xl mx-auto"
           >
-            <img
-              src="/research-the-system-featured.png"
-              alt="Metabolic system illustration"
-              className="w-full h-auto"
-            />
+            {/* Card container with elevation */}
+            <div
+              className="relative bg-white rounded-2xl overflow-hidden"
+              style={{
+                boxShadow: '0 4px 20px -4px rgba(0, 0, 0, 0.08), 0 8px 32px -8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)',
+                border: '1px solid rgba(0, 0, 0, 0.04)',
+              }}
+            >
+              {/* Image wrapper with consistent aspect ratio */}
+              <div className="aspect-[4/3] bg-gradient-to-b from-[#FAFAF7] to-[#F5F5F0] flex items-center justify-center p-6 md:p-10">
+                <img
+                  src="/research-the-system-featured.png"
+                  alt="Metabolic system illustration"
+                  className="w-full h-full object-contain max-h-[360px]"
+                />
+              </div>
+            </div>
           </motion.div>
         </div>
 

@@ -62,7 +62,7 @@ const FollowButton: React.FC<FollowButtonProps> = ({ targetUser, onFollowSuccess
 
     try {
       const isCurrentlyFollowing = followStatus.isFollowing;
-      
+
       if (isCurrentlyFollowing) {
         // Unfollow user
         await userService.unfollowUser(targetUser.id);
@@ -70,7 +70,7 @@ const FollowButton: React.FC<FollowButtonProps> = ({ targetUser, onFollowSuccess
           isFollowing: false,
           status: 'notFollowing'
         });
-        
+
         dispatch(showToast({
           message: `You unfollowed ${targetUser.displayName}`,
           type: 'success',
@@ -83,12 +83,31 @@ const FollowButton: React.FC<FollowButtonProps> = ({ targetUser, onFollowSuccess
           isFollowing: true,
           status: 'accepted'
         });
-        
+
         dispatch(showToast({
           message: `You are now following ${targetUser.displayName}!`,
           type: 'success',
           duration: 3000
         }));
+
+        // Send new follower notification email (fire and forget - don't block the UI)
+        if (targetUser.email) {
+          fetch('/.netlify/functions/send-new-follower-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              toEmail: targetUser.email,
+              firstName: targetUser.displayName?.split(' ')[0] || targetUser.username,
+              followerName: currentUser.displayName || currentUser.username,
+              followerUsername: currentUser.username,
+              followerProfileImageUrl: currentUser.profileImage?.profileImageURL || '',
+              followerLocation: '', // Location not readily available in current user context
+            }),
+          }).catch((err) => {
+            // Silently fail - email notification shouldn't block follow action
+            console.warn('[FollowButton] Failed to send new follower email:', err);
+          });
+        }
       }
 
       // Call success callback
@@ -108,14 +127,14 @@ const FollowButton: React.FC<FollowButtonProps> = ({ targetUser, onFollowSuccess
 
   const handleSignInSuccess = async () => {
     setShowSignInModal(false);
-    
+
     // Show welcome toast
     dispatch(showToast({
       message: 'Welcome! You can now follow users.',
       type: 'success',
       duration: 3000
     }));
-    
+
     // If there was a pending follow action, execute it after sign-in
     if (pendingAction === 'follow') {
       setPendingAction(null);
@@ -141,15 +160,15 @@ const FollowButton: React.FC<FollowButtonProps> = ({ targetUser, onFollowSuccess
 
   const getButtonStyle = () => {
     const baseStyle = 'px-6 py-2 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center gap-2';
-    
+
     if (isLoading) {
       return `${baseStyle} bg-gray-600 text-gray-300 cursor-not-allowed`;
     }
-    
+
     if (followStatus.isFollowing) {
       return `${baseStyle} bg-green-600 text-white hover:bg-green-700 border border-green-600`;
     }
-    
+
     return `${baseStyle} bg-transparent text-white border border-gray-400 hover:bg-white hover:text-black`;
   };
 
