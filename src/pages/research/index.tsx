@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import type { NextPage } from 'next';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import PageHead from '../../components/PageHead';
+import { collection, getDocs, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { db } from '../../api/firebase/config';
 
 // ─── Research categories ───────────────────────────────────────────
 const categories = [
@@ -11,35 +13,36 @@ const categories = [
   'Performance Science',
   'Technology',
   'Wearables',
+  'Nutrition',
+  'Recovery',
 ];
 
-// ─── Article data ──────────────────────────────────────────────────
+// ─── Article interface ─────────────────────────────────────────────
 interface Article {
   slug: string;
   title: string;
   subtitle: string;
   author: string;
-  date: string;
   category: string;
   readTime: string;
   excerpt: string;
-  featured?: boolean;
+  featured: boolean;
+  featuredImage?: string;
+  status: 'draft' | 'published' | 'archived';
+  createdAt: Timestamp;
+  publishedAt?: Timestamp;
 }
 
-const articles: Article[] = [
-  {
-    slug: 'the-system',
-    title: 'Think Like an Athlete. Decoding Your Metabolism.',
-    subtitle: "How bodybuilding helped me understand metabolic health.",
-    author: 'Tremaine',
-    date: 'Feb 5, 2026',
-    category: 'Metabolic Health',
-    readTime: '22 min read',
-    excerpt:
-      'Bodybuilding, at its core, is not about lifting weights or eating chicken and rice. It\'s about surgically manipulating biological systems. The same systems we manipulate for aesthetics and performance are the exact systems that break down in metabolic disease.',
-    featured: true,
-  },
-];
+// ─── Format date from Timestamp ────────────────────────────────────
+const formatDate = (timestamp: Timestamp | undefined): string => {
+  if (!timestamp) return '';
+  const date = timestamp.toDate();
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
 
 // ─── Article card component ────────────────────────────────────────
 const ArticleCard: React.FC<{ article: Article; index: number }> = ({ article, index }) => {
@@ -57,7 +60,7 @@ const ArticleCard: React.FC<{ article: Article; index: number }> = ({ article, i
               <div className="flex items-center gap-3 mb-3">
                 <span className="text-sm font-medium text-stone-500">{article.category}</span>
                 <span className="text-stone-300">·</span>
-                <span className="text-sm text-stone-400">{article.date}</span>
+                <span className="text-sm text-stone-400">{formatDate(article.publishedAt || article.createdAt)}</span>
               </div>
 
               <h3 className="text-xl md:text-2xl font-semibold text-stone-900 mb-2 group-hover:text-stone-700 transition-colors duration-300 leading-tight">
@@ -100,14 +103,14 @@ const FeaturedArticleCard: React.FC<{ article: Article }> = ({ article }) => {
               <span className="text-stone-300">·</span>
               <span className="text-sm text-stone-400">{article.category}</span>
               <span className="text-stone-300">·</span>
-              <span className="text-sm text-stone-400">{article.date}</span>
+              <span className="text-sm text-stone-400">{formatDate(article.publishedAt || article.createdAt)}</span>
             </div>
 
             {/* Featured Image */}
-            {article.slug === 'the-system' && (
+            {article.featuredImage && (
               <div className="relative aspect-[16/10] rounded-xl overflow-hidden bg-stone-100 group-hover:shadow-lg transition-shadow duration-300">
                 <img
-                  src="/research-the-system-featured.png"
+                  src={article.featuredImage}
                   alt={article.title}
                   className="w-full h-full object-cover"
                 />
@@ -116,9 +119,11 @@ const FeaturedArticleCard: React.FC<{ article: Article }> = ({ article }) => {
 
             {/* Content */}
             <div>
-              <p className="text-xs font-semibold text-stone-400 mb-2 uppercase tracking-widest" style={{ letterSpacing: '0.15em' }}>
-                {article.subtitle}
-              </p>
+              {article.subtitle && (
+                <p className="text-xs font-semibold text-stone-400 mb-2 uppercase tracking-widest" style={{ letterSpacing: '0.15em' }}>
+                  {article.subtitle}
+                </p>
+              )}
               <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold text-stone-900 leading-tight mb-4 group-hover:text-stone-600 transition-colors duration-300">
                 {article.title}
               </h2>
@@ -148,6 +153,35 @@ const FeaturedArticleCard: React.FC<{ article: Article }> = ({ article }) => {
 // ─── Main Research Page ────────────────────────────────────────────
 const ResearchPage: NextPage = () => {
   const [activeCategory, setActiveCategory] = React.useState('All');
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch published articles from Firestore
+  useEffect(() => {
+    const fetchArticles = async () => {
+      try {
+        const articlesQuery = query(
+          collection(db, 'researchArticles'),
+          where('status', '==', 'published'),
+          orderBy('publishedAt', 'desc')
+        );
+        const snapshot = await getDocs(articlesQuery);
+        const articlesData = snapshot.docs.map(doc => ({
+          slug: doc.id,
+          ...doc.data()
+        })) as Article[];
+        setArticles(articlesData);
+      } catch (error) {
+        console.error('Error fetching articles:', error);
+        // Fallback to empty array
+        setArticles([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchArticles();
+  }, []);
 
   const filteredArticles = activeCategory === 'All'
     ? articles
@@ -265,11 +299,10 @@ const ResearchPage: NextPage = () => {
               <button
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
-                  activeCategory === cat
+                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${activeCategory === cat
                     ? 'bg-stone-900 text-white'
                     : 'bg-transparent text-stone-500 hover:text-stone-800 hover:bg-stone-100'
-                }`}
+                  }`}
               >
                 {cat}
               </button>
@@ -277,33 +310,51 @@ const ResearchPage: NextPage = () => {
           </motion.div>
         </div>
 
-        {/* ─── Featured article ───────────────────────────── */}
-        {featuredArticle && (
-          <div className="max-w-6xl mx-auto px-6 md:px-8 pb-12">
-            <FeaturedArticleCard article={featuredArticle} />
-          </div>
-        )}
-
-        {/* ─── Article list ───────────────────────────────── */}
-        <div className="max-w-6xl mx-auto px-6 md:px-8 pb-24">
-          {remainingArticles.length > 0 ? (
-            <div>
-              {remainingArticles.map((article, index) => (
-                <ArticleCard key={article.slug} article={article} index={index} />
-              ))}
-            </div>
-          ) : !featuredArticle ? (
+        {/* ─── Loading State ──────────────────────────────── */}
+        {loading ? (
+          <div className="max-w-6xl mx-auto px-6 md:px-8 pb-24">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="text-center py-20"
             >
-              <p className="text-stone-400 text-lg">
-                No articles in this category yet. Check back soon.
-              </p>
+              <div className="inline-block w-8 h-8 border-2 border-stone-300 border-t-stone-900 rounded-full animate-spin mb-4" />
+              <p className="text-stone-400">Loading articles...</p>
             </motion.div>
-          ) : null}
-        </div>
+          </div>
+        ) : (
+          <>
+            {/* ─── Featured article ───────────────────────────── */}
+            {featuredArticle && (
+              <div className="max-w-6xl mx-auto px-6 md:px-8 pb-12">
+                <FeaturedArticleCard article={featuredArticle} />
+              </div>
+            )}
+
+            {/* ─── Article list ───────────────────────────────── */}
+            <div className="max-w-6xl mx-auto px-6 md:px-8 pb-24">
+              {remainingArticles.length > 0 ? (
+                <div>
+                  {remainingArticles.map((article, index) => (
+                    <ArticleCard key={article.slug} article={article} index={index} />
+                  ))}
+                </div>
+              ) : !featuredArticle ? (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-center py-20"
+                >
+                  <p className="text-stone-400 text-lg">
+                    {activeCategory === 'All'
+                      ? 'No articles published yet. Check back soon.'
+                      : 'No articles in this category yet. Check back soon.'}
+                  </p>
+                </motion.div>
+              ) : null}
+            </div>
+          </>
+        )}
 
         {/* ─── Footer ─────────────────────────────────────── */}
         <footer className="border-t border-stone-200 bg-[#FAFAF7]">

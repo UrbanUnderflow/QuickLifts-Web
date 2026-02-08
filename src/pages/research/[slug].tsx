@@ -168,10 +168,49 @@ The body was always the original operating system. We're just finally building t
 
 export const getServerSideProps: GetServerSideProps = async ({ params }) => {
   const slug = params?.slug as string;
-  if (!slug || !RESEARCH_SLUGS.includes(slug as any)) {
+
+  if (!slug) {
     return { notFound: true };
   }
-  return { props: { slug } };
+
+  // Check if it's the hardcoded article first
+  if (RESEARCH_SLUGS.includes(slug as any)) {
+    return { props: { slug, articleData: null } };
+  }
+
+  // Otherwise, try to fetch from Firestore
+  try {
+    const adminModule = await import('../../lib/firebase-admin');
+    const admin = adminModule.default;
+    const db = admin.firestore();
+    const docRef = db.collection('researchArticles').doc(slug);
+    const docSnap = await docRef.get();
+
+    if (!docSnap.exists) {
+      return { notFound: true };
+    }
+
+    const data = docSnap.data();
+
+    // Only show published articles
+    if (data?.status !== 'published') {
+      return { notFound: true };
+    }
+
+    // Serialize Firestore timestamps
+    const articleData = {
+      ...data,
+      slug: docSnap.id,
+      createdAt: data?.createdAt?.toDate?.()?.toISOString() || null,
+      updatedAt: data?.updatedAt?.toDate?.()?.toISOString() || null,
+      publishedAt: data?.publishedAt?.toDate?.()?.toISOString() || null,
+    };
+
+    return { props: { slug, articleData } };
+  } catch (error) {
+    console.error('Error fetching article:', error);
+    return { notFound: true };
+  }
 };
 
 // ─── Reading progress bar ──────────────────────────────────────────
@@ -231,17 +270,304 @@ const Section: React.FC<{
   </section>
 );
 
-interface ResearchArticlePageProps {
+// ─── Dynamic Article interface ─────────────────────────────────────
+interface DynamicArticle {
   slug: string;
+  title: string;
+  subtitle: string;
+  author: string;
+  category: string;
+  excerpt: string;
+  content: string;
+  readTime: string;
+  featured: boolean;
+  featuredImage?: string;
+  status: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  publishedAt: string | null;
 }
 
+interface ResearchArticlePageProps {
+  slug: string;
+  articleData: DynamicArticle | null;
+}
+
+// ─── Dynamic Article Renderer ──────────────────────────────────────
+const DynamicArticleContent: React.FC<{ article: DynamicArticle }> = ({ article }) => {
+  // Convert markdown-like content to paragraphs
+  const renderContent = (content: string) => {
+    const paragraphs = content.split('\n\n').filter(p => p.trim());
+
+    return paragraphs.map((para, index) => {
+      // Check for headers
+      if (para.startsWith('# ')) {
+        return (
+          <h2 key={index} className="text-2xl md:text-3xl font-bold text-stone-900 mt-12 mb-6 leading-tight tracking-tight">
+            {para.substring(2)}
+          </h2>
+        );
+      }
+      if (para.startsWith('## ')) {
+        return (
+          <h3 key={index} className="text-xl md:text-2xl font-bold text-stone-900 mt-10 mb-4 leading-tight">
+            {para.substring(3)}
+          </h3>
+        );
+      }
+      // Check for blockquotes
+      if (para.startsWith('> ')) {
+        return (
+          <blockquote key={index} className="border-l-4 border-[#E0FE10] pl-6 my-8 py-2">
+            <p className="text-lg text-stone-600 leading-[1.85] italic">
+              {para.substring(2)}
+            </p>
+          </blockquote>
+        );
+      }
+      // Check for bullet lists
+      if (para.startsWith('- ')) {
+        const items = para.split('\n').filter(line => line.startsWith('- '));
+        return (
+          <ul key={index} className="list-disc list-inside text-lg text-stone-700 leading-[1.85] mb-6 space-y-2">
+            {items.map((item, i) => (
+              <li key={i}>{item.substring(2)}</li>
+            ))}
+          </ul>
+        );
+      }
+      // Regular paragraph
+      return (
+        <p key={index} className="text-lg text-stone-700 leading-[1.85] mb-6">
+          {para}
+        </p>
+      );
+    });
+  };
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  // Ensure OG image is always an absolute URL for reliable link previews
+  const ogImageUrl = article.featuredImage
+    ? (article.featuredImage.startsWith('http')
+      ? article.featuredImage
+      : `https://fitwithpulse.ai${article.featuredImage}`)
+    : 'https://fitwithpulse.ai/research-the-system-featured.png'; // Static fallback
+
+  return (
+    <>
+      <PageHead
+        metaData={{
+          pageId: `research-${article.slug}`,
+          pageTitle: `${article.title} – Pulse Research`,
+          metaDescription: article.excerpt,
+          ogTitle: article.title,
+          ogDescription: article.excerpt,
+          lastUpdated: article.updatedAt || new Date().toISOString(),
+        }}
+        pageOgUrl={`https://fitwithpulse.ai/research/${article.slug}`}
+        pageOgImage={ogImageUrl}
+      />
+
+      <ReadingProgress />
+
+      <div className="min-h-screen bg-[#FAFAF7]">
+        {/* Navigation */}
+        <nav className="sticky top-0 z-50 bg-[#FAFAF7]/90 backdrop-blur-md border-b border-stone-200/60">
+          <div className="max-w-4xl mx-auto px-6 md:px-8">
+            <div className="flex items-center justify-between h-16">
+              <Link href="/research" className="flex items-center gap-3 group">
+                <img src="/pulse-logo.svg" alt="Pulse" className="h-7" />
+                <span className="text-sm text-stone-400 font-medium group-hover:text-stone-600 transition-colors">
+                  Research
+                </span>
+              </Link>
+              <Link
+                href="/research"
+                className="text-sm text-stone-500 hover:text-stone-900 transition-colors"
+              >
+                All articles
+              </Link>
+            </div>
+          </div>
+        </nav>
+
+        {/* Article Header */}
+        <header className="max-w-4xl mx-auto px-6 md:px-8 pt-12 md:pt-20 pb-10 md:pb-14">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <span className="text-sm font-medium text-stone-500">{article.category}</span>
+              <span className="text-stone-300">·</span>
+              <span className="text-sm text-stone-400">{formatDate(article.publishedAt || article.createdAt)}</span>
+            </div>
+
+            {article.subtitle && (
+              <p
+                className="text-sm font-semibold uppercase tracking-widest text-stone-400 mb-3"
+                style={{ letterSpacing: '0.15em' }}
+              >
+                {article.subtitle}
+              </p>
+            )}
+
+            <h1
+              className="text-3xl md:text-4xl lg:text-5xl font-bold text-stone-900 leading-[1.15] tracking-tight mb-4"
+              style={{
+                fontFamily: "'HK Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              }}
+            >
+              {article.title}
+            </h1>
+
+            <div className="flex items-center gap-4 pt-2">
+              <div className="w-10 h-10 rounded-full bg-stone-900 flex items-center justify-center">
+                <span className="text-sm font-bold text-[#E0FE10]">{article.author.charAt(0).toUpperCase()}</span>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-stone-800">{article.author}</p>
+                <p className="text-xs text-stone-400">{article.readTime}</p>
+              </div>
+            </div>
+          </motion.div>
+        </header>
+
+        {/* Featured Image */}
+        {article.featuredImage && (
+          <div className="max-w-4xl mx-auto px-6 md:px-8 mb-12">
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className="relative w-full max-w-xl mx-auto"
+            >
+              <div
+                className="relative bg-white rounded-2xl overflow-hidden"
+                style={{
+                  boxShadow: '0 4px 20px -4px rgba(0, 0, 0, 0.08), 0 8px 32px -8px rgba(0, 0, 0, 0.06)',
+                  border: '1px solid rgba(0, 0, 0, 0.04)',
+                }}
+              >
+                <div className="aspect-[4/3] bg-gradient-to-b from-[#FAFAF7] to-[#F5F5F0] flex items-center justify-center p-6 md:p-10">
+                  <img
+                    src={article.featuredImage}
+                    alt={article.title}
+                    className="w-full h-full object-contain max-h-[360px]"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        <div className="max-w-4xl mx-auto px-6 md:px-8">
+          <div className="h-px bg-stone-200 mb-12" />
+        </div>
+
+        {/* Article Content */}
+        <motion.article
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="max-w-3xl mx-auto px-6 md:px-8 pb-24"
+          style={{
+            fontFamily: "'Georgia', 'Times New Roman', 'Noto Serif', serif",
+          }}
+        >
+          {/* Excerpt as lead paragraph */}
+          <p className="text-xl text-stone-600 leading-[1.85] mb-8 font-medium">
+            {article.excerpt}
+          </p>
+
+          {/* Main content */}
+          {renderContent(article.content)}
+
+          {/* Author bio */}
+          <div className="mt-16 pt-10 border-t border-stone-200">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0">
+                <span className="text-base font-bold text-[#E0FE10]">{article.author.charAt(0).toUpperCase()}</span>
+              </div>
+              <div>
+                <p className="text-base font-bold text-stone-900 mb-1" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+                  {article.author}
+                </p>
+                <p className="text-sm text-stone-500 leading-relaxed" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+                  Writer for Pulse Research.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Back link */}
+          <div className="mt-12 mb-24">
+            <Link
+              href="/research"
+              className="inline-flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors"
+              style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+              </svg>
+              Back to all research
+            </Link>
+          </div>
+        </motion.article>
+
+        {/* Footer */}
+        <footer className="border-t border-stone-200 bg-[#FAFAF7]">
+          <div className="max-w-4xl mx-auto px-6 md:px-8 py-12">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div>
+                <img src="/pulse-logo.svg" alt="Pulse" className="h-6 mb-3" />
+                <p className="text-sm text-stone-400">
+                  © {new Date().getFullYear()} Pulse Intelligence Labs, Inc.
+                </p>
+              </div>
+              <div className="flex items-center gap-6">
+                <Link href="/" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">
+                  Home
+                </Link>
+                <Link href="/research" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">
+                  Research
+                </Link>
+                <Link href="/about" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">
+                  About
+                </Link>
+                <a
+                  href="mailto:pulsefitnessapp@gmail.com"
+                  className="text-sm text-stone-500 hover:text-stone-900 transition-colors"
+                >
+                  Contact
+                </a>
+              </div>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </>
+  );
+};
+
 // ─── Article page ──────────────────────────────────────────────────
-const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
+const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug, articleData }) => {
   const [showToc, setShowToc] = useState(false);
 
-  // Only "the-system" is implemented; others are 404 via getStaticProps
+  // If articleData is provided, render the dynamic article
+  if (articleData) {
+    return <DynamicArticleContent article={articleData} />;
+  }
+
+  // Otherwise, render the hardcoded "the-system" article
   if (slug !== 'the-system') {
-    return null; // notFound is handled by getStaticProps
+    return null;
   }
 
   return (
@@ -260,7 +586,7 @@ const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug }) => {
           lastUpdated: '2026-02-05T00:00:00.000Z',
         }}
         pageOgUrl={`https://fitwithpulse.ai/research/${slug}`}
-        pageOgImage={`https://fitwithpulse.ai/.netlify/functions/og-article?slug=${slug}`}
+        pageOgImage="https://fitwithpulse.ai/research-the-system-featured.png"
       />
 
       <ReadingProgress />

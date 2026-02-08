@@ -60,12 +60,12 @@ const PageHead: React.FC<PageHeadProps> = ({
 }) => {
   const title = metaData?.pageTitle || GLOBAL_DEFAULT_TITLE;
   const description = metaData?.metaDescription || GLOBAL_DEFAULT_DESCRIPTION;
-  
+
   // For OG tags, if specific metaData.ogTitle/Description are missing, 
   // they will try to use the page title/description (which could be from metaData or global defaults).
   const ogTitle = metaData?.ogTitle || title;
   const ogDescription = metaData?.ogDescription || description;
-  
+
   // Ensure ogImage is always an absolute URL
   // pageOgImage (prop) takes precedence, then metaData.ogImage, else generate dynamic image
   let ogImage = pageOgImage || metaData?.ogImage;
@@ -75,7 +75,7 @@ const PageHead: React.FC<PageHeadProps> = ({
     // Generate dynamic OG image with page title
     ogImage = generateDynamicOgImage(ogTitle, ogDescription !== GLOBAL_DEFAULT_DESCRIPTION ? ogDescription : undefined);
   }
-  
+
   const ogUrl = metaData?.ogUrl || pageOgUrl; // ogUrl from metaData takes precedence, then pageOgUrl prop
   const ogType = metaData?.ogType || 'website';
 
@@ -83,14 +83,12 @@ const PageHead: React.FC<PageHeadProps> = ({
   const twitterCard = metaData?.twitterCard || 'summary_large_image';
   const twitterTitle = metaData?.twitterTitle || ogTitle;
   const twitterDescription = metaData?.twitterDescription || ogDescription;
-  
+
   // Ensure twitterImage is always an absolute URL
   let twitterImage = metaData?.twitterImage || ogImage;
   if (twitterImage && !twitterImage.startsWith('http')) {
     twitterImage = `https://fitwithpulse.ai${twitterImage}`;
   }
-
-  const isGeneratedOgImage = ogImage?.includes('/og-image.png');
 
   return (
     <Head>
@@ -102,9 +100,9 @@ const PageHead: React.FC<PageHeadProps> = ({
       <meta property="og:description" content={ogDescription} key="og:description" />
       {ogImage && <meta property="og:image" content={ogImage} key="og:image" />}
       {ogImage && <meta property="og:image:secure_url" content={ogImage} />}
-      {ogImage && isGeneratedOgImage && <meta property="og:image:type" content="image/png" />}
-      {ogImage && isGeneratedOgImage && <meta property="og:image:width" content="1200" />}
-      {ogImage && isGeneratedOgImage && <meta property="og:image:height" content="630" />}
+      {ogImage && <meta property="og:image:type" content="image/png" />}
+      {ogImage && <meta property="og:image:width" content="1200" />}
+      {ogImage && <meta property="og:image:height" content="630" />}
       {ogImage && <meta property="og:image:alt" content={ogTitle} />}
       <meta property="og:url" content={ogUrl} />
       <meta property="og:type" content={ogType} />
@@ -116,12 +114,12 @@ const PageHead: React.FC<PageHeadProps> = ({
       <meta name="twitter:description" content={twitterDescription} key="twitter:description" />
       {twitterImage && <meta name="twitter:image" content={twitterImage} key="twitter:image" />}
       {twitterImage && <meta name="twitter:image:alt" content={twitterTitle} />}
-      
+
       {/* Additional Meta Tags */}
       <link rel="canonical" href={ogUrl} />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <meta name="theme-color" content="#E0FE10" />
-      
+
       {/* Apple Smart App Banner - prompts iOS users to open/download the app */}
       <meta name="apple-itunes-app" content="app-id=6451497729, app-argument=pulse://home" />
     </Head>

@@ -333,6 +333,12 @@ const adminCardsData = [
     description: "View and manage automated email sequences, customize templates, and send test emails.",
     icon: <Mail className="w-5 h-5" />,
     link: "/admin/emailSequences"
+  },
+  {
+    title: "Research Articles",
+    description: "Create, edit, and publish research articles. Substack-like editor for managing /research content.",
+    icon: <FileText className="w-5 h-5" />,
+    link: "/admin/researchArticles"
   }
 ];
 
@@ -396,8 +402,8 @@ const EnvironmentSwitcher: React.FC = () => {
               <button
                 onClick={() => handleEnvironmentSwitch(false)}
                 className={`w-full text-left px-3 py-2 rounded-md transition-colors ${!isDevelopment
-                    ? 'bg-[#E0FE10] text-black font-medium'
-                    : 'text-zinc-300 hover:bg-[#262a30] hover:text-white'
+                  ? 'bg-[#E0FE10] text-black font-medium'
+                  : 'text-zinc-300 hover:bg-[#262a30] hover:text-white'
                   }`}
               >
                 <div className="flex items-center gap-2">
@@ -412,8 +418,8 @@ const EnvironmentSwitcher: React.FC = () => {
               <button
                 onClick={() => handleEnvironmentSwitch(true)}
                 className={`w-full text-left px-3 py-2 rounded-md transition-colors ${isDevelopment
-                    ? 'bg-[#E0FE10] text-black font-medium'
-                    : 'text-zinc-300 hover:bg-[#262a30] hover:text-white'
+                  ? 'bg-[#E0FE10] text-black font-medium'
+                  : 'text-zinc-300 hover:bg-[#262a30] hover:text-white'
                   }`}
               >
                 <div className="flex items-center gap-2">

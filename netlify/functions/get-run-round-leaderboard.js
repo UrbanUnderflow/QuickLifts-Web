@@ -3,12 +3,17 @@ const admin = require('firebase-admin');
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
     try {
-        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY || '{}');
+        const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+        if (!serviceAccountKey) {
+            throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set');
+        }
+        const serviceAccount = JSON.parse(serviceAccountKey);
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount)
         });
     } catch (error) {
         console.error('Error initializing Firebase Admin:', error);
+        throw error; // Re-throw to prevent the function from running without Firebase
     }
 }
 
