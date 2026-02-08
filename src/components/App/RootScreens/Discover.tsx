@@ -4,6 +4,8 @@ import { Exercise } from '../../../api/firebase/exercise/types';
 import { exerciseService } from '../../../api/firebase/exercise';
 import { GifImageViewer } from '../../../components/GifImageViewer';
 import { workoutService } from '../../../api/firebase/workout';
+import { clubService } from '../../../api/firebase/club/service';
+import { Club } from '../../../api/firebase/club/types';
 import { userService } from '../../../api/firebase/user';
 import { Workout, WorkoutStatus, SweatlistCollection } from '../../../api/firebase/workout/types';
 import { UserChallenge } from '../../../api/firebase/workout/types';
@@ -56,6 +58,7 @@ const Discover: React.FC = () => {
   const [featuredCreators, setFeaturedCreators] = useState<User[]>([]);
   const [activeRounds, setActiveRounds] = useState<UserChallenge[]>([]);
   const [featuredRounds, setFeaturedRounds] = useState<Challenge[]>([]);
+  const [userClubs, setUserClubs] = useState<Club[]>([]);
   const [moveOfTheDay, setMoveOfTheDay] = useState<{ exercise: Exercise, video: ExerciseVideo } | null>(null);
   const [loadingMoveOfTheDay, setLoadingMoveOfTheDay] = useState(true);
   const [todaysMissions, setTodaysMissions] = useState<any[]>([]);
@@ -262,11 +265,21 @@ const Discover: React.FC = () => {
           setActiveRounds([]);
           setTodaysMissions([]);
         }
+
+        // Load clubs the user is a member of
+        try {
+          const clubs = await clubService.getClubsForUser(currentUser.id);
+          setUserClubs(clubs);
+        } catch (error) {
+          console.log("User clubs couldn't be loaded:", error);
+          setUserClubs([]);
+        }
       } else {
         // If no user is signed in, clear user-specific data
         setCurrentWorkout(null);
         setActiveRounds([]);
         setTodaysMissions([]);
+        setUserClubs([]);
       }
 
     } catch (error) {
@@ -1077,6 +1090,122 @@ const Discover: React.FC = () => {
     );
   };
 
+  // Render clubs the user is a member of (creator-focused cards)
+  const renderMyClubs = () => {
+    // Only show if user is logged in and has clubs
+    if (!currentUser?.id || !userClubs.length) {
+      return null;
+    }
+
+    return (
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center">
+            <h3 className="text-white font-bold text-lg">Your Club Memberships</h3>
+            <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#8B5CF6]/15 text-[#8B5CF6] border border-[#8B5CF6]/30">
+              {userClubs.length}
+            </span>
+          </div>
+          <button
+            onClick={() => router.push('/clubs')}
+            className="text-sm text-zinc-400 hover:text-white transition-colors flex items-center gap-1"
+          >
+            View all
+            <span className="text-lg">→</span>
+          </button>
+        </div>
+
+        <div className="relative">
+          <div className="carousel flex gap-4 overflow-x-auto pb-4 scrollbar-none">
+            {userClubs.map((club) => (
+              <div
+                key={club.id}
+                className="min-w-[300px] max-w-[320px] snap-start cursor-pointer group relative"
+                onClick={() => router.push(`/profile/${club.creatorInfo?.username || club.creatorId}`)}
+              >
+                {/* Chromatic glow on hover */}
+                <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-50 transition-all duration-500 bg-gradient-to-br from-[#E0FE10]/40 via-[#8B5CF6]/30 to-[#3B82F6]/20 pointer-events-none" />
+
+                {/* Glass card */}
+                <div className="relative rounded-3xl backdrop-blur-xl bg-zinc-900/50 border border-white/10 group-hover:border-white/20 overflow-hidden transition-all duration-300 h-full">
+                  {/* Gradient top line */}
+                  <div
+                    className="absolute top-0 left-0 right-0 h-[1px] opacity-60"
+                    style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.5), rgba(139,92,246,0.5), transparent)' }}
+                  />
+
+                  {/* Background gradient wash */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#E0FE10]/5 via-transparent to-[#8B5CF6]/10 pointer-events-none" />
+
+                  {/* Floating glow orbs */}
+                  <div className="absolute -top-16 -right-16 w-32 h-32 bg-[#E0FE10]/15 rounded-full blur-3xl" />
+                  <div className="absolute -bottom-16 -left-16 w-32 h-32 bg-[#8B5CF6]/10 rounded-full blur-3xl" />
+
+                  <div className="relative p-6">
+                    {/* Creator profile with glow ring */}
+                    <div className="flex flex-col items-center mb-5">
+                      <div className="relative mb-4">
+                        {/* Glow ring */}
+                        <div className="absolute -inset-1 rounded-full bg-gradient-to-br from-[#E0FE10]/60 to-[#8B5CF6]/40 blur-sm" />
+                        <div className="absolute -inset-0.5 rounded-full bg-gradient-to-br from-[#E0FE10] to-[#8B5CF6] opacity-80" />
+
+                        {/* Profile image */}
+                        <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-zinc-900">
+                          {club.creatorInfo?.profileImage?.profileImageURL ? (
+                            <img
+                              src={club.creatorInfo.profileImage.profileImageURL}
+                              alt={club.creatorInfo.displayName || 'Creator'}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center">
+                              <span className="text-2xl font-bold text-white">
+                                {(club.creatorInfo?.displayName || club.name || 'C').charAt(0).toUpperCase()}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Creator name */}
+                      <p className="text-zinc-400 text-sm font-medium">
+                        {club.creatorInfo?.displayName || club.creatorInfo?.username || 'Creator'}
+                      </p>
+                    </div>
+
+                    {/* Club name */}
+                    <h4 className="text-white font-bold text-xl text-center mb-3 leading-tight">
+                      {club.name}
+                    </h4>
+
+                    {/* Member count badge */}
+                    <div className="flex justify-center mb-5">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E0FE10]/10 border border-[#E0FE10]/30 text-[#E0FE10] text-xs font-semibold">
+                        <UserGroupIcon className="w-3.5 h-3.5" />
+                        {club.memberCount >= 1000
+                          ? `${(club.memberCount / 1000).toFixed(1)}k members`
+                          : `${club.memberCount} ${club.memberCount === 1 ? 'member' : 'members'}`
+                        }
+                      </span>
+                    </div>
+
+                    {/* View Club button */}
+                    <button
+                      className="w-full bg-zinc-800/80 border border-white/10 hover:border-white/20 hover:bg-zinc-700/80 text-white text-sm font-semibold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2"
+                    >
+                      View Club
+                      <span className="text-base">→</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderTrendingRounds = () => {
     if (!trendingRounds.length) {
       return (
@@ -1821,6 +1950,7 @@ const Discover: React.FC = () => {
           {renderContinueWorkoutCard()}
           {renderQuickActions()}
           {renderActiveRounds()}
+          {renderMyClubs()}
           {renderMoveOfTheDaySection()}
           {/* Temporarily hiding Trending Rounds until we have more data */}
           {/* {renderTrendingRounds()} */}
