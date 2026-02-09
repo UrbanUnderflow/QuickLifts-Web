@@ -65,9 +65,10 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
   // Add subscription routes to public routes
   const publicRoutes = [
-    '/', '/about', '/creator', '/creators', '/rounds', '/privacyPolicy', '/programming', '/100trainers', 
+    '/', '/about', '/creator', '/creators', '/rounds', '/privacyPolicy', '/privacy', '/programming', '/100trainers',
     '/starter-pack', '/one-on-one', '/train-your-client', '/stacks', '/moves', '/terms', '/press', '/100trainers',
     '/subscribe', '/pricing', '/download', '/morning-mobility-challenge', '/review', '/MoveAndFuelATL', '/investor', '/invest', '/GetInTouch', '/secure', '/haveyoupaid',
+    '/delete-account', '/deleteAccount',
     // Public onboarding/marketing entry points
     '/sign-up', '/coach', '/coach/sign-up', '/build-your-round', '/creator-onboarding',
     // Design language showcase

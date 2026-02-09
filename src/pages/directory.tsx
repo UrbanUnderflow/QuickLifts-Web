@@ -125,6 +125,7 @@ const Directory: NextPage = () => {
         { label: 'About', path: '/about', description: 'About Pulse' },
         { label: 'Privacy Policy', path: '/privacy', description: 'Privacy policy' },
         { label: 'Terms of Service', path: '/terms', description: 'Terms & conditions' },
+        { label: 'Delete Account', path: '/delete-account', description: 'Request account deletion' },
         { label: 'Press Kit', path: '/press', description: 'Media resources' },
       ],
     },
@@ -322,4 +323,3 @@ const Directory: NextPage = () => {
 };
 
 export default Directory;
-

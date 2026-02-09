@@ -1121,7 +1121,7 @@ const Discover: React.FC = () => {
               <div
                 key={club.id}
                 className="min-w-[300px] max-w-[320px] snap-start cursor-pointer group relative"
-                onClick={() => router.push(`/profile/${club.creatorInfo?.username || club.creatorId}`)}
+                onClick={() => router.push(`/profile/${club.creatorInfo?.username || club.creatorId}?openClub=${club.id}`)}
               >
                 {/* Chromatic glow on hover */}
                 <div className="absolute -inset-1 rounded-3xl blur-xl opacity-0 group-hover:opacity-50 transition-all duration-500 bg-gradient-to-br from-[#E0FE10]/40 via-[#8B5CF6]/30 to-[#3B82F6]/20 pointer-events-none" />

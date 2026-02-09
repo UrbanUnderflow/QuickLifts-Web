@@ -74,6 +74,7 @@ const sections: Section[] = [
       { name: 'About', url: '/about' },
       { name: 'Privacy Policy', url: '/privacy' },
       { name: 'Terms of Service', url: '/terms' },
+      { name: 'Delete Account', url: '/delete-account' },
       { name: 'Press Kit', url: '/press' },
       { name: 'Investor', url: '/investor' },
       { name: 'Creator', url: '/creator' },
