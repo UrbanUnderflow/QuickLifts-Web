@@ -17,39 +17,39 @@ import { workoutService } from '../../api/firebase/workout';
 import { sampleGraph } from '../../components/ReferralGraph';
 
 // Lazy load heavy components
-const VideoDemo = dynamic(() => import('../../components/VideoDemo'), { 
+const VideoDemo = dynamic(() => import('../../components/VideoDemo'), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading video...</span></div>
 });
 
 const ReferralGraph = dynamic(() => import('../../components/ReferralGraph'), { ssr: false });
 
-const ViralityChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.ViralityChart })), { 
+const ViralityChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.ViralityChart })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading chart...</span></div>
 });
 
-const UnitEconChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.UnitEconChart })), { 
+const UnitEconChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.UnitEconChart })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading chart...</span></div>
 });
 
-const SubscriptionOverview = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.SubscriptionOverview })), { 
+const SubscriptionOverview = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.SubscriptionOverview })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading chart...</span></div>
 });
 
-const RetentionRateChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.RetentionRateChart })), { 
+const RetentionRateChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.RetentionRateChart })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading chart...</span></div>
 });
 
-const ConversionChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.ConversionChart })), { 
+const ConversionChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.ConversionChart })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading chart...</span></div>
 });
 
-const EngagementChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.EngagementChart })), { 
+const EngagementChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.EngagementChart })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading chart...</span></div>
 });
@@ -117,7 +117,7 @@ interface KEffectiveMetrics {
 
 // Define serializable interface for meta data
 interface SerializablePageMetaDataForInvestor extends Omit<FirestorePageMetaData, 'lastUpdated'> {
-  lastUpdated: string; 
+  lastUpdated: string;
 }
 
 interface InvestorDataroomPageProps {
@@ -129,7 +129,7 @@ const VALID_SECTIONS = ['overview', 'entity', 'product', 'traction', 'ip', 'visi
 
 const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => {
   const router = useRouter();
-  
+
   // Access control state
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
   const [accessCode, setAccessCode] = useState('');
@@ -160,15 +160,15 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   const [isLoadingKMetrics, setIsLoadingKMetrics] = useState(true);
   const [activeRetentionTab, setActiveRetentionTab] = useState<string>('retention');
   const [activeRevenueYear, setActiveRevenueYear] = useState<'2025' | '2024'>('2025');
-  
+
   // Legal documents state
   const [legalDocuments, setLegalDocuments] = useState<any[]>([]);
   const [isLoadingLegalDocs, setIsLoadingLegalDocs] = useState(false);
-  
+
   // Corporate equity documents state
   const [corporateEquityDocs, setCorporateEquityDocs] = useState<any[]>([]);
   const [isLoadingCorporateDocs, setIsLoadingCorporateDocs] = useState(false);
-  
+
   // Cap table state
   const [stakeholders, setStakeholders] = useState<any[]>([]);
   const [equityPool, setEquityPool] = useState<any | null>(null);
@@ -268,7 +268,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     const totals = activePLYear === '2025' ? pnlTotals2025 : pnlTotals2024;
     const yearLabel = activePLYear === '2025' ? '2025 (Jan–Nov)' : '2024 (Full Year)';
     const is2025 = activePLYear === '2025';
-    
+
     const tableRows = data.map(row => `
       <tr>
         <td style="padding: 10px; border-bottom: 1px solid #e5e5e5;">${row.month}</td>
@@ -298,28 +298,28 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
     const breakdownTotals = is2025
       ? categoryTotals2025.reduce(
-          (acc, row) => {
-            acc.software_tools += row.totals.software_tools;
-            acc.contractors += row.totals.contractors;
-            acc.marketing_growth += row.totals.marketing_growth;
-            acc.sales_fundraising += row.totals.sales_fundraising;
-            acc.legal_ip += row.totals.legal_ip;
-            acc.travel_events += row.totals.travel_events;
-            acc.other += row.totals.other;
-            acc.total += row.totalExpenses;
-            return acc;
-          },
-          {
-            software_tools: 0,
-            contractors: 0,
-            marketing_growth: 0,
-            sales_fundraising: 0,
-            legal_ip: 0,
-            travel_events: 0,
-            other: 0,
-            total: 0,
-          }
-        )
+        (acc, row) => {
+          acc.software_tools += row.totals.software_tools;
+          acc.contractors += row.totals.contractors;
+          acc.marketing_growth += row.totals.marketing_growth;
+          acc.sales_fundraising += row.totals.sales_fundraising;
+          acc.legal_ip += row.totals.legal_ip;
+          acc.travel_events += row.totals.travel_events;
+          acc.other += row.totals.other;
+          acc.total += row.totalExpenses;
+          return acc;
+        },
+        {
+          software_tools: 0,
+          contractors: 0,
+          marketing_growth: 0,
+          sales_fundraising: 0,
+          legal_ip: 0,
+          travel_events: 0,
+          other: 0,
+          total: 0,
+        }
+      )
       : null;
 
     const html = `
@@ -439,7 +439,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
   // Generate Extended P&L PDF - uses same categorization as standard P&L
   const generateExtendedPLPdf = () => {
-    const fmt = (value: number) => 
+    const fmt = (value: number) =>
       `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     // Total revenue for Extended P&L (actual 2025 income)
@@ -608,26 +608,26 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
   // Generate Balance Sheet PDF (both years)
   const generateBalanceSheetPdf = () => {
-    const fmt = (value: number) => 
+    const fmt = (value: number) =>
       `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     const generateYearPage = (year: '2024' | '2025') => {
-      const getValue = (item: { y2024: number; y2025: number }) => 
+      const getValue = (item: { y2024: number; y2025: number }) =>
         year === '2025' ? item.y2025 : item.y2024;
 
       const totalAssets = getValue(balanceSheetData.assets.totalAssets);
-      const totalLiabilities = getValue(balanceSheetData.liabilities.totalCurrentLiabilities) + 
-                              getValue(balanceSheetData.liabilities.totalLongTermLiabilities);
+      const totalLiabilities = getValue(balanceSheetData.liabilities.totalCurrentLiabilities) +
+        getValue(balanceSheetData.liabilities.totalLongTermLiabilities);
       const totalEquity = getValue(balanceSheetData.ownersEquity.totalOwnersEquity);
 
       const currentAssetsRows = balanceSheetData.assets.currentAssets
         .map(item => `<tr class="item"><td>${item.account}</td><td>${fmt(getValue(item))}</td></tr>`)
         .join('');
-      
+
       const fixedAssetsRows = balanceSheetData.assets.fixedAssets
         .map(item => `<tr class="item"><td>${item.account}</td><td>${fmt(getValue(item))}</td></tr>`)
         .join('');
-      
+
       const otherAssetsRows = balanceSheetData.assets.otherAssets
         .map(item => `<tr class="item"><td>${item.account}</td><td>${fmt(getValue(item))}</td></tr>`)
         .join('');
@@ -635,7 +635,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       const currentLiabilitiesRows = balanceSheetData.liabilities.currentLiabilities
         .map(item => `<tr class="item"><td>${item.account}</td><td>${fmt(getValue(item))}</td></tr>`)
         .join('');
-      
+
       const longTermLiabilitiesRows = balanceSheetData.liabilities.longTermLiabilities
         .map(item => `<tr class="item"><td>${item.account}</td><td>${fmt(getValue(item))}</td></tr>`)
         .join('');
@@ -1200,7 +1200,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   const generateContractorAgreementPdf = () => {
     const contractorName = "Lola";
     const currentDate = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    
+
     const html = `
       <!DOCTYPE html>
       <html>
@@ -1451,7 +1451,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   const initialLoadRef = useRef(true);
   useEffect(() => {
     if (!router.isReady) return;
-    
+
     const sectionParam = router.query.section as string;
     if (sectionParam && VALID_SECTIONS.includes(sectionParam as any) && initialLoadRef.current) {
       // Only set pending section on initial page load, not on user navigation
@@ -1472,7 +1472,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   useEffect(() => {
     const storedCode = localStorage.getItem('investorAccessCode') || localStorage.getItem('investorAccessEmail'); // Backward compatibility
     const storedSectionAccess = localStorage.getItem('investorSectionAccess');
-    
+
     if (storedCode) {
       // Try to use cached section access first for faster load
       if (storedSectionAccess) {
@@ -1501,11 +1501,11 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       const accessRef = collection(db, 'investorAccess');
       // Normalize code: remove dashes and convert to uppercase
       const normalizedCode = code.toUpperCase().replace(/[^A-Z0-9]/g, '').trim();
-      
+
       // Try normalized code (no dashes)
       let q = query(accessRef, where('accessCode', '==', normalizedCode));
       let snapshot = await getDocs(q);
-      
+
       // Fallback: try email for backward compatibility
       if (snapshot.empty) {
         q = query(accessRef, where('email', '==', code.toLowerCase().trim()));
@@ -1523,7 +1523,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
           const accessCodeToStore = accessData.accessCode || accessData.email || code.toUpperCase().trim();
           localStorage.setItem('investorAccessCode', accessCodeToStore);
           localStorage.setItem('investorSectionAccess', JSON.stringify(storedSectionAccess));
-          
+
           // Log this access event for analytics
           try {
             const logsRef = collection(db, 'investorAccessLogs');
@@ -2071,7 +2071,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     const data = expenseReportData[reportId];
     if (!data) return;
 
-    const fmt = (value: number) => 
+    const fmt = (value: number) =>
       `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     const afterMonthly = data.monthlyIncome - data.monthlyTotal;
@@ -2218,7 +2218,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       if (expenseReportData[report.id]) {
         generateExpenseReportPdf(report.id);
         // Add a small delay between multiple PDFs
-        setTimeout(() => {}, 500);
+        setTimeout(() => { }, 500);
       }
     });
 
@@ -2238,7 +2238,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       </div>
       <h2 className="text-white text-2xl font-bold mb-2">Section Locked</h2>
       <p className="text-zinc-400 text-center max-w-md mb-6">
-        You don't have access to the <span className="text-white font-medium">{sectionName}</span> section. 
+        You don't have access to the <span className="text-white font-medium">{sectionName}</span> section.
         Contact us to request full dataroom access.
       </p>
       <a
@@ -2253,7 +2253,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   // Copy button component
   const CopyButton: React.FC<{ text: string }> = ({ text }) => {
     const [copied, setCopied] = useState(false);
-    
+
     const handleCopy = async () => {
       try {
         await navigator.clipboard.writeText(text);
@@ -2263,7 +2263,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         console.error('Failed to copy:', err);
       }
     };
-    
+
     return (
       <button
         onClick={handleCopy}
@@ -2278,7 +2278,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       </button>
     );
   };
-  
+
   // Refs for sections
   const sectionsRef = useRef<SectionRefs>({
     overview: null,
@@ -2311,12 +2311,12 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   // Real-time listener for corporate equity documents (EIP, Board Consent, Advisor docs)
   useEffect(() => {
     setIsLoadingCorporateDocs(true);
-    
+
     const equityQuery = query(
       collection(db, 'equity-documents'),
       orderBy('createdAt', 'desc')
     );
-    
+
     const unsubscribe = onSnapshot(
       equityQuery,
       (snapshot) => {
@@ -2329,19 +2329,19 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
             // Filter for completed documents of specific types
             if (doc.status !== 'completed') return false;
             const docType = doc.documentType;
-            return docType === 'eip' || 
-                   docType === 'board_consent' || 
-                   docType === 'advisor_nso_agreement' ||
-                   (doc.stakeholderType === 'advisor' && docType === 'option_agreement');
+            return docType === 'eip' ||
+              docType === 'board_consent' ||
+              docType === 'advisor_nso_agreement' ||
+              (doc.stakeholderType === 'advisor' && docType === 'option_agreement');
           });
-        
+
         // Sort by creation date (newest first)
         allDocs.sort((a: any, b: any) => {
           const aDate = (a.createdAt as any)?.toDate ? (a.createdAt as any).toDate() : new Date(a.createdAt as any);
           const bDate = (b.createdAt as any)?.toDate ? (b.createdAt as any).toDate() : new Date(b.createdAt as any);
           return bDate.getTime() - aDate.getTime();
         });
-        
+
         setCorporateEquityDocs(allDocs);
         setIsLoadingCorporateDocs(false);
       },
@@ -2351,42 +2351,42 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         setIsLoadingCorporateDocs(false);
       }
     );
-    
+
     return () => unsubscribe();
   }, []);
 
   // Real-time listeners for legal documents (equity + legal collections)
   useEffect(() => {
     setIsLoadingLegalDocs(true);
-    
+
     let equityDocs: any[] = [];
     let legalDocs: any[] = [];
     let equityLoaded = false;
     let legalLoaded = false;
-    
+
     const mergeAndSetDocuments = () => {
       const allDocs = [...equityDocs, ...legalDocs];
-      
+
       // Sort by creation date (newest first)
       allDocs.sort((a, b) => {
         const aDate = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
         const bDate = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
         return bDate.getTime() - aDate.getTime();
       });
-      
+
       setLegalDocuments(allDocs);
-      
+
       if (equityLoaded && legalLoaded) {
         setIsLoadingLegalDocs(false);
       }
     };
-    
+
     // Listen to equity documents
     const equityQuery = query(
       collection(db, 'equity-documents'),
       orderBy('createdAt', 'desc')
     );
-    
+
     const unsubscribeEquity = onSnapshot(
       equityQuery,
       (snapshot) => {
@@ -2398,7 +2398,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
             type: 'equity'
           }))
           .filter((doc: any) => doc.status === 'completed');
-        
+
         equityLoaded = true;
         mergeAndSetDocuments();
       },
@@ -2408,13 +2408,13 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         mergeAndSetDocuments();
       }
     );
-    
+
     // Listen to legal documents
     const legalQuery = query(
       collection(db, 'legal-documents'),
       orderBy('createdAt', 'desc')
     );
-    
+
     const unsubscribeLegal = onSnapshot(
       legalQuery,
       (snapshot) => {
@@ -2426,7 +2426,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
             type: 'legal'
           }))
           .filter((doc: any) => doc.status === 'completed');
-        
+
         legalLoaded = true;
         mergeAndSetDocuments();
       },
@@ -2436,7 +2436,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         mergeAndSetDocuments();
       }
     );
-    
+
     return () => {
       unsubscribeEquity();
       unsubscribeLegal();
@@ -2446,13 +2446,13 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   // Real-time listener for cap table data (stakeholders + equity pool)
   useEffect(() => {
     setIsLoadingCapTable(true);
-    
+
     // Listen to stakeholders
     const stakeholdersQuery = query(
       collection(db, 'equity-stakeholders'),
       orderBy('createdAt', 'desc')
     );
-    
+
     const unsubscribeStakeholders = onSnapshot(
       stakeholdersQuery,
       (snapshot) => {
@@ -2469,7 +2469,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         setIsLoadingCapTable(false);
       }
     );
-    
+
     // Listen to equity pool (query collection, typically one document)
     const equityPoolQuery = query(collection(db, 'equity-pool'));
     const unsubscribeEquityPool = onSnapshot(
@@ -2488,7 +2488,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         setEquityPool(null);
       }
     );
-    
+
     return () => {
       unsubscribeStakeholders();
       unsubscribeEquityPool();
@@ -2502,7 +2502,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       try {
         const docRef = doc(db, "investorData", "metrics");
         const docSnap = await getDoc(docRef);
-        
+
         if (docSnap.exists()) {
           setFinancialMetrics(docSnap.data() as FinancialMetrics);
         } else {
@@ -2530,10 +2530,10 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       setIsLoadingKMetrics(true);
       try {
         console.log(`[K-Effective] Starting to fetch K-effective metrics`);
-        
+
         // Use the same method as the inactivity check page to get properly mapped UserChallenge data
         const allUserChallenges = await workoutService.fetchAllUserChallenges();
-        
+
         console.log(`[K-Effective] Found ${allUserChallenges.length} total UserChallenge documents`);
         console.log(`[K-Effective] Sample UserChallenge data:`, allUserChallenges.slice(0, 3));
 
@@ -2555,7 +2555,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         const activeReferrerIds = new Set<string>();
         const referredSignups = recentParticipants.filter((uc: UserChallenge) => {
           console.log(`[K-Effective] Checking referral chain for ${uc.username}:`, uc.referralChain);
-          
+
           if (uc.referralChain?.sharedBy && uc.referralChain.sharedBy !== '') {
             console.log(`[K-Effective] ${uc.username} was referred by: ${uc.referralChain.sharedBy}`);
             activeReferrerIds.add(uc.referralChain.sharedBy);
@@ -2649,7 +2649,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         <Head>
           <title>Investor Dataroom | Pulse Intelligence Labs</title>
           <meta name="description" content="Access confidential investor materials for Pulse Intelligence Labs - the creator-powered fitness platform." />
-          
+
           {/* Open Graph */}
           <meta property="og:title" content="Investor Dataroom | Pulse Intelligence Labs" />
           <meta property="og:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform turning short workout videos into multiplayer training experiences." />
@@ -2662,20 +2662,20 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
           <meta property="og:url" content="https://fitwithpulse.ai/investor" />
           <meta property="og:type" content="website" />
           <meta property="og:site_name" content="Pulse Intelligence Labs" />
-          
+
           {/* Twitter Card */}
           <meta name="twitter:card" content="summary_large_image" />
           <meta name="twitter:title" content="Investor Dataroom | Pulse Intelligence Labs" />
           <meta name="twitter:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform." />
           <meta name="twitter:image" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
           <meta name="twitter:image:alt" content="Pulse Intelligence Labs - Investor Dataroom" />
-          
+
           {/* Additional */}
           <link rel="canonical" href="https://fitwithpulse.ai/investor" />
         </Head>
-        <PageHead 
-          metaData={metaData} 
-          pageOgUrl="https://fitwithpulse.ai/investor" 
+        <PageHead
+          metaData={metaData}
+          pageOgUrl="https://fitwithpulse.ai/investor"
         />
         <div className="max-w-md w-full">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8">
@@ -2684,12 +2684,12 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                 <Lock className="w-8 h-8 text-[#E0FE10]" />
               </div>
             </div>
-            
+
             <h1 className="text-white text-2xl font-bold text-center mb-2">Investor Dataroom</h1>
             <p className="text-zinc-400 text-center mb-8">
               Enter your email to access confidential investor materials.
             </p>
-            
+
             <form onSubmit={handleAccessSubmit} className="space-y-4">
               <div>
                 <div className="relative">
@@ -2709,14 +2709,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                   />
                 </div>
               </div>
-              
+
               {accessError && (
                 <div className="flex items-start gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
                   <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                   <p className="text-red-400 text-sm">{accessError}</p>
                 </div>
               )}
-              
+
               <button
                 type="submit"
                 disabled={isCheckingAccess || !accessCode.trim()}
@@ -2729,12 +2729,12 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                 )}
               </button>
             </form>
-            
+
             <div className="mt-6 pt-6 border-t border-zinc-800">
               <p className="text-zinc-500 text-sm text-center">
                 Don't have access?{' '}
-                <a 
-                  href="mailto:invest@fitwithpulse.ai?subject=Investor%20Dataroom%20Access%20Request" 
+                <a
+                  href="mailto:invest@fitwithpulse.ai?subject=Investor%20Dataroom%20Access%20Request"
                   className="text-[#E0FE10] hover:underline"
                 >
                   Request access
@@ -2742,7 +2742,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
               </p>
             </div>
           </div>
-          
+
           <p className="text-zinc-600 text-xs text-center mt-4">
             This dataroom contains confidential information intended only for authorized investors.
           </p>
@@ -2756,7 +2756,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       <Head>
         <title>Investor Dataroom | Pulse Intelligence Labs</title>
         <meta name="description" content="Access confidential investor materials for Pulse Intelligence Labs - the creator-powered fitness platform." />
-        
+
         {/* Open Graph */}
         <meta property="og:title" content="Investor Dataroom | Pulse Intelligence Labs" />
         <meta property="og:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform turning short workout videos into multiplayer training experiences." />
@@ -2769,20 +2769,20 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
         <meta property="og:url" content="https://fitwithpulse.ai/investor" />
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="Pulse Intelligence Labs" />
-        
+
         {/* Twitter Card */}
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Investor Dataroom | Pulse Intelligence Labs" />
         <meta name="twitter:description" content="Access confidential investor materials for Pulse - the creator-powered fitness platform." />
         <meta name="twitter:image" content="https://fitwithpulse.ai/InvestPreviewImg.png" />
         <meta name="twitter:image:alt" content="Pulse Intelligence Labs - Investor Dataroom" />
-        
+
         {/* Additional */}
         <link rel="canonical" href="https://fitwithpulse.ai/investor" />
       </Head>
-      <PageHead 
-        metaData={metaData} 
-        pageOgUrl="https://fitwithpulse.ai/investor" 
+      <PageHead
+        metaData={metaData}
+        pageOgUrl="https://fitwithpulse.ai/investor"
       />
 
       {/* Logout button - fixed position */}
@@ -2797,11 +2797,11 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       <section className="relative min-h-[70vh] flex flex-col items-center justify-center text-center px-8 py-24 overflow-hidden">
         {/* Base background */}
         <div className="absolute inset-0 bg-[#0a0a0a]"></div>
-        
+
         {/* Animated gradient orbs */}
         <div className="absolute inset-0 overflow-hidden">
           {/* Large lime orb - slow float */}
-          <div 
+          <div
             className="absolute w-[600px] h-[600px] rounded-full opacity-20"
             style={{
               background: 'radial-gradient(circle, #E0FE10 0%, transparent 70%)',
@@ -2812,7 +2812,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
             }}
           />
           {/* Medium purple orb */}
-          <div 
+          <div
             className="absolute w-[400px] h-[400px] rounded-full opacity-15"
             style={{
               background: 'radial-gradient(circle, #8B5CF6 0%, transparent 70%)',
@@ -2823,7 +2823,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
             }}
           />
           {/* Small blue orb */}
-          <div 
+          <div
             className="absolute w-[300px] h-[300px] rounded-full opacity-10"
             style={{
               background: 'radial-gradient(circle, #3B82F6 0%, transparent 70%)',
@@ -2834,7 +2834,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
             }}
           />
           {/* Accent lime orb */}
-          <div 
+          <div
             className="absolute w-[200px] h-[200px] rounded-full opacity-25"
             style={{
               background: 'radial-gradient(circle, #E0FE10 0%, transparent 70%)',
@@ -2848,7 +2848,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
 
         {/* Subtle grid overlay */}
         <div className="absolute inset-0 opacity-[0.03]">
-          <div 
+          <div
             className="h-full w-full"
             style={{
               backgroundImage: 'linear-gradient(rgba(224,254,16,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(224,254,16,0.3) 1px, transparent 1px)',
@@ -2871,7 +2871,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
             <div className="w-2 h-2 rounded-full bg-[#E0FE10] animate-pulse"></div>
             <span className="text-[#E0FE10] text-sm font-medium tracking-wide">INVESTOR RELATIONS</span>
           </div>
-          
+
           {/* Main heading with gradient */}
           <h1 className="text-white text-5xl sm:text-7xl font-bold mb-6 leading-tight">
             Pulse Investor
@@ -2880,24 +2880,24 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
               Dataroom
             </span>
           </h1>
-          
+
           {/* Tagline */}
           <p className="text-zinc-400 text-xl leading-relaxed mb-10 max-w-2xl mx-auto">
             Building the social gateway to the future of health.
           </p>
-          
+
           {/* CTAs */}
           <div className="flex flex-wrap justify-center gap-4">
-            <a 
-              href="/PulseDeck12_9.pdf" 
+            <a
+              href="/PulseDeck12_9.pdf"
               download="PulseDeck12_9.pdf"
               className="group inline-flex items-center justify-center px-8 py-4 bg-[#E0FE10] hover:bg-[#d8f521] text-black font-semibold rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-[#E0FE10]/20 hover:-translate-y-0.5"
             >
               <Download className="mr-2 h-5 w-5 group-hover:animate-bounce" />
               Download Pitch Deck
             </a>
-            <a 
-              href="mailto:invest@fitwithpulse.ai" 
+            <a
+              href="mailto:invest@fitwithpulse.ai"
               className="inline-flex items-center justify-center px-8 py-4 bg-zinc-800/80 backdrop-blur-sm hover:bg-zinc-700 text-white font-semibold rounded-xl border border-zinc-700 transition-all duration-300 hover:-translate-y-0.5"
             >
               Contact Us
@@ -2972,11 +2972,10 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     <button
                       key={item.id}
                       onClick={() => switchSection(item.id)}
-                      className={`flex items-center w-full text-left px-4 py-3 rounded-lg transition-colors ${
-                        activeSection === item.id
+                      className={`flex items-center w-full text-left px-4 py-3 rounded-lg transition-colors ${activeSection === item.id
                           ? 'bg-[#E0FE10]/10 text-[#E0FE10]'
                           : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
-                      }`}
+                        }`}
                     >
                       <span>{item.label}</span>
                       {activeSection === item.id && (
@@ -3001,175 +3000,175 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
               {/* Company Overview Section */}
               {activeSection === 'overview' && (
                 hasSectionAccess('overview') ? (
-              <section 
-                id="overview" 
-                ref={(el) => { sectionsRef.current.overview = el; }}
-                className="mb-20"
-              >
-                {/* Header with gradient accent */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-                  <div className="flex items-center">
-                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#E0FE10] to-[#a8c40a] flex items-center justify-center mr-4 shadow-lg shadow-[#E0FE10]/20">
-                      <span className="font-bold text-black text-lg">1</span>
-                    </div>
-                    <div>
-                      <h2 className="text-white text-3xl font-bold">Company Overview</h2>
-                      <p className="text-zinc-500 text-sm">The future of fitness is social</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <a
-                      href="/PulseIntelligenceLabsCertificateofIncorporation.pdf"
-                      download
-                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded-xl text-xs text-zinc-200 transition-all duration-300 backdrop-blur-sm"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      Certificate of Incorporation
-                    </a>
-                    <a
-                      href="/Founder Intellectual Property Assignment Agreement - Pulse Intelligence Labs.pdf"
-                      download="Founder-IP-Assignment-Agreement.pdf"
-                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded-xl text-xs text-zinc-200 transition-all duration-300 backdrop-blur-sm"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      IP Assignment Agreement
-                    </a>
-                  </div>
-                </div>
-                
-                {/* Main content card with animated background */}
-                <div className="relative rounded-2xl overflow-hidden mb-10">
-                  {/* Animated gradient background */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800">
-                    <div 
-                      className="absolute w-[400px] h-[400px] rounded-full opacity-10"
-                      style={{
-                        background: 'radial-gradient(circle, #E0FE10 0%, transparent 70%)',
-                        top: '-20%',
-                        right: '-10%',
-                        filter: 'blur(60px)',
-                      }}
-                    />
-                    <div 
-                      className="absolute w-[300px] h-[300px] rounded-full opacity-10"
-                      style={{
-                        background: 'radial-gradient(circle, #8B5CF6 0%, transparent 70%)',
-                        bottom: '-15%',
-                        left: '-5%',
-                        filter: 'blur(60px)',
-                      }}
-                    />
-                  </div>
-                  
-                  <div className="relative border border-zinc-800/50 rounded-2xl p-8 md:p-10 backdrop-blur-sm">
-                    {/* Hero statement */}
-                    <div className="max-w-3xl mb-10">
-                      <h3 className="text-white text-2xl md:text-3xl font-bold leading-tight mb-4">
-                        Pulse is the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E0FE10] to-[#a8c40a]">creator-powered fitness platform</span> that turns short workout videos into multiplayer, playlist-style training experiences.
-                      </h3>
-                      <p className="text-zinc-400 text-base leading-relaxed">
-                        Creators upload Moves, Pulse assembles them into Movelists, and users train together in real time with leaderboards, scoring, and social motivation.
-                      </p>
-                    </div>
-                    
-                    {/* For Creators / For Users cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
-                      <div className="group relative bg-gradient-to-br from-zinc-800/80 to-zinc-800/40 rounded-xl p-6 border border-zinc-700/50 hover:border-[#E0FE10]/30 transition-all duration-300">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#E0FE10] to-transparent rounded-t-xl opacity-60"></div>
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/10 flex items-center justify-center">
-                            <span className="text-[#E0FE10] text-lg">🎬</span>
-                          </div>
-                          <h4 className="text-[#E0FE10] font-semibold text-lg">For Creators</h4>
+                  <section
+                    id="overview"
+                    ref={(el) => { sectionsRef.current.overview = el; }}
+                    className="mb-20"
+                  >
+                    {/* Header with gradient accent */}
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+                      <div className="flex items-center">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#E0FE10] to-[#a8c40a] flex items-center justify-center mr-4 shadow-lg shadow-[#E0FE10]/20">
+                          <span className="font-bold text-black text-lg">1</span>
                         </div>
-                        <p className="text-zinc-300 text-sm leading-relaxed">Upload Moves, earn every time they&apos;re used. Pulse handles distribution and payouts.</p>
+                        <div>
+                          <h2 className="text-white text-3xl font-bold">Company Overview</h2>
+                          <p className="text-zinc-500 text-sm">The future of fitness is social</p>
+                        </div>
                       </div>
-                      <div className="group relative bg-gradient-to-br from-zinc-800/80 to-zinc-800/40 rounded-xl p-6 border border-zinc-700/50 hover:border-[#E0FE10]/30 transition-all duration-300">
-                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#E0FE10] to-transparent rounded-t-xl opacity-60"></div>
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/10 flex items-center justify-center">
-                            <span className="text-[#E0FE10] text-lg">💪</span>
-                          </div>
-                          <h4 className="text-[#E0FE10] font-semibold text-lg">For Users</h4>
-                        </div>
-                        <p className="text-zinc-300 text-sm leading-relaxed">Personalized workouts, group challenges, leaderboards. Fitness that feels social.</p>
+                      <div className="flex items-center gap-3">
+                        <a
+                          href="/PulseIntelligenceLabsCertificateofIncorporation.pdf"
+                          download
+                          className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded-xl text-xs text-zinc-200 transition-all duration-300 backdrop-blur-sm"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Certificate of Incorporation
+                        </a>
+                        <a
+                          href="/Founder Intellectual Property Assignment Agreement - Pulse Intelligence Labs.pdf"
+                          download="Founder-IP-Assignment-Agreement.pdf"
+                          className="inline-flex items-center gap-2 px-4 py-2.5 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-600 rounded-xl text-xs text-zinc-200 transition-all duration-300 backdrop-blur-sm"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          IP Assignment Agreement
+                        </a>
                       </div>
                     </div>
 
-                    {/* The Model - highlighted callout */}
-                    <div className="relative bg-gradient-to-r from-[#E0FE10]/10 via-[#E0FE10]/5 to-transparent rounded-xl p-5 border border-[#E0FE10]/20 mb-10">
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#E0FE10] to-[#E0FE10]/30 rounded-l-xl"></div>
-                      <p className="text-zinc-200 text-sm leading-relaxed pl-2">
-                        <span className="text-[#E0FE10] font-semibold">The Model:</span> Creators upload Moves → Pulse transforms them into <span className="text-white font-medium">Movelists</span> (structured workouts) and <span className="text-white font-medium">Rounds</span> (group challenges) → Users train socially → Creators earn through custom pricing and content usage.
-                      </p>
+                    {/* Main content card with animated background */}
+                    <div className="relative rounded-2xl overflow-hidden mb-10">
+                      {/* Animated gradient background */}
+                      <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800">
+                        <div
+                          className="absolute w-[400px] h-[400px] rounded-full opacity-10"
+                          style={{
+                            background: 'radial-gradient(circle, #E0FE10 0%, transparent 70%)',
+                            top: '-20%',
+                            right: '-10%',
+                            filter: 'blur(60px)',
+                          }}
+                        />
+                        <div
+                          className="absolute w-[300px] h-[300px] rounded-full opacity-10"
+                          style={{
+                            background: 'radial-gradient(circle, #8B5CF6 0%, transparent 70%)',
+                            bottom: '-15%',
+                            left: '-5%',
+                            filter: 'blur(60px)',
+                          }}
+                        />
+                      </div>
+
+                      <div className="relative border border-zinc-800/50 rounded-2xl p-8 md:p-10 backdrop-blur-sm">
+                        {/* Hero statement */}
+                        <div className="max-w-3xl mb-10">
+                          <h3 className="text-white text-2xl md:text-3xl font-bold leading-tight mb-4">
+                            Pulse is the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#E0FE10] to-[#a8c40a]">creator-powered fitness platform</span> that turns short workout videos into multiplayer, playlist-style training experiences.
+                          </h3>
+                          <p className="text-zinc-400 text-base leading-relaxed">
+                            Creators upload Moves, Pulse assembles them into Movelists, and users train together in real time with leaderboards, scoring, and social motivation.
+                          </p>
+                        </div>
+
+                        {/* For Creators / For Users cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+                          <div className="group relative bg-gradient-to-br from-zinc-800/80 to-zinc-800/40 rounded-xl p-6 border border-zinc-700/50 hover:border-[#E0FE10]/30 transition-all duration-300">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#E0FE10] to-transparent rounded-t-xl opacity-60"></div>
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/10 flex items-center justify-center">
+                                <span className="text-[#E0FE10] text-lg">🎬</span>
+                              </div>
+                              <h4 className="text-[#E0FE10] font-semibold text-lg">For Creators</h4>
+                            </div>
+                            <p className="text-zinc-300 text-sm leading-relaxed">Upload Moves, earn every time they&apos;re used. Pulse handles distribution and payouts.</p>
+                          </div>
+                          <div className="group relative bg-gradient-to-br from-zinc-800/80 to-zinc-800/40 rounded-xl p-6 border border-zinc-700/50 hover:border-[#E0FE10]/30 transition-all duration-300">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#E0FE10] to-transparent rounded-t-xl opacity-60"></div>
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/10 flex items-center justify-center">
+                                <span className="text-[#E0FE10] text-lg">💪</span>
+                              </div>
+                              <h4 className="text-[#E0FE10] font-semibold text-lg">For Users</h4>
+                            </div>
+                            <p className="text-zinc-300 text-sm leading-relaxed">Personalized workouts, group challenges, leaderboards. Fitness that feels social.</p>
+                          </div>
+                        </div>
+
+                        {/* The Model - highlighted callout */}
+                        <div className="relative bg-gradient-to-r from-[#E0FE10]/10 via-[#E0FE10]/5 to-transparent rounded-xl p-5 border border-[#E0FE10]/20 mb-10">
+                          <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-[#E0FE10] to-[#E0FE10]/30 rounded-l-xl"></div>
+                          <p className="text-zinc-200 text-sm leading-relaxed pl-2">
+                            <span className="text-[#E0FE10] font-semibold">The Model:</span> Creators upload Moves → Pulse transforms them into <span className="text-white font-medium">Movelists</span> (structured workouts) and <span className="text-white font-medium">Rounds</span> (group challenges) → Users train socially → Creators earn through custom pricing and content usage.
+                          </p>
+                        </div>
+
+                        {/* Mission, Vision, Values Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                          {/* Mission Card */}
+                          <div className="group bg-zinc-800/50 rounded-xl p-6 border border-zinc-700/50 hover:border-zinc-600/50 transition-all duration-300 hover:transform hover:scale-[1.02]">
+                            <div className="flex items-center gap-3 mb-4">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 flex items-center justify-center">
+                                <span className="text-blue-400 text-lg">🎯</span>
+                              </div>
+                              <h4 className="text-white font-semibold text-lg">Mission</h4>
+                            </div>
+                            <p className="text-zinc-400 text-sm leading-relaxed">Make fitness feel social, accessible, and community-driven — powered by real creators and real human connection.</p>
+                          </div>
+
+                          {/* Vision Card - clickable */}
+                          <div
+                            className="group relative bg-gradient-to-br from-[#E0FE10]/10 to-zinc-800/50 rounded-xl p-6 cursor-pointer border border-[#E0FE10]/20 hover:border-[#E0FE10]/40 transition-all duration-300 hover:transform hover:scale-[1.02] hover:shadow-lg hover:shadow-[#E0FE10]/10"
+                            onClick={() => switchSection('vision')}
+                          >
+                            <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center group-hover:bg-[#E0FE10]/30 transition-all duration-300 group-hover:scale-110">
+                              <span className="text-[#E0FE10] text-sm">→</span>
+                            </div>
+                            <div className="flex items-center gap-3 mb-4">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E0FE10]/20 to-[#E0FE10]/10 flex items-center justify-center">
+                                <span className="text-[#E0FE10] text-lg">🚀</span>
+                              </div>
+                              <h4 className="text-[#E0FE10] font-semibold text-lg">Vision</h4>
+                            </div>
+                            <p className="text-zinc-300 text-sm leading-relaxed mb-3">
+                              Build the first operating system for human health — wellness that&apos;s continuous, adaptive, and embedded into daily life.
+                            </p>
+                            <p className="text-[#E0FE10]/70 text-xs font-medium group-hover:text-[#E0FE10] transition-colors">
+                              Explore our vision →
+                            </p>
+                          </div>
+
+                          {/* Values Card */}
+                          <div className="group bg-zinc-800/50 rounded-xl p-6 border border-zinc-700/50 hover:border-zinc-600/50 transition-all duration-300 hover:transform hover:scale-[1.02]">
+                            <div className="flex items-center gap-3 mb-4">
+                              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 flex items-center justify-center">
+                                <span className="text-purple-400 text-lg">💎</span>
+                              </div>
+                              <h4 className="text-white font-semibold text-lg">Values</h4>
+                            </div>
+                            <ul className="text-zinc-400 text-sm space-y-2">
+                              <li className="flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
+                                Community-first
+                              </li>
+                              <li className="flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
+                                Authentic, creator-powered fitness
+                              </li>
+                              <li className="flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
+                                Inclusivity and accessibility
+                              </li>
+                              <li className="flex items-center gap-2">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
+                                Tech that enhances connection
+                              </li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    
-                    {/* Mission, Vision, Values Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                      {/* Mission Card */}
-                      <div className="group bg-zinc-800/50 rounded-xl p-6 border border-zinc-700/50 hover:border-zinc-600/50 transition-all duration-300 hover:transform hover:scale-[1.02]">
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/20 to-blue-600/10 flex items-center justify-center">
-                            <span className="text-blue-400 text-lg">🎯</span>
-                          </div>
-                          <h4 className="text-white font-semibold text-lg">Mission</h4>
-                        </div>
-                        <p className="text-zinc-400 text-sm leading-relaxed">Make fitness feel social, accessible, and community-driven — powered by real creators and real human connection.</p>
-                      </div>
-                      
-                      {/* Vision Card - clickable */}
-                      <div 
-                        className="group relative bg-gradient-to-br from-[#E0FE10]/10 to-zinc-800/50 rounded-xl p-6 cursor-pointer border border-[#E0FE10]/20 hover:border-[#E0FE10]/40 transition-all duration-300 hover:transform hover:scale-[1.02] hover:shadow-lg hover:shadow-[#E0FE10]/10"
-                        onClick={() => switchSection('vision')}
-                      >
-                        <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[#E0FE10]/20 flex items-center justify-center group-hover:bg-[#E0FE10]/30 transition-all duration-300 group-hover:scale-110">
-                          <span className="text-[#E0FE10] text-sm">→</span>
-                        </div>
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E0FE10]/20 to-[#E0FE10]/10 flex items-center justify-center">
-                            <span className="text-[#E0FE10] text-lg">🚀</span>
-                          </div>
-                          <h4 className="text-[#E0FE10] font-semibold text-lg">Vision</h4>
-                        </div>
-                        <p className="text-zinc-300 text-sm leading-relaxed mb-3">
-                          Build the first operating system for human health — wellness that&apos;s continuous, adaptive, and embedded into daily life.
-                        </p>
-                        <p className="text-[#E0FE10]/70 text-xs font-medium group-hover:text-[#E0FE10] transition-colors">
-                          Explore our vision →
-                        </p>
-                      </div>
-                      
-                      {/* Values Card */}
-                      <div className="group bg-zinc-800/50 rounded-xl p-6 border border-zinc-700/50 hover:border-zinc-600/50 transition-all duration-300 hover:transform hover:scale-[1.02]">
-                        <div className="flex items-center gap-3 mb-4">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-purple-600/10 flex items-center justify-center">
-                            <span className="text-purple-400 text-lg">💎</span>
-                          </div>
-                          <h4 className="text-white font-semibold text-lg">Values</h4>
-                        </div>
-                        <ul className="text-zinc-400 text-sm space-y-2">
-                          <li className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
-                            Community-first
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
-                            Authentic, creator-powered fitness
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
-                            Inclusivity and accessibility
-                          </li>
-                          <li className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#E0FE10]"></span>
-                            Tech that enhances connection
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </section>
+                  </section>
                 ) : (
                   <LockedSectionView sectionName="Company Overview" />
                 )
@@ -3178,1047 +3177,1055 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
               {/* Business Entity Section */}
               {activeSection === 'entity' && (
                 hasSectionAccess('entity') ? (
-              <section 
-                id="entity" 
-                ref={(el) => { sectionsRef.current.entity = el; }}
-                className="mb-20"
-              >
-                {/* Header with gradient accent */}
-                <div className="flex items-center mb-8">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#E0FE10] to-[#a8c40a] flex items-center justify-center mr-4 shadow-lg shadow-[#E0FE10]/20">
-                    <span className="font-bold text-black text-lg">2</span>
-                  </div>
-                  <div>
-                    <h2 className="text-white text-3xl font-bold">Business Entity</h2>
-                    <p className="text-zinc-500 text-sm">Legal and administrative information</p>
-                  </div>
-                </div>
-
-                {/* Main content card */}
-                <div className="relative rounded-2xl overflow-hidden mb-10">
-                  <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800">
-                    <div 
-                      className="absolute w-[400px] h-[400px] rounded-full opacity-10"
-                      style={{
-                        background: 'radial-gradient(circle, #E0FE10 0%, transparent 70%)',
-                        top: '-20%',
-                        right: '-10%',
-                        filter: 'blur(60px)',
-                      }}
-                    />
-                  </div>
-                  
-                  <div className="relative bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-2xl p-8 md:p-10">
-                    {/* Company Details Section */}
-                    <div className="mb-8">
-                      <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
-                          <span className="text-[#E0FE10] text-sm font-bold">ℹ</span>
-                        </div>
-                        Company Details
-                      </h3>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
-                          <label className="text-zinc-400 text-xs font-medium mb-2 block">Company Name</label>
-                          <div className="flex items-center justify-between">
-                            <p className="text-white text-lg font-medium">Pulse Intelligence Labs, Inc.</p>
-                            <CopyButton text="Pulse Intelligence Labs, Inc." />
-                          </div>
-                        </div>
-                        
-                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
-                          <label className="text-zinc-400 text-xs font-medium mb-2 block">Entity Type</label>
-                          <p className="text-white text-lg font-medium">Delaware C Corporation</p>
-                        </div>
-                        
-                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
-                          <label className="text-zinc-400 text-xs font-medium mb-2 block">EIN (Employer Identification Number)</label>
-                          <div className="flex items-center justify-between">
-                            <p className="text-white text-lg font-medium">41-3072897</p>
-                            <CopyButton text="41-3072897" />
-                          </div>
-                        </div>
-                        
-                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
-                          <label className="text-zinc-400 text-xs font-medium mb-2 block">Incorporation Date</label>
-                          <p className="text-white text-lg font-medium">December 11, 2025</p>
-                        </div>
-                        
-                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
-                          <label className="text-zinc-400 text-xs font-medium mb-2 block">SAM.gov Entity ID</label>
-                          <div className="flex items-center justify-between">
-                            <p className="text-white text-lg font-medium">H3WQVWXKEKP7</p>
-                            <CopyButton text="H3WQVWXKEKP7" />
-                          </div>
-                        </div>
+                  <section
+                    id="entity"
+                    ref={(el) => { sectionsRef.current.entity = el; }}
+                    className="mb-20"
+                  >
+                    {/* Header with gradient accent */}
+                    <div className="flex items-center mb-8">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#E0FE10] to-[#a8c40a] flex items-center justify-center mr-4 shadow-lg shadow-[#E0FE10]/20">
+                        <span className="font-bold text-black text-lg">2</span>
+                      </div>
+                      <div>
+                        <h2 className="text-white text-3xl font-bold">Business Entity</h2>
+                        <p className="text-zinc-500 text-sm">Legal and administrative information</p>
                       </div>
                     </div>
 
-                    {/* Contact Information Section */}
-                    <div className="mb-8">
-                      <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
-                          <Mail className="w-4 h-4 text-[#E0FE10]" />
-                        </div>
-                        Contact Information
-                      </h3>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
-                          <label className="text-zinc-400 text-xs font-medium mb-2 block">Representative Name</label>
-                          <div className="flex items-center justify-between">
-                            <p className="text-white text-lg font-medium">Tremaine Grant</p>
-                            <CopyButton text="Tremaine Grant" />
-                          </div>
-                        </div>
-                        
-                        <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
-                          <label className="text-zinc-400 text-xs font-medium mb-2 block">Company Phone Number</label>
-                          <div className="flex items-center justify-between">
-                            <p className="text-white text-lg font-medium">(954) 548-4221</p>
-                            <CopyButton text="(954) 548-4221" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Business Address Section */}
-                    <div className="mb-8">
-                      <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
-                          <span className="text-[#E0FE10] text-sm font-bold">📍</span>
-                        </div>
-                        Business Address
-                      </h3>
-                      
-                      <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
-                        <label className="text-zinc-400 text-xs font-medium mb-2 block">Registered Address</label>
-                        <div className="flex items-start justify-between gap-4">
-                          <p className="text-white text-lg font-medium">1111B S Governors Avenue STE 50759<br />Dover, DE 19904<br />United States</p>
-                          <CopyButton text="1111B S Governors Avenue STE 50759, Dover, DE 19904, United States" />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Corporate Documents Section */}
-                    <div>
-                      <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
-                          <FileText className="w-4 h-4 text-[#E0FE10]" />
-                        </div>
-                        Corporate Documents
-                      </h3>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <a 
-                          href="/PulseIntelligenceLabsCertificateofIncorporation.pdf" 
-                          download
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Certificate of Incorporation</div>
-                            <div className="text-zinc-500 text-sm">PDF • Delaware C-Corp</div>
-                          </div>
-                        </a>
-                        
-                        <a 
-                          href="/PulseIntelligenceLabsInc - Approved Certificate of Incorporation (Articles of Incorporation).pdf" 
-                          download
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Articles of Incorporation</div>
-                            <div className="text-zinc-500 text-sm">PDF • Approved Certificate</div>
-                          </div>
-                        </a>
-                        
-                        <a 
-                          href="/Pulse Intelligence Labs_ Inc. Bylaws.pdf" 
-                          download
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Corporate Bylaws</div>
-                            <div className="text-zinc-500 text-sm">PDF • Company Bylaws</div>
-                          </div>
-                        </a>
-                        
-                        <a 
-                          href="/Founder Intellectual Property Assignment Agreement - Pulse Intelligence Labs.pdf" 
-                          download="Founder-IP-Assignment-Agreement.pdf"
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">IP Assignment Agreement</div>
-                            <div className="text-zinc-500 text-sm">PDF • Signed Founder IP Assignment</div>
-                          </div>
-                        </a>
-                        
-                        <a 
-                          href="/Founder Restricted Stock Purchase Agreement - Pulse Intelligence Labs.pdf"
-                          download="Founder-RSPA.pdf"
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Founder RSPA</div>
-                            <div className="text-zinc-500 text-sm">PDF • Signed Restricted Stock Purchase Agreement</div>
-                          </div>
-                        </a>
-                        
-                        <a 
-                          href="/RSPA for Tremaine Grant.pdf"
-                          download
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">RSPA for Tremaine Grant</div>
-                            <div className="text-zinc-500 text-sm">PDF • Restricted Stock Purchase Agreement</div>
-                          </div>
-                        </a>
-                        
-                        <a 
-                          href="/Common Stock Certificate Tremaine Grant (1).pdf"
-                          download
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Common Stock Certificate</div>
-                            <div className="text-zinc-500 text-sm">PDF • Tremaine Grant</div>
-                          </div>
-                        </a>
-                        
-                        <a 
-                          href="/Stock Assignment Separate from Certificate for Tremaine Grant (1).pdf"
-                          download
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Stock Assignment</div>
-                            <div className="text-zinc-500 text-sm">PDF • Separate from Certificate</div>
-                          </div>
-                        </a>
-                        
-                        <a 
-                          href="/Employee CIIAA for Tremaine Grant.pdf"
-                          download
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Employee CIIAA</div>
-                            <div className="text-zinc-500 text-sm">PDF • Confidentiality & IP Assignment</div>
-                          </div>
-                        </a>
-                        
-                        <a 
-                          href="/Section 83(b) for Tremaine Grant.pdf"
-                          download
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Section 83(b) Election</div>
-                            <div className="text-zinc-500 text-sm">PDF • Tax Election Form</div>
-                          </div>
-                        </a>
-                        
-                        <a 
-                          href="/Proof of 83(b) filing w_ attached Lob mailed contents for Tremaine Grant.pdf"
-                          download
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">83(b) Filing Proof</div>
-                            <div className="text-zinc-500 text-sm">PDF • Proof of Filing with Contents</div>
-                          </div>
-                        </a>
-                        
-                        <a 
-                          href="/PulseIntelligenceLabsInc - CP 575 Letter (2).pdf"
-                          download
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">CP 575 Letter</div>
-                            <div className="text-zinc-500 text-sm">PDF • IRS Confirmation Letter</div>
-                          </div>
-                        </a>
-                        
-                        <a 
-                          href="/SS-4.pdf"
-                          download
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">SS-4 Form</div>
-                            <div className="text-zinc-500 text-sm">PDF • EIN Application Form</div>
-                          </div>
-                        </a>
-                        
-                        <a 
-                          href="/Form 8821.pdf"
-                          download
-                          className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                            <Download className="w-5 h-5 text-[#E0FE10]" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Form 8821</div>
-                            <div className="text-zinc-500 text-sm">PDF • Tax Information Authorization</div>
-                          </div>
-                        </a>
+                    {/* Main content card */}
+                    <div className="relative rounded-2xl overflow-hidden mb-10">
+                      <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800">
+                        <div
+                          className="absolute w-[400px] h-[400px] rounded-full opacity-10"
+                          style={{
+                            background: 'radial-gradient(circle, #E0FE10 0%, transparent 70%)',
+                            top: '-20%',
+                            right: '-10%',
+                            filter: 'blur(60px)',
+                          }}
+                        />
                       </div>
 
-                      {/* Equity Documents (EIP, Board Consent, Advisor Docs) */}
-                      {isLoadingCorporateDocs ? (
-                        <div className="mt-6 flex items-center justify-center py-8">
-                          <Loader2 className="w-6 h-6 text-[#E0FE10] animate-spin" />
-                          <span className="ml-3 text-zinc-400 text-sm">Loading equity documents...</span>
-                        </div>
-                      ) : corporateEquityDocs.length > 0 && (
-                        <div className="mt-8 pt-8 border-t border-zinc-800">
-                          <h4 className="text-white text-lg font-semibold mb-4 flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
-                              <FileText className="w-3.5 h-3.5 text-[#E0FE10]" />
+                      <div className="relative bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-2xl p-8 md:p-10">
+                        {/* Company Details Section */}
+                        <div className="mb-8">
+                          <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                              <span className="text-[#E0FE10] text-sm font-bold">ℹ</span>
                             </div>
-                            Equity Documents
-                          </h4>
+                            Company Details
+                          </h3>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                              <label className="text-zinc-400 text-xs font-medium mb-2 block">Company Name</label>
+                              <div className="flex items-center justify-between">
+                                <p className="text-white text-lg font-medium">Pulse Intelligence Labs, Inc.</p>
+                                <CopyButton text="Pulse Intelligence Labs, Inc." />
+                              </div>
+                            </div>
+
+                            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                              <label className="text-zinc-400 text-xs font-medium mb-2 block">Entity Type</label>
+                              <p className="text-white text-lg font-medium">Delaware C Corporation</p>
+                            </div>
+
+                            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                              <label className="text-zinc-400 text-xs font-medium mb-2 block">EIN (Employer Identification Number)</label>
+                              <div className="flex items-center justify-between">
+                                <p className="text-white text-lg font-medium">41-3072897</p>
+                                <CopyButton text="41-3072897" />
+                              </div>
+                            </div>
+
+                            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                              <label className="text-zinc-400 text-xs font-medium mb-2 block">Incorporation Date</label>
+                              <p className="text-white text-lg font-medium">December 11, 2025</p>
+                            </div>
+
+                            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                              <label className="text-zinc-400 text-xs font-medium mb-2 block">SAM.gov Entity ID</label>
+                              <div className="flex items-center justify-between">
+                                <p className="text-white text-lg font-medium">H3WQVWXKEKP7</p>
+                                <CopyButton text="H3WQVWXKEKP7" />
+                              </div>
+                            </div>
+
+                            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                              <label className="text-zinc-400 text-xs font-medium mb-2 block">DUNS Number</label>
+                              <div className="flex items-center justify-between">
+                                <p className="text-white text-lg font-medium">144924325</p>
+                                <CopyButton text="144924325" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Contact Information Section */}
+                        <div className="mb-8">
+                          <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                              <Mail className="w-4 h-4 text-[#E0FE10]" />
+                            </div>
+                            Contact Information
+                          </h3>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                              <label className="text-zinc-400 text-xs font-medium mb-2 block">Representative Name</label>
+                              <div className="flex items-center justify-between">
+                                <p className="text-white text-lg font-medium">Tremaine Grant</p>
+                                <CopyButton text="Tremaine Grant" />
+                              </div>
+                            </div>
+
+                            <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                              <label className="text-zinc-400 text-xs font-medium mb-2 block">Company Phone Number</label>
+                              <div className="flex items-center justify-between">
+                                <p className="text-white text-lg font-medium">(954) 548-4221</p>
+                                <CopyButton text="(954) 548-4221" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Business Address Section */}
+                        <div className="mb-8">
+                          <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                              <span className="text-[#E0FE10] text-sm font-bold">📍</span>
+                            </div>
+                            Business Address
+                          </h3>
+
+                          <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5">
+                            <label className="text-zinc-400 text-xs font-medium mb-2 block">Registered Address</label>
+                            <div className="flex items-start justify-between gap-4">
+                              <p className="text-white text-lg font-medium">1111B S Governors Avenue STE 50759<br />Dover, DE 19904<br />United States</p>
+                              <CopyButton text="1111B S Governors Avenue STE 50759, Dover, DE 19904, United States" />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Corporate Documents Section */}
+                        <div>
+                          <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                              <FileText className="w-4 h-4 text-[#E0FE10]" />
+                            </div>
+                            Corporate Documents
+                          </h3>
+
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {corporateEquityDocs.map((doc) => {
-                              const docDate = doc.createdAt?.toDate ? doc.createdAt.toDate() : new Date(doc.createdAt);
-                              const formattedDate = docDate.toLocaleDateString('en-US', { 
-                                year: 'numeric', 
-                                month: 'short', 
-                                day: 'numeric' 
-                              });
-                              
-                              // Determine document type label
-                              let docTypeLabel = 'Equity Document';
-                              let docDescription = '';
-                              
-                              if (doc.documentType === 'eip') {
-                                docTypeLabel = 'Equity Incentive Plan';
-                                docDescription = 'Company-wide equity plan';
-                              } else if (doc.documentType === 'board_consent') {
-                                docTypeLabel = 'Board Consent';
-                                docDescription = doc.stakeholderName 
-                                  ? `Board approval for ${doc.stakeholderName}`
-                                  : 'Board approval document';
-                              } else if (doc.documentType === 'advisor_nso_agreement' || (doc.stakeholderType === 'advisor' && doc.documentType === 'option_agreement')) {
-                                docTypeLabel = 'Advisor Equity Agreement';
-                                docDescription = doc.stakeholderName 
-                                  ? `Advisor agreement for ${doc.stakeholderName}`
-                                  : 'Advisor equity grant';
-                              }
-                              
-                              const viewUrl = `/equity-doc/${doc.id}`;
-                              
-                              return (
-                                <a
-                                  key={doc.id}
-                                  href={viewUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
-                                >
-                                  <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                                    <FileText className="w-5 h-5 text-[#E0FE10]" />
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">
-                                      {doc.title || docTypeLabel}
-                                    </div>
-                                    <div className="text-zinc-500 text-sm">
-                                      {docDescription || 'Equity document'} • {formattedDate}
-                                    </div>
-                                  </div>
-                                  <div className="flex-shrink-0">
-                                    <ArrowUpRight className="w-4 h-4 text-zinc-500 group-hover:text-[#E0FE10] transition-colors" />
-                                  </div>
-                                </a>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
+                            <a
+                              href="/PulseIntelligenceLabsCertificateofIncorporation.pdf"
+                              download
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Certificate of Incorporation</div>
+                                <div className="text-zinc-500 text-sm">PDF • Delaware C-Corp</div>
+                              </div>
+                            </a>
 
-                      {/* Employee Agreements Section */}
-                      <div className="mt-8 pt-8 border-t border-zinc-800">
-                        <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
-                            <FileText className="w-4 h-4 text-[#E0FE10]" />
+                            <a
+                              href="/PulseIntelligenceLabsInc - Approved Certificate of Incorporation (Articles of Incorporation).pdf"
+                              download
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Articles of Incorporation</div>
+                                <div className="text-zinc-500 text-sm">PDF • Approved Certificate</div>
+                              </div>
+                            </a>
+
+                            <a
+                              href="/Pulse Intelligence Labs_ Inc. Bylaws.pdf"
+                              download
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Corporate Bylaws</div>
+                                <div className="text-zinc-500 text-sm">PDF • Company Bylaws</div>
+                              </div>
+                            </a>
+
+                            <a
+                              href="/Founder Intellectual Property Assignment Agreement - Pulse Intelligence Labs.pdf"
+                              download="Founder-IP-Assignment-Agreement.pdf"
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">IP Assignment Agreement</div>
+                                <div className="text-zinc-500 text-sm">PDF • Signed Founder IP Assignment</div>
+                              </div>
+                            </a>
+
+                            <a
+                              href="/Founder Restricted Stock Purchase Agreement - Pulse Intelligence Labs.pdf"
+                              download="Founder-RSPA.pdf"
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Founder RSPA</div>
+                                <div className="text-zinc-500 text-sm">PDF • Signed Restricted Stock Purchase Agreement</div>
+                              </div>
+                            </a>
+
+                            <a
+                              href="/RSPA for Tremaine Grant.pdf"
+                              download
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">RSPA for Tremaine Grant</div>
+                                <div className="text-zinc-500 text-sm">PDF • Restricted Stock Purchase Agreement</div>
+                              </div>
+                            </a>
+
+                            <a
+                              href="/Common Stock Certificate Tremaine Grant (1).pdf"
+                              download
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Common Stock Certificate</div>
+                                <div className="text-zinc-500 text-sm">PDF • Tremaine Grant</div>
+                              </div>
+                            </a>
+
+                            <a
+                              href="/Stock Assignment Separate from Certificate for Tremaine Grant (1).pdf"
+                              download
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Stock Assignment</div>
+                                <div className="text-zinc-500 text-sm">PDF • Separate from Certificate</div>
+                              </div>
+                            </a>
+
+                            <a
+                              href="/Employee CIIAA for Tremaine Grant.pdf"
+                              download
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Employee CIIAA</div>
+                                <div className="text-zinc-500 text-sm">PDF • Confidentiality & IP Assignment</div>
+                              </div>
+                            </a>
+
+                            <a
+                              href="/Section 83(b) for Tremaine Grant.pdf"
+                              download
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Section 83(b) Election</div>
+                                <div className="text-zinc-500 text-sm">PDF • Tax Election Form</div>
+                              </div>
+                            </a>
+
+                            <a
+                              href="/Proof of 83(b) filing w_ attached Lob mailed contents for Tremaine Grant.pdf"
+                              download
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">83(b) Filing Proof</div>
+                                <div className="text-zinc-500 text-sm">PDF • Proof of Filing with Contents</div>
+                              </div>
+                            </a>
+
+                            <a
+                              href="/PulseIntelligenceLabsInc - CP 575 Letter (2).pdf"
+                              download
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">CP 575 Letter</div>
+                                <div className="text-zinc-500 text-sm">PDF • IRS Confirmation Letter</div>
+                              </div>
+                            </a>
+
+                            <a
+                              href="/SS-4.pdf"
+                              download
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">SS-4 Form</div>
+                                <div className="text-zinc-500 text-sm">PDF • EIN Application Form</div>
+                              </div>
+                            </a>
+
+                            <a
+                              href="/Form 8821.pdf"
+                              download
+                              className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                            >
+                              <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                <Download className="w-5 h-5 text-[#E0FE10]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Form 8821</div>
+                                <div className="text-zinc-500 text-sm">PDF • Tax Information Authorization</div>
+                              </div>
+                            </a>
                           </div>
-                          Employee Agreements
-                        </h3>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <button 
-                            type="button"
-                            onClick={generateAdvisorAgreementPdf}
-                            className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group text-left"
-                          >
-                            <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                              <Download className="w-5 h-5 text-[#E0FE10]" />
+
+                          {/* Equity Documents (EIP, Board Consent, Advisor Docs) */}
+                          {isLoadingCorporateDocs ? (
+                            <div className="mt-6 flex items-center justify-center py-8">
+                              <Loader2 className="w-6 h-6 text-[#E0FE10] animate-spin" />
+                              <span className="ml-3 text-zinc-400 text-sm">Loading equity documents...</span>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Advisor Agreement</div>
-                              <div className="text-zinc-500 text-sm">PDF • Independent Advisor / Trial Contractor</div>
+                          ) : corporateEquityDocs.length > 0 && (
+                            <div className="mt-8 pt-8 border-t border-zinc-800">
+                              <h4 className="text-white text-lg font-semibold mb-4 flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                                  <FileText className="w-3.5 h-3.5 text-[#E0FE10]" />
+                                </div>
+                                Equity Documents
+                              </h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {corporateEquityDocs.map((doc) => {
+                                  const docDate = doc.createdAt?.toDate ? doc.createdAt.toDate() : new Date(doc.createdAt);
+                                  const formattedDate = docDate.toLocaleDateString('en-US', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric'
+                                  });
+
+                                  // Determine document type label
+                                  let docTypeLabel = 'Equity Document';
+                                  let docDescription = '';
+
+                                  if (doc.documentType === 'eip') {
+                                    docTypeLabel = 'Equity Incentive Plan';
+                                    docDescription = 'Company-wide equity plan';
+                                  } else if (doc.documentType === 'board_consent') {
+                                    docTypeLabel = 'Board Consent';
+                                    docDescription = doc.stakeholderName
+                                      ? `Board approval for ${doc.stakeholderName}`
+                                      : 'Board approval document';
+                                  } else if (doc.documentType === 'advisor_nso_agreement' || (doc.stakeholderType === 'advisor' && doc.documentType === 'option_agreement')) {
+                                    docTypeLabel = 'Advisor Equity Agreement';
+                                    docDescription = doc.stakeholderName
+                                      ? `Advisor agreement for ${doc.stakeholderName}`
+                                      : 'Advisor equity grant';
+                                  }
+
+                                  const viewUrl = `/equity-doc/${doc.id}`;
+
+                                  return (
+                                    <a
+                                      key={doc.id}
+                                      href={viewUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group"
+                                    >
+                                      <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                        <FileText className="w-5 h-5 text-[#E0FE10]" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">
+                                          {doc.title || docTypeLabel}
+                                        </div>
+                                        <div className="text-zinc-500 text-sm">
+                                          {docDescription || 'Equity document'} • {formattedDate}
+                                        </div>
+                                      </div>
+                                      <div className="flex-shrink-0">
+                                        <ArrowUpRight className="w-4 h-4 text-zinc-500 group-hover:text-[#E0FE10] transition-colors" />
+                                      </div>
+                                    </a>
+                                  );
+                                })}
+                              </div>
                             </div>
-                          </button>
-                          
-                          <button 
-                            type="button"
-                            onClick={generateContractorAgreementPdf}
-                            className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group text-left"
-                          >
-                            <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
-                              <Download className="w-5 h-5 text-[#E0FE10]" />
+                          )}
+
+                          {/* Employee Agreements Section */}
+                          <div className="mt-8 pt-8 border-t border-zinc-800">
+                            <h3 className="text-white text-xl font-semibold mb-6 flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                                <FileText className="w-4 h-4 text-[#E0FE10]" />
+                              </div>
+                              Employee Agreements
+                            </h3>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <button
+                                type="button"
+                                onClick={generateAdvisorAgreementPdf}
+                                className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group text-left"
+                              >
+                                <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                  <Download className="w-5 h-5 text-[#E0FE10]" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Advisor Agreement</div>
+                                  <div className="text-zinc-500 text-sm">PDF • Independent Advisor / Trial Contractor</div>
+                                </div>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={generateContractorAgreementPdf}
+                                className="flex items-center gap-4 p-4 bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700 hover:border-[#E0FE10]/30 rounded-xl transition-all group text-left"
+                              >
+                                <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center flex-shrink-0">
+                                  <Download className="w-5 h-5 text-[#E0FE10]" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Contractor Agreement</div>
+                                  <div className="text-zinc-500 text-sm">PDF • Independent Contractor (Design)</div>
+                                </div>
+                              </button>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-white font-medium group-hover:text-[#E0FE10] transition-colors">Contractor Agreement</div>
-                              <div className="text-zinc-500 text-sm">PDF • Independent Contractor (Design)</div>
-                            </div>
-                          </button>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              </section>
+                  </section>
                 ) : (
                   <LockedSectionView sectionName="Business Entity" />
                 )
               )}
-              
+
               {/* Product & Technology Section */}
               {activeSection === 'product' && (
                 hasSectionAccess('product') ? (
-              <section 
-                id="product" 
-                ref={(el) => { sectionsRef.current.product = el; }}
-                className="mb-20"
-              >
-                <div className="flex items-center mb-6">
-                  <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                    <span className="font-bold text-black">3</span>
-                  </div>
-                  <h2 className="text-white text-3xl font-bold">Product & Technology</h2>
-                </div>
-                
-                {/* Product Demo Video */}
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-8">
-                  <VideoDemo />
-                </div>
+                  <section
+                    id="product"
+                    ref={(el) => { sectionsRef.current.product = el; }}
+                    className="mb-20"
+                  >
+                    <div className="flex items-center mb-6">
+                      <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                        <span className="font-bold text-black">3</span>
+                      </div>
+                      <h2 className="text-white text-3xl font-bold">Product & Technology</h2>
+                    </div>
 
-                {/* Content Hierarchy: Move → Stack → Round */}
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-8">
-                  <h3 className="text-white text-xl font-semibold mb-6">How It Works</h3>
-                  
-                  <div className="flex flex-col md:flex-row items-stretch gap-4">
-                    {/* Moves */}
-                    <div className="flex-1 bg-zinc-800/50 rounded-xl p-5 border-l-4 border-[#E0FE10]">
-                      <div className="flex items-center gap-3 mb-3">
-                        <img src="/moveIcon.png" alt="Moves" className="w-10 h-10 object-contain" />
-                        <h4 className="text-[#E0FE10] font-semibold">Moves</h4>
-                      </div>
-                      <p className="text-zinc-400 text-sm">Short exercise videos uploaded by creators. The atomic building blocks.</p>
+                    {/* Product Demo Video */}
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-8">
+                      <VideoDemo />
                     </div>
-                    
-                    {/* Arrow */}
-                    <div className="hidden md:flex items-center justify-center px-2">
-                      <span className="text-[#E0FE10] text-2xl">→</span>
-                    </div>
-                    <div className="flex md:hidden justify-center py-2">
-                      <span className="text-[#E0FE10] text-2xl">↓</span>
-                    </div>
-                    
-                    {/* Movelists */}
-                    <div className="flex-1 bg-zinc-800/50 rounded-xl p-5 border-l-4 border-blue-400">
-                      <div className="flex items-center gap-3 mb-3">
-                        <img src="/stacksIcon.png" alt="Movelists" className="w-10 h-10 object-contain" />
-                        <h4 className="text-blue-400 font-semibold">Movelists</h4>
-                      </div>
-                      <p className="text-zinc-400 text-sm">Curated playlists of Moves. On-demand workout programs.</p>
-                    </div>
-                    
-                    {/* Arrow */}
-                    <div className="hidden md:flex items-center justify-center px-2">
-                      <span className="text-[#E0FE10] text-2xl">→</span>
-                    </div>
-                    <div className="flex md:hidden justify-center py-2">
-                      <span className="text-[#E0FE10] text-2xl">↓</span>
-                    </div>
-                    
-                    {/* Rounds */}
-                    <div className="flex-1 bg-zinc-800/50 rounded-xl p-5 border-l-4 border-purple-400">
-                      <div className="flex items-center gap-3 mb-3">
-                        <img src="/roundIcon.png" alt="Rounds" className="w-10 h-10 object-contain" />
-                        <h4 className="text-purple-400 font-semibold">Rounds</h4>
-                      </div>
-                      <p className="text-zinc-400 text-sm">Live multiplayer challenges with leaderboards and scoring.</p>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Standout Features */}
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-8">
-                  <h3 className="text-white text-xl font-semibold mb-6">Standout Features</h3>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="bg-zinc-800/40 rounded-lg p-4">
-                      <span className="text-2xl mb-2 block">🏆</span>
-                      <p className="text-white font-medium text-sm">Real-time Leaderboards</p>
-                      <p className="text-zinc-500 text-xs">Compete live during workouts</p>
-                    </div>
-                    <div className="bg-zinc-800/40 rounded-lg p-4">
-                      <span className="text-2xl mb-2 block">🤖</span>
-                      <p className="text-white font-medium text-sm">AI Programming</p>
-                      <p className="text-zinc-500 text-xs">Auto-generate workout plans</p>
-                    </div>
-                    <div className="bg-zinc-800/40 rounded-lg p-4">
-                      <span className="text-2xl mb-2 block">⌚</span>
-                      <p className="text-white font-medium text-sm">Apple Watch Integration</p>
-                      <p className="text-zinc-500 text-xs">Live HR, HRV, and calories</p>
-                    </div>
-                    <div className="bg-zinc-800/40 rounded-lg p-4">
-                      <span className="text-2xl mb-2 block">💰</span>
-                      <p className="text-white font-medium text-sm">Creator Payouts</p>
-                      <p className="text-zinc-500 text-xs">Automatic revenue sharing</p>
-                    </div>
-                    <div className="bg-zinc-800/40 rounded-lg p-4">
-                      <span className="text-2xl mb-2 block">🔗</span>
-                      <p className="text-white font-medium text-sm">Referral System</p>
-                      <p className="text-zinc-500 text-xs">Built-in viral loops</p>
-                    </div>
-                    <div className="bg-zinc-800/40 rounded-lg p-4">
-                      <span className="text-2xl mb-2 block">📱</span>
-                      <p className="text-white font-medium text-sm">Cross-Platform</p>
-                      <p className="text-zinc-500 text-xs">iOS, Android, and Web</p>
-                    </div>
-                  </div>
-                </div>
+                    {/* Content Hierarchy: Move → Stack → Round */}
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-8">
+                      <h3 className="text-white text-xl font-semibold mb-6">How It Works</h3>
 
-                {/* Demo Videos */}
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
-                  <h3 className="text-white text-xl font-semibold mb-6">Product Demos</h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                      <div className="aspect-video rounded-lg overflow-hidden mb-3">
-                        <iframe
-                          src="https://www.youtube.com/embed/8Ous6Wqvn7o"
-                          title="Pulse Product Walkthrough"
-                          className="w-full h-full"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
+                      <div className="flex flex-col md:flex-row items-stretch gap-4">
+                        {/* Moves */}
+                        <div className="flex-1 bg-zinc-800/50 rounded-xl p-5 border-l-4 border-[#E0FE10]">
+                          <div className="flex items-center gap-3 mb-3">
+                            <img src="/moveIcon.png" alt="Moves" className="w-10 h-10 object-contain" />
+                            <h4 className="text-[#E0FE10] font-semibold">Moves</h4>
+                          </div>
+                          <p className="text-zinc-400 text-sm">Short exercise videos uploaded by creators. The atomic building blocks.</p>
+                        </div>
+
+                        {/* Arrow */}
+                        <div className="hidden md:flex items-center justify-center px-2">
+                          <span className="text-[#E0FE10] text-2xl">→</span>
+                        </div>
+                        <div className="flex md:hidden justify-center py-2">
+                          <span className="text-[#E0FE10] text-2xl">↓</span>
+                        </div>
+
+                        {/* Movelists */}
+                        <div className="flex-1 bg-zinc-800/50 rounded-xl p-5 border-l-4 border-blue-400">
+                          <div className="flex items-center gap-3 mb-3">
+                            <img src="/stacksIcon.png" alt="Movelists" className="w-10 h-10 object-contain" />
+                            <h4 className="text-blue-400 font-semibold">Movelists</h4>
+                          </div>
+                          <p className="text-zinc-400 text-sm">Curated playlists of Moves. On-demand workout programs.</p>
+                        </div>
+
+                        {/* Arrow */}
+                        <div className="hidden md:flex items-center justify-center px-2">
+                          <span className="text-[#E0FE10] text-2xl">→</span>
+                        </div>
+                        <div className="flex md:hidden justify-center py-2">
+                          <span className="text-[#E0FE10] text-2xl">↓</span>
+                        </div>
+
+                        {/* Rounds */}
+                        <div className="flex-1 bg-zinc-800/50 rounded-xl p-5 border-l-4 border-purple-400">
+                          <div className="flex items-center gap-3 mb-3">
+                            <img src="/roundIcon.png" alt="Rounds" className="w-10 h-10 object-contain" />
+                            <h4 className="text-purple-400 font-semibold">Rounds</h4>
+                          </div>
+                          <p className="text-zinc-400 text-sm">Live multiplayer challenges with leaderboards and scoring.</p>
+                        </div>
                       </div>
-                      <p className="text-white font-medium text-sm">Product Walkthrough</p>
-                      <p className="text-zinc-500 text-xs">Full platform overview</p>
                     </div>
-                    
-                    <div>
-                      <div className="aspect-video rounded-lg overflow-hidden mb-3">
-                        <iframe
-                          src="https://www.youtube.com/embed/FDqvrReKjyo"
-                          title="How to Upload a Move"
-                          className="w-full h-full"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
+
+                    {/* Standout Features */}
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-8">
+                      <h3 className="text-white text-xl font-semibold mb-6">Standout Features</h3>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="bg-zinc-800/40 rounded-lg p-4">
+                          <span className="text-2xl mb-2 block">🏆</span>
+                          <p className="text-white font-medium text-sm">Real-time Leaderboards</p>
+                          <p className="text-zinc-500 text-xs">Compete live during workouts</p>
+                        </div>
+                        <div className="bg-zinc-800/40 rounded-lg p-4">
+                          <span className="text-2xl mb-2 block">🤖</span>
+                          <p className="text-white font-medium text-sm">AI Programming</p>
+                          <p className="text-zinc-500 text-xs">Auto-generate workout plans</p>
+                        </div>
+                        <div className="bg-zinc-800/40 rounded-lg p-4">
+                          <span className="text-2xl mb-2 block">⌚</span>
+                          <p className="text-white font-medium text-sm">Apple Watch Integration</p>
+                          <p className="text-zinc-500 text-xs">Live HR, HRV, and calories</p>
+                        </div>
+                        <div className="bg-zinc-800/40 rounded-lg p-4">
+                          <span className="text-2xl mb-2 block">💰</span>
+                          <p className="text-white font-medium text-sm">Creator Payouts</p>
+                          <p className="text-zinc-500 text-xs">Automatic revenue sharing</p>
+                        </div>
+                        <div className="bg-zinc-800/40 rounded-lg p-4">
+                          <span className="text-2xl mb-2 block">🔗</span>
+                          <p className="text-white font-medium text-sm">Referral System</p>
+                          <p className="text-zinc-500 text-xs">Built-in viral loops</p>
+                        </div>
+                        <div className="bg-zinc-800/40 rounded-lg p-4">
+                          <span className="text-2xl mb-2 block">📱</span>
+                          <p className="text-white font-medium text-sm">Cross-Platform</p>
+                          <p className="text-zinc-500 text-xs">iOS, Android, and Web</p>
+                        </div>
                       </div>
-                      <p className="text-white font-medium text-sm">How to Upload a Move</p>
-                      <p className="text-zinc-500 text-xs">Creator tutorial</p>
                     </div>
-                    
-                    <div>
-                      <div className="aspect-video rounded-lg overflow-hidden mb-3">
-                        <iframe
-                          src="https://www.youtube.com/embed/MZ_CSr0Cyzs"
-                          title="How to Create a Round"
-                          className="w-full h-full"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
-                        />
+
+                    {/* Demo Videos */}
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
+                      <h3 className="text-white text-xl font-semibold mb-6">Product Demos</h3>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                          <div className="aspect-video rounded-lg overflow-hidden mb-3">
+                            <iframe
+                              src="https://www.youtube.com/embed/8Ous6Wqvn7o"
+                              title="Pulse Product Walkthrough"
+                              className="w-full h-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          </div>
+                          <p className="text-white font-medium text-sm">Product Walkthrough</p>
+                          <p className="text-zinc-500 text-xs">Full platform overview</p>
+                        </div>
+
+                        <div>
+                          <div className="aspect-video rounded-lg overflow-hidden mb-3">
+                            <iframe
+                              src="https://www.youtube.com/embed/FDqvrReKjyo"
+                              title="How to Upload a Move"
+                              className="w-full h-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          </div>
+                          <p className="text-white font-medium text-sm">How to Upload a Move</p>
+                          <p className="text-zinc-500 text-xs">Creator tutorial</p>
+                        </div>
+
+                        <div>
+                          <div className="aspect-video rounded-lg overflow-hidden mb-3">
+                            <iframe
+                              src="https://www.youtube.com/embed/MZ_CSr0Cyzs"
+                              title="How to Create a Round"
+                              className="w-full h-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          </div>
+                          <p className="text-white font-medium text-sm">How to Create a Round</p>
+                          <p className="text-zinc-500 text-xs">Build AI-powered workouts</p>
+                        </div>
                       </div>
-                      <p className="text-white font-medium text-sm">How to Create a Round</p>
-                      <p className="text-zinc-500 text-xs">Build AI-powered workouts</p>
                     </div>
-                  </div>
-                </div>
-              </section>
+                  </section>
                 ) : (
                   <LockedSectionView sectionName="Product & Technology" />
                 )
               )}
-              
+
               {/* Traction & Metrics Section */}
               {activeSection === 'traction' && (
                 hasSectionAccess('traction') ? (
-              <>
-              <section 
-                id="traction" 
-                ref={(el) => { sectionsRef.current.traction = el; }}
-                className="mb-20"
-              >
-                <div className="flex items-center mb-8">
-                  <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                    <span className="font-bold text-black">3</span>
-                  </div>
-                  <h2 className="text-white text-3xl font-bold">Traction & Metrics</h2>
-                </div>
-
-                {/* Hero Stats Row */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-                  <div className="bg-gradient-to-br from-[#E0FE10]/20 to-[#E0FE10]/5 border border-[#E0FE10]/30 rounded-2xl p-6 text-center">
-                    <div className="text-[#E0FE10] text-4xl font-bold mb-1">3</div>
-                    <div className="text-zinc-300 text-sm font-medium">Rounds Launched</div>
-                    <div className="text-zinc-500 text-xs mt-1">2025 YTD</div>
-                  </div>
-                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 text-center">
-                    <div className="text-white text-4xl font-bold mb-1">150+</div>
-                    <div className="text-zinc-300 text-sm font-medium">Total Participants</div>
-                    <div className="text-zinc-500 text-xs mt-1">Across all Rounds</div>
-                  </div>
-                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 text-center">
-                    <div className="text-white text-4xl font-bold mb-1">$0</div>
-                    <div className="text-zinc-300 text-sm font-medium">Paid Marketing</div>
-                    <div className="text-zinc-500 text-xs mt-1">100% organic growth</div>
-                  </div>
-                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 text-center">
-                    <div className="text-white text-4xl font-bold mb-1">1</div>
-                    <div className="text-zinc-300 text-sm font-medium">Brand Partner</div>
-                    <div className="text-zinc-500 text-xs mt-1">SoulCycle</div>
-                  </div>
-                </div>
-
-                {/* Creator Spotlight: Jaidus × SoulCycle */}
-                <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border border-zinc-700 rounded-2xl overflow-hidden mb-10">
-                  {/* Header with SoulCycle partnership badge */}
-                  <div className="bg-gradient-to-r from-[#E0FE10]/10 via-transparent to-transparent p-6 border-b border-zinc-800">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-2xl">🔥</span>
-                          <h3 className="text-white text-2xl font-bold">Creator Spotlight: Jaidus × SoulCycle</h3>
+                  <>
+                    <section
+                      id="traction"
+                      ref={(el) => { sectionsRef.current.traction = el; }}
+                      className="mb-20"
+                    >
+                      <div className="flex items-center mb-8">
+                        <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                          <span className="font-bold text-black">3</span>
                         </div>
-                        <p className="text-zinc-400">From studio energy to digital movement — how one coach turned sweat into story.</p>
-                      </div>
-                      <div className="flex items-center gap-3 bg-zinc-800/80 rounded-xl px-4 py-3 border border-zinc-700">
-                        <img 
-                          src="/soulcycle.png" 
-                          alt="SoulCycle" 
-                          className="w-10 h-10 rounded-lg object-contain bg-white p-1"
-                        />
-                        <div>
-                          <div className="text-white font-semibold text-sm">SoulCycle Partnership</div>
-                          <div className="text-zinc-400 text-xs">First Pulse-branded Round</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-6 md:p-8">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
-                      {/* Video */}
-                      <div className="rounded-xl overflow-hidden border border-zinc-700 bg-black aspect-video">
-                        <video
-                          className="w-full h-full object-cover"
-                          controls
-                          playsInline
-                          src="/JaidusNewYear.mov"
-                        >
-                          Your browser does not support the video tag.
-                        </video>
+                        <h2 className="text-white text-3xl font-bold">Traction & Metrics</h2>
                       </div>
 
-                      {/* Stats & Info */}
-                      <div className="space-y-6">
-                        {/* Highlight stats */}
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="bg-zinc-800/70 border border-zinc-700 rounded-xl p-4 text-center">
-                            <div className="text-[#E0FE10] text-2xl font-bold">30</div>
-                            <div className="text-zinc-400 text-xs mt-1">Day Challenge</div>
-                          </div>
-                          <div className="bg-zinc-800/70 border border-zinc-700 rounded-xl p-4 text-center">
-                            <div className="text-[#E0FE10] text-2xl font-bold">46</div>
-                            <div className="text-zinc-400 text-xs mt-1">Participants</div>
-                          </div>
+                      {/* Hero Stats Row */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+                        <div className="bg-gradient-to-br from-[#E0FE10]/20 to-[#E0FE10]/5 border border-[#E0FE10]/30 rounded-2xl p-6 text-center">
+                          <div className="text-[#E0FE10] text-4xl font-bold mb-1">3</div>
+                          <div className="text-zinc-300 text-sm font-medium">Rounds Launched</div>
+                          <div className="text-zinc-500 text-xs mt-1">2025 YTD</div>
                         </div>
-
-                        {/* Quote */}
-                        <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/30 rounded-xl p-5">
-                          <p className="text-[#e6ffc2]/90 text-lg italic">&ldquo;Pulse helped me turn my workouts into something people feel part of.&rdquo;</p>
-                          <p className="text-[#e6ffc2]/70 text-sm mt-3">— Jaidus Mondesir, Creator & Coach</p>
+                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 text-center">
+                          <div className="text-white text-4xl font-bold mb-1">150+</div>
+                          <div className="text-zinc-300 text-sm font-medium">Total Participants</div>
+                          <div className="text-zinc-500 text-xs mt-1">Across all Rounds</div>
                         </div>
+                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 text-center">
+                          <div className="text-white text-4xl font-bold mb-1">$0</div>
+                          <div className="text-zinc-300 text-sm font-medium">Paid Marketing</div>
+                          <div className="text-zinc-500 text-xs mt-1">100% organic growth</div>
+                        </div>
+                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 text-center">
+                          <div className="text-white text-4xl font-bold mb-1">1</div>
+                          <div className="text-zinc-300 text-sm font-medium">Brand Partner</div>
+                          <div className="text-zinc-500 text-xs mt-1">SoulCycle</div>
+                        </div>
+                      </div>
 
-                        {/* Key wins */}
-                        <div className="space-y-3">
-                          <div className="flex items-start gap-3">
-                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                              <span className="text-[#E0FE10] text-xs">✓</span>
+                      {/* Creator Spotlight: Jaidus × SoulCycle */}
+                      <div className="bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-800 border border-zinc-700 rounded-2xl overflow-hidden mb-10">
+                        {/* Header with SoulCycle partnership badge */}
+                        <div className="bg-gradient-to-r from-[#E0FE10]/10 via-transparent to-transparent p-6 border-b border-zinc-800">
+                          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-2xl">🔥</span>
+                                <h3 className="text-white text-2xl font-bold">Creator Spotlight: Jaidus × SoulCycle</h3>
+                              </div>
+                              <p className="text-zinc-400">From studio energy to digital movement — how one coach turned sweat into story.</p>
                             </div>
-                            <div className="text-zinc-300 text-sm">Built 30-Day Ab Challenge — first creator-led Round on Pulse</div>
-                          </div>
-                          <div className="flex items-start gap-3">
-                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                              <span className="text-[#E0FE10] text-xs">✓</span>
+                            <div className="flex items-center gap-3 bg-zinc-800/80 rounded-xl px-4 py-3 border border-zinc-700">
+                              <img
+                                src="/soulcycle.png"
+                                alt="SoulCycle"
+                                className="w-10 h-10 rounded-lg object-contain bg-white p-1"
+                              />
+                              <div>
+                                <div className="text-white font-semibold text-sm">SoulCycle Partnership</div>
+                                <div className="text-zinc-400 text-xs">First Pulse-branded Round</div>
+                              </div>
                             </div>
-                            <div className="text-zinc-300 text-sm">Trained 46 people simultaneously with live, high-energy experience</div>
                           </div>
-                          <div className="flex items-start gap-3">
-                            <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                              <span className="text-[#E0FE10] text-xs">✓</span>
+                        </div>
+
+                        <div className="p-6 md:p-8">
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+                            {/* Video */}
+                            <div className="rounded-xl overflow-hidden border border-zinc-700 bg-black aspect-video">
+                              <video
+                                className="w-full h-full object-cover"
+                                controls
+                                playsInline
+                                src="/JaidusNewYear.mov"
+                              >
+                                Your browser does not support the video tag.
+                              </video>
                             </div>
-                            <div className="text-zinc-300 text-sm">Partnered with SoulCycle to offer free 7-day rides to winners</div>
+
+                            {/* Stats & Info */}
+                            <div className="space-y-6">
+                              {/* Highlight stats */}
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-zinc-800/70 border border-zinc-700 rounded-xl p-4 text-center">
+                                  <div className="text-[#E0FE10] text-2xl font-bold">30</div>
+                                  <div className="text-zinc-400 text-xs mt-1">Day Challenge</div>
+                                </div>
+                                <div className="bg-zinc-800/70 border border-zinc-700 rounded-xl p-4 text-center">
+                                  <div className="text-[#E0FE10] text-2xl font-bold">46</div>
+                                  <div className="text-zinc-400 text-xs mt-1">Participants</div>
+                                </div>
+                              </div>
+
+                              {/* Quote */}
+                              <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/30 rounded-xl p-5">
+                                <p className="text-[#e6ffc2]/90 text-lg italic">&ldquo;Pulse helped me turn my workouts into something people feel part of.&rdquo;</p>
+                                <p className="text-[#e6ffc2]/70 text-sm mt-3">— Jaidus Mondesir, Creator & Coach</p>
+                              </div>
+
+                              {/* Key wins */}
+                              <div className="space-y-3">
+                                <div className="flex items-start gap-3">
+                                  <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                    <span className="text-[#E0FE10] text-xs">✓</span>
+                                  </div>
+                                  <div className="text-zinc-300 text-sm">Built 30-Day Ab Challenge — first creator-led Round on Pulse</div>
+                                </div>
+                                <div className="flex items-start gap-3">
+                                  <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                    <span className="text-[#E0FE10] text-xs">✓</span>
+                                  </div>
+                                  <div className="text-zinc-300 text-sm">Trained 46 people simultaneously with live, high-energy experience</div>
+                                </div>
+                                <div className="flex items-start gap-3">
+                                  <div className="w-6 h-6 rounded-full bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                    <span className="text-[#E0FE10] text-xs">✓</span>
+                                  </div>
+                                  <div className="text-zinc-300 text-sm">Partnered with SoulCycle to offer free 7-day rides to winners</div>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
 
-                {/* 2025 Rounds Timeline */}
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8 mb-10">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
-                      <TrendingUp className="w-4 h-4 text-[#E0FE10]" />
-                    </div>
-                    <h3 className="text-white text-xl font-semibold">2025 Rounds</h3>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Round 1 */}
-                    <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 hover:border-[#E0FE10]/30 transition-colors">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-500/20 text-green-400">Completed</span>
-                        <span className="text-zinc-500 text-xs">Jan - Feb</span>
-                      </div>
-                      <h4 className="text-white font-semibold mb-1">30 Day Abs Challenge</h4>
-                      <p className="text-zinc-400 text-sm mb-3">Core focus with Jaidus</p>
-                      <div className="flex items-center gap-4 text-sm">
-                        <div><span className="text-[#E0FE10] font-bold">46</span> <span className="text-zinc-500">seekers</span></div>
-                      </div>
-                    </div>
-                    
-                    {/* Round 2 */}
-                    <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 hover:border-[#E0FE10]/30 transition-colors">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-500/20 text-green-400">Completed</span>
-                        <span className="text-zinc-500 text-xs">Mar - Apr</span>
-                      </div>
-                      <h4 className="text-white font-semibold mb-1">30 Day Squat Challenge</h4>
-                      <p className="text-zinc-400 text-sm mb-3">Lower body focus</p>
-                      <div className="flex items-center gap-4 text-sm">
-                        <div><span className="text-[#E0FE10] font-bold">37</span> <span className="text-zinc-500">seekers</span></div>
-                      </div>
-                    </div>
-                    
-                    {/* Round 3 */}
-                    <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 hover:border-[#E0FE10]/30 transition-colors">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-500/20 text-green-400">Completed</span>
-                        <span className="text-zinc-500 text-xs">May - Jun</span>
-                      </div>
-                      <h4 className="text-white font-semibold mb-1">Morning Mobility</h4>
-                      <p className="text-zinc-400 text-sm mb-3">30-day mobility challenge</p>
-                      <div className="flex items-center gap-4 text-sm">
-                        <div><span className="text-[#E0FE10] font-bold">83</span> <span className="text-zinc-500">seekers</span></div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* Growth Arrow */}
-                  <div className="mt-6 pt-6 border-t border-zinc-800">
-                    <div className="flex items-center justify-center gap-8">
-                      <div className="text-center">
-                        <div className="text-zinc-500 text-sm">Round 1</div>
-                        <div className="text-white font-bold">46</div>
-                      </div>
-                      <div className="text-[#E0FE10]">→</div>
-                      <div className="text-center">
-                        <div className="text-zinc-500 text-sm">Round 2</div>
-                        <div className="text-white font-bold">37</div>
-                      </div>
-                      <div className="text-[#E0FE10]">→</div>
-                      <div className="text-center">
-                        <div className="text-zinc-500 text-sm">Round 3</div>
-                        <div className="text-[#E0FE10] font-bold">83</div>
-                      </div>
-                      <div className="bg-[#E0FE10]/10 rounded-lg px-3 py-1.5">
-                        <span className="text-[#E0FE10] text-sm font-medium">+80% growth</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Two Column: Early Validation + Process Optimizations */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
-                  {/* Early Stage Validation */}
-                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
-                    <h3 className="text-white text-xl font-bold mb-2">Early Stage Validation</h3>
-                    <p className="text-zinc-400 text-sm mb-6">
-                      Strong early metrics since January 2025 public launch demonstrate product-market fit and scalable unit economics.
-                    </p>
-                    
-                    <div className="grid grid-cols-2 gap-4 mb-6">
-                      <div className="text-center py-4 bg-zinc-800/50 rounded-xl">
-                        <div className="text-zinc-400 text-sm mb-1">Retention Rate</div>
-                        <div className="text-white text-3xl font-bold">78%</div>
-                        <div className="text-zinc-500 text-xs mt-1">Above industry avg</div>
-                      </div>
-                      <div className="text-center py-4 bg-zinc-800/50 rounded-xl">
-                        <div className="text-zinc-400 text-sm mb-1">Conversion Rate</div>
-                        <div className="text-white text-3xl font-bold">18%</div>
-                        <div className="text-zinc-500 text-xs mt-1">2x industry avg</div>
-                      </div>
-                      <div className="text-center py-4 bg-zinc-800/50 rounded-xl">
-                        <div className="text-zinc-400 text-sm mb-1">Creator Multiplier</div>
-                        <div className="text-white text-3xl font-bold">37.5x</div>
-                        <div className="text-zinc-500 text-xs mt-1">Users per creator</div>
-                      </div>
-                      <div className="text-center py-4 bg-zinc-800/50 rounded-xl">
-                        <div className="text-zinc-400 text-sm mb-1">Monthly Churn</div>
-                        <div className="text-white text-3xl font-bold">6.5%</div>
-                        <div className="text-zinc-500 text-xs mt-1">Low for early stage</div>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-zinc-800/30 rounded-xl p-4">
-                      <h4 className="text-[#E0FE10] text-sm font-medium mb-3">Subscription Mix</h4>
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-zinc-400 text-sm">Annual ($39.99)</span>
-                          <span className="text-white font-semibold">56%</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-zinc-400 text-sm">Monthly ($4.99)</span>
-                          <span className="text-white font-semibold">44%</span>
-                        </div>
-                      </div>
-                      <p className="text-zinc-500 text-xs mt-3">Strong annual uptake shows user confidence</p>
-                    </div>
-                  </div>
-
-                  {/* Process Optimizations */}
-                  <div className="bg-gradient-to-br from-[#E0FE10]/10 to-transparent border border-[#E0FE10]/20 rounded-2xl p-6 md:p-8">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center">
-                        <span className="text-lg">⚡</span>
-                      </div>
-                      <h3 className="text-white text-xl font-bold">2025 Optimizations</h3>
-                    </div>
-                    <p className="text-zinc-400 text-sm mb-6">
-                      Key learnings from our first 3 Rounds, now baked into the platform.
-                    </p>
-                    
-                    <div className="space-y-4">
-                      <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
-                        <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <span className="text-green-400 text-xs">✓</span>
+                      {/* 2025 Rounds Timeline */}
+                      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8 mb-10">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 border border-[#E0FE10]/30 flex items-center justify-center">
+                            <TrendingUp className="w-4 h-4 text-[#E0FE10]" />
                           </div>
-                          <div>
-                            <div className="text-white font-medium">7-Day Trial</div>
-                            <div className="text-zinc-400 text-sm">Reduced from 30 days — prevents post-Round cancellations</div>
+                          <h3 className="text-white text-xl font-semibold">2025 Rounds</h3>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                          {/* Round 1 */}
+                          <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 hover:border-[#E0FE10]/30 transition-colors">
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-500/20 text-green-400">Completed</span>
+                              <span className="text-zinc-500 text-xs">Jan - Feb</span>
+                            </div>
+                            <h4 className="text-white font-semibold mb-1">30 Day Abs Challenge</h4>
+                            <p className="text-zinc-400 text-sm mb-3">Core focus with Jaidus</p>
+                            <div className="flex items-center gap-4 text-sm">
+                              <div><span className="text-[#E0FE10] font-bold">46</span> <span className="text-zinc-500">seekers</span></div>
+                            </div>
+                          </div>
+
+                          {/* Round 2 */}
+                          <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 hover:border-[#E0FE10]/30 transition-colors">
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-500/20 text-green-400">Completed</span>
+                              <span className="text-zinc-500 text-xs">Mar - Apr</span>
+                            </div>
+                            <h4 className="text-white font-semibold mb-1">30 Day Squat Challenge</h4>
+                            <p className="text-zinc-400 text-sm mb-3">Lower body focus</p>
+                            <div className="flex items-center gap-4 text-sm">
+                              <div><span className="text-[#E0FE10] font-bold">37</span> <span className="text-zinc-500">seekers</span></div>
+                            </div>
+                          </div>
+
+                          {/* Round 3 */}
+                          <div className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 hover:border-[#E0FE10]/30 transition-colors">
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-xs font-medium px-2 py-1 rounded-full bg-green-500/20 text-green-400">Completed</span>
+                              <span className="text-zinc-500 text-xs">May - Jun</span>
+                            </div>
+                            <h4 className="text-white font-semibold mb-1">Morning Mobility</h4>
+                            <p className="text-zinc-400 text-sm mb-3">30-day mobility challenge</p>
+                            <div className="flex items-center gap-4 text-sm">
+                              <div><span className="text-[#E0FE10] font-bold">83</span> <span className="text-zinc-500">seekers</span></div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Growth Arrow */}
+                        <div className="mt-6 pt-6 border-t border-zinc-800">
+                          <div className="flex items-center justify-center gap-8">
+                            <div className="text-center">
+                              <div className="text-zinc-500 text-sm">Round 1</div>
+                              <div className="text-white font-bold">46</div>
+                            </div>
+                            <div className="text-[#E0FE10]">→</div>
+                            <div className="text-center">
+                              <div className="text-zinc-500 text-sm">Round 2</div>
+                              <div className="text-white font-bold">37</div>
+                            </div>
+                            <div className="text-[#E0FE10]">→</div>
+                            <div className="text-center">
+                              <div className="text-zinc-500 text-sm">Round 3</div>
+                              <div className="text-[#E0FE10] font-bold">83</div>
+                            </div>
+                            <div className="bg-[#E0FE10]/10 rounded-lg px-3 py-1.5">
+                              <span className="text-[#E0FE10] text-sm font-medium">+80% growth</span>
+                            </div>
                           </div>
                         </div>
                       </div>
-                      
-                      <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
-                        <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <span className="text-green-400 text-xs">✓</span>
+
+                      {/* Two Column: Early Validation + Process Optimizations */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+                        {/* Early Stage Validation */}
+                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8">
+                          <h3 className="text-white text-xl font-bold mb-2">Early Stage Validation</h3>
+                          <p className="text-zinc-400 text-sm mb-6">
+                            Strong early metrics since January 2025 public launch demonstrate product-market fit and scalable unit economics.
+                          </p>
+
+                          <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div className="text-center py-4 bg-zinc-800/50 rounded-xl">
+                              <div className="text-zinc-400 text-sm mb-1">Retention Rate</div>
+                              <div className="text-white text-3xl font-bold">78%</div>
+                              <div className="text-zinc-500 text-xs mt-1">Above industry avg</div>
+                            </div>
+                            <div className="text-center py-4 bg-zinc-800/50 rounded-xl">
+                              <div className="text-zinc-400 text-sm mb-1">Conversion Rate</div>
+                              <div className="text-white text-3xl font-bold">18%</div>
+                              <div className="text-zinc-500 text-xs mt-1">2x industry avg</div>
+                            </div>
+                            <div className="text-center py-4 bg-zinc-800/50 rounded-xl">
+                              <div className="text-zinc-400 text-sm mb-1">Creator Multiplier</div>
+                              <div className="text-white text-3xl font-bold">37.5x</div>
+                              <div className="text-zinc-500 text-xs mt-1">Users per creator</div>
+                            </div>
+                            <div className="text-center py-4 bg-zinc-800/50 rounded-xl">
+                              <div className="text-zinc-400 text-sm mb-1">Monthly Churn</div>
+                              <div className="text-white text-3xl font-bold">6.5%</div>
+                              <div className="text-zinc-500 text-xs mt-1">Low for early stage</div>
+                            </div>
                           </div>
-                          <div>
-                            <div className="text-white font-medium">AI Round Builder</div>
-                            <div className="text-zinc-400 text-sm">Creators can now launch Rounds in &lt;5 min vs. hours</div>
+
+                          <div className="bg-zinc-800/30 rounded-xl p-4">
+                            <h4 className="text-[#E0FE10] text-sm font-medium mb-3">Subscription Mix</h4>
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-zinc-400 text-sm">Annual ($39.99)</span>
+                                <span className="text-white font-semibold">56%</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-zinc-400 text-sm">Monthly ($4.99)</span>
+                                <span className="text-white font-semibold">44%</span>
+                              </div>
+                            </div>
+                            <p className="text-zinc-500 text-xs mt-3">Strong annual uptake shows user confidence</p>
+                          </div>
+                        </div>
+
+                        {/* Process Optimizations */}
+                        <div className="bg-gradient-to-br from-[#E0FE10]/10 to-transparent border border-[#E0FE10]/20 rounded-2xl p-6 md:p-8">
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center">
+                              <span className="text-lg">⚡</span>
+                            </div>
+                            <h3 className="text-white text-xl font-bold">2025 Optimizations</h3>
+                          </div>
+                          <p className="text-zinc-400 text-sm mb-6">
+                            Key learnings from our first 3 Rounds, now baked into the platform.
+                          </p>
+
+                          <div className="space-y-4">
+                            <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
+                              <div className="flex items-start gap-3">
+                                <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <span className="text-green-400 text-xs">✓</span>
+                                </div>
+                                <div>
+                                  <div className="text-white font-medium">7-Day Trial</div>
+                                  <div className="text-zinc-400 text-sm">Reduced from 30 days — prevents post-Round cancellations</div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
+                              <div className="flex items-start gap-3">
+                                <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <span className="text-green-400 text-xs">✓</span>
+                                </div>
+                                <div>
+                                  <div className="text-white font-medium">AI Round Builder</div>
+                                  <div className="text-zinc-400 text-sm">Creators can now launch Rounds in &lt;5 min vs. hours</div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
+                              <div className="flex items-start gap-3">
+                                <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <span className="text-green-400 text-xs">✓</span>
+                                </div>
+                                <div>
+                                  <div className="text-white font-medium">Referral System</div>
+                                  <div className="text-zinc-400 text-sm">Built-in viral loop with trackable K-factor metrics</div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
+                              <div className="flex items-start gap-3">
+                                <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <span className="text-green-400 text-xs">✓</span>
+                                </div>
+                                <div>
+                                  <div className="text-white font-medium">Round Frequency</div>
+                                  <div className="text-zinc-400 text-sm">Targeting bi-weekly Rounds in 2026 (was ~1/quarter)</div>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
-                      
-                      <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
-                        <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <span className="text-green-400 text-xs">✓</span>
+
+                      {/* Program Support Networks */}
+                      <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8 mb-10">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                            <span className="text-lg">🤝</span>
                           </div>
-                          <div>
-                            <div className="text-white font-medium">Referral System</div>
-                            <div className="text-zinc-400 text-sm">Built-in viral loop with trackable K-factor metrics</div>
-                          </div>
+                          <h3 className="text-white text-xl font-bold">Program Support Networks</h3>
+                        </div>
+                        <p className="text-zinc-400 text-sm mb-6">
+                          Backed by top startup programs providing mentorship, resources, and network access.
+                        </p>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          {/* AWS Startups */}
+                          <a
+                            href="https://aws.amazon.com/startups"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 flex flex-col items-center text-center hover:border-orange-500/30 transition-colors group cursor-pointer"
+                          >
+                            <div className="w-full h-14 flex items-center justify-center mb-3">
+                              <img
+                                src="/awsstartups.png"
+                                alt="AWS Startups"
+                                className="max-h-full max-w-full object-contain"
+                              />
+                            </div>
+                            <h4 className="text-white font-semibold text-sm mb-1 group-hover:text-orange-400 transition-colors">AWS Startups</h4>
+                            <p className="text-zinc-500 text-xs">Cloud credits</p>
+                          </a>
+
+                          {/* Techstars */}
+                          <a
+                            href="https://www.techstars.com"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 flex flex-col items-center text-center hover:border-green-500/30 transition-colors group cursor-pointer"
+                          >
+                            <div className="w-full h-14 flex items-center justify-center mb-3">
+                              <img
+                                src="/techstars.png"
+                                alt="Techstars"
+                                className="max-h-full max-w-full object-contain"
+                              />
+                            </div>
+                            <h4 className="text-white font-semibold text-sm mb-1 group-hover:text-green-400 transition-colors">Techstars</h4>
+                            <p className="text-zinc-500 text-xs">Accelerator network</p>
+                          </a>
+
+                          {/* FounderU */}
+                          <a
+                            href="https://www.founder.university"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 flex flex-col items-center text-center hover:border-blue-500/30 transition-colors group cursor-pointer"
+                          >
+                            <div className="w-full h-14 flex items-center justify-center mb-3">
+                              <img
+                                src="/founderu.png"
+                                alt="FounderU"
+                                className="max-h-full max-w-full object-contain"
+                              />
+                            </div>
+                            <h4 className="text-white font-semibold text-sm mb-1 group-hover:text-blue-400 transition-colors">FounderU</h4>
+                            <p className="text-zinc-500 text-xs">Founder program</p>
+                          </a>
+
+                          {/* Launch */}
+                          <a
+                            href="https://www.launchaccelerator.co"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 flex flex-col items-center text-center hover:border-purple-500/30 transition-colors group cursor-pointer"
+                          >
+                            <div className="w-full h-14 flex items-center justify-center mb-3">
+                              <img
+                                src="/Launch.png"
+                                alt="Launch"
+                                className="max-h-full max-w-full object-contain"
+                              />
+                            </div>
+                            <h4 className="text-white font-semibold text-sm mb-1 group-hover:text-purple-400 transition-colors">Launch</h4>
+                            <p className="text-zinc-500 text-xs">Accelerator</p>
+                          </a>
                         </div>
                       </div>
-                      
-                      <div className="bg-zinc-900/50 rounded-xl p-4 border border-zinc-800">
-                        <div className="flex items-start gap-3">
-                          <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <span className="text-green-400 text-xs">✓</span>
-                          </div>
-                          <div>
-                            <div className="text-white font-medium">Round Frequency</div>
-                            <div className="text-zinc-400 text-sm">Targeting bi-weekly Rounds in 2026 (was ~1/quarter)</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
-                {/* Program Support Networks */}
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8 mb-10">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                      <span className="text-lg">🤝</span>
-                    </div>
-                    <h3 className="text-white text-xl font-bold">Program Support Networks</h3>
-                  </div>
-                  <p className="text-zinc-400 text-sm mb-6">
-                    Backed by top startup programs providing mentorship, resources, and network access.
-                  </p>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {/* AWS Startups */}
-                    <a 
-                      href="https://aws.amazon.com/startups" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 flex flex-col items-center text-center hover:border-orange-500/30 transition-colors group cursor-pointer"
-                    >
-                      <div className="w-full h-14 flex items-center justify-center mb-3">
-                        <img 
-                          src="/awsstartups.png" 
-                          alt="AWS Startups" 
-                          className="max-h-full max-w-full object-contain"
-                        />
+                      {/* Bottom CTA */}
+                      <div className="bg-gradient-to-r from-[#E0FE10]/10 via-[#E0FE10]/5 to-transparent border border-[#E0FE10]/20 rounded-2xl p-6 text-center">
+                        <p className="text-zinc-300 text-lg">
+                          <span className="text-[#E0FE10] font-semibold">3 Rounds. 150+ participants. $0 paid marketing.</span>
+                          <br />
+                          <span className="text-zinc-400">The flywheel is spinning — now it&apos;s time to scale.</span>
+                        </p>
                       </div>
-                      <h4 className="text-white font-semibold text-sm mb-1 group-hover:text-orange-400 transition-colors">AWS Startups</h4>
-                      <p className="text-zinc-500 text-xs">Cloud credits</p>
-                    </a>
-
-                    {/* Techstars */}
-                    <a 
-                      href="https://www.techstars.com" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 flex flex-col items-center text-center hover:border-green-500/30 transition-colors group cursor-pointer"
-                    >
-                      <div className="w-full h-14 flex items-center justify-center mb-3">
-                        <img 
-                          src="/techstars.png" 
-                          alt="Techstars" 
-                          className="max-h-full max-w-full object-contain"
-                        />
-                      </div>
-                      <h4 className="text-white font-semibold text-sm mb-1 group-hover:text-green-400 transition-colors">Techstars</h4>
-                      <p className="text-zinc-500 text-xs">Accelerator network</p>
-                    </a>
-
-                    {/* FounderU */}
-                    <a 
-                      href="https://www.founder.university" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 flex flex-col items-center text-center hover:border-blue-500/30 transition-colors group cursor-pointer"
-                    >
-                      <div className="w-full h-14 flex items-center justify-center mb-3">
-                        <img 
-                          src="/founderu.png" 
-                          alt="FounderU" 
-                          className="max-h-full max-w-full object-contain"
-                        />
-                      </div>
-                      <h4 className="text-white font-semibold text-sm mb-1 group-hover:text-blue-400 transition-colors">FounderU</h4>
-                      <p className="text-zinc-500 text-xs">Founder program</p>
-                    </a>
-
-                    {/* Launch */}
-                    <a 
-                      href="https://www.launchaccelerator.co" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="bg-zinc-800/50 border border-zinc-700 rounded-xl p-5 flex flex-col items-center text-center hover:border-purple-500/30 transition-colors group cursor-pointer"
-                    >
-                      <div className="w-full h-14 flex items-center justify-center mb-3">
-                        <img 
-                          src="/Launch.png" 
-                          alt="Launch" 
-                          className="max-h-full max-w-full object-contain"
-                        />
-                      </div>
-                      <h4 className="text-white font-semibold text-sm mb-1 group-hover:text-purple-400 transition-colors">Launch</h4>
-                      <p className="text-zinc-500 text-xs">Accelerator</p>
-                    </a>
-                  </div>
-                </div>
-
-                {/* Bottom CTA */}
-                <div className="bg-gradient-to-r from-[#E0FE10]/10 via-[#E0FE10]/5 to-transparent border border-[#E0FE10]/20 rounded-2xl p-6 text-center">
-                  <p className="text-zinc-300 text-lg">
-                    <span className="text-[#E0FE10] font-semibold">3 Rounds. 150+ participants. $0 paid marketing.</span>
-                    <br />
-                    <span className="text-zinc-400">The flywheel is spinning — now it&apos;s time to scale.</span>
-                  </p>
-                </div>
-              </section>
-              </>
+                    </section>
+                  </>
                 ) : (
                   <LockedSectionView sectionName="Traction & Metrics" />
                 )
               )}
 
-               {/* IP & Defensibility Section */}
-                {activeSection === 'ip' && (
-                  hasSectionAccess('ip') ? (
-                <section
+              {/* IP & Defensibility Section */}
+              {activeSection === 'ip' && (
+                hasSectionAccess('ip') ? (
+                  <section
                     id="ip"
                     ref={(el) => { sectionsRef.current.ip = el; }}
                     className="mb-20"
-                >
+                  >
                     {/* header */}
                     <div className="flex items-center mb-8">
-                    <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                      <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
                         <span className="font-bold text-black">4</span>
-                    </div>
-                    <h2 className="text-white text-3xl font-bold">IP &amp; Defensibility</h2>
+                      </div>
+                      <h2 className="text-white text-3xl font-bold">IP &amp; Defensibility</h2>
                     </div>
 
                     {/* Provisional Patent Hero */}
@@ -4343,198 +4350,198 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         </div>
                       </div>
                     </div>
-                </section>
-                  ) : (
-                    <LockedSectionView sectionName="IP & Moats" />
-                  )
-                )}
+                  </section>
+                ) : (
+                  <LockedSectionView sectionName="IP & Moats" />
+                )
+              )}
 
-                {/* Vision & Evolution Section */}
-                {activeSection === 'vision' && (
-                  hasSectionAccess('vision') ? (
-                <>
-                <section 
-                    id="vision" 
-                    ref={(el) => { sectionsRef.current.vision = el; }}
-                    className="mb-20"
-                >
-                    <div className="flex items-center mb-6">
-                    <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                        <span className="font-bold text-black">5</span>
-                    </div>
-                    <h2 className="text-white text-3xl font-bold">Vision &amp; Evolution</h2>
-                    </div>
-                    
-                    {/* Transition text */}
-                    <div className="mb-8">
-                    <p className="text-zinc-400 text-lg italic text-center">
-                        After social proof comes systemic impact.
-                    </p>
-                    </div>
-                    
-                    {/* Main vision card */}
-                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1 mb-10">
-                    {/* Animated border shimmer */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/15 via-purple-500/15 to-[#d7ff00]/15 animate-[spin_8s_linear_infinite] opacity-25"></div>
-                    
-                    {/* Inner content */}
-                    <div className="relative bg-zinc-900 rounded-lg p-8 lg:p-12 space-y-8">
-                        {/* Vision statement */}
-                        <blockquote className="text-zinc-200 text-xl md:text-2xl leading-relaxed font-light border-l-4 border-[#E0FE10] pl-6">
-                        At Pulse, our vision is to build more than a fitness platform—we&rsquo;re creating the <span className="text-white font-semibold">first operating system for human health</span>.
-                        We believe wellness isn&rsquo;t siloed into workouts, doctors, or devices—it&rsquo;s continuous, adaptive, and embedded into daily life.
-                        </blockquote>
-                        
-                        {/* Evolution pillars */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {[
-                            {
-                            title: 'Behavior Pixel',
-                            copy: 'Every real-world choice becomes a datapoint—movement, meals, sleep, even stress patterns.'
-                            },
-                            {
-                            title: 'Adaptive AI Rounds',
-                            copy: 'Programs auto-adjust to bio-feedback, recovery metrics and goals in real time.'
-                            },
-                            {
-                            title: 'Gamified Longevity',
-                            copy: 'Health turns into a shared game: scores, leagues, and community-powered rewards.'
-                            }
-                        ].map((item) => (
-                            <div key={item.title} className="bg-zinc-800/60 rounded-lg p-6">
-                            <h4 className="text-[#E0FE10] font-medium mb-2">{item.title}</h4>
-                            <p className="text-zinc-400 text-sm">{item.copy}</p>
+              {/* Vision & Evolution Section */}
+              {activeSection === 'vision' && (
+                hasSectionAccess('vision') ? (
+                  <>
+                    <section
+                      id="vision"
+                      ref={(el) => { sectionsRef.current.vision = el; }}
+                      className="mb-20"
+                    >
+                      <div className="flex items-center mb-6">
+                        <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                          <span className="font-bold text-black">5</span>
+                        </div>
+                        <h2 className="text-white text-3xl font-bold">Vision &amp; Evolution</h2>
+                      </div>
+
+                      {/* Transition text */}
+                      <div className="mb-8">
+                        <p className="text-zinc-400 text-lg italic text-center">
+                          After social proof comes systemic impact.
+                        </p>
+                      </div>
+
+                      {/* Main vision card */}
+                      <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-zinc-900 to-zinc-800 p-1 mb-10">
+                        {/* Animated border shimmer */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/15 via-purple-500/15 to-[#d7ff00]/15 animate-[spin_8s_linear_infinite] opacity-25"></div>
+
+                        {/* Inner content */}
+                        <div className="relative bg-zinc-900 rounded-lg p-8 lg:p-12 space-y-8">
+                          {/* Vision statement */}
+                          <blockquote className="text-zinc-200 text-xl md:text-2xl leading-relaxed font-light border-l-4 border-[#E0FE10] pl-6">
+                            At Pulse, our vision is to build more than a fitness platform—we&rsquo;re creating the <span className="text-white font-semibold">first operating system for human health</span>.
+                            We believe wellness isn&rsquo;t siloed into workouts, doctors, or devices—it&rsquo;s continuous, adaptive, and embedded into daily life.
+                          </blockquote>
+
+                          {/* Evolution pillars */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {[
+                              {
+                                title: 'Behavior Pixel',
+                                copy: 'Every real-world choice becomes a datapoint—movement, meals, sleep, even stress patterns.'
+                              },
+                              {
+                                title: 'Adaptive AI Rounds',
+                                copy: 'Programs auto-adjust to bio-feedback, recovery metrics and goals in real time.'
+                              },
+                              {
+                                title: 'Gamified Longevity',
+                                copy: 'Health turns into a shared game: scores, leagues, and community-powered rewards.'
+                              }
+                            ].map((item) => (
+                              <div key={item.title} className="bg-zinc-800/60 rounded-lg p-6">
+                                <h4 className="text-[#E0FE10] font-medium mb-2">{item.title}</h4>
+                                <p className="text-zinc-400 text-sm">{item.copy}</p>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Closing statement */}
+                          <p className="text-zinc-400 pt-4">
+                            Pulse will be the layer that lets people <span className="text-white font-medium">see, shape, and strive</span> for better health—together.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Evolution timeline */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                          <div className="flex items-center mb-4">
+                            <div className="w-3 h-3 rounded-full bg-[#E0FE10] mr-3"></div>
+                            <span className="text-[#E0FE10] font-medium text-sm">2023-24</span>
+                          </div>
+                          <h4 className="text-white font-semibold mb-2">Social Fitness Core</h4>
+                          <p className="text-zinc-400 text-sm">
+                            Building the foundation with community-driven workouts, challenges, and social engagement features.
+                          </p>
+                        </div>
+
+                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                          <div className="flex items-center mb-4">
+                            <div className="w-3 h-3 rounded-full bg-zinc-500 mr-3"></div>
+                            <span className="text-zinc-400 font-medium text-sm">2024-25</span>
+                          </div>
+                          <h4 className="text-white font-semibold mb-2">Whole-Body Health Intelligence</h4>
+                          <p className="text-zinc-400 text-sm">
+                            Expanding beyond fitness with Apple Watch integration, meal AI, sleep tracking, and comprehensive wellness insights.
+                          </p>
+                        </div>
+
+                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
+                          <div className="flex items-center mb-4">
+                            <div className="w-3 h-3 rounded-full bg-zinc-600 mr-3"></div>
+                            <span className="text-zinc-400 font-medium text-sm">2025+</span>
+                          </div>
+                          <h4 className="text-white font-semibold mb-2">Pulse Health OS</h4>
+                          <p className="text-zinc-400 text-sm">
+                            The complete health operating system with predictive AI, seamless device integration, and personalized health orchestration.
+                          </p>
+                        </div>
+                      </div>
+                    </section>
+
+                    {/* Two-Up Framing Card */}
+                    <section className="mb-20">
+                      <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                          <div className="bg-zinc-800/50 rounded-xl p-6">
+                            <div className="flex items-center mb-4">
+                              <span className="text-2xl mr-3">🚀</span>
+                              <h3 className="text-white text-xl font-semibold">Pulse Today</h3>
                             </div>
-                        ))}
-                        </div>
-                        
-                        {/* Closing statement */}
-                        <p className="text-zinc-400 pt-4">
-                        Pulse will be the layer that lets people <span className="text-white font-medium">see, shape, and strive</span> for better health—together.
-                        </p>
-                    </div>
-                    </div>
-                    
-                    {/* Evolution timeline */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                        <div className="flex items-center mb-4">
-                        <div className="w-3 h-3 rounded-full bg-[#E0FE10] mr-3"></div>
-                        <span className="text-[#E0FE10] font-medium text-sm">2023-24</span>
-                        </div>
-                        <h4 className="text-white font-semibold mb-2">Social Fitness Core</h4>
-                        <p className="text-zinc-400 text-sm">
-                        Building the foundation with community-driven workouts, challenges, and social engagement features.
-                        </p>
-                    </div>
-                    
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                        <div className="flex items-center mb-4">
-                        <div className="w-3 h-3 rounded-full bg-zinc-500 mr-3"></div>
-                        <span className="text-zinc-400 font-medium text-sm">2024-25</span>
-                        </div>
-                        <h4 className="text-white font-semibold mb-2">Whole-Body Health Intelligence</h4>
-                        <p className="text-zinc-400 text-sm">
-                        Expanding beyond fitness with Apple Watch integration, meal AI, sleep tracking, and comprehensive wellness insights.
-                        </p>
-                    </div>
-                    
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-                        <div className="flex items-center mb-4">
-                        <div className="w-3 h-3 rounded-full bg-zinc-600 mr-3"></div>
-                        <span className="text-zinc-400 font-medium text-sm">2025+</span>
-                        </div>
-                        <h4 className="text-white font-semibold mb-2">Pulse Health OS</h4>
-                        <p className="text-zinc-400 text-sm">
-                        The complete health operating system with predictive AI, seamless device integration, and personalized health orchestration.
-                        </p>
-                    </div>
-                    </div>
-                </section>
+                            <ul className="space-y-3 text-zinc-300">
+                              <li className="flex items-start gap-2">
+                                <span className="text-[#E0FE10] mt-1">•</span>
+                                <span>Social fitness feed live on iOS/Android</span>
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <span className="text-[#E0FE10] mt-1">•</span>
+                                <span>808 users, 18% paid conversion</span>
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <span className="text-[#E0FE10] mt-1">•</span>
+                                <span>Creator multiplier 37.5×</span>
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <span className="text-[#E0FE10] mt-1">•</span>
+                                <span>$0 CAC, 100% organic growth</span>
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <span className="text-[#E0FE10] mt-1">•</span>
+                                <span>78% retention, 1h 29m sessions</span>
+                              </li>
+                            </ul>
+                          </div>
 
-                {/* Two-Up Framing Card */}
-                <section className="mb-20">
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        <div className="bg-zinc-800/50 rounded-xl p-6">
-                        <div className="flex items-center mb-4">
-                            <span className="text-2xl mr-3">🚀</span>
-                            <h3 className="text-white text-xl font-semibold">Pulse Today</h3>
+                          <div className="bg-zinc-800/50 rounded-xl p-6">
+                            <div className="flex items-center mb-4">
+                              <span className="text-2xl mr-3">🌌</span>
+                              <h3 className="text-white text-xl font-semibold">Pulse Tomorrow</h3>
+                            </div>
+                            <ul className="space-y-3 text-zinc-300">
+                              <li className="flex items-start gap-2">
+                                <span className="text-[#E0FE10] mt-1">•</span>
+                                <span>Health OS stitching workouts, wearables, recovery AI</span>
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <span className="text-[#E0FE10] mt-1">•</span>
+                                <span>Behavior Pixel® data model patent draft</span>
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <span className="text-[#E0FE10] mt-1">•</span>
+                                <span>Gamified longevity leaderboard</span>
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <span className="text-[#E0FE10] mt-1">•</span>
+                                <span>Predictive AI for health optimization</span>
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <span className="text-[#E0FE10] mt-1">•</span>
+                                <span>Personal health operating system</span>
+                              </li>
+                            </ul>
+                          </div>
                         </div>
-                        <ul className="space-y-3 text-zinc-300">
-                            <li className="flex items-start gap-2">
-                            <span className="text-[#E0FE10] mt-1">•</span>
-                            <span>Social fitness feed live on iOS/Android</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                            <span className="text-[#E0FE10] mt-1">•</span>
-                            <span>808 users, 18% paid conversion</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                            <span className="text-[#E0FE10] mt-1">•</span>
-                            <span>Creator multiplier 37.5×</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                            <span className="text-[#E0FE10] mt-1">•</span>
-                            <span>$0 CAC, 100% organic growth</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                            <span className="text-[#E0FE10] mt-1">•</span>
-                            <span>78% retention, 1h 29m sessions</span>
-                            </li>
-                        </ul>
-                        </div>
-                        
-                        <div className="bg-zinc-800/50 rounded-xl p-6">
-                        <div className="flex items-center mb-4">
-                            <span className="text-2xl mr-3">🌌</span>
-                            <h3 className="text-white text-xl font-semibold">Pulse Tomorrow</h3>
-                        </div>
-                        <ul className="space-y-3 text-zinc-300">
-                            <li className="flex items-start gap-2">
-                            <span className="text-[#E0FE10] mt-1">•</span>
-                            <span>Health OS stitching workouts, wearables, recovery AI</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                            <span className="text-[#E0FE10] mt-1">•</span>
-                            <span>Behavior Pixel® data model patent draft</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                            <span className="text-[#E0FE10] mt-1">•</span>
-                            <span>Gamified longevity leaderboard</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                            <span className="text-[#E0FE10] mt-1">•</span>
-                            <span>Predictive AI for health optimization</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                            <span className="text-[#E0FE10] mt-1">•</span>
-                            <span>Personal health operating system</span>
-                            </li>
-                        </ul>
-                        </div>
-                    </div>
-                    </div>
-                </section>
-                </>
-                  ) : (
-                    <LockedSectionView sectionName="Vision & Evolution" />
-                  )
-                )}
+                      </div>
+                    </section>
+                  </>
+                ) : (
+                  <LockedSectionView sectionName="Vision & Evolution" />
+                )
+              )}
 
-                {/* Market Opportunity Section */}
-                {activeSection === 'market' && (
-                  hasSectionAccess('market') ? (
-                <section 
-                    id="market" 
+              {/* Market Opportunity Section */}
+              {activeSection === 'market' && (
+                hasSectionAccess('market') ? (
+                  <section
+                    id="market"
                     ref={(el) => { sectionsRef.current.market = el; }}
                     className="mb-20"
-                >
+                  >
                     <div className="flex items-center mb-8">
-                    <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                      <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
                         <span className="font-bold text-black">6</span>
-                    </div>
-                    <h2 className="text-white text-3xl font-bold">Market Opportunity</h2>
+                      </div>
+                      <h2 className="text-white text-3xl font-bold">Market Opportunity</h2>
                     </div>
 
                     {/* Bottoms-Up TAM Approach */}
@@ -4545,7 +4552,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         </div>
                         <h3 className="text-white text-xl font-semibold">Bottoms-Up TAM</h3>
                       </div>
-                      
+
                       {/* Visual Flow: ICP → Beachhead → GTM → TAM → Path to $100M */}
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
                         <div className="bg-zinc-800/50 rounded-xl p-4 text-center border border-zinc-700">
@@ -4593,7 +4600,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                       </div>
                       <h3 className="text-white text-2xl font-bold mb-2">Fitness Instructors & Studio Coaches</h3>
                       <p className="text-zinc-400 mb-6">We start here because they already have highly supportive audiences who trust their guidance and are primed to convert.</p>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                         <div className="bg-zinc-800/50 rounded-xl p-5 text-center">
                           <div className="text-white text-3xl font-bold mb-1">350,000</div>
@@ -4646,7 +4653,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8 mb-8">
                       <h3 className="text-white text-xl font-semibold mb-2">Our Take: Annual Value Per Creator</h3>
                       <p className="text-zinc-400 text-sm mb-6">This section shows the yearly value created per creator (built from per-round economics).</p>
-                      
+
                       <div className="flex flex-col md:flex-row items-center justify-center gap-6 mb-8">
                         <div className="bg-zinc-800/50 rounded-xl p-6 text-center">
                           <div className="text-zinc-400 text-sm mb-1">Creator</div>
@@ -4691,12 +4698,12 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                     {/* ICP - Full Creator Population */}
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 md:p-8 mb-8">
                       <h3 className="text-white text-xl font-semibold mb-6">Ideal Customer Profile (ICP)</h3>
-                      
+
                       <div className="text-center mb-6">
                         <div className="text-[#E0FE10] text-5xl md:text-6xl font-bold mb-2">1,350,000</div>
                         <p className="text-zinc-400">Total addressable fitness creators</p>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         <div className="bg-zinc-800/50 rounded-xl p-4 text-center">
                           <div className="text-white font-medium text-sm">Certified Instructors</div>
@@ -4727,7 +4734,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                           <h3 className="text-[#E0FE10] text-2xl font-bold">Path to $100M</h3>
                           <span className="text-zinc-400">25,000 Creators</span>
                         </div>
-                        
+
                         {/* Growth Curve Visualization */}
                         <div className="relative mb-8">
                           <div className="flex items-end justify-between gap-2 md:gap-4 h-48">
@@ -4766,10 +4773,10 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="bg-zinc-800/50 rounded-xl p-4 text-center">
                           <p className="text-zinc-400 text-sm">
-                            At <span className="text-[#E0FE10] font-medium">$4,080 annual LTV per creator</span>, 
+                            At <span className="text-[#E0FE10] font-medium">$4,080 annual LTV per creator</span>,
                             we need only <span className="text-white font-medium">1.9%</span> of the ICP (1.35M creators) to reach $100M ARR
                           </p>
                         </div>
@@ -4918,245 +4925,245 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         </div>
                       </div>
                     </div>
-                </section>
-                  ) : (
-                    <LockedSectionView sectionName="Market Opportunity" />
-                  )
-                )}
+                  </section>
+                ) : (
+                  <LockedSectionView sectionName="Market Opportunity" />
+                )
+              )}
 
-                {/* Technical Stack Section */}
-                {activeSection === 'techstack' && (
-                  hasSectionAccess('techstack') ? (
-                <section 
-                    id="techstack" 
+              {/* Technical Stack Section */}
+              {activeSection === 'techstack' && (
+                hasSectionAccess('techstack') ? (
+                  <section
+                    id="techstack"
                     ref={(el) => { sectionsRef.current.techstack = el; }}
                     className="mb-20"
-                >
+                  >
                     <div className="flex items-center mb-6">
-                        <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                            <span className="font-bold text-black">7</span>
-                        </div>
-                        <h2 className="text-white text-3xl font-bold">Technical Stack</h2>
+                      <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                        <span className="font-bold text-black">7</span>
+                      </div>
+                      <h2 className="text-white text-3xl font-bold">Technical Stack</h2>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* Frontend & Mobile */}
-                        <div className="bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
-                            <h3 className="text-white text-xl font-semibold mb-4 flex items-center">
-                                <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center mr-3">
-                                    <span className="text-[#E0FE10] text-sm">📱</span>
-                                </div>
-                                Frontend & Mobile
-                            </h3>
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Web Framework</span>
-                                    <span className="text-[#E0FE10] font-medium">Next.js + React</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Mobile Platform</span>
-                                    <span className="text-[#E0FE10] font-medium">Native iOS (Swift)</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">UI Framework</span>
-                                    <span className="text-[#E0FE10] font-medium">SwiftUI + Tailwind CSS</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Type Safety</span>
-                                    <span className="text-[#E0FE10] font-medium">TypeScript</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">State Management</span>
-                                    <span className="text-[#E0FE10] font-medium">Redux Toolkit</span>
-                                </div>
-                            </div>
+                      {/* Frontend & Mobile */}
+                      <div className="bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
+                        <h3 className="text-white text-xl font-semibold mb-4 flex items-center">
+                          <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center mr-3">
+                            <span className="text-[#E0FE10] text-sm">📱</span>
+                          </div>
+                          Frontend & Mobile
+                        </h3>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Web Framework</span>
+                            <span className="text-[#E0FE10] font-medium">Next.js + React</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Mobile Platform</span>
+                            <span className="text-[#E0FE10] font-medium">Native iOS (Swift)</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">UI Framework</span>
+                            <span className="text-[#E0FE10] font-medium">SwiftUI + Tailwind CSS</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Type Safety</span>
+                            <span className="text-[#E0FE10] font-medium">TypeScript</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">State Management</span>
+                            <span className="text-[#E0FE10] font-medium">Redux Toolkit</span>
+                          </div>
                         </div>
+                      </div>
 
-                        {/* Backend & Infrastructure */}
-                        <div className="bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
-                            <h3 className="text-white text-xl font-semibold mb-4 flex items-center">
-                                <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center mr-3">
-                                    <span className="text-[#E0FE10] text-sm">⚡</span>
-                                </div>
-                                Backend & Infrastructure
-                            </h3>
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Database</span>
-                                    <span className="text-[#E0FE10] font-medium">Firebase Firestore</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Authentication</span>
-                                    <span className="text-[#E0FE10] font-medium">Firebase Auth</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">File Storage</span>
-                                    <span className="text-[#E0FE10] font-medium">Firebase Storage</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">API Layer</span>
-                                    <span className="text-[#E0FE10] font-medium">Next.js API Routes</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Deployment</span>
-                                    <span className="text-[#E0FE10] font-medium">Netlify + App Store</span>
-                                </div>
-                            </div>
+                      {/* Backend & Infrastructure */}
+                      <div className="bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
+                        <h3 className="text-white text-xl font-semibold mb-4 flex items-center">
+                          <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center mr-3">
+                            <span className="text-[#E0FE10] text-sm">⚡</span>
+                          </div>
+                          Backend & Infrastructure
+                        </h3>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Database</span>
+                            <span className="text-[#E0FE10] font-medium">Firebase Firestore</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Authentication</span>
+                            <span className="text-[#E0FE10] font-medium">Firebase Auth</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">File Storage</span>
+                            <span className="text-[#E0FE10] font-medium">Firebase Storage</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">API Layer</span>
+                            <span className="text-[#E0FE10] font-medium">Next.js API Routes</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Deployment</span>
+                            <span className="text-[#E0FE10] font-medium">Netlify + App Store</span>
+                          </div>
                         </div>
+                      </div>
 
-                        {/* AI & Data Processing */}
-                        <div className="bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
-                            <h3 className="text-white text-xl font-semibold mb-4 flex items-center">
-                                <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center mr-3">
-                                    <span className="text-[#E0FE10] text-sm">🤖</span>
-                                </div>
-                                AI & Data Processing
-                            </h3>
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">AI Platform</span>
-                                    <span className="text-[#E0FE10] font-medium">OpenAI API</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Models</span>
-                                    <span className="text-[#E0FE10] font-medium">Latest OpenAI models</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Image Processing</span>
-                                    <span className="text-[#E0FE10] font-medium">AI-powered extraction</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Data Parsing</span>
-                                    <span className="text-[#E0FE10] font-medium">Automated text analysis</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Real-time Sync</span>
-                                    <span className="text-[#E0FE10] font-medium">Firebase listeners</span>
-                                </div>
-                            </div>
+                      {/* AI & Data Processing */}
+                      <div className="bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
+                        <h3 className="text-white text-xl font-semibold mb-4 flex items-center">
+                          <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center mr-3">
+                            <span className="text-[#E0FE10] text-sm">🤖</span>
+                          </div>
+                          AI & Data Processing
+                        </h3>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">AI Platform</span>
+                            <span className="text-[#E0FE10] font-medium">OpenAI API</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Models</span>
+                            <span className="text-[#E0FE10] font-medium">Latest OpenAI models</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Image Processing</span>
+                            <span className="text-[#E0FE10] font-medium">AI-powered extraction</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Data Parsing</span>
+                            <span className="text-[#E0FE10] font-medium">Automated text analysis</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Real-time Sync</span>
+                            <span className="text-[#E0FE10] font-medium">Firebase listeners</span>
+                          </div>
                         </div>
+                      </div>
 
-                        {/* Development & Tools */}
-                        <div className="bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
-                            <h3 className="text-white text-xl font-semibold mb-4 flex items-center">
-                                <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center mr-3">
-                                    <span className="text-[#E0FE10] text-sm">🛠️</span>
-                                </div>
-                                Development & Tools
-                            </h3>
-                            <div className="space-y-3">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Package Manager</span>
-                                    <span className="text-[#E0FE10] font-medium">Yarn</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Version Control</span>
-                                    <span className="text-[#E0FE10] font-medium">Git</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Code Quality</span>
-                                    <span className="text-[#E0FE10] font-medium">ESLint + Prettier</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">Health Integration</span>
-                                    <span className="text-[#E0FE10] font-medium">iOS HealthKit</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-zinc-300">CDN</span>
-                                    <span className="text-[#E0FE10] font-medium">Netlify Edge</span>
-                                </div>
-                            </div>
+                      {/* Development & Tools */}
+                      <div className="bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
+                        <h3 className="text-white text-xl font-semibold mb-4 flex items-center">
+                          <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 flex items-center justify-center mr-3">
+                            <span className="text-[#E0FE10] text-sm">🛠️</span>
+                          </div>
+                          Development & Tools
+                        </h3>
+                        <div className="space-y-3">
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Package Manager</span>
+                            <span className="text-[#E0FE10] font-medium">Yarn</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Version Control</span>
+                            <span className="text-[#E0FE10] font-medium">Git</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Code Quality</span>
+                            <span className="text-[#E0FE10] font-medium">ESLint + Prettier</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">Health Integration</span>
+                            <span className="text-[#E0FE10] font-medium">iOS HealthKit</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-zinc-300">CDN</span>
+                            <span className="text-[#E0FE10] font-medium">Netlify Edge</span>
+                          </div>
                         </div>
+                      </div>
                     </div>
 
                     {/* Architecture Overview */}
                     <div className="mt-8 bg-zinc-900/50 rounded-xl p-6 border border-zinc-800">
-                        <h3 className="text-white text-xl font-semibold mb-4">Architecture Overview</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="text-center">
-                                <div className="w-16 h-16 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-3">
-                                    <span className="text-[#E0FE10] text-2xl">📱</span>
-                                </div>
-                                <h4 className="text-white font-semibold mb-2">Cross-Platform</h4>
-                                <p className="text-zinc-400 text-sm">Native iOS app for optimal mobile experience, responsive web app for broader accessibility</p>
-                            </div>
-                            <div className="text-center">
-                                <div className="w-16 h-16 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-3">
-                                    <span className="text-[#E0FE10] text-2xl">🔄</span>
-                                </div>
-                                <h4 className="text-white font-semibold mb-2">Real-time Sync</h4>
-                                <p className="text-zinc-400 text-sm">Unified Firebase backend ensures data consistency across all platforms and devices</p>
-                            </div>
-                            <div className="text-center">
-                                <div className="w-16 h-16 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-3">
-                                    <span className="text-[#E0FE10] text-2xl">🚀</span>
-                                </div>
-                                <h4 className="text-white font-semibold mb-2">Scalable</h4>
-                                <p className="text-zinc-400 text-sm">Modern tech stack built for rapid scaling with AI-enhanced admin tools and automation</p>
-                            </div>
+                      <h3 className="text-white text-xl font-semibold mb-4">Architecture Overview</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="text-center">
+                          <div className="w-16 h-16 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-3">
+                            <span className="text-[#E0FE10] text-2xl">📱</span>
+                          </div>
+                          <h4 className="text-white font-semibold mb-2">Cross-Platform</h4>
+                          <p className="text-zinc-400 text-sm">Native iOS app for optimal mobile experience, responsive web app for broader accessibility</p>
                         </div>
+                        <div className="text-center">
+                          <div className="w-16 h-16 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-3">
+                            <span className="text-[#E0FE10] text-2xl">🔄</span>
+                          </div>
+                          <h4 className="text-white font-semibold mb-2">Real-time Sync</h4>
+                          <p className="text-zinc-400 text-sm">Unified Firebase backend ensures data consistency across all platforms and devices</p>
+                        </div>
+                        <div className="text-center">
+                          <div className="w-16 h-16 rounded-full bg-[#E0FE10]/20 flex items-center justify-center mx-auto mb-3">
+                            <span className="text-[#E0FE10] text-2xl">🚀</span>
+                          </div>
+                          <h4 className="text-white font-semibold mb-2">Scalable</h4>
+                          <p className="text-zinc-400 text-sm">Modern tech stack built for rapid scaling with AI-enhanced admin tools and automation</p>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Key Technical Advantages */}
                     <div className="mt-8 bg-gradient-to-r from-[#E0FE10]/10 to-transparent rounded-xl p-6 border border-[#E0FE10]/20">
-                        <h3 className="text-white text-xl font-semibold mb-4">Key Technical Advantages</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="flex items-start space-x-3">
-                                <div className="w-6 h-6 rounded-full bg-[#E0FE10] flex items-center justify-center mt-0.5">
-                                    <span className="text-black text-xs font-bold">✓</span>
-                                </div>
-                                <div>
-                                    <h4 className="text-white font-medium">Type-Safe Development</h4>
-                                    <p className="text-zinc-400 text-sm">TypeScript ensures code reliability and faster development cycles</p>
-                                </div>
-                            </div>
-                            <div className="flex items-start space-x-3">
-                                <div className="w-6 h-6 rounded-full bg-[#E0FE10] flex items-center justify-center mt-0.5">
-                                    <span className="text-black text-xs font-bold">✓</span>
-                                </div>
-                                <div>
-                                    <h4 className="text-white font-medium">AI-Enhanced Operations</h4>
-                                    <p className="text-zinc-400 text-sm">Automated data processing reduces manual work and improves accuracy</p>
-                                </div>
-                            </div>
-                            <div className="flex items-start space-x-3">
-                                <div className="w-6 h-6 rounded-full bg-[#E0FE10] flex items-center justify-center mt-0.5">
-                                    <span className="text-black text-xs font-bold">✓</span>
-                                </div>
-                                <div>
-                                    <h4 className="text-white font-medium">Firebase Ecosystem</h4>
-                                    <p className="text-zinc-400 text-sm">Integrated auth, database, and storage with built-in scaling</p>
-                                </div>
-                            </div>
-                            <div className="flex items-start space-x-3">
-                                <div className="w-6 h-6 rounded-full bg-[#E0FE10] flex items-center justify-center mt-0.5">
-                                    <span className="text-black text-xs font-bold">✓</span>
-                                </div>
-                                <div>
-                                    <h4 className="text-white font-medium">Modern Deployment</h4>
-                                    <p className="text-zinc-400 text-sm">Automated CI/CD with Netlify and App Store distribution</p>
-                                </div>
-                            </div>
+                      <h3 className="text-white text-xl font-semibold mb-4">Key Technical Advantages</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-start space-x-3">
+                          <div className="w-6 h-6 rounded-full bg-[#E0FE10] flex items-center justify-center mt-0.5">
+                            <span className="text-black text-xs font-bold">✓</span>
+                          </div>
+                          <div>
+                            <h4 className="text-white font-medium">Type-Safe Development</h4>
+                            <p className="text-zinc-400 text-sm">TypeScript ensures code reliability and faster development cycles</p>
+                          </div>
                         </div>
+                        <div className="flex items-start space-x-3">
+                          <div className="w-6 h-6 rounded-full bg-[#E0FE10] flex items-center justify-center mt-0.5">
+                            <span className="text-black text-xs font-bold">✓</span>
+                          </div>
+                          <div>
+                            <h4 className="text-white font-medium">AI-Enhanced Operations</h4>
+                            <p className="text-zinc-400 text-sm">Automated data processing reduces manual work and improves accuracy</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                          <div className="w-6 h-6 rounded-full bg-[#E0FE10] flex items-center justify-center mt-0.5">
+                            <span className="text-black text-xs font-bold">✓</span>
+                          </div>
+                          <div>
+                            <h4 className="text-white font-medium">Firebase Ecosystem</h4>
+                            <p className="text-zinc-400 text-sm">Integrated auth, database, and storage with built-in scaling</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start space-x-3">
+                          <div className="w-6 h-6 rounded-full bg-[#E0FE10] flex items-center justify-center mt-0.5">
+                            <span className="text-black text-xs font-bold">✓</span>
+                          </div>
+                          <div>
+                            <h4 className="text-white font-medium">Modern Deployment</h4>
+                            <p className="text-zinc-400 text-sm">Automated CI/CD with Netlify and App Store distribution</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                </section>
-                  ) : (
-                    <LockedSectionView sectionName="Tech Stack" />
-                  )
-                )}
+                  </section>
+                ) : (
+                  <LockedSectionView sectionName="Tech Stack" />
+                )
+              )}
 
-                {/* Team Section */}
-                {activeSection === 'team' && (
-                  hasSectionAccess('team') ? (
-                <section 
-                    id="team" 
+              {/* Team Section */}
+              {activeSection === 'team' && (
+                hasSectionAccess('team') ? (
+                  <section
+                    id="team"
                     ref={(el) => { sectionsRef.current.team = el; }}
                     className="mb-20"
-                >
+                  >
                     <div className="flex items-center justify-between mb-6">
                       <div className="flex items-center">
                         <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
-                            <span className="font-bold text-black">8</span>
+                          <span className="font-bold text-black">8</span>
                         </div>
                         <h2 className="text-white text-3xl font-bold">Team</h2>
                       </div>
@@ -5169,1174 +5176,1169 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
                         Org Chart
                       </a>
                     </div>
-                    
+
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                    <h3 className="text-white text-xl font-semibold mb-6">The Folks Building Pulse</h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                      <h3 className="text-white text-xl font-semibold mb-6">The Folks Building Pulse</h3>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                         {/* CEO */}
                         <div className="bg-zinc-800/50 rounded-xl overflow-hidden">
-                        <div className="aspect-square overflow-hidden">
-                            <img 
-                            src="TremaineFounder.jpg"
-                            alt="Tremaine Grant - CEO & Founder" 
-                            className="w-full h-full object-cover"
+                          <div className="aspect-square overflow-hidden">
+                            <img
+                              src="TremaineFounder.jpg"
+                              alt="Tremaine Grant - CEO & Founder"
+                              className="w-full h-full object-cover"
                             />
-                        </div>
-                        <div className="p-6">
+                          </div>
+                          <div className="p-6">
                             <h4 className="text-white font-semibold mb-1">Tremaine</h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-3">CEO & Founder</p>
                             <p className="text-zinc-400 text-sm">
-                            Former D1 athlete, 10+ year personal trainer, principal engineer. Built software at GM, Pfizer, and Warby Parker.
+                              Former D1 athlete, 10+ year personal trainer, principal engineer. Built software at GM, Pfizer, and Warby Parker.
                             </p>
+                          </div>
                         </div>
-                        </div>
-                        
+
                         {/* Design Lead */}
                         <div className="bg-zinc-800/50 rounded-xl overflow-hidden">
-                        <div className="aspect-square overflow-hidden">
-                            <img 
-                            src="lola.jpg"
-                            alt="Lola - Design Lead" 
-                            className="w-full h-full object-cover"
+                          <div className="aspect-square overflow-hidden">
+                            <img
+                              src="lola.jpg"
+                              alt="Lola - Design Lead"
+                              className="w-full h-full object-cover"
                             />
-                        </div>
-                        <div className="p-6">
+                          </div>
+                          <div className="p-6">
                             <h4 className="text-white font-semibold mb-1">Lola</h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-3">Design Lead</p>
                             <p className="text-zinc-400 text-sm mb-3">
-                            UX visionary crafting intuitive, accessible fitness experiences. Expert in design systems and user-centered product strategy.
+                              UX visionary crafting intuitive, accessible fitness experiences. Expert in design systems and user-centered product strategy.
                             </p>
                             <button
-                                type="button"
-                                onClick={generateContractorAgreementPdf}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-700/50 hover:bg-zinc-700 border border-zinc-600 rounded-lg text-xs text-zinc-300 hover:text-white transition-colors"
+                              type="button"
+                              onClick={generateContractorAgreementPdf}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-700/50 hover:bg-zinc-700 border border-zinc-600 rounded-lg text-xs text-zinc-300 hover:text-white transition-colors"
                             >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                Contractor Agreement
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              Contractor Agreement
                             </button>
+                          </div>
                         </div>
-                        </div>
-                        
+
                         {/* Digital Creators Lead */}
                         <div className="bg-zinc-800/50 rounded-xl overflow-hidden">
-                        <div className="aspect-square overflow-hidden">
-                            <img 
-                            src="ricardo.jpg"
-                            alt="Ricardo - Digital Creators Lead" 
-                            className="w-full h-full object-cover"
+                          <div className="aspect-square overflow-hidden">
+                            <img
+                              src="ricardo.jpg"
+                              alt="Ricardo - Digital Creators Lead"
+                              className="w-full h-full object-cover"
                             />
-                        </div>
-                        <div className="p-6">
+                          </div>
+                          <div className="p-6">
                             <h4 className="text-white font-semibold mb-1">Ricardo</h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-3">Digital Creators Lead</p>
                             <p className="text-zinc-400 text-sm">
-                            Exercise science major and veteran. Grew Instagram to 50K+. Leads creator acquisition and influencer partnerships.
+                              Exercise science major and veteran. Grew Instagram to 50K+. Leads creator acquisition and influencer partnerships.
                             </p>
-                        </div>
+                          </div>
                         </div>
 
                         {/* Chief of Staff */}
                         <div className="bg-zinc-800/50 rounded-xl overflow-hidden">
-                        <div className="aspect-square overflow-hidden">
-                            <img 
-                            src="bobbyAdvisor.jpg"
-                            alt="Bobby Nweke - Chief of Staff" 
-                            className="w-full h-full object-cover"
+                          <div className="aspect-square overflow-hidden">
+                            <img
+                              src="bobbyAdvisor.jpg"
+                              alt="Bobby Nweke - Chief of Staff"
+                              className="w-full h-full object-cover"
                             />
-                        </div>
-                        <div className="p-6">
+                          </div>
+                          <div className="p-6">
                             <h4 className="text-white font-semibold mb-1">Bobby</h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-3">Chief of Staff</p>
                             <p className="text-zinc-400 text-sm mb-3">
-                            Harvard-educated, former TED coach. Brings storytelling, operational excellence, and investor communications.
+                              Harvard-educated, former TED coach. Brings storytelling, operational excellence, and investor communications.
                             </p>
                             <button
-                                type="button"
-                                onClick={generateAdvisorAgreementPdf}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-700/50 hover:bg-zinc-700 border border-zinc-600 rounded-lg text-xs text-zinc-300 hover:text-white transition-colors"
+                              type="button"
+                              onClick={generateAdvisorAgreementPdf}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-700/50 hover:bg-zinc-700 border border-zinc-600 rounded-lg text-xs text-zinc-300 hover:text-white transition-colors"
                             >
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                Advisor Agreement
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              Advisor Agreement
                             </button>
+                          </div>
                         </div>
-                        </div>
+                      </div>
                     </div>
-                    </div>
-                    
+
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
-                    <h3 className="text-white text-xl font-semibold mb-6">Who Advises Us</h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                      <h3 className="text-white text-xl font-semibold mb-6">Who Advises Us</h3>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         <div className="flex items-start gap-4">
-                        <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
-                            <img 
-                            src="zak.jpg"
-                            alt="Advisor 1" 
-                            className="w-full h-full object-cover"
+                          <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                            <img
+                              src="zak.jpg"
+                              alt="Advisor 1"
+                              className="w-full h-full object-cover"
                             />
-                        </div>
-                        <div>
+                          </div>
+                          <div>
                             <h4 className="text-white font-semibold mb-1">
-                              <a href="https://www.linkedin.com/in/marqueszak/" 
-                                 target="_blank" 
-                                 rel="noopener noreferrer"
-                                 className="hover:text-[#E0FE10] transition-colors underline decoration-dotted flex items-center gap-1">
+                              <a href="https://www.linkedin.com/in/marqueszak/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-[#E0FE10] transition-colors underline decoration-dotted flex items-center gap-1">
                                 Marques Zak
                                 <ArrowUpRight className="h-3 w-3" />
                               </a>
                             </h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-2">Marketing and Growth</p>
                             <p className="text-zinc-400 text-sm">
-                            Advertising Hall of Achievement inductee. Marketing exec at PepsiCo and American Express. Advises on brand strategy and growth.
+                              Advertising Hall of Achievement inductee. Marketing exec at PepsiCo and American Express. Advises on brand strategy and growth.
                             </p>
+                          </div>
                         </div>
-                        </div>
-                        
+
                         <div className="flex items-start gap-4">
-                        <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
-                            <img 
-                            src="/Val.jpg"
-                            alt="Advisor 2" 
-                            className="w-full h-full object-cover"
+                          <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                            <img
+                              src="/Val.jpg"
+                              alt="Advisor 2"
+                              className="w-full h-full object-cover"
                             />
-                        </div>
-                        <div>
+                          </div>
+                          <div>
                             <h4 className="text-white font-semibold mb-1">
-                              <a href="https://www.speakhappiness.com/about-valerie/" 
-                                 target="_blank" 
-                                 rel="noopener noreferrer"
-                                 className="hover:text-[#E0FE10] transition-colors underline decoration-dotted flex items-center gap-1">
+                              <a href="https://www.speakhappiness.com/about-valerie/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-[#E0FE10] transition-colors underline decoration-dotted flex items-center gap-1">
                                 Valerie Alexander
                                 <ArrowUpRight className="h-3 w-3" />
                               </a>
                             </h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-2">Happiness, Inclusion & Bias</p>
                             <p className="text-zinc-400 text-sm">
-                            TED speaker (500k+ views), #1 Amazon Seller. Former VC consultant and tech CEO. Advises on brand narrative and inclusive community design.
+                              TED speaker (500k+ views), #1 Amazon Seller. Former VC consultant and tech CEO. Advises on brand narrative and inclusive community design.
                             </p>
+                          </div>
                         </div>
-                        </div>
-                        
+
                         <div className="flex items-start gap-4">
-                        <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
-                            <img 
-                            src="/Deray.png"
-                            alt="Advisor 3" 
-                            className="w-full h-full object-cover"
+                          <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
+                            <img
+                              src="/Deray.png"
+                              alt="Advisor 3"
+                              className="w-full h-full object-cover"
                             />
-                        </div>
-                        <div>
+                          </div>
+                          <div>
                             <h4 className="text-white font-semibold mb-1">
-                              <a href="https://deray.com/" 
-                                 target="_blank" 
-                                 rel="noopener noreferrer"
-                                 className="hover:text-[#E0FE10] transition-colors underline decoration-dotted flex items-center gap-1">
+                              <a href="https://deray.com/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:text-[#E0FE10] transition-colors underline decoration-dotted flex items-center gap-1">
                                 DeRay Mckesson
                                 <ArrowUpRight className="h-3 w-3" />
                               </a>
                             </h4>
                             <p className="text-[#E0FE10] text-sm font-medium mb-2">Community Building and Organizing</p>
                             <p className="text-zinc-400 text-sm">
-                            Civil rights activist and community organizer. Expert in rallying people around shared causes. Advises on authentic community building.
+                              Civil rights activist and community organizer. Expert in rallying people around shared causes. Advises on authentic community building.
                             </p>
+                          </div>
                         </div>
-                        </div>
+                      </div>
                     </div>
-                    </div>
-                </section>
-                  ) : (
-                    <LockedSectionView sectionName="Team" />
-                  )
-                )}
+                  </section>
+                ) : (
+                  <LockedSectionView sectionName="Team" />
+                )
+              )}
 
-                {/* Financial Information Section */}
-                {activeSection === 'financials' && (
-                  hasSectionAccess('financials') ? (
-                <section 
-                    id="financials" 
+              {/* Financial Information Section */}
+              {activeSection === 'financials' && (
+                hasSectionAccess('financials') ? (
+                  <section
+                    id="financials"
                     ref={(el) => { sectionsRef.current.financials = el; }}
                     className="mb-20"
-                >
+                  >
                     <div className="flex items-center mb-6">
-                    <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
+                      <div className="w-10 h-10 rounded-full bg-[#E0FE10] flex items-center justify-center mr-4">
                         <span className="font-bold text-black">9</span>
-                    </div>
-                    <h2 className="text-white text-3xl font-bold">Financial Information</h2>
-                    </div>
-                    
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                    <h3 className="text-white text-xl font-semibold mb-6">Revenue Streams</h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Monthly Subscription */}
-                        <div className="bg-zinc-800/70 rounded-lg p-6 relative overflow-hidden">
-                            <div className="absolute -right-4 -top-4 bg-[#E0FE10] text-black text-xs font-bold py-1 px-3 rounded-bl-lg">
-                                MOST POPULAR
-                            </div>
-                            <h4 className="text-[#E0FE10] font-medium mb-2">Monthly Premium</h4>
-                            <p className="text-white text-2xl font-bold mb-2">$4.99<span className="text-zinc-400 text-sm font-normal">/month</span></p>
-                            <p className="text-zinc-400 text-sm">Full platform access</p>
-                        </div>
-                        
-                        {/* Annual Subscription */}
-                        <div className="bg-zinc-800/70 rounded-lg p-6">
-                            <h4 className="text-[#E0FE10] font-medium mb-2">Annual Premium</h4>
-                            <p className="text-white text-2xl font-bold mb-2">$39.99<span className="text-zinc-400 text-sm font-normal">/year</span></p>
-                            <p className="text-zinc-400 text-sm">Save 33% vs monthly</p>
-                        </div>
-                        
-                        {/* Platform Fee */}
-                        <div className="bg-zinc-800/70 rounded-lg p-6 border border-[#E0FE10]/30">
-                            <h4 className="text-[#E0FE10] font-medium mb-2">Platform Fee</h4>
-                            <p className="text-white text-2xl font-bold mb-2">3%<span className="text-zinc-400 text-sm font-normal"> of transaction</span></p>
-                            <p className="text-zinc-400 text-sm">On premium-priced Rounds</p>
-                        </div>
-                    </div>
-                    </div>
-                    
-                    {/* Monthly Revenue Chart */}
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-                        <div>
-                            <h3 className="text-white text-xl font-semibold mb-1">Monthly Revenue</h3>
-                            <p className="text-zinc-400 text-sm">
-                                {activeRevenueYear === '2025' 
-                                    ? 'Actual revenue performance January - November 2025' 
-                                    : 'Stealth mode organic App Store revenue 2024'}
-                            </p>
-                        </div>
-                        
-                        <div className="flex items-center gap-3 mt-4 sm:mt-0">
-                            {/* Year Toggle */}
-                            <div className="flex items-center bg-zinc-800 rounded-lg overflow-hidden text-sm">
-                                <button 
-                                    onClick={() => setActiveRevenueYear('2025')}
-                                    className={`px-4 py-2 font-medium transition-colors ${activeRevenueYear === '2025' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'}`}
-                                >
-                                    2025
-                                </button>
-                                <button 
-                                    onClick={() => setActiveRevenueYear('2024')}
-                                    className={`px-4 py-2 font-medium transition-colors ${activeRevenueYear === '2024' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'}`}
-                                >
-                                    2024
-                                </button>
-                            </div>
-                            
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setMonthlyTableYear(activeRevenueYear);
-                                    setIsMonthlyTableOpen(true);
-                                }}
-                                className="inline-flex items-center px-3 py-2 rounded-lg border border-zinc-700 text-xs font-medium text-zinc-200 hover:border-[#E0FE10] hover:text-[#E0FE10] transition-colors whitespace-nowrap"
-                            >
-                                <Download className="w-3 h-3 mr-1" />
-                                Month-by-month view
-                            </button>
-                        </div>
-                    </div>
-                    
-                    {/* Revenue Narrative */}
-                    <div className="bg-zinc-800/30 rounded-lg p-4 mb-6">
-                        {activeRevenueYear === '2025' ? (
-                            <div className="space-y-3">
-                                <p className="text-zinc-300 text-sm leading-relaxed">
-                                    <span className="text-[#E0FE10] font-medium">2025 was intentionally small.</span> We launched lean, tested with creators one-on-one, and optimized based on real conversations. The revenue spikes (Feb, May-Jun) directly correlate with Round launches—validating our core thesis: <span className="text-white font-medium">Rounds = Subscriptions.</span>
-                                </p>
-                                <div className="bg-zinc-900/50 rounded-lg p-3 border-l-2 border-[#E0FE10]/50">
-                                    <p className="text-zinc-400 text-xs font-medium mb-2">Problems we identified:</p>
-                                    <ul className="text-zinc-400 text-xs space-y-1">
-                                        <li>• Round creation was too long—creators dropped off mid-flow</li>
-                                        <li>• No retargeting for participants after a Round ended</li>
-                                    </ul>
-                                </div>
-                                <p className="text-zinc-400 text-sm leading-relaxed">
-                                    We spent H2 building <span className="text-[#E0FE10]">AI templating</span> and <span className="text-[#E0FE10]">automated Round generation</span> to solve these friction points. The path forward is clear: optimize the funnel from signup → Round launch.
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                <p className="text-zinc-300 text-sm leading-relaxed">
-                                    <span className="text-blue-400 font-medium">2024 was our stealth year.</span> With zero marketing spend, we generated $2,011 in <span className="text-white">subscription revenue</span> through organic App Store discovery, private invitations to fitness seekers, and one-on-one training sessions using the app.
-                                </p>
-                                <p className="text-zinc-400 text-sm leading-relaxed">
-                                    This validated our core product before the public launch—and revealed a pattern: users who trained <span className="text-white">together</span> retained longer and paid more. That insight became the foundation for Rounds, our main subscription driver.
-                                </p>
-                                <div className="bg-zinc-900/50 rounded-lg p-3 border-l-2 border-blue-400/50">
-                                    <p className="text-zinc-500 text-xs italic">
-                                        Note: We focused on subscription revenue. Additional revenue from one-off personal training sessions is not included in these figures.
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* Bar Chart */}
-                    <div className="relative">
-                        {/* Y-axis labels */}
-                        <div className="absolute left-0 top-0 h-64 w-12 flex flex-col justify-between text-right pr-2">
-                            {activeRevenueYear === '2025' ? (
-                                <>
-                                    <span className="text-zinc-500 text-xs">$700</span>
-                                    <span className="text-zinc-500 text-xs">$525</span>
-                                    <span className="text-zinc-500 text-xs">$350</span>
-                                    <span className="text-zinc-500 text-xs">$175</span>
-                                    <span className="text-zinc-500 text-xs">$0</span>
-                                </>
-                            ) : (
-                                <>
-                                    <span className="text-zinc-500 text-xs">$500</span>
-                                    <span className="text-zinc-500 text-xs">$375</span>
-                                    <span className="text-zinc-500 text-xs">$250</span>
-                                    <span className="text-zinc-500 text-xs">$125</span>
-                                    <span className="text-zinc-500 text-xs">$0</span>
-                                </>
-                            )}
-                        </div>
-                        
-                        {/* Chart area */}
-                        <div className="ml-14">
-                            {/* Grid lines */}
-                            <div className="absolute left-14 right-0 top-0 h-64 flex flex-col justify-between pointer-events-none">
-                                <div className="border-t border-zinc-800 w-full"></div>
-                                <div className="border-t border-zinc-800 w-full"></div>
-                                <div className="border-t border-zinc-800 w-full"></div>
-                                <div className="border-t border-zinc-800 w-full"></div>
-                                <div className="border-t border-zinc-800 w-full"></div>
-                            </div>
-                            
-                            {/* Bars Container */}
-                            <div className="flex items-end gap-2 h-64 relative z-10">
-                                {activeRevenueYear === '2025' ? (
-                                    // 2025 Data
-                                    [
-                                        { month: 'Jan', value: 246 },
-                                        { month: 'Feb', value: 633 },
-                                        { month: 'Mar', value: 268 },
-                                        { month: 'Apr', value: 220 },
-                                        { month: 'May', value: 373 },
-                                        { month: 'Jun', value: 512 },
-                                        { month: 'Jul', value: 346 },
-                                        { month: 'Aug', value: 128 },
-                                        { month: 'Sep', value: 115 },
-                                        { month: 'Oct', value: 173 },
-                                        { month: 'Nov', value: 134 },
-                                        { month: 'Dec', value: null },
-                                    ].map((item, index) => (
-                                        <div key={index} className="flex-1 flex flex-col items-center justify-end h-full group">
-                                            {item.value !== null ? (
-                                                <div 
-                                                    className="w-full bg-gradient-to-t from-[#E0FE10] to-[#E0FE10]/70 rounded-t-sm hover:from-[#E0FE10] hover:to-[#E0FE10] transition-all cursor-pointer relative"
-                                                    style={{ height: `${(item.value / 700) * 256}px` }}
-                                                >
-                                                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-700 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                                                        ${item.value}
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div 
-                                                    className="w-full bg-zinc-700/50 rounded-t-sm border-2 border-dashed border-zinc-500 cursor-pointer relative"
-                                                    style={{ height: '40px' }}
-                                                >
-                                                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-700 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                                                        In Progress
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))
-                                ) : (
-                                    // 2024 Data
-                                    [
-                                        { month: 'Jan', value: 137 },
-                                        { month: 'Feb', value: 89 },
-                                        { month: 'Mar', value: 135 },
-                                        { month: 'Apr', value: 111 },
-                                        { month: 'May', value: 107 },
-                                        { month: 'Jun', value: 293 },
-                                        { month: 'Jul', value: 397 },
-                                        { month: 'Aug', value: 157 },
-                                        { month: 'Sep', value: 96 },
-                                        { month: 'Oct', value: 201 },
-                                        { month: 'Nov', value: 168 },
-                                        { month: 'Dec', value: 120 },
-                                    ].map((item, index) => (
-                                        <div key={index} className="flex-1 flex flex-col items-center justify-end h-full group">
-                                            <div 
-                                                className="w-full bg-gradient-to-t from-blue-500 to-blue-400/70 rounded-t-sm hover:from-blue-400 hover:to-blue-400 transition-all cursor-pointer relative"
-                                                style={{ height: `${(item.value / 500) * 256}px` }}
-                                            >
-                                                <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-700 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                                                    ${item.value}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                            
-                            {/* X-axis labels */}
-                            <div className="flex gap-2 mt-3 text-xs text-zinc-500">
-                                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month) => (
-                                    <span key={month} className="flex-1 text-center">{month}</span>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    {/* Summary Stats */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-                        {activeRevenueYear === '2025' ? (
-                            <>
-                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
-                                    <p className="text-zinc-400 text-sm">YTD Revenue</p>
-                                    <p className="text-[#E0FE10] text-2xl font-bold">$3,148</p>
-                                    <p className="text-zinc-500 text-xs">Jan - Nov 2025</p>
-                                </div>
-                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
-                                    <p className="text-zinc-400 text-sm">Peak Month</p>
-                                    <p className="text-white text-2xl font-bold">$633</p>
-                                    <p className="text-zinc-500 text-xs">February 2025</p>
-                                </div>
-                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
-                                    <p className="text-zinc-400 text-sm">Monthly Avg</p>
-                                    <p className="text-white text-2xl font-bold">$286</p>
-                                    <p className="text-zinc-500 text-xs">11-month average</p>
-                                </div>
-                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
-                                    <p className="text-zinc-400 text-sm">Best Quarter</p>
-                                    <p className="text-white text-2xl font-bold">Q2</p>
-                                    <p className="text-zinc-500 text-xs">$1,105 total</p>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
-                                    <p className="text-zinc-400 text-sm">Annual Revenue</p>
-                                    <p className="text-blue-400 text-2xl font-bold">$2,011</p>
-                                    <p className="text-zinc-500 text-xs">Full Year 2024</p>
-                                </div>
-                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
-                                    <p className="text-zinc-400 text-sm">Peak Month</p>
-                                    <p className="text-white text-2xl font-bold">$397</p>
-                                    <p className="text-zinc-500 text-xs">July 2024</p>
-                                </div>
-                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
-                                    <p className="text-zinc-400 text-sm">Monthly Avg</p>
-                                    <p className="text-white text-2xl font-bold">$168</p>
-                                    <p className="text-zinc-500 text-xs">12-month average</p>
-                                </div>
-                                <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
-                                    <p className="text-zinc-400 text-sm">Best Quarter</p>
-                                    <p className="text-white text-2xl font-bold">Q3</p>
-                                    <p className="text-zinc-500 text-xs">$650 total</p>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                    </div>
-                    
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
-                    <h3 className="text-white text-xl font-semibold mb-6">Revenue Model & Projections</h3>
-                    
-                    {/* Current vs Target Economics */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                        {/* Where We Are (2025) */}
-                        <div className="bg-zinc-800/50 rounded-xl p-6 border border-zinc-700">
-                            <div className="flex items-center gap-2 mb-4">
-                                <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-                                <h4 className="text-blue-400 font-medium">Where We Are (2025)</h4>
-                            </div>
-                            <div className="space-y-3 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-400">Retention</span>
-                                    <span className="text-white font-medium">78% — strong</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-400">Trial Conversion</span>
-                                    <span className="text-white font-medium">18% — will improve(7 day)</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-400">Avg Seekers/Round</span>
-                                    <span className="text-white font-medium">≈55</span>
-                                </div>
-                            </div>
-                            <div className="mt-4 p-3 bg-zinc-900/60 rounded-lg space-y-2">
-                                <p className="text-zinc-300 text-xs font-semibold uppercase tracking-wide">Funnel optimizations</p>
-                                <ul className="text-zinc-400 text-xs space-y-1 list-disc list-inside">
-                                    <li>Shortening trials from 30 days to 7 days aligns payment with Round completion and reduces free-only usage.</li>
-                                    <li>Strong retention (78% stay once they pay) gives us confidence that improving trial conversion directly compounds revenue.</li>
-                                    <li>Increasing Round launch cadence in 2026 lets us repeat and scale high-performing Rounds instead of one-off spikes.</li>
-                                </ul>
-                            </div>
-                        </div>
-                        
-                        {/* Target Model */}
-                        <div className="bg-zinc-800/50 rounded-xl p-6 border border-[#E0FE10]/30">
-                            <div className="flex items-center gap-2 mb-4">
-                                <div className="w-2 h-2 bg-[#E0FE10] rounded-full"></div>
-                                <h4 className="text-[#E0FE10] font-medium">Target Model (Post-Optimization)</h4>
-                            </div>
-                            <div className="space-y-3 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-400">Revenue/Round</span>
-                                    <span className="text-white font-medium">$2,080</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-400">Target Seekers/Round</span>
-                                    <span className="text-white font-medium">50</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-zinc-400">LTV/Creator (2 Rounds)</span>
-                                    <span className="text-[#E0FE10] font-medium">$4,080</span>
-                                </div>
-                            </div>
-                            <div className="mt-4 p-3 bg-zinc-900/50 rounded-lg">
-                                <p className="text-zinc-500 text-xs">
-                                    Requires: AI-powered Round creation (built), retargeting system (in development), optimized trial-to-paid conversion, creator audience building tools.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    {/* LTV Math Callout */}
-                    <div className="bg-zinc-900/60 rounded-xl p-5 mb-8 border border-zinc-800">
-                        <h4 className="text-white font-medium mb-3">How we get to ≈$2K LTV per creator</h4>
-                        <ol className="text-zinc-400 text-xs space-y-1 list-decimal list-inside">
-                            <li>
-                                ≈55 seekers per Round × 18% trial → paid ≈{' '}
-                                <span className="text-white font-medium">10 long-term subscribers</span>.
-                            </li>
-                            <li>
-                                Paying user LTV, with 78% retention over time, is modeled at about{' '}
-                                <span className="text-white font-medium">$200 per subscriber</span>.
-                            </li>
-                            <li>
-                                10 subscribers × $200 LTV ≈{' '}
-                                <span className="text-[#E0FE10] font-semibold">$2,000+ annual LTV per creator</span>.
-                            </li>
-                        </ol>
-                    </div>
-                    
-                    {/* The Gap Explanation */}
-                    <div className="bg-gradient-to-r from-blue-500/10 to-[#E0FE10]/10 rounded-xl p-6 mb-8 border border-zinc-700">
-                        <h4 className="text-white font-medium mb-3">Bridging the Gap: Current → Target</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                            <div className="bg-zinc-900/50 rounded-lg p-4">
-                                <p className="text-[#E0FE10] font-medium mb-1">1. Round Creation Speed</p>
-                                <p className="text-zinc-400 text-xs">AI templating reduces creation from 45min → 5min. More Rounds = more revenue events.</p>
-                            </div>
-                            <div className="bg-zinc-900/50 rounded-lg p-4">
-                                <p className="text-[#E0FE10] font-medium mb-1">2. Seeker Retargeting</p>
-                                <p className="text-zinc-400 text-xs">Post-Round re-engagement to drive annual subscriptions. Currently no system exists.</p>
-                            </div>
-                            <div className="bg-zinc-900/50 rounded-lg p-4">
-                                <p className="text-[#E0FE10] font-medium mb-1">3. Trial Optimization ✓</p>
-                                <p className="text-zinc-400 text-xs">Already shifted from 30-day → 7-day trial. Previously, users would complete a Round then cancel before paying.</p>
-                            </div>
-                        </div>
+                      </div>
+                      <h2 className="text-white text-3xl font-bold">Financial Information</h2>
                     </div>
 
-                    {/* 2026 Focus Card */}
-                    <div className="bg-zinc-900/60 rounded-xl border border-zinc-800 p-6 mb-8">
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
+                      <h3 className="text-white text-xl font-semibold mb-6">Revenue Streams</h3>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Monthly Subscription */}
+                        <div className="bg-zinc-800/70 rounded-lg p-6 relative overflow-hidden">
+                          <div className="absolute -right-4 -top-4 bg-[#E0FE10] text-black text-xs font-bold py-1 px-3 rounded-bl-lg">
+                            MOST POPULAR
+                          </div>
+                          <h4 className="text-[#E0FE10] font-medium mb-2">Monthly Premium</h4>
+                          <p className="text-white text-2xl font-bold mb-2">$4.99<span className="text-zinc-400 text-sm font-normal">/month</span></p>
+                          <p className="text-zinc-400 text-sm">Full platform access</p>
+                        </div>
+
+                        {/* Annual Subscription */}
+                        <div className="bg-zinc-800/70 rounded-lg p-6">
+                          <h4 className="text-[#E0FE10] font-medium mb-2">Annual Premium</h4>
+                          <p className="text-white text-2xl font-bold mb-2">$39.99<span className="text-zinc-400 text-sm font-normal">/year</span></p>
+                          <p className="text-zinc-400 text-sm">Save 33% vs monthly</p>
+                        </div>
+
+                        {/* Platform Fee */}
+                        <div className="bg-zinc-800/70 rounded-lg p-6 border border-[#E0FE10]/30">
+                          <h4 className="text-[#E0FE10] font-medium mb-2">Platform Fee</h4>
+                          <p className="text-white text-2xl font-bold mb-2">3%<span className="text-zinc-400 text-sm font-normal"> of transaction</span></p>
+                          <p className="text-zinc-400 text-sm">On premium-priced Rounds</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Monthly Revenue Chart */}
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+                        <div>
+                          <h3 className="text-white text-xl font-semibold mb-1">Monthly Revenue</h3>
+                          <p className="text-zinc-400 text-sm">
+                            {activeRevenueYear === '2025'
+                              ? 'Actual revenue performance January - November 2025'
+                              : 'Stealth mode organic App Store revenue 2024'}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-3 mt-4 sm:mt-0">
+                          {/* Year Toggle */}
+                          <div className="flex items-center bg-zinc-800 rounded-lg overflow-hidden text-sm">
+                            <button
+                              onClick={() => setActiveRevenueYear('2025')}
+                              className={`px-4 py-2 font-medium transition-colors ${activeRevenueYear === '2025' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'}`}
+                            >
+                              2025
+                            </button>
+                            <button
+                              onClick={() => setActiveRevenueYear('2024')}
+                              className={`px-4 py-2 font-medium transition-colors ${activeRevenueYear === '2024' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'}`}
+                            >
+                              2024
+                            </button>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMonthlyTableYear(activeRevenueYear);
+                              setIsMonthlyTableOpen(true);
+                            }}
+                            className="inline-flex items-center px-3 py-2 rounded-lg border border-zinc-700 text-xs font-medium text-zinc-200 hover:border-[#E0FE10] hover:text-[#E0FE10] transition-colors whitespace-nowrap"
+                          >
+                            <Download className="w-3 h-3 mr-1" />
+                            Month-by-month view
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Revenue Narrative */}
+                      <div className="bg-zinc-800/30 rounded-lg p-4 mb-6">
+                        {activeRevenueYear === '2025' ? (
+                          <div className="space-y-3">
+                            <p className="text-zinc-300 text-sm leading-relaxed">
+                              <span className="text-[#E0FE10] font-medium">2025 was intentionally small.</span> We launched lean, tested with creators one-on-one, and optimized based on real conversations. The revenue spikes (Feb, May-Jun) directly correlate with Round launches—validating our core thesis: <span className="text-white font-medium">Rounds = Subscriptions.</span>
+                            </p>
+                            <div className="bg-zinc-900/50 rounded-lg p-3 border-l-2 border-[#E0FE10]/50">
+                              <p className="text-zinc-400 text-xs font-medium mb-2">Problems we identified:</p>
+                              <ul className="text-zinc-400 text-xs space-y-1">
+                                <li>• Round creation was too long—creators dropped off mid-flow</li>
+                                <li>• No retargeting for participants after a Round ended</li>
+                              </ul>
+                            </div>
+                            <p className="text-zinc-400 text-sm leading-relaxed">
+                              We spent H2 building <span className="text-[#E0FE10]">AI templating</span> and <span className="text-[#E0FE10]">automated Round generation</span> to solve these friction points. The path forward is clear: optimize the funnel from signup → Round launch.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            <p className="text-zinc-300 text-sm leading-relaxed">
+                              <span className="text-blue-400 font-medium">2024 was our stealth year.</span> With zero marketing spend, we generated $2,011 in <span className="text-white">subscription revenue</span> through organic App Store discovery, private invitations to fitness seekers, and one-on-one training sessions using the app.
+                            </p>
+                            <p className="text-zinc-400 text-sm leading-relaxed">
+                              This validated our core product before the public launch—and revealed a pattern: users who trained <span className="text-white">together</span> retained longer and paid more. That insight became the foundation for Rounds, our main subscription driver.
+                            </p>
+                            <div className="bg-zinc-900/50 rounded-lg p-3 border-l-2 border-blue-400/50">
+                              <p className="text-zinc-500 text-xs italic">
+                                Note: We focused on subscription revenue. Additional revenue from one-off personal training sessions is not included in these figures.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Bar Chart */}
+                      <div className="relative">
+                        {/* Y-axis labels */}
+                        <div className="absolute left-0 top-0 h-64 w-12 flex flex-col justify-between text-right pr-2">
+                          {activeRevenueYear === '2025' ? (
+                            <>
+                              <span className="text-zinc-500 text-xs">$700</span>
+                              <span className="text-zinc-500 text-xs">$525</span>
+                              <span className="text-zinc-500 text-xs">$350</span>
+                              <span className="text-zinc-500 text-xs">$175</span>
+                              <span className="text-zinc-500 text-xs">$0</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-zinc-500 text-xs">$500</span>
+                              <span className="text-zinc-500 text-xs">$375</span>
+                              <span className="text-zinc-500 text-xs">$250</span>
+                              <span className="text-zinc-500 text-xs">$125</span>
+                              <span className="text-zinc-500 text-xs">$0</span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Chart area */}
+                        <div className="ml-14">
+                          {/* Grid lines */}
+                          <div className="absolute left-14 right-0 top-0 h-64 flex flex-col justify-between pointer-events-none">
+                            <div className="border-t border-zinc-800 w-full"></div>
+                            <div className="border-t border-zinc-800 w-full"></div>
+                            <div className="border-t border-zinc-800 w-full"></div>
+                            <div className="border-t border-zinc-800 w-full"></div>
+                            <div className="border-t border-zinc-800 w-full"></div>
+                          </div>
+
+                          {/* Bars Container */}
+                          <div className="flex items-end gap-2 h-64 relative z-10">
+                            {activeRevenueYear === '2025' ? (
+                              // 2025 Data
+                              [
+                                { month: 'Jan', value: 246 },
+                                { month: 'Feb', value: 633 },
+                                { month: 'Mar', value: 268 },
+                                { month: 'Apr', value: 220 },
+                                { month: 'May', value: 373 },
+                                { month: 'Jun', value: 512 },
+                                { month: 'Jul', value: 346 },
+                                { month: 'Aug', value: 128 },
+                                { month: 'Sep', value: 115 },
+                                { month: 'Oct', value: 173 },
+                                { month: 'Nov', value: 134 },
+                                { month: 'Dec', value: null },
+                              ].map((item, index) => (
+                                <div key={index} className="flex-1 flex flex-col items-center justify-end h-full group">
+                                  {item.value !== null ? (
+                                    <div
+                                      className="w-full bg-gradient-to-t from-[#E0FE10] to-[#E0FE10]/70 rounded-t-sm hover:from-[#E0FE10] hover:to-[#E0FE10] transition-all cursor-pointer relative"
+                                      style={{ height: `${(item.value / 700) * 256}px` }}
+                                    >
+                                      <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-700 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                                        ${item.value}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div
+                                      className="w-full bg-zinc-700/50 rounded-t-sm border-2 border-dashed border-zinc-500 cursor-pointer relative"
+                                      style={{ height: '40px' }}
+                                    >
+                                      <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-700 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                                        In Progress
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              // 2024 Data
+                              [
+                                { month: 'Jan', value: 137 },
+                                { month: 'Feb', value: 89 },
+                                { month: 'Mar', value: 135 },
+                                { month: 'Apr', value: 111 },
+                                { month: 'May', value: 107 },
+                                { month: 'Jun', value: 293 },
+                                { month: 'Jul', value: 397 },
+                                { month: 'Aug', value: 157 },
+                                { month: 'Sep', value: 96 },
+                                { month: 'Oct', value: 201 },
+                                { month: 'Nov', value: 168 },
+                                { month: 'Dec', value: 120 },
+                              ].map((item, index) => (
+                                <div key={index} className="flex-1 flex flex-col items-center justify-end h-full group">
+                                  <div
+                                    className="w-full bg-gradient-to-t from-blue-500 to-blue-400/70 rounded-t-sm hover:from-blue-400 hover:to-blue-400 transition-all cursor-pointer relative"
+                                    style={{ height: `${(item.value / 500) * 256}px` }}
+                                  >
+                                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-700 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                                      ${item.value}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+
+                          {/* X-axis labels */}
+                          <div className="flex gap-2 mt-3 text-xs text-zinc-500">
+                            {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month) => (
+                              <span key={month} className="flex-1 text-center">{month}</span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Summary Stats */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+                        {activeRevenueYear === '2025' ? (
+                          <>
+                            <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                              <p className="text-zinc-400 text-sm">YTD Revenue</p>
+                              <p className="text-[#E0FE10] text-2xl font-bold">$3,148</p>
+                              <p className="text-zinc-500 text-xs">Jan - Nov 2025</p>
+                            </div>
+                            <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                              <p className="text-zinc-400 text-sm">Peak Month</p>
+                              <p className="text-white text-2xl font-bold">$633</p>
+                              <p className="text-zinc-500 text-xs">February 2025</p>
+                            </div>
+                            <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                              <p className="text-zinc-400 text-sm">Monthly Avg</p>
+                              <p className="text-white text-2xl font-bold">$286</p>
+                              <p className="text-zinc-500 text-xs">11-month average</p>
+                            </div>
+                            <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                              <p className="text-zinc-400 text-sm">Best Quarter</p>
+                              <p className="text-white text-2xl font-bold">Q2</p>
+                              <p className="text-zinc-500 text-xs">$1,105 total</p>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                              <p className="text-zinc-400 text-sm">Annual Revenue</p>
+                              <p className="text-blue-400 text-2xl font-bold">$2,011</p>
+                              <p className="text-zinc-500 text-xs">Full Year 2024</p>
+                            </div>
+                            <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                              <p className="text-zinc-400 text-sm">Peak Month</p>
+                              <p className="text-white text-2xl font-bold">$397</p>
+                              <p className="text-zinc-500 text-xs">July 2024</p>
+                            </div>
+                            <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                              <p className="text-zinc-400 text-sm">Monthly Avg</p>
+                              <p className="text-white text-2xl font-bold">$168</p>
+                              <p className="text-zinc-500 text-xs">12-month average</p>
+                            </div>
+                            <div className="bg-zinc-800/50 rounded-lg p-4 text-center">
+                              <p className="text-zinc-400 text-sm">Best Quarter</p>
+                              <p className="text-white text-2xl font-bold">Q3</p>
+                              <p className="text-zinc-500 text-xs">$650 total</p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8">
+                      <h3 className="text-white text-xl font-semibold mb-6">Revenue Model & Projections</h3>
+
+                      {/* Current vs Target Economics */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        {/* Where We Are (2025) */}
+                        <div className="bg-zinc-800/50 rounded-xl p-6 border border-zinc-700">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
+                            <h4 className="text-blue-400 font-medium">Where We Are (2025)</h4>
+                          </div>
+                          <div className="space-y-3 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-zinc-400">Retention</span>
+                              <span className="text-white font-medium">78% — strong</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-zinc-400">Trial Conversion</span>
+                              <span className="text-white font-medium">18% — will improve(7 day)</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-zinc-400">Avg Seekers/Round</span>
+                              <span className="text-white font-medium">≈55</span>
+                            </div>
+                          </div>
+                          <div className="mt-4 p-3 bg-zinc-900/60 rounded-lg space-y-2">
+                            <p className="text-zinc-300 text-xs font-semibold uppercase tracking-wide">Funnel optimizations</p>
+                            <ul className="text-zinc-400 text-xs space-y-1 list-disc list-inside">
+                              <li>Shortening trials from 30 days to 7 days aligns payment with Round completion and reduces free-only usage.</li>
+                              <li>Strong retention (78% stay once they pay) gives us confidence that improving trial conversion directly compounds revenue.</li>
+                              <li>Increasing Round launch cadence in 2026 lets us repeat and scale high-performing Rounds instead of one-off spikes.</li>
+                            </ul>
+                          </div>
+                        </div>
+
+                        {/* Target Model */}
+                        <div className="bg-zinc-800/50 rounded-xl p-6 border border-[#E0FE10]/30">
+                          <div className="flex items-center gap-2 mb-4">
+                            <div className="w-2 h-2 bg-[#E0FE10] rounded-full"></div>
+                            <h4 className="text-[#E0FE10] font-medium">Target Model (Post-Optimization)</h4>
+                          </div>
+                          <div className="space-y-3 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-zinc-400">Revenue/Round</span>
+                              <span className="text-white font-medium">$2,080</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-zinc-400">Target Seekers/Round</span>
+                              <span className="text-white font-medium">50</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-zinc-400">LTV/Creator (2 Rounds)</span>
+                              <span className="text-[#E0FE10] font-medium">$4,080</span>
+                            </div>
+                          </div>
+                          <div className="mt-4 p-3 bg-zinc-900/50 rounded-lg">
+                            <p className="text-zinc-500 text-xs">
+                              Requires: AI-powered Round creation (built), retargeting system (in development), optimized trial-to-paid conversion, creator audience building tools.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* LTV Math Callout */}
+                      <div className="bg-zinc-900/60 rounded-xl p-5 mb-8 border border-zinc-800">
+                        <h4 className="text-white font-medium mb-3">How we get to ≈$2K LTV per creator</h4>
+                        <ol className="text-zinc-400 text-xs space-y-1 list-decimal list-inside">
+                          <li>
+                            ≈55 seekers per Round × 18% trial → paid ≈{' '}
+                            <span className="text-white font-medium">10 long-term subscribers</span>.
+                          </li>
+                          <li>
+                            Paying user LTV, with 78% retention over time, is modeled at about{' '}
+                            <span className="text-white font-medium">$200 per subscriber</span>.
+                          </li>
+                          <li>
+                            10 subscribers × $200 LTV ≈{' '}
+                            <span className="text-[#E0FE10] font-semibold">$2,000+ annual LTV per creator</span>.
+                          </li>
+                        </ol>
+                      </div>
+
+                      {/* The Gap Explanation */}
+                      <div className="bg-gradient-to-r from-blue-500/10 to-[#E0FE10]/10 rounded-xl p-6 mb-8 border border-zinc-700">
+                        <h4 className="text-white font-medium mb-3">Bridging the Gap: Current → Target</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                          <div className="bg-zinc-900/50 rounded-lg p-4">
+                            <p className="text-[#E0FE10] font-medium mb-1">1. Round Creation Speed</p>
+                            <p className="text-zinc-400 text-xs">AI templating reduces creation from 45min → 5min. More Rounds = more revenue events.</p>
+                          </div>
+                          <div className="bg-zinc-900/50 rounded-lg p-4">
+                            <p className="text-[#E0FE10] font-medium mb-1">2. Seeker Retargeting</p>
+                            <p className="text-zinc-400 text-xs">Post-Round re-engagement to drive annual subscriptions. Currently no system exists.</p>
+                          </div>
+                          <div className="bg-zinc-900/50 rounded-lg p-4">
+                            <p className="text-[#E0FE10] font-medium mb-1">3. Trial Optimization ✓</p>
+                            <p className="text-zinc-400 text-xs">Already shifted from 30-day → 7-day trial. Previously, users would complete a Round then cancel before paying.</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 2026 Focus Card */}
+                      <div className="bg-zinc-900/60 rounded-xl border border-zinc-800 p-6 mb-8">
                         <div className="flex items-center gap-3 mb-3">
-                            <span className="text-yellow-300 text-xl">⚡</span>
-                            <h4 className="text-white font-medium">2026: Turning Rounds into Predictable Revenue</h4>
+                          <span className="text-yellow-300 text-xl">⚡</span>
+                          <h4 className="text-white font-medium">2026: Turning Rounds into Predictable Revenue</h4>
                         </div>
                         <div className="space-y-4">
-                            <div>
-                                <p className="text-zinc-100 text-sm italic border-l-2 border-zinc-700 pl-3">
-                                    “2026 will be our first year of consistent Round cadence, which should smooth revenue from spikes into predictable monthly growth.”
-                                </p>
-                                <p className="text-zinc-400 text-sm mt-1">
-                                    This makes clear our path to a <span className="italic">stable subscription business</span> instead of one-off spikes.
-                                </p>
-                            </div>
-                            <div>
-                                <p className="text-zinc-100 text-sm italic border-l-2 border-zinc-700 pl-3">
-                                    “While revenue paused, engagement, retention, and sharability increased — signaling that the engine improves as we refine it.”
-                                </p>
-                                <p className="text-zinc-400 text-sm mt-1">
-                                    We’re explicitly orienting 2026 around <span className="italic">leading indicators</span> (Rounds, engagement, retention) that compound into revenue as optimization lands.
-                                </p>
-                            </div>
+                          <div>
+                            <p className="text-zinc-100 text-sm italic border-l-2 border-zinc-700 pl-3">
+                              “2026 will be our first year of consistent Round cadence, which should smooth revenue from spikes into predictable monthly growth.”
+                            </p>
+                            <p className="text-zinc-400 text-sm mt-1">
+                              This makes clear our path to a <span className="italic">stable subscription business</span> instead of one-off spikes.
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-zinc-100 text-sm italic border-l-2 border-zinc-700 pl-3">
+                              “While revenue paused, engagement, retention, and sharability increased — signaling that the engine improves as we refine it.”
+                            </p>
+                            <p className="text-zinc-400 text-sm mt-1">
+                              We’re explicitly orienting 2026 around <span className="italic">leading indicators</span> (Rounds, engagement, retention) that compound into revenue as optimization lands.
+                            </p>
+                          </div>
                         </div>
-                    </div>
-                    
-                    {/* Conservative Projections */}
-                    <h4 className="text-white font-medium mb-4">Conservative Growth Projections</h4>
-                    <div className="bg-zinc-800/50 rounded-xl overflow-hidden">
+                      </div>
+
+                      {/* Conservative Projections */}
+                      <h4 className="text-white font-medium mb-4">Conservative Growth Projections</h4>
+                      <div className="bg-zinc-800/50 rounded-xl overflow-hidden">
                         <table className="w-full text-left">
-                        <thead>
+                          <thead>
                             <tr className="border-b border-zinc-700">
-                            <th className="py-4 px-6 text-zinc-400 font-medium">Metric</th>
-                            <th className="py-4 px-6 text-zinc-400 font-medium">2026</th>
-                            <th className="py-4 px-6 text-zinc-400 font-medium">2027</th>
-                            <th className="py-4 px-6 text-zinc-400 font-medium">2028</th>
+                              <th className="py-4 px-6 text-zinc-400 font-medium">Metric</th>
+                              <th className="py-4 px-6 text-zinc-400 font-medium">2026</th>
+                              <th className="py-4 px-6 text-zinc-400 font-medium">2027</th>
+                              <th className="py-4 px-6 text-zinc-400 font-medium">2028</th>
                             </tr>
-                        </thead>
-                        <tbody>
+                          </thead>
+                          <tbody>
                             <tr className="border-b border-zinc-700">
-                            <td className="py-4 px-6 text-white">Active Creators</td>
-                            <td className="py-4 px-6 text-white">50</td>
-                            <td className="py-4 px-6 text-white">200</td>
-                            <td className="py-4 px-6 text-white">750</td>
-                            </tr>
-                            <tr className="border-b border-zinc-700">
-                            <td className="py-4 px-6 text-white">Avg Seekers/Round</td>
-                            <td className="py-4 px-6 text-white">25</td>
-                            <td className="py-4 px-6 text-white">35</td>
-                            <td className="py-4 px-6 text-white">50</td>
+                              <td className="py-4 px-6 text-white">Active Creators</td>
+                              <td className="py-4 px-6 text-white">50</td>
+                              <td className="py-4 px-6 text-white">200</td>
+                              <td className="py-4 px-6 text-white">750</td>
                             </tr>
                             <tr className="border-b border-zinc-700">
-                            <td className="py-4 px-6 text-white">Revenue/Creator</td>
-                            <td className="py-4 px-6 text-white">$1,080</td>
-                            <td className="py-4 px-6 text-white">$1,480</td>
-                            <td className="py-4 px-6 text-white">$2,080</td>
+                              <td className="py-4 px-6 text-white">Avg Seekers/Round</td>
+                              <td className="py-4 px-6 text-white">25</td>
+                              <td className="py-4 px-6 text-white">35</td>
+                              <td className="py-4 px-6 text-white">50</td>
+                            </tr>
+                            <tr className="border-b border-zinc-700">
+                              <td className="py-4 px-6 text-white">Revenue/Creator</td>
+                              <td className="py-4 px-6 text-white">$1,080</td>
+                              <td className="py-4 px-6 text-white">$1,480</td>
+                              <td className="py-4 px-6 text-white">$2,080</td>
                             </tr>
                             <tr className="border-b border-zinc-700 bg-zinc-800/30">
-                            <td className="py-4 px-6 text-[#E0FE10] font-medium">Annual Revenue</td>
-                            <td className="py-4 px-6 text-[#E0FE10] font-bold">$108K</td>
-                            <td className="py-4 px-6 text-[#E0FE10] font-bold">$592K</td>
-                            <td className="py-4 px-6 text-[#E0FE10] font-bold">$3.1M</td>
+                              <td className="py-4 px-6 text-[#E0FE10] font-medium">Annual Revenue</td>
+                              <td className="py-4 px-6 text-[#E0FE10] font-bold">$108K</td>
+                              <td className="py-4 px-6 text-[#E0FE10] font-bold">$592K</td>
+                              <td className="py-4 px-6 text-[#E0FE10] font-bold">$3.1M</td>
                             </tr>
-                        </tbody>
+                          </tbody>
                         </table>
-                    </div>
-                    
-                    <p className="text-zinc-500 text-sm mt-4 italic">
+                      </div>
+
+                      <p className="text-zinc-500 text-sm mt-4 italic">
                         Conservative model assumes gradual improvement in seekers/Round as optimization work ships. Revenue/Creator calculated at $80 creator + (seekers × $40 × 50% annual conversion).
-                    </p>
+                      </p>
                     </div>
-                    
+
                     {/* Key Revenue Insights */}
                     <div className="bg-gradient-to-r from-[#E0FE10]/10 to-[#E0FE10]/5 border border-[#E0FE10]/20 rounded-xl p-6 mt-10 mb-10">
-                        <h4 className="text-[#E0FE10] font-semibold mb-4">💡 Key Revenue Insights</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <h4 className="text-[#E0FE10] font-semibold mb-4">💡 Key Revenue Insights</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <h5 className="text-white font-medium mb-2">Strong Annual Preference</h5>
-                            <p className="text-zinc-300 text-sm">
-                            56% of subscribers choose annual plans, indicating high confidence in the platform 
+                          <h5 className="text-white font-medium mb-2">Strong Annual Preference</h5>
+                          <p className="text-zinc-300 text-sm">
+                            56% of subscribers choose annual plans, indicating high confidence in the platform
                             and providing better cash flow predictability.
-                            </p>
+                          </p>
                         </div>
                         <div>
-                            <h5 className="text-white font-medium mb-2">Creator-Driven Growth</h5>
-                            <p className="text-zinc-300 text-sm">
+                          <h5 className="text-white font-medium mb-2">Creator-Driven Growth</h5>
+                          <p className="text-zinc-300 text-sm">
                             Each creator brings an average of 37.5 users, with 18% converting to paid subscriptions—
                             creating a scalable, low-CAC growth engine.
-                            </p>
+                          </p>
                         </div>
-                        </div>
+                      </div>
                     </div>
 
                     {/* Financial Documents */}
                     <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-8 mb-10">
-                        <h3 className="text-white text-xl font-semibold mb-1">Financial Documents</h3>
-                        <p className="text-zinc-400 text-sm mb-6">
-                            Download verified bank statements, financial summaries, and revenue reports.
-                        </p>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {/* 2025 Statements */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setIsBank2025ModalOpen(true);
-                                    setSelectedBank2025Months(bankStatements2025.map(r => r.id));
-                                }}
-                                className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
-                            >
-                                <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center group-hover:bg-[#E0FE10]/20 transition-colors">
-                                    <Download className="w-6 h-6 text-[#E0FE10]" />
-                                </div>
-                                <div>
-                                    <p className="text-white font-medium">2025 Bank Statements</p>
-                                    <p className="text-zinc-500 text-sm">Select months to download</p>
-                                </div>
-                            </button>
-                            
-                            {/* 2024 Statements */}
-                            <button
-                                type="button"
-                                onClick={() => setIsBank2024ModalOpen(true)}
-                                className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
-                            >
-                                <div className="w-12 h-12 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-                                    <Download className="w-6 h-6 text-blue-400" />
-                                </div>
-                                <div>
-                                    <p className="text-white font-medium">2024 Bank Statements</p>
-                                    <p className="text-zinc-500 text-sm">Available by request</p>
-                                </div>
-                            </button>
-                            
-                            {/* Revenue Reports (CSV) */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setIsRevenueModalOpen(true);
-                                    setSelectedRevenueMonths(revenueReports.map(r => r.id));
-                                }}
-                                className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
-                            >
-                                <div className="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
-                                    <Download className="w-6 h-6 text-purple-400" />
-                                </div>
-                                <div>
-                                    <p className="text-white font-medium">Revenue Reports (CSV)</p>
-                                    <p className="text-zinc-500 text-sm">Monthly subscription revenue</p>
-                                </div>
-                            </button>
-                            
-                            {/* Profit & Loss */}
-                            <button
-                                type="button"
-                                onClick={() => setIsPLModalOpen(true)}
-                                className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
-                            >
-                                <div className="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
-                                    <Download className="w-6 h-6 text-emerald-400" />
-                                </div>
-                                <div>
-                                    <p className="text-white font-medium">Profit & Loss Statement</p>
-                                    <p className="text-zinc-500 text-sm">Income statement</p>
-                                </div>
-                            </button>
-                            
-                            {/* Balance Sheet */}
-                            <button
-                                type="button"
-                                onClick={() => setIsBalanceSheetModalOpen(true)}
-                                className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
-                            >
-                                <div className="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
-                                    <Download className="w-6 h-6 text-amber-400" />
-                                </div>
-                                <div>
-                                    <p className="text-white font-medium">Balance Sheet</p>
-                                    <p className="text-zinc-500 text-sm">Assets & liabilities</p>
-                                </div>
-                            </button>
-                            
-                            {/* Expense Reports */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setIsExpenseReportModalOpen(true);
-                                    setSelectedExpenseMonths(expenseReports.map(r => r.id));
-                                }}
-                                className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
-                            >
-                                <div className="w-12 h-12 rounded-lg bg-rose-500/10 flex items-center justify-center group-hover:bg-rose-500/20 transition-colors">
-                                    <Download className="w-6 h-6 text-rose-400" />
-                                </div>
-                                <div>
-                                    <p className="text-white font-medium">Expense Reports</p>
-                                    <p className="text-zinc-500 text-sm">Month-to-month detailed expenses</p>
-                                </div>
-                            </button>
-                        </div>
-                        
-                        <p className="text-zinc-500 text-xs mt-4">
-                            📋 These documents contain sensitive financial information. By downloading, you agree to maintain confidentiality.
-                        </p>
+                      <h3 className="text-white text-xl font-semibold mb-1">Financial Documents</h3>
+                      <p className="text-zinc-400 text-sm mb-6">
+                        Download verified bank statements, financial summaries, and revenue reports.
+                      </p>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {/* 2025 Statements */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsBank2025ModalOpen(true);
+                            setSelectedBank2025Months(bankStatements2025.map(r => r.id));
+                          }}
+                          className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-[#E0FE10]/10 flex items-center justify-center group-hover:bg-[#E0FE10]/20 transition-colors">
+                            <Download className="w-6 h-6 text-[#E0FE10]" />
+                          </div>
+                          <div>
+                            <p className="text-white font-medium">2025 Bank Statements</p>
+                            <p className="text-zinc-500 text-sm">Select months to download</p>
+                          </div>
+                        </button>
+
+                        {/* 2024 Statements */}
+                        <button
+                          type="button"
+                          onClick={() => setIsBank2024ModalOpen(true)}
+                          className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+                            <Download className="w-6 h-6 text-blue-400" />
+                          </div>
+                          <div>
+                            <p className="text-white font-medium">2024 Bank Statements</p>
+                            <p className="text-zinc-500 text-sm">Available by request</p>
+                          </div>
+                        </button>
+
+                        {/* Revenue Reports (CSV) */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsRevenueModalOpen(true);
+                            setSelectedRevenueMonths(revenueReports.map(r => r.id));
+                          }}
+                          className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
+                            <Download className="w-6 h-6 text-purple-400" />
+                          </div>
+                          <div>
+                            <p className="text-white font-medium">Revenue Reports (CSV)</p>
+                            <p className="text-zinc-500 text-sm">Monthly subscription revenue</p>
+                          </div>
+                        </button>
+
+                        {/* Profit & Loss */}
+                        <button
+                          type="button"
+                          onClick={() => setIsPLModalOpen(true)}
+                          className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+                            <Download className="w-6 h-6 text-emerald-400" />
+                          </div>
+                          <div>
+                            <p className="text-white font-medium">Profit & Loss Statement</p>
+                            <p className="text-zinc-500 text-sm">Income statement</p>
+                          </div>
+                        </button>
+
+                        {/* Balance Sheet */}
+                        <button
+                          type="button"
+                          onClick={() => setIsBalanceSheetModalOpen(true)}
+                          className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+                            <Download className="w-6 h-6 text-amber-400" />
+                          </div>
+                          <div>
+                            <p className="text-white font-medium">Balance Sheet</p>
+                            <p className="text-zinc-500 text-sm">Assets & liabilities</p>
+                          </div>
+                        </button>
+
+                        {/* Expense Reports */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsExpenseReportModalOpen(true);
+                            setSelectedExpenseMonths(expenseReports.map(r => r.id));
+                          }}
+                          className="flex items-center gap-4 p-4 bg-zinc-800/70 rounded-lg hover:bg-zinc-800 transition-colors group text-left"
+                        >
+                          <div className="w-12 h-12 rounded-lg bg-rose-500/10 flex items-center justify-center group-hover:bg-rose-500/20 transition-colors">
+                            <Download className="w-6 h-6 text-rose-400" />
+                          </div>
+                          <div>
+                            <p className="text-white font-medium">Expense Reports</p>
+                            <p className="text-zinc-500 text-sm">Month-to-month detailed expenses</p>
+                          </div>
+                        </button>
+                      </div>
+
+                      <p className="text-zinc-500 text-xs mt-4">
+                        📋 These documents contain sensitive financial information. By downloading, you agree to maintain confidentiality.
+                      </p>
                     </div>
 
                     {/* Revenue Reports Modal */}
                     {isRevenueModalOpen && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div>
-                                        <h4 className="text-white text-lg font-semibold">Revenue Reports (CSV)</h4>
-                                        <p className="text-zinc-400 text-xs mt-1">
-                                            Select the months you’d like to download. Each file shows subscription revenue for that month.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="max-h-64 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/60 mb-4">
-                                    <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 text-xs text-zinc-400">
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedRevenueMonths(revenueReports.map(r => r.id))}
-                                            className="hover:text-[#E0FE10] transition-colors"
-                                        >
-                                            Select all
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedRevenueMonths([])}
-                                            className="hover:text-[#E0FE10] transition-colors"
-                                        >
-                                            Clear
-                                        </button>
-                                    </div>
-                                    <ul className="divide-y divide-zinc-800 text-sm">
-                                        {revenueReports.map(report => {
-                                            const checked = selectedRevenueMonths.includes(report.id);
-                                            return (
-                                                <li
-                                                    key={report.id}
-                                                    className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-zinc-900/70"
-                                                    onClick={() => toggleRevenueMonth(report.id)}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div
-                                                            className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] ${
-                                                                checked
-                                                                    ? 'border-[#E0FE10] bg-[#E0FE10]/20 text-[#E0FE10]'
-                                                                    : 'border-zinc-600 text-transparent'
-                                                            }`}
-                                                        >
-                                                            ✓
-                                                        </div>
-                                                        <span className="text-white">{report.label}</span>
-                                                    </div>
-                                                    <span className="text-zinc-500 text-xs">Subscription revenue</span>
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                </div>
-
-                                <div className="flex justify-end gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsRevenueModalOpen(false)}
-                                        className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleDownloadSelectedRevenueReports}
-                                        disabled={!selectedRevenueMonths.length}
-                                        className="px-4 py-2 rounded-lg bg-[#E0FE10] text-sm font-semibold text-black hover:bg-[#d8f521] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center"
-                                    >
-                                        <Download className="w-4 h-4 mr-2" />
-                                        Download selected
-                                    </button>
-                                </div>
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <h4 className="text-white text-lg font-semibold">Revenue Reports (CSV)</h4>
+                              <p className="text-zinc-400 text-xs mt-1">
+                                Select the months you’d like to download. Each file shows subscription revenue for that month.
+                              </p>
                             </div>
+                          </div>
+
+                          <div className="max-h-64 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/60 mb-4">
+                            <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 text-xs text-zinc-400">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRevenueMonths(revenueReports.map(r => r.id))}
+                                className="hover:text-[#E0FE10] transition-colors"
+                              >
+                                Select all
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedRevenueMonths([])}
+                                className="hover:text-[#E0FE10] transition-colors"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                            <ul className="divide-y divide-zinc-800 text-sm">
+                              {revenueReports.map(report => {
+                                const checked = selectedRevenueMonths.includes(report.id);
+                                return (
+                                  <li
+                                    key={report.id}
+                                    className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-zinc-900/70"
+                                    onClick={() => toggleRevenueMonth(report.id)}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div
+                                        className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] ${checked
+                                            ? 'border-[#E0FE10] bg-[#E0FE10]/20 text-[#E0FE10]'
+                                            : 'border-zinc-600 text-transparent'
+                                          }`}
+                                      >
+                                        ✓
+                                      </div>
+                                      <span className="text-white">{report.label}</span>
+                                    </div>
+                                    <span className="text-zinc-500 text-xs">Subscription revenue</span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+
+                          <div className="flex justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setIsRevenueModalOpen(false)}
+                              className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleDownloadSelectedRevenueReports}
+                              disabled={!selectedRevenueMonths.length}
+                              className="px-4 py-2 rounded-lg bg-[#E0FE10] text-sm font-semibold text-black hover:bg-[#d8f521] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center"
+                            >
+                              <Download className="w-4 h-4 mr-2" />
+                              Download selected
+                            </button>
+                          </div>
                         </div>
+                      </div>
                     )}
 
                     {/* 2025 Bank Statements Modal */}
                     {isBank2025ModalOpen && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div>
-                                        <h4 className="text-white text-lg font-semibold">2025 Bank Statements</h4>
-                                        <p className="text-zinc-400 text-xs mt-1">
-                                            Select the 2025 statement months you’d like to download. Each file is a full bank PDF export.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="max-h-64 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/60 mb-4">
-                                    <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 text-xs text-zinc-400">
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedBank2025Months(bankStatements2025.map(r => r.id))}
-                                            className="hover:text-[#E0FE10] transition-colors"
-                                        >
-                                            Select all
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedBank2025Months([])}
-                                            className="hover:text-[#E0FE10] transition-colors"
-                                        >
-                                            Clear
-                                        </button>
-                                    </div>
-                                    <ul className="divide-y divide-zinc-800 text-sm">
-                                        {bankStatements2025.map(report => {
-                                            const checked = selectedBank2025Months.includes(report.id);
-                                            return (
-                                                <li
-                                                    key={report.id}
-                                                    className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-zinc-900/70"
-                                                    onClick={() => toggleBank2025Month(report.id)}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div
-                                                            className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] ${
-                                                                checked
-                                                                    ? 'border-[#E0FE10] bg-[#E0FE10]/20 text-[#E0FE10]'
-                                                                    : 'border-zinc-600 text-transparent'
-                                                            }`}
-                                                        >
-                                                            ✓
-                                                        </div>
-                                                        <span className="text-white">{report.label}</span>
-                                                    </div>
-                                                    <span className="text-zinc-500 text-xs">Bank statement PDF</span>
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                </div>
-
-                                <div className="flex justify-end gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsBank2025ModalOpen(false)}
-                                        className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleDownloadSelectedBankStatements2025}
-                                        disabled={!selectedBank2025Months.length}
-                                        className="px-4 py-2 rounded-lg bg-[#E0FE10] text-sm font-semibold text-black hover:bg-[#d8f521] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center"
-                                    >
-                                        <Download className="w-4 h-4 mr-2" />
-                                        Download selected
-                                    </button>
-                                </div>
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <h4 className="text-white text-lg font-semibold">2025 Bank Statements</h4>
+                              <p className="text-zinc-400 text-xs mt-1">
+                                Select the 2025 statement months you’d like to download. Each file is a full bank PDF export.
+                              </p>
                             </div>
+                          </div>
+
+                          <div className="max-h-64 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/60 mb-4">
+                            <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 text-xs text-zinc-400">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedBank2025Months(bankStatements2025.map(r => r.id))}
+                                className="hover:text-[#E0FE10] transition-colors"
+                              >
+                                Select all
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedBank2025Months([])}
+                                className="hover:text-[#E0FE10] transition-colors"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                            <ul className="divide-y divide-zinc-800 text-sm">
+                              {bankStatements2025.map(report => {
+                                const checked = selectedBank2025Months.includes(report.id);
+                                return (
+                                  <li
+                                    key={report.id}
+                                    className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-zinc-900/70"
+                                    onClick={() => toggleBank2025Month(report.id)}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div
+                                        className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] ${checked
+                                            ? 'border-[#E0FE10] bg-[#E0FE10]/20 text-[#E0FE10]'
+                                            : 'border-zinc-600 text-transparent'
+                                          }`}
+                                      >
+                                        ✓
+                                      </div>
+                                      <span className="text-white">{report.label}</span>
+                                    </div>
+                                    <span className="text-zinc-500 text-xs">Bank statement PDF</span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+
+                          <div className="flex justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setIsBank2025ModalOpen(false)}
+                              className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleDownloadSelectedBankStatements2025}
+                              disabled={!selectedBank2025Months.length}
+                              className="px-4 py-2 rounded-lg bg-[#E0FE10] text-sm font-semibold text-black hover:bg-[#d8f521] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center"
+                            >
+                              <Download className="w-4 h-4 mr-2" />
+                              Download selected
+                            </button>
+                          </div>
                         </div>
+                      </div>
                     )}
 
                     {/* Expense Reports Modal */}
                     {isExpenseReportModalOpen && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div>
-                                        <h4 className="text-white text-lg font-semibold">Expense Reports</h4>
-                                        <p className="text-zinc-400 text-xs mt-1">
-                                            Select the months you'd like to download. Each file shows detailed line-by-line expenses for that month.
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="max-h-64 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/60 mb-4">
-                                    <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 text-xs text-zinc-400">
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedExpenseMonths(expenseReports.map(r => r.id))}
-                                            className="hover:text-[#E0FE10] transition-colors"
-                                        >
-                                            Select all
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setSelectedExpenseMonths([])}
-                                            className="hover:text-[#E0FE10] transition-colors"
-                                        >
-                                            Clear
-                                        </button>
-                                    </div>
-                                    <ul className="divide-y divide-zinc-800 text-sm">
-                                        {expenseReports.map(report => {
-                                            const checked = selectedExpenseMonths.includes(report.id);
-                                            return (
-                                                <li
-                                                    key={report.id}
-                                                    className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-zinc-900/70"
-                                                    onClick={() => toggleExpenseMonth(report.id)}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div
-                                                            className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] ${
-                                                                checked
-                                                                    ? 'border-[#E0FE10] bg-[#E0FE10]/20 text-[#E0FE10]'
-                                                                    : 'border-zinc-600 text-transparent'
-                                                            }`}
-                                                        >
-                                                            ✓
-                                                        </div>
-                                                        <span className="text-white">{report.label}</span>
-                                                    </div>
-                                                    <span className="text-zinc-500 text-xs">Detailed expenses</span>
-                                                </li>
-                                            );
-                                        })}
-                                    </ul>
-                                </div>
-
-                                <div className="flex justify-end gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsExpenseReportModalOpen(false)}
-                                        className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleDownloadSelectedExpenseReports}
-                                        disabled={!selectedExpenseMonths.length}
-                                        className="px-4 py-2 rounded-lg bg-[#E0FE10] text-sm font-semibold text-black hover:bg-[#d8f521] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center"
-                                    >
-                                        <Download className="w-4 h-4 mr-2" />
-                                        Download selected
-                                    </button>
-                                </div>
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <h4 className="text-white text-lg font-semibold">Expense Reports</h4>
+                              <p className="text-zinc-400 text-xs mt-1">
+                                Select the months you'd like to download. Each file shows detailed line-by-line expenses for that month.
+                              </p>
                             </div>
+                          </div>
+
+                          <div className="max-h-64 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/60 mb-4">
+                            <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 text-xs text-zinc-400">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedExpenseMonths(expenseReports.map(r => r.id))}
+                                className="hover:text-[#E0FE10] transition-colors"
+                              >
+                                Select all
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedExpenseMonths([])}
+                                className="hover:text-[#E0FE10] transition-colors"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                            <ul className="divide-y divide-zinc-800 text-sm">
+                              {expenseReports.map(report => {
+                                const checked = selectedExpenseMonths.includes(report.id);
+                                return (
+                                  <li
+                                    key={report.id}
+                                    className="flex items-center justify-between px-4 py-2 cursor-pointer hover:bg-zinc-900/70"
+                                    onClick={() => toggleExpenseMonth(report.id)}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div
+                                        className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] ${checked
+                                            ? 'border-[#E0FE10] bg-[#E0FE10]/20 text-[#E0FE10]'
+                                            : 'border-zinc-600 text-transparent'
+                                          }`}
+                                      >
+                                        ✓
+                                      </div>
+                                      <span className="text-white">{report.label}</span>
+                                    </div>
+                                    <span className="text-zinc-500 text-xs">Detailed expenses</span>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+
+                          <div className="flex justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setIsExpenseReportModalOpen(false)}
+                              className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleDownloadSelectedExpenseReports}
+                              disabled={!selectedExpenseMonths.length}
+                              className="px-4 py-2 rounded-lg bg-[#E0FE10] text-sm font-semibold text-black hover:bg-[#d8f521] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center"
+                            >
+                              <Download className="w-4 h-4 mr-2" />
+                              Download selected
+                            </button>
+                          </div>
                         </div>
+                      </div>
                     )}
 
                     {/* 2024 Bank Statements Info Modal */}
                     {isBank2024ModalOpen && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6">
-                                <h4 className="text-white text-lg font-semibold mb-2">2024 Bank Statements</h4>
-                                <p className="text-zinc-300 text-sm mb-3">
-                                    Our 2024 bank statements are available on request to active investors and diligence partners.
-                                </p>
-                                <p className="text-zinc-400 text-xs mb-5">
-                                    To receive copies of the 2024 PDFs, email us and we’ll share a secure link with you.
-                                </p>
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6">
+                          <h4 className="text-white text-lg font-semibold mb-2">2024 Bank Statements</h4>
+                          <p className="text-zinc-300 text-sm mb-3">
+                            Our 2024 bank statements are available on request to active investors and diligence partners.
+                          </p>
+                          <p className="text-zinc-400 text-xs mb-5">
+                            To receive copies of the 2024 PDFs, email us and we’ll share a secure link with you.
+                          </p>
 
-                                <div className="flex justify-end gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsBank2024ModalOpen(false)}
-                                        className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
-                                    >
-                                        Close
-                                    </button>
-                                    <a
-                                        href="mailto:invest@fitwithpulse.ai?subject=2024%20Bank%20Statements%20Request&body=Hi%20Pulse%20team%2C%0A%0AI%27d%20like%20to%20review%20the%202024%20bank%20statements%20for%20my%20diligence.%0A%0AThank%20you%2C%0A[Your%20Name]"
-                                        className="px-4 py-2 rounded-lg bg-[#E0FE10] text-sm font-semibold text-black hover:bg-[#d8f521] transition-colors flex items-center"
-                                    >
-                                        <Download className="w-4 h-4 mr-2" />
-                                        Request via email
-                                    </a>
-                                </div>
-                            </div>
+                          <div className="flex justify-end gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setIsBank2024ModalOpen(false)}
+                              className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
+                            >
+                              Close
+                            </button>
+                            <a
+                              href="mailto:invest@fitwithpulse.ai?subject=2024%20Bank%20Statements%20Request&body=Hi%20Pulse%20team%2C%0A%0AI%27d%20like%20to%20review%20the%202024%20bank%20statements%20for%20my%20diligence.%0A%0AThank%20you%2C%0A[Your%20Name]"
+                              className="px-4 py-2 rounded-lg bg-[#E0FE10] text-sm font-semibold text-black hover:bg-[#d8f521] transition-colors flex items-center"
+                            >
+                              <Download className="w-4 h-4 mr-2" />
+                              Request via email
+                            </a>
+                          </div>
                         </div>
+                      </div>
                     )}
 
                     {/* Month-by-month revenue table modal */}
                     {isMonthlyTableOpen && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div>
-                                        <h4 className="text-white text-lg font-semibold">Monthly Revenue — {monthlyTableYear}</h4>
-                                        <p className="text-zinc-400 text-xs mt-1">
-                                            Quick month-by-month view of subscription revenue. All numbers are in USD.
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center bg-zinc-800 rounded-lg overflow-hidden text-xs">
-                                        <button
-                                            type="button"
-                                            onClick={() => setMonthlyTableYear('2025')}
-                                            className={`px-3 py-1.5 font-medium transition-colors ${
-                                                monthlyTableYear === '2025' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'
-                                            }`}
-                                        >
-                                            2025
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => setMonthlyTableYear('2024')}
-                                            className={`px-3 py-1.5 font-medium transition-colors ${
-                                                monthlyTableYear === '2024' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'
-                                            }`}
-                                        >
-                                            2024
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="rounded-lg border border-zinc-800 overflow-hidden">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-zinc-900/80 border-b border-zinc-800">
-                                            <tr>
-                                                <th className="text-left px-4 py-2 text-zinc-400 font-medium">Month</th>
-                                                <th className="text-right px-4 py-2 text-zinc-400 font-medium">Revenue</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {(monthlyTableYear === '2025' ? monthlyRevenue2025 : monthlyRevenue2024).map(row => (
-                                                <tr key={`${monthlyTableYear}-${row.month}`} className="border-b border-zinc-800/70">
-                                                    <td className="px-4 py-2 text-white">{row.label}</td>
-                                                    <td className="px-4 py-2 text-right text-zinc-100">
-                                                        {row.value === 0 ? (
-                                                            <span className="text-zinc-500 italic">In progress</span>
-                                                        ) : (
-                                                            `$${row.value.toLocaleString()}`
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                <div className="flex justify-end mt-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsMonthlyTableOpen(false)}
-                                        className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
-                                    >
-                                        Close
-                                    </button>
-                                </div>
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-lg w-full p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <h4 className="text-white text-lg font-semibold">Monthly Revenue — {monthlyTableYear}</h4>
+                              <p className="text-zinc-400 text-xs mt-1">
+                                Quick month-by-month view of subscription revenue. All numbers are in USD.
+                              </p>
                             </div>
+                            <div className="flex items-center bg-zinc-800 rounded-lg overflow-hidden text-xs">
+                              <button
+                                type="button"
+                                onClick={() => setMonthlyTableYear('2025')}
+                                className={`px-3 py-1.5 font-medium transition-colors ${monthlyTableYear === '2025' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'
+                                  }`}
+                              >
+                                2025
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setMonthlyTableYear('2024')}
+                                className={`px-3 py-1.5 font-medium transition-colors ${monthlyTableYear === '2024' ? 'bg-[#E0FE10] text-black' : 'text-zinc-400 hover:text-white'
+                                  }`}
+                              >
+                                2024
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="rounded-lg border border-zinc-800 overflow-hidden">
+                            <table className="w-full text-sm">
+                              <thead className="bg-zinc-900/80 border-b border-zinc-800">
+                                <tr>
+                                  <th className="text-left px-4 py-2 text-zinc-400 font-medium">Month</th>
+                                  <th className="text-right px-4 py-2 text-zinc-400 font-medium">Revenue</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(monthlyTableYear === '2025' ? monthlyRevenue2025 : monthlyRevenue2024).map(row => (
+                                  <tr key={`${monthlyTableYear}-${row.month}`} className="border-b border-zinc-800/70">
+                                    <td className="px-4 py-2 text-white">{row.label}</td>
+                                    <td className="px-4 py-2 text-right text-zinc-100">
+                                      {row.value === 0 ? (
+                                        <span className="text-zinc-500 italic">In progress</span>
+                                      ) : (
+                                        `$${row.value.toLocaleString()}`
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="flex justify-end mt-4">
+                            <button
+                              type="button"
+                              onClick={() => setIsMonthlyTableOpen(false)}
+                              className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
+                            >
+                              Close
+                            </button>
+                          </div>
                         </div>
+                      </div>
                     )}
 
                     {/* Profit & Loss modal */}
                     {isPLModalOpen && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-                            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-3xl w-full p-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div>
-                                        <h4 className="text-white text-lg font-semibold">
-                                            {activePLYear} Profit &amp; Loss {activePLYear === '2025' ? '(Jan–Nov)' : '(Full Year)'}
-                                        </h4>
-                                        <p className="text-zinc-400 text-xs mt-1">
-                                            High-level P&amp;L for {activePLYear} subscription revenue. All amounts in USD.
-                                        </p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsPLModalOpen(false)}
-                                        className="text-zinc-400 hover:text-white transition-colors"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
-                                    </button>
-                                </div>
-
-                                <div className="text-center py-8 text-zinc-500">
-                                    P&amp;L data coming soon
-                                </div>
-
-                                <div className="flex justify-end mt-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsPLModalOpen(false)}
-                                        className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
-                                    >
-                                        Close
-                                    </button>
-                                </div>
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-3xl w-full p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <div>
+                              <h4 className="text-white text-lg font-semibold">
+                                {activePLYear} Profit &amp; Loss {activePLYear === '2025' ? '(Jan–Nov)' : '(Full Year)'}
+                              </h4>
+                              <p className="text-zinc-400 text-xs mt-1">
+                                High-level P&amp;L for {activePLYear} subscription revenue. All amounts in USD.
+                              </p>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => setIsPLModalOpen(false)}
+                              className="text-zinc-400 hover:text-white transition-colors"
+                            >
+                              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </div>
+
+                          <div className="text-center py-8 text-zinc-500">
+                            P&amp;L data coming soon
+                          </div>
+
+                          <div className="flex justify-end mt-4">
+                            <button
+                              type="button"
+                              onClick={() => setIsPLModalOpen(false)}
+                              className="px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-200 hover:bg-zinc-800 transition-colors"
+                            >
+                              Close
+                            </button>
+                          </div>
                         </div>
+                      </div>
                     )}
-                </section>
-                  ) : (
-                    <LockedSectionView sectionName="Financial Information" />
-                  )
-                )}
+                  </section>
+                ) : (
+                  <LockedSectionView sectionName="Financial Information" />
+                )
+              )}
             </div>
           </div>
         </div>

@@ -89,7 +89,7 @@ const SettingsPage: NextPage = () => {
   };
 
   const handleDeleteAccount = () => {
-    window.location.href = `mailto:${supportEmail}?subject=Delete%20Account%20Request%20-%20${encodeURIComponent(username || 'Pulse%20user')}`;
+    router.push('/delete-account');
   };
 
   return (
@@ -183,7 +183,6 @@ const SettingsPage: NextPage = () => {
 };
 
 export default SettingsPage;
-
 
 
 

@@ -15,6 +15,7 @@ const Footer = () => {
     { name: 'Press Kit', href: '/press' },
     { name: 'Privacy', href: '/privacy' },
     { name: 'Terms', href: '/terms' },
+    { name: 'Delete Account', href: '/delete-account' },
   ];
 
   const socialLinks = [
@@ -112,7 +113,6 @@ const Footer = () => {
 };
 
 export default Footer;
-
 
 
 
