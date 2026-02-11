@@ -55,12 +55,14 @@ const DESK_POSITIONS = [
 const AGENT_ROLES: Record<string, string> = {
   antigravity: 'Co-CEO · Strategy & Architecture',
   nora: 'Director of System Ops',
+  scout: 'Influencer Research Analyst',
   // Add more agents here as they join
 };
 
 const AGENT_DUTIES: Record<string, string> = {
   antigravity: 'Drives product strategy, system architecture, and pair-programs with the CEO. Coordinates cross-agent work and reviews critical code paths.',
   nora: 'Maintains the living system map across all surfaces. Owns Kanban ops, agent orchestration, telemetry, and product ops — the operations nerve center for Pulse.',
+  scout: 'Runs outbound influencer discovery workflows, researches creator fit and engagement quality, and prepares qualified prospects for CRM intake.',
 };
 
 /* ─── Full agent profiles (for modal) ─────────────────── */
@@ -168,6 +170,33 @@ const AGENT_PROFILES: Record<string, { title: string; location: string; sections
       },
     ],
     footer: 'Think of Nora as the operations nerve center: if it touches Pulse\'s systems, telemetry, or cross-team collaboration, it routes through her so Tremaine can stay focused on vision, relationships, and high-leverage decisions.',
+  },
+  scout: {
+    title: 'Influencer Research Analyst',
+    location: 'Virtual Office (research desk)',
+    sections: [
+      {
+        title: '1. Discovery Scope',
+        bullets: [
+          'Research runner-focused creators and shortlist profiles with strong audience engagement.',
+          'Prioritize creators aligned with Pulse goals and current campaign filters.',
+        ],
+      },
+      {
+        title: '2. Qualification Workflow',
+        bullets: [
+          'Capture creator handle, niche, engagement signals, and fit rationale.',
+          'Prepare structured records that can be inserted into the CRM pipeline.',
+        ],
+      },
+      {
+        title: '3. Reporting Cadence',
+        bullets: [
+          'Provide concise recaps of candidates discovered, confidence level, and recommended next actions.',
+        ],
+      },
+    ],
+    footer: 'Scout is the focused research specialist for creator discovery and qualification workflows.',
   },
 };
 
@@ -845,10 +874,34 @@ const VirtualOfficeContent: React.FC = () => {
     sessionStartedAt: new Date(),
   };
 
+  const SCOUT_PRESENCE: AgentPresence = {
+    id: 'scout',
+    displayName: 'Scout',
+    emoji: '🕵️',
+    status: 'idle' as const,
+    currentTask: '',
+    currentTaskId: '',
+    notes: 'Influencer research specialist — ready for assignments.',
+    executionSteps: [],
+    currentStepIndex: -1,
+    taskProgress: 0,
+    lastUpdate: new Date(),
+    sessionStartedAt: new Date(),
+  };
+
   const allAgents = useMemo(() => {
-    // Put Antigravity first, then Firestore agents
-    const hasAntigravity = agents.some(a => a.id === 'antigravity');
-    return hasAntigravity ? agents : [ANTIGRAVITY_PRESENCE, ...agents];
+    const merged = [...agents];
+
+    if (!merged.some(a => a.id === 'antigravity')) merged.push(ANTIGRAVITY_PRESENCE);
+    if (!merged.some(a => a.id === 'scout')) merged.push(SCOUT_PRESENCE);
+
+    const priority: Record<string, number> = { antigravity: 0, nora: 1, scout: 2 };
+    return merged.sort((a, b) => {
+      const pa = priority[a.id] ?? 99;
+      const pb = priority[b.id] ?? 99;
+      if (pa !== pb) return pa - pb;
+      return a.displayName.localeCompare(b.displayName);
+    });
   }, [agents]);
 
   const workingCount = useMemo(() => allAgents.filter((a) => a.status === 'working').length, [allAgents]);
