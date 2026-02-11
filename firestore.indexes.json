@@ -698,6 +698,20 @@
       ]
     },
     {
+      "collectionGroup": "agent-commands",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "to",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "signingRequests",
       "queryScope": "COLLECTION",
       "fields": [

@@ -23,6 +23,7 @@ import { collection, query, where, orderBy, getDocs, limit, Timestamp } from 'fi
 const ADMIN_EMAILS = [
     'tre@fitwithpulse.ai',
     'tremainegrant@gmail.com',
+    'tremaine.grant@gmail.com',
     // Add other admin emails here
 ];
 
