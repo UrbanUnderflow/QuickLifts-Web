@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, where, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { FileText, Download, Trash2, Loader2, Sparkles, Clock, AlertCircle, CheckCircle, RefreshCw, Eye, ChevronUp, Edit3, ClipboardCheck, X, AlertTriangle, CheckCircle2, Send, Mail, Check, PenTool, Share2, Copy, Paperclip, Link2 } from 'lucide-react';
 import { applyDocumentPatches, type DocumentPatch } from '../../utils/documentPatches';
@@ -212,74 +212,36 @@ const LegalDocumentsAdmin: React.FC = () => {
   const [selectedExhibits, setSelectedExhibits] = useState<string[]>([]);
   const [isSavingExhibits, setIsSavingExhibits] = useState(false);
 
-  // Load documents from Firestore
+  // Load documents, stakeholders, and signing requests via server-side API
+  // (bypasses Firestore rules that require admin custom claim on auth token)
   const loadDocuments = useCallback(async () => {
     setLoading(true);
     try {
-      const q = query(
-        collection(db, 'legal-documents'),
-        orderBy('createdAt', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      const docs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as LegalDocument[];
-      setDocuments(docs);
-
-      // Load stakeholder directory for signer prefill (best-effort)
-      try {
-        const stakeQ = query(collection(db, 'equity-stakeholders'), orderBy('createdAt', 'desc'));
-        const stakeSnap = await getDocs(stakeQ);
-        const directory = stakeSnap.docs
-          .map(d => ({ id: d.id, ...(d.data() as any) }))
-          .filter((s: any) => typeof s.email === 'string' && s.email.length > 0)
-          .map((s: any) => ({ id: s.id, name: s.name || s.email, email: s.email }))
-          .slice(0, 200);
-        setStakeholderDirectory(directory);
-      } catch {
-        // ignore
+      const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+      const endpoint = isLocalhost
+        ? '/api/admin/list-legal-documents'
+        : '/api/admin/list-legal-documents';
+      const response = await fetch(endpoint);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to load documents (HTTP ${response.status})`);
       }
+      const data = await response.json();
+
+      setDocuments((data.documents || []) as LegalDocument[]);
+      setStakeholderDirectory(data.stakeholderDirectory || []);
+      setSigningRequests((data.signingRequests || []) as SigningRequest[]);
     } catch (error) {
       console.error('Error loading documents:', error);
-      setMessage({ type: 'error', text: 'Failed to load documents' });
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to load documents' });
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Load signing requests from Firestore
+  // loadSigningRequests is now handled by loadDocuments above (single API call)
   const loadSigningRequests = useCallback(async () => {
-    try {
-      const q = query(
-        collection(db, 'signingRequests'),
-        where('legalDocumentId', '!=', null),
-        orderBy('legalDocumentId'),
-        orderBy('createdAt', 'desc')
-      );
-      const snapshot = await getDocs(q);
-      const requests = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as SigningRequest[];
-      setSigningRequests(requests);
-    } catch (error) {
-      console.error('Error loading signing requests:', error);
-      // Try without the compound query if index doesn't exist
-      try {
-        const fallbackQ = query(
-          collection(db, 'signingRequests'),
-          orderBy('createdAt', 'desc')
-        );
-        const fallbackSnapshot = await getDocs(fallbackQ);
-        const requests = fallbackSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as SigningRequest))
-          .filter(r => r.legalDocumentId);
-        setSigningRequests(requests);
-      } catch (fallbackError) {
-        console.error('Fallback query also failed:', fallbackError);
-      }
-    }
+    // no-op: signing requests are loaded together with documents
   }, []);
 
   // Get signing requests for a document

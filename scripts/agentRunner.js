@@ -279,11 +279,22 @@ async function sendMessage(toAgent, content, type = 'chat', metadata = {}) {
         type,
         content,
         metadata,
-        status: 'pending',
+        status: 'completed', // agent-initiated messages are born complete
         createdAt: FieldValue.serverTimestamp(),
+        completedAt: FieldValue.serverTimestamp(),
     });
-    console.log(`📤 Sent ${type} to ${toAgent}: "${content}" (${msgRef.id})`);
+    console.log(`📤 Sent ${type} to ${toAgent}: "${content.substring(0, 80)}..." (${msgRef.id})`);
     return msgRef.id;
+}
+
+/**
+ * Proactively message the admin/user via the chat interface.
+ * These messages appear as agent-initiated bubbles in the chat.
+ * @param {string} content - The message text
+ * @param {string} proactiveType - Label for the badge: 'completed', 'failed', 'suggestion', 'update'
+ */
+async function sendProactiveMessage(content, proactiveType = 'update') {
+    return sendMessage('admin', content, 'chat', { proactiveType });
 }
 
 /* ─── Kanban Integration ──────────────────────────────── */
@@ -716,8 +727,35 @@ async function run() {
                     notes: `✅ Completed: ${task.name}`,
                     taskProgress: 100,
                 });
+
+                // Proactively report completion to the chat
+                const durationStr = formatMs(Date.now() - taskStartTime.getTime());
+                const stepsCompleted = steps.filter(s => s.status === 'completed').length;
+                const stepSummary = steps
+                    .filter(s => s.status === 'completed')
+                    .map((s, i) => `${i + 1}. ${s.description}`)
+                    .join('\n');
+
+                await sendProactiveMessage(
+                    `✅ Task completed: "${task.name}"\n\n` +
+                    `Finished ${stepsCompleted} steps in ${durationStr}.\n\n` +
+                    `Steps completed:\n${stepSummary}\n\n` +
+                    `Ready for the next task!`,
+                    'completed'
+                );
             } else {
                 await saveTaskHistory(task.name, task.id, steps, 'failed', taskStartTime);
+
+                // Proactively report failure to the chat
+                const failedStep = steps.find(s => s.status === 'failed');
+                const failedIndex = steps.indexOf(failedStep);
+                await sendProactiveMessage(
+                    `❌ Task failed: "${task.name}"\n\n` +
+                    `Failed at step ${failedIndex + 1}/${steps.length}: ${failedStep?.description}\n` +
+                    `Error: ${failedStep?.output || 'Unknown error'}\n\n` +
+                    `Would you like me to retry this task or skip it?`,
+                    'failed'
+                );
             }
 
             await new Promise(r => setTimeout(r, 5_000));
