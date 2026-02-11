@@ -47,6 +47,12 @@ const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link })
 
 const adminCardsData = [
   {
+    title: "Virtual Office",
+    description: "Live status board for agents with animated desks and typing state.",
+    icon: <Users className="w-5 h-5" />,
+    link: "/admin/virtualOffice"
+  },
+  {
     title: "Coach Invite Links",
     description: "Generate team-owned /coach-onboard invite links and monitor attribution by invite code.",
     icon: <LinkIcon className="w-5 h-5" />,
