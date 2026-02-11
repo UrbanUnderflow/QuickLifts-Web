@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
@@ -6,12 +6,12 @@ import { presenceService, AgentPresence } from '../../api/firebase/presence/serv
 import { db } from '../../api/firebase/config';
 import {
   collection, addDoc, serverTimestamp, query, where, orderBy,
-  onSnapshot, Timestamp, limit, doc, updateDoc
+  onSnapshot, limit, doc, updateDoc
 } from 'firebase/firestore';
 import {
-  ArrowLeft, Send, Zap, Brain, MessageSquare, ListTodo,
+  ArrowLeft, Send, Zap, MessageSquare, ListTodo,
   HelpCircle, Terminal, ChevronDown, Loader2, CheckCircle2,
-  Clock, Circle, AlertCircle
+  Circle, AlertCircle
 } from 'lucide-react';
 
 /* ─── Types ───────────────────────────────────────────── */
@@ -52,6 +52,9 @@ const AGENT_ROLES: Record<string, string> = {
   scout: 'Influencer Research Analyst',
 };
 
+const AGENT_HEARTBEAT_STALE_MS = 2 * 60_000;
+const OFFLINE_RESPONSE_TIMEOUT_MS = 45_000;
+
 const formatTime = (date?: Date) => {
   if (!date) return '';
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -64,6 +67,11 @@ const formatRelative = (date?: Date) => {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   return date.toLocaleDateString();
+};
+
+const isAgentStale = (agent?: AgentPresence | null) => {
+  if (!agent?.lastUpdate) return true;
+  return (Date.now() - agent.lastUpdate.getTime()) > AGENT_HEARTBEAT_STALE_MS;
 };
 
 const statusColor = (status: string) => {
@@ -90,39 +98,44 @@ const AgentListScreen: React.FC<{
         </div>
         <div className="ac-header-badge">
           <Zap className="w-4 h-4" />
-          <span>{agents.filter(a => a.status !== 'offline').length} online</span>
+          <span>{agents.filter(a => a.status !== 'offline' && !isAgentStale(a)).length} online</span>
         </div>
       </div>
 
       <div className="ac-agents">
-        {agents.map((agent) => (
-          <button
-            key={agent.id}
-            className="ac-agent-row"
-            onClick={() => onSelectAgent(agent)}
-          >
-            <div className="ac-agent-avatar">
-              <span className="ac-avatar-emoji">{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</span>
-              <div className="ac-status-dot" style={{ background: statusColor(agent.status) }} />
-            </div>
-            <div className="ac-agent-info">
-              <div className="ac-agent-name-row">
-                <span className="ac-agent-name">{agent.displayName}</span>
-                {agent.lastUpdate && (
-                  <span className="ac-agent-time">{formatRelative(agent.lastUpdate)}</span>
-                )}
+        {agents.map((agent) => {
+          const stale = isAgentStale(agent);
+          const displayStatus = stale ? 'offline' : agent.status;
+          const preview = displayStatus === 'working' && agent.currentTask
+            ? `🔨 ${agent.currentTask}`
+            : displayStatus === 'idle'
+              ? (agent.notes || '💤 Waiting for tasks...')
+              : '🔴 Offline - agent runner not connected';
+
+          return (
+            <button
+              key={agent.id}
+              className="ac-agent-row"
+              onClick={() => onSelectAgent(agent)}
+            >
+              <div className="ac-agent-avatar">
+                <span className="ac-avatar-emoji">{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</span>
+                <div className="ac-status-dot" style={{ background: statusColor(displayStatus) }} />
               </div>
-              <p className="ac-agent-role">{AGENT_ROLES[agent.id] || 'Agent'}</p>
-              <p className="ac-agent-preview">
-                {agent.status === 'working' && agent.currentTask
-                  ? `🔨 ${agent.currentTask}`
-                  : agent.notes || `${agent.status === 'idle' ? '💤 Waiting for tasks...' : '🔴 Offline'}`
-                }
-              </p>
-            </div>
-            <div className="ac-agent-chevron">›</div>
-          </button>
-        ))}
+              <div className="ac-agent-info">
+                <div className="ac-agent-name-row">
+                  <span className="ac-agent-name">{agent.displayName}</span>
+                  {agent.lastUpdate && (
+                    <span className="ac-agent-time">{formatRelative(agent.lastUpdate)}</span>
+                  )}
+                </div>
+                <p className="ac-agent-role">{AGENT_ROLES[agent.id] || 'Agent'}</p>
+                <p className="ac-agent-preview">{preview}</p>
+              </div>
+              <div className="ac-agent-chevron">›</div>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -142,6 +155,9 @@ const ChatScreen: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const autoFailedMessageIdsRef = useRef<Set<string>>(new Set());
+  const agentIsStale = isAgentStale(agent);
+  const agentIsOnline = agent.status !== 'offline' && !agentIsStale;
 
   // Listen for messages involving this agent (BOTH directions)
   useEffect(() => {
@@ -290,6 +306,38 @@ const ChatScreen: React.FC<{
     }
   };
 
+  // If the agent runner is offline and a message sits pending, fail it with a clear response.
+  useEffect(() => {
+    if (agentIsOnline) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const stalePending = messages.filter((msg) => {
+        if (msg.from !== 'admin' || msg.to !== agent.id || msg.response) return false;
+        if (msg.status !== 'pending' && msg.status !== 'in-progress') return false;
+        if (msg.id.startsWith('optimistic-')) return false;
+        if (autoFailedMessageIdsRef.current.has(msg.id)) return false;
+        if (!msg.createdAt) return false;
+        return now - msg.createdAt.getTime() >= OFFLINE_RESPONSE_TIMEOUT_MS;
+      });
+
+      stalePending.forEach(async (msg) => {
+        autoFailedMessageIdsRef.current.add(msg.id);
+        try {
+          await updateDoc(doc(db, 'agent-commands', msg.id), {
+            status: 'failed',
+            response: `${agent.displayName} is currently offline. Please restart the agent runner and resend this message.`,
+            completedAt: serverTimestamp(),
+          });
+        } catch (err) {
+          console.error('Failed to auto-fail stale message:', err);
+        }
+      });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [agent.id, agent.displayName, agentIsOnline, messages]);
+
   const selectedType = MESSAGE_TYPES.find(t => t.type === msgType)!;
 
   return (
@@ -302,19 +350,21 @@ const ChatScreen: React.FC<{
         <div className="ac-chat-agent-info">
           <div className="ac-chat-avatar">
             <span>{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</span>
-            <div className="ac-status-dot-sm" style={{ background: statusColor(agent.status) }} />
+            <div className="ac-status-dot-sm" style={{ background: statusColor(agentIsOnline ? agent.status : 'offline') }} />
           </div>
           <div>
             <h2 className="ac-chat-name">{agent.displayName}</h2>
             <p className="ac-chat-status">
-              {agent.status === 'working'
+              {!agentIsOnline
+                ? 'Offline'
+                : agent.status === 'working'
                 ? `Working: ${agent.currentTask || 'task'}`
                 : agent.status === 'idle' ? 'Online · Idle' : 'Offline'
               }
             </p>
           </div>
         </div>
-        {agent.status === 'working' && agent.taskProgress > 0 && (
+        {agentIsOnline && agent.status === 'working' && agent.taskProgress > 0 && (
           <div className="ac-progress-badge">
             <Zap className="w-3 h-3" />
             <span>{agent.taskProgress}%</span>
@@ -328,6 +378,13 @@ const ChatScreen: React.FC<{
           <AlertCircle className="w-4 h-4" />
           <span>{error}</span>
           <button onClick={() => setError(null)} className="ac-error-close">✕</button>
+        </div>
+      )}
+
+      {!agentIsOnline && (
+        <div className="ac-offline-banner">
+          <AlertCircle className="w-4 h-4" />
+          <span>{agent.displayName} runner is offline. Pending messages auto-fail after 45s with a reconnect hint.</span>
         </div>
       )}
 
@@ -408,17 +465,13 @@ const ChatScreen: React.FC<{
                       </div>
                       <div className="ac-msg-in-content">
                         <div className="ac-msg-bubble ac-bubble-in ac-bubble-pending">
-                          {msg.status === 'in-progress' ? (
-                            <span className="ac-typing">
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              Working on it...
+                          <span className="ac-typing">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            Thinking
+                            <span className="ac-thinking-dots" aria-hidden>
+                              <span>.</span><span>.</span><span>.</span>
                             </span>
-                          ) : (
-                            <span className="ac-typing">
-                              <Clock className="w-3.5 h-3.5" />
-                              Queued
-                            </span>
-                          )}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -511,15 +564,15 @@ const AgentChatContent: React.FC = () => {
     id: 'scout',
     displayName: 'Scout',
     emoji: '🕵️',
-    status: 'idle',
+    status: 'offline',
     currentTask: '',
     currentTaskId: '',
-    notes: 'Ready for research assignments',
+    notes: 'Agent runner not connected',
     executionSteps: [],
     currentStepIndex: -1,
     taskProgress: 0,
-    lastUpdate: new Date(),
-    sessionStartedAt: new Date(),
+    lastUpdate: new Date(0),
+    sessionStartedAt: undefined,
   };
 
   // Listen for agent presence
@@ -868,6 +921,17 @@ const AgentChatContent: React.FC = () => {
           background: rgba(239, 68, 68, 0.15);
         }
 
+        .ac-offline-banner {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 16px;
+          background: rgba(245, 158, 11, 0.12);
+          border-bottom: 1px solid rgba(245, 158, 11, 0.22);
+          color: #fbbf24;
+          font-size: 12px;
+        }
+
         @keyframes slideDown {
           from { opacity: 0; transform: translateY(-8px); }
           to { opacity: 1; transform: translateY(0); }
@@ -1054,6 +1118,33 @@ const AgentChatContent: React.FC = () => {
           gap: 6px;
           font-size: 12px;
           color: #71717a;
+        }
+
+        .ac-thinking-dots {
+          display: inline-flex;
+          width: 16px;
+          justify-content: flex-start;
+        }
+
+        .ac-thinking-dots span {
+          opacity: 0;
+          animation: acThinkingDot 1.2s infinite;
+          display: inline-block;
+          width: 4px;
+        }
+
+        .ac-thinking-dots span:nth-child(2) {
+          animation-delay: 0.2s;
+        }
+
+        .ac-thinking-dots span:nth-child(3) {
+          animation-delay: 0.4s;
+        }
+
+        @keyframes acThinkingDot {
+          0%, 20% { opacity: 0; }
+          40%, 80% { opacity: 1; }
+          100% { opacity: 0; }
         }
 
         /* ─── Type Selector Dropdown ───────────────────── */
