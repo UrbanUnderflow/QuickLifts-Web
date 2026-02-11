@@ -443,22 +443,8 @@ const AgentChatContent: React.FC = () => {
   // Listen for agent presence
   useEffect(() => {
     const unsub = presenceService.listen((incoming) => {
-      // Add Antigravity as static agent if missing
-      const hasAntigravity = incoming.some(a => a.id === 'antigravity');
-      const all = hasAntigravity ? incoming : [{
-        id: 'antigravity',
-        displayName: 'Antigravity',
-        emoji: '🌌',
-        status: 'working' as const,
-        currentTask: 'Pair programming with Tremaine',
-        currentTaskId: '',
-        notes: 'IDE Agent — always online',
-        executionSteps: [],
-        currentStepIndex: -1,
-        taskProgress: 0,
-        lastUpdate: new Date(),
-        sessionStartedAt: new Date(),
-      }, ...incoming];
+      // Filter out Antigravity — it communicates directly via the IDE
+      const all = incoming.filter(a => a.id !== 'antigravity');
       setAgents(all);
 
       // Update selected agent data if we're in a chat

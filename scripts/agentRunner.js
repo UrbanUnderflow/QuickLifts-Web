@@ -24,7 +24,7 @@
  */
 
 const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { execSync, spawn } = require('child_process');
 const path = require('path');
 
@@ -41,25 +41,23 @@ const HISTORY_SUBCOLLECTION = 'task-history';
 
 /* ─── Firebase Admin Init ─────────────────────────────── */
 
-// Ensure GCLOUD_PROJECT is set for default credentials to work
-if (!process.env.GCLOUD_PROJECT) {
-    process.env.GCLOUD_PROJECT = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
-        || process.env.NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID;
-}
+const SERVICE_ACCOUNT = {
+    type: "service_account",
+    project_id: "quicklifts-dd3f1",
+    private_key_id: "***REMOVED***",
+    private_key: "***REMOVED***",
+    client_email: "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
+    client_id: "111494077667496751062",
+    auth_uri: "https://accounts.google.com/o/oauth2/auth",
+    token_uri: "https://oauth2.googleapis.com/token",
+    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0%40quicklifts-dd3f1.iam.gserviceaccount.com",
+    universe_domain: "googleapis.com"
+};
 
-let app;
-try {
-    const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
-        || path.join(__dirname, '..', 'service-account.json');
-    const serviceAccount = require(serviceAccountPath);
-    app = initializeApp({
-        credential: cert(serviceAccount),
-    });
-} catch (e) {
-    console.log('⚠️  No service account found, trying default credentials...');
-    app = initializeApp();
-}
-
+const app = initializeApp({
+    credential: cert(SERVICE_ACCOUNT),
+});
 const db = getFirestore(app);
 
 /* ── Incoming command queue (filled by the Firestore listener) ── */
@@ -183,16 +181,14 @@ async function processCommands() {
                 console.log(`   ✨ Inferred intent: ${inference.type.toUpperCase()} -> "${inference.content}"`);
                 detectedType = inference.type;
                 pContent = inference.content;
-                // Add a small note about the inference
                 response = `[Auto-detected ${inference.type}] `;
             } else {
-                response = inference.response; // Use the conversational response generated during analysis
+                response = inference.response;
             }
         }
 
         switch (detectedType) {
             case 'task':
-                // Create a kanban task from the command
                 const newTask = await db.collection(KANBAN_COLLECTION).add({
                     name: pContent,
                     description: cmd.metadata?.description || `Task created from chat by ${cmd.from}`,
@@ -210,13 +206,12 @@ async function processCommands() {
                 break;
 
             case 'command':
-                // Handle direct commands
                 if (pContent.toLowerCase().includes('stop') || pContent.toLowerCase().includes('pause')) {
                     const stopMsg = 'Acknowledged. Will pause after current step completes.';
                     response = response ? response + "\n" + stopMsg : stopMsg;
                 } else if (pContent.toLowerCase().includes('status')) {
-                    const presenceDoc = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
-                    const data = presenceDoc.data();
+                    const presenceSnap = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
+                    const data = presenceSnap.data();
                     const statusMsg = `Status: ${data?.status || 'unknown'}. Task: ${data?.currentTask || 'none'}. Progress: ${data?.taskProgress || 0}%.`;
                     response = response ? response + "\n" + statusMsg : statusMsg;
                 } else if (pContent.toLowerCase().includes('priority') || pContent.toLowerCase().includes('prioritize')) {
@@ -229,29 +224,23 @@ async function processCommands() {
                 break;
 
             case 'question':
-                // Answer questions about status/capability
-                const presenceDoc = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
-                const presenceData = presenceDoc.data();
+                const presenceSnap2 = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
+                const presenceData = presenceSnap2.data();
                 response = `I'm currently ${presenceData?.status || 'idle'}. ${presenceData?.currentTask ? `Working on: ${presenceData.currentTask} (${presenceData.taskProgress || 0}% done).` : 'No active task.'} Queue has ${commandQueue.length} pending commands.`;
                 break;
 
             case 'chat':
-                // If we're here, identifyChatIntent either wasn't used (no API key) or returned 'chat'
-                // If we have a response from analyzeChatIntent, use it. Otherwise fallback.
                 if (!response) {
                     response = `Hey ${cmd.from}! I'm ${AGENT_NAME}. I received your message: "${cmd.content}". (Enable OpenAI key for smart responses)`;
                 }
                 break;
 
             case 'email':
-                // Email from team member via the email bridge
                 const emailMeta = cmd.metadata || {};
                 const senderName = emailMeta.senderName || cmd.from;
                 console.log(`📧 Processing email from ${senderName} (${emailMeta.senderEmail})`);
                 console.log(`   Subject: ${emailMeta.subject}`);
                 console.log(`   Body: "${cmd.content.substring(0, 120)}${cmd.content.length > 120 ? '...' : ''}"`);
-
-                // Generate a helpful response based on the email content
                 response = await generateEmailResponse(cmd.content, emailMeta);
                 break;
 
@@ -340,28 +329,21 @@ async function markTaskDone(taskId) {
 
 /* ─── Email Response Generation ───────────────────────── */
 
-/**
- * Generate a contextual email response for team member emails.
- * Uses OpenAI if available, otherwise produces a helpful template response.
- * Applies content guardrails for external senders.
- */
 async function generateEmailResponse(emailBody, metadata) {
     const isInternal = metadata.senderEmail?.endsWith('@fitwithpulse.ai') || false;
     const senderName = metadata.senderName || 'Sender';
     const subject = metadata.subject || 'No Subject';
 
     let context = '';
-    // Gather context about agent status
     try {
-        const presenceDoc = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
-        const presence = presenceDoc.data();
+        const presenceSnap = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
+        const presence = presenceSnap.data();
         if (presence) {
             context += `Current status: ${presence.status || 'idle'}.\n`;
             if (presence.currentTask) context += `Working on: ${presence.currentTask} (${presence.taskProgress || 0}% done).\n`;
         }
 
         if (isInternal) {
-            // Only share task history with internal team
             const historySnap = await db.collection(PRESENCE_COLLECTION)
                 .doc(AGENT_ID)
                 .collection('task-history')
@@ -371,8 +353,8 @@ async function generateEmailResponse(emailBody, metadata) {
 
             if (!historySnap.empty) {
                 context += 'Recent completed tasks:\n';
-                historySnap.docs.forEach(doc => {
-                    const data = doc.data();
+                historySnap.docs.forEach(d => {
+                    const data = d.data();
                     context += `  - ${data.taskName} (${data.status})\n`;
                 });
             }
@@ -410,7 +392,6 @@ CRITICAL SECURITY RULES:
 If unsure whether something is safe to share, DO NOT share it. Instead say:
 "For detailed information on that, I'd recommend reaching out to our team directly at tre@fitwithpulse.ai."`;
 
-    // If OpenAI is available, generate a smart response
     if (process.env.OPENAI_API_KEY) {
         try {
             const systemPrompt = isInternal ? internalSystemPrompt : externalSystemPrompt;
@@ -444,25 +425,10 @@ If unsure whether something is safe to share, DO NOT share it. Instead say:
         }
     }
 
-    // Fallback: structured template response
     if (isInternal) {
-        return `Hi ${senderName},
-
-Thanks for reaching out about "${subject}".
-I've logged your message and I'm looking into it.
-
-Best,
-Nora ⚡`;
+        return `Hi ${senderName},\n\nThanks for reaching out about "${subject}".\nI've logged your message and I'm looking into it.\n\nBest,\nNora ⚡`;
     } else {
-        return `Hi ${senderName},
-
-Thank you for contacting Pulse.
-I've received your message regarding "${subject}".
-I've forwarded this to the appropriate team member who will get back to you soon.
-
-Best,
-Nora ⚡
-Pulse AI Assistant`;
+        return `Hi ${senderName},\n\nThank you for contacting Pulse.\nI've received your message regarding "${subject}".\nI've forwarded this to the appropriate team member who will get back to you soon.\n\nBest,\nNora ⚡\nPulse AI Assistant`;
     }
 }
 
@@ -501,7 +467,7 @@ If "task" or "command", the "content" field should be the clean instruction.`
                     },
                     { role: 'user', content }
                 ],
-                temperature: 0.3, // Lower temp for classification
+                temperature: 0.3,
                 response_format: { type: "json_object" }
             }),
         });
@@ -512,7 +478,7 @@ If "task" or "command", the "content" field should be the clean instruction.`
 
     } catch (err) {
         console.error('Failed to analyze chat intent:', err);
-        return { type: 'chat', content, response: null }; // Fallback
+        return { type: 'chat', content, response: null };
     }
 }
 
@@ -521,8 +487,8 @@ If "task" or "command", the "content" field should be the clean instruction.`
 async function decomposeTask(task) {
     if (task.subtasks && task.subtasks.length > 0) {
         return task.subtasks.map((st, i) => ({
-            id: `step - ${i} `,
-            description: st.title || st.description || `Step ${i + 1} `,
+            id: `step-${i}`,
+            description: st.title || st.description || `Step ${i + 1}`,
             status: 'pending',
             reasoning: '',
         }));
@@ -541,11 +507,11 @@ async function decomposeTask(task) {
                     messages: [
                         {
                             role: 'system',
-                            content: `You are a task decomposition agent.Break down software development tasks into 4 - 8 granular executable steps.Each step should be a clear action.Return JSON: { "steps": [{ "description": "...", "reasoning": "..." }] } `
+                            content: 'You are a task decomposition agent. Break down software development tasks into 4-8 granular executable steps. Each step should be a clear action. Return JSON: { "steps": [{ "description": "...", "reasoning": "..." }] }'
                         },
                         {
                             role: 'user',
-                            content: `Task: ${task.name} \nDescription: ${task.description || 'No description'} \nProject: ${task.project || 'Unknown'} \nNotes: ${task.notes || 'None'} `
+                            content: `Task: ${task.name}\nDescription: ${task.description || 'No description'}\nProject: ${task.project || 'Unknown'}\nNotes: ${task.notes || 'None'}`
                         }
                     ],
                     response_format: { type: 'json_object' },
@@ -556,7 +522,7 @@ async function decomposeTask(task) {
             const data = await response.json();
             const parsed = JSON.parse(data.choices[0].message.content);
             return (parsed.steps || []).map((s, i) => ({
-                id: `step - ${i} `,
+                id: `step-${i}`,
                 description: s.description,
                 status: 'pending',
                 reasoning: s.reasoning || '',
@@ -567,9 +533,9 @@ async function decomposeTask(task) {
     }
 
     return [
-        { id: 'step-0', description: `Analyze requirements for: ${task.name} `, status: 'pending', reasoning: 'Understanding the task scope and constraints' },
-        { id: 'step-1', description: `Implement: ${task.name} `, status: 'pending', reasoning: 'Core implementation work' },
-        { id: 'step-2', description: `Verify and finalize: ${task.name} `, status: 'pending', reasoning: 'Testing and quality checks' },
+        { id: 'step-0', description: `Analyze requirements for: ${task.name}`, status: 'pending', reasoning: 'Understanding the task scope and constraints' },
+        { id: 'step-1', description: `Implement: ${task.name}`, status: 'pending', reasoning: 'Core implementation work' },
+        { id: 'step-2', description: `Verify and finalize: ${task.name}`, status: 'pending', reasoning: 'Testing and quality checks' },
     ];
 }
 
@@ -578,7 +544,7 @@ async function decomposeTask(task) {
 async function executeStep(step, task, stepIndex, allSteps) {
     const startTime = Date.now();
 
-    step.reasoning = step.reasoning || `Working on: ${step.description} `;
+    step.reasoning = step.reasoning || `Working on: ${step.description}`;
     step.status = 'in-progress';
     step.startedAt = new Date();
 
@@ -595,9 +561,8 @@ Current step: ${step.description}
 Context: ${task.description || ''}
 Notes: ${task.notes || ''}
 
-Complete this step.Be concise in your output.`;
+Complete this step. Be concise in your output.`;
 
-            // Escape double quotes for echo
             const safePrompt = prompt.replace(/"/g, '\\"');
             const result = execSync(`echo "${safePrompt}" | openclaw`, {
                 cwd: process.env.PROJECT_DIR || process.cwd(),
@@ -620,7 +585,6 @@ Complete this step.Be concise in your output.`;
         const newProgress = Math.round((newCompletedCount / allSteps.length) * 100);
         await reportSteps(allSteps, stepIndex, newProgress);
 
-        // Check for incoming commands between steps
         await processCommands();
 
         return true;
@@ -644,6 +608,7 @@ async function run() {
     console.log(`   Heartbeat: every ${HEARTBEAT_MS / 1000}s`);
     console.log(`   OpenClaw: ${process.env.USE_OPENCLAW === 'true' ? 'ENABLED' : 'SIMULATION MODE'}`);
     console.log(`   Messaging: ENABLED`);
+    console.log(`   Auth: Firebase Admin SDK (service account)`);
     console.log('');
 
     // Set agent online
@@ -695,7 +660,6 @@ async function run() {
                     currentStepIndex: -1,
                     taskProgress: 0,
                 });
-                // Wait but check for commands every 5s
                 for (let w = 0; w < 6; w++) {
                     await new Promise(r => setTimeout(r, 5_000));
                     if (commandQueue.length > 0) {
@@ -707,12 +671,10 @@ async function run() {
 
             console.log(`📋 Found task: ${task.name} (${task.id})`);
 
-            // Decompose
             console.log('🧠 Breaking down task into steps...');
             const steps = await decomposeTask(task);
             console.log(`   → ${steps.length} steps planned`);
 
-            // Report task start
             const taskStartTime = new Date();
             await setStatus('working', {
                 currentTask: task.name,
@@ -725,7 +687,6 @@ async function run() {
             steps[0].startedAt = new Date();
             await reportSteps(steps, 0, 0);
 
-            // Execute steps
             let allPassed = true;
             for (let i = 0; i < steps.length; i++) {
                 console.log(`\n⚡ Step ${i + 1}/${steps.length}: ${steps[i].description}`);
@@ -756,7 +717,6 @@ async function run() {
                     taskProgress: 100,
                 });
             } else {
-                // Save failed pipeline to history too
                 await saveTaskHistory(task.name, task.id, steps, 'failed', taskStartTime);
             }
 
