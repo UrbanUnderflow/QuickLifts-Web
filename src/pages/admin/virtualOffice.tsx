@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { presenceService, AgentPresence, AgentThoughtStep, TaskHistoryEntry } from '../../api/firebase/presence/service';
@@ -180,21 +181,21 @@ const AgentProfileModal: React.FC<{
   const profile = AGENT_PROFILES[agentId];
   if (!profile) return null;
 
-  return (
+  return ReactDOM.createPortal(
     <div className="profile-modal-overlay" onClick={onClose}>
       <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="profile-modal-header">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">{emoji}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>{emoji}</span>
             <div>
-              <h2 className="text-lg font-bold text-white">{agentName}</h2>
-              <p className="text-xs text-indigo-400 font-medium">{profile.title}</p>
-              <p className="text-[10px] text-zinc-500 mt-0.5">📍 {profile.location}</p>
+              <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#fff', margin: 0 }}>{agentName}</h2>
+              <p style={{ fontSize: '12px', color: '#818cf8', fontWeight: 600, margin: '2px 0 0' }}>{profile.title}</p>
+              <p style={{ fontSize: '10px', color: '#71717a', margin: '2px 0 0' }}>📍 {profile.location}</p>
             </div>
           </div>
           <button onClick={onClose} className="profile-modal-close">
-            <XCircle className="w-5 h-5" />
+            <XCircle style={{ width: 20, height: 20 }} />
           </button>
         </div>
 
@@ -221,7 +222,8 @@ const AgentProfileModal: React.FC<{
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
@@ -526,6 +528,19 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
     };
   }, []);
 
+  // Click outside to close
+  const spriteRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (hovered && spriteRef.current && !spriteRef.current.contains(e.target as Node)) {
+        setHovered(false);
+        if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [hovered]);
+
   // Random coffee break
   const [isOnCoffeeBreak, setIsOnCoffeeBreak] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -546,6 +561,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
 
   return (
     <div
+      ref={spriteRef}
       className="agent-desk-sprite"
       style={{ left: `${position.x}%`, top: `${position.y}%` }}
       onMouseEnter={handleMouseEnter}
