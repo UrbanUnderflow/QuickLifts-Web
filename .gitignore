@@ -14,3 +14,6 @@ firebase-debug.log
 # Firebase Index Management
 backups/
 temp/
+
+# Gmail OAuth token (email bridge)
+.gmail-token.json

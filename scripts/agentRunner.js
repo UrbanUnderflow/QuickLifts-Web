@@ -212,6 +212,18 @@ async function processCommands() {
                 response = `Hey ${cmd.from}! I'm ${AGENT_NAME}. Message received: "${cmd.content}". I'm here and ready to help!`;
                 break;
 
+            case 'email':
+                // Email from team member via the email bridge
+                const emailMeta = cmd.metadata || {};
+                const senderName = emailMeta.senderName || cmd.from;
+                console.log(`📧 Processing email from ${senderName} (${emailMeta.senderEmail})`);
+                console.log(`   Subject: ${emailMeta.subject}`);
+                console.log(`   Body: "${cmd.content.substring(0, 120)}${cmd.content.length > 120 ? '...' : ''}"`);
+
+                // Generate a helpful response based on the email content
+                response = await generateEmailResponse(cmd.content, emailMeta);
+                break;
+
             default:
                 response = `Received ${cmd.type}: "${cmd.content}". Not sure how to handle this type.`;
         }
@@ -293,6 +305,108 @@ async function markTaskDone(taskId) {
         status: 'done',
         updatedAt: FieldValue.serverTimestamp(),
     });
+}
+
+/* ─── Email Response Generation ───────────────────────── */
+
+/**
+ * Generate a contextual email response for team member emails.
+ * Uses OpenAI if available, otherwise produces a helpful template response.
+ */
+async function generateEmailResponse(emailBody, metadata) {
+    const senderName = metadata.senderName || 'team member';
+    const subject = metadata.subject || '(no subject)';
+
+    // Gather context: current status, recent tasks
+    let context = '';
+    try {
+        const presenceDoc = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
+        const presence = presenceDoc.data();
+        if (presence) {
+            context += `Current status: ${presence.status || 'idle'}.\n`;
+            if (presence.currentTask) context += `Working on: ${presence.currentTask} (${presence.taskProgress || 0}% done).\n`;
+        }
+
+        // Recent completed tasks for context
+        const historySnap = await db.collection(PRESENCE_COLLECTION)
+            .doc(AGENT_ID)
+            .collection('task-history')
+            .orderBy('completedAt', 'desc')
+            .limit(5)
+            .get();
+
+        if (!historySnap.empty) {
+            context += 'Recent completed tasks:\n';
+            historySnap.docs.forEach(doc => {
+                const data = doc.data();
+                context += `  - ${data.taskName} (${data.status})\n`;
+            });
+        }
+    } catch (err) {
+        console.warn('Could not gather context for email response:', err.message);
+    }
+
+    // If OpenAI is available, generate a smart response
+    if (process.env.OPENAI_API_KEY) {
+        try {
+            const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    messages: [
+                        {
+                            role: 'system',
+                            content: `You are Nora, Director of System Ops at Pulse (a fitness tech company). You are an AI agent that helps the team with operations, project tracking, and system management.
+
+Your communication style:
+- Professional but warm
+- Concise and actionable
+- You refer to yourself as Nora
+- You sign off with "— Nora"
+- If you can't do something, say so honestly
+- If you need to create a task, mention you've queued it
+
+Current context:
+${context || 'No additional context available.'}
+
+Important: You can only respond to internal @fitwithpulse.ai team members. Keep responses focused and helpful.`
+                        },
+                        {
+                            role: 'user',
+                            content: `Email from ${senderName} (${metadata.senderEmail}).\nSubject: ${subject}\n\n${emailBody}`
+                        }
+                    ],
+                    temperature: 0.7,
+                    max_tokens: 500,
+                }),
+            });
+
+            const data = await resp.json();
+            if (data.choices?.[0]?.message?.content) {
+                return data.choices[0].message.content;
+            }
+        } catch (err) {
+            console.error('OpenAI email response generation failed:', err.message);
+        }
+    }
+
+    // Fallback: structured template response
+    return `Hi ${senderName},
+
+Thanks for reaching out about "${subject}".
+
+I've logged your message and I'm looking into it. Here's my current status:
+
+${context || '• I\'m currently idle and ready to help.'}
+
+I'll follow up with a detailed response once I've reviewed everything.
+
+— Nora
+Director of System Ops`;
 }
 
 /* ─── Task Decomposition ──────────────────────────────── */
