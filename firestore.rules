@@ -418,6 +418,14 @@ service cloud.firestore {
       allow read, write: if isOwner(userId) || isAdmin();
     }
     
+    // Admin collection (used by AdminRouteGuard to check admin status)
+    match /admin/{email} {
+      // Any authenticated user can read to check if they are admin
+      allow read: if isAuthenticated();
+      // Only existing admins can modify admin list (but this uses custom claim which may not be set)
+      allow write: if false; // Managed via Firebase Console or Admin SDK only
+    }
+
     // ============================================================================
     // AGENT SYSTEM COLLECTIONS
     // ============================================================================
