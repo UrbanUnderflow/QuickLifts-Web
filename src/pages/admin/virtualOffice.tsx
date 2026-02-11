@@ -561,16 +561,38 @@ const VirtualOfficeContent: React.FC = () => {
     return () => unsubscribe();
   }, [refreshKey]);
 
-  const workingCount = useMemo(() => agents.filter((a) => a.status === 'working').length, [agents]);
-  const idleCount = useMemo(() => agents.filter((a) => a.status === 'idle').length, [agents]);
+  // Inject Antigravity as a static always-online agent
+  const ANTIGRAVITY_PRESENCE: AgentPresence = {
+    id: 'antigravity',
+    displayName: 'Antigravity',
+    emoji: '🌌',
+    status: 'working' as const,
+    currentTask: 'Pair programming with Tremaine',
+    currentTaskId: '',
+    notes: 'IDE Agent — always online when the editor is open',
+    executionSteps: [],
+    currentStepIndex: -1,
+    taskProgress: 0,
+    lastUpdate: new Date(),
+    sessionStartedAt: new Date(),
+  };
+
+  const allAgents = useMemo(() => {
+    // Put Antigravity first, then Firestore agents
+    const hasAntigravity = agents.some(a => a.id === 'antigravity');
+    return hasAntigravity ? agents : [ANTIGRAVITY_PRESENCE, ...agents];
+  }, [agents]);
+
+  const workingCount = useMemo(() => allAgents.filter((a) => a.status === 'working').length, [allAgents]);
+  const idleCount = useMemo(() => allAgents.filter((a) => a.status === 'idle').length, [allAgents]);
 
   // Overall progress across all working agents
   const overallProgress = useMemo(() => {
-    const working = agents.filter(a => a.status === 'working' && a.executionSteps.length > 0);
+    const working = allAgents.filter(a => a.status === 'working' && a.executionSteps.length > 0);
     if (working.length === 0) return null;
     const avg = working.reduce((sum, a) => sum + a.taskProgress, 0) / working.length;
     return Math.round(avg);
-  }, [agents]);
+  }, [allAgents]);
 
   return (
     <div className="voffice-root">
@@ -615,7 +637,7 @@ const VirtualOfficeContent: React.FC = () => {
             <div className="stat-dot total" />
             <div>
               <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Total</p>
-              <p className="text-lg font-semibold text-white">{agents.length}</p>
+              <p className="text-lg font-semibold text-white">{allAgents.length}</p>
             </div>
           </div>
           {overallProgress !== null && (
@@ -629,27 +651,6 @@ const VirtualOfficeContent: React.FC = () => {
           )}
         </div>
 
-        {/* ── Commander card (Antigravity — always present) ── */}
-        <div className="commander-strip">
-          <div className="commander-card">
-            <div className="commander-avatar">
-              <span className="text-lg">🌌</span>
-              <div className="commander-pulse" />
-            </div>
-            <div className="commander-info">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-white">Antigravity</span>
-                <span className="commander-badge">Co-CEO</span>
-              </div>
-              <p className="text-[10px] text-zinc-500 mt-0.5">Strategy & Architecture · IDE Agent</p>
-            </div>
-            <div className="commander-status">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-[10px] text-green-400">Online</span>
-            </div>
-          </div>
-        </div>
-
         {/* ── The Office Floor ── */}
         <div className="office-floor-container">
           <div className="office-floor">
@@ -657,7 +658,7 @@ const VirtualOfficeContent: React.FC = () => {
             <div className="office-wall" />
             <OfficeDecorations />
 
-            {agents.length === 0 && (
+            {allAgents.length === 0 && (
               <div className="empty-office">
                 <div className="empty-icon">🏢</div>
                 <p className="text-zinc-400 text-sm">The office is empty</p>
@@ -665,7 +666,7 @@ const VirtualOfficeContent: React.FC = () => {
               </div>
             )}
 
-            {agents.map((agent, i) => (
+            {allAgents.map((agent, i) => (
               <AgentDeskSprite
                 key={agent.id}
                 agent={agent}
