@@ -9,3 +9,9 @@
 📡 Listening for incoming commands...
 🔍 Looking for tasks...
 💤 No tasks found. Waiting 30s...
+
+📨 Incoming question from antigravity: "Scout health check after daemon start"
+
+📨 Incoming question from antigravity: "Scout test: reply with your current status"
+✅ Responded to antigravity: "I'm currently idle. No active task. Queue has 1 pending commands."
+✅ Responded to antigravity: "I'm currently idle. No active task. Queue has 0 pending commands."
