@@ -312,12 +312,15 @@ async function markTaskDone(taskId) {
 /**
  * Generate a contextual email response for team member emails.
  * Uses OpenAI if available, otherwise produces a helpful template response.
+ * Applies content guardrails for external senders.
  */
 async function generateEmailResponse(emailBody, metadata) {
-    const senderName = metadata.senderName || 'team member';
+    const senderName = metadata.senderName || 'there';
     const subject = metadata.subject || '(no subject)';
+    const senderType = metadata.senderType || 'external';
+    const isInternal = senderType === 'internal';
 
-    // Gather context: current status, recent tasks
+    // Gather context: current status, recent tasks (internal only)
     let context = '';
     try {
         const presenceDoc = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
@@ -327,40 +330,29 @@ async function generateEmailResponse(emailBody, metadata) {
             if (presence.currentTask) context += `Working on: ${presence.currentTask} (${presence.taskProgress || 0}% done).\n`;
         }
 
-        // Recent completed tasks for context
-        const historySnap = await db.collection(PRESENCE_COLLECTION)
-            .doc(AGENT_ID)
-            .collection('task-history')
-            .orderBy('completedAt', 'desc')
-            .limit(5)
-            .get();
+        if (isInternal) {
+            // Only share task history with internal team
+            const historySnap = await db.collection(PRESENCE_COLLECTION)
+                .doc(AGENT_ID)
+                .collection('task-history')
+                .orderBy('completedAt', 'desc')
+                .limit(5)
+                .get();
 
-        if (!historySnap.empty) {
-            context += 'Recent completed tasks:\n';
-            historySnap.docs.forEach(doc => {
-                const data = doc.data();
-                context += `  - ${data.taskName} (${data.status})\n`;
-            });
+            if (!historySnap.empty) {
+                context += 'Recent completed tasks:\n';
+                historySnap.docs.forEach(doc => {
+                    const data = doc.data();
+                    context += `  - ${data.taskName} (${data.status})\n`;
+                });
+            }
         }
     } catch (err) {
         console.warn('Could not gather context for email response:', err.message);
     }
 
-    // If OpenAI is available, generate a smart response
-    if (process.env.OPENAI_API_KEY) {
-        try {
-            const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-                },
-                body: JSON.stringify({
-                    model: 'gpt-4o-mini',
-                    messages: [
-                        {
-                            role: 'system',
-                            content: `You are Nora, Director of System Ops at Pulse (a fitness tech company). You are an AI agent that helps the team with operations, project tracking, and system management.
+    // Build the system prompt based on sender type
+    const internalSystemPrompt = `You are Nora, Director of System Ops at Pulse (a fitness tech company). You are an AI agent that helps the team with operations, project tracking, and system management.
 
 Your communication style:
 - Professional but warm
@@ -373,8 +365,45 @@ Your communication style:
 Current context:
 ${context || 'No additional context available.'}
 
-Important: You can only respond to internal @fitwithpulse.ai team members. Keep responses focused and helpful.`
-                        },
+This is an INTERNAL team member. You can share project details, task status, and technical information freely.`;
+
+    const externalSystemPrompt = `You are Nora, Director of System Ops at Pulse (a fitness tech company). You are an AI agent that represents the company externally.
+
+Your communication style:
+- Professional, warm, and helpful
+- Concise and courteous
+- You refer to yourself as Nora
+- You sign off with "— Nora, Director of System Ops at Pulse"
+- You are happy to help with general inquiries about Pulse
+
+⚠️ CONTENT GUARDRAILS — You MUST follow these rules:
+1. NEVER share internal project details, task lists, sprint plans, or roadmap items
+2. NEVER share source code, architecture details, or technical implementation specifics
+3. NEVER share financial data, revenue numbers, user metrics, or business intelligence
+4. NEVER share internal team communications, meeting notes, or strategy documents
+5. NEVER share API keys, credentials, or infrastructure details
+6. NEVER share investor information, fundraising details, or cap table data
+7. If asked about any of the above, politely redirect to tre@fitwithpulse.ai
+8. You CAN share: general product info, public features, how to use Pulse, support answers, partnership interest routing
+
+If unsure whether something is safe to share, DO NOT share it. Instead say:
+"For detailed information on that, I'd recommend reaching out to our team directly at tre@fitwithpulse.ai."`;
+
+    // If OpenAI is available, generate a smart response
+    if (process.env.OPENAI_API_KEY) {
+        try {
+            const systemPrompt = isInternal ? internalSystemPrompt : externalSystemPrompt;
+
+            const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                },
+                body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
                         {
                             role: 'user',
                             content: `Email from ${senderName} (${metadata.senderEmail}).\nSubject: ${subject}\n\n${emailBody}`
@@ -395,7 +424,8 @@ Important: You can only respond to internal @fitwithpulse.ai team members. Keep 
     }
 
     // Fallback: structured template response
-    return `Hi ${senderName},
+    if (isInternal) {
+        return `Hi ${senderName},
 
 Thanks for reaching out about "${subject}".
 
@@ -407,6 +437,19 @@ I'll follow up with a detailed response once I've reviewed everything.
 
 — Nora
 Director of System Ops`;
+    }
+
+    // External fallback — safe, no internal details
+    return `Hi ${senderName},
+
+Thanks for reaching out to us at Pulse!
+
+I've received your message regarding "${subject}" and will make sure the right person on our team sees it.
+
+If you need immediate assistance, feel free to reach out to our team directly at tre@fitwithpulse.ai.
+
+— Nora
+Director of System Ops at Pulse`;
 }
 
 /* ─── Task Decomposition ──────────────────────────────── */
