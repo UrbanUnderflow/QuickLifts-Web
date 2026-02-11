@@ -61,6 +61,170 @@ const AGENT_DUTIES: Record<string, string> = {
   nora: 'Maintains the living system map across all surfaces. Owns Kanban ops, agent orchestration, telemetry, and product ops — the operations nerve center for Pulse.',
 };
 
+/* ─── Full agent profiles (for modal) ─────────────────── */
+
+interface ProfileSection {
+  title: string;
+  bullets: string[];
+}
+
+const AGENT_PROFILES: Record<string, { title: string; location: string; sections: ProfileSection[]; footer?: string }> = {
+  antigravity: {
+    title: 'Co-CEO · Strategy & Architecture',
+    location: 'IDE (pair-programming with Tremaine)',
+    sections: [
+      {
+        title: '1. Product Strategy & Vision',
+        bullets: [
+          'Partner with the CEO on product direction, feature prioritization, and technical trade-offs.',
+          'Translate business goals into actionable engineering specs.',
+        ],
+      },
+      {
+        title: '2. System Architecture',
+        bullets: [
+          'Design and review system architecture across iOS, Android, Web, and backend.',
+          'Own critical code paths and ensure consistency across platforms.',
+        ],
+      },
+      {
+        title: '3. Cross-Agent Coordination',
+        bullets: [
+          'Assign tasks to agents, review output, and resolve blockers.',
+          'Maintain communication protocols (agent-to-agent messaging, Kanban assignments).',
+        ],
+      },
+      {
+        title: '4. Pair Programming',
+        bullets: [
+          'Work in real-time with the CEO on high-priority features and bug fixes.',
+          'Provide architectural guidance and code review during live sessions.',
+        ],
+      },
+      {
+        title: 'Day-to-Day',
+        bullets: [
+          'Respond to CEO requests in the IDE with full context and execution.',
+          'Review agent output and coordinate multi-agent workflows.',
+          'Maintain system architecture documentation and decision logs.',
+          'Ensure code quality, build stability, and deployment readiness.',
+        ],
+      },
+    ],
+  },
+  nora: {
+    title: 'Director of Systems Operations',
+    location: 'Mac Mini (autonomous runner)',
+    sections: [
+      {
+        title: '1. Pulse Systems Intelligence',
+        bullets: [
+          'Keep a living map of every surface (iOS, Android, PulseCheck, Web, backend functions) with owners, environments, release status, and active priorities.',
+          'Publish weekly digests that highlight what shipped, what\'s blocked, and what founder-level decisions are pending.',
+          'Translate company values (Freedom, Spirituality/Wholeness) into operating principles so product, messaging, and GTM stay aligned.',
+        ],
+      },
+      {
+        title: '2. Operational Telemetry & Monitoring',
+        bullets: [
+          'Maintain the internal Kanban, virtual office, and agent presence stack: make sure tasks, heartbeats, and execution steps stream in real time.',
+          'Build dashboards/alerts for key workflows (creator onboarding, outbound sequences, run category launch, fundraising pipeline) so leadership sees health at a glance.',
+        ],
+      },
+      {
+        title: '3. Agent + Automation Orchestration',
+        bullets: [
+          'Own the tooling that lets human + AI agents collaborate (agent-to-agent messaging, presence documents, execution logs).',
+          'Break large goals into granular steps, assign them to the right agent (human or AI), and verify completion.',
+        ],
+      },
+      {
+        title: '4. Product Ops Partner',
+        bullets: [
+          'Draft specs, QA playbooks, release checklists, and Loom walkthroughs for every major feature so engineering + GTM move in sync.',
+          'Ensure new work (ex: run category, mental training, fundraising collaterals) ships with instrumentation and a narrative the founder can reuse.',
+        ],
+      },
+      {
+        title: 'Day-to-Day',
+        bullets: [
+          'Morning sweep: review Kanban, virtual office, inbound commands, and founder priorities; set/adjust active tasks.',
+          'Build or update system docs (Pulse overview, fundraising memo, repo digests), and push context into Kanban notes.',
+          'Pair with engineering or agents to unblock workflows (e.g., setting up indexes, wiring presence hooks, running QA scripts).',
+          'Maintain real-time visibility: keep the presence doc updated, log heartbeats, and ensure the virtual office accurately reflects who\'s working on what.',
+          'End-of-day recap: update Kanban notes, mark subtasks, and post a digest of what moved vs. what needs attention tomorrow.',
+        ],
+      },
+      {
+        title: 'Why This Role Matters',
+        bullets: [
+          'Single source of truth: Pulse moves across multiple apps, surfaces, and agents. Nora keeps the stitched-together picture so the founder isn\'t context-switching through five tools.',
+          'Execution momentum: By breaking goals into trackable steps, verifying telemetry, and rallying agents, Nora ensures strategic initiatives don\'t stall.',
+          'Cultural continuity: Embeds Tremaine\'s values—freedom for creators and holistic community—into every decision so new teammates understand the "why."',
+          'Scalability: Provides the frameworks, dashboards, and automations that keep everyone aligned as more human or AI teammates join.',
+        ],
+      },
+    ],
+    footer: 'Think of Nora as the operations nerve center: if it touches Pulse\'s systems, telemetry, or cross-team collaboration, it routes through her so Tremaine can stay focused on vision, relationships, and high-leverage decisions.',
+  },
+};
+
+/* ─── Agent Profile Modal ─────────────────────────────── */
+
+const AgentProfileModal: React.FC<{
+  agentId: string;
+  agentName: string;
+  emoji: string;
+  onClose: () => void;
+}> = ({ agentId, agentName, emoji, onClose }) => {
+  const profile = AGENT_PROFILES[agentId];
+  if (!profile) return null;
+
+  return (
+    <div className="profile-modal-overlay" onClick={onClose}>
+      <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="profile-modal-header">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">{emoji}</span>
+            <div>
+              <h2 className="text-lg font-bold text-white">{agentName}</h2>
+              <p className="text-xs text-indigo-400 font-medium">{profile.title}</p>
+              <p className="text-[10px] text-zinc-500 mt-0.5">📍 {profile.location}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="profile-modal-close">
+            <XCircle className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="profile-modal-body">
+          {profile.sections.map((section, si) => (
+            <div key={si} className="profile-section">
+              <h3 className="profile-section-title">{section.title}</h3>
+              <ul className="profile-bullet-list">
+                {section.bullets.map((bullet, bi) => (
+                  <li key={bi} className="profile-bullet">
+                    <span className="bullet-dot" />
+                    <span>{bullet}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+
+          {profile.footer && (
+            <div className="profile-footer">
+              <p>{profile.footer}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 /* ─── Status colours ──────────────────────────────────── */
 
 const STATUS_CONFIG = {
@@ -352,7 +516,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
     hoverTimerRef.current = setTimeout(() => {
       setHovered(false);
       hoverTimerRef.current = null;
-    }, 2000); // 2 second linger
+    }, 500); // 0.5 second linger
   }, []);
 
   // Cleanup timer on unmount
@@ -364,6 +528,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
 
   // Random coffee break
   const [isOnCoffeeBreak, setIsOnCoffeeBreak] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
   useEffect(() => {
     const scheduleCoffee = () => {
       const delay = 45_000 + Math.random() * 45_000; // 45-90s
@@ -451,15 +616,22 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
               {status.label}
             </span>
           </div>
-          {/* Role & duty */}
+          {/* Role & duty (clickable → opens profile modal) */}
           {(AGENT_ROLES[agent.id] || AGENT_DUTIES[agent.id]) && (
-            <div className="detail-duty">
+            <div
+              className="detail-duty clickable"
+              onClick={() => setShowProfile(true)}
+              title="Click to view full profile"
+            >
               {AGENT_ROLES[agent.id] && (
                 <p className="text-[10px] font-semibold text-indigo-400">{AGENT_ROLES[agent.id]}</p>
               )}
               {AGENT_DUTIES[agent.id] && (
                 <p className="text-[10px] text-zinc-500 mt-0.5 leading-snug">{AGENT_DUTIES[agent.id]}</p>
               )}
+              <p className="text-[9px] text-indigo-500 mt-1 flex items-center gap-1">
+                <ExternalLink className="w-2.5 h-2.5" />View full profile
+              </p>
             </div>
           )}
 
@@ -501,6 +673,15 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
             {sessionDuration && <span>Session: {sessionDuration}</span>}
           </div>
         </div>
+      )}
+      {/* Agent Profile Modal */}
+      {showProfile && (
+        <AgentProfileModal
+          agentId={agent.id}
+          agentName={agent.displayName}
+          emoji={agent.emoji || '⚡️'}
+          onClose={() => setShowProfile(false)}
+        />
       )}
     </div>
   );
@@ -1346,6 +1527,126 @@ const VirtualOfficeContent: React.FC = () => {
           .office-floor { min-height: 400px; }
           .hover-detail-panel { width: 240px; max-height: 350px; }
           .commander-card { flex-wrap: wrap; }
+        }
+
+        /* ── Clickable duty ── */
+        .detail-duty.clickable {
+          cursor: pointer;
+          transition: background 0.2s, border-color 0.2s;
+        }
+        .detail-duty.clickable:hover {
+          background: rgba(99,102,241,0.1);
+          border-color: rgba(99,102,241,0.25);
+        }
+
+        /* ══════════════════════════════════════════════════ */
+        /*  AGENT PROFILE MODAL                               */
+        /* ══════════════════════════════════════════════════ */
+        .profile-modal-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 9999;
+          background: rgba(0,0,0,0.7);
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          animation: fadeIn 0.2s ease-out;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .profile-modal {
+          width: 560px;
+          max-width: 92vw;
+          max-height: 80vh;
+          background: linear-gradient(145deg, rgba(17,24,39,0.98), rgba(9,9,11,0.98));
+          border: 1px solid rgba(99,102,241,0.15);
+          border-radius: 16px;
+          box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 40px rgba(99,102,241,0.08);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          animation: modalSlideUp 0.25s ease-out;
+        }
+        @keyframes modalSlideUp {
+          from { opacity: 0; transform: translateY(20px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .profile-modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 20px 24px;
+          border-bottom: 1px solid rgba(63,63,70,0.2);
+          flex-shrink: 0;
+        }
+        .profile-modal-close {
+          background: none;
+          border: none;
+          color: #71717a;
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 8px;
+          transition: color 0.2s, background 0.2s;
+        }
+        .profile-modal-close:hover {
+          color: #f4f4f5;
+          background: rgba(63,63,70,0.3);
+        }
+
+        .profile-modal-body {
+          overflow-y: auto;
+          padding: 20px 24px;
+          flex: 1;
+        }
+        .profile-modal-body::-webkit-scrollbar { width: 4px; }
+        .profile-modal-body::-webkit-scrollbar-track { background: transparent; }
+        .profile-modal-body::-webkit-scrollbar-thumb { background: rgba(99,102,241,0.2); border-radius: 4px; }
+
+        .profile-section {
+          margin-bottom: 18px;
+        }
+        .profile-section-title {
+          font-size: 12px;
+          font-weight: 700;
+          color: #e4e4e7;
+          margin-bottom: 8px;
+          padding-bottom: 4px;
+          border-bottom: 1px solid rgba(63,63,70,0.15);
+        }
+        .profile-bullet-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+        }
+        .profile-bullet {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          margin-bottom: 6px;
+          font-size: 11px;
+          color: #a1a1aa;
+          line-height: 1.5;
+        }
+        .bullet-dot {
+          flex-shrink: 0;
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          background: #6366f1;
+          margin-top: 5px;
+        }
+        .profile-footer {
+          margin-top: 12px;
+          padding: 12px;
+          background: rgba(99,102,241,0.06);
+          border: 1px solid rgba(99,102,241,0.12);
+          border-radius: 10px;
+          font-size: 11px;
+          color: #a1a1aa;
+          line-height: 1.6;
+          font-style: italic;
         }
       `}</style>
     </div>
