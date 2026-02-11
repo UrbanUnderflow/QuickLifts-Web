@@ -5,471 +5,512 @@ import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { presenceService, AgentPresence } from '../../api/firebase/presence/service';
 import { db } from '../../api/firebase/config';
 import {
-    collection, addDoc, serverTimestamp, query, where, orderBy,
-    onSnapshot, Timestamp, limit, doc, updateDoc
+  collection, addDoc, serverTimestamp, query, where, orderBy,
+  onSnapshot, Timestamp, limit, doc, updateDoc
 } from 'firebase/firestore';
 import {
-    ArrowLeft, Send, Zap, Brain, MessageSquare, ListTodo,
-    HelpCircle, Terminal, ChevronDown, Loader2, CheckCircle2,
-    Clock, Circle, AlertCircle
+  ArrowLeft, Send, Zap, Brain, MessageSquare, ListTodo,
+  HelpCircle, Terminal, ChevronDown, Loader2, CheckCircle2,
+  Clock, Circle, AlertCircle
 } from 'lucide-react';
 
 /* ─── Types ───────────────────────────────────────────── */
 
 interface ChatMessage {
-    id: string;
-    from: string;
-    to: string;
-    type: 'task' | 'command' | 'question' | 'chat' | 'email';
-    content: string;
-    response?: string;
-    status: 'pending' | 'in-progress' | 'completed' | 'failed';
-    createdAt?: Date;
-    completedAt?: Date;
-    metadata?: Record<string, any>;
+  id: string;
+  from: string;
+  to: string;
+  type: 'task' | 'command' | 'question' | 'chat' | 'email';
+  content: string;
+  response?: string;
+  status: 'pending' | 'in-progress' | 'completed' | 'failed';
+  createdAt?: Date;
+  completedAt?: Date;
+  metadata?: Record<string, any>;
 }
 
 type MessageType = 'task' | 'command' | 'question' | 'chat';
 
 const MESSAGE_TYPES: { type: MessageType; label: string; icon: React.ReactNode; desc: string }[] = [
-    { type: 'task', label: 'Task', icon: <ListTodo className="w-4 h-4" />, desc: 'Assign work — agent decomposes & executes' },
-    { type: 'command', label: 'Command', icon: <Terminal className="w-4 h-4" />, desc: 'Direct instruction — immediate action' },
-    { type: 'question', label: 'Question', icon: <HelpCircle className="w-4 h-4" />, desc: 'Ask for info or status' },
-    { type: 'chat', label: 'Chat', icon: <MessageSquare className="w-4 h-4" />, desc: 'General conversation' },
+  { type: 'task', label: 'Task', icon: <ListTodo className="w-4 h-4" />, desc: 'Assign work — agent decomposes & executes' },
+  { type: 'command', label: 'Command', icon: <Terminal className="w-4 h-4" />, desc: 'Direct instruction — immediate action' },
+  { type: 'question', label: 'Question', icon: <HelpCircle className="w-4 h-4" />, desc: 'Ask for info or status' },
+  { type: 'chat', label: 'Chat', icon: <MessageSquare className="w-4 h-4" />, desc: 'General conversation' },
 ];
 
 /* ─── Helpers ─────────────────────────────────────────── */
 
 const AGENT_EMOJIS: Record<string, string> = {
-    nora: '⚡',
-    antigravity: '🌌',
+  nora: '⚡',
+  antigravity: '🌌',
 };
 
 const AGENT_ROLES: Record<string, string> = {
-    nora: 'Director of System Ops',
-    antigravity: 'Co-CEO · Strategy & Architecture',
+  nora: 'Director of System Ops',
+  antigravity: 'Co-CEO · Strategy & Architecture',
 };
 
 const formatTime = (date?: Date) => {
-    if (!date) return '';
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (!date) return '';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
 const formatRelative = (date?: Date) => {
-    if (!date) return '';
-    const diff = Date.now() - date.getTime();
-    if (diff < 60_000) return 'Just now';
-    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-    return date.toLocaleDateString();
+  if (!date) return '';
+  const diff = Date.now() - date.getTime();
+  if (diff < 60_000) return 'Just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return date.toLocaleDateString();
 };
 
 const statusColor = (status: string) => {
-    switch (status) {
-        case 'working': return '#22c55e';
-        case 'idle': return '#eab308';
-        case 'offline': return '#ef4444';
-        default: return '#71717a';
-    }
+  switch (status) {
+    case 'working': return '#22c55e';
+    case 'idle': return '#eab308';
+    case 'offline': return '#ef4444';
+    default: return '#71717a';
+  }
 };
 
 /* ─── Agent List Screen ───────────────────────────────── */
 
 const AgentListScreen: React.FC<{
-    agents: AgentPresence[];
-    onSelectAgent: (agent: AgentPresence) => void;
+  agents: AgentPresence[];
+  onSelectAgent: (agent: AgentPresence) => void;
 }> = ({ agents, onSelectAgent }) => {
-    return (
-        <div className="ac-agent-list">
-            <div className="ac-list-header">
-                <div>
-                    <p className="ac-list-subtitle">Agent Comms</p>
-                    <h1 className="ac-list-title">Messages</h1>
-                </div>
-                <div className="ac-header-badge">
-                    <Zap className="w-4 h-4" />
-                    <span>{agents.filter(a => a.status !== 'offline').length} online</span>
-                </div>
-            </div>
-
-            <div className="ac-agents">
-                {agents.map((agent) => (
-                    <button
-                        key={agent.id}
-                        className="ac-agent-row"
-                        onClick={() => onSelectAgent(agent)}
-                    >
-                        <div className="ac-agent-avatar">
-                            <span className="ac-avatar-emoji">{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</span>
-                            <div className="ac-status-dot" style={{ background: statusColor(agent.status) }} />
-                        </div>
-                        <div className="ac-agent-info">
-                            <div className="ac-agent-name-row">
-                                <span className="ac-agent-name">{agent.displayName}</span>
-                                {agent.lastUpdate && (
-                                    <span className="ac-agent-time">{formatRelative(agent.lastUpdate)}</span>
-                                )}
-                            </div>
-                            <p className="ac-agent-role">{AGENT_ROLES[agent.id] || 'Agent'}</p>
-                            <p className="ac-agent-preview">
-                                {agent.status === 'working' && agent.currentTask
-                                    ? `🔨 ${agent.currentTask}`
-                                    : agent.notes || `${agent.status === 'idle' ? '💤 Waiting for tasks...' : '🔴 Offline'}`
-                                }
-                            </p>
-                        </div>
-                        <div className="ac-agent-chevron">›</div>
-                    </button>
-                ))}
-            </div>
+  return (
+    <div className="ac-agent-list">
+      <div className="ac-list-header">
+        <div>
+          <p className="ac-list-subtitle">Agent Comms</p>
+          <h1 className="ac-list-title">Messages</h1>
         </div>
-    );
+        <div className="ac-header-badge">
+          <Zap className="w-4 h-4" />
+          <span>{agents.filter(a => a.status !== 'offline').length} online</span>
+        </div>
+      </div>
+
+      <div className="ac-agents">
+        {agents.map((agent) => (
+          <button
+            key={agent.id}
+            className="ac-agent-row"
+            onClick={() => onSelectAgent(agent)}
+          >
+            <div className="ac-agent-avatar">
+              <span className="ac-avatar-emoji">{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</span>
+              <div className="ac-status-dot" style={{ background: statusColor(agent.status) }} />
+            </div>
+            <div className="ac-agent-info">
+              <div className="ac-agent-name-row">
+                <span className="ac-agent-name">{agent.displayName}</span>
+                {agent.lastUpdate && (
+                  <span className="ac-agent-time">{formatRelative(agent.lastUpdate)}</span>
+                )}
+              </div>
+              <p className="ac-agent-role">{AGENT_ROLES[agent.id] || 'Agent'}</p>
+              <p className="ac-agent-preview">
+                {agent.status === 'working' && agent.currentTask
+                  ? `🔨 ${agent.currentTask}`
+                  : agent.notes || `${agent.status === 'idle' ? '💤 Waiting for tasks...' : '🔴 Offline'}`
+                }
+              </p>
+            </div>
+            <div className="ac-agent-chevron">›</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 };
 
 /* ─── Chat Screen ─────────────────────────────────────── */
 
 const ChatScreen: React.FC<{
-    agent: AgentPresence;
-    onBack: () => void;
+  agent: AgentPresence;
+  onBack: () => void;
 }> = ({ agent, onBack }) => {
-    const [messages, setMessages] = useState<ChatMessage[]>([]);
-    const [inputText, setInputText] = useState('');
-    const [msgType, setMsgType] = useState<MessageType>('task');
-    const [showTypeSelector, setShowTypeSelector] = useState(false);
-    const [sending, setSending] = useState(false);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-    const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [msgType, setMsgType] = useState<MessageType>('task');
+  const [showTypeSelector, setShowTypeSelector] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
-    // Listen for messages involving this agent
-    useEffect(() => {
-        const commandsRef = collection(db, 'agent-commands');
-        const q = query(
-            commandsRef,
-            where('to', '==', agent.id),
-            orderBy('createdAt', 'desc'),
-            limit(50)
-        );
+  // Listen for messages involving this agent
+  useEffect(() => {
+    const commandsRef = collection(db, 'agent-commands');
+    // Query uses the existing composite index: to (asc) + createdAt (desc)
+    const q = query(
+      commandsRef,
+      where('to', '==', agent.id),
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
 
-        const unsub = onSnapshot(q, (snapshot) => {
-            const msgs: ChatMessage[] = snapshot.docs.map((doc) => {
-                const data = doc.data();
-                return {
-                    id: doc.id,
-                    from: data.from || 'unknown',
-                    to: data.to || '',
-                    type: data.type || 'chat',
-                    content: data.content || '',
-                    response: data.response || '',
-                    status: data.status || 'pending',
-                    createdAt: data.createdAt?.toDate?.() || undefined,
-                    completedAt: data.completedAt?.toDate?.() || undefined,
-                    metadata: data.metadata || {},
-                };
-            }).reverse(); // oldest first
-            setMessages(msgs);
-        });
-
-        return unsub;
-    }, [agent.id]);
-
-    // Auto-scroll on new messages
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
-
-    // Auto-resize textarea
-    const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setInputText(e.target.value);
-        e.target.style.height = 'auto';
-        e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
-    };
-
-    // Send message
-    const sendMessage = async () => {
-        const text = inputText.trim();
-        if (!text || sending) return;
-
-        setSending(true);
-        try {
-            await addDoc(collection(db, 'agent-commands'), {
-                from: 'admin',
-                to: agent.id,
-                type: msgType,
-                content: text,
-                metadata: {},
-                status: 'pending',
-                createdAt: serverTimestamp(),
-            });
-
-            setInputText('');
-            if (inputRef.current) {
-                inputRef.current.style.height = 'auto';
-            }
-        } catch (err) {
-            console.error('Failed to send message:', err);
+    const unsub = onSnapshot(q,
+      (snapshot) => {
+        setError(null);
+        const msgs: ChatMessage[] = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          return {
+            id: docSnap.id,
+            from: data.from || 'unknown',
+            to: data.to || '',
+            type: data.type || 'chat',
+            content: data.content || '',
+            response: data.response || '',
+            status: data.status || 'pending',
+            createdAt: data.createdAt?.toDate?.() || undefined,
+            completedAt: data.completedAt?.toDate?.() || undefined,
+            metadata: data.metadata || {},
+          };
+        }).reverse(); // oldest first
+        setMessages(msgs);
+      },
+      (err) => {
+        console.error('Firestore listener error:', err);
+        // Check if it's a missing index error
+        if (err.message?.includes('index')) {
+          setError('Missing Firestore index. Check console for the creation link.');
+        } else {
+          setError(`Firestore error: ${err.message}`);
         }
-        setSending(false);
+      }
+    );
+
+    return unsub;
+  }, [agent.id]);
+
+  // Auto-scroll on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Auto-resize textarea
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+  };
+
+  // Send message
+  const sendMessage = async () => {
+    const text = inputText.trim();
+    if (!text || sending) return;
+
+    setSending(true);
+
+    // Optimistic UI — show bubble immediately
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticMsg: ChatMessage = {
+      id: optimisticId,
+      from: 'admin',
+      to: agent.id,
+      type: msgType,
+      content: text,
+      status: 'pending',
+      createdAt: new Date(),
     };
+    setMessages(prev => [...prev, optimisticMsg]);
+    setInputText('');
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
-    };
+    try {
+      await addDoc(collection(db, 'agent-commands'), {
+        from: 'admin',
+        to: agent.id,
+        type: msgType,
+        content: text,
+        metadata: {},
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      // Firestore listener will replace the optimistic message with the real one
+    } catch (err: any) {
+      console.error('Failed to send message:', err);
+      setError(`Send failed: ${err.message}`);
+      // Remove the optimistic message on failure
+      setMessages(prev => prev.filter(m => m.id !== optimisticId));
+      setTimeout(() => setError(null), 5000);
+    }
+    setSending(false);
+  };
 
-    const selectedType = MESSAGE_TYPES.find(t => t.type === msgType)!;
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
 
-    return (
-        <div className="ac-chat-screen">
-            {/* Chat Header */}
-            <div className="ac-chat-header">
-                <button className="ac-back-btn" onClick={onBack}>
-                    <ArrowLeft className="w-5 h-5" />
-                </button>
-                <div className="ac-chat-agent-info">
-                    <div className="ac-chat-avatar">
-                        <span>{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</span>
-                        <div className="ac-status-dot-sm" style={{ background: statusColor(agent.status) }} />
-                    </div>
-                    <div>
-                        <h2 className="ac-chat-name">{agent.displayName}</h2>
-                        <p className="ac-chat-status">
-                            {agent.status === 'working'
-                                ? `Working: ${agent.currentTask || 'task'}`
-                                : agent.status === 'idle' ? 'Online · Idle' : 'Offline'
-                            }
-                        </p>
-                    </div>
-                </div>
-                {agent.status === 'working' && agent.taskProgress > 0 && (
-                    <div className="ac-progress-badge">
-                        <Zap className="w-3 h-3" />
-                        <span>{agent.taskProgress}%</span>
-                    </div>
+  const selectedType = MESSAGE_TYPES.find(t => t.type === msgType)!;
+
+  return (
+    <div className="ac-chat-screen">
+      {/* Chat Header */}
+      <div className="ac-chat-header">
+        <button className="ac-back-btn" onClick={onBack}>
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <div className="ac-chat-agent-info">
+          <div className="ac-chat-avatar">
+            <span>{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</span>
+            <div className="ac-status-dot-sm" style={{ background: statusColor(agent.status) }} />
+          </div>
+          <div>
+            <h2 className="ac-chat-name">{agent.displayName}</h2>
+            <p className="ac-chat-status">
+              {agent.status === 'working'
+                ? `Working: ${agent.currentTask || 'task'}`
+                : agent.status === 'idle' ? 'Online · Idle' : 'Offline'
+              }
+            </p>
+          </div>
+        </div>
+        {agent.status === 'working' && agent.taskProgress > 0 && (
+          <div className="ac-progress-badge">
+            <Zap className="w-3 h-3" />
+            <span>{agent.taskProgress}%</span>
+          </div>
+        )}
+      </div>
+
+      {/* Error banner */}
+      {error && (
+        <div className="ac-error-banner">
+          <AlertCircle className="w-4 h-4" />
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ac-error-close">✕</button>
+        </div>
+      )}
+
+      {/* Messages Area */}
+      <div className="ac-messages">
+        {messages.length === 0 && (
+          <div className="ac-empty-chat">
+            <div className="ac-empty-icon">{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</div>
+            <h3>Start a conversation with {agent.displayName}</h3>
+            <p>Send a task, question, or command. Messages go directly to the agent runner pipeline — real work gets done.</p>
+          </div>
+        )}
+
+        {messages.map((msg) => (
+          <div key={msg.id} className="ac-message-group">
+            {/* User message (outgoing) */}
+            <div className="ac-msg ac-msg-out">
+              <div className="ac-msg-meta-out">
+                <span className={`ac-msg-type-badge type-${msg.type}`}>
+                  {msg.type}
+                </span>
+                {msg.createdAt && (
+                  <span className="ac-msg-time">{formatTime(msg.createdAt)}</span>
                 )}
+              </div>
+              <div className="ac-msg-bubble ac-bubble-out">
+                <p>{msg.content}</p>
+              </div>
             </div>
 
-            {/* Messages Area */}
-            <div className="ac-messages">
-                {messages.length === 0 && (
-                    <div className="ac-empty-chat">
-                        <div className="ac-empty-icon">{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</div>
-                        <h3>Start a conversation with {agent.displayName}</h3>
-                        <p>Send a task, question, or command. Messages go directly to the agent runner pipeline — real work gets done.</p>
-                    </div>
-                )}
-
-                {messages.map((msg) => (
-                    <div key={msg.id} className="ac-message-group">
-                        {/* User message (outgoing) */}
-                        <div className="ac-msg ac-msg-out">
-                            <div className="ac-msg-meta-out">
-                                <span className={`ac-msg-type-badge type-${msg.type}`}>
-                                    {msg.type}
-                                </span>
-                                {msg.createdAt && (
-                                    <span className="ac-msg-time">{formatTime(msg.createdAt)}</span>
-                                )}
-                            </div>
-                            <div className="ac-msg-bubble ac-bubble-out">
-                                <p>{msg.content}</p>
-                            </div>
-                        </div>
-
-                        {/* Agent response (incoming) */}
-                        {msg.response && (
-                            <div className="ac-msg ac-msg-in">
-                                <div className="ac-msg-avatar-sm">
-                                    {agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}
-                                </div>
-                                <div className="ac-msg-in-content">
-                                    <div className="ac-msg-bubble ac-bubble-in">
-                                        <p>{msg.response}</p>
-                                    </div>
-                                    <div className="ac-msg-meta-in">
-                                        <StatusIcon status={msg.status} />
-                                        <span className="ac-msg-time">{msg.completedAt ? formatTime(msg.completedAt) : ''}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Pending/in-progress indicator */}
-                        {!msg.response && msg.status !== 'completed' && (
-                            <div className="ac-msg ac-msg-in">
-                                <div className="ac-msg-avatar-sm">
-                                    {agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}
-                                </div>
-                                <div className="ac-msg-in-content">
-                                    <div className="ac-msg-bubble ac-bubble-in ac-bubble-pending">
-                                        {msg.status === 'in-progress' ? (
-                                            <span className="ac-typing">
-                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                Working on it...
-                                            </span>
-                                        ) : (
-                                            <span className="ac-typing">
-                                                <Clock className="w-3.5 h-3.5" />
-                                                Queued
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ))}
-
-                <div ref={messagesEndRef} />
-            </div>
-
-            {/* Type Selector Dropdown */}
-            {showTypeSelector && (
-                <div className="ac-type-dropdown">
-                    {MESSAGE_TYPES.map((t) => (
-                        <button
-                            key={t.type}
-                            className={`ac-type-option ${msgType === t.type ? 'active' : ''}`}
-                            onClick={() => { setMsgType(t.type); setShowTypeSelector(false); }}
-                        >
-                            <div className="ac-type-icon">{t.icon}</div>
-                            <div>
-                                <p className="ac-type-label">{t.label}</p>
-                                <p className="ac-type-desc">{t.desc}</p>
-                            </div>
-                        </button>
-                    ))}
+            {/* Agent response (incoming) */}
+            {msg.response && (
+              <div className="ac-msg ac-msg-in">
+                <div className="ac-msg-avatar-sm">
+                  {agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}
                 </div>
+                <div className="ac-msg-in-content">
+                  <div className="ac-msg-bubble ac-bubble-in">
+                    <p>{msg.response}</p>
+                  </div>
+                  <div className="ac-msg-meta-in">
+                    <StatusIcon status={msg.status} />
+                    <span className="ac-msg-time">{msg.completedAt ? formatTime(msg.completedAt) : ''}</span>
+                  </div>
+                </div>
+              </div>
             )}
 
-            {/* Input Area */}
-            <div className="ac-input-area">
-                <button
-                    className={`ac-type-btn type-${msgType}`}
-                    onClick={() => setShowTypeSelector(!showTypeSelector)}
-                >
-                    {selectedType.icon}
-                    <span>{selectedType.label}</span>
-                    <ChevronDown className="w-3 h-3" />
-                </button>
-
-                <div className="ac-input-row">
-                    <textarea
-                        ref={inputRef}
-                        className="ac-text-input"
-                        placeholder={`Send a ${msgType} to ${agent.displayName}...`}
-                        value={inputText}
-                        onChange={handleInputChange}
-                        onKeyDown={handleKeyDown}
-                        rows={1}
-                    />
-                    <button
-                        className="ac-send-btn"
-                        onClick={sendMessage}
-                        disabled={!inputText.trim() || sending}
-                    >
-                        {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                    </button>
+            {/* Pending/in-progress indicator */}
+            {!msg.response && msg.status !== 'completed' && (
+              <div className="ac-msg ac-msg-in">
+                <div className="ac-msg-avatar-sm">
+                  {agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}
                 </div>
-            </div>
+                <div className="ac-msg-in-content">
+                  <div className="ac-msg-bubble ac-bubble-in ac-bubble-pending">
+                    {msg.status === 'in-progress' ? (
+                      <span className="ac-typing">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Working on it...
+                      </span>
+                    ) : (
+                      <span className="ac-typing">
+                        <Clock className="w-3.5 h-3.5" />
+                        Queued
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Type Selector Dropdown */}
+      {showTypeSelector && (
+        <div className="ac-type-dropdown">
+          {MESSAGE_TYPES.map((t) => (
+            <button
+              key={t.type}
+              className={`ac-type-option ${msgType === t.type ? 'active' : ''}`}
+              onClick={() => { setMsgType(t.type); setShowTypeSelector(false); }}
+            >
+              <div className="ac-type-icon">{t.icon}</div>
+              <div>
+                <p className="ac-type-label">{t.label}</p>
+                <p className="ac-type-desc">{t.desc}</p>
+              </div>
+            </button>
+          ))}
         </div>
-    );
+      )}
+
+      {/* Input Area */}
+      <div className="ac-input-area">
+        <button
+          className={`ac-type-btn type-${msgType}`}
+          onClick={() => setShowTypeSelector(!showTypeSelector)}
+        >
+          {selectedType.icon}
+          <span>{selectedType.label}</span>
+          <ChevronDown className="w-3 h-3" />
+        </button>
+
+        <div className="ac-input-row">
+          <textarea
+            ref={inputRef}
+            className="ac-text-input"
+            placeholder={`Send a ${msgType} to ${agent.displayName}...`}
+            value={inputText}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            rows={1}
+          />
+          <button
+            className="ac-send-btn"
+            onClick={sendMessage}
+            disabled={!inputText.trim() || sending}
+          >
+            {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 /* ─── Status Icon ─────────────────────────────────────── */
 
 const StatusIcon: React.FC<{ status: string }> = ({ status }) => {
-    switch (status) {
-        case 'completed':
-            return <CheckCircle2 className="w-3 h-3 text-green-400" />;
-        case 'in-progress':
-            return <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />;
-        case 'failed':
-            return <AlertCircle className="w-3 h-3 text-red-400" />;
-        default:
-            return <Circle className="w-3 h-3 text-zinc-500" />;
-    }
+  switch (status) {
+    case 'completed':
+      return <CheckCircle2 className="w-3 h-3 text-green-400" />;
+    case 'in-progress':
+      return <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />;
+    case 'failed':
+      return <AlertCircle className="w-3 h-3 text-red-400" />;
+    default:
+      return <Circle className="w-3 h-3 text-zinc-500" />;
+  }
 };
 
 /* ─── Main Page Component ─────────────────────────────── */
 
 const AgentChatContent: React.FC = () => {
-    const router = useRouter();
-    const [agents, setAgents] = useState<AgentPresence[]>([]);
-    const [selectedAgent, setSelectedAgent] = useState<AgentPresence | null>(null);
+  const router = useRouter();
+  const [agents, setAgents] = useState<AgentPresence[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<AgentPresence | null>(null);
 
-    // Listen for agent presence
-    useEffect(() => {
-        const unsub = presenceService.listen((incoming) => {
-            // Add Antigravity as static agent if missing
-            const hasAntigravity = incoming.some(a => a.id === 'antigravity');
-            const all = hasAntigravity ? incoming : [{
-                id: 'antigravity',
-                displayName: 'Antigravity',
-                emoji: '🌌',
-                status: 'working' as const,
-                currentTask: 'Pair programming with Tremaine',
-                currentTaskId: '',
-                notes: 'IDE Agent — always online',
-                executionSteps: [],
-                currentStepIndex: -1,
-                taskProgress: 0,
-                lastUpdate: new Date(),
-                sessionStartedAt: new Date(),
-            }, ...incoming];
-            setAgents(all);
+  // Listen for agent presence
+  useEffect(() => {
+    const unsub = presenceService.listen((incoming) => {
+      // Add Antigravity as static agent if missing
+      const hasAntigravity = incoming.some(a => a.id === 'antigravity');
+      const all = hasAntigravity ? incoming : [{
+        id: 'antigravity',
+        displayName: 'Antigravity',
+        emoji: '🌌',
+        status: 'working' as const,
+        currentTask: 'Pair programming with Tremaine',
+        currentTaskId: '',
+        notes: 'IDE Agent — always online',
+        executionSteps: [],
+        currentStepIndex: -1,
+        taskProgress: 0,
+        lastUpdate: new Date(),
+        sessionStartedAt: new Date(),
+      }, ...incoming];
+      setAgents(all);
 
-            // Update selected agent data if we're in a chat
-            if (selectedAgent) {
-                const updated = all.find(a => a.id === selectedAgent.id);
-                if (updated) setSelectedAgent(updated);
-            }
-        });
-        return unsub;
-    }, [selectedAgent?.id]);
+      // Update selected agent data if we're in a chat
+      if (selectedAgent) {
+        const updated = all.find(a => a.id === selectedAgent.id);
+        if (updated) setSelectedAgent(updated);
+      }
+    });
+    return unsub;
+  }, [selectedAgent?.id]);
 
-    // Handle agent from URL param
-    useEffect(() => {
-        const agentId = router.query.agent as string;
-        if (agentId && agents.length > 0 && !selectedAgent) {
-            const found = agents.find(a => a.id === agentId);
-            if (found) setSelectedAgent(found);
-        }
-    }, [router.query.agent, agents, selectedAgent]);
+  // Handle agent from URL param
+  useEffect(() => {
+    const agentId = router.query.agent as string;
+    if (agentId && agents.length > 0 && !selectedAgent) {
+      const found = agents.find(a => a.id === agentId);
+      if (found) setSelectedAgent(found);
+    }
+  }, [router.query.agent, agents, selectedAgent]);
 
-    return (
-        <div className="ac-root">
-            <Head>
-                <title>Agent Chat – Pulse Admin</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-                <meta name="apple-mobile-web-app-capable" content="yes" />
-                <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-                <meta name="theme-color" content="#09090b" />
-                <link rel="preconnect" href="https://fonts.googleapis.com" />
-                <link
-                    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-                    rel="stylesheet"
-                />
-            </Head>
-            <AdminRouteGuard>
-                {selectedAgent ? (
-                    <ChatScreen
-                        agent={selectedAgent}
-                        onBack={() => {
-                            setSelectedAgent(null);
-                            router.replace('/admin/agentChat', undefined, { shallow: true });
-                        }}
-                    />
-                ) : (
-                    <AgentListScreen agents={agents} onSelectAgent={(agent) => {
-                        setSelectedAgent(agent);
-                        router.replace(`/admin/agentChat?agent=${agent.id}`, undefined, { shallow: true });
-                    }} />
-                )}
-            </AdminRouteGuard>
+  return (
+    <div className="ac-root">
+      <Head>
+        <title>Agent Chat – Pulse Admin</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="theme-color" content="#09090b" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </Head>
+      <AdminRouteGuard>
+        {selectedAgent ? (
+          <ChatScreen
+            agent={selectedAgent}
+            onBack={() => {
+              setSelectedAgent(null);
+              router.replace('/admin/agentChat', undefined, { shallow: true });
+            }}
+          />
+        ) : (
+          <AgentListScreen agents={agents} onSelectAgent={(agent) => {
+            setSelectedAgent(agent);
+            router.replace(`/admin/agentChat?agent=${agent.id}`, undefined, { shallow: true });
+          }} />
+        )}
+      </AdminRouteGuard>
 
-            <style jsx global>{`
+      <style jsx global>{`
         /* ─── Root & Reset ─────────────────────────────── */
         .ac-root {
           font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -723,6 +764,39 @@ const AgentChatContent: React.FC = () => {
           font-size: 12px;
           font-weight: 600;
           flex-shrink: 0;
+        }
+
+        /* ─── Error Banner ─────────────────────────────── */
+        .ac-error-banner {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 16px;
+          background: rgba(239, 68, 68, 0.15);
+          border-bottom: 1px solid rgba(239, 68, 68, 0.25);
+          color: #fca5a5;
+          font-size: 12px;
+          animation: slideDown 0.2s ease;
+        }
+
+        .ac-error-close {
+          margin-left: auto;
+          background: none;
+          border: none;
+          color: #fca5a5;
+          cursor: pointer;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 14px;
+        }
+
+        .ac-error-close:hover {
+          background: rgba(239, 68, 68, 0.15);
+        }
+
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
         }
 
         /* ─── Messages ─────────────────────────────────── */
@@ -1094,12 +1168,12 @@ const AgentChatContent: React.FC = () => {
           background: transparent;
         }
       `}</style>
-        </div>
-    );
+    </div>
+  );
 };
 
 /* ─── Export ───────────────────────────────────────────── */
 
 export default function AgentChatPage() {
-    return <AgentChatContent />;
+  return <AgentChatContent />;
 }

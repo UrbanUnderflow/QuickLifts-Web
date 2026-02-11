@@ -418,6 +418,37 @@ service cloud.firestore {
       allow read, write: if isOwner(userId) || isAdmin();
     }
     
+    // ============================================================================
+    // AGENT SYSTEM COLLECTIONS
+    // ============================================================================
+    
+    // Agent commands (chat messages & task assignments)
+    // UI access is already gated by AdminRouteGuard (doc-based admin check)
+    // Agent runner uses Admin SDK which bypasses rules entirely
+    match /agent-commands/{commandId} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // Agent presence (online status, current task, etc.)
+    match /agent-presence/{agentId} {
+      // Any authenticated user can read agent presence (for Virtual Office)
+      allow read: if isAuthenticated();
+      // Only admins can write (agent runner uses Admin SDK, so this is for web UI)
+      allow write: if isAdmin();
+      
+      // Task history subcollection
+      match /task-history/{historyId} {
+        allow read: if isAuthenticated();
+        allow write: if isAdmin();
+      }
+    }
+    
+    // Kanban tasks (agent task board)
+    match /kanban-tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
     // Default deny rule for any unmatched documents
     match /{document=**} {
       allow read, write: if false;
