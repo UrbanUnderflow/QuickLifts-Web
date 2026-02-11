@@ -213,16 +213,39 @@ interface AgentDeskProps {
 
 const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
   const [hovered, setHovered] = useState(false);
+  const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
   const status = STATUS_CONFIG[agent.status];
   const sessionDuration = formatDuration(agent.sessionStartedAt);
   const hasSteps = agent.executionSteps && agent.executionSteps.length > 0;
+
+  const handleMouseEnter = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setHovered(true);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    hoverTimerRef.current = setTimeout(() => {
+      setHovered(false);
+      hoverTimerRef.current = null;
+    }, 2000); // 2 second linger
+  }, []);
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    };
+  }, []);
 
   return (
     <div
       className="agent-desk-sprite"
       style={{ left: `${position.x}%`, top: `${position.y}%` }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       {/* Status halo / glow under the desk */}
       <div className="desk-glow" style={{ boxShadow: `0 0 40px 15px ${status.glow}` }} />
