@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { presenceService, AgentPresence, AgentThoughtStep } from '../../api/firebase/presence/service';
+import { presenceService, AgentPresence, AgentThoughtStep, TaskHistoryEntry } from '../../api/firebase/presence/service';
 import { kanbanService } from '../../api/firebase/kanban/service';
 import { KanbanTask } from '../../api/firebase/kanban/types';
 import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
-  ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap
+  ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
+  History, ChevronRight
 } from 'lucide-react';
 
 /* ─── helpers ─────────────────────────────────────────── */
@@ -46,6 +47,14 @@ const DESK_POSITIONS = [
   { x: 40, y: 26, facing: 'right' as const },
   { x: 40, y: 86, facing: 'left' as const },
 ];
+
+/* ─── Agent roles / job titles ─────────────────────── */
+
+const AGENT_ROLES: Record<string, string> = {
+  antigravity: 'Co-CEO · Strategy & Architecture',
+  nora: 'Lead Engineer',
+  // Add more agents here as they join
+};
 
 /* ─── Status colours ──────────────────────────────────── */
 
@@ -204,6 +213,114 @@ const ExecutionStepsPanel: React.FC<{
   );
 };
 
+/* ─── Task History Panel ──────────────────────────────── */
+
+const TaskHistoryPanel: React.FC<{ agentId: string }> = ({ agentId }) => {
+  const [expanded, setExpanded] = useState(false);
+  const [history, setHistory] = useState<TaskHistoryEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
+  const fetched = useRef(false);
+
+  const loadHistory = useCallback(async () => {
+    if (fetched.current) {
+      setExpanded(e => !e);
+      return;
+    }
+    setLoading(true);
+    setExpanded(true);
+    try {
+      const entries = await presenceService.fetchTaskHistory(agentId, 10);
+      setHistory(entries);
+      fetched.current = true;
+    } catch (err) {
+      console.error('Failed to load task history:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [agentId]);
+
+  return (
+    <div className="task-history-section">
+      <button
+        onClick={loadHistory}
+        className="history-toggle"
+      >
+        <History className="w-3 h-3" />
+        <span>Task History</span>
+        <ChevronDown className={`w-3 h-3 ml-auto transition-transform ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+
+      {expanded && (
+        <div className="history-list">
+          {loading && (
+            <div className="flex items-center justify-center py-3">
+              <Loader2 className="w-3.5 h-3.5 text-zinc-500 animate-spin" />
+            </div>
+          )}
+
+          {!loading && history.length === 0 && (
+            <p className="text-[10px] text-zinc-600 text-center py-2">No completed tasks yet</p>
+          )}
+
+          {history.map((entry) => {
+            const isEntryExpanded = expandedEntry === entry.id;
+            const entryDate = entry.completedAt;
+            const timeStr = entryDate?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '';
+            const dateStr = entryDate?.toLocaleDateString([], { month: 'short', day: 'numeric' }) || '';
+
+            return (
+              <div key={entry.id} className="history-entry">
+                <button
+                  className="history-entry-header"
+                  onClick={() => setExpandedEntry(isEntryExpanded ? null : (entry.id || null))}
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {entry.status === 'completed'
+                      ? <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
+                      : <XCircle className="w-3 h-3 text-red-400 flex-shrink-0" />}
+                    <span className="text-[11px] text-zinc-200 truncate">{entry.taskName}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className="text-[9px] text-zinc-600">{formatMs(entry.totalDurationMs)}</span>
+                    <ChevronRight className={`w-2.5 h-2.5 text-zinc-600 transition-transform ${isEntryExpanded ? 'rotate-90' : ''}`} />
+                  </div>
+                </button>
+
+                {/* Expanded: show step list */}
+                {isEntryExpanded && (
+                  <div className="history-entry-steps">
+                    <div className="flex items-center justify-between text-[9px] text-zinc-600 mb-1.5">
+                      <span>{dateStr} at {timeStr}</span>
+                      <span>{entry.completedStepCount}/{entry.stepCount} steps</span>
+                    </div>
+                    {entry.steps.map((step, si) => (
+                      <div key={step.id || si} className="history-step">
+                        <StepIcon status={step.status} />
+                        <span className={`text-[10px] truncate ${step.status === 'completed' ? 'text-zinc-400'
+                          : step.status === 'failed' ? 'text-red-400'
+                            : 'text-zinc-600'
+                          }`}>
+                          {step.description}
+                        </span>
+                        {step.durationMs ? (
+                          <span className="text-[9px] text-zinc-700 ml-auto flex-shrink-0">
+                            {formatMs(step.durationMs)}
+                          </span>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ─── Agent Desk Sprite ───────────────────────────────── */
 
 interface AgentDeskProps {
@@ -284,10 +401,15 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
       {/* Chair */}
       <div className="office-chair" />
 
-      {/* Nameplate + progress */}
+      {/* Nameplate + role + progress */}
       <div className="agent-nameplate">
         <span className={`status-dot ${agent.status}`} />
-        <span className="agent-name">{agent.displayName}</span>
+        <div className="nameplate-text">
+          <span className="agent-name">{agent.displayName}</span>
+          {AGENT_ROLES[agent.id] && (
+            <span className="agent-role">{AGENT_ROLES[agent.id]}</span>
+          )}
+        </div>
         {hasSteps && agent.taskProgress > 0 && (
           <span className="name-progress">{agent.taskProgress}%</span>
         )}
@@ -333,6 +455,9 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
               <p className="text-[11px] text-zinc-300 whitespace-pre-wrap">{agent.notes}</p>
             </div>
           )}
+
+          {/* Task History */}
+          <TaskHistoryPanel agentId={agent.id} />
 
           {/* Footer */}
           <div className="detail-footer">
@@ -502,6 +627,27 @@ const VirtualOfficeContent: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+
+        {/* ── Commander card (Antigravity — always present) ── */}
+        <div className="commander-strip">
+          <div className="commander-card">
+            <div className="commander-avatar">
+              <span className="text-lg">🌌</span>
+              <div className="commander-pulse" />
+            </div>
+            <div className="commander-info">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-white">Antigravity</span>
+                <span className="commander-badge">Co-CEO</span>
+              </div>
+              <p className="text-[10px] text-zinc-500 mt-0.5">Strategy & Architecture · IDE Agent</p>
+            </div>
+            <div className="commander-status">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-[10px] text-green-400">Online</span>
+            </div>
+          </div>
         </div>
 
         {/* ── The Office Floor ── */}
@@ -733,12 +879,16 @@ const VirtualOfficeContent: React.FC = () => {
           border: 1px solid rgba(63,63,70,0.3);
           white-space: nowrap; z-index: 10;
         }
+        .nameplate-text {
+          display: flex; flex-direction: column; align-items: center; gap: 0;
+        }
         .status-dot { width: 6px; height: 6px; border-radius: 50%; }
         .status-dot.working { background: #22c55e; animation: dotPulse 2s infinite; }
         .status-dot.idle { background: #f59e0b; }
         .status-dot.offline { background: #52525b; }
         @keyframes dotPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); } 50% { box-shadow: 0 0 0 4px rgba(34,197,94,0); } }
         .agent-name { font-size: 10px; font-weight: 600; color: #d4d4d8; letter-spacing: 0.02em; }
+        .agent-role { font-size: 8px; font-weight: 500; color: #71717a; letter-spacing: 0.03em; line-height: 1; margin-top: -1px; }
         .name-progress { font-size: 9px; font-weight: 700; color: #3b82f6; margin-left: 2px; }
 
         /* ══════════════════════════════════════════════════ */
@@ -933,6 +1083,101 @@ const VirtualOfficeContent: React.FC = () => {
           padding: 6px 8px;
         }
 
+        /* ── Commander strip ── */
+        .commander-strip {
+          max-width: 1200px;
+          margin: 16px auto 0;
+          padding: 0 28px;
+        }
+        .commander-card {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.06));
+          border: 1px solid rgba(99,102,241,0.2);
+          border-radius: 14px;
+          padding: 12px 18px;
+          backdrop-filter: blur(12px);
+          transition: all 0.3s ease;
+        }
+        .commander-card:hover {
+          border-color: rgba(99,102,241,0.35);
+          box-shadow: 0 0 30px rgba(99,102,241,0.08);
+        }
+        .commander-avatar {
+          position: relative;
+          width: 40px; height: 40px;
+          display: flex; align-items: center; justify-content: center;
+          background: rgba(99,102,241,0.15);
+          border-radius: 12px;
+          border: 1px solid rgba(99,102,241,0.3);
+        }
+        .commander-pulse {
+          position: absolute; bottom: -2px; right: -2px;
+          width: 10px; height: 10px;
+          background: #22c55e;
+          border-radius: 50%;
+          border: 2px solid #030508;
+          animation: dotPulse 2s infinite;
+        }
+        .commander-info { flex: 1; min-width: 0; }
+        .commander-badge {
+          font-size: 9px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: #a78bfa;
+          background: rgba(139,92,246,0.12);
+          border: 1px solid rgba(139,92,246,0.25);
+          padding: 2px 8px;
+          border-radius: 6px;
+        }
+        .commander-status {
+          display: flex; align-items: center; gap: 5px;
+        }
+
+        /* ── Task history panel ── */
+        .task-history-section {
+          margin-top: 8px;
+          border-top: 1px solid rgba(63,63,70,0.2);
+          padding-top: 6px;
+        }
+        .history-toggle {
+          display: flex; align-items: center; gap: 5px;
+          width: 100%;
+          padding: 4px 0;
+          background: none; border: none; cursor: pointer;
+          color: #71717a;
+          font-size: 10px;
+          font-weight: 500;
+          transition: color 0.2s;
+        }
+        .history-toggle:hover { color: #a1a1aa; }
+        .history-list {
+          max-height: 220px;
+          overflow-y: auto;
+          margin-top: 4px;
+        }
+        .history-entry {
+          border-bottom: 1px solid rgba(63,63,70,0.12);
+        }
+        .history-entry:last-child { border-bottom: none; }
+        .history-entry-header {
+          display: flex; align-items: center; justify-content: space-between;
+          width: 100%; gap: 8px;
+          padding: 5px 2px;
+          background: none; border: none; cursor: pointer;
+          transition: background 0.15s;
+        }
+        .history-entry-header:hover { background: rgba(255,255,255,0.02); }
+        .history-entry-steps {
+          padding: 4px 6px 8px 18px;
+        }
+        .history-step {
+          display: flex; align-items: center; gap: 5px;
+          padding: 2px 0;
+        }
+
         /* ── Empty state ── */
         .empty-office { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 5; }
         .empty-icon { font-size: 48px; margin-bottom: 12px; animation: emptyFloat 3s ease-in-out infinite; }
@@ -944,6 +1189,7 @@ const VirtualOfficeContent: React.FC = () => {
           .voffice-stats { flex-wrap: wrap; }
           .office-floor { min-height: 400px; }
           .hover-detail-panel { width: 240px; max-height: 350px; }
+          .commander-card { flex-wrap: wrap; }
         }
       `}</style>
     </div>

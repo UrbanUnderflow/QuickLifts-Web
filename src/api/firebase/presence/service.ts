@@ -1,4 +1,4 @@
-import { collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, Unsubscribe, Timestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, addDoc, getDocs, query, orderBy, limit, Unsubscribe, Timestamp } from 'firebase/firestore';
 import { db } from '../config';
 
 export type AgentStatus = 'offline' | 'idle' | 'working';
@@ -40,7 +40,23 @@ export interface AgentPresence {
   sessionStartedAt?: Date;
 }
 
+/* ─── Task history entry (completed pipelines) ─────────── */
+
+export interface TaskHistoryEntry {
+  id?: string;
+  taskName: string;
+  taskId: string;
+  status: 'completed' | 'failed';
+  steps: AgentThoughtStep[];
+  startedAt: Date;
+  completedAt: Date;
+  totalDurationMs: number;
+  stepCount: number;
+  completedStepCount: number;
+}
+
 const COLLECTION = 'agent-presence';
+const HISTORY_SUBCOLLECTION = 'task-history';
 
 /* ─── Serialise thought steps for Firestore ────────────── */
 
@@ -272,6 +288,60 @@ export const presenceService = {
       executionSteps: [],
       currentStepIndex: -1,
       lastUpdate: serverTimestamp(),
+    });
+  },
+
+  /**
+   * Save a completed task pipeline to history
+   */
+  async saveTaskHistory(
+    agentId: string,
+    taskName: string,
+    taskId: string,
+    steps: AgentThoughtStep[],
+    status: 'completed' | 'failed',
+    startedAt: Date
+  ) {
+    const historyRef = collection(db, COLLECTION, agentId, HISTORY_SUBCOLLECTION);
+    const completedAt = new Date();
+    const totalDurationMs = completedAt.getTime() - startedAt.getTime();
+    const completedStepCount = steps.filter(s => s.status === 'completed').length;
+
+    await addDoc(historyRef, {
+      taskName,
+      taskId,
+      status,
+      steps: steps.map(serialiseStep),
+      startedAt,
+      completedAt,
+      totalDurationMs,
+      stepCount: steps.length,
+      completedStepCount,
+    });
+  },
+
+  /**
+   * Fetch task history for an agent (most recent first)
+   */
+  async fetchTaskHistory(agentId: string, count: number = 10): Promise<TaskHistoryEntry[]> {
+    const historyRef = collection(db, COLLECTION, agentId, HISTORY_SUBCOLLECTION);
+    const q = query(historyRef, orderBy('completedAt', 'desc'), limit(count));
+    const snap = await getDocs(q);
+
+    return snap.docs.map((docSnap) => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        taskName: data.taskName || 'Unknown task',
+        taskId: data.taskId || '',
+        status: data.status || 'completed',
+        steps: (data.steps || []).map(deserialiseStep),
+        startedAt: data.startedAt?.toDate?.() || new Date(data.startedAt),
+        completedAt: data.completedAt?.toDate?.() || new Date(data.completedAt),
+        totalDurationMs: data.totalDurationMs || 0,
+        stepCount: data.stepCount || 0,
+        completedStepCount: data.completedStepCount || 0,
+      };
     });
   },
 
