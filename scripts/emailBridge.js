@@ -4,12 +4,13 @@
  * Nora Email Bridge — Gmail ↔ Agent Runner
  *
  * This script polls Gmail for new emails sent to nora@fitwithpulse.ai,
- * validates the sender domain, writes the email as a task/command into Firestore,
+ * classifies the sender, writes the email as a task/command into Firestore,
  * and sends replies via Brevo.
  *
  * Security:
- *   - Only processes emails from @fitwithpulse.ai senders
- *   - All other emails are silently ignored (or get an "internal only" bounce)
+ *   - Accepts emails from anyone (internal + external)
+ *   - Tags senders as 'internal' (@fitwithpulse.ai) or 'external'
+ *   - Content guardrails prevent sharing sensitive info with external senders
  *
  * Requirements:
  *   1. Gmail API enabled in Google Cloud Console
@@ -233,11 +234,15 @@ function cleanEmailBody(body) {
     return cleaned.trim();
 }
 
-/* ─── Security: Domain Validation ─────────────────────── */
+/* ─── Sender Classification ───────────────────────────── */
 
-function isAllowedSender(email) {
+/**
+ * Classify sender as 'internal' (team) or 'external'.
+ * Internal senders get full access; external senders get content-guarded responses.
+ */
+function classifySender(email) {
     const domain = email.split('@')[1];
-    return domain === ALLOWED_DOMAIN;
+    return domain === ALLOWED_DOMAIN ? 'internal' : 'external';
 }
 
 /* ─── Firestore: Track Processed Emails ───────────────── */
@@ -257,6 +262,8 @@ async function markEmailProcessed(messageId, emailData) {
 /* ─── Create Agent Command from Email ─────────────────── */
 
 async function createAgentCommand(emailData) {
+    const senderType = classifySender(emailData.senderEmail);
+
     const docRef = await db.collection(COMMANDS_COLLECTION).add({
         from: `email:${emailData.senderEmail}`,
         to: AGENT_ID,
@@ -266,6 +273,7 @@ async function createAgentCommand(emailData) {
             subject: emailData.subject,
             senderName: emailData.senderName,
             senderEmail: emailData.senderEmail,
+            senderType,  // 'internal' or 'external'
             gmailMessageId: emailData.messageId,
             gmailThreadId: emailData.threadId,
             receivedAt: emailData.receivedAt,
@@ -274,7 +282,7 @@ async function createAgentCommand(emailData) {
         createdAt: FieldValue.serverTimestamp(),
     });
 
-    console.log(`📋 Created agent command: ${docRef.id}`);
+    console.log(`📋 Created agent command (${senderType}): ${docRef.id}`);
     return docRef.id;
 }
 
@@ -414,23 +422,9 @@ async function pollInbox() {
 
             const senderEmail = extractSenderEmail(from);
             const senderName = extractSenderName(from) || senderEmail.split('@')[0];
+            const senderType = classifySender(senderEmail);
 
-            // Security check: only allow internal emails
-            if (!isAllowedSender(senderEmail)) {
-                console.log(`🚫 Blocked external sender: ${senderEmail}`);
-                await markEmailProcessed(msg.id, {
-                    senderEmail,
-                    subject,
-                    status: 'blocked',
-                    reason: 'external_sender',
-                });
-                // Mark as read so we don't keep checking it
-                await gmailApi(`messages/${msg.id}/modify`, {
-                    method: 'POST',
-                    body: JSON.stringify({ removeLabelIds: ['UNREAD'] }),
-                });
-                continue;
-            }
+            console.log(`   Sender type: ${senderType === 'internal' ? '🏠 internal' : '🌐 external'}`);
 
             // Extract body text
             const rawBody = extractBody(fullMsg.payload);
@@ -658,7 +652,7 @@ async function main() {
     console.log('╔══════════════════════════════════════════╗');
     console.log('║   📧 Nora Email Bridge                  ║');
     console.log('║   Polling: nora@fitwithpulse.ai         ║');
-    console.log('║   Security: @fitwithpulse.ai only       ║');
+    console.log('║   Access: open (content-guarded)        ║');
     console.log(`║   Interval: ${(POLL_INTERVAL_MS / 1000).toFixed(0)}s                        ║`);
     console.log('╚══════════════════════════════════════════╝');
     console.log('');
