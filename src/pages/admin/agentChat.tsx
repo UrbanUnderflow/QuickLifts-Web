@@ -141,40 +141,64 @@ const ChatScreen: React.FC<{
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Listen for messages involving this agent
+  // Listen for messages involving this agent (BOTH directions)
   useEffect(() => {
     const commandsRef = collection(db, 'agent-commands');
-    // Query uses the existing composite index: to (asc) + createdAt (desc)
-    const q = query(
+
+    // Query 1: Messages sent TO the agent (user → agent)
+    const qTo = query(
       commandsRef,
       where('to', '==', agent.id),
       orderBy('createdAt', 'desc'),
       limit(50)
     );
 
-    const unsub = onSnapshot(q,
+    // Query 2: Messages sent FROM the agent (agent → user, proactive messages)
+    const qFrom = query(
+      commandsRef,
+      where('from', '==', agent.id),
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
+
+    // Track results from both listeners and merge
+    let toMsgs: ChatMessage[] = [];
+    let fromMsgs: ChatMessage[] = [];
+
+    const mergAndSet = () => {
+      // Combine, deduplicate by id, sort oldest-first
+      const map = new Map<string, ChatMessage>();
+      [...toMsgs, ...fromMsgs].forEach(m => map.set(m.id, m));
+      const merged = Array.from(map.values()).sort(
+        (a, b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0)
+      );
+      setMessages(merged);
+    };
+
+    const mapDoc = (docSnap: any): ChatMessage => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        from: data.from || 'unknown',
+        to: data.to || '',
+        type: data.type || 'chat',
+        content: data.content || '',
+        response: data.response || '',
+        status: data.status || 'pending',
+        createdAt: data.createdAt?.toDate?.() || undefined,
+        completedAt: data.completedAt?.toDate?.() || undefined,
+        metadata: data.metadata || {},
+      };
+    };
+
+    const unsub1 = onSnapshot(qTo,
       (snapshot) => {
         setError(null);
-        const msgs: ChatMessage[] = snapshot.docs.map((docSnap) => {
-          const data = docSnap.data();
-          return {
-            id: docSnap.id,
-            from: data.from || 'unknown',
-            to: data.to || '',
-            type: data.type || 'chat',
-            content: data.content || '',
-            response: data.response || '',
-            status: data.status || 'pending',
-            createdAt: data.createdAt?.toDate?.() || undefined,
-            completedAt: data.completedAt?.toDate?.() || undefined,
-            metadata: data.metadata || {},
-          };
-        }).reverse(); // oldest first
-        setMessages(msgs);
+        toMsgs = snapshot.docs.map(mapDoc);
+        mergAndSet();
       },
       (err) => {
-        console.error('Firestore listener error:', err);
-        // Check if it's a missing index error
+        console.error('Firestore listener error (to):', err);
         if (err.message?.includes('index')) {
           setError('Missing Firestore index. Check console for the creation link.');
         } else {
@@ -183,7 +207,21 @@ const ChatScreen: React.FC<{
       }
     );
 
-    return unsub;
+    const unsub2 = onSnapshot(qFrom,
+      (snapshot) => {
+        fromMsgs = snapshot.docs.map(mapDoc);
+        mergAndSet();
+      },
+      (err) => {
+        console.error('Firestore listener error (from):', err);
+        // from-query index: from (asc) + createdAt (desc)
+        if (err.message?.includes('index')) {
+          setError('Missing Firestore index for agent messages. Check console for the creation link.');
+        }
+      }
+    );
+
+    return () => { unsub1(); unsub2(); };
   }, [agent.id]);
 
   // Auto-scroll on new messages
@@ -301,66 +339,93 @@ const ChatScreen: React.FC<{
           </div>
         )}
 
-        {messages.map((msg) => (
-          <div key={msg.id} className="ac-message-group">
-            {/* User message (outgoing) */}
-            <div className="ac-msg ac-msg-out">
-              <div className="ac-msg-meta-out">
-                <span className={`ac-msg-type-badge type-${msg.type}`}>
-                  {msg.type}
-                </span>
-                {msg.createdAt && (
-                  <span className="ac-msg-time">{formatTime(msg.createdAt)}</span>
-                )}
-              </div>
-              <div className="ac-msg-bubble ac-bubble-out">
-                <p>{msg.content}</p>
-              </div>
+        {messages.map((msg) => {
+          // Determine if this is an agent-initiated (proactive) message
+          const isProactive = msg.from === agent.id;
+
+          return (
+            <div key={msg.id} className="ac-message-group">
+              {isProactive ? (
+                /* ── Agent-initiated (proactive) message ── */
+                <div className="ac-msg ac-msg-in">
+                  <div className="ac-msg-avatar-sm">
+                    {agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}
+                  </div>
+                  <div className="ac-msg-in-content">
+                    <div className="ac-msg-bubble ac-bubble-in ac-bubble-proactive">
+                      <p>{msg.content}</p>
+                    </div>
+                    <div className="ac-msg-meta-in">
+                      <span className="ac-msg-type-badge type-proactive">
+                        {msg.metadata?.proactiveType || 'update'}
+                      </span>
+                      <span className="ac-msg-time">{msg.createdAt ? formatTime(msg.createdAt) : ''}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* ── User message (outgoing) ── */
+                <>
+                  <div className="ac-msg ac-msg-out">
+                    <div className="ac-msg-meta-out">
+                      <span className={`ac-msg-type-badge type-${msg.type}`}>
+                        {msg.type}
+                      </span>
+                      {msg.createdAt && (
+                        <span className="ac-msg-time">{formatTime(msg.createdAt)}</span>
+                      )}
+                    </div>
+                    <div className="ac-msg-bubble ac-bubble-out">
+                      <p>{msg.content}</p>
+                    </div>
+                  </div>
+
+                  {/* Agent response (incoming) */}
+                  {msg.response && (
+                    <div className="ac-msg ac-msg-in">
+                      <div className="ac-msg-avatar-sm">
+                        {agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}
+                      </div>
+                      <div className="ac-msg-in-content">
+                        <div className="ac-msg-bubble ac-bubble-in">
+                          <p>{msg.response}</p>
+                        </div>
+                        <div className="ac-msg-meta-in">
+                          <StatusIcon status={msg.status} />
+                          <span className="ac-msg-time">{msg.completedAt ? formatTime(msg.completedAt) : ''}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pending/in-progress indicator */}
+                  {!msg.response && msg.status !== 'completed' && (
+                    <div className="ac-msg ac-msg-in">
+                      <div className="ac-msg-avatar-sm">
+                        {agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}
+                      </div>
+                      <div className="ac-msg-in-content">
+                        <div className="ac-msg-bubble ac-bubble-in ac-bubble-pending">
+                          {msg.status === 'in-progress' ? (
+                            <span className="ac-typing">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              Working on it...
+                            </span>
+                          ) : (
+                            <span className="ac-typing">
+                              <Clock className="w-3.5 h-3.5" />
+                              Queued
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-
-            {/* Agent response (incoming) */}
-            {msg.response && (
-              <div className="ac-msg ac-msg-in">
-                <div className="ac-msg-avatar-sm">
-                  {agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}
-                </div>
-                <div className="ac-msg-in-content">
-                  <div className="ac-msg-bubble ac-bubble-in">
-                    <p>{msg.response}</p>
-                  </div>
-                  <div className="ac-msg-meta-in">
-                    <StatusIcon status={msg.status} />
-                    <span className="ac-msg-time">{msg.completedAt ? formatTime(msg.completedAt) : ''}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Pending/in-progress indicator */}
-            {!msg.response && msg.status !== 'completed' && (
-              <div className="ac-msg ac-msg-in">
-                <div className="ac-msg-avatar-sm">
-                  {agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}
-                </div>
-                <div className="ac-msg-in-content">
-                  <div className="ac-msg-bubble ac-bubble-in ac-bubble-pending">
-                    {msg.status === 'in-progress' ? (
-                      <span className="ac-typing">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        Working on it...
-                      </span>
-                    ) : (
-                      <span className="ac-typing">
-                        <Clock className="w-3.5 h-3.5" />
-                        Queued
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
 
         <div ref={messagesEndRef} />
       </div>
@@ -890,6 +955,11 @@ const AgentChatContent: React.FC = () => {
           color: #fb7185;
         }
 
+        .ac-msg-type-badge.type-proactive {
+          background: rgba(20, 184, 166, 0.15);
+          color: #2dd4bf;
+        }
+
         .ac-msg-time {
           font-size: 10px;
           color: #52525b;
@@ -923,6 +993,10 @@ const AgentChatContent: React.FC = () => {
 
         .ac-bubble-pending {
           padding: 10px 16px;
+        }
+
+        .ac-bubble-proactive {
+          border-left: 3px solid #14b8a6;
         }
 
         .ac-msg-avatar-sm {
