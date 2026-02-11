@@ -43,11 +43,13 @@ const MESSAGE_TYPES: { type: MessageType; label: string; icon: React.ReactNode; 
 const AGENT_EMOJIS: Record<string, string> = {
   nora: '⚡',
   antigravity: '🌌',
+  scout: '🕵️',
 };
 
 const AGENT_ROLES: Record<string, string> = {
   nora: 'Director of System Ops',
   antigravity: 'Co-CEO · Strategy & Architecture',
+  scout: 'Influencer Research Analyst',
 };
 
 const formatTime = (date?: Date) => {
@@ -505,16 +507,37 @@ const AgentChatContent: React.FC = () => {
   const [agents, setAgents] = useState<AgentPresence[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AgentPresence | null>(null);
 
+  const SCOUT_FALLBACK: AgentPresence = {
+    id: 'scout',
+    displayName: 'Scout',
+    emoji: '🕵️',
+    status: 'idle',
+    currentTask: '',
+    currentTaskId: '',
+    notes: 'Ready for research assignments',
+    executionSteps: [],
+    currentStepIndex: -1,
+    taskProgress: 0,
+    lastUpdate: new Date(),
+    sessionStartedAt: new Date(),
+  };
+
   // Listen for agent presence
   useEffect(() => {
     const unsub = presenceService.listen((incoming) => {
       // Filter out Antigravity — it communicates directly via the IDE
-      const all = incoming.filter(a => a.id !== 'antigravity');
-      setAgents(all);
+      const visible = incoming.filter(a => a.id !== 'antigravity');
+
+      // Ensure Scout can always be selected in chat
+      if (!visible.some(a => a.id === 'scout')) {
+        visible.push(SCOUT_FALLBACK);
+      }
+
+      setAgents(visible.sort((a, b) => a.displayName.localeCompare(b.displayName)));
 
       // Update selected agent data if we're in a chat
       if (selectedAgent) {
-        const updated = all.find(a => a.id === selectedAgent.id);
+        const updated = visible.find(a => a.id === selectedAgent.id);
         if (updated) setSelectedAgent(updated);
       }
     });
