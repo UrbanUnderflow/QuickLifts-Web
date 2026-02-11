@@ -52,8 +52,13 @@ const DESK_POSITIONS = [
 
 const AGENT_ROLES: Record<string, string> = {
   antigravity: 'Co-CEO · Strategy & Architecture',
-  nora: 'Lead Engineer',
+  nora: 'Director of System Ops',
   // Add more agents here as they join
+};
+
+const AGENT_DUTIES: Record<string, string> = {
+  antigravity: 'Drives product strategy, system architecture, and pair-programs with the CEO. Coordinates cross-agent work and reviews critical code paths.',
+  nora: 'Maintains the living system map across all surfaces. Owns Kanban ops, agent orchestration, telemetry, and product ops — the operations nerve center for Pulse.',
 };
 
 /* ─── Status colours ──────────────────────────────────── */
@@ -357,6 +362,23 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
     };
   }, []);
 
+  // Random coffee break
+  const [isOnCoffeeBreak, setIsOnCoffeeBreak] = useState(false);
+  useEffect(() => {
+    const scheduleCoffee = () => {
+      const delay = 45_000 + Math.random() * 45_000; // 45-90s
+      return setTimeout(() => {
+        setIsOnCoffeeBreak(true);
+        // Come back after animation completes (8s)
+        setTimeout(() => setIsOnCoffeeBreak(false), 8000);
+        // Schedule next break
+        coffeeTimer.current = scheduleCoffee();
+      }, delay);
+    };
+    const coffeeTimer = { current: scheduleCoffee() };
+    return () => clearTimeout(coffeeTimer.current);
+  }, []);
+
   return (
     <div
       className="agent-desk-sprite"
@@ -390,12 +412,13 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
       </div>
 
       {/* Character */}
-      <div className={`office-character ${agent.status}`}>
+      <div className={`office-character ${agent.status} ${isOnCoffeeBreak ? 'coffee-walk' : ''}`}>
         <div className="char-head" />
         <div className="char-body">
           <div className="char-arm left" />
           <div className="char-arm right" />
         </div>
+        {isOnCoffeeBreak && <div className="coffee-cup-held">☕</div>}
       </div>
 
       {/* Chair */}
@@ -428,6 +451,17 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
               {status.label}
             </span>
           </div>
+          {/* Role & duty */}
+          {(AGENT_ROLES[agent.id] || AGENT_DUTIES[agent.id]) && (
+            <div className="detail-duty">
+              {AGENT_ROLES[agent.id] && (
+                <p className="text-[10px] font-semibold text-indigo-400">{AGENT_ROLES[agent.id]}</p>
+              )}
+              {AGENT_DUTIES[agent.id] && (
+                <p className="text-[10px] text-zinc-500 mt-0.5 leading-snug">{AGENT_DUTIES[agent.id]}</p>
+              )}
+            </div>
+          )}
 
           {/* Current task */}
           {agent.currentTask && (
@@ -510,6 +544,41 @@ const OfficeDecorations: React.FC = () => (
       <div className="cooler-tank" />
       <div className="cooler-body" />
     </div>
+
+    {/* Coffee machine */}
+    <div className="coffee-machine">
+      <div className="cm-body">
+        <div className="cm-top" />
+        <div className="cm-screen" />
+        <div className="cm-nozzle" />
+        <div className="cm-drip-tray" />
+      </div>
+      <div className="cm-steam s1" />
+      <div className="cm-steam s2" />
+      <div className="cm-steam s3" />
+      <div className="cm-label">☕</div>
+    </div>
+
+    {/* Bookshelf */}
+    <div className="office-bookshelf">
+      <div className="shelf-unit">
+        <div className="shelf-row">
+          <div className="book b1" />
+          <div className="book b2" />
+          <div className="book b3" />
+          <div className="book b4" />
+        </div>
+        <div className="shelf-divider" />
+        <div className="shelf-row">
+          <div className="book b5" />
+          <div className="book b6" />
+          <div className="book b7" />
+        </div>
+      </div>
+    </div>
+
+    {/* Cozy rug */}
+    <div className="office-rug" />
 
     {/* Wall clock */}
     <div className="wall-clock">
@@ -789,6 +858,50 @@ const VirtualOfficeContent: React.FC = () => {
         .cooler-tank { width: 18px; height: 22px; background: linear-gradient(180deg, rgba(147,197,253,0.3), rgba(96,165,250,0.15)); border: 1px solid rgba(147,197,253,0.2); border-radius: 6px 6px 2px 2px; margin: 0 auto; }
         .cooler-body { width: 22px; height: 28px; background: #d4d4d8; border-radius: 3px; margin: 0 auto; }
 
+        /* Coffee machine */
+        .coffee-machine { position: absolute; top: 47%; left: 50%; transform: translateX(-50%); z-index: 3; }
+        .cm-body { width: 36px; height: 46px; background: linear-gradient(180deg, #374151, #1f2937); border-radius: 6px 6px 3px 3px; position: relative; border: 1px solid rgba(75,85,99,0.5); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+        .cm-top { position: absolute; top: -3px; left: 2px; right: 2px; height: 6px; background: linear-gradient(180deg, #4b5563, #374151); border-radius: 4px 4px 0 0; }
+        .cm-screen { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 16px; height: 8px; background: rgba(34,197,94,0.3); border-radius: 2px; border: 1px solid rgba(34,197,94,0.2); animation: screenGlow 3s ease-in-out infinite; }
+        @keyframes screenGlow { 0%,100% { background: rgba(34,197,94,0.2); } 50% { background: rgba(34,197,94,0.5); } }
+        .cm-nozzle { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); width: 8px; height: 4px; background: #6b7280; border-radius: 0 0 2px 2px; }
+        .cm-drip-tray { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); width: 24px; height: 4px; background: #4b5563; border-radius: 2px; }
+        .cm-steam { position: absolute; top: -8px; width: 2px; background: rgba(255,255,255,0.15); border-radius: 4px; animation: steamRise 2s ease-in-out infinite; }
+        .cm-steam.s1 { left: 12px; height: 10px; animation-delay: 0s; }
+        .cm-steam.s2 { left: 18px; height: 14px; animation-delay: 0.7s; }
+        .cm-steam.s3 { left: 24px; height: 8px; animation-delay: 1.4s; }
+        @keyframes steamRise {
+          0% { opacity: 0; transform: translateY(0) scaleX(1); }
+          30% { opacity: 0.6; }
+          70% { opacity: 0.3; transform: translateY(-12px) scaleX(1.5); }
+          100% { opacity: 0; transform: translateY(-20px) scaleX(2); }
+        }
+        .cm-label { position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%); font-size: 10px; }
+
+        /* Bookshelf */
+        .office-bookshelf { position: absolute; top: 1.5%; left: 82%; z-index: 2; }
+        .shelf-unit { width: 56px; background: linear-gradient(180deg, #44403c, #292524); border-radius: 3px; padding: 3px; border: 1px solid rgba(68,64,60,0.5); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        .shelf-row { display: flex; gap: 2px; padding: 2px 1px; justify-content: center; }
+        .shelf-divider { height: 2px; background: #57534e; margin: 1px 0; border-radius: 1px; }
+        .book { width: 6px; border-radius: 1px; }
+        .book.b1 { height: 18px; background: #ef4444; }
+        .book.b2 { height: 16px; background: #3b82f6; }
+        .book.b3 { height: 20px; background: #f59e0b; }
+        .book.b4 { height: 15px; background: #8b5cf6; }
+        .book.b5 { height: 17px; background: #10b981; }
+        .book.b6 { height: 19px; background: #ec4899; }
+        .book.b7 { height: 14px; background: #6366f1; }
+
+        /* Cozy rug */
+        .office-rug {
+          position: absolute;
+          top: 43%; left: 35%; width: 30%; height: 16%;
+          background: radial-gradient(ellipse, rgba(139,92,246,0.06), rgba(99,102,241,0.03), transparent 70%);
+          border: 1px solid rgba(139,92,246,0.06);
+          border-radius: 50%;
+          z-index: 0;
+        }
+
         .wall-clock { position: absolute; top: 2%; right: 18%; z-index: 2; }
         .clock-face { width: 32px; height: 32px; border-radius: 50%; background: #1e293b; border: 2px solid #334155; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
         .clock-hand { position: absolute; bottom: 50%; left: 50%; transform-origin: bottom center; border-radius: 2px; }
@@ -866,6 +979,41 @@ const VirtualOfficeContent: React.FC = () => {
         .office-character.offline { opacity: 0.3; filter: grayscale(0.8); }
         .office-character.offline .char-arm { animation: none; }
 
+        /* Coffee break animation */
+        .office-character.coffee-walk {
+          animation: coffeeTrip 8s ease-in-out forwards;
+        }
+        .office-character.coffee-walk .char-arm {
+          animation: walkSwing 0.4s ease-in-out infinite alternate !important;
+        }
+        .coffee-cup-held {
+          position: absolute;
+          bottom: 4px;
+          right: -10px;
+          font-size: 8px;
+          opacity: 0;
+          animation: cupAppear 8s ease-in-out forwards;
+        }
+        @keyframes coffeeTrip {
+          0%   { transform: translateX(calc(-50% - 16px)) translateY(0); }
+          15%  { transform: translateX(calc(-50% - 16px)) translateY(-40px); }
+          30%  { transform: translateX(calc(-50% + 40px)) translateY(-60px); }
+          45%  { transform: translateX(calc(-50% + 40px)) translateY(-60px); }
+          60%  { transform: translateX(calc(-50% + 40px)) translateY(-60px); }
+          75%  { transform: translateX(calc(-50% - 16px)) translateY(-40px); }
+          90%  { transform: translateX(calc(-50% - 16px)) translateY(0); }
+          100% { transform: translateX(calc(-50% - 16px)) translateY(0); }
+        }
+        @keyframes walkSwing {
+          0%   { transform: rotate(-15deg); }
+          100% { transform: rotate(15deg); }
+        }
+        @keyframes cupAppear {
+          0%, 25%  { opacity: 0; }
+          35%, 80% { opacity: 1; }
+          90%, 100% { opacity: 0; }
+        }
+
         .office-chair { position: absolute; bottom: 24px; left: 50%; transform: translateX(calc(-50% - 18px)); width: 22px; height: 24px; border-radius: 8px 8px 4px 4px; background: linear-gradient(180deg, #1e293b, #0f172a); box-shadow: 0 2px 4px rgba(0,0,0,0.3); z-index: 1; }
 
         /* Nameplate */
@@ -930,6 +1078,13 @@ const VirtualOfficeContent: React.FC = () => {
           margin-bottom: 10px;
           padding-bottom: 10px;
           border-bottom: 1px solid rgba(63,63,70,0.2);
+        }
+        .detail-duty {
+          margin-bottom: 8px;
+          padding: 6px 8px;
+          background: rgba(99,102,241,0.04);
+          border: 1px solid rgba(99,102,241,0.1);
+          border-radius: 8px;
         }
         .detail-task {
           margin-bottom: 10px;
