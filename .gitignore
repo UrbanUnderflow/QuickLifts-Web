@@ -17,3 +17,6 @@ temp/
 
 # Gmail OAuth token (email bridge)
 .gmail-token.json
+
+# OpenClaw temp files
+.openclaw-prompt.tmp

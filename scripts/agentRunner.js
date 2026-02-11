@@ -552,6 +552,67 @@ async function decomposeTask(task) {
 
 /* ─── Execute a step ──────────────────────────────────── */
 
+const projectDir = process.env.PROJECT_DIR || process.cwd();
+
+/**
+ * Get the current git status (changed files) in the project directory.
+ */
+function getGitChanges() {
+    try {
+        const status = execSync('git status --porcelain', {
+            cwd: projectDir,
+            encoding: 'utf-8',
+            timeout: 10_000,
+        }).trim();
+        return status ? status.split('\n').map(l => l.trim()) : [];
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Get the latest git commit hash and message.
+ */
+function getLatestCommit() {
+    try {
+        return execSync('git log -1 --oneline', {
+            cwd: projectDir,
+            encoding: 'utf-8',
+            timeout: 10_000,
+        }).trim();
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Auto-commit any changes made during a step.
+ */
+function autoCommitStep(stepDescription, taskName) {
+    try {
+        const changes = getGitChanges();
+        if (changes.length === 0) return null;
+
+        // Stage all changes
+        execSync('git add -A', { cwd: projectDir, timeout: 10_000 });
+
+        // Commit with a descriptive message
+        const msg = `[${AGENT_ID}] ${stepDescription}\n\nTask: ${taskName}`;
+        execSync(`git commit -m "${msg.replace(/"/g, '\\"')}"`, {
+            cwd: projectDir,
+            encoding: 'utf-8',
+            timeout: 30_000,
+        });
+
+        const commit = getLatestCommit();
+        console.log(`   📝 Auto-committed: ${commit}`);
+        return commit;
+    } catch (err) {
+        console.log(`   ⚠️ Auto-commit skipped: ${err.message.split('\n')[0]}`);
+        return null;
+    }
+}
+
 async function executeStep(step, task, stepIndex, allSteps) {
     const startTime = Date.now();
 
@@ -566,23 +627,68 @@ async function executeStep(step, task, stepIndex, allSteps) {
     try {
         const useOpenClaw = process.env.USE_OPENCLAW === 'true';
 
+        // Snapshot git state before the step
+        const changesBefore = getGitChanges();
+
         if (useOpenClaw) {
-            const prompt = `You are working on task "${task.name}" for the Pulse Fitness project.
-Current step: ${step.description}
-Context: ${task.description || ''}
-Notes: ${task.notes || ''}
+            // Build a rich prompt with full project context
+            const stepsContext = allSteps
+                .map((s, i) => `  ${i === stepIndex ? '→' : ' '} ${i + 1}. [${s.status}] ${s.description}`)
+                .join('\n');
 
-Complete this step. Be concise in your output.`;
+            const prompt = [
+                `You are Nora, an AI engineer working on the Pulse Fitness project.`,
+                `Project directory: ${projectDir}`,
+                ``,
+                `TASK: "${task.name}"`,
+                task.description ? `Description: ${task.description}` : '',
+                task.notes ? `Notes: ${task.notes}` : '',
+                ``,
+                `All steps:`,
+                stepsContext,
+                ``,
+                `CURRENT STEP (${stepIndex + 1}/${allSteps.length}): ${step.description}`,
+                ``,
+                `Instructions:`,
+                `- Complete ONLY this step.`,
+                `- Create or modify files as needed in the project directory.`,
+                `- Be thorough — write real, production-quality code.`,
+                `- When done, list the files you created or modified.`,
+            ].filter(Boolean).join('\n');
 
-            const safePrompt = prompt.replace(/"/g, '\\"');
-            const result = execSync(`echo "${safePrompt}" | openclaw`, {
-                cwd: process.env.PROJECT_DIR || process.cwd(),
-                timeout: 300_000,
-                encoding: 'utf-8',
-            });
+            // Write prompt to a temp file to avoid shell escaping issues
+            const tmpFile = path.join(projectDir, '.openclaw-prompt.tmp');
+            require('fs').writeFileSync(tmpFile, prompt);
 
-            step.output = result.trim().substring(0, 500);
+            try {
+                const result = execSync(`cat "${tmpFile}" | openclaw`, {
+                    cwd: projectDir,
+                    timeout: 600_000, // 10 min per step
+                    encoding: 'utf-8',
+                    maxBuffer: 10 * 1024 * 1024, // 10MB
+                });
+
+                step.output = result.trim().substring(0, 2000);
+            } finally {
+                // Clean up temp file
+                try { require('fs').unlinkSync(tmpFile); } catch { }
+            }
+
+            // Capture what files changed
+            const changesAfter = getGitChanges();
+            const newChanges = changesAfter.filter(c => !changesBefore.includes(c));
+            if (newChanges.length > 0) {
+                step.filesChanged = newChanges;
+                console.log(`   📁 Files changed: ${newChanges.join(', ')}`);
+            }
+
+            // Auto-commit the changes
+            const commit = autoCommitStep(step.description, task.name);
+            if (commit) {
+                step.commitHash = commit;
+            }
         } else {
+            // Simulation mode
             const waitMs = 2000 + Math.random() * 5000;
             await new Promise(r => setTimeout(r, waitMs));
             step.output = `Completed: ${step.description}`;
@@ -731,18 +837,59 @@ async function run() {
                 // Proactively report completion to the chat
                 const durationStr = formatMs(Date.now() - taskStartTime.getTime());
                 const stepsCompleted = steps.filter(s => s.status === 'completed').length;
+                const isSimulation = process.env.USE_OPENCLAW !== 'true';
                 const stepSummary = steps
                     .filter(s => s.status === 'completed')
                     .map((s, i) => `${i + 1}. ${s.description}`)
                     .join('\n');
 
-                await sendProactiveMessage(
-                    `✅ Task completed: "${task.name}"\n\n` +
-                    `Finished ${stepsCompleted} steps in ${durationStr}.\n\n` +
-                    `Steps completed:\n${stepSummary}\n\n` +
-                    `Ready for the next task!`,
-                    'completed'
-                );
+                if (isSimulation) {
+                    await sendProactiveMessage(
+                        `📋 Task plan completed: "${task.name}"\n\n` +
+                        `⚠️ SIMULATION MODE — no actual files were created.\n` +
+                        `Generated a ${stepsCompleted}-step execution plan in ${durationStr}.\n\n` +
+                        `Planned steps:\n${stepSummary}\n\n` +
+                        `To execute for real, run the agent on the Mac Mini with USE_OPENCLAW=true.`,
+                        'completed'
+                    );
+                } else {
+                    // Collect git commits from all steps
+                    const commits = steps
+                        .filter(s => s.commitHash)
+                        .map(s => `  • ${s.commitHash}`)
+                        .join('\n');
+
+                    // Collect all files changed across steps
+                    const allFiles = [...new Set(
+                        steps.flatMap(s => s.filesChanged || [])
+                    )];
+                    const filesList = allFiles.length > 0
+                        ? allFiles.map(f => `  • ${f}`).join('\n')
+                        : '  (no file changes detected)';
+
+                    // Try to push commits
+                    let pushStatus = '';
+                    if (commits) {
+                        try {
+                            execSync('git push', { cwd: projectDir, timeout: 30_000 });
+                            pushStatus = '\n🚀 Changes pushed to remote.';
+                        } catch {
+                            pushStatus = '\n⚠️ Auto-push failed — please run `git push` manually.';
+                        }
+                    }
+
+                    await sendProactiveMessage(
+                        `✅ Task completed: "${task.name}"\n\n` +
+                        `Finished ${stepsCompleted} steps in ${durationStr}.\n\n` +
+                        `Steps completed:\n${stepSummary}\n\n` +
+                        `📦 Deliverables:\n\n` +
+                        `Files changed:\n${filesList}\n\n` +
+                        (commits ? `Git commits:\n${commits}\n` : '') +
+                        pushStatus +
+                        `\n\nReady for the next task!`,
+                        'completed'
+                    );
+                }
             } else {
                 await saveTaskHistory(task.name, task.id, steps, 'failed', taskStartTime);
 
