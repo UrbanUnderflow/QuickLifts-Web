@@ -1,37 +1,283 @@
-import { collection, doc, onSnapshot, serverTimestamp, setDoc, Unsubscribe } from 'firebase/firestore';
+import { collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, Unsubscribe, Timestamp } from 'firebase/firestore';
 import { db } from '../config';
 
 export type AgentStatus = 'offline' | 'idle' | 'working';
+
+/* ─── Granular thought step ────────────────────────────── */
+
+export interface AgentThoughtStep {
+  id: string;
+  description: string;
+  status: 'pending' | 'in-progress' | 'completed' | 'failed';
+  startedAt?: Date;
+  completedAt?: Date;
+  reasoning?: string;     // The agent's reasoning / thought process
+  output?: string;        // Result or artifact produced
+  durationMs?: number;    // How long this step took
+}
+
+/* ─── Agent presence with execution context ────────────── */
 
 export interface AgentPresence {
   id: string;
   displayName: string;
   emoji?: string;
   status: AgentStatus;
-  currentTask?: string;
-  lastUpdate?: Date;
+
+  // Task context
+  currentTask?: string;        // Human-readable task name
+  currentTaskId?: string;      // Links to kanbanTasks document
   notes?: string;
+
+  // Execution pipeline
+  executionSteps: AgentThoughtStep[];  // Live step checklist
+  currentStepIndex: number;            // Which step is active (-1 = none)
+  taskStartedAt?: Date;                // When agent began this task
+  taskProgress: number;                // 0-100 completion percentage
+
+  // Timestamps
+  lastUpdate?: Date;
+  sessionStartedAt?: Date;
 }
 
 const COLLECTION = 'agent-presence';
 
+/* ─── Serialise thought steps for Firestore ────────────── */
+
+function serialiseStep(step: AgentThoughtStep): Record<string, any> {
+  return {
+    id: step.id,
+    description: step.description,
+    status: step.status,
+    startedAt: step.startedAt || null,
+    completedAt: step.completedAt || null,
+    reasoning: step.reasoning || '',
+    output: step.output || '',
+    durationMs: step.durationMs || 0,
+  };
+}
+
+function deserialiseStep(data: any): AgentThoughtStep {
+  return {
+    id: data.id || '',
+    description: data.description || '',
+    status: data.status || 'pending',
+    startedAt: data.startedAt?.toDate?.() || (data.startedAt ? new Date(data.startedAt) : undefined),
+    completedAt: data.completedAt?.toDate?.() || (data.completedAt ? new Date(data.completedAt) : undefined),
+    reasoning: data.reasoning || '',
+    output: data.output || '',
+    durationMs: data.durationMs || 0,
+  };
+}
+
+/* ─── Presence service ─────────────────────────────────── */
+
 export const presenceService = {
+  /**
+   * Full presence update (used by the agent runner)
+   */
   async updateAgentPresence(agentId: string, payload: Partial<Omit<AgentPresence, 'id'>>) {
     const docRef = doc(db, COLLECTION, agentId);
-    await setDoc(
-      docRef,
-      {
-        displayName: payload.displayName || 'Unknown Agent',
-        emoji: payload.emoji || '⚡️',
-        status: payload.status || 'idle',
-        currentTask: payload.currentTask || '',
-        notes: payload.notes || '',
-        lastUpdate: serverTimestamp()
-      },
-      { merge: true }
-    );
+    const data: Record<string, any> = {
+      displayName: payload.displayName || 'Unknown Agent',
+      emoji: payload.emoji || '⚡️',
+      status: payload.status || 'idle',
+      currentTask: payload.currentTask || '',
+      currentTaskId: payload.currentTaskId || '',
+      notes: payload.notes || '',
+      executionSteps: (payload.executionSteps || []).map(serialiseStep),
+      currentStepIndex: payload.currentStepIndex ?? -1,
+      taskProgress: payload.taskProgress ?? 0,
+      lastUpdate: serverTimestamp(),
+    };
+    if (payload.taskStartedAt) data.taskStartedAt = payload.taskStartedAt;
+    if (payload.sessionStartedAt) data.sessionStartedAt = payload.sessionStartedAt;
+    await setDoc(docRef, data, { merge: true });
   },
 
+  /**
+   * Quick status heartbeat (keeps agent "online")
+   */
+  async heartbeat(agentId: string) {
+    const docRef = doc(db, COLLECTION, agentId);
+    await updateDoc(docRef, { lastUpdate: serverTimestamp() });
+  },
+
+  /**
+   * Start working on a task — sets up the execution steps checklist
+   */
+  async startTask(
+    agentId: string,
+    taskName: string,
+    taskId: string,
+    steps: Array<{ description: string; reasoning?: string }>
+  ) {
+    const executionSteps: AgentThoughtStep[] = steps.map((s, i) => ({
+      id: `step-${i}`,
+      description: s.description,
+      status: i === 0 ? 'in-progress' : 'pending',
+      reasoning: s.reasoning || '',
+      startedAt: i === 0 ? new Date() : undefined,
+    }));
+
+    const docRef = doc(db, COLLECTION, agentId);
+    await setDoc(docRef, {
+      status: 'working',
+      currentTask: taskName,
+      currentTaskId: taskId,
+      executionSteps: executionSteps.map(serialiseStep),
+      currentStepIndex: 0,
+      taskStartedAt: new Date(),
+      taskProgress: 0,
+      lastUpdate: serverTimestamp(),
+    }, { merge: true });
+  },
+
+  /**
+   * Mark a step as completed and move to the next one
+   */
+  async completeStep(
+    agentId: string,
+    stepIndex: number,
+    output?: string,
+    nextStepReasoning?: string
+  ) {
+    const docRef = doc(db, COLLECTION, agentId);
+
+    // We need to read-modify-write. In production you'd use a transaction.
+    const { onSnapshot: snapOnce } = await import('firebase/firestore');
+    return new Promise<void>((resolve, reject) => {
+      const unsub = onSnapshot(docRef, async (snap) => {
+        unsub(); // one-shot read
+        const data = snap.data();
+        if (!data) return reject(new Error('Agent not found'));
+
+        const steps: AgentThoughtStep[] = (data.executionSteps || []).map(deserialiseStep);
+        const now = new Date();
+
+        // Complete current step
+        if (steps[stepIndex]) {
+          steps[stepIndex].status = 'completed';
+          steps[stepIndex].completedAt = now;
+          steps[stepIndex].output = output || steps[stepIndex].output;
+          if (steps[stepIndex].startedAt) {
+            steps[stepIndex].durationMs = now.getTime() - steps[stepIndex].startedAt!.getTime();
+          }
+        }
+
+        // Activate next step
+        const nextIndex = stepIndex + 1;
+        if (nextIndex < steps.length) {
+          steps[nextIndex].status = 'in-progress';
+          steps[nextIndex].startedAt = now;
+          if (nextStepReasoning) steps[nextIndex].reasoning = nextStepReasoning;
+        }
+
+        const completedCount = steps.filter(s => s.status === 'completed').length;
+        const progress = steps.length > 0 ? Math.round((completedCount / steps.length) * 100) : 0;
+        const allDone = completedCount === steps.length;
+
+        await updateDoc(docRef, {
+          executionSteps: steps.map(serialiseStep),
+          currentStepIndex: allDone ? -1 : nextIndex,
+          taskProgress: progress,
+          status: allDone ? 'idle' : 'working',
+          lastUpdate: serverTimestamp(),
+          ...(allDone ? { notes: `✅ Completed: ${data.currentTask || 'task'}` } : {}),
+        });
+
+        resolve();
+      });
+    });
+  },
+
+  /**
+   * Mark a step as failed
+   */
+  async failStep(agentId: string, stepIndex: number, reason: string) {
+    const docRef = doc(db, COLLECTION, agentId);
+    return new Promise<void>((resolve, reject) => {
+      const unsub = onSnapshot(docRef, async (snap) => {
+        unsub();
+        const data = snap.data();
+        if (!data) return reject(new Error('Agent not found'));
+
+        const steps: AgentThoughtStep[] = (data.executionSteps || []).map(deserialiseStep);
+        if (steps[stepIndex]) {
+          steps[stepIndex].status = 'failed';
+          steps[stepIndex].completedAt = new Date();
+          steps[stepIndex].output = reason;
+        }
+
+        await updateDoc(docRef, {
+          executionSteps: steps.map(serialiseStep),
+          status: 'idle',
+          lastUpdate: serverTimestamp(),
+          notes: `❌ Failed at step ${stepIndex + 1}: ${reason}`,
+        });
+        resolve();
+      });
+    });
+  },
+
+  /**
+   * Update the reasoning/notes on the current active step (for live thought streaming)
+   */
+  async updateCurrentStepReasoning(agentId: string, stepIndex: number, reasoning: string) {
+    const docRef = doc(db, COLLECTION, agentId);
+    return new Promise<void>((resolve, reject) => {
+      const unsub = onSnapshot(docRef, async (snap) => {
+        unsub();
+        const data = snap.data();
+        if (!data) return reject(new Error('Agent not found'));
+
+        const steps: AgentThoughtStep[] = (data.executionSteps || []).map(deserialiseStep);
+        if (steps[stepIndex]) {
+          steps[stepIndex].reasoning = reasoning;
+        }
+
+        await updateDoc(docRef, {
+          executionSteps: steps.map(serialiseStep),
+          lastUpdate: serverTimestamp(),
+        });
+        resolve();
+      });
+    });
+  },
+
+  /**
+   * Set agent to idle (no active task)
+   */
+  async setIdle(agentId: string, notes?: string) {
+    const docRef = doc(db, COLLECTION, agentId);
+    await updateDoc(docRef, {
+      status: 'idle',
+      currentTask: '',
+      currentTaskId: '',
+      executionSteps: [],
+      currentStepIndex: -1,
+      taskProgress: 0,
+      notes: notes || '',
+      lastUpdate: serverTimestamp(),
+    });
+  },
+
+  /**
+   * Set agent offline
+   */
+  async setOffline(agentId: string) {
+    const docRef = doc(db, COLLECTION, agentId);
+    await updateDoc(docRef, {
+      status: 'offline',
+      executionSteps: [],
+      currentStepIndex: -1,
+      lastUpdate: serverTimestamp(),
+    });
+  },
+
+  /**
+   * Real-time listener for all agents
+   */
   listen(callback: (agents: AgentPresence[]) => void): Unsubscribe {
     const colRef = collection(db, COLLECTION);
     return onSnapshot(colRef, (snapshot) => {
@@ -43,8 +289,14 @@ export const presenceService = {
           emoji: data.emoji || '⚡️',
           status: (data.status as AgentStatus) || 'idle',
           currentTask: data.currentTask || '',
+          currentTaskId: data.currentTaskId || '',
           notes: data.notes || '',
-          lastUpdate: data.lastUpdate?.toDate?.() || undefined
+          executionSteps: (data.executionSteps || []).map(deserialiseStep),
+          currentStepIndex: data.currentStepIndex ?? -1,
+          taskProgress: data.taskProgress ?? 0,
+          taskStartedAt: data.taskStartedAt?.toDate?.() || undefined,
+          lastUpdate: data.lastUpdate?.toDate?.() || undefined,
+          sessionStartedAt: data.sessionStartedAt?.toDate?.() || undefined,
         };
       });
       callback(agents);
