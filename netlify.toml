@@ -289,3 +289,16 @@
 [functions.scheduled-mental-assignment-reminder]
   # Runs every 30 minutes and sends a reminder if the user has active assignments and hasn't completed by their local reminder time (default noon).
   schedule = "*/30 * * * *"
+
+# User Onboarding Functions
+[functions.create-onboarding-link]
+  # Creates a new user account and generates a one-time onboarding link
+  external_node_modules = ["firebase-admin"]
+
+[functions.complete-onboarding-password]
+  # Validates token and sets the user's password
+  external_node_modules = ["firebase-admin"]
+
+[functions.send-onboarding-email]
+  # Sends the branded onboarding email with set-password link
+

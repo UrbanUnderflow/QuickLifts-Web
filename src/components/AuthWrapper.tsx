@@ -11,7 +11,7 @@ import { useUser } from '../hooks/useUser';
 import { setLoginRedirectPath } from '../redux/tempRedirectSlice';
 
 interface AuthWrapperProps {
- children: React.ReactNode;
+  children: React.ReactNode;
 }
 
 // Utility for shallow comparison
@@ -52,7 +52,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
   const auth = getAuth();
   const [showSignInModal, setShowSignInModal] = useState(false);
   const router = useRouter();
-  
+
   const currentUser = useUser();
   const isLoading = useSelector((state: RootState) => state.user.loading);
   const [authChecked, setAuthChecked] = useState(false);
@@ -76,13 +76,15 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     // Business overview
     '/one-pager',
     // Wunna Run proposal (passcode-protected on the page itself)
-    '/WunnaRun'
+    '/WunnaRun',
+    // Onboarding password setup (public so new users can set their password)
+    '/onboarding/set-password'
   ].map(route => route?.toLowerCase());
- 
+
   const publicPathPatterns = [
-    '/round-invitation', '/round', '/round-library', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest', '/connect', '/coach-invite', '/research'
+    '/round-invitation', '/round', '/round-library', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest', '/connect', '/coach-invite', '/research', '/onboarding'
   ].map(pattern => pattern.toLowerCase());
- 
+
   const isPublicRoute = (path: string) => {
     // Normalize: prefer asPath, strip query/hash, lowercase, remove trailing slash
     const raw = (path || '').split('?')[0].split('#')[0] || '/';
@@ -101,9 +103,9 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     // This matches pages/[username]/[page].tsx routing.
     if (segments.length === 2) {
       const reservedPrefixes = new Set([
-        'round-invitation','round','round-library','profile','challenge','review','programming','press','100trainers',
-        'moveandfuelatl','investor','invest','connect','coach-invite','coach','admin','api','payment',
-        'subscribe','download','partner','winner','secure','haveyoupaid'
+        'round-invitation', 'round', 'round-library', 'profile', 'challenge', 'review', 'programming', 'press', '100trainers',
+        'moveandfuelatl', 'investor', 'invest', 'connect', 'coach-invite', 'coach', 'admin', 'api', 'payment',
+        'subscribe', 'download', 'partner', 'winner', 'secure', 'haveyoupaid', 'onboarding'
       ]);
       if (!reservedPrefixes.has(segments[0])) {
         // Consider this a public landing page
@@ -115,18 +117,18 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     // This matches pages/[username]/questionnaire/[questionnaireId].tsx routing.
     if (segments.length === 3 && segments[1] === 'questionnaire') {
       const reservedPrefixes = new Set([
-        'round-invitation','round','round-library','profile','challenge','review','programming','press','100trainers',
-        'moveandfuelatl','investor','invest','connect','coach-invite','coach','admin','api','payment',
-        'subscribe','download','partner','winner','secure','haveyoupaid'
+        'round-invitation', 'round', 'round-library', 'profile', 'challenge', 'review', 'programming', 'press', '100trainers',
+        'moveandfuelatl', 'investor', 'invest', 'connect', 'coach-invite', 'coach', 'admin', 'api', 'payment',
+        'subscribe', 'download', 'partner', 'winner', 'secure', 'haveyoupaid', 'onboarding'
       ]);
       if (!reservedPrefixes.has(segments[0])) {
         return true;
       }
     }
 
-    const isPublic = publicRoutes.includes(normalizedPath) || 
-           publicPathPatterns.some(pattern => normalizedPath.startsWith(pattern));
-    
+    const isPublic = publicRoutes.includes(normalizedPath) ||
+      publicPathPatterns.some(pattern => normalizedPath.startsWith(pattern));
+
     // Add debugging for starter-pack specifically
     if (normalizedPath.includes('starter-pack')) {
       console.log('[AuthWrapper] Starter-pack route check:', {
@@ -137,7 +139,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         allPublicRoutes: publicRoutes
       });
     }
-    
+
     // Add debugging for subscribe page specifically
     if (normalizedPath.includes('subscribe')) {
       console.log('[AuthWrapper] Subscribe route check:', {
@@ -158,24 +160,24 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
         publicPathPatterns
       });
     }
-    
+
     return isPublic;
   };
- 
+
   const isCreatorLandingPath = (path: string) => {
     const raw = (path || '').split('?')[0].split('#')[0] || '/';
     const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
     const segments = normalizedPath.split('/').filter(Boolean);
     if (segments.length !== 2) return false;
     const reservedPrefixes = new Set([
-      'round-invitation','round','round-library','profile','challenge','review','programming','press','100trainers',
-      'moveandfuelatl','investor','invest','connect','coach-invite','coach','admin','api','payment',
-      'subscribe','download','partner','winner','secure','haveyoupaid'
+      'round-invitation', 'round', 'round-library', 'profile', 'challenge', 'review', 'programming', 'press', '100trainers',
+      'moveandfuelatl', 'investor', 'invest', 'connect', 'coach-invite', 'coach', 'admin', 'api', 'payment',
+      'subscribe', 'download', 'partner', 'winner', 'secure', 'haveyoupaid', 'onboarding'
     ]);
     return !reservedPrefixes.has(segments[0]);
   };
- 
-    // Add debug useEffect to track currentUser changes with Safari-specific logging
+
+  // Add debug useEffect to track currentUser changes with Safari-specific logging
   useEffect(() => {
     const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
     console.log('🔍 [AuthWrapper] Current User State:', {
@@ -205,7 +207,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     }
 
   }, [currentUser, auth, dispatch]);
-    
+
   // This is the main auth effect that should contain our logs
   useEffect(() => {
     console.log('Auth effect starting...', {
@@ -216,7 +218,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
 
     try {
       dispatch(setLoading(true));
-      
+
       const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         console.log('Auth state changed:', {
           hasFirebaseUser: !!firebaseUser,
@@ -255,8 +257,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               console.warn('[AuthWrapper] shallowEqual failed. Dispatching setUser. Differences:', {
                 prev: prevUserRef.current,
                 next: newUserDict,
-                diffKeys: newUserDict ? Object.keys(newUserDict).filter(key => 
-                  key !== 'createdAt' && key !== 'updatedAt' && 
+                diffKeys: newUserDict ? Object.keys(newUserDict).filter(key =>
+                  key !== 'createdAt' && key !== 'updatedAt' &&
                   (!prevUserRef.current || prevUserRef.current[key] !== newUserDict[key])
                 ) : ['prev was object, next is null'],
                 timestamp: new Date().toISOString()
@@ -302,14 +304,14 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
               } else if (!activeUser || activeUser.subscriptionType === SubscriptionType.unsubscribed) {
                 // Skip subscription check for connect pages (athletes connecting to coaches)
                 const isConnectPage = router.pathname.startsWith('/connect/') || router.asPath.startsWith('/connect/');
-                
+
                 if (isConnectPage) {
                   console.log('[AuthWrapper] User on connect page, allowing access for coach connection flow');
                   setShowSignInModal(false);
                   setAuthChecked(true);
                   return;
                 }
-                
+
                 // Drive access by subscription record expirations instead of user field
                 try {
                   const userIdForCheck = activeUser?.id || firebaseUser.uid;
@@ -390,7 +392,7 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       const wantsSignIn =
         Object.prototype.hasOwnProperty.call(query, 'signin') ||
         Object.prototype.hasOwnProperty.call(query, 'signup');
-      
+
       if (wantsSignIn) {
         if (!currentUser) {
           console.log('[AuthWrapper] Query requested auth modal (?signin|?signup). Showing SignInModal.');
@@ -408,49 +410,49 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     }
   }, [router?.query, router?.asPath, router?.pathname, currentUser]);
 
- const handleSignInSuccess = () => {
-   // Modal will auto-close based on Redux state
- };
+  const handleSignInSuccess = () => {
+    // Modal will auto-close based on Redux state
+  };
 
- const handleSignInError = (error: Error) => {
-   console.error('Sign in error:', error);
- };
+  const handleSignInError = (error: Error) => {
+    console.error('Sign in error:', error);
+  };
 
- // Don't render anything until initial auth check is complete
- if (!authChecked || isLoading) {
-   return <div className="flex items-center justify-center min-h-screen">
-     <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-zinc-900"></div>
-   </div>;
- }
+  // Don't render anything until initial auth check is complete
+  if (!authChecked || isLoading) {
+    return <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-zinc-900"></div>
+    </div>;
+  }
 
- // Final Render
- return (
-   <>
-     {children}
-     {/* Render SignInModal only if needed (unauthenticated on protected route, or onboarding incomplete) */}
-     {showSignInModal && (
-         <SignInModal
-           isVisible={showSignInModal} // Controlled by state
-           onClose={() => {
-               console.log('[AuthWrapper] Closing SignInModal');
-               setShowSignInModal(false);
-           }}
-           // Pass necessary handlers
-           onSignInSuccess={handleSignInSuccess} 
-           onSignInError={handleSignInError}
-           onRegistrationComplete={() => { // Ensure this hides modal too
-               console.log('[AuthWrapper] Registration complete from modal');
-               setShowSignInModal(false);
-           }}
-           onQuizComplete={() => { // Ensure this hides modal too
-               console.log('[AuthWrapper] Quiz complete from modal');
-               setShowSignInModal(false);
-           }}
-            // Add any other handlers SignInModal expects that might trigger a close/state change
-         />
-     )}
-   </>
- );
+  // Final Render
+  return (
+    <>
+      {children}
+      {/* Render SignInModal only if needed (unauthenticated on protected route, or onboarding incomplete) */}
+      {showSignInModal && (
+        <SignInModal
+          isVisible={showSignInModal} // Controlled by state
+          onClose={() => {
+            console.log('[AuthWrapper] Closing SignInModal');
+            setShowSignInModal(false);
+          }}
+          // Pass necessary handlers
+          onSignInSuccess={handleSignInSuccess}
+          onSignInError={handleSignInError}
+          onRegistrationComplete={() => { // Ensure this hides modal too
+            console.log('[AuthWrapper] Registration complete from modal');
+            setShowSignInModal(false);
+          }}
+          onQuizComplete={() => { // Ensure this hides modal too
+            console.log('[AuthWrapper] Quiz complete from modal');
+            setShowSignInModal(false);
+          }}
+        // Add any other handlers SignInModal expects that might trigger a close/state change
+        />
+      )}
+    </>
+  );
 };
 
 export default AuthWrapper;
