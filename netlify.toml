@@ -34,30 +34,10 @@
   force = true
 
 
-# Handle specific known routes that should go to the SPA
-[[redirects]]
-  from = "/profile/*"
-  to = "/"
-  status = 200
-
-[[redirects]]
-  from = "/round/*"
-  to = "/"
-  status = 200
-
-[[redirects]]
-  from = "/round-invitation/*"
-  to = "/"
-  status = 200
-
-[[redirects]]
-  from = "/payment/*"
-  to = "/"
-  status = 200
-
-# NOTE: Removed /admin/*, /coach/*, /partner/*, /PulseCheck/* and catch-all redirects
-# These were interfering with Next.js routing. Next.js handles these routes directly.
-# The @netlify/plugin-nextjs plugin handles SPA routing automatically.
+# NOTE: Do NOT add SPA-style catch-all redirects like "/* → / 200" here.
+# The @netlify/plugin-nextjs plugin handles ALL Next.js routing automatically.
+# Adding manual redirects will BREAK direct navigation / hard refreshes.
+# See docs/netlify-routing-fix.md for details.
 
 [[headers]]
   for = "/*"
