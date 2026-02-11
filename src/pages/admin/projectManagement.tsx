@@ -1576,7 +1576,20 @@ const ProjectManagement: React.FC = () => {
 
   const handleSaveTask = async (taskData: Partial<KanbanTask>) => {
     try {
-      if (modalMode === 'create') {
+      // Always prefer an existing task id for updates. This prevents accidental
+      // duplicate creation when saving edits from a detail modal.
+      const existingTaskId = taskData.id || selectedTask?.id;
+
+      if (existingTaskId) {
+        await kanbanService.updateTask(existingTaskId, {
+          name: taskData.name,
+          description: taskData.description,
+          project: taskData.project,
+          theme: taskData.theme,
+          assignee: taskData.assignee,
+          status: taskData.status
+        });
+      } else {
         await kanbanService.createTask({
           name: taskData.name!,
           description: taskData.description!,
@@ -1585,15 +1598,6 @@ const ProjectManagement: React.FC = () => {
           assignee: taskData.assignee!,
           status: taskData.status!,
           subtasks: []
-        });
-      } else if (selectedTask) {
-        await kanbanService.updateTask(selectedTask.id, {
-          name: taskData.name,
-          description: taskData.description,
-          project: taskData.project,
-          theme: taskData.theme,
-          assignee: taskData.assignee,
-          status: taskData.status
         });
       }
       await fetchTasks();
@@ -1630,6 +1634,7 @@ const ProjectManagement: React.FC = () => {
 
   const handleViewTaskDetails = (task: KanbanTask) => {
     setSelectedTask(task);
+    setModalMode('edit');
     setTaskDetailModalOpen(true);
   };
 
