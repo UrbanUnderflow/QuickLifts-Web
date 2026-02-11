@@ -13,6 +13,7 @@ export interface KanbanTaskData {
   theme: string;
   assignee: string;
   status: 'todo' | 'in-progress' | 'done';
+  notes?: string;
   subtasks: Subtask[];
   createdAt: Date;
   updatedAt: Date;
@@ -26,6 +27,7 @@ export class KanbanTask {
   theme: string;
   assignee: string;
   status: 'todo' | 'in-progress' | 'done';
+  notes: string;
   subtasks: Subtask[];
   createdAt: Date;
   updatedAt: Date;
@@ -38,6 +40,7 @@ export class KanbanTask {
     this.theme = data.theme || '';
     this.assignee = data.assignee || '';
     this.status = data.status || 'todo';
+    this.notes = data.notes || '';
     this.subtasks = data.subtasks || [];
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || new Date();
@@ -61,6 +64,7 @@ export class KanbanTask {
       theme: this.theme,
       assignee: this.assignee,
       status: this.status,
+      notes: this.notes,
       subtasks: this.subtasks,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt
@@ -71,6 +75,7 @@ export class KanbanTask {
     return new KanbanTask({
       id,
       ...data,
+      notes: data.notes || '',
       subtasks: data.subtasks || [],
       createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
       updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)

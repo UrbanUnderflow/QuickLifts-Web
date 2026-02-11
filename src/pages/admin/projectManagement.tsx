@@ -3,7 +3,7 @@ import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { kanbanService } from '../../api/firebase/kanban/service';
 import { KanbanTask } from '../../api/firebase/kanban/types';
-import { Plus, Edit, Trash2, Calendar, User, Tag, GripVertical, Clock, Filter, ChevronDown, CheckSquare, Square, X } from 'lucide-react';
+import { Plus, Edit, Trash2, Calendar, User, Tag, GripVertical, Clock, Filter, CheckSquare, Square, X } from 'lucide-react';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { adminMethods } from '../../api/firebase/admin/methods';
@@ -70,6 +70,12 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onDragStart
       
       {task.description && (
         <p className="text-zinc-400 text-xs mb-3 line-clamp-2">{task.description}</p>
+      )}
+
+      {task.notes && (
+        <div className="bg-amber-500/10 border border-amber-400/30 rounded-md p-2 mb-3">
+          <p className="text-amber-100 text-xs leading-relaxed whitespace-pre-wrap">{task.notes.length > 160 ? `${task.notes.slice(0, 157)}...` : task.notes}</p>
+        </div>
       )}
 
       {/* Subtask progress indicator */}
@@ -142,7 +148,8 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
     project: '',
     theme: '',
     assignee: '',
-    status: 'todo' as TaskStatus
+    status: 'todo' as TaskStatus,
+    notes: ''
   });
 
   // Subtask management states
@@ -205,7 +212,8 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
         project: task.project,
         theme: task.theme,
         assignee: task.assignee,
-        status: task.status
+        status: task.status,
+        notes: task.notes || ''
       });
       setAssigneeQuery(task.assignee);
     }
@@ -559,6 +567,18 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
                 )}
               </div>
 
+              {task.notes && (
+                <div className="bg-[#262a30] rounded-lg p-4 border border-zinc-700/60">
+                  <div className="flex items-center gap-2 mb-2">
+                    <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+                    </svg>
+                    <span className="text-sm font-medium text-zinc-400">Notes</span>
+                  </div>
+                  <p className="text-zinc-200 whitespace-pre-wrap text-sm leading-relaxed">{task.notes}</p>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {task.project && (
                   <div className="bg-[#262a30] rounded-lg p-4">
@@ -822,6 +842,20 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  Notes
+                </label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  className="w-full px-3 py-2 bg-[#262a30] border border-amber-500/40 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-amber-400 resize-none"
+                  placeholder="Drop quick updates, blockers, or context for Tremaine..."
+                  rows={4}
+                />
+                <p className="text-xs text-zinc-500 mt-1">Only visible to admins inside this board.</p>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="relative">
                   <label className="block text-sm font-medium text-zinc-300 mb-2">
@@ -980,7 +1014,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
     project: '',
     theme: '',
     assignee: '',
-    status: 'todo' as TaskStatus
+    status: 'todo' as TaskStatus,
+    notes: ''
   });
 
   // @ tagging system for assignee (similar to programming page)
@@ -994,7 +1029,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
   const [existingThemes, setExistingThemes] = useState<string[]>([]);
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
   const [showThemeDropdown, setShowThemeDropdown] = useState(false);
-  const [loadingProjectsThemes, setLoadingProjectsThemes] = useState(false);
+  const [_loadingProjectsThemes, setLoadingProjectsThemes] = useState(false);
 
   // Load existing projects and themes when modal opens
   useEffect(() => {
@@ -1041,7 +1076,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
         project: task.project,
         theme: task.theme,
         assignee: task.assignee,
-        status: task.status
+        status: task.status,
+        notes: task.notes || ''
       });
       setAssigneeQuery(task.assignee);
     } else {
@@ -1051,7 +1087,8 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
         project: '',
         theme: '',
         assignee: '',
-        status: 'todo'
+        status: 'todo',
+        notes: ''
       });
       setAssigneeQuery('');
     }
@@ -1230,6 +1267,19 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="w-full px-3 py-2 bg-[#262a30] border border-zinc-600 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 resize-none"
               placeholder="Enter task description"
+              rows={3}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-1">
+              Notes
+            </label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              className="w-full px-3 py-2 bg-[#262a30] border border-amber-500/40 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-amber-400 resize-none"
+              placeholder="Leave context, investor updates, blockers, etc."
               rows={3}
             />
           </div>
@@ -1587,7 +1637,8 @@ const ProjectManagement: React.FC = () => {
           project: taskData.project,
           theme: taskData.theme,
           assignee: taskData.assignee,
-          status: taskData.status
+          status: taskData.status,
+          notes: taskData.notes
         });
       } else {
         await kanbanService.createTask({
@@ -1597,6 +1648,7 @@ const ProjectManagement: React.FC = () => {
           theme: taskData.theme!,
           assignee: taskData.assignee!,
           status: taskData.status!,
+          notes: taskData.notes || '',
           subtasks: []
         });
       }
