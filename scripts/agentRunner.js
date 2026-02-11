@@ -37,6 +37,7 @@ const HEARTBEAT_MS = parseInt(process.env.HEARTBEAT_MS || '30000', 10);
 const PRESENCE_COLLECTION = 'agent-presence';
 const KANBAN_COLLECTION = 'kanbanTasks';
 const COMMANDS_COLLECTION = 'agent-commands';
+const HISTORY_SUBCOLLECTION = 'task-history';
 
 /* ─── Firebase Admin Init ─────────────────────────────── */
 
@@ -98,6 +99,32 @@ function serializeStep(step) {
         output: step.output || '',
         durationMs: step.durationMs || 0,
     };
+}
+
+/* ─── Task History ────────────────────────────────────── */
+
+async function saveTaskHistory(taskName, taskId, steps, status, startedAt) {
+    const historyRef = db.collection(PRESENCE_COLLECTION)
+        .doc(AGENT_ID)
+        .collection(HISTORY_SUBCOLLECTION);
+
+    const completedAt = new Date();
+    const totalDurationMs = completedAt.getTime() - startedAt.getTime();
+    const completedStepCount = steps.filter(s => s.status === 'completed').length;
+
+    await historyRef.add({
+        taskName,
+        taskId,
+        status,
+        steps: steps.map(serializeStep),
+        startedAt,
+        completedAt,
+        totalDurationMs,
+        stepCount: steps.length,
+        completedStepCount,
+    });
+
+    console.log(`📜 Task history saved: ${taskName} (${status}, ${formatMs(totalDurationMs)})`);
 }
 
 /* ─── Agent-to-Agent Messaging ────────────────────────── */
@@ -463,10 +490,11 @@ async function run() {
             console.log(`   → ${steps.length} steps planned`);
 
             // Report task start
+            const taskStartTime = new Date();
             await setStatus('working', {
                 currentTask: task.name,
                 currentTaskId: task.id,
-                taskStartedAt: new Date(),
+                taskStartedAt: taskStartTime,
                 notes: `Starting: ${task.name}`,
             });
 
@@ -496,6 +524,7 @@ async function run() {
 
             if (allPassed) {
                 console.log(`\n🎉 Task completed: ${task.name}`);
+                await saveTaskHistory(task.name, task.id, steps, 'completed', taskStartTime);
                 await markTaskDone(task.id);
                 await setStatus('idle', {
                     currentTask: '',
@@ -503,6 +532,9 @@ async function run() {
                     notes: `✅ Completed: ${task.name}`,
                     taskProgress: 100,
                 });
+            } else {
+                // Save failed pipeline to history too
+                await saveTaskHistory(task.name, task.id, steps, 'failed', taskStartTime);
             }
 
             await new Promise(r => setTimeout(r, 5_000));
