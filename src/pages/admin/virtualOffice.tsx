@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { presenceService, AgentPresence, AgentThoughtStep, TaskHistoryEntry } from '../../api/firebase/presence/service';
 import { kanbanService } from '../../api/firebase/kanban/service';
@@ -8,7 +9,7 @@ import { KanbanTask } from '../../api/firebase/kanban/types';
 import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
   ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
-  History, ChevronRight
+  History, ChevronRight, MessageSquare
 } from 'lucide-react';
 
 /* ─── helpers ─────────────────────────────────────────── */
@@ -817,6 +818,7 @@ const LiveClock: React.FC = () => {
 /* ─── Main Virtual Office ─────────────────────────────── */
 
 const VirtualOfficeContent: React.FC = () => {
+  const router = useRouter();
   const [agents, setAgents] = useState<AgentPresence[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -874,6 +876,12 @@ const VirtualOfficeContent: React.FC = () => {
           </div>
           <div className="flex items-center gap-4">
             <LiveClock />
+            <button
+              onClick={() => router.push('/admin/agentChat')}
+              className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-indigo-500/30 text-indigo-300 hover:bg-indigo-900/30 hover:border-indigo-400/50 transition-all"
+            >
+              <MessageSquare className="w-3.5 h-3.5" /> Chat
+            </button>
             <button
               onClick={() => setRefreshKey((k) => k + 1)}
               className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-zinc-700/50 text-zinc-300 hover:bg-zinc-800/60 hover:border-zinc-600 transition-all"
