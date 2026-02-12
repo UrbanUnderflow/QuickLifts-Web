@@ -38,7 +38,7 @@ const KANBAN_COLLECTION = 'kanbanTasks';
 const COMMANDS_COLLECTION = 'agent-commands';
 const HISTORY_SUBCOLLECTION = 'task-history';
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
-const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || (AGENT_ID === 'nora' ? 'main' : AGENT_ID);
+const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || ({ 'nora': 'main', 'scout': 'scout' }[AGENT_ID] || 'main');
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
 const MAX_FOLLOW_UP_DEPTH = 4; // Max rounds of agent-to-agent @mention follow-ups
@@ -204,7 +204,7 @@ async function processCommands() {
         let pContent = cmd.content;
 
         // Smart Auto-detection: If type is 'auto' or 'chat', use AI to infer intent
-        if ((cmd.type === 'auto' || cmd.type === 'chat') && process.env.OPENAI_API_KEY) {
+        if ((cmd.type === 'auto' || cmd.type === 'chat') && (process.env.OPENAI_API_KEY || process.env.USE_OPENCLAW === 'true')) {
             console.log(`🧠 Analyzing intent for: "${cmd.content}"`);
             const inference = await analyzeChatIntent(cmd.content, cmd.from);
             if (inference.type !== 'chat') {
@@ -297,16 +297,92 @@ async function processCommands() {
                 break;
 
             case 'question':
+            case 'chat': {
+                // Generate intelligent DM response via OpenClaw or OpenAI
                 var presenceSnap2 = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
                 var presenceData = presenceSnap2.data();
-                response = `I'm currently ${presenceData?.status || 'idle'}. ${presenceData?.currentTask ? `Working on: ${presenceData.currentTask} (${presenceData.taskProgress || 0}% done).` : 'No active task.'} Queue has ${commandQueue.length} pending commands.`;
-                break;
+                var statusContext = `Status: ${presenceData?.status || 'idle'}. ${presenceData?.currentTask ? `Working on: ${presenceData.currentTask} (${presenceData.taskProgress || 0}% done).` : 'No active task.'} Queue: ${commandQueue.length} pending.`;
 
-            case 'chat':
-                if (!response) {
-                    response = `Hey ${cmd.from}! I'm ${AGENT_NAME}. I received your message: "${cmd.content}". (Enable OpenAI key for smart responses)`;
+                var dmPersonalities = {
+                    nora: { role: 'Director of System Operations', style: 'Strategic, organized, decisive. You manage systems, architecture, and operational efficiency.' },
+                    scout: { role: 'Influencer Research Analyst', style: 'Curious, analytical, detail-oriented. You focus on data, trends, and user insights.' },
+                    solara: { role: 'Brand Director', style: 'Visionary, expressive, values-driven. You focus on narrative, identity, and emotional resonance.' },
+                };
+                var dmPersonality = dmPersonalities[AGENT_ID] || { role: 'Team Member', style: 'Collaborative and thoughtful.' };
+
+                var dmPrompt = [
+                    `You are ${AGENT_NAME}, the ${dmPersonality.role} on the Pulse team (FitWithPulse.ai).`,
+                    `Personality: ${dmPersonality.style}`,
+                    ``,
+                    `Your current status: ${statusContext}`,
+                    ``,
+                    `Tremaine (your boss, the founder) just sent you a direct message.`,
+                    `Respond naturally and helpfully. Be honest about what you've done or haven't done.`,
+                    `If they're asking about tasks, check your status above and answer truthfully.`,
+                    `If you're idle and they expected work to be done, acknowledge it honestly.`,
+                    `Keep it to 2-4 sentences. Be conversational, real, and specific.`,
+                    `Respond in plain text only (no markdown). Just your natural reply:`,
+                ].join('\n');
+
+                var dmAiResponse = '';
+                var useOpenClaw = process.env.USE_OPENCLAW === 'true';
+
+                if (process.env.OPENAI_API_KEY) {
+                    try {
+                        var dmResp = await fetch('https://api.openai.com/v1/chat/completions', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+                            body: JSON.stringify({
+                                model: 'gpt-4o',
+                                messages: [{ role: 'system', content: dmPrompt }, { role: 'user', content: cmd.content }],
+                                temperature: 0.7, max_tokens: 300,
+                            }),
+                        });
+                        var dmData = await dmResp.json();
+                        dmAiResponse = dmData.choices?.[0]?.message?.content || '';
+                    } catch (err) {
+                        console.error('OpenAI DM generation failed:', err.message);
+                    }
+                } else if (useOpenClaw) {
+                    try {
+                        var dmClawResult = await new Promise((resolve, reject) => {
+                            var child = spawn(OPENCLAW_BIN, [
+                                '--no-color', 'agent', '--local',
+                                '--agent', OPENCLAW_AGENT_ID,
+                                '--message', dmPrompt + '\n\nUser message: ' + cmd.content,
+                                '--timeout', '30',
+                            ], { cwd: process.cwd(), env: process.env });
+                            var stdout = '', stderr = '';
+                            var timeout = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('openclaw timed out')); }, 35_000);
+                            child.stdout.on('data', (d) => { stdout += d.toString(); });
+                            child.stderr.on('data', (d) => { stderr += d.toString(); });
+                            child.on('error', (err) => { clearTimeout(timeout); reject(err); });
+                            child.on('close', (code) => {
+                                clearTimeout(timeout);
+                                if (code === 0) resolve(stdout.trim());
+                                else reject(new Error(`openclaw exit ${code}: ${stderr.substring(0, 300)}`));
+                            });
+                        });
+                        try {
+                            var parsed = JSON.parse(dmClawResult);
+                            dmAiResponse = parsed.response || parsed.output || parsed.result || dmClawResult;
+                        } catch (_e) {
+                            dmAiResponse = dmClawResult;
+                        }
+                        dmAiResponse = dmAiResponse.replace(/^```[\s\S]*?```$/gm, '').trim();
+                    } catch (err) {
+                        console.error('OpenClaw DM generation failed:', err.message);
+                    }
+                }
+
+                if (dmAiResponse) {
+                    response = dmAiResponse;
+                } else {
+                    // Fallback: at least give useful status instead of canned text
+                    response = `${statusContext} Let me know what you need and I'll get on it.`;
                 }
                 break;
+            }
 
             case 'email':
                 var emailMeta = cmd.metadata || {};
@@ -431,6 +507,7 @@ async function processCommands() {
                     };
 
                     var MAX_RETRIES = 3;
+                    var lastError = '';  // Track last error for diagnostics
                     for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                         try {
                             if (process.env.OPENAI_API_KEY) {
@@ -492,6 +569,7 @@ async function processCommands() {
                             // Check if the response looks like an error
                             if (gcResponse && looksLikeError(gcResponse)) {
                                 console.error(`   ⚠️ Attempt ${attempt}/${MAX_RETRIES}: Got error-like response: "${gcResponse.substring(0, 100)}..."`);
+                                lastError = `Error-like response: ${gcResponse.substring(0, 150)}`;
                                 gcResponse = '';
                                 if (attempt < MAX_RETRIES) {
                                     console.log(`   🔄 Retrying in 3s...`);
@@ -503,6 +581,7 @@ async function processCommands() {
                             }
                         } catch (err) {
                             console.error(`   ⚠️ Attempt ${attempt}/${MAX_RETRIES} failed for ${AGENT_NAME}:`, err.message);
+                            lastError = err.message;
                             gcResponse = '';
                             if (attempt < MAX_RETRIES) {
                                 console.log(`   🔄 Retrying in 3s...`);
@@ -516,20 +595,30 @@ async function processCommands() {
                 if (!gcResponse) {
                     var contentLower = cmd.content.toLowerCase();
                     var isGreeting = /^(hi|hey|hello|sup|what'?s up|how are|how'?s it going)/i.test(contentLower);
+                    var errorTag = lastError ? ` [⚠️ AI Error: ${lastError.substring(0, 120)}]` : '';
                     if (AGENT_ID === 'nora') {
                         if (isGreeting) {
-                            gcResponse = `Doing well! I've been heads-down on system improvements. Just finished optimizing our deployment pipeline — things are running smoother now. What's on your mind?`;
+                            gcResponse = `Doing well! I've been heads-down on system improvements. Just finished optimizing our deployment pipeline — things are running smoother now. What's on your mind?` + errorTag;
                         } else {
-                            gcResponse = `From an ops perspective, I think we should break this down into concrete steps. I can scope this out and get a plan together if you want — that's usually the fastest path to shipping.`;
+                            gcResponse = `From an ops perspective, I think we should break this down into concrete steps. I can scope this out and get a plan together if you want — that's usually the fastest path to shipping.` + errorTag;
                         }
                     } else if (AGENT_ID === 'scout') {
                         if (isGreeting) {
-                            gcResponse = `Hey! Been deep in research mode today — found some interesting patterns in the data I want to share later. Everything's good on my end though. What are we cooking?`;
+                            gcResponse = `Hey! Been deep in research mode today — found some interesting patterns in the data I want to share later. Everything's good on my end though. What are we cooking?` + errorTag;
                         } else {
-                            gcResponse = `Interesting angle. Let me dig into the data side of this — I want to see what the numbers tell us before we commit to a direction. I have a hunch there might be some insights we're missing.`;
+                            gcResponse = `Interesting angle. Let me dig into the data side of this — I want to see what the numbers tell us before we commit to a direction. I have a hunch there might be some insights we're missing.` + errorTag;
+                        }
+                    } else if (AGENT_ID === 'solara') {
+                        if (isGreeting) {
+                            gcResponse = `Hey! The creative energy is flowing today. I've been refining our brand narrative — making sure every touchpoint feels authentically Pulse. What's sparking for you?` + errorTag;
+                        } else {
+                            gcResponse = `I'm looking at this through the brand lens. The key question for me is: does this reinforce who we are and what we stand for? Every decision is a brand signal — let's make sure we're sending the right one.` + errorTag;
                         }
                     } else {
-                        gcResponse = `Good point. Let me think about how I can contribute to this from my end — I'll follow up with specifics once I've had a chance to dig in.`;
+                        gcResponse = `Good point. Let me think about how I can contribute to this from my end — I'll follow up with specifics once I've had a chance to dig in.` + errorTag;
+                    }
+                    if (lastError) {
+                        console.warn(`   ⚠️ Using fallback response for ${AGENT_NAME}. Last error: ${lastError}`);
                     }
                 }
 
