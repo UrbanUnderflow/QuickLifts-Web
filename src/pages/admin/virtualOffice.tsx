@@ -11,6 +11,15 @@ import {
   ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
   History, ChevronRight, MessageSquare
 } from 'lucide-react';
+import { RoundTable } from '../../components/virtualOffice/RoundTable';
+import { GroupChatModal } from '../../components/virtualOffice/GroupChatModal';
+import { groupChatService } from '../../api/firebase/groupChat/service';
+import {
+  getAllTablePositions,
+  getDeskPosition,
+  getStaggerDelay,
+  getExitStaggerDelay,
+} from '../../utils/tablePositions';
 
 /* ─── helpers ─────────────────────────────────────────── */
 
@@ -526,10 +535,17 @@ const TaskHistoryPanel: React.FC<{ agentId: string }> = ({ agentId }) => {
 
 interface AgentDeskProps {
   agent: AgentPresence;
-  position: { x: number; y: number; facing: 'left' | 'right' };
+  position: { x: number; y: number; facing: 'left' | 'right' | 'inward' };
+  isTransitioning?: boolean;
+  transitionDelay?: number;
 }
 
-const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
+const AgentDeskSprite: React.FC<AgentDeskProps> = ({ 
+  agent, 
+  position,
+  isTransitioning = false,
+  transitionDelay = 0,
+}) => {
   const [hovered, setHovered] = useState(false);
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -612,8 +628,12 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
   return (
     <div
       ref={spriteRef}
-      className="agent-desk-sprite"
-      style={{ left: `${position.x}%`, top: `${position.y}%` }}
+      className={`agent-desk-sprite ${isTransitioning ? 'transitioning' : ''}`}
+      style={{
+        left: `${position.x}%`,
+        top: `${position.y}%`,
+        transitionDelay: isTransitioning ? `${transitionDelay}ms` : '0ms',
+      }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -643,7 +663,11 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
       </div>
 
       {/* Character */}
-      <div className={`office-character ${agent.status} ${isOnCoffeeBreak ? 'coffee-walk' : ''}`}>
+      <div className={`office-character ${agent.status} ${
+        isOnCoffeeBreak ? 'coffee-walk' : ''
+      } ${
+        isTransitioning ? 'walking' : ''
+      }`}>
         <div className="char-head" />
         <div className="char-body">
           <div className="char-arm left" />
@@ -871,6 +895,20 @@ const VirtualOfficeContent: React.FC = () => {
   const [agents, setAgents] = useState<AgentPresence[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Round Table Collaboration state
+  type AgentPositionState = 'desk' | 'table' | 'transitioning-to-table' | 'transitioning-to-desk';
+  
+  interface AgentPositionInfo {
+    state: AgentPositionState;
+    position: { x: number; y: number; facing: 'left' | 'right' | 'inward' };
+    transitionDelay: number;
+  }
+
+  const [isCollaborating, setIsCollaborating] = useState(false);
+  const [groupChatId, setGroupChatId] = useState<string | null>(null);
+  const [showGroupChatModal, setShowGroupChatModal] = useState(false);
+  const [agentPositions, setAgentPositions] = useState<Record<string, AgentPositionInfo>>({});
+
   useEffect(() => {
     const unsubscribe = presenceService.listen((next) => {
       setAgents(next.sort((a, b) => a.displayName.localeCompare(b.displayName)));
@@ -934,6 +972,110 @@ const VirtualOfficeContent: React.FC = () => {
     const avg = working.reduce((sum, a) => sum + a.taskProgress, 0) / working.length;
     return Math.round(avg);
   }, [allAgents]);
+
+  // Initialize agent positions when agents load
+  useEffect(() => {
+    const initialPositions: Record<string, AgentPositionInfo> = {};
+    allAgents.forEach((agent, index) => {
+      initialPositions[agent.id] = {
+        state: 'desk',
+        position: getDeskPosition(index),
+        transitionDelay: 0,
+      };
+    });
+    setAgentPositions(initialPositions);
+  }, [allAgents.length]); // Only re-init if agent count changes
+
+  // Handler to start collaboration
+  const startCollaboration = useCallback(async () => {
+    try {
+      setIsCollaborating(true);
+
+      // Create group chat session
+      const agentIds = allAgents.map(a => a.id);
+      const chatId = await groupChatService.createSession(agentIds);
+      setGroupChatId(chatId);
+
+      // Animate agents to table
+      const tablePositions = getAllTablePositions(agentIds);
+      const updatedPositions = { ...agentPositions };
+      agentIds.forEach((agentId, index) => {
+        updatedPositions[agentId] = {
+          state: 'transitioning-to-table',
+          position: tablePositions[agentId],
+          transitionDelay: getStaggerDelay(index),
+        };
+      });
+      setAgentPositions(updatedPositions);
+
+      // Mark as "at table" and open modal after animation
+      const lastAgentDelay = getStaggerDelay(agentIds.length - 1);
+      setTimeout(() => {
+        const finalPositions = { ...updatedPositions };
+        agentIds.forEach(agentId => {
+          finalPositions[agentId].state = 'table';
+          finalPositions[agentId].transitionDelay = 0;
+        });
+        setAgentPositions(finalPositions);
+        setShowGroupChatModal(true);
+      }, lastAgentDelay + 2000);
+
+    } catch (error) {
+      console.error('Failed to start collaboration:', error);
+      setIsCollaborating(false);
+    }
+  }, [allAgents, agentPositions]);
+
+  // Handler to end collaboration
+  const endCollaboration = useCallback(async () => {
+    // Close modal first
+    setShowGroupChatModal(false);
+
+    // Close Firestore session
+    if (groupChatId) {
+      try {
+        await groupChatService.closeSession(groupChatId);
+      } catch (error) {
+        console.error('Failed to close group chat session:', error);
+      }
+    }
+
+    const agentIds = allAgents.map(a => a.id);
+
+    // Update positions with reverse stagger
+    const updatedPositions = { ...agentPositions };
+    agentIds.forEach((agentId, index) => {
+      updatedPositions[agentId] = {
+        state: 'transitioning-to-desk',
+        position: getDeskPosition(index),
+        transitionDelay: getExitStaggerDelay(index, agentIds.length),
+      };
+    });
+    setAgentPositions(updatedPositions);
+
+    // After animation completes, mark as "at desk"
+    const lastExitDelay = getExitStaggerDelay(0, agentIds.length);
+    setTimeout(() => {
+      const finalPositions = { ...updatedPositions };
+      agentIds.forEach(agentId => {
+        finalPositions[agentId].state = 'desk';
+        finalPositions[agentId].transitionDelay = 0;
+      });
+      setAgentPositions(finalPositions);
+      setIsCollaborating(false);
+      setGroupChatId(null);
+    }, lastExitDelay + 2000);
+
+  }, [allAgents, agentPositions, groupChatId]);
+
+  // Update table click handler
+  const handleTableClick = useCallback(() => {
+    if (isCollaborating) {
+      endCollaboration();
+    } else {
+      startCollaboration();
+    }
+  }, [isCollaborating, startCollaboration, endCollaboration]);
 
   return (
     <div className="voffice-root">
@@ -1005,6 +1147,13 @@ const VirtualOfficeContent: React.FC = () => {
             <div className="office-wall" />
             <OfficeDecorations />
 
+            {/* Round Table for Collaboration */}
+            <RoundTable
+              isActive={isCollaborating}
+              onClick={handleTableClick}
+              participantCount={allAgents.length}
+            />
+
             {allAgents.length === 0 && (
               <div className="empty-office">
                 <div className="empty-icon">🏢</div>
@@ -1013,15 +1162,31 @@ const VirtualOfficeContent: React.FC = () => {
               </div>
             )}
 
-            {allAgents.map((agent, i) => (
-              <AgentDeskSprite
-                key={agent.id}
-                agent={agent}
-                position={DESK_POSITIONS[i % DESK_POSITIONS.length]}
-              />
-            ))}
+            {allAgents.map((agent) => {
+              const posInfo = agentPositions[agent.id];
+              if (!posInfo) return null; // Position not yet initialized
+
+              return (
+                <AgentDeskSprite
+                  key={agent.id}
+                  agent={agent}
+                  position={posInfo.position}
+                  isTransitioning={posInfo.state.includes('transitioning')}
+                  transitionDelay={posInfo.transitionDelay}
+                />
+              );
+            })}
           </div>
         </div>
+
+        {/* Group Chat Modal */}
+        {showGroupChatModal && groupChatId && (
+          <GroupChatModal
+            chatId={groupChatId}
+            participants={allAgents.map(a => a.id)}
+            onClose={endCollaboration}
+          />
+        )}
       </AdminRouteGuard>
 
       {/* ═══════════════════════════════════════════════════ */}
@@ -1293,6 +1458,58 @@ const VirtualOfficeContent: React.FC = () => {
         }
 
         .office-chair { position: absolute; bottom: 24px; left: 50%; transform: translateX(calc(-50% - 18px)); width: 22px; height: 24px; border-radius: 8px 8px 4px 4px; background: linear-gradient(180deg, #1e293b, #0f172a); box-shadow: 0 2px 4px rgba(0,0,0,0.3); z-index: 1; }
+
+        /* Round Table Transitions */
+        .agent-desk-sprite.transitioning {
+          transition: 
+            left 2s cubic-bezier(0.4, 0.0, 0.2, 1),
+            top 2s cubic-bezier(0.4, 0.0, 0.2, 1);
+          z-index: 15; /* Above other agents during transition */
+        }
+
+        .office-character.walking {
+          animation: characterWalk 0.6s steps(4) infinite;
+        }
+
+        .office-character.walking .char-arm {
+          animation: armSwing 0.6s ease-in-out infinite alternate !important;
+        }
+
+        .office-character.walking .char-head {
+          animation: headBob 0.6s ease-in-out infinite;
+        }
+
+        @keyframes characterWalk {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          25% { transform: translateY(-2px) rotate(-1deg); }
+          50% { transform: translateY(0) rotate(0deg); }
+          75% { transform: translateY(-2px) rotate(1deg); }
+        }
+
+        @keyframes armSwing {
+          0% { transform: rotate(-25deg); }
+          100% { transform: rotate(25deg); }
+        }
+
+        @keyframes headBob {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-1px); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .agent-desk-sprite.transitioning {
+            transition-duration: 0.01ms !important;
+          }
+          .office-character.walking {
+            animation: none !important;
+          }
+          .office-character.walking .char-arm {
+            animation: none !important;
+          }
+          .office-character.walking .char-head {
+            animation: none !important;
+          }
+        }
 
         /* Nameplate */
         .agent-nameplate {
