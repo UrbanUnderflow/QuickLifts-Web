@@ -45,12 +45,14 @@ const AGENT_EMOJIS: Record<string, string> = {
   nora: '⚡',
   antigravity: '🌌',
   scout: '🕵️',
+  branddirector: '❤️‍🔥',
 };
 
 const AGENT_ROLES: Record<string, string> = {
   nora: 'Director of System Ops',
   antigravity: 'Co-CEO · Strategy & Architecture',
   scout: 'Influencer Research Analyst',
+  branddirector: 'Brand Director',
 };
 
 const AGENT_HEARTBEAT_STALE_MS = 2 * 60_000;
@@ -609,6 +611,21 @@ const AgentChatContent: React.FC = () => {
     sessionStartedAt: undefined,
   };
 
+  const BRAND_DIRECTOR_FALLBACK: AgentPresence = {
+    id: 'branddirector',
+    displayName: 'Solara',
+    emoji: '❤️‍🔥',
+    status: 'offline',
+    currentTask: '',
+    currentTaskId: '',
+    notes: 'Agent runner not connected',
+    executionSteps: [],
+    currentStepIndex: -1,
+    taskProgress: 0,
+    lastUpdate: new Date(0),
+    sessionStartedAt: undefined,
+  };
+
   // Listen for agent presence
   useEffect(() => {
     const unsub = presenceService.listen((incoming) => {
@@ -618,6 +635,9 @@ const AgentChatContent: React.FC = () => {
       // Ensure Scout can always be selected in chat
       if (!visible.some(a => a.id === 'scout')) {
         visible.push(SCOUT_FALLBACK);
+      }
+      if (!visible.some(a => a.id === 'branddirector')) {
+        visible.push(BRAND_DIRECTOR_FALLBACK);
       }
 
       setAgents(visible.sort((a, b) => a.displayName.localeCompare(b.displayName)));

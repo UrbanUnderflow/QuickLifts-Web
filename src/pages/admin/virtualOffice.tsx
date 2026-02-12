@@ -57,7 +57,7 @@ const DESK_POSITIONS = [
   { x: 12, y: 35, facing: 'right' as const },   // Antigravity — far left, upper
   { x: 75, y: 30, facing: 'left' as const },    // Nora — far right, upper
   { x: 12, y: 70, facing: 'right' as const },   // Scout — far left, lower
-  { x: 75, y: 70, facing: 'left' as const },    // slot 4
+  { x: 75, y: 70, facing: 'left' as const },    // Brand Director — far right, lower
   { x: 42, y: 22, facing: 'right' as const },   // slot 5
   { x: 42, y: 85, facing: 'left' as const },    // slot 6
 ];
@@ -68,6 +68,7 @@ const AGENT_ROLES: Record<string, string> = {
   antigravity: 'Co-CEO · Strategy & Architecture',
   nora: 'Director of System Ops',
   scout: 'Influencer Research Analyst',
+  branddirector: 'Brand Director',
   // Add more agents here as they join
 };
 
@@ -75,6 +76,7 @@ const AGENT_DUTIES: Record<string, string> = {
   antigravity: 'Drives product strategy, system architecture, and pair-programs with the CEO. Coordinates cross-agent work and reviews critical code paths.',
   nora: 'Maintains the living system map across all surfaces. Owns Kanban ops, agent orchestration, telemetry, and product ops — the operations nerve center for Pulse.',
   scout: 'Runs outbound influencer discovery workflows, researches creator fit and engagement quality, and prepares qualified prospects for CRM intake.',
+  branddirector: 'Owns brand voice, messaging strategy, and value alignment across outward-facing work. Converts Freedom + Spirituality principles into clear narrative guardrails and content direction for all agents.',
 };
 
 /* ─── Full agent profiles (for modal) ─────────────────── */
@@ -209,6 +211,41 @@ const AGENT_PROFILES: Record<string, { title: string; location: string; sections
       },
     ],
     footer: 'Scout is the focused research specialist for creator discovery and qualification workflows.',
+  },
+  branddirector: {
+    title: 'Brand Director',
+    location: 'Virtual Office (brand strategy desk)',
+    sections: [
+      {
+        title: '1. Brand Voice & Messaging',
+        bullets: [
+          'Own and maintain Pulse brand voice across all outbound copy, artifacts, and public-facing narratives.',
+          'Create message frameworks and tone guardrails that help agents and operators stay consistent.',
+        ],
+      },
+      {
+        title: '2. Brand Strategy & Alignment',
+        bullets: [
+          'Translate core values (Freedom + Spirituality) into practical brand pillars, positioning, and campaign strategy.',
+          'Define the north star for outward-facing decisions so cross-agent execution remains coherent.',
+        ],
+      },
+      {
+        title: '3. Content Systems & Distribution',
+        bullets: [
+          'Manage day-to-day brand operations: planning, hardening, and distribution of brand content assets.',
+          'Equip human operators with scripts, briefs, and messaging kits that can be deployed quickly.',
+        ],
+      },
+      {
+        title: '4. Cross-Agent Enablement',
+        bullets: [
+          'Review major external-facing initiatives and provide brand direction before release.',
+          'Resolve messaging conflicts across product, GTM, and creator workflows.',
+        ],
+      },
+    ],
+    footer: 'Brand Director is the narrative strategist and quality gate for anything outward-facing — ensuring every message reinforces Pulse identity and long-term positioning.',
   },
 };
 
@@ -942,13 +979,29 @@ const VirtualOfficeContent: React.FC = () => {
     sessionStartedAt: new Date(),
   };
 
+  const BRAND_DIRECTOR_PRESENCE: AgentPresence = {
+    id: 'branddirector',
+    displayName: 'Solara',
+    emoji: '❤️‍🔥',
+    status: 'idle' as const,
+    currentTask: '',
+    currentTaskId: '',
+    notes: 'Brand strategy and messaging lead — ready for assignments.',
+    executionSteps: [],
+    currentStepIndex: -1,
+    taskProgress: 0,
+    lastUpdate: new Date(),
+    sessionStartedAt: new Date(),
+  };
+
   const allAgents = useMemo(() => {
     const merged = [...agents];
 
     if (!merged.some(a => a.id === 'antigravity')) merged.push(ANTIGRAVITY_PRESENCE);
     if (!merged.some(a => a.id === 'scout')) merged.push(SCOUT_PRESENCE);
+    if (!merged.some(a => a.id === 'branddirector')) merged.push(BRAND_DIRECTOR_PRESENCE);
 
-    const priority: Record<string, number> = { antigravity: 0, nora: 1, scout: 2 };
+    const priority: Record<string, number> = { antigravity: 0, nora: 1, scout: 2, branddirector: 3 };
     return merged.sort((a, b) => {
       const pa = priority[a.id] ?? 99;
       const pb = priority[b.id] ?? 99;
