@@ -1555,7 +1555,7 @@ const VirtualOfficeContent: React.FC = () => {
     status: 'idle' as const,
     currentTask: '',
     currentTaskId: '',
-    notes: 'Brand strategy and messaging lead — ready for assignments.',
+    notes: 'Brand Voice steward — calibrating tone, narrative, and creator-facing storytelling.',
     executionSteps: [],
     currentStepIndex: -1,
     taskProgress: 0,
