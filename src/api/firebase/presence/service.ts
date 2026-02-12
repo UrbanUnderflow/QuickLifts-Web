@@ -41,6 +41,15 @@ export interface AgentPresence {
   manifestoInjections?: number;        // How many times manifesto was injected this session
   lastManifestoInjection?: Date;       // When it was last injected
 
+  // AI Model & Token Usage
+  currentModel?: string;               // Which AI model is active (gpt-4o, gpt-4o-mini, openclaw)
+  tokenUsage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    callCount: number;
+  };
+
   // Timestamps
   lastUpdate?: Date;
   sessionStartedAt?: Date;
