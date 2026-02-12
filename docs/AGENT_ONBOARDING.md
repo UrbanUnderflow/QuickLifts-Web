@@ -143,7 +143,7 @@ const DESK_POSITIONS = [
 const ROLE_TITLES: Record<string, string> = {
   nora: 'Director of System Ops',
   scout: 'Influencer Research Analyst',
-  solara: 'Brand Director',
+  solara: 'Brand Voice',
   NEW_AGENT_ID: 'ROLE_TITLE',  // ← add
 };
 ```
