@@ -25,8 +25,7 @@
 
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-const { execSync, spawn, spawnSync } = require('child_process');
-const path = require('path');
+const { execSync, spawn } = require('child_process');
 
 /* ─── Configuration ───────────────────────────────────── */
 
@@ -40,6 +39,8 @@ const COMMANDS_COLLECTION = 'agent-commands';
 const HISTORY_SUBCOLLECTION = 'task-history';
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || (AGENT_ID === 'nora' ? 'main' : AGENT_ID);
+const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
+const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
 
 /* ─── Firebase Admin Init ─────────────────────────────── */
 
@@ -605,6 +606,28 @@ function getLatestCommit() {
 /**
  * Auto-commit any changes made during a step.
  */
+function runOpenClawSmokeCheck(commandString = OPENCLAW_SMOKE_CMD) {
+    const args = commandString.split(/\s+/).filter(Boolean);
+    const spawnResult = spawnSync(OPENCLAW_BIN, args, {
+        cwd: projectDir,
+        timeout: 120_000,
+        encoding: 'utf-8',
+        maxBuffer: 5 * 1024 * 1024,
+    });
+
+    if (spawnResult.error) {
+        throw new Error(`Smoke test failed to launch ${OPENCLAW_BIN}: ${spawnResult.error.message}`);
+    }
+    const trimmedStdout = (spawnResult.stdout || '').trim();
+    const trimmedStderr = (spawnResult.stderr || '').trim();
+
+    if (spawnResult.status !== 0) {
+        throw new Error(`Smoke test command exited with ${spawnResult.status}: ${trimmedStderr || trimmedStdout}`);
+    }
+
+    return trimmedStdout || 'OpenClaw smoke test completed with no output.';
+}
+
 function autoCommitStep(stepDescription, taskName) {
     try {
         const changes = getGitChanges();
@@ -648,87 +671,131 @@ async function executeStep(step, task, stepIndex, allSteps) {
         const changesBefore = getGitChanges();
 
         if (useOpenClaw) {
-            // Build a rich prompt with full project context
-            const stepsContext = allSteps
-                .map((s, i) => `  ${i === stepIndex ? '→' : ' '} ${i + 1}. [${s.status}] ${s.description}`)
-                .join('\n');
+            if (OPENCLAW_SMOKE_TEST) {
+                console.log('   🔎 Running OpenClaw smoke test command...');
+                const smokeOutput = runOpenClawSmokeCheck(OPENCLAW_SMOKE_CMD);
+                step.output = `[SMOKE] ${OPENCLAW_SMOKE_CMD}
+${smokeOutput}`.substring(0, 2000);
+            } else {
+                // Build a rich prompt with full project context
+                const stepsContext = allSteps
+                    .map((s, i) => `  ${i === stepIndex ? '→' : ' '} ${i + 1}. [${s.status}] ${s.description}`)
+                    .join('\n');
 
-            const prompt = [
-                `You are Nora, an AI engineer working on the Pulse Fitness project.`,
-                `Project directory: ${projectDir}`,
-                ``,
-                `TASK: "${task.name}"`,
-                task.description ? `Description: ${task.description}` : '',
-                task.notes ? `Notes: ${task.notes}` : '',
-                ``,
-                `All steps:`,
-                stepsContext,
-                ``,
-                `CURRENT STEP (${stepIndex + 1}/${allSteps.length}): ${step.description}`,
-                ``,
-                `Instructions:`,
-                `- Complete ONLY this step.`,
-                `- Create or modify files as needed in the project directory.`,
-                `- Be thorough — write real, production-quality code.`,
-                `- When done, list the files you created or modified.`,
-            ].filter(Boolean).join('\n');
+                const prompt = [
+                    `You are Nora, an AI engineer working on the Pulse Fitness project.`,
+                    `Project directory: ${projectDir}`,
+                    ``,
+                    `TASK: "${task.name}"`,
+                    task.description ? `Description: ${task.description}` : '',
+                    task.notes ? `Notes: ${task.notes}` : '',
+                    ``,
+                    `All steps:`,
+                    stepsContext,
+                    ``,
+                    `CURRENT STEP (${stepIndex + 1}/${allSteps.length}): ${step.description}`,
+                    ``,
+                    `Instructions:`,
+                    `- Complete ONLY this step.`,
+                    `- Create or modify files as needed in the project directory.`,
+                    `- Be thorough — write real, production-quality code.`,
+                    `- When done, list the files you created or modified.`,
+                ].filter(Boolean).join('\n');
 
-            const args = [
-                '--no-color',
-                'agent',
-                '--local',
-                '--json',
-                '--agent',
-                OPENCLAW_AGENT_ID,
-                '--message',
-                prompt,
-                '--timeout',
-                '600',
-            ];
+                const args = [
+                    '--no-color',
+                    'agent',
+                    '--local',
+                    '--json',
+                    '--agent',
+                    OPENCLAW_AGENT_ID,
+                    '--message',
+                    prompt,
+                    '--timeout',
+                    '600',
+                ];
 
-            const result = spawnSync(OPENCLAW_BIN, args, {
-                cwd: projectDir,
-                timeout: 600_000, // 10 min per step
-                encoding: 'utf-8',
-                maxBuffer: 10 * 1024 * 1024, // 10MB
+            const runOpenClaw = () => new Promise((resolve, reject) => {
+                const child = spawn(OPENCLAW_BIN, args, { cwd: projectDir, env: process.env });
+                let stdout = '';
+                let stderr = '';
+                let timedOut = false;
+                const maxLen = 10 * 1024 * 1024; // 10MB
+
+                const timeout = setTimeout(() => {
+                    timedOut = true;
+                    child.kill('SIGTERM');
+                    setTimeout(() => child.kill('SIGKILL'), 5000);
+                }, 600_000);
+
+                child.stdout.on('data', (chunk) => {
+                    stdout += chunk.toString();
+                    if (stdout.length > maxLen) {
+                        clearTimeout(timeout);
+                        child.kill('SIGKILL');
+                        reject(new Error('OpenClaw output exceeded 10MB'));
+                    }
+                });
+
+                child.stderr.on('data', (chunk) => {
+                    stderr += chunk.toString();
+                    if (stderr.length > maxLen) {
+                        clearTimeout(timeout);
+                        child.kill('SIGKILL');
+                        reject(new Error('OpenClaw error output exceeded 10MB'));
+                    }
+                });
+
+                child.on('error', (err) => {
+                    clearTimeout(timeout);
+                    reject(new Error(`Failed to launch ${OPENCLAW_BIN}: ${err.message}`));
+                });
+
+                child.on('close', (code) => {
+                    clearTimeout(timeout);
+                    if (timedOut) {
+                        reject(new Error('OpenClaw timed out after 600s'));
+                        return;
+                    }
+                    if (code !== 0) {
+                        const errOut = (stderr || stdout || '').trim();
+                        reject(new Error(`OpenClaw failed (exit ${code}): ${errOut}`));
+                        return;
+                    }
+                    resolve({ stdout, stderr });
+                });
             });
 
-            if (result.error) {
-                throw new Error(`Failed to launch ${OPENCLAW_BIN}: ${result.error.message}`);
-            }
-            if (result.status !== 0) {
-                const errOut = (result.stderr || result.stdout || '').trim();
-                throw new Error(`OpenClaw failed (exit ${result.status}): ${errOut}`);
-            }
-
+            const result = await runOpenClaw();
             const rawOut = (result.stdout || '').trim();
-            let outputText = rawOut;
-            if (rawOut) {
-                try {
-                    const parsed = JSON.parse(rawOut);
-                    const payloadText = (parsed?.payloads || [])
-                        .map((p) => p?.text)
-                        .filter(Boolean)
-                        .join('\n\n');
-                    if (payloadText) outputText = payloadText;
-                } catch {
-                    // Keep raw output if JSON parsing fails.
+                let outputText = rawOut;
+                if (rawOut) {
+                    try {
+                        const parsed = JSON.parse(rawOut);
+                        const payloadText = (parsed?.payloads || [])
+                            .map((p) => p?.text)
+                            .filter(Boolean)
+                            .join('\n\n');
+                        if (payloadText) outputText = payloadText;
+                    } catch {
+                        // Keep raw output if JSON parsing fails.
+                    }
                 }
-            }
-            step.output = outputText.substring(0, 2000);
+                step.output = outputText.substring(0, 2000);
 
-            // Capture what files changed
-            const changesAfter = getGitChanges();
-            const newChanges = changesAfter.filter(c => !changesBefore.includes(c));
-            if (newChanges.length > 0) {
-                step.filesChanged = newChanges;
-                console.log(`   📁 Files changed: ${newChanges.join(', ')}`);
-            }
+                // Capture what files changed
+                const changesAfter = getGitChanges();
+                const newChanges = changesAfter.filter(c => !changesBefore.includes(c));
+                if (newChanges.length > 0) {
+                    step.filesChanged = newChanges;
+                    console.log(`   📁 Files changed: ${newChanges.join(', ')}`);
+                }
 
-            // Auto-commit the changes
-            const commit = autoCommitStep(step.description, task.name);
-            if (commit) {
-                step.commitHash = commit;
+                // Auto-commit the changes
+                const commit = autoCommitStep(step.description, task.name);
+                if (commit) {
+                    step.commitHash = commit;
+                }
             }
         } else {
             // Simulation mode
@@ -767,6 +834,9 @@ async function run() {
     console.log(`   Agent: ${AGENT_NAME} (${AGENT_ID})`);
     console.log(`   Heartbeat: every ${HEARTBEAT_MS / 1000}s`);
     console.log(`   OpenClaw: ${process.env.USE_OPENCLAW === 'true' ? 'ENABLED' : 'SIMULATION MODE'}`);
+    if (process.env.USE_OPENCLAW === 'true') {
+        console.log(`   Smoke test: ${OPENCLAW_SMOKE_TEST ? 'ON' : 'off'}`);
+    }
     console.log(`   Messaging: ENABLED`);
     console.log(`   Auth: Firebase Admin SDK (service account)`);
     console.log('');
