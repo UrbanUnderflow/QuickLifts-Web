@@ -281,7 +281,8 @@ const AGENT_PROFILES: Record<string, { title: string; location: string; sections
         title: '1. Intel Feed Stewardship',
         bullets: [
           'Curate the live intel feed, triage urgent drops, and maintain the weekly digest with context-aware insights.',
-          'Keep Tremaine looped on shifts that impact product, creator strategy, or fundraising narrative.'
+          'Keep Tremaine looped on shifts that impact product, creator strategy, or fundraising narrative.',
+          'Signature rhythm: Field Notes → Patterns → Feed Drops; every dispatch includes why it matters plus primary sources.'
         ],
       },
       {
