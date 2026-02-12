@@ -616,6 +616,7 @@ interface AgentDeskProps {
   position: { x: number; y: number; facing: 'left' | 'right' | 'inward' };
   isTransitioning?: boolean;
   transitionDelay?: number;
+  isAtTable?: boolean;
 }
 
 const AgentDeskSprite: React.FC<AgentDeskProps> = ({
@@ -623,6 +624,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   position,
   isTransitioning = false,
   transitionDelay = 0,
+  isAtTable = false,
 }) => {
   const [hovered, setHovered] = useState(false);
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -716,32 +718,40 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Status halo / glow under the desk */}
-      <div className="desk-glow" style={{ boxShadow: `0 0 40px 15px ${status.glow}` }} />
+      {/* Desk furniture — hidden when agent is at the table */}
+      {!isAtTable && !isTransitioning && (
+        <>
+          {/* Status halo / glow under the desk */}
+          <div className="desk-glow" style={{ boxShadow: `0 0 40px 15px ${status.glow}` }} />
 
-      {/* The desk surface */}
-      <div className="office-desk">
-        <div className="desk-surface" />
-        <div className="desk-leg left" />
-        <div className="desk-leg right" />
-      </div>
+          {/* The desk surface */}
+          <div className="office-desk">
+            <div className="desk-surface" />
+            <div className="desk-leg left" />
+            <div className="desk-leg right" />
+          </div>
 
-      {/* Monitor */}
-      <div className="agent-monitor" style={{ boxShadow: `0 0 20px ${status.monitorGlow}` }}>
-        <div className="monitor-screen" style={{ background: agent.status === 'working' ? '#0c1222' : '#0a0a0a' }}>
-          {agent.status === 'working' && (
-            <>
-              <div className="code-line l1" />
-              <div className="code-line l2" />
-              <div className="code-line l3" />
-              <div className="cursor-blink" />
-            </>
-          )}
-        </div>
-        <div className="monitor-stand" />
-      </div>
+          {/* Monitor */}
+          <div className="agent-monitor" style={{ boxShadow: `0 0 20px ${status.monitorGlow}` }}>
+            <div className="monitor-screen" style={{ background: agent.status === 'working' ? '#0c1222' : '#0a0a0a' }}>
+              {agent.status === 'working' && (
+                <>
+                  <div className="code-line l1" />
+                  <div className="code-line l2" />
+                  <div className="code-line l3" />
+                  <div className="cursor-blink" />
+                </>
+              )}
+            </div>
+            <div className="monitor-stand" />
+          </div>
 
-      {/* Character */}
+          {/* Chair */}
+          <div className="office-chair" />
+        </>
+      )}
+
+      {/* Character — always visible, walks to table */}
       <div className={`office-character ${agent.status} ${isOnCoffeeBreak ? 'coffee-walk' : ''
         } ${isTransitioning ? 'walking' : ''
         }`}>
@@ -752,9 +762,6 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
         </div>
         {isOnCoffeeBreak && <div className="coffee-cup-held">☕</div>}
       </div>
-
-      {/* Chair */}
-      <div className="office-chair" />
 
       {/* Nameplate + role + progress */}
       <div className="agent-nameplate">
@@ -966,6 +973,7 @@ const VirtualOfficeContent: React.FC = () => {
   interface AgentPositionInfo {
     state: AgentPositionState;
     position: { x: number; y: number; facing: 'left' | 'right' | 'inward' };
+    deskPosition: { x: number; y: number; facing: 'left' | 'right' | 'inward' };
     transitionDelay: number;
   }
 
@@ -1071,9 +1079,11 @@ const VirtualOfficeContent: React.FC = () => {
   useEffect(() => {
     const initialPositions: Record<string, AgentPositionInfo> = {};
     allAgents.forEach((agent, index) => {
+      const deskPos = getDeskPosition(index);
       initialPositions[agent.id] = {
         state: 'desk',
-        position: getDeskPosition(index),
+        position: deskPos,
+        deskPosition: deskPos,
         transitionDelay: 0,
       };
     });
@@ -1098,6 +1108,7 @@ const VirtualOfficeContent: React.FC = () => {
         updatedPositions[agentId] = {
           state: 'transitioning-to-table',
           position: tablePositions[agentId],
+          deskPosition: updatedPositions[agentId]?.deskPosition || getDeskPosition(index),
           transitionDelay: getStaggerDelay(index),
         };
       });
@@ -1160,6 +1171,7 @@ const VirtualOfficeContent: React.FC = () => {
       updatedPositions[agentId] = {
         state: 'transitioning-to-desk',
         position: getDeskPosition(originalIndex),
+        deskPosition: getDeskPosition(originalIndex),
         transitionDelay: getExitStaggerDelay(i, agentIds.length),
       };
     });
@@ -1294,14 +1306,42 @@ const VirtualOfficeContent: React.FC = () => {
               const posInfo = agentPositions[agent.id];
               if (!posInfo) return null; // Position not yet initialized
 
+              const isAway = posInfo.state === 'table' || posInfo.state.includes('transitioning');
+
               return (
-                <AgentDeskSprite
-                  key={agent.id}
-                  agent={agent}
-                  position={posInfo.position}
-                  isTransitioning={posInfo.state.includes('transitioning')}
-                  transitionDelay={posInfo.transitionDelay}
-                />
+                <React.Fragment key={agent.id}>
+                  {/* Static empty desk — visible when agent is away */}
+                  {isAway && (
+                    <div
+                      className="agent-desk-sprite agent-desk-empty"
+                      style={{
+                        left: `${posInfo.deskPosition.x}%`,
+                        top: `${posInfo.deskPosition.y}%`,
+                      }}
+                    >
+                      <div className="desk-glow" style={{ boxShadow: '0 0 40px 15px rgba(100,100,140,0.06)' }} />
+                      <div className="office-desk">
+                        <div className="desk-surface" />
+                        <div className="desk-leg left" />
+                        <div className="desk-leg right" />
+                      </div>
+                      <div className="agent-monitor" style={{ boxShadow: '0 0 20px rgba(30,30,60,0.15)' }}>
+                        <div className="monitor-screen" style={{ background: '#0a0a0a' }} />
+                        <div className="monitor-stand" />
+                      </div>
+                      <div className="office-chair" />
+                    </div>
+                  )}
+
+                  {/* The agent (character walks to table, desk hidden when away) */}
+                  <AgentDeskSprite
+                    agent={agent}
+                    position={posInfo.position}
+                    isTransitioning={posInfo.state.includes('transitioning')}
+                    transitionDelay={posInfo.transitionDelay}
+                    isAtTable={posInfo.state === 'table'}
+                  />
+                </React.Fragment>
               );
             })}
           </div>
@@ -1638,6 +1678,12 @@ const VirtualOfficeContent: React.FC = () => {
         }
 
         .office-chair { position: absolute; bottom: 24px; left: 50%; transform: translateX(calc(-50% - 18px)); width: 22px; height: 24px; border-radius: 8px 8px 4px 4px; background: linear-gradient(180deg, #1e293b, #0f172a); box-shadow: 0 2px 4px rgba(0,0,0,0.3); z-index: 1; }
+
+        /* Empty desk (agent walked to the table — desk stays fully visible) */
+        .agent-desk-empty {
+          pointer-events: none;
+          z-index: 1;
+        }
 
         /* Round Table Transitions */
         .agent-desk-sprite.transitioning {
