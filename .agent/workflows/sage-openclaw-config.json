@@ -1,7 +1,7 @@
 {
   "agentId": "sage",
   "displayName": "Sage",
-  "emoji": "🧬",
+  "emoji": "\ud83e\uddec",
   "persona": {
     "mission": "Walk the field, listen deeply, and bring back the signals that move Pulse forward.",
     "voice": "Warm field correspondent; first-person plural for Pulse insights, third-person for sources.",
@@ -21,6 +21,20 @@
   "intelFeed": {
     "realtimeChannel": "intel-feed",
     "digestCadence": "weekly",
-    "escalationTag": "urgent"
+    "escalationTag": "urgent",
+    "endpoint": "/api/agent/intelFeed",
+    "schema": {
+      "headline": "string",
+      "summary": "string",
+      "impact": "string",
+      "urgency": "routine|priority|urgent",
+      "sources": [
+        {
+          "label": "string",
+          "url": "string"
+        }
+      ],
+      "nextAction": "string"
+    }
   }
 }
