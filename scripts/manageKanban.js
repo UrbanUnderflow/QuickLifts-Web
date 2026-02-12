@@ -1,4 +1,35 @@
+const fs = require('fs');
+const path = require('path');
 const admin = require('firebase-admin');
+
+function loadLocalEnv() {
+  const envFiles = ['.env.local', '.env'];
+  for (const file of envFiles) {
+    const envPath = path.join(__dirname, '..', file);
+    if (!fs.existsSync(envPath)) continue;
+
+    const lines = fs.readFileSync(envPath, 'utf-8').split(/\r?\n/);
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) continue;
+
+      const sanitized = line.startsWith('export ') ? line.replace(/^export\s+/, '') : line;
+      const [key, ...rest] = sanitized.split('=');
+      if (!key || rest.length === 0) continue;
+
+      let value = rest.join('=').trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
+loadLocalEnv();
 
 function getEnv(name) {
   const value = process.env[name];

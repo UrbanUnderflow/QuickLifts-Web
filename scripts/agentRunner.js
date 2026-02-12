@@ -111,6 +111,108 @@ function serializeStep(step) {
     };
 }
 
+/* ─── Conversation Context ────────────────────────────── */
+
+/**
+ * Fetch recent commands/responses for this agent to provide conversational context.
+ * Returns a string summarizing the last N interactions.
+ */
+async function getRecentConversationContext(limit = 8) {
+    try {
+        const recentCmds = await db.collection(COMMANDS_COLLECTION)
+            .where('to', '==', AGENT_ID)
+            .orderBy('createdAt', 'desc')
+            .limit(limit)
+            .get();
+
+        if (recentCmds.empty) return '';
+
+        const lines = [];
+        recentCmds.docs.reverse().forEach(doc => {
+            const d = doc.data();
+            const time = d.createdAt?.toDate?.()?.toISOString?.() || 'unknown';
+            lines.push(`[${time}] ${d.from}: ${d.content?.substring(0, 200) || '(empty)'}`);
+            if (d.response) {
+                lines.push(`[${time}] ${AGENT_NAME}: ${d.response.substring(0, 200)}`);
+            }
+        });
+        return lines.join('\n');
+    } catch (err) {
+        console.warn('Could not fetch conversation context:', err.message);
+        return '';
+    }
+}
+
+/**
+ * Use AI to generate a clear, descriptive task title from vague user input + context.
+ * Falls back to the original content if AI fails.
+ */
+async function generateSmartTaskTitle(rawContent, conversationContext) {
+    var useOpenClaw = process.env.USE_OPENCLAW === 'true';
+    if (!process.env.OPENAI_API_KEY && !useOpenClaw) return rawContent;
+
+    var titlePrompt = [
+        `You are a project manager. A user sent a message that should become a task.`,
+        `Generate a clear, concise task title (max 80 chars) that describes what actually needs to be done.`,
+        ``,
+        `Rules:`,
+        `- If the user says something vague like "try again", "do it", "ok go ahead", look at the recent conversation to understand what they're referring to.`,
+        `- The title should be specific and actionable (e.g. "Add meeting action items to kanban board" not "Ok lets try again")`,
+        `- Never use the user's exact conversational phrasing as the title`,
+        `- If there's no context to infer from, make the title as descriptive as possible from the message content`,
+        ``,
+        `Recent conversation:`,
+        conversationContext || '(no prior conversation)',
+        ``,
+        `User's message: "${rawContent}"`,
+        ``,
+        `Respond with ONLY the task title, nothing else:`,
+    ].join('\n');
+
+    try {
+        if (process.env.OPENAI_API_KEY) {
+            var resp = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+                body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    messages: [{ role: 'user', content: titlePrompt }],
+                    temperature: 0.2, max_tokens: 60,
+                }),
+            });
+            var data = await resp.json();
+            var title = data.choices?.[0]?.message?.content?.trim();
+            if (title) return title.replace(/^["']|["']$/g, '');  // strip quotes
+        } else if (useOpenClaw) {
+            var clawResult = await new Promise((resolve, reject) => {
+                var child = spawn(OPENCLAW_BIN, [
+                    '--no-color', 'agent', '--local',
+                    '--agent', OPENCLAW_AGENT_ID,
+                    '--message', titlePrompt,
+                    '--timeout', '20',
+                ], { cwd: process.cwd(), env: process.env });
+                var stdout = '', stderr = '';
+                var timeout = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('timeout')); }, 25_000);
+                child.stdout.on('data', (d) => { stdout += d.toString(); });
+                child.stderr.on('data', (d) => { stderr += d.toString(); });
+                child.on('error', (err) => { clearTimeout(timeout); reject(err); });
+                child.on('close', (code) => {
+                    clearTimeout(timeout);
+                    if (code === 0) resolve(stdout.trim());
+                    else reject(new Error(`exit ${code}: ${stderr.substring(0, 200)}`));
+                });
+            });
+            // Parse out just the title
+            try { var parsed = JSON.parse(clawResult); clawResult = parsed.response || parsed.output || clawResult; } catch (_) { }
+            var titleLine = clawResult.replace(/^```[\s\S]*?```$/gm, '').trim().split('\n')[0].trim();
+            if (titleLine) return titleLine.replace(/^["']|["']$/g, '');
+        }
+    } catch (err) {
+        console.warn('Smart title generation failed, using raw content:', err.message);
+    }
+    return rawContent;
+}
+
 /* ─── Task History ────────────────────────────────────── */
 
 async function saveTaskHistory(taskName, taskId, steps, status, startedAt) {
@@ -233,9 +335,14 @@ async function processCommands() {
 
         switch (detectedType) {
             case 'task':
+                // Fetch conversation context to understand vague references like "try again"
+                var taskConvoContext = await getRecentConversationContext();
+                var smartTitle = await generateSmartTaskTitle(pContent, taskConvoContext);
+                console.log(`🧠 Smart title: "${pContent}" → "${smartTitle}"`);
+
                 var newTask = await db.collection(KANBAN_COLLECTION).add({
-                    name: pContent,
-                    description: cmd.metadata?.description || `Task created from chat by ${cmd.from}`,
+                    name: smartTitle,
+                    description: cmd.metadata?.description || `Original request: "${pContent}". Task created from chat by ${cmd.from}`,
                     assignee: AGENT_NAME,
                     status: 'todo',
                     project: cmd.metadata?.project || 'General',
@@ -244,15 +351,15 @@ async function processCommands() {
                     createdAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
-                var taskMsg = `Task created: ${newTask.id}. I've added it to my queue.`;
+                var taskMsg = `Task created: "${smartTitle}" (${newTask.id}). I've added it to my queue.`;
                 response = response ? response + "\n" + taskMsg : taskMsg;
-                console.log(`📋 Created task from command: ${pContent} → ${newTask.id}`);
+                console.log(`📋 Created task: ${smartTitle} → ${newTask.id}`);
 
                 // Immediately update status to 'working' so Virtual Office reflects the change
                 await setStatus('working', {
-                    currentTask: pContent,
+                    currentTask: smartTitle,
                     currentTaskId: newTask.id,
-                    notes: `Received new task: ${pContent}`,
+                    notes: `Received new task: ${smartTitle}`,
                 });
                 break;
 
@@ -1019,6 +1126,15 @@ async function decomposeTask(task) {
         }));
     }
 
+    var decomposePrompt = `You are a task decomposition agent. Break down tasks into 3-6 granular executable steps.
+Each step should be a clear, specific action — not generic like "Analyze" or "Implement".
+Return JSON only: { "steps": [{ "description": "...", "reasoning": "..." }] }
+
+Task: ${task.name}
+Description: ${task.description || 'No description'}
+Project: ${task.project || 'Unknown'}
+Notes: ${task.notes || 'None'}`;
+
     if (process.env.OPENAI_API_KEY) {
         try {
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -1030,14 +1146,8 @@ async function decomposeTask(task) {
                 body: JSON.stringify({
                     model: 'gpt-4o-mini',
                     messages: [
-                        {
-                            role: 'system',
-                            content: 'You are a task decomposition agent. Break down software development tasks into 4-8 granular executable steps. Each step should be a clear action. Return JSON: { "steps": [{ "description": "...", "reasoning": "..." }] }'
-                        },
-                        {
-                            role: 'user',
-                            content: `Task: ${task.name}\nDescription: ${task.description || 'No description'}\nProject: ${task.project || 'Unknown'}\nNotes: ${task.notes || 'None'}`
-                        }
+                        { role: 'system', content: decomposePrompt },
+                        { role: 'user', content: `Decompose this task into steps.` }
                     ],
                     response_format: { type: 'json_object' },
                     temperature: 0.3,
@@ -1053,14 +1163,50 @@ async function decomposeTask(task) {
                 reasoning: s.reasoning || '',
             }));
         } catch (err) {
-            console.error('AI decomposition failed, using fallback:', err.message);
+            console.error('AI decomposition failed:', err.message);
+        }
+    } else if (process.env.USE_OPENCLAW === 'true') {
+        try {
+            var clawResult = await new Promise((resolve, reject) => {
+                var child = spawn(OPENCLAW_BIN, [
+                    '--no-color', 'agent', '--local',
+                    '--agent', OPENCLAW_AGENT_ID,
+                    '--message', decomposePrompt,
+                    '--timeout', '25',
+                ], { cwd: process.cwd(), env: process.env });
+                var stdout = '', stderr = '';
+                var timeout = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('timeout')); }, 30_000);
+                child.stdout.on('data', (d) => { stdout += d.toString(); });
+                child.stderr.on('data', (d) => { stderr += d.toString(); });
+                child.on('error', (err) => { clearTimeout(timeout); reject(err); });
+                child.on('close', (code) => {
+                    clearTimeout(timeout);
+                    if (code === 0) resolve(stdout.trim());
+                    else reject(new Error(`exit ${code}: ${stderr.substring(0, 200)}`));
+                });
+            });
+            // Try to extract JSON from the response
+            var jsonMatch = clawResult.match(/\{[\s\S]*"steps"[\s\S]*\}/m);
+            if (jsonMatch) {
+                var parsed = JSON.parse(jsonMatch[0]);
+                if (parsed.steps && parsed.steps.length > 0) {
+                    return parsed.steps.map((s, i) => ({
+                        id: `step-${i}`,
+                        description: s.description || `Step ${i + 1}`,
+                        status: 'pending',
+                        reasoning: s.reasoning || '',
+                    }));
+                }
+            }
+        } catch (err) {
+            console.error('OpenClaw decomposition failed:', err.message);
         }
     }
 
     return [
-        { id: 'step-0', description: `Analyze requirements for: ${task.name}`, status: 'pending', reasoning: 'Understanding the task scope and constraints' },
-        { id: 'step-1', description: `Implement: ${task.name}`, status: 'pending', reasoning: 'Core implementation work' },
-        { id: 'step-2', description: `Verify and finalize: ${task.name}`, status: 'pending', reasoning: 'Testing and quality checks' },
+        { id: 'step-0', description: `Research and plan: ${task.name}`, status: 'pending', reasoning: 'Understanding the task scope and constraints' },
+        { id: 'step-1', description: `Execute: ${task.name}`, status: 'pending', reasoning: 'Core implementation work' },
+        { id: 'step-2', description: `Review and validate: ${task.name}`, status: 'pending', reasoning: 'Testing and quality checks' },
     ];
 }
 
