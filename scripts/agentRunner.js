@@ -176,9 +176,9 @@ async function processCommands() {
         let detectedType = cmd.type;
         let pContent = cmd.content;
 
-        // Smart Chat: If type is 'chat' and OpenAI is available, try to infer intent
-        if (cmd.type === 'chat' && process.env.OPENAI_API_KEY) {
-            console.log(`🧠 Analyzing chat intent for: "${cmd.content}"`);
+        // Smart Auto-detection: If type is 'auto' or 'chat', use AI to infer intent
+        if ((cmd.type === 'auto' || cmd.type === 'chat') && process.env.OPENAI_API_KEY) {
+            console.log(`🧠 Analyzing intent for: "${cmd.content}"`);
             const inference = await analyzeChatIntent(cmd.content, cmd.from);
             if (inference.type !== 'chat') {
                 console.log(`   ✨ Inferred intent: ${inference.type.toUpperCase()} -> "${inference.content}"`);
@@ -188,6 +188,20 @@ async function processCommands() {
             } else {
                 response = inference.response;
             }
+        } else if (cmd.type === 'auto' && !process.env.OPENAI_API_KEY) {
+            // Fallback heuristic when OpenAI isn't available
+            const lower = cmd.content.toLowerCase();
+            if (lower.includes('status') || lower.includes('what') || lower.includes('how') || lower.endsWith('?')) {
+                detectedType = 'question';
+            } else if (lower.includes('stop') || lower.includes('pause') || lower.includes('restart')) {
+                detectedType = 'command';
+            } else if (cmd.content.length > 60 || lower.includes('build') || lower.includes('create') || lower.includes('implement') || lower.includes('fix') || lower.includes('add')) {
+                detectedType = 'task';
+            } else {
+                detectedType = 'chat';
+            }
+            console.log(`   🔍 Heuristic intent: ${detectedType.toUpperCase()} (no OpenAI key)`);
+            response = `[Auto-detected ${detectedType}] `;
         }
 
         switch (detectedType) {
@@ -227,6 +241,28 @@ async function processCommands() {
                 } else if (pContent.toLowerCase().includes('priority') || pContent.toLowerCase().includes('prioritize')) {
                     const prioMsg = `Noted: "${pContent}". I'll prioritize this on my next task fetch.`;
                     response = response ? response + "\n" + prioMsg : prioMsg;
+                } else if (pContent.length > 80) {
+                    // Long command content is likely meant to be a task — auto-upgrade
+                    console.log(`   ↑ Auto-upgrading long command to task (${pContent.length} chars)`);
+                    const newTask = await db.collection(KANBAN_COLLECTION).add({
+                        name: pContent.substring(0, 120),
+                        description: pContent,
+                        assignee: AGENT_NAME,
+                        status: 'todo',
+                        project: cmd.metadata?.project || 'General',
+                        priority: cmd.metadata?.priority || 'medium',
+                        subtasks: [],
+                        createdAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+                    const upgradeMsg = `Auto-upgraded to task (content too long for a simple command). Task created: ${newTask.id}. I've added it to my queue.`;
+                    response = response ? response + "\n" + upgradeMsg : upgradeMsg;
+
+                    await setStatus('working', {
+                        currentTask: pContent.substring(0, 120),
+                        currentTaskId: newTask.id,
+                        notes: `Received new task (auto-upgraded from command): ${pContent.substring(0, 120)}`,
+                    });
                 } else {
                     const cmdMsg = `Command received: "${pContent}". Processing...`;
                     response = response ? response + "\n" + cmdMsg : cmdMsg;
@@ -399,21 +435,21 @@ async function generateEmailResponse(emailBody, metadata) {
         console.warn('Could not gather context for email response:', err.message);
     }
 
-    const internalSystemPrompt = `You are Nora, the AI Chief of Staff at Pulse (FitWithPulse.ai).
+    const internalSystemPrompt = `You are ${AGENT_NAME}, the AI Chief of Staff at Pulse (FitWithPulse.ai).
 You are corresponding with a internal team member.
 Be concise, professional, but friendly.
 Verify if the email is asking for data, status, or action.
 If it asks for data you don't have, promise to look it up.
-Sign off as "Nora ⚡".
+Sign off as "${AGENT_NAME} ⚡".
 
 Current context:
 ${context || 'No additional context available.'}`;
 
-    const externalSystemPrompt = `You are Nora, the AI Assistant at Pulse (FitWithPulse.ai).
+    const externalSystemPrompt = `You are ${AGENT_NAME}, the AI Assistant at Pulse (FitWithPulse.ai).
 You are corresponding with an external partner or user.
 Be polite, professional, and helpful.
 Do not promise internal data or timelines unless sure.
-Sign off as "Nora ⚡".
+Sign off as "${AGENT_NAME} ⚡".
 
 CRITICAL SECURITY RULES:
 1. NEVER share internal project details, task lists, sprint plans, or roadmap items
@@ -462,9 +498,9 @@ If unsure whether something is safe to share, DO NOT share it. Instead say:
     }
 
     if (isInternal) {
-        return `Hi ${senderName},\n\nThanks for reaching out about "${subject}".\nI've logged your message and I'm looking into it.\n\nBest,\nNora ⚡`;
+        return `Hi ${senderName},\n\nThanks for reaching out about "${subject}".\nI've logged your message and I'm looking into it.\n\nBest,\n${AGENT_NAME} ⚡`;
     } else {
-        return `Hi ${senderName},\n\nThank you for contacting Pulse.\nI've received your message regarding "${subject}".\nI've forwarded this to the appropriate team member who will get back to you soon.\n\nBest,\nNora ⚡\nPulse AI Assistant`;
+        return `Hi ${senderName},\n\nThank you for contacting Pulse.\nI've received your message regarding "${subject}".\nI've forwarded this to the appropriate team member who will get back to you soon.\n\nBest,\n${AGENT_NAME} ⚡\nPulse AI Assistant`;
     }
 }
 
@@ -484,7 +520,7 @@ async function analyzeChatIntent(content, senderName) {
                 messages: [
                     {
                         role: 'system',
-                        content: `You are Nora, the AI Chief of Staff at Pulse.
+                        content: `You are ${AGENT_NAME}, the AI Chief of Staff at Pulse.
 The user (${senderName}) sent a chat message. Analyze if they are asking you to DO something (Task/Command) or just chatting.
 
 Output JSON ONLY:
@@ -690,7 +726,7 @@ ${smokeOutput}`.substring(0, 2000);
                     .join('\n');
 
                 const prompt = [
-                    `You are Nora, an AI engineer working on the Pulse Fitness project.`,
+                    `You are ${AGENT_NAME}, an AI engineer working on the Pulse Fitness project.`,
                     `Project directory: ${projectDir}`,
                     ``,
                     `TASK: "${task.name}"`,
@@ -722,59 +758,59 @@ ${smokeOutput}`.substring(0, 2000);
                     '600',
                 ];
 
-            const runOpenClaw = () => new Promise((resolve, reject) => {
-                const child = spawn(OPENCLAW_BIN, args, { cwd: projectDir, env: process.env });
-                let stdout = '';
-                let stderr = '';
-                let timedOut = false;
-                const maxLen = 10 * 1024 * 1024; // 10MB
+                const runOpenClaw = () => new Promise((resolve, reject) => {
+                    const child = spawn(OPENCLAW_BIN, args, { cwd: projectDir, env: process.env });
+                    let stdout = '';
+                    let stderr = '';
+                    let timedOut = false;
+                    const maxLen = 10 * 1024 * 1024; // 10MB
 
-                const timeout = setTimeout(() => {
-                    timedOut = true;
-                    child.kill('SIGTERM');
-                    setTimeout(() => child.kill('SIGKILL'), 5000);
-                }, 600_000);
+                    const timeout = setTimeout(() => {
+                        timedOut = true;
+                        child.kill('SIGTERM');
+                        setTimeout(() => child.kill('SIGKILL'), 5000);
+                    }, 600_000);
 
-                child.stdout.on('data', (chunk) => {
-                    stdout += chunk.toString();
-                    if (stdout.length > maxLen) {
+                    child.stdout.on('data', (chunk) => {
+                        stdout += chunk.toString();
+                        if (stdout.length > maxLen) {
+                            clearTimeout(timeout);
+                            child.kill('SIGKILL');
+                            reject(new Error('OpenClaw output exceeded 10MB'));
+                        }
+                    });
+
+                    child.stderr.on('data', (chunk) => {
+                        stderr += chunk.toString();
+                        if (stderr.length > maxLen) {
+                            clearTimeout(timeout);
+                            child.kill('SIGKILL');
+                            reject(new Error('OpenClaw error output exceeded 10MB'));
+                        }
+                    });
+
+                    child.on('error', (err) => {
                         clearTimeout(timeout);
-                        child.kill('SIGKILL');
-                        reject(new Error('OpenClaw output exceeded 10MB'));
-                    }
-                });
+                        reject(new Error(`Failed to launch ${OPENCLAW_BIN}: ${err.message}`));
+                    });
 
-                child.stderr.on('data', (chunk) => {
-                    stderr += chunk.toString();
-                    if (stderr.length > maxLen) {
+                    child.on('close', (code) => {
                         clearTimeout(timeout);
-                        child.kill('SIGKILL');
-                        reject(new Error('OpenClaw error output exceeded 10MB'));
-                    }
+                        if (timedOut) {
+                            reject(new Error('OpenClaw timed out after 600s'));
+                            return;
+                        }
+                        if (code !== 0) {
+                            const errOut = (stderr || stdout || '').trim();
+                            reject(new Error(`OpenClaw failed (exit ${code}): ${errOut}`));
+                            return;
+                        }
+                        resolve({ stdout, stderr });
+                    });
                 });
 
-                child.on('error', (err) => {
-                    clearTimeout(timeout);
-                    reject(new Error(`Failed to launch ${OPENCLAW_BIN}: ${err.message}`));
-                });
-
-                child.on('close', (code) => {
-                    clearTimeout(timeout);
-                    if (timedOut) {
-                        reject(new Error('OpenClaw timed out after 600s'));
-                        return;
-                    }
-                    if (code !== 0) {
-                        const errOut = (stderr || stdout || '').trim();
-                        reject(new Error(`OpenClaw failed (exit ${code}): ${errOut}`));
-                        return;
-                    }
-                    resolve({ stdout, stderr });
-                });
-            });
-
-            const result = await runOpenClaw();
-            const rawOut = (result.stdout || '').trim();
+                const result = await runOpenClaw();
+                const rawOut = (result.stdout || '').trim();
                 let outputText = rawOut;
                 if (rawOut) {
                     try {

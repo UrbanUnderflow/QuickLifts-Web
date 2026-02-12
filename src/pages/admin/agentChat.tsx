@@ -20,7 +20,7 @@ interface ChatMessage {
   id: string;
   from: string;
   to: string;
-  type: 'task' | 'command' | 'question' | 'chat' | 'email';
+  type: 'auto' | 'task' | 'command' | 'question' | 'chat' | 'email';
   content: string;
   response?: string;
   status: 'pending' | 'in-progress' | 'completed' | 'failed';
@@ -29,13 +29,14 @@ interface ChatMessage {
   metadata?: Record<string, any>;
 }
 
-type MessageType = 'task' | 'command' | 'question' | 'chat';
+type MessageType = 'auto' | 'task' | 'command' | 'question' | 'chat';
 
 const MESSAGE_TYPES: { type: MessageType; label: string; icon: React.ReactNode; desc: string }[] = [
+  { type: 'auto', label: 'Auto', icon: <Zap className="w-4 h-4" />, desc: 'AI detects intent — task, command, question, or chat' },
   { type: 'task', label: 'Task', icon: <ListTodo className="w-4 h-4" />, desc: 'Assign work — agent decomposes & executes' },
   { type: 'command', label: 'Command', icon: <Terminal className="w-4 h-4" />, desc: 'Direct instruction — immediate action' },
   { type: 'question', label: 'Question', icon: <HelpCircle className="w-4 h-4" />, desc: 'Ask for info or status' },
-  { type: 'chat', label: 'Chat', icon: <MessageSquare className="w-4 h-4" />, desc: 'General conversation' },
+  { type: 'chat', label: 'Chat', icon: <MessageSquare className="w-4 h-4" />, desc: 'General conversation — no task execution' },
 ];
 
 /* ─── Helpers ─────────────────────────────────────────── */
@@ -182,7 +183,7 @@ const ChatScreen: React.FC<{
 }> = ({ agent, onBack }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
-  const [msgType, setMsgType] = useState<MessageType>('task');
+  const [msgType, setMsgType] = useState<MessageType>('auto');
   const [showTypeSelector, setShowTypeSelector] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1050,6 +1051,11 @@ const AgentChatContent: React.FC = () => {
           border-radius: 6px;
         }
 
+        .ac-msg-type-badge.type-auto {
+          background: linear-gradient(135deg, rgba(251, 146, 60, 0.15), rgba(168, 85, 247, 0.15));
+          color: #fb923c;
+        }
+
         .ac-msg-type-badge.type-task {
           background: rgba(168, 85, 247, 0.15);
           color: #c084fc;
@@ -1271,6 +1277,11 @@ const AgentChatContent: React.FC = () => {
           font-weight: 600;
           width: fit-content;
           transition: all 0.15s;
+        }
+
+        .ac-type-btn.type-auto {
+          background: linear-gradient(135deg, rgba(251, 146, 60, 0.15), rgba(168, 85, 247, 0.15));
+          color: #fb923c;
         }
 
         .ac-type-btn.type-task {
