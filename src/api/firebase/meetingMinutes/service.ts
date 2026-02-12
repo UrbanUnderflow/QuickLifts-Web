@@ -191,6 +191,113 @@ export class MeetingMinutesService {
 
         return lines.join('\n');
     }
+
+    toHTML(minutes: MeetingMinutes): string {
+        const date = minutes.createdAt instanceof Date
+            ? minutes.createdAt
+            : (minutes.createdAt as any)?.toDate?.() || new Date();
+
+        const formatList = (items: string[]) =>
+            items.length
+                ? `<ul>${items.map(item => `<li>${item}</li>`).join('')}</ul>`
+                : '';
+
+        const formatTopics = (topics: { title: string; summary: string }[]) =>
+            topics.length
+                ? topics.map(topic => `
+                    <div class="mm-topic">
+                        <h4>${topic.title}</h4>
+                        <p>${topic.summary}</p>
+                    </div>
+                `).join('')
+                : '';
+
+        const formatActionItems = (items: { task: string; owner: string }[]) =>
+            items.length
+                ? items.map(item => `
+                    <div class="mm-action-item">
+                        <span class="mm-action-task">${item.task}</span>
+                        <span class="mm-action-owner">${item.owner}</span>
+                    </div>
+                `).join('')
+                : '';
+
+        const styles = `
+            <style>
+                body { font-family: 'Inter', Arial, sans-serif; background: #fafafa; color: #0f172a; margin: 0; padding: 24px; }
+                .mm-container { max-width: 720px; margin: 0 auto; background: #fff; border-radius: 16px; padding: 32px; box-shadow: 0 20px 60px rgba(15,23,42,0.08); }
+                .mm-header { border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 24px; }
+                .mm-title { font-size: 24px; margin: 0; color: #111827; }
+                .mm-meta { margin: 8px 0 0; color: #475569; font-size: 13px; }
+                .mm-section { margin-bottom: 24px; }
+                .mm-section h3 { margin: 0 0 8px; font-size: 16px; color: #111827; }
+                .mm-section p { margin: 0; line-height: 1.5; color: #1f2937; }
+                .mm-topic { border: 1px solid #e5e7eb; border-radius: 12px; padding: 12px 16px; margin-bottom: 12px; }
+                .mm-topic h4 { margin: 0 0 4px; font-size: 14px; color: #1d4ed8; }
+                .mm-topic p { margin: 0; font-size: 13px; color: #334155; }
+                ul { padding-left: 18px; margin: 8px 0 0; color: #1f2937; }
+                li { margin-bottom: 6px; font-size: 13px; }
+                .mm-action-item { display: flex; justify-content: space-between; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px 14px; margin-bottom: 8px; font-size: 13px; }
+                .mm-action-owner { color: #6366f1; font-weight: 600; }
+            </style>
+        `;
+
+        return `
+            <!DOCTYPE html>
+            <html lang="en">
+                <head>
+                    <meta charset="UTF-8" />
+                    <title>Meeting Minutes</title>
+                    ${styles}
+                </head>
+                <body>
+                    <div class="mm-container">
+                        <div class="mm-header">
+                            <h1 class="mm-title">Round Table Meeting Minutes</h1>
+                            <p class="mm-meta">
+                                ${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                                · ${minutes.duration} · ${minutes.messageCount} messages · Participants: ${minutes.participants.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ')}
+                            </p>
+                        </div>
+                        <section class="mm-section">
+                            <h3>Executive Summary</h3>
+                            <p>${minutes.executiveSummary || 'No summary provided.'}</p>
+                        </section>
+                        ${minutes.topicsDiscussed.length ? `
+                            <section class="mm-section">
+                                <h3>Topics Discussed</h3>
+                                ${formatTopics(minutes.topicsDiscussed)}
+                            </section>
+                        ` : ''}
+                        ${minutes.keyInsights.length ? `
+                            <section class="mm-section">
+                                <h3>Key Insights</h3>
+                                ${formatList(minutes.keyInsights)}
+                            </section>
+                        ` : ''}
+                        ${minutes.decisions.length ? `
+                            <section class="mm-section">
+                                <h3>Decisions & Positions</h3>
+                                ${formatList(minutes.decisions)}
+                            </section>
+                        ` : ''}
+                        ${minutes.openQuestions.length ? `
+                            <section class="mm-section">
+                                <h3>Open Questions</h3>
+                                ${formatList(minutes.openQuestions)}
+                            </section>
+                        ` : ''}
+                        ${minutes.actionItems.length ? `
+                            <section class="mm-section">
+                                <h3>Action Items</h3>
+                                ${formatActionItems(minutes.actionItems)}
+                            </section>
+                        ` : ''}
+                    </div>
+                </body>
+            </html>
+        `;
+    }
 }
 
 export const meetingMinutesService = new MeetingMinutesService();
