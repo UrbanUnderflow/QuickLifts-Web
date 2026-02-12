@@ -42,19 +42,23 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
         }
     };
 
-    const handleDownload = (minutes: MeetingMinutes, e: React.MouseEvent) => {
+    const handleDownload = async (minutes: MeetingMinutes, e: React.MouseEvent) => {
         e.stopPropagation();
-        const md = meetingMinutesService.toMarkdown(minutes);
-        const blob = new Blob([md], { type: 'text/markdown' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const date = minutes.createdAt instanceof Date
-            ? minutes.createdAt
-            : (minutes.createdAt as any)?.toDate?.() || new Date();
-        a.download = `meeting-minutes-${date.toISOString().split('T')[0]}.md`;
-        a.click();
-        URL.revokeObjectURL(url);
+        try {
+            const html = meetingMinutesService.toHTML(minutes);
+            const pdfBlob = await import('../../utils/pdf').then(mod => mod.renderHtmlToPdf(html));
+            const url = URL.createObjectURL(pdfBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = minutes.createdAt instanceof Date
+                ? minutes.createdAt
+                : (minutes.createdAt as any)?.toDate?.() || new Date();
+            a.download = `meeting-minutes-${date.toISOString().split('T')[0]}.pdf`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Failed to download PDF minutes:', err);
+        }
     };
 
     const handleDelete = async (id: string, e: React.MouseEvent) => {
