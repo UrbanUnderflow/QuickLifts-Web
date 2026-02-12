@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { X, Send, Sparkles, MessageSquare, AtSign, Paperclip, FileText, Loader2, FolderOpen, Code2, ChevronDown } from 'lucide-react';
+import { X, Send, Sparkles, MessageSquare, AtSign, Paperclip, FileText, Loader2, FolderOpen, Code2, ChevronDown, Lightbulb, ListTodo, Terminal } from 'lucide-react';
+import { db } from '../../api/firebase/config';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { groupChatService } from '../../api/firebase/groupChat/service';
 import { presenceService, AgentPresence } from '../../api/firebase/presence/service';
 import type { GroupChatMessage } from '../../api/firebase/groupChat/types';
@@ -44,6 +46,10 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [hasNewMessages, setHasNewMessages] = useState(false);
+
+  // Chat mode switcher
+  type ChatMode = 'brainstorm' | 'task' | 'command';
+  const [chatMode, setChatMode] = useState<ChatMode>('brainstorm');
 
   // Meeting minutes attachment state
   const [showMinutesPicker, setShowMinutesPicker] = useState(false);
@@ -124,7 +130,37 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
         const md = meetingMinutesService.toMarkdown(attachedMinutes);
         messageContent += `\n\n--- ATTACHED MEETING MINUTES ---\n${md}\n--- END MEETING MINUTES ---`;
       }
-      await groupChatService.broadcastMessage(chatId, messageContent, participants);
+
+      if (chatMode === 'brainstorm') {
+        // Default: broadcast to all agents for group discussion
+        await groupChatService.broadcastMessage(chatId, messageContent, participants);
+      } else {
+        // Task or Command mode: extract @mentioned agents and send directly as commands
+        const mentionedAgents = participants.filter(agentId => {
+          const name = (agentStatuses[agentId]?.displayName || agentId).toLowerCase();
+          return messageContent.toLowerCase().includes(`@${name}`) || messageContent.includes(`@${agentId}`);
+        });
+
+        // If no agents mentioned, send to all participants
+        const targets = mentionedAgents.length > 0 ? mentionedAgents : participants;
+
+        // Also broadcast the message to group chat so everyone sees it
+        await groupChatService.broadcastMessage(chatId, `[${chatMode.toUpperCase()}] ${messageContent}`, participants);
+
+        // Send individual task/command to each targeted agent
+        for (const agentId of targets) {
+          await addDoc(collection(db, 'agent-commands'), {
+            from: 'admin',
+            to: agentId,
+            type: chatMode, // 'task' or 'command'
+            content: messageContent.replace(new RegExp(`@\\w+`, 'gi'), '').trim(),
+            metadata: { source: 'group-chat', chatId },
+            status: 'pending',
+            createdAt: serverTimestamp(),
+          });
+        }
+      }
+
       setInputText('');
       setAttachedMinutes(null);
       setAttachedFile(null);
@@ -400,6 +436,33 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
 
         {/* ── Input ── */}
         <div className="rt-input-area">
+          {/* Mode Switcher */}
+          <div className="rt-mode-switcher">
+            <button
+              className={`rt-mode-pill ${chatMode === 'brainstorm' ? 'active' : ''}`}
+              onClick={() => setChatMode('brainstorm')}
+              data-mode="brainstorm"
+            >
+              <Lightbulb className="w-3 h-3" />
+              Brainstorm
+            </button>
+            <button
+              className={`rt-mode-pill ${chatMode === 'task' ? 'active' : ''}`}
+              onClick={() => setChatMode('task')}
+              data-mode="task"
+            >
+              <ListTodo className="w-3 h-3" />
+              Task
+            </button>
+            <button
+              className={`rt-mode-pill ${chatMode === 'command' ? 'active' : ''}`}
+              onClick={() => setChatMode('command')}
+              data-mode="command"
+            >
+              <Terminal className="w-3 h-3" />
+              Command
+            </button>
+          </div>
           {/* Attached minutes chip */}
           {attachedMinutes && (
             <div className="rt-attached-chip">
@@ -559,7 +622,13 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
             <textarea
               ref={inputRef}
               className="rt-textarea"
-              placeholder="Message all agents…"
+              placeholder={
+                chatMode === 'brainstorm'
+                  ? 'Brainstorm with all agents…'
+                  : chatMode === 'task'
+                    ? 'Describe a task… @mention an agent to assign'
+                    : 'Send a command… @mention an agent to target'
+              }
               value={inputText}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -581,6 +650,11 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
           </div>
           <p className="rt-input-hint">
             <kbd>↵</kbd> to send · <kbd>⇧</kbd> + <kbd>↵</kbd> new line · <kbd>@</kbd> to mention
+            {chatMode !== 'brainstorm' && (
+              <span className="rt-mode-hint">
+                &nbsp;· Mode: <strong>{chatMode}</strong> — {chatMode === 'task' ? 'creates a kanban task' : 'sends a direct command'}
+              </span>
+            )}
           </p>
         </div>
       </div>
@@ -818,6 +892,72 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
         .rt-input-area {
           padding: 12px 18px 14px;
           border-top: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        /* ═══ MODE SWITCHER ═══ */
+        .rt-mode-switcher {
+          display: flex;
+          gap: 4px;
+          margin-bottom: 10px;
+          padding: 3px;
+          background: rgba(255,255,255,0.02);
+          border-radius: 10px;
+          border: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .rt-mode-pill {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          padding: 6px 10px;
+          font-size: 11px;
+          font-weight: 500;
+          letter-spacing: 0.02em;
+          border-radius: 8px;
+          border: 1px solid transparent;
+          background: transparent;
+          color: #52525b;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .rt-mode-pill:hover {
+          color: #a1a1aa;
+          background: rgba(255,255,255,0.04);
+        }
+
+        /* Brainstorm active */
+        .rt-mode-pill[data-mode="brainstorm"].active {
+          background: rgba(139, 92, 246, 0.12);
+          border-color: rgba(139, 92, 246, 0.3);
+          color: #a78bfa;
+          box-shadow: 0 0 12px rgba(139, 92, 246, 0.08);
+        }
+
+        /* Task active */
+        .rt-mode-pill[data-mode="task"].active {
+          background: rgba(34, 197, 94, 0.12);
+          border-color: rgba(34, 197, 94, 0.3);
+          color: #4ade80;
+          box-shadow: 0 0 12px rgba(34, 197, 94, 0.08);
+        }
+
+        /* Command active */
+        .rt-mode-pill[data-mode="command"].active {
+          background: rgba(245, 158, 11, 0.12);
+          border-color: rgba(245, 158, 11, 0.3);
+          color: #fbbf24;
+          box-shadow: 0 0 12px rgba(245, 158, 11, 0.08);
+        }
+
+        .rt-mode-hint {
+          color: #71717a;
+        }
+        .rt-mode-hint strong {
+          text-transform: capitalize;
+          color: #a1a1aa;
         }
 
         .rt-input-row {
