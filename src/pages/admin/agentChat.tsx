@@ -89,10 +89,43 @@ const AgentListScreen: React.FC<{
   agents: AgentPresence[];
   onSelectAgent: (agent: AgentPresence) => void;
 }> = ({ agents, onSelectAgent }) => {
+  const router = useRouter();
+
   return (
     <div className="ac-agent-list">
       <div className="ac-list-header">
         <div>
+          <button
+            onClick={() => router.push('/admin/virtualOffice')}
+            className="ac-back-button"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 12px',
+              marginBottom: '12px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '8px',
+              color: '#a1a1aa',
+              fontSize: '14px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+              e.currentTarget.style.color = '#ffffff';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.color = '#a1a1aa';
+            }}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Virtual Office</span>
+          </button>
           <p className="ac-list-subtitle">Agent Comms</p>
           <h1 className="ac-list-title">Messages</h1>
         </div>
@@ -358,8 +391,8 @@ const ChatScreen: React.FC<{
               {!agentIsOnline
                 ? 'Offline'
                 : agent.status === 'working'
-                ? `Working: ${agent.currentTask || 'task'}`
-                : agent.status === 'idle' ? 'Online · Idle' : 'Offline'
+                  ? `Working: ${agent.currentTask || 'task'}`
+                  : agent.status === 'idle' ? 'Online · Idle' : 'Offline'
               }
             </p>
           </div>
