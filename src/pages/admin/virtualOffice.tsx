@@ -82,7 +82,7 @@ const AGENT_DUTIES: Record<string, string> = {
   nora: 'Maintains the living system map across all surfaces. Owns Kanban ops, agent orchestration, telemetry, and product ops — the operations nerve center for Pulse.',
   scout: 'Runs outbound influencer discovery workflows, researches creator fit and engagement quality, and prepares qualified prospects for CRM intake.',
   solara: 'Owns brand voice, messaging strategy, and value alignment across outward-facing work. Converts Freedom + Spirituality principles into clear narrative guardrails and content direction for all agents.',
-  sage: 'Stewards the intel feed, runs field research, and delivers sourced insights with empathy and rigor. Brings back evidence-backed briefs, risks, and next actions for the team.',
+  sage: 'Stewards the intel feed, runs field research, and delivers sourced insights with empathy and rigor — always internal-facing. Signature rhythm: Field Notes → Patterns → Feed Drops, so every briefing pairs heartbeat stories with receipts.',
 };
 
 const AGENT_ID_ALIASES: Record<string, string> = {
