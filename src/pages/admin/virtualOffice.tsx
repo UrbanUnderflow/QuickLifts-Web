@@ -9,7 +9,8 @@ import { KanbanTask } from '../../api/firebase/kanban/types';
 import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
   ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
-  History, ChevronRight, MessageSquare, Archive
+  History, ChevronRight, MessageSquare, Archive, X, ListOrdered, AlertTriangle,
+  BookOpen, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { RoundTable } from '../../components/virtualOffice/RoundTable';
 import { GroupChatModal } from '../../components/virtualOffice/GroupChatModal';
@@ -376,6 +377,8 @@ const StepIcon: React.FC<{ status: AgentThoughtStep['status'] }> = ({ status }) 
   switch (status) {
     case 'completed':
       return <CheckCircle2 className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />;
+    case 'completed-with-issues':
+      return <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />;
     case 'in-progress':
       return <Loader2 className="w-3.5 h-3.5 text-blue-400 flex-shrink-0 animate-spin" />;
     case 'failed':
@@ -503,22 +506,19 @@ const ExecutionStepsPanel: React.FC<{
 
 /* ─── Task History Panel ──────────────────────────────── */
 
-const TaskHistoryPanel: React.FC<{ agentId: string }> = ({ agentId }) => {
-  const [expanded, setExpanded] = useState(false);
+const TaskHistoryPanel: React.FC<{ agentId: string; agentName?: string; emoji?: string }> = ({ agentId, agentName, emoji }) => {
+  const [isOpen, setIsOpen] = useState(false);
   const [history, setHistory] = useState<TaskHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
   const fetched = useRef(false);
 
-  const loadHistory = useCallback(async () => {
-    if (fetched.current) {
-      setExpanded(e => !e);
-      return;
-    }
+  const loadAndOpen = useCallback(async () => {
+    setIsOpen(true);
+    if (fetched.current) return;
     setLoading(true);
-    setExpanded(true);
     try {
-      const entries = await presenceService.fetchTaskHistory(agentId, 10);
+      const entries = await presenceService.fetchTaskHistory(agentId, 20);
       setHistory(entries);
       fetched.current = true;
     } catch (err) {
@@ -528,84 +528,337 @@ const TaskHistoryPanel: React.FC<{ agentId: string }> = ({ agentId }) => {
     }
   }, [agentId]);
 
+  /* ─── Helper: detect and linkify deliverable URLs ────── */
+  const linkifyOutput = (text: string) => {
+    if (!text) return null;
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const fileRegex = /(?:^|\s)([\w\-./]+\.[a-z]{1,6})/gi;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) =>
+      urlRegex.test(part) ? (
+        <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="th-link">{part}</a>
+      ) : (
+        <span key={i}>{part}</span>
+      )
+    );
+  };
+
+  const statusEmoji = (s: string) =>
+    s === 'completed' ? '✅' : s === 'failed' ? '❌' : s === 'in-progress' ? '⏳' : '⏸';
+
+  const statusColor = (s: string) =>
+    s === 'completed' ? '#22c55e' : s === 'failed' ? '#ef4444' : s === 'in-progress' ? '#3b82f6' : '#71717a';
+
   return (
-    <div className="task-history-section">
-      <button
-        onClick={loadHistory}
-        className="history-toggle"
-      >
+    <>
+      {/* Trigger button inside hover panel */}
+      <button onClick={(e) => { e.stopPropagation(); loadAndOpen(); }} className="history-toggle">
         <History className="w-3 h-3" />
         <span>Task History</span>
-        <ChevronDown className={`w-3 h-3 ml-auto transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        <ExternalLink className="w-2.5 h-2.5 ml-auto text-zinc-600" />
       </button>
 
-      {expanded && (
-        <div className="history-list">
-          {loading && (
-            <div className="flex items-center justify-center py-3">
-              <Loader2 className="w-3.5 h-3.5 text-zinc-500 animate-spin" />
-            </div>
-          )}
-
-          {!loading && history.length === 0 && (
-            <p className="text-[10px] text-zinc-600 text-center py-2">No completed tasks yet</p>
-          )}
-
-          {history.map((entry) => {
-            const isEntryExpanded = expandedEntry === entry.id;
-            const entryDate = entry.completedAt;
-            const timeStr = entryDate?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '';
-            const dateStr = entryDate?.toLocaleDateString([], { month: 'short', day: 'numeric' }) || '';
-
-            return (
-              <div key={entry.id} className="history-entry">
-                <button
-                  className="history-entry-header"
-                  onClick={() => setExpandedEntry(isEntryExpanded ? null : (entry.id || null))}
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    {entry.status === 'completed'
-                      ? <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
-                      : <XCircle className="w-3 h-3 text-red-400 flex-shrink-0" />}
-                    <span className="text-[11px] text-zinc-200 truncate">{entry.taskName}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    <span className="text-[9px] text-zinc-600">{formatMs(entry.totalDurationMs)}</span>
-                    <ChevronRight className={`w-2.5 h-2.5 text-zinc-600 transition-transform ${isEntryExpanded ? 'rotate-90' : ''}`} />
-                  </div>
-                </button>
-
-                {/* Expanded: show step list */}
-                {isEntryExpanded && (
-                  <div className="history-entry-steps">
-                    <div className="flex items-center justify-between text-[9px] text-zinc-600 mb-1.5">
-                      <span>{dateStr} at {timeStr}</span>
-                      <span>{entry.completedStepCount}/{entry.stepCount} steps</span>
-                    </div>
-                    {entry.steps.map((step, si) => (
-                      <div key={step.id || si} className="history-step">
-                        <StepIcon status={step.status} />
-                        <span className={`text-[10px] truncate ${step.status === 'completed' ? 'text-zinc-400'
-                          : step.status === 'failed' ? 'text-red-400'
-                            : 'text-zinc-600'
-                          }`}>
-                          {step.description}
-                        </span>
-                        {step.durationMs ? (
-                          <span className="text-[9px] text-zinc-700 ml-auto flex-shrink-0">
-                            {formatMs(step.durationMs)}
-                          </span>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
-                )}
+      {/* Full-screen modal via portal */}
+      {isOpen && ReactDOM.createPortal(
+        <div className="th-overlay" onClick={() => setIsOpen(false)} onMouseDown={e => e.stopPropagation()}>
+          <div className="th-modal" onClick={e => e.stopPropagation()}>
+            {/* Modal Header */}
+            <div className="th-header">
+              <div className="th-header-left">
+                <span className="th-header-emoji">{emoji || '⚡️'}</span>
+                <div>
+                  <h2 className="th-title">{agentName || agentId}&apos;s Task History</h2>
+                  <p className="th-subtitle">{history.length} task{history.length !== 1 ? 's' : ''} recorded</p>
+                </div>
               </div>
-            );
-          })}
-        </div>
+              <button className="th-close" onClick={() => setIsOpen(false)}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="th-body">
+              {loading && (
+                <div className="th-loading">
+                  <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
+                  <span>Loading task history…</span>
+                </div>
+              )}
+
+              {!loading && history.length === 0 && (
+                <div className="th-empty">
+                  <History className="w-8 h-8 text-zinc-700" />
+                  <p>No completed tasks yet</p>
+                </div>
+              )}
+
+              {history.map((entry) => {
+                const isExp = expandedEntry === entry.id;
+                const completedDate = entry.completedAt;
+                const dateStr = completedDate?.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }) || '';
+                const timeStr = completedDate?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '';
+                const durationStr = formatMs(entry.totalDurationMs);
+
+                // ─── Retroactive output analysis ───────────────
+                // Detect failure signals in step outputs even for old entries
+                const FAILURE_RX = [/\bfailed\b/i, /\berror\b/i, /\bmissing\b/i, /\bcouldn'?t\b/i, /\bblocked\b/i, /\bunable to\b/i, /\bnot found\b/i, /\bnot available\b/i];
+                const FALSE_POS_RX = [/no\s+error/i, /without\s+error/i, /0\s+error/i, /fixed.*error/i, /resolved.*error/i];
+                const analyzeOutput = (text: string) => {
+                  if (!text) return false;
+                  const hasSignal = FAILURE_RX.some(rx => rx.test(text));
+                  const isFP = FALSE_POS_RX.some(rx => rx.test(text));
+                  return hasSignal && !isFP;
+                };
+
+                const stepsWithIssues = entry.steps.filter(s =>
+                  s.status === 'completed-with-issues' ||
+                  s.verificationFlag ||
+                  (s.status === 'completed' && analyzeOutput(s.output || ''))
+                );
+                const hasVerificationIssues = stepsWithIssues.length > 0 || entry.status === 'completed-with-issues';
+                const effectiveStatus = entry.status === 'completed' && hasVerificationIssues
+                  ? 'completed-with-issues' : entry.status;
+
+                return (
+                  <div key={entry.id} className={`th-entry ${isExp ? 'expanded' : ''}`}>
+                    {/* Entry header — clickable */}
+                    <button className="th-entry-header" onClick={() => setExpandedEntry(isExp ? null : (entry.id || null))}>
+                      <div className="th-entry-status">
+                        {effectiveStatus === 'completed'
+                          ? <CheckCircle2 className="w-4 h-4" style={{ color: '#22c55e' }} />
+                          : effectiveStatus === 'completed-with-issues'
+                            ? <AlertTriangle className="w-4 h-4" style={{ color: '#f59e0b' }} />
+                            : <XCircle className="w-4 h-4" style={{ color: '#ef4444' }} />}
+                      </div>
+                      <div className="th-entry-info">
+                        <span className="th-entry-name">{entry.taskName}</span>
+                        <span className="th-entry-meta">
+                          {dateStr} at {timeStr} · {durationStr} · {entry.completedStepCount}/{entry.stepCount} steps
+                          {hasVerificationIssues && <span style={{ color: '#f59e0b', marginLeft: 6 }}>⚠ {stepsWithIssues.length} step{stepsWithIssues.length !== 1 ? 's' : ''} need review</span>}
+                        </span>
+                      </div>
+                      <ChevronDown className={`w-4 h-4 text-zinc-600 transition-transform ${isExp ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {/* Expanded detail */}
+                    {isExp && (
+                      <div className="th-entry-detail">
+                        {/* Summary stats bar */}
+                        <div className="th-stats-bar">
+                          <div className="th-stat">
+                            <span className="th-stat-label">Status</span>
+                            <span className={`th-stat-value ${effectiveStatus}`}>
+                              {effectiveStatus === 'completed' ? '✅ Completed'
+                                : effectiveStatus === 'completed-with-issues' ? '⚠️ Needs Review'
+                                  : '❌ Failed'}
+                            </span>
+                          </div>
+                          <div className="th-stat">
+                            <span className="th-stat-label">Duration</span>
+                            <span className="th-stat-value">{durationStr}</span>
+                          </div>
+                          <div className="th-stat">
+                            <span className="th-stat-label">Steps Done</span>
+                            <span className="th-stat-value">{entry.completedStepCount} / {entry.stepCount}</span>
+                          </div>
+                          <div className="th-stat">
+                            <span className="th-stat-label">Started</span>
+                            <span className="th-stat-value">
+                              {entry.startedAt?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || '—'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Step breakdown */}
+                        <div className="th-steps-section">
+                          <h4 className="th-section-title">
+                            <ListOrdered className="w-3.5 h-3.5" /> Execution Steps
+                          </h4>
+                          {entry.steps.map((step, si) => {
+                            const stepHasIssue = step.status === 'completed-with-issues' || step.verificationFlag || (step.status === 'completed' && analyzeOutput(step.output || ''));
+                            const effectiveStepStatus = stepHasIssue && step.status === 'completed' ? 'completed-with-issues' : step.status;
+                            return (
+                              <div key={step.id || si} className={`th-step ${effectiveStepStatus}`}>
+                                <div className="th-step-header">
+                                  <span className="th-step-num">{si + 1}</span>
+                                  <StepIcon status={effectiveStepStatus} />
+                                  <span className="th-step-desc">{step.description}</span>
+                                  {step.durationMs ? (
+                                    <span className="th-step-duration">{formatMs(step.durationMs)}</span>
+                                  ) : null}
+                                </div>
+                                {/* Reasoning */}
+                                {step.reasoning && (
+                                  <div className="th-step-reasoning">
+                                    <span className="th-step-reasoning-label">💭 Reasoning:</span>
+                                    <p>{step.reasoning}</p>
+                                  </div>
+                                )}
+                                {/* Output / Deliverable */}
+                                {step.output && (
+                                  <div className={`th-step-output ${step.status === 'failed' ? 'error' : stepHasIssue ? 'warning' : ''}`}>
+                                    <span className="th-step-output-label">
+                                      {step.status === 'failed' ? '⚠️ Error:' : stepHasIssue ? '🔍 Needs Verification:' : '📦 Output:'}
+                                    </span>
+                                    <div className="th-step-output-content">
+                                      {linkifyOutput(step.output)}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
-    </div>
+
+      <style jsx>{`
+        .th-overlay {
+          position: fixed; inset: 0; z-index: 9999;
+          background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+          display: flex; align-items: center; justify-content: center;
+          animation: thFadeIn 0.2s ease;
+        }
+        @keyframes thFadeIn { from { opacity: 0; } }
+        .th-modal {
+          width: min(680px, 92vw); max-height: 85vh;
+          background: linear-gradient(135deg, #111114, #18181b);
+          border: 1px solid rgba(255,255,255,0.06);
+          border-radius: 16px;
+          display: flex; flex-direction: column;
+          box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03);
+          animation: thSlideUp 0.25s ease;
+        }
+        @keyframes thSlideUp { from { transform: translateY(20px); opacity: 0; } }
+        .th-header {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .th-header-left { display: flex; align-items: center; gap: 12px; }
+        .th-header-emoji { font-size: 28px; }
+        .th-title { font-size: 16px; font-weight: 700; color: #f4f4f5; margin: 0; }
+        .th-subtitle { font-size: 11px; color: #71717a; margin: 2px 0 0; }
+        .th-close {
+          background: none; border: none; color: #71717a; cursor: pointer;
+          padding: 6px; border-radius: 8px; transition: all 0.15s;
+        }
+        .th-close:hover { background: rgba(255,255,255,0.06); color: #a1a1aa; }
+        .th-body {
+          flex: 1; overflow-y: auto; padding: 16px 20px;
+          scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.06) transparent;
+        }
+        .th-loading, .th-empty {
+          display: flex; flex-direction: column; align-items: center; gap: 10px;
+          padding: 40px 0; color: #71717a; font-size: 13px;
+        }
+        /* Entry */
+        .th-entry {
+          border: 1px solid rgba(255,255,255,0.04);
+          border-radius: 10px; margin-bottom: 8px;
+          background: rgba(255,255,255,0.015); transition: all 0.2s;
+        }
+        .th-entry.expanded { border-color: rgba(99,102,241,0.15); background: rgba(99,102,241,0.02); }
+        .th-entry-header {
+          width: 100%; display: flex; align-items: center; gap: 10px;
+          padding: 12px 14px; border: none; background: none;
+          cursor: pointer; text-align: left;
+        }
+        .th-entry-header:hover { background: rgba(255,255,255,0.02); border-radius: 10px; }
+        .th-entry-status { flex-shrink: 0; }
+        .th-entry-info { flex: 1; min-width: 0; }
+        .th-entry-name {
+          display: block; font-size: 13px; font-weight: 600; color: #e4e4e7;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .th-entry-meta { display: block; font-size: 10px; color: #52525b; margin-top: 2px; }
+        /* Detail */
+        .th-entry-detail { padding: 0 14px 14px; }
+        .th-stats-bar {
+          display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+          padding: 10px; background: rgba(0,0,0,0.25); border-radius: 8px; margin-bottom: 14px;
+        }
+        .th-stat { display: flex; flex-direction: column; gap: 2px; }
+        .th-stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; color: #52525b; }
+        .th-stat-value { font-size: 11px; font-weight: 600; color: #a1a1aa; }
+        .th-stat-value.completed { color: #22c55e; }
+        .th-stat-value.completed-with-issues { color: #f59e0b; }
+        .th-stat-value.failed { color: #ef4444; }
+        .th-section-title {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 11px; font-weight: 700; color: #71717a;
+          text-transform: uppercase; letter-spacing: 0.06em;
+          margin-bottom: 10px; padding-bottom: 6px;
+          border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        /* Steps */
+        .th-step {
+          margin-bottom: 6px; border-radius: 8px;
+          border: 1px solid rgba(255,255,255,0.03);
+          background: rgba(255,255,255,0.01);
+          overflow: hidden;
+        }
+        .th-step.completed { border-left: 2px solid #22c55e; }
+        .th-step.completed-with-issues { border-left: 2px solid #f59e0b; }
+        .th-step.failed { border-left: 2px solid #ef4444; }
+        .th-step.in-progress { border-left: 2px solid #3b82f6; }
+        .th-step.pending { border-left: 2px solid #3f3f46; }
+        .th-step-header {
+          display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+        }
+        .th-step-num {
+          font-size: 9px; font-weight: 700; color: #52525b;
+          width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;
+          border-radius: 50%; background: rgba(255,255,255,0.04); flex-shrink: 0;
+        }
+        .th-step-desc { flex: 1; font-size: 12px; color: #d4d4d8; min-width: 0; }
+        .th-step-duration { font-size: 10px; color: #52525b; flex-shrink: 0; }
+        .th-step-reasoning {
+          padding: 6px 10px 8px 36px;
+          background: rgba(99,102,241,0.04);
+          border-top: 1px solid rgba(99,102,241,0.06);
+        }
+        .th-step-reasoning-label {
+          font-size: 10px; font-weight: 600; color: #6366f1; display: block; margin-bottom: 2px;
+        }
+        .th-step-reasoning p {
+          font-size: 11px; color: #a1a1aa; margin: 0; line-height: 1.5; white-space: pre-wrap;
+        }
+        .th-step-output {
+          padding: 6px 10px 8px 36px;
+          background: rgba(34,197,94,0.03);
+          border-top: 1px solid rgba(34,197,94,0.06);
+        }
+        .th-step-output.warning {
+          background: rgba(245,158,11,0.04);
+          border-top: 1px solid rgba(245,158,11,0.1);
+        }
+        .th-step-output.error {
+          background: rgba(239,68,68,0.04);
+          border-top-color: rgba(239,68,68,0.08);
+        }
+        .th-step-output-label {
+          font-size: 10px; font-weight: 600; color: #22c55e; display: block; margin-bottom: 2px;
+        }
+        .th-step-output.warning .th-step-output-label { color: #f59e0b; }
+        .th-step-output.error .th-step-output-label { color: #ef4444; }
+        .th-step-output-content {
+          font-size: 11px; color: #a1a1aa; line-height: 1.5; white-space: pre-wrap; word-break: break-all;
+        }
+        .th-link {
+          color: #818cf8; text-decoration: underline; text-underline-offset: 2px;
+          word-break: break-all;
+        }
+        .th-link:hover { color: #a5b4fc; }
+      `}</style>
+    </>
   );
 };
 
@@ -836,8 +1089,59 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
             </div>
           )}
 
+          {/* Manifesto Monitor */}
+          <div className="manifesto-monitor" style={{
+            margin: '8px 0', padding: '6px 8px',
+            background: 'rgba(139, 92, 246, 0.08)',
+            border: '1px solid rgba(139, 92, 246, 0.2)',
+            borderRadius: '6px', fontSize: '10px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#a78bfa' }}>
+                <BookOpen className="w-3 h-3" />
+                <span style={{ fontWeight: 600 }}>Manifesto</span>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const newVal = !(agent.manifestoEnabled !== false);
+                  presenceService.toggleManifesto(agent.id, newVal);
+                }}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  padding: 0, display: 'flex', alignItems: 'center', gap: '3px',
+                  color: agent.manifestoEnabled !== false ? '#34d399' : '#6b7280',
+                  fontSize: '9px',
+                }}
+                title={agent.manifestoEnabled !== false ? 'Click to disable manifesto injection' : 'Click to enable manifesto injection'}
+              >
+                {agent.manifestoEnabled !== false
+                  ? <><ToggleRight className="w-4 h-4" /> On</>
+                  : <><ToggleLeft className="w-4 h-4" /> Off</>
+                }
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', color: '#9ca3af', fontSize: '9px' }}>
+              <span>
+                Injections: <strong style={{ color: (agent.manifestoInjections ?? 0) > 0 ? '#a78bfa' : '#6b7280' }}>
+                  {agent.manifestoInjections ?? 0}
+                </strong>
+              </span>
+              {agent.lastManifestoInjection && (
+                <span>
+                  Last: {(() => {
+                    const mins = Math.round((Date.now() - agent.lastManifestoInjection.getTime()) / 60000);
+                    if (mins < 1) return 'just now';
+                    if (mins < 60) return `${mins}m ago`;
+                    return `${Math.round(mins / 60)}h ago`;
+                  })()}
+                </span>
+              )}
+            </div>
+          </div>
+
           {/* Task History */}
-          <TaskHistoryPanel agentId={agent.id} />
+          <TaskHistoryPanel agentId={agent.id} agentName={agent.displayName} emoji={agent.emoji} />
 
           {/* Chat Button */}
           <button
@@ -872,20 +1176,19 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
 
 /* ─── Office Decorations ──────────────────────────────── */
 
-const OfficeDecorations: React.FC = () => (
+const OfficeDecorations: React.FC<{ onOpenManifesto?: () => void }> = ({ onOpenManifesto }) => (
   <>
-    {/* Whiteboard */}
-    <div className="office-whiteboard">
-      <div className="wb-frame">
-        <div className="wb-surface">
-          <div className="wb-text">Sprint Goals</div>
-          <div className="wb-line" />
-          <div className="wb-line short" />
-          <div className="wb-line" />
-          <div className="wb-marker red" />
-          <div className="wb-marker blue" />
+    {/* Manifesto Picture Frame (replaces whiteboard) */}
+    <div className="office-manifesto-frame" onClick={onOpenManifesto} title="View Agent Manifesto">
+      <div className="mf-frame">
+        <div className="mf-inner">
+          <div className="mf-icon">📜</div>
+          <div className="mf-title">Agent Manifesto</div>
+          <div className="mf-subtitle">Team Knowledge</div>
         </div>
+        <div className="mf-shine" />
       </div>
+      <div className="mf-shadow" />
     </div>
 
     {/* Coffee machine — top right corner */}
@@ -987,6 +1290,25 @@ const VirtualOfficeContent: React.FC = () => {
   } | null>(null);
   const [showFilingCabinet, setShowFilingCabinet] = useState(false);
   const [chatAgent, setChatAgent] = useState<AgentPresence | null>(null);
+  const [showManifesto, setShowManifesto] = useState(false);
+  const [manifestoContent, setManifestoContent] = useState<string | null>(null);
+  const [manifestoLoading, setManifestoLoading] = useState(false);
+
+  const handleOpenManifesto = useCallback(async () => {
+    setShowManifesto(true);
+    if (!manifestoContent) {
+      setManifestoLoading(true);
+      try {
+        const res = await fetch('/api/agent/manifesto');
+        const data = await res.json();
+        setManifestoContent(data.content || 'Manifesto not found.');
+      } catch {
+        setManifestoContent('Failed to load manifesto.');
+      } finally {
+        setManifestoLoading(false);
+      }
+    }
+  }, [manifestoContent]);
 
   // Expose setChatAgent for AgentDeskSprite (avoids prop drilling through sprite component)
   useEffect(() => {
@@ -1279,7 +1601,7 @@ const VirtualOfficeContent: React.FC = () => {
           <div className="office-floor">
             <div className="floor-grid" />
             <div className="office-wall" />
-            <OfficeDecorations />
+            <OfficeDecorations onOpenManifesto={handleOpenManifesto} />
 
             {/* Round Table for Collaboration */}
             <RoundTable
@@ -1371,6 +1693,58 @@ const VirtualOfficeContent: React.FC = () => {
         {/* Filing Cabinet */}
         {showFilingCabinet && (
           <FilingCabinet onClose={() => setShowFilingCabinet(false)} />
+        )}
+
+        {/* Manifesto Reader Modal */}
+        {showManifesto && ReactDOM.createPortal(
+          <div
+            className="manifesto-modal-overlay"
+            onClick={() => setShowManifesto(false)}
+            onMouseDown={e => e.stopPropagation()}
+          >
+            <div className="manifesto-modal" onClick={e => e.stopPropagation()}>
+              <div className="manifesto-modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '20px' }}>📜</span>
+                  <h2 className="manifesto-modal-title">Agent Manifesto</h2>
+                </div>
+                <button className="manifesto-modal-close" onClick={() => setShowManifesto(false)}>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="manifesto-modal-body">
+                {manifestoLoading ? (
+                  <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+                    <Loader2 className="w-6 h-6 animate-spin" style={{ margin: '0 auto 12px' }} />
+                    Loading manifesto...
+                  </div>
+                ) : manifestoContent ? (
+                  <div className="manifesto-content">
+                    {manifestoContent.split('\n').map((line, i) => {
+                      // Heading rendering
+                      if (line.startsWith('# ')) return <h1 key={i}>{line.replace(/^# /, '')}</h1>;
+                      if (line.startsWith('## ')) return <h2 key={i}>{line.replace(/^## /, '')}</h2>;
+                      if (line.startsWith('### ')) return <h3 key={i}>{line.replace(/^### /, '')}</h3>;
+                      if (line.startsWith('---')) return <hr key={i} />;
+                      if (line.startsWith('> ')) return <blockquote key={i}>{line.replace(/^> /, '')}</blockquote>;
+                      if (line.startsWith('- **')) {
+                        const match = line.match(/^- \*\*(.+?)\*\*\s*[—–-]\s*(.*)/);
+                        if (match) return <div key={i} className="manifesto-lesson"><strong>{match[1]}</strong> — {match[2]}</div>;
+                      }
+                      if (line.startsWith('- ')) return <div key={i} className="manifesto-bullet">{line.replace(/^- /, '• ')}</div>;
+                      if (line.startsWith('| ') && !line.includes('---')) {
+                        const cells = line.split('|').filter(Boolean).map(c => c.trim());
+                        return <div key={i} className="manifesto-table-row">{cells.map((c, j) => <span key={j}>{c}</span>)}</div>;
+                      }
+                      if (line.trim() === '') return <div key={i} style={{ height: '8px' }} />;
+                      return <p key={i}>{line}</p>;
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>,
+          document.body
         )}
 
         {/* Agent Chat Modal */}
@@ -1497,15 +1871,88 @@ const VirtualOfficeContent: React.FC = () => {
         }
 
         /* ── Decorations ── */
-        .office-whiteboard { position: absolute; top: 1.5%; left: 50%; transform: translateX(-50%); z-index: 2; }
-        .wb-frame { width: 160px; height: 64px; background: #d4d4d4; border-radius: 4px; padding: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-        .wb-surface { width: 100%; height: 100%; background: #f5f5f5; border-radius: 2px; position: relative; overflow: hidden; padding: 6px 8px; }
-        .wb-text { font-size: 6px; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
-        .wb-line { width: 80%; height: 2px; background: #94a3b8; border-radius: 1px; margin-bottom: 3px; opacity: 0.4; }
-        .wb-line.short { width: 50%; }
-        .wb-marker { position: absolute; bottom: 4px; width: 16px; height: 4px; border-radius: 2px; }
-        .wb-marker.red { right: 26px; background: #ef4444; }
-        .wb-marker.blue { right: 8px; background: #3b82f6; }
+        /* ── Manifesto Picture Frame ── */
+        .office-manifesto-frame {
+          position: absolute; top: 1.5%; left: 50%; transform: translateX(-50%); z-index: 2;
+          cursor: pointer; transition: transform 0.2s ease;
+        }
+        .office-manifesto-frame:hover { transform: translateX(-50%) scale(1.05); }
+        .office-manifesto-frame:hover .mf-shine { opacity: 0.3; }
+        .mf-frame {
+          width: 120px; height: 72px;
+          background: linear-gradient(135deg, #b8860b, #daa520, #cd853f, #b8860b);
+          border-radius: 3px; padding: 4px; position: relative; overflow: hidden;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.3);
+        }
+        .mf-inner {
+          width: 100%; height: 100%;
+          background: linear-gradient(180deg, #fdf6e3, #f5e6c8, #ede0c8);
+          border-radius: 1px; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 2px;
+        }
+        .mf-icon { font-size: 16px; line-height: 1; }
+        .mf-title { font-size: 6px; font-weight: 700; color: #5c4a2a; letter-spacing: 0.5px; text-transform: uppercase; }
+        .mf-subtitle { font-size: 5px; color: #8b7355; font-style: italic; }
+        .mf-shine {
+          position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+          background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.15) 50%, transparent 60%);
+          opacity: 0; transition: opacity 0.3s ease; pointer-events: none;
+        }
+        .mf-shadow {
+          width: 90%; height: 4px; margin: 2px auto 0;
+          background: radial-gradient(ellipse, rgba(0,0,0,0.25), transparent);
+          border-radius: 50%;
+        }
+
+        /* ── Manifesto Modal ── */
+        .manifesto-modal-overlay {
+          position: fixed; inset: 0; z-index: 10000;
+          background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+          display: flex; align-items: center; justify-content: center;
+          animation: fadeIn 0.2s ease;
+        }
+        .manifesto-modal {
+          width: 680px; max-width: 90vw; max-height: 85vh;
+          background: #1a1a2e; border: 1px solid rgba(139,92,246,0.3);
+          border-radius: 12px; overflow: hidden; display: flex; flex-direction: column;
+          box-shadow: 0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(139,92,246,0.1);
+        }
+        .manifesto-modal-header {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 16px 20px; border-bottom: 1px solid rgba(139,92,246,0.15);
+          background: rgba(139,92,246,0.05);
+        }
+        .manifesto-modal-title { font-size: 16px; font-weight: 700; color: #e2e8f0; margin: 0; }
+        .manifesto-modal-close {
+          background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+          color: #9ca3af; border-radius: 6px; padding: 6px; cursor: pointer;
+          transition: all 0.15s ease;
+        }
+        .manifesto-modal-close:hover { background: rgba(255,255,255,0.1); color: white; }
+        .manifesto-modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+
+        .manifesto-content h1 { font-size: 20px; font-weight: 800; color: #a78bfa; margin: 16px 0 8px; }
+        .manifesto-content h2 { font-size: 15px; font-weight: 700; color: #c4b5fd; margin: 20px 0 8px; border-bottom: 1px solid rgba(139,92,246,0.15); padding-bottom: 4px; }
+        .manifesto-content h3 { font-size: 13px; font-weight: 600; color: #ddd6fe; margin: 14px 0 6px; }
+        .manifesto-content p { font-size: 12px; color: #d1d5db; line-height: 1.6; margin: 2px 0; }
+        .manifesto-content hr { border: none; border-top: 1px solid rgba(139,92,246,0.15); margin: 16px 0; }
+        .manifesto-content blockquote {
+          border-left: 3px solid #a78bfa; padding: 6px 12px; margin: 8px 0;
+          background: rgba(139,92,246,0.06); border-radius: 0 6px 6px 0;
+          font-size: 11px; color: #c4b5fd; font-style: italic;
+        }
+        .manifesto-bullet { font-size: 11px; color: #d1d5db; padding: 2px 0 2px 12px; line-height: 1.5; }
+        .manifesto-lesson {
+          font-size: 11px; color: #d1d5db; padding: 4px 0 4px 12px; line-height: 1.5;
+          border-left: 2px solid rgba(250,204,21,0.3);
+          margin: 3px 0; padding-left: 10px;
+        }
+        .manifesto-lesson strong { color: #fbbf24; }
+        .manifesto-table-row {
+          display: flex; gap: 16px; font-size: 10px; color: #9ca3af;
+          padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .manifesto-table-row span:first-child { min-width: 120px; color: #d1d5db; font-weight: 500; }
 
         .office-plant { position: absolute; z-index: 2; }
         .office-plant.p1 { bottom: 8%; right: 6%; }

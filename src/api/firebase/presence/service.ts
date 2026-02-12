@@ -8,12 +8,13 @@ export type AgentStatus = 'offline' | 'idle' | 'working';
 export interface AgentThoughtStep {
   id: string;
   description: string;
-  status: 'pending' | 'in-progress' | 'completed' | 'failed';
+  status: 'pending' | 'in-progress' | 'completed' | 'completed-with-issues' | 'failed';
   startedAt?: Date;
   completedAt?: Date;
   reasoning?: string;     // The agent's reasoning / thought process
   output?: string;        // Result or artifact produced
   durationMs?: number;    // How long this step took
+  verificationFlag?: string; // Failure signals detected in output
 }
 
 /* ─── Agent presence with execution context ────────────── */
@@ -35,6 +36,11 @@ export interface AgentPresence {
   taskStartedAt?: Date;                // When agent began this task
   taskProgress: number;                // 0-100 completion percentage
 
+  // Manifesto / self-correction
+  manifestoEnabled?: boolean;          // Toggle: allow manifesto injection
+  manifestoInjections?: number;        // How many times manifesto was injected this session
+  lastManifestoInjection?: Date;       // When it was last injected
+
   // Timestamps
   lastUpdate?: Date;
   sessionStartedAt?: Date;
@@ -46,7 +52,7 @@ export interface TaskHistoryEntry {
   id?: string;
   taskName: string;
   taskId: string;
-  status: 'completed' | 'failed';
+  status: 'completed' | 'completed-with-issues' | 'failed';
   steps: AgentThoughtStep[];
   startedAt: Date;
   completedAt: Date;
@@ -83,6 +89,7 @@ function deserialiseStep(data: any): AgentThoughtStep {
     reasoning: data.reasoning || '',
     output: data.output || '',
     durationMs: data.durationMs || 0,
+    verificationFlag: data.verificationFlag || '',
   };
 }
 
@@ -365,11 +372,22 @@ export const presenceService = {
           currentStepIndex: data.currentStepIndex ?? -1,
           taskProgress: data.taskProgress ?? 0,
           taskStartedAt: data.taskStartedAt?.toDate?.() || undefined,
+          manifestoEnabled: data.manifestoEnabled !== false, // default true
+          manifestoInjections: data.manifestoInjections ?? 0,
+          lastManifestoInjection: data.lastManifestoInjection?.toDate?.() || undefined,
           lastUpdate: data.lastUpdate?.toDate?.() || undefined,
           sessionStartedAt: data.sessionStartedAt?.toDate?.() || undefined,
         };
       });
       callback(agents);
     });
+  },
+
+  /**
+   * Toggle manifesto injection for a specific agent
+   */
+  async toggleManifesto(agentId: string, enabled: boolean): Promise<void> {
+    const docRef = doc(db, COLLECTION, agentId);
+    await updateDoc(docRef, { manifestoEnabled: enabled });
   }
 };

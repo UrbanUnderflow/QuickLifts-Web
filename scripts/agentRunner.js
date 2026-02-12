@@ -26,6 +26,8 @@
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { execSync, spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 /* ─── Configuration ───────────────────────────────────── */
 
@@ -42,8 +44,53 @@ const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || ({ 'nora': 'main', 's
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
 const MAX_FOLLOW_UP_DEPTH = 4; // Max rounds of agent-to-agent @mention follow-ups
+const MAX_SELF_CORRECTION_RETRIES = 2; // Retry attempts when step output contains failure signals
 
-/* ─── Firebase Admin Init ─────────────────────────────── */
+/* ─── Agent Manifesto (shared institutional knowledge) ── */
+
+const projectDir = process.env.PROJECT_DIR || process.cwd();
+
+function loadManifesto() {
+    const manifestoPath = path.join(projectDir, 'docs', 'AGENT_MANIFESTO.md');
+    try {
+        if (fs.existsSync(manifestoPath)) {
+            const content = fs.readFileSync(manifestoPath, 'utf-8');
+            // Extract the most useful sections for prompts (env knowledge + lessons)
+            const envSection = content.match(/## Environment Knowledge[\s\S]*?(?=## Problem-Solving|$)/)?.[0] || '';
+            const lessonsSection = content.match(/## Lessons Learned[\s\S]*?(?=## Operational|$)/)?.[0] || '';
+            const principlesSection = content.match(/## Principles[\s\S]*?(?=## Environment|$)/)?.[0] || '';
+            return { full: content, env: envSection.trim(), lessons: lessonsSection.trim(), principles: principlesSection.trim() };
+        }
+    } catch (err) {
+        console.log(`📜 Could not load manifesto: ${err.message}`);
+    }
+    return null;
+}
+
+function appendLessonLearned(lesson) {
+    const manifestoPath = path.join(projectDir, 'docs', 'AGENT_MANIFESTO.md');
+    try {
+        if (fs.existsSync(manifestoPath)) {
+            const content = fs.readFileSync(manifestoPath, 'utf-8');
+            const date = new Date().toISOString().split('T')[0];
+            const entry = `\n- **[${date}] ${AGENT_NAME}** — ${lesson}`;
+            // Append before the Operational Rules section
+            const updated = content.replace(
+                /(\n---\n\n## Operational Rules)/,
+                `${entry}$1`
+            );
+            if (updated !== content) {
+                fs.writeFileSync(manifestoPath, updated, 'utf-8');
+                console.log(`📜 Added lesson to manifesto: ${lesson.substring(0, 80)}...`);
+            }
+        }
+    } catch (err) {
+        console.log(`📜 Could not update manifesto: ${err.message}`);
+    }
+}
+
+// Load manifesto once at startup (will be refreshed each task cycle if needed)
+let cachedManifesto = loadManifesto();
 
 const SERVICE_ACCOUNT = {
     type: "service_account",
@@ -108,6 +155,7 @@ function serializeStep(step) {
         reasoning: step.reasoning || '',
         output: step.output || '',
         durationMs: step.durationMs || 0,
+        verificationFlag: step.verificationFlag || '',
     };
 }
 
@@ -144,55 +192,111 @@ async function getRecentConversationContext(limit = 8) {
 }
 
 /**
- * Use AI to generate a clear, descriptive task title from vague user input + context.
- * Falls back to the original content if AI fails.
+ * Use AI to generate a well-formed task title AND description from vague user input + context.
+ * Returns { title, description }. Falls back to a heuristic cleanup if AI fails.
  */
-async function generateSmartTaskTitle(rawContent, conversationContext) {
-    var useOpenClaw = process.env.USE_OPENCLAW === 'true';
-    if (!process.env.OPENAI_API_KEY && !useOpenClaw) return rawContent;
+async function generateSmartTask(rawContent, conversationContext) {
+    // ── Heuristic local fallback (always available) ──
+    function localCleanup(raw, context) {
+        // Strip conversational filler from the beginning
+        const fillerPatterns = [
+            /^(ok|okay|alright|hey|hi|yo|sure|yeah|yep|please|pls|can you|could you|go ahead and|lets|let's|i need you to|i want you to|try to|just)\s*/gi,
+        ];
+        let cleaned = raw.trim();
+        let changed = true;
+        while (changed) {
+            changed = false;
+            for (const pattern of fillerPatterns) {
+                const before = cleaned;
+                cleaned = cleaned.replace(pattern, '');
+                if (cleaned !== before) changed = true;
+            }
+        }
+        cleaned = cleaned.replace(/\s+/g, ' ').trim();
 
-    var titlePrompt = [
-        `You are a project manager. A user sent a message that should become a task.`,
-        `Generate a clear, concise task title (max 80 chars) that describes what actually needs to be done.`,
+        // If after cleanup we have very little, try to extract intent from context
+        if (cleaned.length < 10 && context) {
+            const contextLines = context.split('\n').filter(l => l.includes('admin:') || l.includes('user:'));
+            const lastMeaningful = contextLines.reverse().find(l => l.length > 30);
+            if (lastMeaningful) {
+                const msgPart = lastMeaningful.replace(/^\[.*?\]\s*\w+:\s*/, '').trim();
+                cleaned = msgPart.substring(0, 120);
+            }
+        }
+
+        // Capitalize first letter, ensure it's a proper statement
+        if (cleaned.length > 0) {
+            cleaned = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+        }
+        // Remove trailing periods from title
+        cleaned = cleaned.replace(/\.+$/, '');
+        // Truncate
+        if (cleaned.length > 80) cleaned = cleaned.substring(0, 77) + '...';
+        if (cleaned.length < 5) cleaned = raw.substring(0, 80); // last resort
+
+        return {
+            title: cleaned,
+            description: `Original request: "${raw}". Auto-created from chat conversation.`,
+        };
+    }
+
+    var useOpenClaw = process.env.USE_OPENCLAW === 'true';
+    if (!process.env.OPENAI_API_KEY && !useOpenClaw) {
+        console.log('   🔧 No AI available — using heuristic task cleanup');
+        return localCleanup(rawContent, conversationContext);
+    }
+
+    var taskPrompt = [
+        `You are a senior engineering project manager. A user sent a casual chat message that should become a well-formed task ticket.`,
         ``,
-        `Rules:`,
-        `- If the user says something vague like "try again", "do it", "ok go ahead", look at the recent conversation to understand what they're referring to.`,
-        `- The title should be specific and actionable (e.g. "Add meeting action items to kanban board" not "Ok lets try again")`,
-        `- Never use the user's exact conversational phrasing as the title`,
-        `- If there's no context to infer from, make the title as descriptive as possible from the message content`,
+        `## Rules for the TITLE:`,
+        `- Must be a clear, specific, actionable task name (max 80 chars)`,
+        `- Written like a professional Jira/Linear ticket title`,
+        `- NEVER use the user's raw conversational text — rephrase it into a professional task`,
+        `- Examples of GOOD titles: "Implement user authentication flow", "Fix broken pagination on dashboard", "Add email notification for new signups"`,
+        `- Examples of BAD titles: "Ok lets try again", "can you do the thing we talked about", "go ahead and fix it"`,
+        `- If the message is vague (e.g. "try again", "do it", "go ahead"), look at the conversation context to understand what they mean`,
         ``,
-        `Recent conversation:`,
-        conversationContext || '(no prior conversation)',
+        `## Rules for the DESCRIPTION:`,
+        `- 2-3 sentences explaining what needs to be done, the goal, and any relevant context`,
+        `- Be specific — mention files, features, or components if you can infer them`,
+        `- Include acceptance criteria when possible`,
         ``,
-        `User's message: "${rawContent}"`,
+        `## Recent conversation context:`,
+        conversationContext || '(no prior conversation available)',
         ``,
-        `Respond with ONLY the task title, nothing else:`,
+        `## User's message: "${rawContent}"`,
+        ``,
+        `Respond in EXACTLY this format (no markdown, no extra text):`,
+        `TITLE: <the task title>`,
+        `DESCRIPTION: <the task description>`,
     ].join('\n');
 
     try {
+        var aiOutput = '';
+
         if (process.env.OPENAI_API_KEY) {
             var resp = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
                 body: JSON.stringify({
                     model: 'gpt-4o-mini',
-                    messages: [{ role: 'user', content: titlePrompt }],
-                    temperature: 0.2, max_tokens: 60,
+                    messages: [{ role: 'user', content: taskPrompt }],
+                    temperature: 0.2, max_tokens: 200,
                 }),
             });
             var data = await resp.json();
-            var title = data.choices?.[0]?.message?.content?.trim();
-            if (title) return title.replace(/^["']|["']$/g, '');  // strip quotes
+            aiOutput = data.choices?.[0]?.message?.content?.trim() || '';
         } else if (useOpenClaw) {
             var clawResult = await new Promise((resolve, reject) => {
                 var child = spawn(OPENCLAW_BIN, [
                     '--no-color', 'agent', '--local',
                     '--agent', OPENCLAW_AGENT_ID,
-                    '--message', titlePrompt,
-                    '--timeout', '20',
+                    '--message', taskPrompt,
+                    '--timeout', '25',
                 ], { cwd: process.cwd(), env: process.env });
                 var stdout = '', stderr = '';
-                var timeout = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('timeout')); }, 25_000);
+                var timeout = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('timeout')); }, 30_000);
                 child.stdout.on('data', (d) => { stdout += d.toString(); });
                 child.stderr.on('data', (d) => { stderr += d.toString(); });
                 child.on('error', (err) => { clearTimeout(timeout); reject(err); });
@@ -202,15 +306,41 @@ async function generateSmartTaskTitle(rawContent, conversationContext) {
                     else reject(new Error(`exit ${code}: ${stderr.substring(0, 200)}`));
                 });
             });
-            // Parse out just the title
+            // Parse OpenClaw JSON wrapper if present
             try { var parsed = JSON.parse(clawResult); clawResult = parsed.response || parsed.output || clawResult; } catch (_) { }
-            var titleLine = clawResult.replace(/^```[\s\S]*?```$/gm, '').trim().split('\n')[0].trim();
-            if (titleLine) return titleLine.replace(/^["']|["']$/g, '');
+            aiOutput = clawResult.replace(/^```[\s\S]*?```$/gm, '').trim();
+        }
+
+        // Parse the TITLE: ... DESCRIPTION: ... format
+        if (aiOutput) {
+            const titleMatch = aiOutput.match(/TITLE:\s*(.+?)(?:\n|$)/i);
+            const descMatch = aiOutput.match(/DESCRIPTION:\s*(.+?)(?:\n\n|$)/is);
+
+            const title = titleMatch?.[1]?.trim().replace(/^["']|["']$/g, '') || '';
+            const description = descMatch?.[1]?.trim().replace(/^["']|["']$/g, '') || '';
+
+            if (title.length >= 5 && title.length <= 120) {
+                return {
+                    title,
+                    description: description || `Original request: "${rawContent}". AI-generated task.`,
+                };
+            }
+            // If we got *something* from AI but parsing failed, try using the first line
+            const firstLine = aiOutput.split('\n')[0].replace(/^(TITLE:|title:)\s*/i, '').trim();
+            if (firstLine.length >= 5 && firstLine.length <= 120) {
+                return {
+                    title: firstLine.replace(/^["']|["']$/g, ''),
+                    description: description || `Original request: "${rawContent}". AI-generated task.`,
+                };
+            }
         }
     } catch (err) {
-        console.warn('Smart title generation failed, using raw content:', err.message);
+        console.warn('Smart task generation failed, using heuristic:', err.message);
     }
-    return rawContent;
+
+    // Fallback to local heuristic cleanup
+    console.log('   🔧 AI response unusable — falling back to heuristic cleanup');
+    return localCleanup(rawContent, conversationContext);
 }
 
 /* ─── Task History ────────────────────────────────────── */
@@ -337,12 +467,12 @@ async function processCommands() {
             case 'task':
                 // Fetch conversation context to understand vague references like "try again"
                 var taskConvoContext = await getRecentConversationContext();
-                var smartTitle = await generateSmartTaskTitle(pContent, taskConvoContext);
-                console.log(`🧠 Smart title: "${pContent}" → "${smartTitle}"`);
+                var smartTask = await generateSmartTask(pContent, taskConvoContext);
+                console.log(`🧠 Smart task: "${pContent}" → title: "${smartTask.title}", desc: "${smartTask.description.substring(0, 80)}..."`);
 
                 var newTask = await db.collection(KANBAN_COLLECTION).add({
-                    name: smartTitle,
-                    description: cmd.metadata?.description || `Original request: "${pContent}". Task created from chat by ${cmd.from}`,
+                    name: smartTask.title,
+                    description: cmd.metadata?.description || smartTask.description,
                     assignee: AGENT_NAME,
                     status: 'todo',
                     project: cmd.metadata?.project || 'General',
@@ -351,15 +481,15 @@ async function processCommands() {
                     createdAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
-                var taskMsg = `Task created: "${smartTitle}" (${newTask.id}). I've added it to my queue.`;
+                var taskMsg = `Task created: "${smartTask.title}" (${newTask.id}). I've added it to my queue.`;
                 response = response ? response + "\n" + taskMsg : taskMsg;
-                console.log(`📋 Created task: ${smartTitle} → ${newTask.id}`);
+                console.log(`📋 Created task: ${smartTask.title} → ${newTask.id}`);
 
                 // Immediately update status to 'working' so Virtual Office reflects the change
                 await setStatus('working', {
-                    currentTask: smartTitle,
+                    currentTask: smartTask.title,
                     currentTaskId: newTask.id,
-                    notes: `Received new task: ${smartTitle}`,
+                    notes: `Received new task: ${smartTask.title}`,
                 });
                 break;
 
@@ -378,9 +508,12 @@ async function processCommands() {
                 } else if (pContent.length > 80) {
                     // Long command content is likely meant to be a task — auto-upgrade
                     console.log(`   ↑ Auto-upgrading long command to task (${pContent.length} chars)`);
+                    var upgConvoCtx = await getRecentConversationContext();
+                    var upgSmart = await generateSmartTask(pContent, upgConvoCtx);
+                    console.log(`🧠 Auto-upgrade: "${pContent.substring(0, 60)}..." → "${upgSmart.title}"`);
                     var upgTask = await db.collection(KANBAN_COLLECTION).add({
-                        name: pContent.substring(0, 120),
-                        description: pContent,
+                        name: upgSmart.title,
+                        description: upgSmart.description,
                         assignee: AGENT_NAME,
                         status: 'todo',
                         project: cmd.metadata?.project || 'General',
@@ -389,13 +522,13 @@ async function processCommands() {
                         createdAt: FieldValue.serverTimestamp(),
                         updatedAt: FieldValue.serverTimestamp(),
                     });
-                    var upgradeMsg = `Auto-upgraded to task (content too long for a simple command). Task created: ${upgTask.id}. I've added it to my queue.`;
+                    var upgradeMsg = `Auto-upgraded to task: "${upgSmart.title}" (${upgTask.id}). I've added it to my queue.`;
                     response = response ? response + "\n" + upgradeMsg : upgradeMsg;
 
                     await setStatus('working', {
-                        currentTask: pContent.substring(0, 120),
+                        currentTask: upgSmart.title,
                         currentTaskId: upgTask.id,
-                        notes: `Received new task (auto-upgraded from command): ${pContent.substring(0, 120)}`,
+                        notes: `Received new task (auto-upgraded from command): ${upgSmart.title}`,
                     });
                 } else {
                     var cmdMsg = `Command received: "${pContent}". Processing...`;
@@ -1212,8 +1345,6 @@ Notes: ${task.notes || 'None'}`;
 
 /* ─── Execute a step ──────────────────────────────────── */
 
-const projectDir = process.env.PROJECT_DIR || process.cwd();
-
 /**
  * Get the current git status (changed files) in the project directory.
  */
@@ -1319,50 +1450,108 @@ async function executeStep(step, task, stepIndex, allSteps) {
                 step.output = `[SMOKE] ${OPENCLAW_SMOKE_CMD}
 ${smokeOutput}`.substring(0, 2000);
             } else {
-                // Build a rich prompt with full project context
+                // ─── Manifesto-aware, self-correcting execution ──
+                // Refresh manifesto each step (other agents may have updated it)
+                cachedManifesto = loadManifesto();
+
                 const stepsContext = allSteps
                     .map((s, i) => `  ${i === stepIndex ? '→' : ' '} ${i + 1}. [${s.status}] ${s.description}`)
                     .join('\n');
 
-                const prompt = [
-                    `You are ${AGENT_NAME}, an AI engineer working on the Pulse Fitness project.`,
-                    `Project directory: ${projectDir}`,
-                    ``,
-                    `TASK: "${task.name}"`,
-                    task.description ? `Description: ${task.description}` : '',
-                    task.notes ? `Notes: ${task.notes}` : '',
-                    ``,
-                    `All steps:`,
-                    stepsContext,
-                    ``,
-                    `CURRENT STEP (${stepIndex + 1}/${allSteps.length}): ${step.description}`,
-                    ``,
-                    `Instructions:`,
-                    `- Complete ONLY this step.`,
-                    `- Create or modify files as needed in the project directory.`,
-                    `- Be thorough — write real, production-quality code.`,
-                    `- When done, list the files you created or modified.`,
-                ].filter(Boolean).join('\n');
+                // Build the manifesto context block (only used on retries to save tokens)
+                const getManifestoBlock = () => {
+                    cachedManifesto = loadManifesto(); // Refresh on retry
+                    if (!cachedManifesto) return '';
+                    return [
+                        ``,
+                        `=== TEAM KNOWLEDGE (from Agent Manifesto) ===`,
+                        cachedManifesto.env ? cachedManifesto.env.substring(0, 1500) : '',
+                        cachedManifesto.lessons ? cachedManifesto.lessons.substring(0, 800) : '',
+                        `=== END TEAM KNOWLEDGE ===`,
+                        ``,
+                    ].filter(Boolean).join('\n');
+                };
 
-                const args = [
-                    '--no-color',
-                    'agent',
-                    '--local',
-                    '--json',
-                    '--agent',
-                    OPENCLAW_AGENT_ID,
-                    '--message',
-                    prompt,
-                    '--timeout',
-                    '600',
-                ];
+                // Helper: build prompt for a given attempt
+                const buildPrompt = async (attempt, previousOutput) => {
+                    const base = [
+                        `You are ${AGENT_NAME}, an AI engineer working on the Pulse Fitness project.`,
+                        `Project directory: ${projectDir}`,
+                        `TASK: "${task.name}"`,
+                        task.description ? `Description: ${task.description}` : '',
+                        task.notes ? `Notes: ${task.notes}` : '',
+                        ``,
+                        `All steps:`,
+                        stepsContext,
+                        ``,
+                        `CURRENT STEP (${stepIndex + 1}/${allSteps.length}): ${step.description}`,
+                    ];
 
-                const runOpenClaw = () => new Promise((resolve, reject) => {
-                    const child = spawn(OPENCLAW_BIN, args, { cwd: projectDir, env: process.env });
+                    // Only inject manifesto + correction context on retries (saves tokens on first attempt)
+                    if (attempt > 0 && previousOutput) {
+                        // Check if manifesto is enabled for this agent (toggle from Virtual Office)
+                        let manifestoAllowed = true;
+                        try {
+                            const presDoc = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
+                            if (presDoc.exists && presDoc.data()?.manifestoEnabled === false) {
+                                manifestoAllowed = false;
+                                console.log(`   📜 Manifesto disabled via toggle — skipping knowledge injection`);
+                            }
+                        } catch { /* default to allowed */ }
+
+                        if (manifestoAllowed) {
+                            base.push(``, getManifestoBlock());
+                            // Track the injection in presence for monitoring
+                            try {
+                                await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).update({
+                                    manifestoInjections: FieldValue.increment(1),
+                                    lastManifestoInjection: new Date(),
+                                });
+                            } catch { /* non-critical */ }
+                        }
+
+                        base.push(
+                            ``,
+                            `⚠️ SELF-CORRECTION (attempt ${attempt + 1}/${MAX_SELF_CORRECTION_RETRIES + 1})`,
+                            `Your previous attempt produced this output:`,
+                            `"${previousOutput.substring(0, 500)}"`,
+                            ``,
+                            `The output contains failure signals. DO NOT just document the failure.`,
+                            `Instead:`,
+                            `1. Investigate WHY it failed — search the codebase (grep, find, cat files)`,
+                            `2. Look at how existing working code solves similar problems`,
+                            `3. Check .env.local, scripts/, src/api/ for existing configs and patterns`,
+                            `4. Try an alternative approach to accomplish the goal`,
+                            `5. If you truly cannot complete the step, explain exactly what's blocking you and what a human would need to do`,
+                        );
+                    }
+
+                    base.push(
+                        ``,
+                        `Instructions:`,
+                        `- Complete ONLY this step.`,
+                        `- Create or modify files as needed in the project directory.`,
+                        `- Be thorough — write real, production-quality code.`,
+                        `- NEVER just document a failure. Investigate and fix it.`,
+                        `- When done, list the files you created or modified.`,
+                    );
+
+                    return base.filter(Boolean).join('\n');
+                };
+
+                // Helper: run OpenClaw with a given prompt
+                const invokeOpenClaw = (promptText) => new Promise((resolve, reject) => {
+                    const clawArgs = [
+                        '--no-color', 'agent', '--local', '--json',
+                        '--agent', OPENCLAW_AGENT_ID,
+                        '--message', promptText,
+                        '--timeout', '600',
+                    ];
+                    const child = spawn(OPENCLAW_BIN, clawArgs, { cwd: projectDir, env: process.env });
                     let stdout = '';
                     let stderr = '';
                     let timedOut = false;
-                    const maxLen = 10 * 1024 * 1024; // 10MB
+                    const maxLen = 10 * 1024 * 1024;
 
                     const timeout = setTimeout(() => {
                         timedOut = true;
@@ -1372,58 +1561,85 @@ ${smokeOutput}`.substring(0, 2000);
 
                     child.stdout.on('data', (chunk) => {
                         stdout += chunk.toString();
-                        if (stdout.length > maxLen) {
-                            clearTimeout(timeout);
-                            child.kill('SIGKILL');
-                            reject(new Error('OpenClaw output exceeded 10MB'));
-                        }
+                        if (stdout.length > maxLen) { clearTimeout(timeout); child.kill('SIGKILL'); reject(new Error('OpenClaw output exceeded 10MB')); }
                     });
-
                     child.stderr.on('data', (chunk) => {
                         stderr += chunk.toString();
-                        if (stderr.length > maxLen) {
-                            clearTimeout(timeout);
-                            child.kill('SIGKILL');
-                            reject(new Error('OpenClaw error output exceeded 10MB'));
-                        }
+                        if (stderr.length > maxLen) { clearTimeout(timeout); child.kill('SIGKILL'); reject(new Error('OpenClaw error output exceeded 10MB')); }
                     });
-
-                    child.on('error', (err) => {
-                        clearTimeout(timeout);
-                        reject(new Error(`Failed to launch ${OPENCLAW_BIN}: ${err.message}`));
-                    });
-
+                    child.on('error', (err) => { clearTimeout(timeout); reject(new Error(`Failed to launch ${OPENCLAW_BIN}: ${err.message}`)); });
                     child.on('close', (code) => {
                         clearTimeout(timeout);
-                        if (timedOut) {
-                            reject(new Error('OpenClaw timed out after 600s'));
-                            return;
-                        }
-                        if (code !== 0) {
-                            const errOut = (stderr || stdout || '').trim();
-                            reject(new Error(`OpenClaw failed (exit ${code}): ${errOut}`));
-                            return;
-                        }
+                        if (timedOut) { reject(new Error('OpenClaw timed out after 600s')); return; }
+                        if (code !== 0) { reject(new Error(`OpenClaw failed (exit ${code}): ${(stderr || stdout || '').trim()}`)); return; }
                         resolve({ stdout, stderr });
                     });
                 });
 
-                const result = await runOpenClaw();
-                const rawOut = (result.stdout || '').trim();
-                let outputText = rawOut;
-                if (rawOut) {
-                    try {
-                        const parsed = JSON.parse(rawOut);
-                        const payloadText = (parsed?.payloads || [])
-                            .map((p) => p?.text)
-                            .filter(Boolean)
-                            .join('\n\n');
-                        if (payloadText) outputText = payloadText;
-                    } catch {
-                        // Keep raw output if JSON parsing fails.
+                // Helper: parse OpenClaw output
+                const parseOutput = (raw) => {
+                    let outputText = raw;
+                    if (raw) {
+                        try {
+                            const parsed = JSON.parse(raw);
+                            const payloadText = (parsed?.payloads || []).map(p => p?.text).filter(Boolean).join('\n\n');
+                            if (payloadText) outputText = payloadText;
+                        } catch { /* keep raw */ }
+                    }
+                    return outputText.substring(0, 2000);
+                };
+
+                // ─── Self-correction retry loop ──────────────
+                let lastOutput = '';
+                for (let attempt = 0; attempt <= MAX_SELF_CORRECTION_RETRIES; attempt++) {
+                    if (attempt > 0) {
+                        console.log(`   🔄 Self-correction retry ${attempt}/${MAX_SELF_CORRECTION_RETRIES}...`);
+                        step.status = 'in-progress';
+                        step.reasoning = `Self-correction attempt ${attempt + 1}: re-investigating after previous failure`;
+                        await reportSteps(allSteps, stepIndex, progress);
+                    }
+
+                    const prompt = await buildPrompt(attempt, lastOutput);
+                    const result = await invokeOpenClaw(prompt);
+                    const outputText = parseOutput((result.stdout || '').trim());
+                    step.output = outputText;
+                    lastOutput = outputText;
+
+                    // Check for failure signals
+                    const FAILURE_SIGNALS = [
+                        /\bfailed\b/i, /\berror\b/i, /\bmissing\b/i,
+                        /\bcouldn'?t\b/i, /\bblocked\b/i, /\bunable to\b/i,
+                        /\bnot found\b/i, /\bnot available\b/i,
+                        /\bcrash/i, /\bexception\b/i, /\btimed?\s*out\b/i,
+                        /\bdenied\b/i, /\brefused\b/i,
+                    ];
+                    const FALSE_POSITIVE_GUARDS = [
+                        /no\s+error/i, /without\s+error/i, /error.?free/i,
+                        /0\s+error/i, /fixed.*error/i, /resolved.*error/i,
+                        /error.*resolved/i, /error.*fixed/i,
+                    ];
+                    const hitSignals = FAILURE_SIGNALS.filter(rx => rx.test(outputText));
+                    const isFalsePositive = FALSE_POSITIVE_GUARDS.some(rx => rx.test(outputText));
+
+                    if (hitSignals.length === 0 || isFalsePositive) {
+                        // Clean success — no more retries needed
+                        console.log(`   ✅ Step output looks clean (attempt ${attempt + 1})`);
+                        break;
+                    }
+
+                    if (attempt === MAX_SELF_CORRECTION_RETRIES) {
+                        // Exhausted retries — mark as completed-with-issues
+                        step.verificationFlag = hitSignals.map(rx => rx.source).join(', ');
+                        console.log(`   ⚠️  Exhausted ${MAX_SELF_CORRECTION_RETRIES} retries. Failure signals remain: ${step.verificationFlag}`);
+                        // Append lesson learned to manifesto
+                        appendLessonLearned(
+                            `Step "${step.description}" still had issues after ${MAX_SELF_CORRECTION_RETRIES} retries. ` +
+                            `Output signals: ${step.verificationFlag}. Last output: "${outputText.substring(0, 120)}..."`
+                        );
+                    } else {
+                        console.log(`   ⚠️  Failure signals detected (attempt ${attempt + 1}): ${hitSignals.map(rx => rx.source).join(', ')}. Will retry...`);
                     }
                 }
-                step.output = outputText.substring(0, 2000);
 
                 // Capture what files changed
                 const changesAfter = getGitChanges();
@@ -1446,11 +1662,18 @@ ${smokeOutput}`.substring(0, 2000);
             step.output = `Completed: ${step.description}`;
         }
 
-        step.status = 'completed';
+        // ─── Set final step status ─────────────────────────────
+        // If the self-correction retry loop set a verificationFlag,
+        // the step has unresolved issues. Otherwise it's clean.
+        if (step.verificationFlag) {
+            step.status = 'completed-with-issues';
+        } else {
+            step.status = 'completed';
+        }
         step.completedAt = new Date();
         step.durationMs = Date.now() - startTime;
 
-        const newCompletedCount = allSteps.filter(s => s.status === 'completed').length;
+        const newCompletedCount = allSteps.filter(s => s.status === 'completed' || s.status === 'completed-with-issues').length;
         const newProgress = Math.round((newCompletedCount / allSteps.length) * 100);
         await reportSteps(allSteps, stepIndex, newProgress);
 
@@ -1578,20 +1801,27 @@ async function run() {
                 }
             }
 
+            const hasIssues = steps.some(s => s.status === 'completed-with-issues');
+            const finalStatus = hasIssues ? 'completed-with-issues' : 'completed';
+
             if (allPassed) {
-                console.log(`\n🎉 Task completed: ${task.name}`);
-                await saveTaskHistory(task.name, task.id, steps, 'completed', taskStartTime);
+                console.log(hasIssues
+                    ? `\n⚠️  Task completed with issues: ${task.name}`
+                    : `\n🎉 Task completed: ${task.name}`);
+                await saveTaskHistory(task.name, task.id, steps, finalStatus, taskStartTime);
                 await markTaskDone(task.id);
                 await setStatus('idle', {
                     currentTask: '',
                     currentTaskId: '',
-                    notes: `✅ Completed: ${task.name}`,
+                    notes: hasIssues
+                        ? `⚠️ Completed with issues: ${task.name}`
+                        : `✅ Completed: ${task.name}`,
                     taskProgress: 100,
                 });
 
                 // Proactively report completion to the chat
                 const durationStr = formatMs(Date.now() - taskStartTime.getTime());
-                const stepsCompleted = steps.filter(s => s.status === 'completed').length;
+                const stepsCompleted = steps.filter(s => s.status === 'completed' || s.status === 'completed-with-issues').length;
                 const isSimulation = process.env.USE_OPENCLAW !== 'true';
                 const stepSummary = steps
                     .filter(s => s.status === 'completed')
