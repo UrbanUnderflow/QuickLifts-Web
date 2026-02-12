@@ -10,11 +10,11 @@ export interface MeetingMinutes {
 
     // AI-generated sections
     executiveSummary: string;
-    valueInsights: InsightItem[];
-    strategicDecisions: string[];
-    nextActions: ActionItem[];
-    highlights: HighlightItem[];
-    risksOrOpenQuestions: string[];
+    valueInsights?: InsightItem[];
+    strategicDecisions?: string[];
+    nextActions?: ActionItem[];
+    highlights?: HighlightItem[];
+    risksOrOpenQuestions?: string[];
 }
 
 export interface InsightItem {
