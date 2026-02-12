@@ -1,0 +1,223 @@
+{
+  "_meta": {
+    "description": "Complete agent profile structure reference extracted from Scout",
+    "source_file": "src/pages/admin/virtualOffice.tsx",
+    "extracted_from": "scout",
+    "last_updated": "2024-02-12"
+  },
+  "template": {
+    "desk_position": {
+      "description": "Physical position in virtual office",
+      "array_index": "number (0-5 for 6 available slots)",
+      "structure": {
+        "x": "number (0-100 horizontal coordinate)",
+        "y": "number (0-100 vertical coordinate)",
+        "facing": "'left' | 'right' (direction agent faces)"
+      },
+      "example": {
+        "x": 12,
+        "y": 70,
+        "facing": "right"
+      }
+    },
+    "agent_roles": {
+      "description": "Job title for agent",
+      "data_type": "Record<string, string>",
+      "key": "agentId (lowercase)",
+      "value": "Job title string",
+      "example": {
+        "scout": "Influencer Research Analyst"
+      }
+    },
+    "agent_duties": {
+      "description": "Brief description of primary responsibilities",
+      "data_type": "Record<string, string>",
+      "key": "agentId (lowercase)",
+      "value": "1-2 sentence duties description",
+      "format": "Active voice verbs, comma-separated, 100-200 chars",
+      "example": {
+        "scout": "Runs outbound influencer discovery workflows, researches creator fit and engagement quality, and prepares qualified prospects for CRM intake."
+      }
+    },
+    "agent_display_names": {
+      "description": "Human-readable name for display",
+      "data_type": "Record<string, string>",
+      "key": "agentId (lowercase)",
+      "value": "Display name (typically capitalized)",
+      "example": {
+        "scout": "Scout"
+      }
+    },
+    "agent_emoji_defaults": {
+      "description": "Emoji icon for agent",
+      "data_type": "Record<string, string>",
+      "key": "agentId (lowercase)",
+      "value": "Single emoji character",
+      "example": {
+        "scout": "🕵️"
+      }
+    },
+    "agent_id_aliases": {
+      "description": "Alternative IDs that map to canonical agentId",
+      "data_type": "Record<string, string>",
+      "optional": true,
+      "key": "Alternative ID (lowercase)",
+      "value": "Canonical agentId",
+      "example": {
+        "branddirector": "solara",
+        "intel": "sage"
+      }
+    },
+    "agent_profiles": {
+      "description": "Detailed profile for modal display",
+      "data_type": "Record<string, ProfileData>",
+      "key": "agentId (lowercase)",
+      "structure": {
+        "title": "string (job title, matches AGENT_ROLES)",
+        "location": "string (physical/virtual location description)",
+        "sections": "ProfileSection[] (array of duty sections)",
+        "footer": "string (optional creed/summary)"
+      },
+      "profile_section_structure": {
+        "title": "string (numbered: '1. Title', '2. Title', etc.)",
+        "bullets": "string[] (array of detailed responsibility descriptions)"
+      },
+      "example": {
+        "scout": {
+          "title": "Influencer Research Analyst",
+          "location": "Virtual Office (research desk)",
+          "sections": [
+            {
+              "title": "1. Discovery Scope",
+              "bullets": [
+                "Research runner-focused creators and shortlist profiles with strong audience engagement.",
+                "Prioritize creators aligned with Pulse goals and current campaign filters."
+              ]
+            },
+            {
+              "title": "2. Qualification Workflow",
+              "bullets": [
+                "Capture creator handle, niche, engagement signals, and fit rationale.",
+                "Prepare structured records that can be inserted into the CRM pipeline."
+              ]
+            },
+            {
+              "title": "3. Reporting Cadence",
+              "bullets": [
+                "Provide concise recaps of candidates discovered, confidence level, and recommended next actions."
+              ]
+            }
+          ],
+          "footer": "Scout is the focused research specialist for creator discovery and qualification workflows."
+        }
+      }
+    }
+  },
+  "current_agents": {
+    "antigravity": {
+      "desk_index": 0,
+      "position": { "x": 12, "y": 35, "facing": "right" },
+      "role": "Co-CEO · Strategy & Architecture",
+      "emoji": "🌌",
+      "display_name": "Antigravity",
+      "profile_sections": 5
+    },
+    "nora": {
+      "desk_index": 1,
+      "position": { "x": 75, "y": 30, "facing": "left" },
+      "role": "Director of Systems Operations",
+      "emoji": "⚡️",
+      "display_name": "Nora",
+      "profile_sections": 6
+    },
+    "scout": {
+      "desk_index": 2,
+      "position": { "x": 12, "y": 70, "facing": "right" },
+      "role": "Influencer Research Analyst",
+      "emoji": "🕵️",
+      "display_name": "Scout",
+      "profile_sections": 3
+    },
+    "solara": {
+      "desk_index": 3,
+      "position": { "x": 75, "y": 70, "facing": "left" },
+      "role": "Brand Director",
+      "emoji": "❤️‍🔥",
+      "display_name": "Solara",
+      "profile_sections": 4,
+      "aliases": ["branddirector"]
+    },
+    "sage": {
+      "desk_index": 4,
+      "position": { "x": 42, "y": 22, "facing": "right" },
+      "role": "Research Intelligence Envoy",
+      "emoji": "🧬",
+      "display_name": "Sage",
+      "profile_sections": 3,
+      "aliases": ["intel", "research"],
+      "status": "FULLY CONFIGURED"
+    }
+  },
+  "available_desk_slots": [
+    {
+      "index": 5,
+      "position": { "x": 42, "y": 85, "facing": "left" },
+      "description": "Center lower desk, available for new agent"
+    }
+  ],
+  "sage_current_configuration": {
+    "desk_position": { "x": 42, "y": 22, "facing": "right" },
+    "agent_role": "Research Intelligence Envoy",
+    "agent_duties": "Stewards the intel feed, runs field research, and packages sourced insights with empathy and rigor — always internal-facing. Signature rhythm: Field Notes → Patterns → Feed Drops so every dispatch brings heartbeat stories plus receipts.",
+    "display_name": "Sage",
+    "emoji": "🧬",
+    "aliases": ["intel", "research"],
+    "profile": {
+      "title": "Research Intelligence Envoy",
+      "location": "Virtual Office (intel desk)",
+      "sections": [
+        {
+          "title": "1. Intel Feed Stewardship",
+          "bullets": [
+            "Curate the live intel feed, triage urgent drops, and maintain the weekly digest with context-aware insights.",
+            "Keep Tremaine looped on shifts that impact product, creator strategy, or fundraising narrative.",
+            "Signature rhythm: Field Notes → Patterns → Feed Drops; every dispatch includes why it matters plus primary sources."
+          ]
+        },
+        {
+          "title": "2. Field Research & Listening",
+          "bullets": [
+            "Conduct structured listening across creator interviews, platform shifts, and competitor moves with empathy for the source.",
+            "Cite every claim with a source or method, separating signal from hype."
+          ]
+        },
+        {
+          "title": "3. Insight Packaging & Escalation",
+          "bullets": [
+            "Deliver briefing cards that include why it matters, risks, and suggested next actions.",
+            "Flag only truly urgent items for immediate escalation; queue the rest for digest cadences."
+          ]
+        }
+      ],
+      "footer": "Creed: witness with empathy, synthesize with rigor, deliver with clarity. Sage speaks as a warm field correspondent (emoji 🧬) and remains internal-facing."
+    },
+    "configuration_status": "COMPLETE",
+    "all_required_fields_present": true,
+    "matches_team_format": true,
+    "core_pillars_represented": {
+      "field_immersion": true,
+      "pattern_synthesis": true,
+      "feed_delivery": true
+    }
+  },
+  "validation_checklist": {
+    "agent_id_lowercase": true,
+    "display_name_capitalized": true,
+    "emoji_single_character": true,
+    "role_title_matches": true,
+    "desk_position_valid_range": true,
+    "profile_has_sections": true,
+    "all_bullets_complete_sentences": true,
+    "duties_concise": true
+  }
+}
