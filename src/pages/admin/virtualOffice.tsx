@@ -9,11 +9,14 @@ import { KanbanTask } from '../../api/firebase/kanban/types';
 import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
   ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
-  History, ChevronRight, MessageSquare
+  History, ChevronRight, MessageSquare, Archive
 } from 'lucide-react';
 import { RoundTable } from '../../components/virtualOffice/RoundTable';
 import { GroupChatModal } from '../../components/virtualOffice/GroupChatModal';
+import { MeetingMinutesPreview } from '../../components/virtualOffice/MeetingMinutesPreview';
+import { FilingCabinet } from '../../components/virtualOffice/FilingCabinet';
 import { groupChatService } from '../../api/firebase/groupChat/service';
+import type { GroupChatMessage } from '../../api/firebase/groupChat/types';
 import {
   getAllTablePositions,
   getDeskPosition,
@@ -51,12 +54,12 @@ const formatMs = (ms?: number) => {
 /* ─── Desk positions for the office floor plan ────────── */
 
 const DESK_POSITIONS = [
-  { x: 22, y: 42, facing: 'right' as const },
-  { x: 58, y: 42, facing: 'left' as const },
-  { x: 22, y: 72, facing: 'right' as const },
-  { x: 58, y: 72, facing: 'left' as const },
-  { x: 40, y: 26, facing: 'right' as const },
-  { x: 40, y: 86, facing: 'left' as const },
+  { x: 12, y: 35, facing: 'right' as const },   // Antigravity — far left, upper
+  { x: 75, y: 30, facing: 'left' as const },    // Nora — far right, upper
+  { x: 12, y: 70, facing: 'right' as const },   // Scout — far left, lower
+  { x: 75, y: 70, facing: 'left' as const },    // slot 4
+  { x: 42, y: 22, facing: 'right' as const },   // slot 5
+  { x: 42, y: 85, facing: 'left' as const },    // slot 6
 ];
 
 /* ─── Agent roles / job titles ─────────────────────── */
@@ -540,8 +543,8 @@ interface AgentDeskProps {
   transitionDelay?: number;
 }
 
-const AgentDeskSprite: React.FC<AgentDeskProps> = ({ 
-  agent, 
+const AgentDeskSprite: React.FC<AgentDeskProps> = ({
+  agent,
   position,
   isTransitioning = false,
   transitionDelay = 0,
@@ -549,6 +552,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   const [hovered, setHovered] = useState(false);
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
   const status = STATUS_CONFIG[agent.status];
   const sessionDuration = formatDuration(agent.sessionStartedAt);
   const hasSteps = agent.executionSteps && agent.executionSteps.length > 0;
@@ -663,11 +667,9 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
       </div>
 
       {/* Character */}
-      <div className={`office-character ${agent.status} ${
-        isOnCoffeeBreak ? 'coffee-walk' : ''
-      } ${
-        isTransitioning ? 'walking' : ''
-      }`}>
+      <div className={`office-character ${agent.status} ${isOnCoffeeBreak ? 'coffee-walk' : ''
+        } ${isTransitioning ? 'walking' : ''
+        }`}>
         <div className="char-head" />
         <div className="char-body">
           <div className="char-arm left" />
@@ -755,6 +757,15 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
           {/* Task History */}
           <TaskHistoryPanel agentId={agent.id} />
 
+          {/* Chat Button */}
+          <button
+            className="detail-chat-btn"
+            onClick={() => router.push(`/admin/agentChat?agent=${agent.id}`)}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            Chat with {agent.displayName}
+          </button>
+
           {/* Footer */}
           <div className="detail-footer">
             <span className="flex items-center gap-1">
@@ -795,28 +806,7 @@ const OfficeDecorations: React.FC = () => (
       </div>
     </div>
 
-    {/* Plants */}
-    <div className="office-plant p1">
-      <div className="pot" />
-      <div className="plant-stem" />
-      <div className="leaf l1" />
-      <div className="leaf l2" />
-      <div className="leaf l3" />
-    </div>
-    <div className="office-plant p2">
-      <div className="pot" />
-      <div className="plant-stem" />
-      <div className="leaf l1" />
-      <div className="leaf l2" />
-    </div>
-
-    {/* Water cooler */}
-    <div className="water-cooler">
-      <div className="cooler-tank" />
-      <div className="cooler-body" />
-    </div>
-
-    {/* Coffee machine */}
+    {/* Coffee machine — top right corner */}
     <div className="coffee-machine">
       <div className="cm-body">
         <div className="cm-top" />
@@ -897,7 +887,7 @@ const VirtualOfficeContent: React.FC = () => {
 
   // Round Table Collaboration state
   type AgentPositionState = 'desk' | 'table' | 'transitioning-to-table' | 'transitioning-to-desk';
-  
+
   interface AgentPositionInfo {
     state: AgentPositionState;
     position: { x: number; y: number; facing: 'left' | 'right' | 'inward' };
@@ -908,6 +898,11 @@ const VirtualOfficeContent: React.FC = () => {
   const [groupChatId, setGroupChatId] = useState<string | null>(null);
   const [showGroupChatModal, setShowGroupChatModal] = useState(false);
   const [agentPositions, setAgentPositions] = useState<Record<string, AgentPositionInfo>>({});
+  const [collabStartTime, setCollabStartTime] = useState<Date | null>(null);
+  const [minutesPreviewData, setMinutesPreviewData] = useState<{
+    chatId: string; messages: GroupChatMessage[]; participants: string[]; duration: string;
+  } | null>(null);
+  const [showFilingCabinet, setShowFilingCabinet] = useState(false);
 
   useEffect(() => {
     const unsubscribe = presenceService.listen((next) => {
@@ -991,10 +986,11 @@ const VirtualOfficeContent: React.FC = () => {
     try {
       setIsCollaborating(true);
 
-      // Create group chat session
-      const agentIds = allAgents.map(a => a.id);
+      // Create group chat session — exclude antigravity (represents the user, not an agent)
+      const agentIds = allAgents.filter(a => a.id !== 'antigravity').map(a => a.id);
       const chatId = await groupChatService.createSession(agentIds);
       setGroupChatId(chatId);
+      setCollabStartTime(new Date());
 
       // Animate agents to table
       const tablePositions = getAllTablePositions(agentIds);
@@ -1026,10 +1022,26 @@ const VirtualOfficeContent: React.FC = () => {
     }
   }, [allAgents, agentPositions]);
 
-  // Handler to end collaboration
-  const endCollaboration = useCallback(async () => {
-    // Close modal first
+  // Handler to end collaboration — transitions to meeting minutes preview
+  const endCollaboration = useCallback(async (chatMessages?: GroupChatMessage[]) => {
+    // Close the chat modal
     setShowGroupChatModal(false);
+
+    // Calculate session duration
+    const durationMs = collabStartTime ? Date.now() - collabStartTime.getTime() : 0;
+    const mins = Math.floor(durationMs / 60_000);
+    const durationStr = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+
+    // If we have messages, show the meeting minutes preview
+    const agentParticipants = allAgents.filter(a => a.id !== 'antigravity').map(a => a.id);
+    if (chatMessages && chatMessages.length > 0 && groupChatId) {
+      setMinutesPreviewData({
+        chatId: groupChatId,
+        messages: chatMessages,
+        participants: agentParticipants,
+        duration: durationStr || '< 1m',
+      });
+    }
 
     // Close Firestore session
     if (groupChatId) {
@@ -1040,15 +1052,16 @@ const VirtualOfficeContent: React.FC = () => {
       }
     }
 
-    const agentIds = allAgents.map(a => a.id);
+    const agentIds = allAgents.filter(a => a.id !== 'antigravity').map(a => a.id);
 
-    // Update positions with reverse stagger
+    // Update positions with reverse stagger — use original allAgents index for correct desk position
     const updatedPositions = { ...agentPositions };
-    agentIds.forEach((agentId, index) => {
+    agentIds.forEach((agentId, i) => {
+      const originalIndex = allAgents.findIndex(a => a.id === agentId);
       updatedPositions[agentId] = {
         state: 'transitioning-to-desk',
-        position: getDeskPosition(index),
-        transitionDelay: getExitStaggerDelay(index, agentIds.length),
+        position: getDeskPosition(originalIndex),
+        transitionDelay: getExitStaggerDelay(i, agentIds.length),
       };
     });
     setAgentPositions(updatedPositions);
@@ -1064,9 +1077,19 @@ const VirtualOfficeContent: React.FC = () => {
       setAgentPositions(finalPositions);
       setIsCollaborating(false);
       setGroupChatId(null);
+      setCollabStartTime(null);
     }, lastExitDelay + 2000);
 
-  }, [allAgents, agentPositions, groupChatId]);
+  }, [allAgents, agentPositions, groupChatId, collabStartTime]);
+
+  // Close minutes preview
+  const handleMinutesSaved = useCallback(() => {
+    setMinutesPreviewData(null);
+  }, []);
+
+  const handleMinutesDiscarded = useCallback(() => {
+    setMinutesPreviewData(null);
+  }, []);
 
   // Update table click handler
   const handleTableClick = useCallback(() => {
@@ -1151,8 +1174,14 @@ const VirtualOfficeContent: React.FC = () => {
             <RoundTable
               isActive={isCollaborating}
               onClick={handleTableClick}
-              participantCount={allAgents.length}
+              participantCount={allAgents.filter(a => a.id !== 'antigravity').length}
             />
+
+            {/* Filing Cabinet Button */}
+            <div className="filing-cabinet-btn" onClick={() => setShowFilingCabinet(true)}>
+              <Archive className="w-4 h-4" />
+              <span>Filing Cabinet</span>
+            </div>
 
             {allAgents.length === 0 && (
               <div className="empty-office">
@@ -1183,9 +1212,26 @@ const VirtualOfficeContent: React.FC = () => {
         {showGroupChatModal && groupChatId && (
           <GroupChatModal
             chatId={groupChatId}
-            participants={allAgents.map(a => a.id)}
+            participants={allAgents.filter(a => a.id !== 'antigravity').map(a => a.id)}
             onClose={endCollaboration}
           />
+        )}
+
+        {/* Meeting Minutes Preview */}
+        {minutesPreviewData && (
+          <MeetingMinutesPreview
+            chatId={minutesPreviewData.chatId}
+            messages={minutesPreviewData.messages}
+            participants={minutesPreviewData.participants}
+            duration={minutesPreviewData.duration}
+            onSaveAndClose={handleMinutesSaved}
+            onDiscard={handleMinutesDiscarded}
+          />
+        )}
+
+        {/* Filing Cabinet */}
+        {showFilingCabinet && (
+          <FilingCabinet onClose={() => setShowFilingCabinet(false)} />
         )}
       </AdminRouteGuard>
 
@@ -1259,6 +1305,32 @@ const VirtualOfficeContent: React.FC = () => {
           border: 1px solid rgba(63,63,70,0.25);
           box-shadow: 0 4px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03);
         }
+        .filing-cabinet-btn {
+          position: absolute;
+          bottom: 16px;
+          right: 16px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 14px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(234,179,8,0.08));
+          border: 1px solid rgba(245,158,11,0.15);
+          color: #fbbf24;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          z-index: 10;
+          backdrop-filter: blur(8px);
+        }
+        .filing-cabinet-btn:hover {
+          background: linear-gradient(135deg, rgba(245,158,11,0.2), rgba(234,179,8,0.14));
+          border-color: rgba(245,158,11,0.3);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(245,158,11,0.1);
+        }
+
         .floor-grid {
           position: absolute;
           inset: 0;
@@ -1302,7 +1374,7 @@ const VirtualOfficeContent: React.FC = () => {
         .cooler-body { width: 22px; height: 28px; background: #d4d4d8; border-radius: 3px; margin: 0 auto; }
 
         /* Coffee machine */
-        .coffee-machine { position: absolute; top: 47%; left: 50%; transform: translateX(-50%); z-index: 3; }
+        .coffee-machine { position: absolute; top: 8%; right: 8%; z-index: 3; }
         .cm-body { width: 36px; height: 46px; background: linear-gradient(180deg, #374151, #1f2937); border-radius: 6px 6px 3px 3px; position: relative; border: 1px solid rgba(75,85,99,0.5); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
         .cm-top { position: absolute; top: -3px; left: 2px; right: 2px; height: 6px; background: linear-gradient(180deg, #4b5563, #374151); border-radius: 4px 4px 0 0; }
         .cm-screen { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 16px; height: 8px; background: rgba(34,197,94,0.3); border-radius: 2px; border: 1px solid rgba(34,197,94,0.2); animation: screenGlow 3s ease-in-out infinite; }
@@ -1597,6 +1669,28 @@ const VirtualOfficeContent: React.FC = () => {
           margin-top: 10px;
           padding-top: 8px;
           border-top: 1px solid rgba(63,63,70,0.15);
+        }
+        .detail-chat-btn {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 8px 0;
+          margin-top: 10px;
+          background: rgba(139,92,246,0.1);
+          border: 1px solid rgba(139,92,246,0.2);
+          border-radius: 10px;
+          color: #a78bfa;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .detail-chat-btn:hover {
+          background: rgba(139,92,246,0.2);
+          border-color: rgba(139,92,246,0.4);
+          color: #c4b5fd;
         }
 
         /* ══════════════════════════════════════════════════ */
