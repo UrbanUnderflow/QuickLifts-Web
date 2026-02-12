@@ -661,11 +661,13 @@ async function executeStep(step, task, stepIndex, allSteps) {
             require('fs').writeFileSync(tmpFile, prompt);
 
             try {
-                const result = execSync(`cat "${tmpFile}" | openclaw`, {
+                // Use OpenClaw's agent command with --local for embedded execution
+                const result = execSync(`openclaw agent --local --message "$(cat "${tmpFile}")"`, {
                     cwd: projectDir,
                     timeout: 600_000, // 10 min per step
                     encoding: 'utf-8',
                     maxBuffer: 10 * 1024 * 1024, // 10MB
+                    shell: '/bin/bash', // Ensure bash for command substitution
                 });
 
                 step.output = result.trim().substring(0, 2000);
