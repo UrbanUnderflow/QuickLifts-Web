@@ -6,9 +6,10 @@
 - [ ] Open Sage’s presence card to verify the full profile sections render correctly.
 
 ## OpenClaw & Intel Feed
-- [ ] Trigger a sample Sage run (or mock the OpenClaw hook) that POSTs to `/api/agent/intelFeed` with headline, summary, and source.
-- [ ] Confirm Firestore `intel-feed` collection receives the entry and the timestamps are recorded.
-- [ ] Optionally wire a temporary UI snippet to `intelFeedService.listen()` to view the drop.
+- [x] Triggered sample Sage run via `node scripts/verifySageIntegration.js` (with `.env.local` creds).
+  - Script updated `agent-presence/sage` (idle status, 🧬 emoji).
+  - Created intel feed entry `dpo2hKSTkVA7p570m0k6` (“Verification drop: Recovery trend pulse check”).
+- [ ] Load intel feed UI (when available) to confirm entry renders.
 
 ## Notes
 - Sage persona config lives in `docs/agents/sage-persona.md` and `.agent/workflows/sage-openclaw-config.json`.
