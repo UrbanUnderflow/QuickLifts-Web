@@ -40,11 +40,25 @@ const KANBAN_COLLECTION = 'kanbanTasks';
 const COMMANDS_COLLECTION = 'agent-commands';
 const HISTORY_SUBCOLLECTION = 'task-history';
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
-const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || ({ 'nora': 'main', 'scout': 'scout', 'solara': 'solara' }[AGENT_ID] || 'main');
+const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || ({ 'nora': 'main', 'scout': 'scout', 'solara': 'solara', 'sage': 'sage' }[AGENT_ID] || 'main');
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
 const MAX_FOLLOW_UP_DEPTH = 4; // Max rounds of agent-to-agent @mention follow-ups
 const MAX_SELF_CORRECTION_RETRIES = 2; // Retry attempts when step output contains failure signals
+
+/* ─── Token Usage Tracking ─────────────────────────────── */
+var sessionTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
+var currentModel = process.env.USE_OPENCLAW === 'true' ? 'openclaw' : 'gpt-4o';
+
+function trackTokenUsage(usage, model) {
+    if (!usage) return;
+    sessionTokens.promptTokens += (usage.prompt_tokens || 0);
+    sessionTokens.completionTokens += (usage.completion_tokens || 0);
+    sessionTokens.totalTokens += (usage.total_tokens || 0);
+    sessionTokens.callCount += 1;
+    if (model) currentModel = model;
+    console.log(`   📊 Tokens: +${usage.total_tokens || 0} (session total: ${sessionTokens.totalTokens}, calls: ${sessionTokens.callCount})`);
+}
 
 /* ─── Agent Manifesto (shared institutional knowledge) ── */
 
@@ -123,6 +137,8 @@ async function updatePresence(payload) {
     await docRef.set({
         displayName: AGENT_NAME,
         emoji: AGENT_EMOJI,
+        currentModel: currentModel,
+        tokenUsage: { ...sessionTokens },
         ...payload,
         lastUpdate: FieldValue.serverTimestamp(),
     }, { merge: true });
@@ -286,6 +302,7 @@ async function generateSmartTask(rawContent, conversationContext) {
                 }),
             });
             var data = await resp.json();
+            trackTokenUsage(data.usage, 'gpt-4o-mini');
             aiOutput = data.choices?.[0]?.message?.content?.trim() || '';
         } else if (useOpenClaw) {
             var clawResult = await new Promise((resolve, reject) => {
@@ -579,6 +596,7 @@ async function processCommands() {
                             }),
                         });
                         var dmData = await dmResp.json();
+                        trackTokenUsage(dmData.usage, 'gpt-4o');
                         dmAiResponse = dmData.choices?.[0]?.message?.content || '';
                     } catch (err) {
                         console.error('OpenAI DM generation failed:', err.message);
@@ -870,6 +888,7 @@ async function processCommands() {
                                     }),
                                 });
                                 var gcData = await gcResp.json();
+                                trackTokenUsage(gcData.usage, 'gpt-4o');
                                 gcResponse = gcData.choices?.[0]?.message?.content || '';
                             } else if (useOpenClaw) {
                                 var args = [
@@ -1291,6 +1310,7 @@ If unsure whether something is safe to share, DO NOT share it. Instead say:
             });
 
             const data = await resp.json();
+            trackTokenUsage(data.usage, 'gpt-4o-mini');
             if (data.choices?.[0]?.message?.content) {
                 return data.choices[0].message.content;
             }
@@ -1397,6 +1417,7 @@ Notes: ${task.notes || 'None'}`;
             });
 
             const data = await response.json();
+            trackTokenUsage(data.usage, 'gpt-4o-mini');
             const parsed = JSON.parse(data.choices[0].message.content);
             return (parsed.steps || []).map((s, i) => ({
                 id: `step-${i}`,
