@@ -79,6 +79,43 @@ const AGENT_DUTIES: Record<string, string> = {
   solara: 'Owns brand voice, messaging strategy, and value alignment across outward-facing work. Converts Freedom + Spirituality principles into clear narrative guardrails and content direction for all agents.',
 };
 
+const AGENT_ID_ALIASES: Record<string, string> = {
+  branddirector: 'solara',
+};
+
+const normalizeIncomingAgents = (incoming: AgentPresence[]): AgentPresence[] => {
+  const merged = new Map<string, { agent: AgentPresence; canonicalSource: boolean }>();
+
+  for (const rawAgent of incoming) {
+    const canonicalId = AGENT_ID_ALIASES[rawAgent.id] ?? rawAgent.id;
+    const normalized: AgentPresence = {
+      ...rawAgent,
+      id: canonicalId,
+      displayName: canonicalId === 'solara' ? 'Solara' : rawAgent.displayName,
+      emoji: canonicalId === 'solara' ? (rawAgent.emoji || '❤️‍🔥') : rawAgent.emoji,
+    };
+
+    const candidate = { agent: normalized, canonicalSource: rawAgent.id === canonicalId };
+    const existing = merged.get(canonicalId);
+
+    if (!existing) {
+      merged.set(canonicalId, candidate);
+      continue;
+    }
+
+    if (candidate.canonicalSource !== existing.canonicalSource) {
+      if (candidate.canonicalSource) merged.set(canonicalId, candidate);
+      continue;
+    }
+
+    const candidateUpdatedAt = candidate.agent.lastUpdate?.getTime() ?? 0;
+    const existingUpdatedAt = existing.agent.lastUpdate?.getTime() ?? 0;
+    if (candidateUpdatedAt >= existingUpdatedAt) merged.set(canonicalId, candidate);
+  }
+
+  return Array.from(merged.values()).map((entry) => entry.agent);
+};
+
 /* ─── Full agent profiles (for modal) ─────────────────── */
 
 interface ProfileSection {
@@ -943,7 +980,8 @@ const VirtualOfficeContent: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = presenceService.listen((next) => {
-      setAgents(next.sort((a, b) => a.displayName.localeCompare(b.displayName)));
+      const normalized = normalizeIncomingAgents(next);
+      setAgents(normalized.sort((a, b) => a.displayName.localeCompare(b.displayName)));
     });
     return () => unsubscribe();
   }, [refreshKey]);

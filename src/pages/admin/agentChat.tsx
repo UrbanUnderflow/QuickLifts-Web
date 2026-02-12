@@ -55,6 +55,45 @@ const AGENT_ROLES: Record<string, string> = {
   solara: 'Brand Director',
 };
 
+const AGENT_ID_ALIASES: Record<string, string> = {
+  branddirector: 'solara',
+};
+
+const normalizeIncomingAgents = (incoming: AgentPresence[]): AgentPresence[] => {
+  const merged = new Map<string, { agent: AgentPresence; canonicalSource: boolean }>();
+
+  for (const rawAgent of incoming) {
+    const canonicalId = AGENT_ID_ALIASES[rawAgent.id] ?? rawAgent.id;
+    const normalized: AgentPresence = {
+      ...rawAgent,
+      id: canonicalId,
+      displayName: canonicalId === 'solara' ? 'Solara' : rawAgent.displayName,
+      emoji: canonicalId === 'solara'
+        ? (rawAgent.emoji || AGENT_EMOJIS.solara)
+        : rawAgent.emoji,
+    };
+
+    const candidate = { agent: normalized, canonicalSource: rawAgent.id === canonicalId };
+    const existing = merged.get(canonicalId);
+
+    if (!existing) {
+      merged.set(canonicalId, candidate);
+      continue;
+    }
+
+    if (candidate.canonicalSource !== existing.canonicalSource) {
+      if (candidate.canonicalSource) merged.set(canonicalId, candidate);
+      continue;
+    }
+
+    const candidateUpdatedAt = candidate.agent.lastUpdate?.getTime() ?? 0;
+    const existingUpdatedAt = existing.agent.lastUpdate?.getTime() ?? 0;
+    if (candidateUpdatedAt >= existingUpdatedAt) merged.set(canonicalId, candidate);
+  }
+
+  return Array.from(merged.values()).map((entry) => entry.agent);
+};
+
 const AGENT_HEARTBEAT_STALE_MS = 2 * 60_000;
 const OFFLINE_RESPONSE_TIMEOUT_MS = 45_000;
 
@@ -629,8 +668,10 @@ const AgentChatContent: React.FC = () => {
   // Listen for agent presence
   useEffect(() => {
     const unsub = presenceService.listen((incoming) => {
+      const normalized = normalizeIncomingAgents(incoming);
+
       // Filter out Antigravity — it communicates directly via the IDE
-      const visible = incoming.filter(a => a.id !== 'antigravity');
+      const visible = normalized.filter(a => a.id !== 'antigravity');
 
       // Ensure Scout can always be selected in chat
       if (!visible.some(a => a.id === 'scout')) {
