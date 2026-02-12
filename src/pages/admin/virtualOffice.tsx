@@ -532,6 +532,7 @@ interface AgentDeskProps {
 const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
   const [hovered, setHovered] = useState(false);
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const status = STATUS_CONFIG[agent.status];
   const sessionDuration = formatDuration(agent.sessionStartedAt);
   const hasSteps = agent.executionSteps && agent.executionSteps.length > 0;
@@ -569,6 +570,25 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [hovered]);
+
+  // Keep hover panel within viewport bounds
+  useEffect(() => {
+    if (!hovered || !panelRef.current) return;
+    const el = panelRef.current;
+    const rect = el.getBoundingClientRect();
+    const vH = window.innerHeight;
+    const margin = 12;
+
+    if (rect.bottom > vH - margin) {
+      // Panel overflows bottom — shift it up
+      const overflow = rect.bottom - (vH - margin);
+      el.style.transform = `translateY(calc(-50% - ${overflow}px))`;
+    } else if (rect.top < margin) {
+      // Panel overflows top — shift it down
+      const overflow = margin - rect.top;
+      el.style.transform = `translateY(calc(-50% + ${overflow}px))`;
+    }
   }, [hovered]);
 
   // Random coffee break
@@ -651,7 +671,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({ agent, position }) => {
 
       {/* Hover Panel: Info + Live Execution Steps */}
       {hovered && (
-        <div className={`hover-detail-panel ${position.facing}`}>
+        <div ref={panelRef} className={`hover-detail-panel ${position.facing}`}>
           {/* Agent info header */}
           <div className="detail-header">
             <div className="flex items-center gap-2">
