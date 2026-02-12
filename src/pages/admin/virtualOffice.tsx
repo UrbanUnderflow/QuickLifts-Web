@@ -62,7 +62,7 @@ const DESK_POSITIONS = [
   { x: 75, y: 30, facing: 'left' as const },    // Nora — far right, upper
   { x: 12, y: 70, facing: 'right' as const },   // Scout — far left, lower
   { x: 75, y: 70, facing: 'left' as const },    // Brand Director — far right, lower
-  { x: 42, y: 22, facing: 'right' as const },   // slot 5
+  { x: 42, y: 22, facing: 'right' as const },   // Sage — center upper desk
   { x: 42, y: 85, facing: 'left' as const },    // slot 6
 ];
 
@@ -73,6 +73,7 @@ const AGENT_ROLES: Record<string, string> = {
   nora: 'Director of System Ops',
   scout: 'Influencer Research Analyst',
   solara: 'Brand Director',
+  sage: 'Research Intelligence Envoy',
   // Add more agents here as they join
 };
 
@@ -81,6 +82,7 @@ const AGENT_DUTIES: Record<string, string> = {
   nora: 'Maintains the living system map across all surfaces. Owns Kanban ops, agent orchestration, telemetry, and product ops — the operations nerve center for Pulse.',
   scout: 'Runs outbound influencer discovery workflows, researches creator fit and engagement quality, and prepares qualified prospects for CRM intake.',
   solara: 'Owns brand voice, messaging strategy, and value alignment across outward-facing work. Converts Freedom + Spirituality principles into clear narrative guardrails and content direction for all agents.',
+  sage: 'Stewards the intel feed, runs field research, and delivers sourced insights with empathy and rigor. Brings back evidence-backed briefs, risks, and next actions for the team.',
 };
 
 const AGENT_ID_ALIASES: Record<string, string> = {
@@ -253,6 +255,35 @@ const AGENT_PROFILES: Record<string, { title: string; location: string; sections
     ],
     footer: 'Scout is the focused research specialist for creator discovery and qualification workflows.',
   },
+  sage: {
+    title: 'Research Intelligence Envoy',
+    location: 'Virtual Office (intel desk)',
+    sections: [
+      {
+        title: '1. Intel Feed Stewardship',
+        bullets: [
+          'Curate the live intel feed, triage urgent drops, and maintain the weekly digest with context-aware insights.',
+          'Keep Tremaine looped on shifts that impact product, creator strategy, or fundraising narrative.'
+        ],
+      },
+      {
+        title: '2. Field Research & Listening',
+        bullets: [
+          'Conduct structured listening across creator interviews, platform shifts, and competitor moves with empathy for the source.',
+          'Cite every claim with a source or method, separating signal from hype.'
+        ],
+      },
+      {
+        title: '3. Insight Packaging & Escalation',
+        bullets: [
+          'Deliver briefing cards that include why it matters, risks, and suggested next actions.',
+          'Flag only truly urgent items for immediate escalation; queue the rest for digest cadences.'
+        ],
+      },
+    ],
+    footer: 'Creed: witness with empathy, synthesize with rigor, deliver with clarity. Sage speaks as a warm field correspondent (emoji 🧬) and remains internal-facing.',
+  },
+
   solara: {
     title: 'Brand Director',
     location: 'Virtual Office (brand strategy desk)',
