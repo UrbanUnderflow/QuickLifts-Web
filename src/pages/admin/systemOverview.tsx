@@ -186,12 +186,14 @@ const connections: Connection[] = [
   { from: 'virtual-office', to: 'antigravity', type: 'events' },
 ];
 
-const summaryCards = [
-  { title: 'Client Surfaces', value: '4', icon: <Layers className="w-5 h-5" />, tone: 'from-blue-500/30 to-blue-300/10' },
-  { title: 'Backend Services', value: '4', icon: <Server className="w-5 h-5" />, tone: 'from-purple-500/30 to-purple-300/10' },
-  { title: 'Integrations', value: '4', icon: <Link2 className="w-5 h-5" />, tone: 'from-amber-500/30 to-amber-300/10' },
-  { title: 'Agents Online', value: '4', icon: <Users className="w-5 h-5" />, tone: 'from-green-500/30 to-green-300/10' },
-];
+interface SummaryCardConfig {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+  tone: string;
+  caption?: string;
+}
+
 
 const surfacesTable = [
   { name: 'QuickLifts iOS', repo: 'QuickLifts', release: 'TestFlight weekly', status: 'Production' },
@@ -214,24 +216,32 @@ const integrationsTable = [
   { name: 'Instantly', purpose: 'Outbound automation', status: 'Active' },
 ];
 
+const flowHighlights = [
+  'QuickLifts clients authenticate via Firebase Auth → Firestore replicates user + round data → Netlify functions trigger payouts.',
+  'Creator landing pages push waitlist entries into Firestore and Brevo simultaneously for redundancy.',
+  'Agent runner polls Firestore kanban tasks, executes via OpenClaw, and updates agent-presence for Virtual Office.',
+  'Stripe + RevenueCat ensure mobile + web subscription parity; Netlify functions reconcile daily.'
+];
+
 const detailCopy: Record<string, string> = systemNodes.reduce((acc, node) => {
   acc[node.id] = node.description;
   return acc;
 }, {} as Record<string, string>);
 
-function SummaryCard({ title, value, icon, tone }: { title: string; value: string; icon: React.ReactNode; tone: string }) {
+function SummaryCard({ title, value, icon, tone, caption }: SummaryCardConfig) {
   return (
-    <div className={`bg-gradient-to-br ${tone} border border-white/5 rounded-2xl p-4 flex items-center justify-between`}> 
+    <div className={`bg-gradient-to-br ${tone} border border-white/5 rounded-2xl p-4 flex items-center justify-between`}>
       <div>
         <p className="text-xs uppercase tracking-wide text-zinc-400">{title}</p>
         <p className="text-2xl font-semibold text-white mt-1">{value}</p>
+        {caption && <p className="text-[11px] text-white/70 mt-0.5">{caption}</p>}
       </div>
       <div className="p-3 rounded-full bg-black/30 text-white">{icon}</div>
     </div>
   );
 }
 
-function SystemMap({ nodes, selectedId, onSelect }: { nodes: SystemNode[]; selectedId?: string; onSelect: (id: string) => void }) {
+function SystemMap({ nodes, selectedId, onSelect, highlightConnections }: { nodes: SystemNode[]; selectedId?: string; onSelect: (id: string) => void; highlightConnections?: boolean }) {
   const nodeMap = useMemo(() => Object.fromEntries(nodes.map((node) => [node.id, node])), [nodes]);
   const lines = connections.filter((conn) => nodeMap[conn.from] && nodeMap[conn.to]);
 
@@ -243,7 +253,18 @@ function SystemMap({ nodes, selectedId, onSelect }: { nodes: SystemNode[]; selec
           const to = nodeMap[conn.to];
           const path = `M ${from.x}% ${from.y}% C ${(from.x + to.x) / 2}% ${from.y}%, ${(from.x + to.x) / 2}% ${to.y}%, ${to.x}% ${to.y}%`;
           const color = conn.type === 'data' ? '#38bdf8' : conn.type === 'auth' ? '#a78bfa' : '#facc15';
-          return <path key={`${conn.from}-${conn.to}`} d={path} stroke={color} strokeWidth={1.5} fill="none" strokeOpacity={0.35} markerEnd="url(#arrowhead)" />;
+          const isHighlighted = highlightConnections && (conn.from === selectedId || conn.to === selectedId);
+          return (
+            <path
+              key={`${conn.from}-${conn.to}`}
+              d={path}
+              stroke={color}
+              strokeWidth={isHighlighted ? 2.4 : 1.4}
+              fill="none"
+              strokeOpacity={isHighlighted ? 0.9 : 0.3}
+              markerEnd="url(#arrowhead)"
+            />
+          );
         })}
         <defs>
           <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" fill="#f8fafc">
@@ -301,8 +322,8 @@ const DetailPanel: React.FC<{ node?: SystemNode; agents: AgentPresence[] }> = ({
         <div className="mt-4 text-xs text-zinc-300">
           <p className="font-semibold text-sm text-white mb-1">Live presence</p>
           <p>Status: {linkedAgent.status}</p>
-          <p>Task: {linkedAgent.currentTask || '—'}</p>
-          <p>Last heartbeat: {linkedAgent.lastUpdate ? linkedAgent.lastUpdate.toLocaleTimeString() : '—'}</p>
+          <p>Task: {linkedAgent.currentTask || '-'}</p>
+          <p>Last heartbeat: {linkedAgent.lastUpdate ? linkedAgent.lastUpdate.toLocaleTimeString() : '-'}</p>
         </div>
       )}
     </div>
@@ -312,11 +333,28 @@ const DetailPanel: React.FC<{ node?: SystemNode; agents: AgentPresence[] }> = ({
 const SystemOverviewPage: React.FC = () => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>('quicklifts-web');
   const [agentPresence, setAgentPresence] = useState<AgentPresence[]>([]);
+  const [layerFilter, setLayerFilter] = useState<'all' | SystemNode['layer']>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     const unsubscribe = presenceService.listen((agents) => setAgentPresence(agents));
     return () => unsubscribe();
   }, []);
+
+  const filteredNodes = useMemo(() => {
+    return systemNodes.filter((node) => {
+      const matchesLayer = layerFilter === 'all' || node.layer === layerFilter;
+      const matchesSearch = node.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesLayer && matchesSearch;
+    });
+  }, [layerFilter, searchQuery]);
+
+  const summaryCards: SummaryCardConfig[] = [
+    { title: 'Client Surfaces', value: String(systemNodes.filter((n) => n.layer === 'surface').length), icon: <Layers className="w-5 h-5" />, tone: 'from-blue-500/30 to-blue-300/10', caption: 'iOS + Android + Web' },
+    { title: 'Backend Services', value: String(systemNodes.filter((n) => n.layer === 'backend').length), icon: <Server className="w-5 h-5" />, tone: 'from-purple-500/30 to-purple-300/10', caption: 'Firebase + Netlify' },
+    { title: 'Integrations', value: String(systemNodes.filter((n) => n.layer === 'integration').length), icon: <Link2 className="w-5 h-5" />, tone: 'from-amber-500/30 to-amber-300/10', caption: 'Stripe, Brevo, etc.' },
+    { title: 'Agents Online', value: String(agentPresence.length), icon: <Users className="w-5 h-5" />, tone: 'from-green-500/30 to-green-300/10', caption: agentPresence.length ? agentPresence.map((a) => a.displayName).join(', ') : 'None' },
+  ];
 
   const selectedNode = useMemo(() => systemNodes.find((node) => node.id === selectedNodeId), [selectedNodeId]);
 
@@ -339,13 +377,53 @@ const SystemOverviewPage: React.FC = () => {
             ))}
           </section>
 
+          <section className="bg-[#070b12] border border-zinc-900 rounded-2xl p-4 flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
+              {['all', 'surface', 'backend', 'integration', 'agent'].map((layer) => (
+                <button
+                  key={layer}
+                  onClick={() => setLayerFilter(layer as typeof layerFilter)}
+                  className={`px-3 py-1.5 rounded-full text-xs uppercase tracking-wide border transition-colors ${
+                    layerFilter === layer
+                      ? 'bg-white text-black border-white'
+                      : 'text-zinc-400 border-zinc-700 hover:border-white/40'
+                  }`}
+                >
+                  {layer === 'all' ? 'All Layers' : layer}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                type="text"
+                placeholder="Search node..."
+                className="flex-1 min-w-[200px] bg-black/30 border border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-white/60"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <div className="text-xs text-zinc-500 flex items-center gap-3">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#38bdf8] inline-block" /> Data</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#a78bfa] inline-block" /> Auth</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#facc15] inline-block" /> Events</span>
+              </div>
+            </div>
+          </section>
+
           <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-            <div className="lg:col-span-2">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-xl font-semibold">Systems Map</h2>
+            <div className="lg:col-span-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold">Systems Map</h2>
+                  <p className="text-xs text-zinc-500">Highlight connections in {layerFilter === 'all' ? 'all layers' : `${layerFilter}`} view.</p>
+                </div>
                 <span className="text-xs text-zinc-500 flex items-center gap-1"><Activity className="w-3 h-3" /> Live</span>
               </div>
-              <SystemMap nodes={systemNodes} selectedId={selectedNodeId} onSelect={setSelectedNodeId} />
+              <SystemMap
+                nodes={filteredNodes.length ? filteredNodes : systemNodes}
+                selectedId={selectedNodeId}
+                onSelect={setSelectedNodeId}
+                highlightConnections
+              />
             </div>
             <DetailPanel node={selectedNode} agents={agentPresence} />
           </section>
@@ -418,8 +496,8 @@ const SystemOverviewPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
-              <div className="flex items-center gap-2 mb-4">
+            <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center gap-2">
                 <Database className="w-4 h-4 text-amber-300" />
                 <h3 className="text-lg font-semibold">Integrations</h3>
               </div>
@@ -432,7 +510,22 @@ const SystemOverviewPage: React.FC = () => {
                   </div>
                 ))}
               </div>
+              <div className="text-xs text-zinc-500 border border-zinc-800 rounded-xl p-3 bg-black/20">
+                <p className="uppercase tracking-wide mb-1">Onboarding</p>
+                <p className="text-zinc-300">
+                  New teammate? Read the <a href="https://github.com/UrbanUnderflow/QuickLifts-Web/blob/main/docs/system-architecture-overview-plan.md" className="text-blue-300 underline" target="_blank" rel="noreferrer">Systems Handbook</a> and watch the Loom in /admin/systems-handbook (coming soon).
+                </p>
+              </div>
             </div>
+          </section>
+
+          <section className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
+            <h3 className="text-lg font-semibold mb-3">Data Flow Highlights</h3>
+            <ul className="space-y-2 text-sm text-zinc-300 list-disc pl-5">
+              {flowHighlights.map((item, idx) => (
+                <li key={idx}>{item}</li>
+              ))}
+            </ul>
           </section>
         </div>
       </AdminRouteGuard>
