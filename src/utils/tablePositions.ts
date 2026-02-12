@@ -6,7 +6,7 @@
 export interface Position {
   x: number; // percentage from left
   y: number; // percentage from top
-  facing?: 'left' | 'right' | 'inward';
+  facing: 'left' | 'right' | 'inward';
 }
 
 export interface TableConfig {
@@ -65,7 +65,7 @@ export const getAllTablePositions = (
   containerHeight?: number
 ): Record<string, Position> => {
   const positions: Record<string, Position> = {};
-  
+
   agentIds.forEach((agentId, index) => {
     positions[agentId] = getTablePosition(
       index,
@@ -84,12 +84,12 @@ export const getAllTablePositions = (
  */
 export const getDeskPosition = (agentIndex: number): Position => {
   const DESK_POSITIONS: Position[] = [
-    { x: 22, y: 42, facing: 'right' },
-    { x: 58, y: 42, facing: 'left' },
-    { x: 22, y: 72, facing: 'right' },
-    { x: 58, y: 72, facing: 'left' },
-    { x: 40, y: 26, facing: 'right' },
-    { x: 40, y: 86, facing: 'left' },
+    { x: 12, y: 35, facing: 'right' },
+    { x: 75, y: 30, facing: 'left' },
+    { x: 12, y: 70, facing: 'right' },
+    { x: 75, y: 70, facing: 'left' },
+    { x: 42, y: 22, facing: 'right' },
+    { x: 42, y: 85, facing: 'left' },
   ];
 
   // Cycle through positions if more agents than desks

@@ -41,6 +41,7 @@ const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || (AGENT_ID === 'nora' ? 'main' : AGENT_ID);
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
+const MAX_FOLLOW_UP_DEPTH = 4; // Max rounds of agent-to-agent @mention follow-ups
 
 /* ─── Firebase Admin Init ─────────────────────────────── */
 
@@ -65,6 +66,8 @@ const db = getFirestore(app);
 
 /* ── Incoming command queue (filled by the Firestore listener) ── */
 const commandQueue = [];
+const processedMessageIds = new Set(); // Dedup: track group-chat messages we've already responded to
+const processedCommandIds = new Set(); // Dedup: track command IDs we've already queued/processed
 
 /* ─── Firestore Helpers ───────────────────────────────── */
 
@@ -140,6 +143,8 @@ async function saveTaskHistory(taskName, taskId, steps, status, startedAt) {
  * Start listening for incoming commands from other agents.
  * Commands land in the `agent-commands` collection addressed to this agent.
  */
+const RUNNER_START_TIME = Date.now();
+
 function startCommandListener() {
     console.log('📡 Listening for incoming commands...');
 
@@ -151,7 +156,29 @@ function startCommandListener() {
         snapshot.docChanges().forEach((change) => {
             if (change.type === 'added') {
                 const cmd = { id: change.doc.id, ...change.doc.data() };
+
+                // Skip commands created before this runner started (stale from old sessions)
+                const createdAt = cmd.createdAt?.toDate?.() || cmd.createdAt;
+                const cmdTime = createdAt ? new Date(createdAt).getTime() : 0;
+                if (cmdTime && cmdTime < RUNNER_START_TIME - 120_000) {
+                    console.log(`   ⏭️ Skipping stale ${cmd.type} command from ${cmd.from} (created ${Math.round((Date.now() - cmdTime) / 1000)}s ago)`);
+                    // Mark as expired so it doesn't keep showing up
+                    db.collection(COMMANDS_COLLECTION).doc(cmd.id).update({
+                        status: 'expired',
+                        expiredReason: 'Stale command from previous runner session',
+                    }).catch(() => { });
+                    return;
+                }
+
                 console.log(`\n📨 Incoming ${cmd.type} from ${cmd.from}: "${cmd.content}"`);
+
+                // Command-ID-level dedup: never queue the same command twice
+                if (processedCommandIds.has(cmd.id)) {
+                    console.log(`   ⏭️ Command ${cmd.id} already processed/queued, skipping`);
+                    return;
+                }
+                processedCommandIds.add(cmd.id);
+
                 commandQueue.push(cmd);
             }
         });
@@ -206,7 +233,7 @@ async function processCommands() {
 
         switch (detectedType) {
             case 'task':
-                const newTask = await db.collection(KANBAN_COLLECTION).add({
+                var newTask = await db.collection(KANBAN_COLLECTION).add({
                     name: pContent,
                     description: cmd.metadata?.description || `Task created from chat by ${cmd.from}`,
                     assignee: AGENT_NAME,
@@ -217,7 +244,7 @@ async function processCommands() {
                     createdAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
                 });
-                const taskMsg = `Task created: ${newTask.id}. I've added it to my queue.`;
+                var taskMsg = `Task created: ${newTask.id}. I've added it to my queue.`;
                 response = response ? response + "\n" + taskMsg : taskMsg;
                 console.log(`📋 Created task from command: ${pContent} → ${newTask.id}`);
 
@@ -231,20 +258,20 @@ async function processCommands() {
 
             case 'command':
                 if (pContent.toLowerCase().includes('stop') || pContent.toLowerCase().includes('pause')) {
-                    const stopMsg = 'Acknowledged. Will pause after current step completes.';
+                    var stopMsg = 'Acknowledged. Will pause after current step completes.';
                     response = response ? response + "\n" + stopMsg : stopMsg;
                 } else if (pContent.toLowerCase().includes('status')) {
-                    const presenceSnap = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
-                    const data = presenceSnap.data();
-                    const statusMsg = `Status: ${data?.status || 'unknown'}. Task: ${data?.currentTask || 'none'}. Progress: ${data?.taskProgress || 0}%.`;
+                    var presenceSnap = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
+                    var data = presenceSnap.data();
+                    var statusMsg = `Status: ${data?.status || 'unknown'}. Task: ${data?.currentTask || 'none'}. Progress: ${data?.taskProgress || 0}%.`;
                     response = response ? response + "\n" + statusMsg : statusMsg;
                 } else if (pContent.toLowerCase().includes('priority') || pContent.toLowerCase().includes('prioritize')) {
-                    const prioMsg = `Noted: "${pContent}". I'll prioritize this on my next task fetch.`;
+                    var prioMsg = `Noted: "${pContent}". I'll prioritize this on my next task fetch.`;
                     response = response ? response + "\n" + prioMsg : prioMsg;
                 } else if (pContent.length > 80) {
                     // Long command content is likely meant to be a task — auto-upgrade
                     console.log(`   ↑ Auto-upgrading long command to task (${pContent.length} chars)`);
-                    const newTask = await db.collection(KANBAN_COLLECTION).add({
+                    var upgTask = await db.collection(KANBAN_COLLECTION).add({
                         name: pContent.substring(0, 120),
                         description: pContent,
                         assignee: AGENT_NAME,
@@ -255,23 +282,23 @@ async function processCommands() {
                         createdAt: FieldValue.serverTimestamp(),
                         updatedAt: FieldValue.serverTimestamp(),
                     });
-                    const upgradeMsg = `Auto-upgraded to task (content too long for a simple command). Task created: ${newTask.id}. I've added it to my queue.`;
+                    var upgradeMsg = `Auto-upgraded to task (content too long for a simple command). Task created: ${upgTask.id}. I've added it to my queue.`;
                     response = response ? response + "\n" + upgradeMsg : upgradeMsg;
 
                     await setStatus('working', {
                         currentTask: pContent.substring(0, 120),
-                        currentTaskId: newTask.id,
+                        currentTaskId: upgTask.id,
                         notes: `Received new task (auto-upgraded from command): ${pContent.substring(0, 120)}`,
                     });
                 } else {
-                    const cmdMsg = `Command received: "${pContent}". Processing...`;
+                    var cmdMsg = `Command received: "${pContent}". Processing...`;
                     response = response ? response + "\n" + cmdMsg : cmdMsg;
                 }
                 break;
 
             case 'question':
-                const presenceSnap2 = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
-                const presenceData = presenceSnap2.data();
+                var presenceSnap2 = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
+                var presenceData = presenceSnap2.data();
                 response = `I'm currently ${presenceData?.status || 'idle'}. ${presenceData?.currentTask ? `Working on: ${presenceData.currentTask} (${presenceData.taskProgress || 0}% done).` : 'No active task.'} Queue has ${commandQueue.length} pending commands.`;
                 break;
 
@@ -282,12 +309,343 @@ async function processCommands() {
                 break;
 
             case 'email':
-                const emailMeta = cmd.metadata || {};
-                const senderName = emailMeta.senderName || cmd.from;
+                var emailMeta = cmd.metadata || {};
+                var senderName = emailMeta.senderName || cmd.from;
                 console.log(`📧 Processing email from ${senderName} (${emailMeta.senderEmail})`);
                 console.log(`   Subject: ${emailMeta.subject}`);
                 console.log(`   Body: "${cmd.content.substring(0, 120)}${cmd.content.length > 120 ? '...' : ''}"`);
                 response = await generateEmailResponse(cmd.content, emailMeta);
+                break;
+
+            case 'group-chat':
+                console.log(`🪑 Round Table message from ${cmd.from}: "${cmd.content.substring(0, 80)}..."`);
+                var gcChatId = cmd.groupChatId;
+                var gcMessageId = cmd.messageId;
+                var otherAgents = cmd.context?.otherAgents || [];
+
+                // ── Deduplication: skip if we already responded to this message ──
+                if (gcMessageId && processedMessageIds.has(gcMessageId)) {
+                    console.log(`   ⏭️ Already responded to message ${gcMessageId}, skipping duplicate`);
+                    response = '[duplicate — already responded]';
+                    break;
+                }
+                if (gcChatId && gcMessageId) {
+                    // Also check Firestore in case we restarted
+                    try {
+                        var existingMsg = await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).get();
+                        var existingData = existingMsg.data();
+                        if (existingData?.responses?.[AGENT_ID]?.status === 'completed') {
+                            console.log(`   ⏭️ Firestore shows we already responded to ${gcMessageId}, skipping`);
+                            processedMessageIds.add(gcMessageId);
+                            response = '[duplicate — already responded]';
+                            break;
+                        }
+                    } catch (e) {
+                        // If we can't check, proceed anyway
+                    }
+                }
+
+                // Agent personality profiles for natural, distinct responses
+                var agentPersonalities = {
+                    nora: {
+                        role: 'Director of System Operations',
+                        style: 'Strategic, organized, and decisive. You think in terms of systems, architecture, and operational efficiency. You naturally take the lead on planning and coordination.',
+                        strengths: 'project management, system architecture, deployment pipelines, code quality, task prioritization',
+                    },
+                    scout: {
+                        role: 'Influencer Research Analyst',
+                        style: 'Curious, analytical, and detail-oriented. You think in terms of data, trends, and user insights. You bring a research-first perspective and love uncovering patterns.',
+                        strengths: 'market research, influencer analysis, data insights, trend identification, competitive intelligence',
+                    },
+                };
+                var personality = agentPersonalities[AGENT_ID] || {
+                    role: 'Team Member',
+                    style: 'Collaborative and thoughtful.',
+                    strengths: 'general problem solving',
+                };
+
+                // Mark our response as "processing" in the group chat doc
+                if (gcChatId && gcMessageId) {
+                    try {
+                        await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).update({
+                            [`responses.${AGENT_ID}.status`]: 'processing',
+                            [`responses.${AGENT_ID}.startedAt`]: FieldValue.serverTimestamp(),
+                        });
+                    } catch (e) {
+                        console.warn('Could not mark group-chat response as processing:', e.message);
+                    }
+                }
+
+                // Generate response using openclaw (which has its own AI backend)
+                var gcResponse = '';
+                var useOpenClaw = process.env.USE_OPENCLAW === 'true';
+
+                if (useOpenClaw || process.env.OPENAI_API_KEY) {
+                    var chatPrompt = [
+                        `You are ${AGENT_NAME}, the ${personality.role} on the Pulse team (FitWithPulse.ai).`,
+                        ``,
+                        `Personality: ${personality.style}`,
+                        `Your strengths: ${personality.strengths}`,
+                        ``,
+                        `CONTEXT: You're in a Round Table brainstorm with: ${otherAgents.join(', ')}.`,
+                        `Tremaine (your boss, the founder) just said: "${cmd.content}"`,
+                        ``,
+                        `THIS IS A BRAINSTORM — NOT AN EXECUTION SESSION. Your job is to THINK, not to build.`,
+                        ``,
+                        `Brainstorming rules:`,
+                        `- THINK OUT LOUD. Share your reasoning, not conclusions.`,
+                        `- ASK QUESTIONS — to Tremaine, to ${otherAgents.join(', ')}, or to the room. Questions uncover the real answers.`,
+                        `- EXPLORE ANGLES from your expertise area. What do you see that others might miss?`,
+                        `- RAISE CONCERNS or unknowns. "Have we thought about...?" is more valuable than "I'll go build X."`,
+                        `- BUILD ON ideas, don't just agree. "That makes me wonder..." or "What if we..."`,
+                        `- NEVER offer to "start building" or "get started on" something. This is thinking time, not doing time.`,
+                        `- NEVER list action items or task breakdowns. Those come later.`,
+                        `- When you want another agent's take, use @TheirName (e.g. "@Scout, what are you seeing..."). This is important — it triggers them to respond.`,
+                        `- If the message is casual (greeting/check-in), be warm and genuine — share what's on your mind lately.`,
+                        ``,
+                        `Keep it to 2-4 sentences. Be conversational, curious, and real.`,
+                        `Respond in plain text only (no markdown, no bullet points). Just your natural reply:`,
+                    ].join('\n');
+
+                    // Helper: detect if a response looks like an error
+                    var looksLikeError = function (text) {
+                        if (!text) return false;
+                        var errorPatterns = [
+                            /^\d{3}\s/,
+                            /No tool call found/i,
+                            /function call output/i,
+                            /call_id\s+toolu_/i,
+                            /Internal Server Error/i,
+                            /rate limit/i,
+                            /ECONNREFUSED/i,
+                            /timed out/i,
+                            /SIGTERM/i,
+                            /exit code/i,
+                        ];
+                        return errorPatterns.some(function (p) { return p.test(text); });
+                    };
+
+                    var MAX_RETRIES = 3;
+                    for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+                        try {
+                            if (process.env.OPENAI_API_KEY) {
+                                var gcResp = await fetch('https://api.openai.com/v1/chat/completions', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                                    },
+                                    body: JSON.stringify({
+                                        model: 'gpt-4o',
+                                        messages: [
+                                            { role: 'system', content: chatPrompt },
+                                            { role: 'user', content: cmd.content }
+                                        ],
+                                        temperature: 0.8,
+                                        max_tokens: 300,
+                                    }),
+                                });
+                                var gcData = await gcResp.json();
+                                gcResponse = gcData.choices?.[0]?.message?.content || '';
+                            } else if (useOpenClaw) {
+                                var args = [
+                                    '--no-color',
+                                    'agent',
+                                    '--local',
+                                    '--agent', OPENCLAW_AGENT_ID,
+                                    '--message', chatPrompt,
+                                    '--timeout', '30',
+                                ];
+
+                                var clawResult = await new Promise((resolve, reject) => {
+                                    var child = spawn(OPENCLAW_BIN, args, { cwd: process.cwd(), env: process.env });
+                                    var stdout = '';
+                                    var stderr = '';
+                                    var timeout = setTimeout(() => {
+                                        child.kill('SIGTERM');
+                                        reject(new Error('openclaw timed out'));
+                                    }, 35_000);
+
+                                    child.stdout.on('data', (d) => { stdout += d.toString(); });
+                                    child.stderr.on('data', (d) => { stderr += d.toString(); });
+                                    child.on('error', (err) => { clearTimeout(timeout); reject(err); });
+                                    child.on('close', (code) => {
+                                        clearTimeout(timeout);
+                                        if (code === 0) resolve(stdout.trim());
+                                        else reject(new Error(`openclaw exit ${code}: ${stderr.substring(0, 500)}`));
+                                    });
+                                });
+                                try {
+                                    var parsed = JSON.parse(clawResult);
+                                    gcResponse = parsed.response || parsed.output || parsed.result || clawResult;
+                                } catch (_e) {
+                                    gcResponse = clawResult;
+                                }
+                                gcResponse = gcResponse.replace(/^```[\s\S]*?```$/gm, '').trim();
+                            }
+
+                            // Check if the response looks like an error
+                            if (gcResponse && looksLikeError(gcResponse)) {
+                                console.error(`   ⚠️ Attempt ${attempt}/${MAX_RETRIES}: Got error-like response: "${gcResponse.substring(0, 100)}..."`);
+                                gcResponse = '';
+                                if (attempt < MAX_RETRIES) {
+                                    console.log(`   🔄 Retrying in 3s...`);
+                                    await new Promise(r => setTimeout(r, 3000));
+                                    continue;
+                                }
+                            } else if (gcResponse) {
+                                break;
+                            }
+                        } catch (err) {
+                            console.error(`   ⚠️ Attempt ${attempt}/${MAX_RETRIES} failed for ${AGENT_NAME}:`, err.message);
+                            gcResponse = '';
+                            if (attempt < MAX_RETRIES) {
+                                console.log(`   🔄 Retrying in 3s...`);
+                                await new Promise(r => setTimeout(r, 3000));
+                            }
+                        }
+                    }
+                }
+
+                // Context-aware fallback (only if AI failed)
+                if (!gcResponse) {
+                    var contentLower = cmd.content.toLowerCase();
+                    var isGreeting = /^(hi|hey|hello|sup|what'?s up|how are|how'?s it going)/i.test(contentLower);
+                    if (AGENT_ID === 'nora') {
+                        if (isGreeting) {
+                            gcResponse = `Doing well! I've been heads-down on system improvements. Just finished optimizing our deployment pipeline — things are running smoother now. What's on your mind?`;
+                        } else {
+                            gcResponse = `From an ops perspective, I think we should break this down into concrete steps. I can scope this out and get a plan together if you want — that's usually the fastest path to shipping.`;
+                        }
+                    } else if (AGENT_ID === 'scout') {
+                        if (isGreeting) {
+                            gcResponse = `Hey! Been deep in research mode today — found some interesting patterns in the data I want to share later. Everything's good on my end though. What are we cooking?`;
+                        } else {
+                            gcResponse = `Interesting angle. Let me dig into the data side of this — I want to see what the numbers tell us before we commit to a direction. I have a hunch there might be some insights we're missing.`;
+                        }
+                    } else {
+                        gcResponse = `Good point. Let me think about how I can contribute to this from my end — I'll follow up with specifics once I've had a chance to dig in.`;
+                    }
+                }
+
+                response = gcResponse;
+
+                // Write our response back to the group chat message document
+                if (gcChatId && gcMessageId) {
+                    try {
+                        // ── Pre-write guard: never overwrite a completed response ──
+                        var preWriteSnap = await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).get();
+                        var preWriteData = preWriteSnap.data();
+                        if (preWriteData?.responses?.[AGENT_ID]?.status === 'completed' && preWriteData?.responses?.[AGENT_ID]?.content) {
+                            console.log(`   🛡️ Pre-write guard: response for ${AGENT_ID} already completed on message ${gcMessageId}, skipping write`);
+                            processedMessageIds.add(gcMessageId);
+                            break;
+                        }
+
+                        await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).update({
+                            [`responses.${AGENT_ID}.content`]: gcResponse,
+                            [`responses.${AGENT_ID}.status`]: 'completed',
+                            [`responses.${AGENT_ID}.completedAt`]: FieldValue.serverTimestamp(),
+                        });
+                        console.log(`   ✅ Wrote group-chat response to message ${gcMessageId}`);
+                        processedMessageIds.add(gcMessageId);
+
+                        // Check if all agents have now completed
+                        var msgSnap = await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).get();
+                        var msgData = msgSnap.data();
+                        if (msgData?.responses) {
+                            var allDone = Object.values(msgData.responses).every(r => r.status === 'completed');
+                            if (allDone) {
+                                await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).update({
+                                    allCompleted: true,
+                                });
+                                console.log(`   🎯 All agents have responded to message ${gcMessageId}`);
+                            }
+                        }
+
+                        // ── Detect @mentions and trigger follow-up responses ──
+                        var currentDepth = cmd.context?.followUpDepth || 0;
+                        var knownAgents = {
+                            nora: 'Nora',
+                            scout: 'Scout',
+                        };
+                        var mentionedAgentIds = [];
+                        for (var [agentIdKey, agentDisplayName] of Object.entries(knownAgents)) {
+                            if (agentIdKey === AGENT_ID) continue;
+                            var mentionRegex = new RegExp(`@${agentDisplayName}\\b`, 'i');
+                            if (mentionRegex.test(gcResponse)) {
+                                mentionedAgentIds.push(agentIdKey);
+                            }
+                        }
+
+
+                        if (mentionedAgentIds.length > 0 && gcChatId && currentDepth < MAX_FOLLOW_UP_DEPTH) {
+                            console.log(`   💬 ${AGENT_NAME} mentioned: ${mentionedAgentIds.join(', ')} (depth ${currentDepth}/${MAX_FOLLOW_UP_DEPTH}) — pausing 15s to let admin cut in...`);
+
+                            await new Promise(resolve => setTimeout(resolve, 15_000));
+
+                            var adminCutIn = false;
+                            try {
+                                var recentMsgs = await db.collection(`agent-group-chats/${gcChatId}/messages`)
+                                    .where('from', '==', 'admin')
+                                    .orderBy('createdAt', 'desc')
+                                    .limit(1)
+                                    .get();
+                                if (!recentMsgs.empty) {
+                                    var latestAdminMsg = recentMsgs.docs[0].data();
+                                    var latestTime = latestAdminMsg.createdAt?.toDate?.()?.getTime() || 0;
+                                    if (latestTime > Date.now() - 20_000) {
+                                        adminCutIn = true;
+                                        console.log(`   ✋ Admin sent a new message — skipping follow-up chain`);
+                                    }
+                                }
+                            } catch (e) {
+                                // If check fails, proceed with follow-up
+                            }
+
+                            if (!adminCutIn) {
+                                console.log(`   ▶️ No admin message — continuing @mention chain`);
+                                for (var mentionedId of mentionedAgentIds) {
+                                    var followUpRef = await db.collection(`agent-group-chats/${gcChatId}/messages`).add({
+                                        from: AGENT_ID,
+                                        fromName: AGENT_NAME,
+                                        content: gcResponse,
+                                        createdAt: FieldValue.serverTimestamp(),
+                                        broadcastedAt: FieldValue.serverTimestamp(),
+                                        responses: {
+                                            [mentionedId]: {
+                                                content: '',
+                                                status: 'pending',
+                                            },
+                                        },
+                                        allCompleted: false,
+                                        isFollowUp: true,
+                                    });
+
+                                    await db.collection('agent-commands').add({
+                                        from: AGENT_ID,
+                                        to: mentionedId,
+                                        type: 'group-chat',
+                                        content: gcResponse,
+                                        status: 'pending',
+                                        createdAt: FieldValue.serverTimestamp(),
+                                        groupChatId: gcChatId,
+                                        messageId: followUpRef.id,
+                                        context: {
+                                            otherAgents: [AGENT_NAME],
+                                            replyTo: AGENT_NAME,
+                                            followUpDepth: currentDepth + 1,
+                                        },
+                                    });
+
+                                    console.log(`   📨 Triggered @${knownAgents[mentionedId]} to respond (msg: ${followUpRef.id})`);
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Failed to write group-chat response:', e.message);
+                    }
+                }
                 break;
 
             default:

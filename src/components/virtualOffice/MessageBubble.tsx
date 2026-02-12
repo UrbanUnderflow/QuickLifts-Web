@@ -1,6 +1,6 @@
 import React from 'react';
-import { CheckCircle2, Loader2, XCircle, Clock } from 'lucide-react';
-import type { GroupChatMessage, AgentResponse } from '../../api/firebase/groupChat/types';
+import { CheckCircle2, XCircle } from 'lucide-react';
+import type { GroupChatMessage } from '../../api/firebase/groupChat/types';
 
 interface MessageBubbleProps {
   message: GroupChatMessage;
@@ -15,235 +15,201 @@ const formatTime = (date: Date | any): string => {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
 
-const ResponseStatus: React.FC<{ status: AgentResponse['status'] }> = ({ status }) => {
-  switch (status) {
-    case 'completed':
-      return <CheckCircle2 className="w-3 h-3 text-green-400" />;
-    case 'processing':
-      return <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />;
-    case 'failed':
-      return <XCircle className="w-3 h-3 text-red-400" />;
-    default:
-      return <Clock className="w-3 h-3 text-zinc-600" />;
-  }
-};
-
+/**
+ * Flat chat-stream message bubble for the Round Table.
+ * Renders admin messages as outgoing, agent follow-ups as incoming,
+ * and only completed/failed agent responses as standalone bubbles.
+ */
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   agentNames,
   agentEmojis,
   agentColors,
 }) => {
-  const responseCount = Object.keys(message.responses).length;
-  const completedCount = Object.values(message.responses).filter(
-    r => r.status === 'completed'
-  ).length;
+  // Only show completed or failed responses as bubbles
+  const visibleResponses = Object.entries(message.responses).filter(
+    ([, response]) => response.status === 'completed' || response.status === 'failed'
+  );
+
+  // Determine if this message is from an agent (follow-up from @mention)
+  const isFromAgent = message.from !== 'admin';
+  const senderAgentId = message.from;
+  const senderColor = isFromAgent ? (agentColors[senderAgentId] || '#3b82f6') : '';
+  const senderName = isFromAgent
+    ? (agentNames[senderAgentId] || (message as any).fromName || senderAgentId)
+    : '';
+  const senderEmoji = isFromAgent ? (agentEmojis[senderAgentId] || '🤖') : '';
 
   return (
-    <div className="message-bubble-container">
-      {/* Admin message */}
-      <div className="admin-message">
-        <div className="message-header">
-          <span className="message-from">You</span>
-          <span className="message-time">{formatTime(message.createdAt)}</span>
-        </div>
-        <div className="message-content">{message.content}</div>
-        <div className="message-footer">
-          <span className="response-count">
-            {completedCount}/{responseCount} responses
+    <>
+      {/* ── Sender message ── */}
+      {isFromAgent ? (
+        /* Agent-initiated follow-up (from @mention) — 
+           Show a subtle context indicator so users understand the conversation flow */
+        <div className="rt-followup-indicator">
+          <span className="rt-followup-line" style={{ borderColor: `${senderColor}30` }} />
+          <span className="rt-followup-label" style={{ color: senderColor }}>
+            {senderEmoji} {senderName} replied
           </span>
+          <span className="rt-followup-line" style={{ borderColor: `${senderColor}30` }} />
         </div>
-      </div>
+      ) : (
+        /* Admin (You) message — outgoing, right-aligned */
+        <div className="rt-bubble rt-bubble-out">
+          <div className="rt-bubble-content rt-out">
+            <p className="rt-bubble-text">{message.content}</p>
+            <span className="rt-bubble-time">{formatTime(message.createdAt)}</span>
+          </div>
+        </div>
+      )}
 
-      {/* Agent responses */}
-      <div className="agent-responses">
-        {Object.entries(message.responses).map(([agentId, response]) => {
-          const agentColor = agentColors[agentId] || '#3b82f6';
-          const agentName = agentNames[agentId] || agentId;
-          const emoji = agentEmojis[agentId] || '🤖';
+      {/* ── Agent responses ── only completed/failed, as flat chat bubbles */}
+      {visibleResponses.map(([agentId, response]) => {
+        const color = agentColors[agentId] || '#3b82f6';
+        const name = agentNames[agentId] || agentId;
+        const emoji = agentEmojis[agentId] || '🤖';
 
-          return (
-            <div
-              key={agentId}
-              className="agent-response"
-              style={{ borderLeftColor: agentColor }}
-            >
-              <div className="response-header">
-                <div className="agent-info">
-                  <span className="agent-emoji">{emoji}</span>
-                  <span className="agent-name" style={{ color: agentColor }}>
-                    {agentName}
-                  </span>
-                </div>
-                <ResponseStatus status={response.status} />
+        return (
+          <div key={agentId} className="rt-bubble rt-bubble-in">
+            <div className="rt-avatar" style={{ background: `${color}18`, borderColor: `${color}40` }}>
+              <span>{emoji}</span>
+            </div>
+            <div className="rt-bubble-content rt-in">
+              <div className="rt-bubble-sender">
+                <span style={{ color }}>{name}</span>
+                {response.status === 'completed' && <CheckCircle2 className="w-2.5 h-2.5 text-green-500 opacity-50" />}
+                {response.status === 'failed' && <XCircle className="w-2.5 h-2.5 text-red-400" />}
               </div>
-              
-              {response.status === 'processing' && (
-                <div className="response-content typing">
-                  <div className="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                </div>
-              )}
-
               {response.status === 'completed' && response.content && (
-                <div className="response-content">{response.content}</div>
+                <p className="rt-bubble-text">{response.content}</p>
               )}
-
               {response.status === 'failed' && (
-                <div className="response-content error">
+                <p className="rt-bubble-text rt-error">
                   {response.error || 'Failed to respond'}
-                </div>
+                </p>
               )}
-
-              {response.status === 'pending' && (
-                <div className="response-content pending">Waiting...</div>
+              {response.completedAt && (
+                <span className="rt-bubble-time">{formatTime(response.completedAt)}</span>
               )}
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
 
       <style jsx>{`
-        .message-bubble-container {
-          margin-bottom: 24px;
-        }
-
-        .admin-message {
-          background: rgba(59, 130, 246, 0.08);
-          border: 1px solid rgba(59, 130, 246, 0.2);
-          border-radius: 12px;
-          padding: 12px 16px;
-          margin-bottom: 8px;
-        }
-
-        .message-header {
+        .rt-bubble {
           display: flex;
-          align-items: center;
-          justify-content: space-between;
           margin-bottom: 6px;
+          max-width: 85%;
+          animation: rtBubbleIn 0.25s ease-out;
         }
 
-        .message-from {
-          font-size: 12px;
-          font-weight: 600;
-          color: #3b82f6;
+        @keyframes rtBubbleIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
         }
 
-        .message-time {
-          font-size: 10px;
-          color: #71717a;
-        }
-
-        .message-content {
-          font-size: 13px;
-          color: #e4e4e7;
+        .rt-bubble-content {
+          border-radius: 16px;
+          padding: 10px 14px;
           line-height: 1.5;
+        }
+
+        .rt-bubble-text {
+          font-size: 13px;
+          margin: 0;
           white-space: pre-wrap;
           word-wrap: break-word;
         }
 
-        .message-footer {
-          margin-top: 6px;
-          padding-top: 6px;
-          border-top: 1px solid rgba(63, 63, 70, 0.2);
+        .rt-bubble-time {
+          display: block;
+          font-size: 9px;
+          color: #52525b;
+          margin-top: 4px;
+          text-align: right;
         }
 
-        .response-count {
-          font-size: 10px;
-          color: #71717a;
+        .rt-bubble-out {
+          justify-content: flex-end;
+          margin-left: auto;
         }
 
-        .agent-responses {
-          padding-left: 24px;
-          display: flex;
-          flex-direction: column;
+        .rt-out {
+          background: linear-gradient(135deg, rgba(99,102,241,0.25), rgba(139,92,246,0.18));
+          border: 1px solid rgba(139,92,246,0.15);
+          border-bottom-right-radius: 4px;
+          color: #e4e4e7;
+        }
+
+        .rt-bubble-in {
+          justify-content: flex-start;
           gap: 8px;
+          align-items: flex-end;
         }
 
-        .agent-response {
-          background: rgba(24, 24, 27, 0.6);
-          border-left: 3px solid;
-          border-radius: 0 8px 8px 0;
-          padding: 10px 12px;
-        }
-
-        .response-header {
+        .rt-avatar {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          border: 1.5px solid;
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          margin-bottom: 6px;
+          justify-content: center;
+          font-size: 14px;
+          flex-shrink: 0;
+          margin-bottom: 2px;
         }
 
-        .agent-info {
+        .rt-in {
+          background: rgba(24,24,27,0.7);
+          border: 1px solid rgba(63,63,70,0.2);
+          border-bottom-left-radius: 4px;
+          color: #d4d4d8;
+        }
+
+        .rt-followup {
+          border-left: 2px solid rgba(139,92,246,0.3);
+        }
+
+        .rt-followup-tag {
+          font-size: 9px;
+          color: #71717a;
+          font-style: italic;
+        }
+
+        .rt-bubble-sender {
           display: flex;
           align-items: center;
           gap: 6px;
-        }
-
-        .agent-emoji {
-          font-size: 14px;
-        }
-
-        .agent-name {
+          margin-bottom: 4px;
           font-size: 11px;
           font-weight: 600;
         }
 
-        .response-content {
-          font-size: 12px;
-          color: #d4d4d8;
-          line-height: 1.5;
+        .rt-followup-indicator {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin: 8px 0 4px;
+          padding: 0 8px;
         }
 
-        .response-content.typing {
-          padding: 4px 0;
+        .rt-followup-line {
+          flex: 1;
+          height: 0;
+          border-bottom: 1px dashed;
         }
 
-        .response-content.error {
-          color: #fca5a5;
-          font-style: italic;
+        .rt-followup-label {
+          font-size: 10px;
+          font-weight: 500;
+          white-space: nowrap;
+          opacity: 0.7;
         }
 
-        .response-content.pending {
-          color: #71717a;
-          font-style: italic;
-        }
-
-        .typing-indicator {
-          display: inline-flex;
-          gap: 4px;
-        }
-
-        .typing-indicator span {
-          width: 6px;
-          height: 6px;
-          background: #71717a;
-          border-radius: 50%;
-          animation: typingBounce 1.4s infinite;
-        }
-
-        .typing-indicator span:nth-child(2) {
-          animation-delay: 0.2s;
-        }
-
-        .typing-indicator span:nth-child(3) {
-          animation-delay: 0.4s;
-        }
-
-        @keyframes typingBounce {
-          0%, 60%, 100% {
-            transform: translateY(0);
-            opacity: 0.4;
-          }
-          30% {
-            transform: translateY(-6px);
-            opacity: 1;
-          }
-        }
+        .rt-error { color: #fca5a5; font-style: italic; }
       `}</style>
-    </div>
+    </>
   );
 };
