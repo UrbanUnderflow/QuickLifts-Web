@@ -74,7 +74,7 @@ async function send() {
         });
 
         console.log(`✅ Message sent! ID: ${docRef.id}`);
-        console.log(`   Nora's agent runner should pick this up in real-time.`);
+        console.log(`   ${agentId}'s agent runner should pick this up in real-time.`);
         process.exit(0);
     } catch (err) {
         console.error(`❌ Error: ${err.message}`);
