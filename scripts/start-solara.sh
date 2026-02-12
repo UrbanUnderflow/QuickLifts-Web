@@ -12,7 +12,7 @@ if [ -f ".env.local" ]; then
 fi
 
 export USE_OPENCLAW=true
-export AGENT_ID=branddirector
+export AGENT_ID=solara
 export AGENT_NAME="Solara"
 export AGENT_EMOJI="❤️‍🔥"
 
