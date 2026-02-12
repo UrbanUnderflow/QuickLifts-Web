@@ -25,7 +25,7 @@
 
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-const { execSync, spawn } = require('child_process');
+const { execSync, spawn, spawnSync } = require('child_process');
 const path = require('path');
 
 /* ─── Configuration ───────────────────────────────────── */
@@ -38,6 +38,8 @@ const PRESENCE_COLLECTION = 'agent-presence';
 const KANBAN_COLLECTION = 'kanbanTasks';
 const COMMANDS_COLLECTION = 'agent-commands';
 const HISTORY_SUBCOLLECTION = 'task-history';
+const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
+const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || (AGENT_ID === 'nora' ? 'main' : AGENT_ID);
 
 /* ─── Firebase Admin Init ─────────────────────────────── */
 
@@ -304,25 +306,31 @@ async function fetchNextTask() {
         .where('assignee', '==', AGENT_NAME)
         .where('status', '==', 'in-progress')
         .orderBy('createdAt', 'asc')
-        .limit(1)
+        .limit(20)
         .get();
 
     if (!inProgressSnap.empty) {
-        const doc = inProgressSnap.docs[0];
-        return { id: doc.id, ...doc.data() };
+        const doc = inProgressSnap.docs.find((d) => !d.data().runnerBlocked);
+        if (doc) {
+            return { id: doc.id, ...doc.data() };
+        }
     }
 
     const todoSnap = await db.collection(KANBAN_COLLECTION)
         .where('assignee', '==', AGENT_NAME)
         .where('status', '==', 'todo')
         .orderBy('createdAt', 'asc')
-        .limit(1)
+        .limit(20)
         .get();
 
     if (!todoSnap.empty) {
-        const doc = todoSnap.docs[0];
+        const doc = todoSnap.docs.find((d) => !d.data().runnerBlocked);
+        if (!doc) return null;
         await db.collection(KANBAN_COLLECTION).doc(doc.id).update({
             status: 'in-progress',
+            runnerBlocked: FieldValue.delete(),
+            runnerFailureAt: FieldValue.delete(),
+            runnerFailureMessage: FieldValue.delete(),
             updatedAt: FieldValue.serverTimestamp(),
         });
         return { id: doc.id, ...doc.data() };
@@ -334,6 +342,15 @@ async function fetchNextTask() {
 async function markTaskDone(taskId) {
     await db.collection(KANBAN_COLLECTION).doc(taskId).update({
         status: 'done',
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+}
+
+async function markTaskFailed(taskId, failureMessage) {
+    await db.collection(KANBAN_COLLECTION).doc(taskId).update({
+        runnerBlocked: true,
+        runnerFailureAt: FieldValue.serverTimestamp(),
+        runnerFailureMessage: (failureMessage || 'Unknown runner failure').slice(0, 2000),
         updatedAt: FieldValue.serverTimestamp(),
     });
 }
@@ -656,25 +673,49 @@ async function executeStep(step, task, stepIndex, allSteps) {
                 `- When done, list the files you created or modified.`,
             ].filter(Boolean).join('\n');
 
-            // Write prompt to a temp file to avoid shell escaping issues
-            const tmpFile = path.join(projectDir, '.openclaw-prompt.tmp');
-            require('fs').writeFileSync(tmpFile, prompt);
+            const args = [
+                '--no-color',
+                'agent',
+                '--local',
+                '--json',
+                '--agent',
+                OPENCLAW_AGENT_ID,
+                '--message',
+                prompt,
+                '--timeout',
+                '600',
+            ];
 
-            try {
-                // Use OpenClaw's agent command with --local for embedded execution
-                const result = execSync(`openclaw agent --local --message "$(cat "${tmpFile}")"`, {
-                    cwd: projectDir,
-                    timeout: 600_000, // 10 min per step
-                    encoding: 'utf-8',
-                    maxBuffer: 10 * 1024 * 1024, // 10MB
-                    shell: '/bin/bash', // Ensure bash for command substitution
-                });
+            const result = spawnSync(OPENCLAW_BIN, args, {
+                cwd: projectDir,
+                timeout: 600_000, // 10 min per step
+                encoding: 'utf-8',
+                maxBuffer: 10 * 1024 * 1024, // 10MB
+            });
 
-                step.output = result.trim().substring(0, 2000);
-            } finally {
-                // Clean up temp file
-                try { require('fs').unlinkSync(tmpFile); } catch { }
+            if (result.error) {
+                throw new Error(`Failed to launch ${OPENCLAW_BIN}: ${result.error.message}`);
             }
+            if (result.status !== 0) {
+                const errOut = (result.stderr || result.stdout || '').trim();
+                throw new Error(`OpenClaw failed (exit ${result.status}): ${errOut}`);
+            }
+
+            const rawOut = (result.stdout || '').trim();
+            let outputText = rawOut;
+            if (rawOut) {
+                try {
+                    const parsed = JSON.parse(rawOut);
+                    const payloadText = (parsed?.payloads || [])
+                        .map((p) => p?.text)
+                        .filter(Boolean)
+                        .join('\n\n');
+                    if (payloadText) outputText = payloadText;
+                } catch {
+                    // Keep raw output if JSON parsing fails.
+                }
+            }
+            step.output = outputText.substring(0, 2000);
 
             // Capture what files changed
             const changesAfter = getGitChanges();
@@ -898,10 +939,12 @@ async function run() {
                 // Proactively report failure to the chat
                 const failedStep = steps.find(s => s.status === 'failed');
                 const failedIndex = steps.indexOf(failedStep);
+                await markTaskFailed(task.id, failedStep?.output || 'Unknown error');
                 await sendProactiveMessage(
                     `❌ Task failed: "${task.name}"\n\n` +
                     `Failed at step ${failedIndex + 1}/${steps.length}: ${failedStep?.description}\n` +
                     `Error: ${failedStep?.output || 'Unknown error'}\n\n` +
+                    `This task has been blocked from auto-retry to prevent loops.\n` +
                     `Would you like me to retry this task or skip it?`,
                     'failed'
                 );
