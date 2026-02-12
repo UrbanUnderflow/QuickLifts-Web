@@ -86,11 +86,11 @@ export class MeetingMinutesService {
             participants,
             messageCount,
             executiveSummary: data.executiveSummary || '',
-            topicsDiscussed: data.topicsDiscussed || [],
-            keyInsights: data.keyInsights || [],
-            decisions: data.decisions || [],
-            openQuestions: data.openQuestions || [],
-            actionItems: data.actionItems || [],
+            valueInsights: data.valueInsights || [],
+            strategicDecisions: data.strategicDecisions || [],
+            nextActions: data.nextActions || [],
+            highlights: data.highlights || [],
+            risksOrOpenQuestions: data.risksOrOpenQuestions || [],
         };
     }
 
