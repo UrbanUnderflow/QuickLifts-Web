@@ -206,6 +206,13 @@ async function processCommands() {
                 const taskMsg = `Task created: ${newTask.id}. I've added it to my queue.`;
                 response = response ? response + "\n" + taskMsg : taskMsg;
                 console.log(`📋 Created task from command: ${pContent} → ${newTask.id}`);
+
+                // Immediately update status to 'working' so Virtual Office reflects the change
+                await setStatus('working', {
+                    currentTask: pContent,
+                    currentTaskId: newTask.id,
+                    notes: `Received new task: ${pContent}`,
+                });
                 break;
 
             case 'command':
