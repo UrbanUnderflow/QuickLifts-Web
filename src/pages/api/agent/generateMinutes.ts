@@ -22,38 +22,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             p.charAt(0).toUpperCase() + p.slice(1)
         );
 
-        const systemPrompt = `You are a meeting minutes summarizer for a startup team called Pulse (FitWithPulse.ai).
-You will receive a transcript of a Round Table brainstorm session between the founder (Tremaine) and AI team members.
+        const systemPrompt = `You are a meeting minutes synthesizer for Pulse (FitWithPulse.ai), tasked with turning brainstorm transcripts into thoughtful analysis.
 
-Generate structured meeting minutes in the following JSON format:
+Return JSON with this structure:
 {
-  "executiveSummary": "2-3 sentence overview of the session",
-  "topicsDiscussed": [
-    { "title": "Topic Name", "summary": "1-2 sentence summary of the discussion around this topic" }
+  "executiveSummary": "2-3 sentence overview describing the most important outcome of the meeting",
+  "valueInsights": [
+    { "title": "Short headline for an insight", "takeaway": "1-2 sentence synthesis capturing the meaning", "impact": "Why it matters / expected impact" }
   ],
-  "keyInsights": [
-    "A standout idea, observation, or 'aha' moment from the discussion"
+  "strategicDecisions": [
+    "Concise statements describing positions or decisions reached"
   ],
-  "decisions": [
-    "A position taken or consensus reached during the discussion"
+  "nextActions": [
+    { "task": "Concrete next step", "owner": "Responsible person", "due": "Optional due timing" }
   ],
-  "openQuestions": [
-    "An unresolved question that needs follow-up"
+  "highlights": [
+    { "speaker": "Name", "summary": "Brief notable moment or quote" }
   ],
-  "actionItems": [
-    { "task": "A concrete next step", "owner": "Person responsible" }
+  "risksOrOpenQuestions": [
+    "Potential risk, blocker, or follow-up question that needs attention"
   ]
 }
 
-Rules:
-- Be concise but capture the substance of the brainstorm
-- Identify 2-5 key topics discussed
-- Extract 3-5 key insights (the best ideas and observations)
-- Identify any decisions or positions the team took
-- List open questions that remain unresolved
-- Suggest 2-4 action items based on the discussion, assign owners where obvious
-- Use the actual names of participants (${participantNames.join(', ')})
-- Return ONLY valid JSON, no markdown or extra text`;
+Guidelines:
+- Think critically; DO NOT regurgitate the transcript.
+- Focus on the most valuable ideas, insights, and blockers that move the business forward.
+- Use participants' real names (${participantNames.join(', ')}) in summaries/owner fields when clear.
+- Limit highlights to 2-4 moments that illustrate tone or key takeaways.
+- Return ONLY valid JSON with the schema above (no markdown fences).`;
 
         const userPrompt = `Here is the Round Table transcript with ${messageCount} messages between ${participantNames.join(', ')}:\n\n${transcript}`;
 
@@ -148,11 +144,21 @@ Rules:
 
         return res.status(200).json({
             executiveSummary: `Round table discussion with ${participantNames.join(' and ')} covering ${messageCount} messages. The team explored several topics in a brainstorm format.`,
-            topicsDiscussed: [{ title: 'General Discussion', summary: 'The team discussed various topics in a brainstorm format.' }],
-            keyInsights: insights.slice(0, 5).length > 0 ? insights.slice(0, 5) : ['Discussion was actively collaborative with multiple perspectives shared.'],
-            decisions: ['Further discussion needed on key topics.'],
-            openQuestions: questions.slice(0, 5).length > 0 ? questions.slice(0, 5) : ['No specific questions captured.'],
-            actionItems: [{ task: 'Review meeting minutes and identify next steps', owner: 'Tremaine' }],
+            valueInsights: (insights.slice(0, 3).map((text, idx) => ({
+                title: `Insight ${idx + 1}`,
+                takeaway: text,
+                impact: 'Needs follow-up to quantify impact.',
+            }))) || [],
+            strategicDecisions: ['Further synthesis required—no concrete decision captured in fallback.'],
+            nextActions: [{ task: 'Review meeting minutes and identify next steps', owner: 'Tremaine' }],
+            highlights: lines.slice(0, 3).map(line => {
+                const [speaker, ...rest] = line.split(':');
+                return {
+                    speaker: speaker?.trim() || 'Participant',
+                    summary: rest.join(':').trim(),
+                };
+            }),
+            risksOrOpenQuestions: questions.slice(0, 5).length > 0 ? questions.slice(0, 5) : ['No specific blockers captured.'],
         });
 
     } catch (error: any) {
