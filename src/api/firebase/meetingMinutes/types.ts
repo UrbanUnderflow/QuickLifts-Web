@@ -10,19 +10,26 @@ export interface MeetingMinutes {
 
     // AI-generated sections
     executiveSummary: string;
-    topicsDiscussed: TopicItem[];
-    keyInsights: string[];
-    decisions: string[];
-    openQuestions: string[];
-    actionItems: ActionItem[];
+    valueInsights: InsightItem[];
+    strategicDecisions: string[];
+    nextActions: ActionItem[];
+    highlights: HighlightItem[];
+    risksOrOpenQuestions: string[];
 }
 
-export interface TopicItem {
+export interface InsightItem {
     title: string;
+    takeaway: string;
+    impact: string;
+}
+
+export interface HighlightItem {
+    speaker: string;
     summary: string;
 }
 
 export interface ActionItem {
     task: string;
     owner: string;
+    due?: string;
 }
