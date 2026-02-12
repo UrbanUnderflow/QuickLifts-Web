@@ -72,19 +72,27 @@ export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!minutes) return;
-    const md = meetingMinutesService.toMarkdown({
-      ...minutes,
-      createdAt: new Date(),
-    } as MeetingMinutes);
-    const blob = new Blob([md], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `meeting-minutes-${new Date().toISOString().split('T')[0]}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      setLoading(true);
+      const html = meetingMinutesService.toHTML({
+        ...minutes,
+        createdAt: new Date(),
+      } as MeetingMinutes);
+      const pdfBlob = await import('../../utils/pdf').then(mod => mod.renderHtmlToPdf(html));
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `meeting-minutes-${new Date().toISOString().split('T')[0]}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to generate PDF minutes:', err);
+      setError('Failed to generate PDF minutes. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const totalResponses = messages.reduce((acc, msg) =>
@@ -111,7 +119,7 @@ export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
           <div className="mm-header-actions">
             {minutes && (
               <>
-                <button className="mm-btn mm-btn-ghost" onClick={handleDownload} title="Download as Markdown">
+                <button className="mm-btn mm-btn-ghost" onClick={handleDownload} title="Download as PDF">
                   <Download className="w-4 h-4" />
                 </button>
                 <button
