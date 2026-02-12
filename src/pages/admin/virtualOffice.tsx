@@ -87,6 +87,24 @@ const AGENT_DUTIES: Record<string, string> = {
 
 const AGENT_ID_ALIASES: Record<string, string> = {
   branddirector: 'solara',
+  intel: 'sage',
+  research: 'sage',
+};
+
+const AGENT_DISPLAY_NAMES: Record<string, string> = {
+  antigravity: 'Antigravity',
+  nora: 'Nora',
+  scout: 'Scout',
+  solara: 'Solara',
+  sage: 'Sage',
+};
+
+const AGENT_EMOJI_DEFAULTS: Record<string, string> = {
+  antigravity: '🌌',
+  nora: '⚡️',
+  scout: '🕵️',
+  solara: '❤️‍🔥',
+  sage: '🧬',
 };
 
 const normalizeIncomingAgents = (incoming: AgentPresence[]): AgentPresence[] => {
@@ -97,8 +115,8 @@ const normalizeIncomingAgents = (incoming: AgentPresence[]): AgentPresence[] => 
     const normalized: AgentPresence = {
       ...rawAgent,
       id: canonicalId,
-      displayName: canonicalId === 'solara' ? 'Solara' : rawAgent.displayName,
-      emoji: canonicalId === 'solara' ? (rawAgent.emoji || '❤️‍🔥') : rawAgent.emoji,
+      displayName: rawAgent.displayName || AGENT_DISPLAY_NAMES[canonicalId] || canonicalId,
+      emoji: rawAgent.emoji || AGENT_EMOJI_DEFAULTS[canonicalId],
     };
 
     const candidate = { agent: normalized, canonicalSource: rawAgent.id === canonicalId };
