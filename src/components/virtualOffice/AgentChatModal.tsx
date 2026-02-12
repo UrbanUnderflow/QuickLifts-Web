@@ -385,8 +385,10 @@ const ChatPanel: React.FC<{
     const [sending, setSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const autoFailedMessageIdsRef = useRef<Set<string>>(new Set());
+    const [hasNewMessages, setHasNewMessages] = useState(false);
 
     // Meeting minutes attachment state
     const [showMinutesPicker, setShowMinutesPicker] = useState(false);
@@ -454,10 +456,30 @@ const ChatPanel: React.FC<{
         return () => { unsub1(); unsub2(); };
     }, [agent.id]);
 
-    // Auto-scroll
+    // Smart scroll — only auto-scroll if user is near the bottom
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        if (distanceFromBottom < 120) {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        } else {
+            setHasNewMessages(true);
+        }
     }, [messages]);
+
+    // Clear new-message indicator when user scrolls to bottom
+    const handleMessagesScroll = () => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        if (distanceFromBottom < 80) setHasNewMessages(false);
+    };
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        setHasNewMessages(false);
+    };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const val = e.target.value;
@@ -631,7 +653,7 @@ const ChatPanel: React.FC<{
             )}
 
             {/* Messages */}
-            <div className="dm-messages">
+            <div className="dm-messages" ref={messagesContainerRef} onScroll={handleMessagesScroll}>
                 {messages.length === 0 && (
                     <div className="dm-empty-chat">
                         <div className="dm-empty-emoji">{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</div>
@@ -697,6 +719,14 @@ const ChatPanel: React.FC<{
                 })}
                 <div ref={messagesEndRef} />
             </div>
+
+            {/* New messages indicator */}
+            {hasNewMessages && (
+                <button className="dm-new-msg-btn" onClick={scrollToBottom}>
+                    <ChevronDown className="w-4 h-4" />
+                    <span>New messages</span>
+                </button>
+            )}
 
             {/* Type Selector */}
             {showTypeSelector && (
@@ -1168,6 +1198,19 @@ const ChatPanel: React.FC<{
           padding: 1px 6px; border-radius: 4px;
           background: rgba(63,63,70,0.2); color: #71717a;
         }
+
+        /* ─── New Messages Indicator ─────────────── */
+        .dm-new-msg-btn {
+          position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%);
+          display: flex; align-items: center; gap: 5px;
+          padding: 6px 14px; border-radius: 20px;
+          background: rgba(99,102,241,0.9); color: #fff;
+          border: none; cursor: pointer; font-size: 11px; font-weight: 600;
+          box-shadow: 0 4px 16px rgba(99,102,241,0.3);
+          z-index: 20; animation: dmSlideUp2 0.2s ease-out;
+          transition: background 0.15s;
+        }
+        .dm-new-msg-btn:hover { background: rgba(99,102,241,1); }
 
         /* ─── File Browser ──────────────────────────── */
         .dm-file-chip { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.2); color: #4ade80; }

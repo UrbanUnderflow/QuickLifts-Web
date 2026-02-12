@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { X, Send, Sparkles, MessageSquare, AtSign, Paperclip, FileText, Loader2, FolderOpen, Code2 } from 'lucide-react';
+import { X, Send, Sparkles, MessageSquare, AtSign, Paperclip, FileText, Loader2, FolderOpen, Code2, ChevronDown } from 'lucide-react';
 import { groupChatService } from '../../api/firebase/groupChat/service';
 import { presenceService, AgentPresence } from '../../api/firebase/presence/service';
 import type { GroupChatMessage } from '../../api/firebase/groupChat/types';
@@ -41,7 +41,9 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
 
   // Meeting minutes attachment state
   const [showMinutesPicker, setShowMinutesPicker] = useState(false);
@@ -75,10 +77,29 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
     return () => unsubscribe();
   }, []);
 
-  // Auto-scroll to latest message
+  // Smart scroll — only auto-scroll if user is near bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distFromBottom < 120) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      setHasNewMessages(true);
+    }
   }, [messages]);
+
+  const handleMessagesScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distFromBottom < 80) setHasNewMessages(false);
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setHasNewMessages(false);
+  };
 
   // Focus input on mount
   useEffect(() => {
@@ -298,7 +319,7 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
         </div>
 
         {/* ── Messages ── */}
-        <div className="rt-messages">
+        <div className="rt-messages" ref={messagesContainerRef} onScroll={handleMessagesScroll}>
           {messages.length === 0 && (
             <div className="rt-empty">
               <div className="rt-empty-icon">
@@ -323,6 +344,14 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
           ))}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* New messages indicator */}
+        {hasNewMessages && (
+          <button className="rt-new-msg-btn" onClick={scrollToBottom}>
+            <ChevronDown className="w-4 h-4" />
+            <span>New messages</span>
+          </button>
+        )}
 
         {/* ── Typing indicator ── */}
         {typingAgents.length > 0 && (
@@ -1023,6 +1052,19 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
           padding: 1px 6px; border-radius: 4px;
           background: rgba(63,63,70,0.2); color: #71717a;
         }
+
+        /* ── New Messages Indicator ── */
+        .rt-new-msg-btn {
+          position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%);
+          display: flex; align-items: center; gap: 5px;
+          padding: 6px 14px; border-radius: 20px;
+          background: rgba(139,92,246,0.9); color: #fff;
+          border: none; cursor: pointer; font-size: 11px; font-weight: 600;
+          box-shadow: 0 4px 16px rgba(139,92,246,0.3);
+          z-index: 20; animation: rtFade 0.2s ease-out;
+          transition: background 0.15s;
+        }
+        .rt-new-msg-btn:hover { background: rgba(139,92,246,1); }
 
         /* ── File Browser ── */
         .rt-file-chip { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.2); color: #4ade80; }
