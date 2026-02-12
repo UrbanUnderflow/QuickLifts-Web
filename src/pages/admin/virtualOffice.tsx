@@ -68,7 +68,7 @@ const AGENT_ROLES: Record<string, string> = {
   antigravity: 'Co-CEO · Strategy & Architecture',
   nora: 'Director of System Ops',
   scout: 'Influencer Research Analyst',
-  branddirector: 'Brand Director',
+  solara: 'Brand Director',
   // Add more agents here as they join
 };
 
@@ -76,7 +76,7 @@ const AGENT_DUTIES: Record<string, string> = {
   antigravity: 'Drives product strategy, system architecture, and pair-programs with the CEO. Coordinates cross-agent work and reviews critical code paths.',
   nora: 'Maintains the living system map across all surfaces. Owns Kanban ops, agent orchestration, telemetry, and product ops — the operations nerve center for Pulse.',
   scout: 'Runs outbound influencer discovery workflows, researches creator fit and engagement quality, and prepares qualified prospects for CRM intake.',
-  branddirector: 'Owns brand voice, messaging strategy, and value alignment across outward-facing work. Converts Freedom + Spirituality principles into clear narrative guardrails and content direction for all agents.',
+  solara: 'Owns brand voice, messaging strategy, and value alignment across outward-facing work. Converts Freedom + Spirituality principles into clear narrative guardrails and content direction for all agents.',
 };
 
 /* ─── Full agent profiles (for modal) ─────────────────── */
@@ -212,7 +212,7 @@ const AGENT_PROFILES: Record<string, { title: string; location: string; sections
     ],
     footer: 'Scout is the focused research specialist for creator discovery and qualification workflows.',
   },
-  branddirector: {
+  solara: {
     title: 'Brand Director',
     location: 'Virtual Office (brand strategy desk)',
     sections: [
@@ -979,8 +979,8 @@ const VirtualOfficeContent: React.FC = () => {
     sessionStartedAt: new Date(),
   };
 
-  const BRAND_DIRECTOR_PRESENCE: AgentPresence = {
-    id: 'branddirector',
+  const SOLARA_PRESENCE: AgentPresence = {
+    id: 'solara',
     displayName: 'Solara',
     emoji: '❤️‍🔥',
     status: 'idle' as const,
@@ -999,9 +999,9 @@ const VirtualOfficeContent: React.FC = () => {
 
     if (!merged.some(a => a.id === 'antigravity')) merged.push(ANTIGRAVITY_PRESENCE);
     if (!merged.some(a => a.id === 'scout')) merged.push(SCOUT_PRESENCE);
-    if (!merged.some(a => a.id === 'branddirector')) merged.push(BRAND_DIRECTOR_PRESENCE);
+    if (!merged.some(a => a.id === 'solara')) merged.push(SOLARA_PRESENCE);
 
-    const priority: Record<string, number> = { antigravity: 0, nora: 1, scout: 2, branddirector: 3 };
+    const priority: Record<string, number> = { antigravity: 0, nora: 1, scout: 2, solara: 3 };
     return merged.sort((a, b) => {
       const pa = priority[a.id] ?? 99;
       const pb = priority[b.id] ?? 99;

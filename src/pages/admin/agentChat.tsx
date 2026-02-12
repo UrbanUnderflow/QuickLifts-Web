@@ -45,14 +45,14 @@ const AGENT_EMOJIS: Record<string, string> = {
   nora: '⚡',
   antigravity: '🌌',
   scout: '🕵️',
-  branddirector: '❤️‍🔥',
+  solara: '❤️‍🔥',
 };
 
 const AGENT_ROLES: Record<string, string> = {
   nora: 'Director of System Ops',
   antigravity: 'Co-CEO · Strategy & Architecture',
   scout: 'Influencer Research Analyst',
-  branddirector: 'Brand Director',
+  solara: 'Brand Director',
 };
 
 const AGENT_HEARTBEAT_STALE_MS = 2 * 60_000;
@@ -611,8 +611,8 @@ const AgentChatContent: React.FC = () => {
     sessionStartedAt: undefined,
   };
 
-  const BRAND_DIRECTOR_FALLBACK: AgentPresence = {
-    id: 'branddirector',
+  const SOLARA_FALLBACK: AgentPresence = {
+    id: 'solara',
     displayName: 'Solara',
     emoji: '❤️‍🔥',
     status: 'offline',
@@ -636,8 +636,8 @@ const AgentChatContent: React.FC = () => {
       if (!visible.some(a => a.id === 'scout')) {
         visible.push(SCOUT_FALLBACK);
       }
-      if (!visible.some(a => a.id === 'branddirector')) {
-        visible.push(BRAND_DIRECTOR_FALLBACK);
+      if (!visible.some(a => a.id === 'solara')) {
+        visible.push(SOLARA_FALLBACK);
       }
 
       setAgents(visible.sort((a, b) => a.displayName.localeCompare(b.displayName)));
