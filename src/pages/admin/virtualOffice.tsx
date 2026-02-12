@@ -5,6 +5,8 @@ import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { presenceService, AgentPresence, AgentThoughtStep, TaskHistoryEntry } from '../../api/firebase/presence/service';
 import { kanbanService } from '../../api/firebase/kanban/service';
+import { db } from '../../api/firebase/config';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { KanbanTask } from '../../api/firebase/kanban/types';
 import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
@@ -511,7 +513,81 @@ const TaskHistoryPanel: React.FC<{ agentId: string; agentName?: string; emoji?: 
   const [history, setHistory] = useState<TaskHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
+  const [retryingStep, setRetryingStep] = useState<string | null>(null);
+  const [retrySuccess, setRetrySuccess] = useState<string | null>(null);
   const fetched = useRef(false);
+
+  const handleRetryStep = useCallback(async (entry: TaskHistoryEntry, step: { description: string; output?: string; id?: string }, stepIndex: number) => {
+    const stepKey = `${entry.id}-${stepIndex}`;
+    setRetryingStep(stepKey);
+    try {
+      const content = [
+        `RETRY FAILED STEP from task "${entry.taskName}"`,
+        ``,
+        `Step ${stepIndex + 1}: ${step.description}`,
+        step.output ? `Previous error: ${step.output.substring(0, 500)}` : '',
+        ``,
+        `Please retry this step. Investigate the error, fix the root cause, and complete the work.`,
+      ].filter(Boolean).join('\n');
+
+      await addDoc(collection(db, 'agent-commands'), {
+        from: 'admin',
+        to: agentId,
+        type: 'task',
+        content,
+        metadata: {
+          source: 'task-history-retry',
+          originalTask: entry.taskName,
+          failedStep: step.description,
+          stepIndex,
+        },
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      setRetrySuccess(stepKey);
+      setTimeout(() => setRetrySuccess(null), 2500);
+    } catch (err) {
+      console.error('Failed to send retry command:', err);
+    } finally {
+      setRetryingStep(null);
+    }
+  }, [agentId]);
+
+  const handleRetryAllFailed = useCallback(async (entry: TaskHistoryEntry, failedSteps: { description: string; output?: string; id?: string; stepIndex: number }[]) => {
+    const entryKey = `all-${entry.id}`;
+    setRetryingStep(entryKey);
+    try {
+      const stepList = failedSteps.map((s, i) => `  ${i + 1}. ${s.description}${s.output ? ` (Error: ${s.output.substring(0, 200)})` : ''}`).join('\n');
+      const content = [
+        `RETRY ALL FAILED STEPS from task "${entry.taskName}"`,
+        ``,
+        `The following steps failed or had issues:`,
+        stepList,
+        ``,
+        `Please retry each of these steps. Investigate the errors, fix root causes, and complete the work.`,
+      ].join('\n');
+
+      await addDoc(collection(db, 'agent-commands'), {
+        from: 'admin',
+        to: agentId,
+        type: 'task',
+        content,
+        metadata: {
+          source: 'task-history-retry-all',
+          originalTask: entry.taskName,
+          failedStepCount: failedSteps.length,
+        },
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      setRetrySuccess(entryKey);
+      setTimeout(() => setRetrySuccess(null), 2500);
+    } catch (err) {
+      console.error('Failed to send retry-all command:', err);
+    } finally {
+      setRetryingStep(null);
+    }
+  }, [agentId]);
 
   const loadAndOpen = useCallback(async () => {
     setIsOpen(true);
@@ -669,6 +745,23 @@ const TaskHistoryPanel: React.FC<{ agentId: string; agentName?: string; emoji?: 
                           </div>
                         </div>
 
+                        {/* Retry all failed button */}
+                        {stepsWithIssues.length > 0 && (
+                          <button
+                            className="th-retry-all-btn"
+                            disabled={retryingStep === `all-${entry.id}`}
+                            onClick={() => handleRetryAllFailed(entry, stepsWithIssues.map((s, si) => ({ ...s, stepIndex: entry.steps.indexOf(s) })))}
+                          >
+                            {retryingStep === `all-${entry.id}` ? (
+                              <><Loader2 className="w-3 h-3 animate-spin" /> Sending…</>
+                            ) : retrySuccess === `all-${entry.id}` ? (
+                              <><CheckCircle2 className="w-3 h-3" /> Retry Sent!</>
+                            ) : (
+                              <><RefreshCcw className="w-3 h-3" /> Retry {stepsWithIssues.length} Failed Step{stepsWithIssues.length !== 1 ? 's' : ''}</>
+                            )}
+                          </button>
+                        )}
+
                         {/* Step breakdown */}
                         <div className="th-steps-section">
                           <h4 className="th-section-title">
@@ -697,9 +790,26 @@ const TaskHistoryPanel: React.FC<{ agentId: string; agentName?: string; emoji?: 
                                 {/* Output / Deliverable */}
                                 {step.output && (
                                   <div className={`th-step-output ${step.status === 'failed' ? 'error' : stepHasIssue ? 'warning' : ''}`}>
-                                    <span className="th-step-output-label">
-                                      {step.status === 'failed' ? '⚠️ Error:' : stepHasIssue ? '🔍 Needs Verification:' : '📦 Output:'}
-                                    </span>
+                                    <div className="th-step-output-top">
+                                      <span className="th-step-output-label">
+                                        {step.status === 'failed' ? '⚠️ Error:' : stepHasIssue ? '🔍 Needs Verification:' : '📦 Output:'}
+                                      </span>
+                                      {(step.status === 'failed' || stepHasIssue) && (
+                                        <button
+                                          className={`th-retry-btn ${retrySuccess === `${entry.id}-${si}` ? 'success' : ''}`}
+                                          disabled={retryingStep === `${entry.id}-${si}`}
+                                          onClick={() => handleRetryStep(entry, step, si)}
+                                        >
+                                          {retryingStep === `${entry.id}-${si}` ? (
+                                            <><Loader2 className="w-3 h-3 animate-spin" /> Retrying…</>
+                                          ) : retrySuccess === `${entry.id}-${si}` ? (
+                                            <><CheckCircle2 className="w-3 h-3" /> Sent!</>
+                                          ) : (
+                                            <><RefreshCcw className="w-3 h-3" /> Retry</>
+                                          )}
+                                        </button>
+                                      )}
+                                    </div>
                                     <div className="th-step-output-content">
                                       {linkifyOutput(step.output)}
                                     </div>
@@ -857,6 +967,39 @@ const TaskHistoryPanel: React.FC<{ agentId: string; agentName?: string; emoji?: 
           word-break: break-all;
         }
         .th-link:hover { color: #a5b4fc; }
+
+        /* Retry Buttons */
+        .th-step-output-top {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 2px;
+        }
+        .th-retry-btn {
+          display: inline-flex; align-items: center; gap: 4px;
+          padding: 3px 10px; font-size: 10px; font-weight: 600;
+          border-radius: 6px; border: 1px solid rgba(245,158,11,0.3);
+          background: rgba(245,158,11,0.08); color: #fbbf24;
+          cursor: pointer; transition: all 0.2s;
+        }
+        .th-retry-btn:hover:not(:disabled) {
+          background: rgba(245,158,11,0.18); border-color: rgba(245,158,11,0.5);
+          box-shadow: 0 0 12px rgba(245,158,11,0.1);
+        }
+        .th-retry-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .th-retry-btn.success {
+          border-color: rgba(34,197,94,0.3); background: rgba(34,197,94,0.08); color: #4ade80;
+        }
+        .th-retry-all-btn {
+          display: flex; align-items: center; justify-content: center; gap: 6px;
+          width: 100%; padding: 8px 14px; font-size: 12px; font-weight: 600;
+          border-radius: 8px; border: 1px solid rgba(245,158,11,0.25);
+          background: rgba(245,158,11,0.06); color: #fbbf24;
+          cursor: pointer; transition: all 0.2s; margin-bottom: 14px;
+        }
+        .th-retry-all-btn:hover:not(:disabled) {
+          background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.4);
+          box-shadow: 0 0 16px rgba(245,158,11,0.08);
+        }
+        .th-retry-all-btn:disabled { opacity: 0.6; cursor: not-allowed; }
       `}</style>
     </>
   );
