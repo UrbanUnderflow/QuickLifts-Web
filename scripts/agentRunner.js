@@ -43,12 +43,18 @@ const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || ({ 'nora': 'main', 'scout': 'scout', 'solara': 'solara', 'sage': 'sage' }[AGENT_ID] || 'main');
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
+const OPENCLAW_MODEL_SYNC_MS = parseInt(process.env.OPENCLAW_MODEL_SYNC_MS || '60000', 10); // Keep presence model accurate after OpenClaw config changes
 const MAX_FOLLOW_UP_DEPTH = 4; // Max rounds of agent-to-agent @mention follow-ups
 const MAX_SELF_CORRECTION_RETRIES = 2; // Retry attempts when step output contains failure signals
 
 /* ─── Token Usage Tracking ─────────────────────────────── */
 var sessionTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
+// If OpenClaw is enabled, we'll sync the actual configured model from OpenClaw at runtime.
 var currentModel = process.env.USE_OPENCLAW === 'true' ? 'openclaw' : 'gpt-4o';
+var currentModelProvider = '';
+var currentModelRaw = '';
+var lastOpenClawModelSyncAt = 0;
+var openClawModelSyncInFlight = null;
 
 function trackTokenUsage(usage, model) {
     if (!usage) return;
@@ -132,12 +138,78 @@ const processedCommandIds = new Set(); // Dedup: track command IDs we've already
 
 /* ─── Firestore Helpers ───────────────────────────────── */
 
+function parseProviderModel(raw) {
+    if (!raw || typeof raw !== 'string') return { provider: '', model: '' };
+    var parts = raw.split('/');
+    if (parts.length >= 2) return { provider: parts[0] || '', model: parts.slice(1).join('/') };
+    return { provider: '', model: raw };
+}
+
+async function maybeSyncModelFromOpenClaw(force = false) {
+    if (process.env.USE_OPENCLAW !== 'true') return;
+
+    var now = Date.now();
+    if (!force && (now - lastOpenClawModelSyncAt) < OPENCLAW_MODEL_SYNC_MS) return;
+
+    if (openClawModelSyncInFlight) return openClawModelSyncInFlight;
+
+    openClawModelSyncInFlight = (async function () {
+        try {
+            var args = ['--no-color', 'agents', 'list', '--json'];
+            var stdout = await new Promise(function (resolve, reject) {
+                var child = spawn(OPENCLAW_BIN, args, { cwd: process.cwd(), env: process.env });
+                var out = '';
+                var err = '';
+                var timeout = setTimeout(function () {
+                    child.kill('SIGTERM');
+                    reject(new Error('openclaw agents list timed out'));
+                }, 7_000);
+
+                child.stdout.on('data', function (d) { out += d.toString(); });
+                child.stderr.on('data', function (d) { err += d.toString(); });
+                child.on('error', function (e) { clearTimeout(timeout); reject(e); });
+                child.on('close', function (code) {
+                    clearTimeout(timeout);
+                    if (code === 0) resolve(out.trim());
+                    else reject(new Error(`openclaw agents list exit ${code}: ${err.substring(0, 400)}`));
+                });
+            });
+
+            var list = JSON.parse(stdout);
+            var entry = Array.isArray(list) ? list.find(function (a) { return a && a.id === OPENCLAW_AGENT_ID; }) : null;
+            var rawModel = entry && entry.model ? String(entry.model) : '';
+
+            if (!rawModel) return;
+
+            currentModelRaw = rawModel;
+            var parsed = parseProviderModel(rawModel);
+            currentModelProvider = parsed.provider;
+            currentModel = parsed.model || rawModel;
+        } catch (e) {
+            console.warn(`   ⚠️ Could not sync model from OpenClaw (${OPENCLAW_AGENT_ID}):`, e.message);
+        } finally {
+            lastOpenClawModelSyncAt = Date.now();
+        }
+    })();
+
+    try {
+        return await openClawModelSyncInFlight;
+    } finally {
+        openClawModelSyncInFlight = null;
+    }
+}
+
 async function updatePresence(payload) {
+    await maybeSyncModelFromOpenClaw(false);
+
     const docRef = db.collection(PRESENCE_COLLECTION).doc(AGENT_ID);
     await docRef.set({
         displayName: AGENT_NAME,
         emoji: AGENT_EMOJI,
         currentModel: currentModel,
+        currentModelRaw: currentModelRaw || null,
+        currentModelProvider: currentModelProvider || null,
+        openClawAgentId: process.env.USE_OPENCLAW === 'true' ? OPENCLAW_AGENT_ID : null,
         tokenUsage: { ...sessionTokens },
         ...payload,
         lastUpdate: FieldValue.serverTimestamp(),

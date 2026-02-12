@@ -43,6 +43,9 @@ export interface AgentPresence {
 
   // AI Model & Token Usage
   currentModel?: string;               // Which AI model is active (gpt-4o, gpt-4o-mini, openclaw)
+  currentModelRaw?: string;            // Provider-qualified model (e.g., openai/gpt-5.1-codex)
+  currentModelProvider?: string;       // Provider (e.g., openai, anthropic)
+  openClawAgentId?: string;            // Which OpenClaw isolated agent is driving this runner (e.g., main, scout, solara)
   tokenUsage?: {
     promptTokens: number;
     completionTokens: number;
@@ -385,6 +388,9 @@ export const presenceService = {
           manifestoInjections: data.manifestoInjections ?? 0,
           lastManifestoInjection: data.lastManifestoInjection?.toDate?.() || undefined,
           currentModel: data.currentModel || undefined,
+          currentModelRaw: data.currentModelRaw || undefined,
+          currentModelProvider: data.currentModelProvider || undefined,
+          openClawAgentId: data.openClawAgentId || undefined,
           tokenUsage: data.tokenUsage || undefined,
           lastUpdate: data.lastUpdate?.toDate?.() || undefined,
           sessionStartedAt: data.sessionStartedAt?.toDate?.() || undefined,
