@@ -1333,6 +1333,58 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
             </div>
           </div>
 
+          {/* AI Model & Token Usage */}
+          <div className="model-token-monitor" style={{
+            margin: '8px 0', padding: '6px 8px',
+            background: 'rgba(34, 197, 94, 0.06)',
+            border: '1px solid rgba(34, 197, 94, 0.15)',
+            borderRadius: '6px', fontSize: '10px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#4ade80' }}>
+                <Zap className="w-3 h-3" />
+                <span style={{ fontWeight: 600 }}>AI Model</span>
+              </div>
+              <span style={{
+                fontSize: '9px', fontWeight: 700,
+                padding: '1px 6px', borderRadius: '4px',
+                background: agent.currentModel === 'gpt-4o' ? 'rgba(34,197,94,0.15)'
+                  : agent.currentModel === 'gpt-4o-mini' ? 'rgba(59,130,246,0.15)'
+                    : agent.currentModel === 'openclaw' ? 'rgba(139,92,246,0.15)'
+                      : 'rgba(113,113,122,0.15)',
+                color: agent.currentModel === 'gpt-4o' ? '#4ade80'
+                  : agent.currentModel === 'gpt-4o-mini' ? '#60a5fa'
+                    : agent.currentModel === 'openclaw' ? '#a78bfa'
+                      : '#71717a',
+                border: `1px solid ${agent.currentModel === 'gpt-4o' ? 'rgba(34,197,94,0.3)'
+                  : agent.currentModel === 'gpt-4o-mini' ? 'rgba(59,130,246,0.3)'
+                    : agent.currentModel === 'openclaw' ? 'rgba(139,92,246,0.3)'
+                      : 'rgba(113,113,122,0.2)'}`,
+                letterSpacing: '0.02em',
+              }}>
+                {agent.currentModel || 'unknown'}
+              </span>
+            </div>
+            {agent.tokenUsage && agent.tokenUsage.totalTokens > 0 && (
+              <div style={{ display: 'flex', gap: '10px', color: '#9ca3af', fontSize: '9px', flexWrap: 'wrap' }}>
+                <span>
+                  Tokens: <strong style={{ color: '#4ade80' }}>
+                    {agent.tokenUsage.totalTokens.toLocaleString()}
+                  </strong>
+                </span>
+                <span>
+                  In: <strong style={{ color: '#60a5fa' }}>{agent.tokenUsage.promptTokens.toLocaleString()}</strong>
+                </span>
+                <span>
+                  Out: <strong style={{ color: '#f59e0b' }}>{agent.tokenUsage.completionTokens.toLocaleString()}</strong>
+                </span>
+                <span>
+                  Calls: <strong style={{ color: '#a1a1aa' }}>{agent.tokenUsage.callCount}</strong>
+                </span>
+              </div>
+            )}
+          </div>
+
           {/* Task History */}
           <TaskHistoryPanel agentId={agent.id} agentName={agent.displayName} emoji={agent.emoji} />
 
