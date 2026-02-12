@@ -38,7 +38,7 @@ const KANBAN_COLLECTION = 'kanbanTasks';
 const COMMANDS_COLLECTION = 'agent-commands';
 const HISTORY_SUBCOLLECTION = 'task-history';
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
-const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || ({ 'nora': 'main', 'scout': 'scout' }[AGENT_ID] || 'main');
+const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || ({ 'nora': 'main', 'scout': 'scout', 'solara': 'solara' }[AGENT_ID] || 'main');
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
 const MAX_FOLLOW_UP_DEPTH = 4; // Max rounds of agent-to-agent @mention follow-ups
@@ -204,7 +204,7 @@ async function processCommands() {
         let pContent = cmd.content;
 
         // Smart Auto-detection: If type is 'auto' or 'chat', use AI to infer intent
-        if ((cmd.type === 'auto' || cmd.type === 'chat') && (process.env.OPENAI_API_KEY || process.env.USE_OPENCLAW === 'true')) {
+        if ((cmd.type === 'auto' || cmd.type === 'chat') && process.env.OPENAI_API_KEY) {
             console.log(`🧠 Analyzing intent for: "${cmd.content}"`);
             const inference = await analyzeChatIntent(cmd.content, cmd.from);
             if (inference.type !== 'chat') {

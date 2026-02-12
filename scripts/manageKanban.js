@@ -36,6 +36,21 @@ const makeSubtask = (title) => ({
 
 const tasks = [
   {
+    name: 'Stand up Research Intel Feed pipeline',
+    description: 'Design the living intel feed the new researcher will own: real-time drops, urgent flags, daily skim summaries, and a weekly digest tied to Tremaine’s “why now” questions.',
+    project: 'Strategic Ops',
+    theme: 'Insights',
+    assignee: 'Nora ⚡️',
+    status: 'todo',
+    notes: 'Outcome from Feb 11 roundtable; scoped in docs/kanban-task-plan-2026-02-11.md. Need structure before researcher onboarding.',
+    subtasks: [
+      'Define feed taxonomy (source, why-now signal, urgency, owner, status)',
+      'Draft urgent-vs-weekly escalation rules + notification path',
+      'Create weekly digest template + cadence notes for Tremaine/leadership',
+      'Document handoff checklist for incoming researcher + Kanban lane plugs',
+    ].map(makeSubtask),
+  },
+  {
     name: 'Build Pulse systems overview',
     description: 'Create a single source of truth covering every repo, environments, release branches, and responsible owners. Include Firestore collections + tooling references for onboarding.',
     project: 'Strategic Ops',
