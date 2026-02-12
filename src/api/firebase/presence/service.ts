@@ -384,6 +384,8 @@ export const presenceService = {
           manifestoEnabled: data.manifestoEnabled !== false, // default true
           manifestoInjections: data.manifestoInjections ?? 0,
           lastManifestoInjection: data.lastManifestoInjection?.toDate?.() || undefined,
+          currentModel: data.currentModel || undefined,
+          tokenUsage: data.tokenUsage || undefined,
           lastUpdate: data.lastUpdate?.toDate?.() || undefined,
           sessionStartedAt: data.sessionStartedAt?.toDate?.() || undefined,
         };
