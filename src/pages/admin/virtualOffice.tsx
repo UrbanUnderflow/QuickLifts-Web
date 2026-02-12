@@ -1345,25 +1345,51 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
                 <Zap className="w-3 h-3" />
                 <span style={{ fontWeight: 600 }}>AI Model</span>
               </div>
-              <span style={{
-                fontSize: '9px', fontWeight: 700,
-                padding: '1px 6px', borderRadius: '4px',
-                background: agent.currentModel === 'gpt-4o' ? 'rgba(34,197,94,0.15)'
-                  : agent.currentModel === 'gpt-4o-mini' ? 'rgba(59,130,246,0.15)'
-                    : agent.currentModel === 'openclaw' ? 'rgba(139,92,246,0.15)'
-                      : 'rgba(113,113,122,0.15)',
-                color: agent.currentModel === 'gpt-4o' ? '#4ade80'
-                  : agent.currentModel === 'gpt-4o-mini' ? '#60a5fa'
-                    : agent.currentModel === 'openclaw' ? '#a78bfa'
-                      : '#71717a',
-                border: `1px solid ${agent.currentModel === 'gpt-4o' ? 'rgba(34,197,94,0.3)'
-                  : agent.currentModel === 'gpt-4o-mini' ? 'rgba(59,130,246,0.3)'
-                    : agent.currentModel === 'openclaw' ? 'rgba(139,92,246,0.3)'
-                      : 'rgba(113,113,122,0.2)'}`,
-                letterSpacing: '0.02em',
-              }}>
-                {agent.currentModel || 'unknown'}
-              </span>
+              {(() => {
+                const m = agent.currentModel || 'unknown';
+                const ml = m.toLowerCase();
+                const is4o = ml === 'gpt-4o';
+                const isMini = ml.includes('mini');
+                const isCodex = ml.includes('codex');
+                const isClaude = ml.includes('claude') || ml.includes('sonnet') || ml.includes('opus') || ml.includes('haiku');
+                const bg = is4o
+                  ? 'rgba(34,197,94,0.15)'
+                  : isMini
+                    ? 'rgba(59,130,246,0.15)'
+                    : isCodex
+                      ? 'rgba(139,92,246,0.15)'
+                      : isClaude
+                        ? 'rgba(245,158,11,0.15)'
+                        : 'rgba(113,113,122,0.15)';
+                const fg = is4o
+                  ? '#4ade80'
+                  : isMini
+                    ? '#60a5fa'
+                    : isCodex
+                      ? '#a78bfa'
+                      : isClaude
+                        ? '#fbbf24'
+                        : '#71717a';
+                const bd = is4o
+                  ? 'rgba(34,197,94,0.3)'
+                  : isMini
+                    ? 'rgba(59,130,246,0.3)'
+                    : isCodex
+                      ? 'rgba(139,92,246,0.3)'
+                      : isClaude
+                        ? 'rgba(245,158,11,0.3)'
+                        : 'rgba(113,113,122,0.2)';
+                return (
+                  <span style={{
+                    fontSize: '9px', fontWeight: 700,
+                    padding: '1px 6px', borderRadius: '4px',
+                    background: bg, color: fg, border: `1px solid ${bd}`,
+                    letterSpacing: '0.02em',
+                  }}>
+                    {m}
+                  </span>
+                );
+              })()}
             </div>
             {agent.tokenUsage && agent.tokenUsage.totalTokens > 0 && (
               <div style={{ display: 'flex', gap: '10px', color: '#9ca3af', fontSize: '9px', flexWrap: 'wrap' }}>
