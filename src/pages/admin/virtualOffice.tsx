@@ -1544,14 +1544,31 @@ const VirtualOfficeContent: React.FC = () => {
     sessionStartedAt: new Date(),
   };
 
+  const SAGE_PRESENCE: AgentPresence = {
+    id: 'sage',
+    displayName: 'Sage',
+    emoji: '🧬',
+    status: 'idle' as const,
+    currentTask: '',
+    currentTaskId: '',
+    // Field Notes → Patterns → Feed Drops signature baked into the notes for the hover panel
+    notes: 'Field Notes → Patterns → Feed Drops. Warm field correspondent bringing back receipts.',
+    executionSteps: [],
+    currentStepIndex: -1,
+    taskProgress: 0,
+    lastUpdate: new Date(),
+    sessionStartedAt: new Date(),
+  };
+
   const allAgents = useMemo(() => {
     const merged = [...agents];
 
     if (!merged.some(a => a.id === 'antigravity')) merged.push(ANTIGRAVITY_PRESENCE);
     if (!merged.some(a => a.id === 'scout')) merged.push(SCOUT_PRESENCE);
     if (!merged.some(a => a.id === 'solara')) merged.push(SOLARA_PRESENCE);
+    if (!merged.some(a => a.id === 'sage')) merged.push(SAGE_PRESENCE);
 
-    const priority: Record<string, number> = { antigravity: 0, nora: 1, scout: 2, solara: 3 };
+    const priority: Record<string, number> = { antigravity: 0, nora: 1, scout: 2, solara: 3, sage: 4 };
     return merged.sort((a, b) => {
       const pa = priority[a.id] ?? 99;
       const pb = priority[b.id] ?? 99;
