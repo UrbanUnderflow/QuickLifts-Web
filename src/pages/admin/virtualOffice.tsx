@@ -15,6 +15,7 @@ import { RoundTable } from '../../components/virtualOffice/RoundTable';
 import { GroupChatModal } from '../../components/virtualOffice/GroupChatModal';
 import { MeetingMinutesPreview } from '../../components/virtualOffice/MeetingMinutesPreview';
 import { FilingCabinet } from '../../components/virtualOffice/FilingCabinet';
+import { AgentChatModal } from '../../components/virtualOffice/AgentChatModal';
 import { groupChatService } from '../../api/firebase/groupChat/service';
 import type { GroupChatMessage } from '../../api/firebase/groupChat/types';
 import {
@@ -834,7 +835,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
           {/* Chat Button */}
           <button
             className="detail-chat-btn"
-            onClick={() => router.push(`/admin/agentChat?agent=${agent.id}`)}
+            onClick={(e) => { e.stopPropagation(); (window as any).__openAgentChat?.(agent); }}
           >
             <MessageSquare className="w-3.5 h-3.5" />
             Chat with {agent.displayName}
@@ -977,6 +978,13 @@ const VirtualOfficeContent: React.FC = () => {
     chatId: string; messages: GroupChatMessage[]; participants: string[]; duration: string;
   } | null>(null);
   const [showFilingCabinet, setShowFilingCabinet] = useState(false);
+  const [chatAgent, setChatAgent] = useState<AgentPresence | null>(null);
+
+  // Expose setChatAgent for AgentDeskSprite (avoids prop drilling through sprite component)
+  useEffect(() => {
+    (window as any).__openAgentChat = (agent: AgentPresence) => setChatAgent(agent);
+    return () => { delete (window as any).__openAgentChat; };
+  }, []);
 
   useEffect(() => {
     const unsubscribe = presenceService.listen((next) => {
@@ -1206,7 +1214,7 @@ const VirtualOfficeContent: React.FC = () => {
           <div className="flex items-center gap-4">
             <LiveClock />
             <button
-              onClick={() => router.push('/admin/agentChat')}
+              onClick={() => setChatAgent({} as any)}
               className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg border border-indigo-500/30 text-indigo-300 hover:bg-indigo-900/30 hover:border-indigo-400/50 transition-all"
             >
               <MessageSquare className="w-3.5 h-3.5" /> Chat
@@ -1323,6 +1331,15 @@ const VirtualOfficeContent: React.FC = () => {
         {/* Filing Cabinet */}
         {showFilingCabinet && (
           <FilingCabinet onClose={() => setShowFilingCabinet(false)} />
+        )}
+
+        {/* Agent Chat Modal */}
+        {chatAgent !== null && (
+          <AgentChatModal
+            agents={allAgents}
+            initialAgent={chatAgent?.id ? chatAgent : null}
+            onClose={() => setChatAgent(null)}
+          />
         )}
       </AdminRouteGuard>
 

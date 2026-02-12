@@ -1,268 +1,269 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import {
-    X, Download, Save, Trash2, FileText,
-    Lightbulb, HelpCircle, CheckSquare, MessageSquare,
-    Target, Loader2, Sparkles
+  X, Download, Save, Trash2, FileText,
+  Lightbulb, HelpCircle, CheckSquare, MessageSquare,
+  Target, Loader2, Sparkles
 } from 'lucide-react';
 import { meetingMinutesService } from '../../api/firebase/meetingMinutes/service';
 import type { MeetingMinutes } from '../../api/firebase/meetingMinutes/types';
 import type { GroupChatMessage } from '../../api/firebase/groupChat/types';
 
 interface MeetingMinutesPreviewProps {
-    chatId: string;
-    messages: GroupChatMessage[];
-    participants: string[];
-    duration: string;
-    onSaveAndClose: () => void;
-    onDiscard: () => void;
+  chatId: string;
+  messages: GroupChatMessage[];
+  participants: string[];
+  duration: string;
+  onSaveAndClose: () => void;
+  onDiscard: () => void;
 }
 
 const AGENT_COLORS: Record<string, string> = {
-    nora: '#22c55e',
-    scout: '#f59e0b',
-    default: '#8b5cf6',
+  nora: '#22c55e',
+  scout: '#f59e0b',
+  solara: '#f43f5e',
+  default: '#8b5cf6',
 };
 
 export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
-    chatId,
-    messages,
-    participants,
-    duration,
-    onSaveAndClose,
-    onDiscard,
+  chatId,
+  messages,
+  participants,
+  duration,
+  onSaveAndClose,
+  onDiscard,
 }) => {
-    const [minutes, setMinutes] = useState<Omit<MeetingMinutes, 'id' | 'createdAt'> | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState('');
+  const [minutes, setMinutes] = useState<Omit<MeetingMinutes, 'id' | 'createdAt'> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-    useEffect(() => {
-        generateMinutes();
-    }, []);
+  useEffect(() => {
+    generateMinutes();
+  }, []);
 
-    const generateMinutes = async () => {
-        setLoading(true);
-        setError('');
-        try {
-            const result = await meetingMinutesService.generate(
-                chatId,
-                messages as any,
-                participants,
-                duration
-            );
-            setMinutes(result);
-        } catch (e: any) {
-            setError(e.message || 'Failed to generate minutes');
-        } finally {
-            setLoading(false);
-        }
-    };
+  const generateMinutes = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await meetingMinutesService.generate(
+        chatId,
+        messages as any,
+        participants,
+        duration
+      );
+      setMinutes(result);
+    } catch (e: any) {
+      setError(e.message || 'Failed to generate minutes');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const handleSave = async () => {
-        if (!minutes) return;
-        setSaving(true);
-        try {
-            await meetingMinutesService.save(minutes);
-            onSaveAndClose();
-        } catch (e: any) {
-            setError('Failed to save: ' + e.message);
-            setSaving(false);
-        }
-    };
+  const handleSave = async () => {
+    if (!minutes) return;
+    setSaving(true);
+    try {
+      await meetingMinutesService.save(minutes);
+      onSaveAndClose();
+    } catch (e: any) {
+      setError('Failed to save: ' + e.message);
+      setSaving(false);
+    }
+  };
 
-    const handleDownload = () => {
-        if (!minutes) return;
-        const md = meetingMinutesService.toMarkdown({
-            ...minutes,
-            createdAt: new Date(),
-        } as MeetingMinutes);
-        const blob = new Blob([md], { type: 'text/markdown' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `meeting-minutes-${new Date().toISOString().split('T')[0]}.md`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
+  const handleDownload = () => {
+    if (!minutes) return;
+    const md = meetingMinutesService.toMarkdown({
+      ...minutes,
+      createdAt: new Date(),
+    } as MeetingMinutes);
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `meeting-minutes-${new Date().toISOString().split('T')[0]}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-    const totalResponses = messages.reduce((acc, msg) =>
-        acc + Object.values(msg.responses).filter(r => r.status === 'completed').length, 0
-    );
+  const totalResponses = messages.reduce((acc, msg) =>
+    acc + Object.values(msg.responses).filter(r => r.status === 'completed').length, 0
+  );
 
-    const modal = (
-        <div className="mm-overlay">
-            <div className="mm-modal">
-                {/* Header */}
-                <div className="mm-header">
-                    <div className="mm-header-left">
-                        <div className="mm-header-icon">
-                            <FileText className="w-5 h-5" />
-                        </div>
-                        <div>
-                            <h2 className="mm-title">Meeting Minutes</h2>
-                            <p className="mm-subtitle">
-                                {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                                {' · '}{duration}{' · '}{messages.length} messages · {totalResponses} responses
-                            </p>
-                        </div>
-                    </div>
-                    <div className="mm-header-actions">
-                        {minutes && (
-                            <>
-                                <button className="mm-btn mm-btn-ghost" onClick={handleDownload} title="Download as Markdown">
-                                    <Download className="w-4 h-4" />
-                                </button>
-                                <button
-                                    className="mm-btn mm-btn-primary"
-                                    onClick={handleSave}
-                                    disabled={saving}
-                                >
-                                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                                    {saving ? 'Saving...' : 'Save to Cabinet'}
-                                </button>
-                            </>
-                        )}
-                        <button className="mm-btn mm-btn-ghost" onClick={onDiscard} title="Discard">
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Content */}
-                <div className="mm-content">
-                    {loading && (
-                        <div className="mm-loading">
-                            <div className="mm-loading-spinner">
-                                <Sparkles className="w-8 h-8" />
-                            </div>
-                            <p className="mm-loading-text">Generating meeting minutes...</p>
-                            <p className="mm-loading-sub">Analyzing {messages.length} messages from {participants.length} participants</p>
-                        </div>
-                    )}
-
-                    {error && !loading && (
-                        <div className="mm-error">
-                            <p>{error}</p>
-                            <button className="mm-btn mm-btn-ghost" onClick={generateMinutes}>Retry</button>
-                        </div>
-                    )}
-
-                    {minutes && !loading && (
-                        <div className="mm-sections">
-                            {/* Participants */}
-                            <div className="mm-participants">
-                                {participants.map(p => {
-                                    const color = AGENT_COLORS[p] || AGENT_COLORS.default;
-                                    return (
-                                        <span key={p} className="mm-participant" style={{ borderColor: `${color}40`, color }}>
-                                            {p.charAt(0).toUpperCase() + p.slice(1)}
-                                        </span>
-                                    );
-                                })}
-                                <span className="mm-participant" style={{ borderColor: '#6366f140', color: '#6366f1' }}>
-                                    Tremaine
-                                </span>
-                            </div>
-
-                            {/* Executive Summary */}
-                            <section className="mm-section">
-                                <div className="mm-section-header">
-                                    <Target className="w-4 h-4" style={{ color: '#8b5cf6' }} />
-                                    <h3>Executive Summary</h3>
-                                </div>
-                                <p className="mm-section-body mm-summary">{minutes.executiveSummary}</p>
-                            </section>
-
-                            {/* Topics Discussed */}
-                            {minutes.topicsDiscussed.length > 0 && (
-                                <section className="mm-section">
-                                    <div className="mm-section-header">
-                                        <MessageSquare className="w-4 h-4" style={{ color: '#3b82f6' }} />
-                                        <h3>Topics Discussed</h3>
-                                    </div>
-                                    <div className="mm-topics">
-                                        {minutes.topicsDiscussed.map((topic, i) => (
-                                            <div key={i} className="mm-topic">
-                                                <h4 className="mm-topic-title">{topic.title}</h4>
-                                                <p className="mm-topic-summary">{topic.summary}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </section>
-                            )}
-
-                            {/* Key Insights */}
-                            {minutes.keyInsights.length > 0 && (
-                                <section className="mm-section">
-                                    <div className="mm-section-header">
-                                        <Lightbulb className="w-4 h-4" style={{ color: '#f59e0b' }} />
-                                        <h3>Key Insights</h3>
-                                    </div>
-                                    <ul className="mm-list">
-                                        {minutes.keyInsights.map((insight, i) => (
-                                            <li key={i}>{insight}</li>
-                                        ))}
-                                    </ul>
-                                </section>
-                            )}
-
-                            {/* Decisions */}
-                            {minutes.decisions.length > 0 && (
-                                <section className="mm-section">
-                                    <div className="mm-section-header">
-                                        <CheckSquare className="w-4 h-4" style={{ color: '#22c55e' }} />
-                                        <h3>Decisions & Positions</h3>
-                                    </div>
-                                    <ul className="mm-list mm-decisions">
-                                        {minutes.decisions.map((decision, i) => (
-                                            <li key={i}>{decision}</li>
-                                        ))}
-                                    </ul>
-                                </section>
-                            )}
-
-                            {/* Open Questions */}
-                            {minutes.openQuestions.length > 0 && (
-                                <section className="mm-section">
-                                    <div className="mm-section-header">
-                                        <HelpCircle className="w-4 h-4" style={{ color: '#ef4444' }} />
-                                        <h3>Open Questions</h3>
-                                    </div>
-                                    <ul className="mm-list mm-questions">
-                                        {minutes.openQuestions.map((q, i) => (
-                                            <li key={i}>{q}</li>
-                                        ))}
-                                    </ul>
-                                </section>
-                            )}
-
-                            {/* Action Items */}
-                            {minutes.actionItems.length > 0 && (
-                                <section className="mm-section">
-                                    <div className="mm-section-header">
-                                        <Sparkles className="w-4 h-4" style={{ color: '#8b5cf6' }} />
-                                        <h3>Action Items</h3>
-                                    </div>
-                                    <div className="mm-actions">
-                                        {minutes.actionItems.map((item, i) => (
-                                            <div key={i} className="mm-action-item">
-                                                <div className="mm-action-checkbox" />
-                                                <div className="mm-action-content">
-                                                    <span className="mm-action-task">{item.task}</span>
-                                                    <span className="mm-action-owner">{item.owner}</span>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </section>
-                            )}
-                        </div>
-                    )}
-                </div>
+  const modal = (
+    <div className="mm-overlay">
+      <div className="mm-modal">
+        {/* Header */}
+        <div className="mm-header">
+          <div className="mm-header-left">
+            <div className="mm-header-icon">
+              <FileText className="w-5 h-5" />
             </div>
+            <div>
+              <h2 className="mm-title">Meeting Minutes</h2>
+              <p className="mm-subtitle">
+                {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                {' · '}{duration}{' · '}{messages.length} messages · {totalResponses} responses
+              </p>
+            </div>
+          </div>
+          <div className="mm-header-actions">
+            {minutes && (
+              <>
+                <button className="mm-btn mm-btn-ghost" onClick={handleDownload} title="Download as Markdown">
+                  <Download className="w-4 h-4" />
+                </button>
+                <button
+                  className="mm-btn mm-btn-primary"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {saving ? 'Saving...' : 'Save to Cabinet'}
+                </button>
+              </>
+            )}
+            <button className="mm-btn mm-btn-ghost" onClick={onDiscard} title="Discard">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
 
-            <style jsx>{`
+        {/* Content */}
+        <div className="mm-content">
+          {loading && (
+            <div className="mm-loading">
+              <div className="mm-loading-spinner">
+                <Sparkles className="w-8 h-8" />
+              </div>
+              <p className="mm-loading-text">Generating meeting minutes...</p>
+              <p className="mm-loading-sub">Analyzing {messages.length} messages from {participants.length} participants</p>
+            </div>
+          )}
+
+          {error && !loading && (
+            <div className="mm-error">
+              <p>{error}</p>
+              <button className="mm-btn mm-btn-ghost" onClick={generateMinutes}>Retry</button>
+            </div>
+          )}
+
+          {minutes && !loading && (
+            <div className="mm-sections">
+              {/* Participants */}
+              <div className="mm-participants">
+                {participants.map(p => {
+                  const color = AGENT_COLORS[p] || AGENT_COLORS.default;
+                  return (
+                    <span key={p} className="mm-participant" style={{ borderColor: `${color}40`, color }}>
+                      {p.charAt(0).toUpperCase() + p.slice(1)}
+                    </span>
+                  );
+                })}
+                <span className="mm-participant" style={{ borderColor: '#6366f140', color: '#6366f1' }}>
+                  Tremaine
+                </span>
+              </div>
+
+              {/* Executive Summary */}
+              <section className="mm-section">
+                <div className="mm-section-header">
+                  <Target className="w-4 h-4" style={{ color: '#8b5cf6' }} />
+                  <h3>Executive Summary</h3>
+                </div>
+                <p className="mm-section-body mm-summary">{minutes.executiveSummary}</p>
+              </section>
+
+              {/* Topics Discussed */}
+              {minutes.topicsDiscussed.length > 0 && (
+                <section className="mm-section">
+                  <div className="mm-section-header">
+                    <MessageSquare className="w-4 h-4" style={{ color: '#3b82f6' }} />
+                    <h3>Topics Discussed</h3>
+                  </div>
+                  <div className="mm-topics">
+                    {minutes.topicsDiscussed.map((topic, i) => (
+                      <div key={i} className="mm-topic">
+                        <h4 className="mm-topic-title">{topic.title}</h4>
+                        <p className="mm-topic-summary">{topic.summary}</p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Key Insights */}
+              {minutes.keyInsights.length > 0 && (
+                <section className="mm-section">
+                  <div className="mm-section-header">
+                    <Lightbulb className="w-4 h-4" style={{ color: '#f59e0b' }} />
+                    <h3>Key Insights</h3>
+                  </div>
+                  <ul className="mm-list">
+                    {minutes.keyInsights.map((insight, i) => (
+                      <li key={i}>{insight}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {/* Decisions */}
+              {minutes.decisions.length > 0 && (
+                <section className="mm-section">
+                  <div className="mm-section-header">
+                    <CheckSquare className="w-4 h-4" style={{ color: '#22c55e' }} />
+                    <h3>Decisions & Positions</h3>
+                  </div>
+                  <ul className="mm-list mm-decisions">
+                    {minutes.decisions.map((decision, i) => (
+                      <li key={i}>{decision}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {/* Open Questions */}
+              {minutes.openQuestions.length > 0 && (
+                <section className="mm-section">
+                  <div className="mm-section-header">
+                    <HelpCircle className="w-4 h-4" style={{ color: '#ef4444' }} />
+                    <h3>Open Questions</h3>
+                  </div>
+                  <ul className="mm-list mm-questions">
+                    {minutes.openQuestions.map((q, i) => (
+                      <li key={i}>{q}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {/* Action Items */}
+              {minutes.actionItems.length > 0 && (
+                <section className="mm-section">
+                  <div className="mm-section-header">
+                    <Sparkles className="w-4 h-4" style={{ color: '#8b5cf6' }} />
+                    <h3>Action Items</h3>
+                  </div>
+                  <div className="mm-actions">
+                    {minutes.actionItems.map((item, i) => (
+                      <div key={i} className="mm-action-item">
+                        <div className="mm-action-checkbox" />
+                        <div className="mm-action-content">
+                          <span className="mm-action-task">{item.task}</span>
+                          <span className="mm-action-owner">{item.owner}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <style jsx>{`
         .mm-overlay {
           position: fixed;
           inset: 0;
@@ -566,8 +567,8 @@ export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
           font-weight: 600;
         }
       `}</style>
-        </div>
-    );
+    </div>
+  );
 
-    return ReactDOM.createPortal(modal, document.body);
+  return ReactDOM.createPortal(modal, document.body);
 };

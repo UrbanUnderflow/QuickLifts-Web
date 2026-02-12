@@ -357,6 +357,11 @@ async function processCommands() {
                         style: 'Curious, analytical, and detail-oriented. You think in terms of data, trends, and user insights. You bring a research-first perspective and love uncovering patterns.',
                         strengths: 'market research, influencer analysis, data insights, trend identification, competitive intelligence',
                     },
+                    solara: {
+                        role: 'Brand Director',
+                        style: 'Visionary, expressive, and values-driven. You think in terms of narrative, identity, and emotional resonance. You ensure every outward-facing message reinforces who Pulse is and what it stands for.',
+                        strengths: 'brand voice, messaging strategy, content direction, value alignment, narrative guardrails, positioning',
+                    },
                 };
                 var personality = agentPersonalities[AGENT_ID] || {
                     role: 'Team Member',
@@ -568,6 +573,7 @@ async function processCommands() {
                         var knownAgents = {
                             nora: 'Nora',
                             scout: 'Scout',
+                            solara: 'Solara',
                         };
                         var mentionedAgentIds = [];
                         for (var [agentIdKey, agentDisplayName] of Object.entries(knownAgents)) {
