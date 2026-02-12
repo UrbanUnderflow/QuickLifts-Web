@@ -16,6 +16,7 @@ const AGENT_COLORS: Record<string, string> = {
   nora: '#22c55e',
   antigravity: '#8b5cf6',
   scout: '#f59e0b',
+  solara: '#f43f5e',
   default: '#3b82f6',
 };
 
@@ -23,6 +24,7 @@ const AGENT_EMOJIS: Record<string, string> = {
   nora: '⚡',
   antigravity: '🌌',
   scout: '🕵️',
+  solara: '❤️‍🔥',
 };
 
 export const GroupChatModal: React.FC<GroupChatModalProps> = ({

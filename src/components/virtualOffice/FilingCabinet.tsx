@@ -16,6 +16,7 @@ interface FilingCabinetProps {
 const AGENT_COLORS: Record<string, string> = {
     nora: '#22c55e',
     scout: '#f59e0b',
+    solara: '#f43f5e',
     default: '#8b5cf6',
 };
 
