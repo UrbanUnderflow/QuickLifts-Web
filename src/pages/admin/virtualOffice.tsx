@@ -61,7 +61,7 @@ const DESK_POSITIONS = [
   { x: 12, y: 35, facing: 'right' as const },   // Antigravity — far left, upper
   { x: 75, y: 30, facing: 'left' as const },    // Nora — far right, upper
   { x: 12, y: 70, facing: 'right' as const },   // Scout — far left, lower
-  { x: 75, y: 70, facing: 'left' as const },    // Brand Director — far right, lower
+  { x: 75, y: 70, facing: 'left' as const },    // Brand Voice — far right, lower
   { x: 42, y: 22, facing: 'right' as const },   // Sage — center upper desk
   { x: 42, y: 85, facing: 'left' as const },    // slot 6
 ];
@@ -72,7 +72,7 @@ const AGENT_ROLES: Record<string, string> = {
   antigravity: 'Co-CEO · Strategy & Architecture',
   nora: 'Director of System Ops',
   scout: 'Influencer Research Analyst',
-  solara: 'Brand Director',
+  solara: 'Brand Voice',
   sage: 'Research Intelligence Envoy',
   // Add more agents here as they join
 };
@@ -81,7 +81,7 @@ const AGENT_DUTIES: Record<string, string> = {
   antigravity: 'Drives product strategy, system architecture, and pair-programs with the CEO. Coordinates cross-agent work and reviews critical code paths.',
   nora: 'Maintains the living system map across all surfaces. Owns Kanban ops, agent orchestration, telemetry, and product ops — the operations nerve center for Pulse.',
   scout: 'Runs outbound influencer discovery workflows, researches creator fit and engagement quality, and prepares qualified prospects for CRM intake.',
-  solara: 'Owns brand voice, messaging strategy, and value alignment across outward-facing work. Converts Freedom + Spirituality principles into clear narrative guardrails and content direction for all agents.',
+  solara: 'Acts as the keeper of Pulse’s Brand Voice—owning language systems, tone guardrails, and value alignment across every outward-facing moment so creators and partners feel the Freedom + Spirituality narrative instantly.',
   sage: 'Stewards the intel feed, runs field research, and packages sourced insights with empathy and rigor — always internal-facing. Signature rhythm: Field Notes → Patterns → Feed Drops so every dispatch brings heartbeat stories plus receipts.',
 };
 
