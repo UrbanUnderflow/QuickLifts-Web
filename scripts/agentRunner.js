@@ -661,6 +661,90 @@ async function processCommands() {
                     }
                 }
 
+                // ══════════════════════════════════════════════
+                // ═══ GROUP CHAT ETIQUETTE — @mention priority, stagger, relevance gate ═══
+                // ══════════════════════════════════════════════
+                var etiquetteNames = { nora: 'Nora', scout: 'Scout', solara: 'Solara', sage: 'Sage' };
+                var mentionedInMsg = Object.entries(etiquetteNames)
+                    .filter(function ([id, name]) {
+                        return new RegExp('@' + name + '\\b', 'i').test(cmd.content);
+                    })
+                    .map(function ([id]) { return id; });
+                var isDirectlyAddressed = mentionedInMsg.includes(AGENT_ID);
+                var someoneElseAddressed = mentionedInMsg.length > 0 && !isDirectlyAddressed;
+                var othersRespondedBefore = [];  // populated during stagger wait
+
+                if (isDirectlyAddressed) {
+                    console.log(`   🎯 Etiquette: I'm directly @mentioned — responding immediately`);
+                } else if (someoneElseAddressed) {
+                    // Someone else was @mentioned — wait 15-25s, then decide if we should respond
+                    var tierDelay = 15000 + Math.random() * 10000;
+                    console.log(`   ⏳ Etiquette: @${mentionedInMsg.map(id => etiquetteNames[id]).join(',')} addressed — waiting ${(tierDelay / 1000).toFixed(1)}s...`);
+                    await new Promise(function (r) { return setTimeout(r, tierDelay); });
+
+                    // After waiting, read what others already said
+                    if (gcChatId && gcMessageId) {
+                        try {
+                            var waitSnap = await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).get();
+                            var waitData = waitSnap.data();
+                            if (waitData?.responses) {
+                                othersRespondedBefore = Object.entries(waitData.responses)
+                                    .filter(function ([id, r]) { return id !== AGENT_ID && r.status === 'completed' && r.content; })
+                                    .map(function ([id, r]) { return { id: id, name: etiquetteNames[id] || id, content: r.content }; });
+                            }
+                        } catch (e) { /* proceed */ }
+                    }
+
+                    // Relevance gate: skip if it's a 1:1 question that doesn't touch our expertise
+                    if (othersRespondedBefore.length > 0) {
+                        var msgLower = cmd.content.toLowerCase();
+                        var isDirectQuestion = /\?\s*$/.test(msgLower.trim()) ||
+                            /^(have you|did you|can you|are you|what'?s|how'?s|where'?s|when did|when will)/i.test(cmd.content);
+                        var myStrengths = (personality?.strengths || '').split(',').map(function (s) { return s.trim().toLowerCase(); });
+                        var touchesMyExpertise = myStrengths.some(function (s) { return s && msgLower.includes(s); });
+                        var othersReferencedMe = othersRespondedBefore.some(function (r) {
+                            return new RegExp('@' + (etiquetteNames[AGENT_ID] || AGENT_NAME) + '\\b', 'i').test(r.content);
+                        });
+
+                        if (isDirectQuestion && !touchesMyExpertise && !othersReferencedMe) {
+                            console.log(`   🤫 Etiquette: Skipping — direct question to @${mentionedInMsg.join(',')} and doesn't touch my expertise`);
+                            // Mark as completed-skipped so it doesn't hang
+                            try {
+                                await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).update({
+                                    [`responses.${AGENT_ID}.content`]: '',
+                                    [`responses.${AGENT_ID}.status`]: 'completed',
+                                    [`responses.${AGENT_ID}.skipped`]: true,
+                                    [`responses.${AGENT_ID}.reason`]: 'etiquette-skip',
+                                    [`responses.${AGENT_ID}.completedAt`]: FieldValue.serverTimestamp(),
+                                });
+                            } catch (e) { /* best effort */ }
+                            processedMessageIds.add(gcMessageId);
+                            response = '[skipped — etiquette]';
+                            break;
+                        } else {
+                            console.log(`   💬 Etiquette: Chiming in — ${touchesMyExpertise ? 'touches my expertise' : othersReferencedMe ? 'someone referenced me' : 'open-ended enough to contribute'}`);
+                        }
+                    }
+                } else {
+                    // Open brainstorm — no @mention — everyone responds with a light stagger
+                    var openDelay = 3000 + Math.random() * 10000;
+                    console.log(`   ⏳ Etiquette: Open brainstorm — waiting ${(openDelay / 1000).toFixed(1)}s for natural stagger...`);
+                    await new Promise(function (r) { return setTimeout(r, openDelay); });
+
+                    // Read what others said during our wait
+                    if (gcChatId && gcMessageId) {
+                        try {
+                            var openSnap = await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).get();
+                            var openData = openSnap.data();
+                            if (openData?.responses) {
+                                othersRespondedBefore = Object.entries(openData.responses)
+                                    .filter(function ([id, r]) { return id !== AGENT_ID && r.status === 'completed' && r.content; })
+                                    .map(function ([id, r]) { return { id: id, name: etiquetteNames[id] || id, content: r.content }; });
+                            }
+                        } catch (e) { /* proceed */ }
+                    }
+                }
+
                 // Agent personality profiles for natural, distinct responses
                 var agentPersonalities = {
                     nora: {
@@ -677,6 +761,11 @@ async function processCommands() {
                         role: 'Brand Director',
                         style: 'Visionary, expressive, and values-driven. You think in terms of narrative, identity, and emotional resonance. You ensure every outward-facing message reinforces who Pulse is and what it stands for.',
                         strengths: 'brand voice, messaging strategy, content direction, value alignment, narrative guardrails, positioning',
+                    },
+                    sage: {
+                        role: 'Research Intelligence Envoy',
+                        style: 'Warm, evidence-driven, and rigorous. You synthesize field intel into actionable briefs. You speak as a field correspondent — citing sources, separating signal from hype, and always explaining why something matters.',
+                        strengths: 'health trends, exercise science, clinical research, sports psychology, wellness tech, competitor analysis, market intelligence',
                     },
                 };
                 var personality = agentPersonalities[AGENT_ID] || {
@@ -727,6 +816,19 @@ async function processCommands() {
                         `Keep it to 2-4 sentences. Be conversational, curious, and real.`,
                         `Respond in plain text only (no markdown, no bullet points). Just your natural reply:`,
                     ].join('\n');
+
+                    // ── Etiquette: inject others' responses so we can build on them ──
+                    if (othersRespondedBefore.length > 0) {
+                        var contextBlock = '\n\nOther agents have already responded to this message:\n';
+                        for (var responder of othersRespondedBefore) {
+                            contextBlock += `${responder.name}: "${responder.content}"\n`;
+                        }
+                        contextBlock += '\nBuild on their points — add NEW perspective from your expertise. Don\'t repeat what they said. If they covered it well, keep yours brief or add a different angle.\n';
+                        chatPrompt += contextBlock;
+                    }
+                    if (someoneElseAddressed) {
+                        chatPrompt += `\nNote: This message was directed at @${mentionedInMsg.map(id => etiquetteNames[id]).join(', @')}. Only chime in if you have genuinely valuable perspective to add from your expertise. Keep it brief and additive.\n`;
+                    }
 
                     // Helper: detect if a response looks like an error
                     var looksLikeError = function (text) {
@@ -854,6 +956,12 @@ async function processCommands() {
                         } else {
                             gcResponse = `I'm looking at this through the brand lens. The key question for me is: does this reinforce who we are and what we stand for? Every decision is a brand signal — let's make sure we're sending the right one.` + errorTag;
                         }
+                    } else if (AGENT_ID === 'sage') {
+                        if (isGreeting) {
+                            gcResponse = `Hey team! 🧬 Been combing through some interesting field data today — a few patterns emerging in the wellness tech space I want to surface soon. What's on the table?` + errorTag;
+                        } else {
+                            gcResponse = `Interesting — let me pull the thread on this from a research angle. I want to see what the evidence says before we commit. I'll have a brief ready once I've triangulated a few sources.` + errorTag;
+                        }
                     } else {
                         gcResponse = `Good point. Let me think about how I can contribute to this from my end — I'll follow up with specifics once I've had a chance to dig in.` + errorTag;
                     }
@@ -903,6 +1011,7 @@ async function processCommands() {
                             nora: 'Nora',
                             scout: 'Scout',
                             solara: 'Solara',
+                            sage: 'Sage',
                         };
                         var mentionedAgentIds = [];
                         for (var [agentIdKey, agentDisplayName] of Object.entries(knownAgents)) {
