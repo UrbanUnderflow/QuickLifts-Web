@@ -15,6 +15,8 @@ export interface AgentThoughtStep {
   output?: string;        // Result or artifact produced
   durationMs?: number;    // How long this step took
   verificationFlag?: string; // Failure signals detected in output
+  subSteps?: { action: string; detail: string; ts: string }[];  // Live activity feed from OpenClaw stderr
+  lastActivityAt?: string;  // ISO timestamp of last detected activity
 }
 
 /* ─── Agent presence with execution context ────────────── */
@@ -88,6 +90,8 @@ function serialiseStep(step: AgentThoughtStep): Record<string, any> {
     reasoning: step.reasoning || '',
     output: step.output || '',
     durationMs: step.durationMs || 0,
+    subSteps: step.subSteps || [],
+    lastActivityAt: step.lastActivityAt || null,
   };
 }
 
@@ -102,6 +106,8 @@ function deserialiseStep(data: any): AgentThoughtStep {
     output: data.output || '',
     durationMs: data.durationMs || 0,
     verificationFlag: data.verificationFlag || '',
+    subSteps: data.subSteps || [],
+    lastActivityAt: data.lastActivityAt || null,
   };
 }
 
