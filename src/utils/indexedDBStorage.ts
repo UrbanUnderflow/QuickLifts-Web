@@ -1,21 +1,35 @@
 /**
  * IndexedDB storage utility for handling large file data
  * This is used as an alternative to sessionStorage which has quota limitations
+ *
+ * IMPORTANT: All browser-storage operations are guarded with
+ * `typeof window !== 'undefined'` so this module can be safely imported
+ * during Next.js SSR / SSG without triggering "No available storage method"
+ * errors from localforage.
  */
 
-import localforage from 'localforage';
+// Only import localforage in the browser — during SSR we never touch it.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+let localforage: any = null;
+
+if (typeof window !== 'undefined') {
+  localforage = require('localforage');
+}
 
 // Define the database name and store name
 const DB_NAME = 'QuickLiftsVideoDB';
 const STORE_NAME = 'videoFiles';
 
 /**
- * Initialize localforage
+ * Initialize localforage (browser-only)
  */
 const initializeStorage = () => {
+  if (typeof window === 'undefined' || !localforage) {
+    return false;
+  }
+
   try {
-    // Don't delete existing database - this can cause issues with persistence
-    console.log('[Storage] Available drivers:', 
+    console.log('[Storage] Available drivers:',
       localforage.INDEXEDDB ? 'IndexedDB' : 'No IndexedDB',
       localforage.WEBSQL ? 'WebSQL' : 'No WebSQL',
       localforage.LOCALSTORAGE ? 'localStorage' : 'No localStorage'
@@ -34,10 +48,10 @@ const initializeStorage = () => {
       console.log('[Storage] Configured localforage to use IndexedDB');
     } catch (_e) {
       console.warn('[Storage] Failed to configure IndexedDB, falling back to other drivers');
-      localforage.config({
+      localforage!.config({
         driver: [
-          localforage.WEBSQL,
-          localforage.LOCALSTORAGE
+          localforage!.WEBSQL,
+          localforage!.LOCALSTORAGE
         ],
         name: DB_NAME,
         storeName: STORE_NAME,
@@ -51,12 +65,12 @@ const initializeStorage = () => {
     const testStorage = async () => {
       try {
         const testKey = 'storage_test_' + Date.now();
-        await localforage.setItem(testKey, { test: 'ok' });
-        const testResult = await localforage.getItem(testKey);
+        await localforage!.setItem(testKey, { test: 'ok' });
+        const testResult = await localforage!.getItem(testKey);
         console.log('[Storage] Storage test completed successfully');
         console.log('[Storage] Test result:', testResult);
-        console.log('[Storage] Current driver being used:', await localforage.driver());
-        await localforage.removeItem(testKey);
+        console.log('[Storage] Current driver being used:', await localforage!.driver());
+        await localforage!.removeItem(testKey);
         return true;
       } catch (testError) {
         console.error('[Storage] Storage test failed:', testError);
@@ -72,8 +86,10 @@ const initializeStorage = () => {
   }
 };
 
-// Initialize on module load
-initializeStorage();
+// Initialize on module load — only in the browser
+if (typeof window !== 'undefined') {
+  initializeStorage();
+}
 
 /**
  * Stores a video file in storage
@@ -82,8 +98,13 @@ initializeStorage();
  * @returns Promise that resolves when the data is stored
  */
 export const storeVideoFile = async (key: string, data: any): Promise<void> => {
+  if (typeof window === 'undefined' || !localforage) {
+    console.warn('[Storage] storeVideoFile called on the server — skipping.');
+    return;
+  }
+
   console.log(`[Storage] Storing video file with key: ${key}, estimated size: ${data.data ? Math.round(data.data.length / 1024) : 'unknown'} KB`);
-  
+
   try {
     // Check if localforage has a driver available
     const currentDriver = await localforage.driver();
@@ -91,23 +112,23 @@ export const storeVideoFile = async (key: string, data: any): Promise<void> => {
       // If no driver is available, attempt to reinitialize
       console.warn('[Storage] No storage driver available, attempting to reinitialize');
       initializeStorage();
-      
+
       // Check again for a driver
       const retryDriver = await localforage.driver();
       if (!retryDriver) {
         throw new Error('No available storage method found. Please try a different browser or clear browser data.');
       }
     }
-    
+
     console.log(`[Storage] Using driver: ${await localforage.driver()}`);
-    
+
     // Clear storage before saving to ensure maximum available space
     await clearUnusedStorage();
 
     // First, clear any existing data with this key
     await localforage.removeItem(key);
     console.log(`[Storage] Cleared any existing data for key: ${key}`);
-    
+
     try {
       // Store the data - don't modify the data object, let localforage handle the key
       const startTime = performance.now();
@@ -116,7 +137,7 @@ export const storeVideoFile = async (key: string, data: any): Promise<void> => {
       console.log(`[Storage] Successfully stored video file with key: ${key} in ${Math.round(endTime - startTime)}ms`);
     } catch (storageError) {
       console.error('[Storage] Raw storage error:', storageError);
-      
+
       // Specific error handling based on the error message or type
       if (storageError instanceof Error) {
         if (storageError.name === 'QuotaExceededError') {
@@ -142,6 +163,11 @@ export const storeVideoFile = async (key: string, data: any): Promise<void> => {
  * @returns Promise with the file data
  */
 export const getVideoFile = async (key: string): Promise<any> => {
+  if (typeof window === 'undefined' || !localforage) {
+    console.warn('[Storage] getVideoFile called on the server — returning null.');
+    return null;
+  }
+
   console.log(`[Storage] Retrieving video file with key: ${key}`);
   try {
     const data = await localforage.getItem(key);
@@ -164,6 +190,10 @@ export const getVideoFile = async (key: string): Promise<any> => {
  * @returns Promise that resolves when the data is removed
  */
 export const removeVideoFile = async (key: string): Promise<void> => {
+  if (typeof window === 'undefined' || !localforage) {
+    return;
+  }
+
   console.log(`[Storage] Removing video file with key: ${key}`);
   try {
     await localforage.removeItem(key);
@@ -178,18 +208,22 @@ export const removeVideoFile = async (key: string): Promise<void> => {
  * Clear unused storage to make space for new files
  */
 async function clearUnusedStorage(): Promise<void> {
+  if (typeof window === 'undefined' || !localforage) {
+    return;
+  }
+
   try {
     console.log('[Storage] Checking for unused files to clear space');
-    
+
     // These keys should be cleared if they exist to free up space
     const keysToCheck = [
-      'trim_video_file_backup', 
+      'trim_video_file_backup',
       'old_video_file',
       'temp_video_file',
       // Add trimmed_video_file to prevent conflicts if a previous trimming was incomplete
       'trimmed_video_file'
     ];
-    
+
     for (const key of keysToCheck) {
       try {
         const existingItem = await localforage.getItem(key);
@@ -210,6 +244,10 @@ async function clearUnusedStorage(): Promise<void> {
  * Clear all storage (use with caution)
  */
 export const clearAllStorage = async (): Promise<void> => {
+  if (typeof window === 'undefined' || !localforage) {
+    return;
+  }
+
   try {
     console.log('[Storage] Clearing all stored video files');
     await localforage.clear();
