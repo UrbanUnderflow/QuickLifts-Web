@@ -42,7 +42,7 @@ const MESSAGE_TYPES: { type: MessageType; label: string; icon: React.ReactNode; 
 ];
 
 const AGENT_EMOJIS: Record<string, string> = {
-    nora: '⚡', antigravity: '🌌', scout: '🕵️', solara: '❤️‍🔥',
+    nora: '⚡', antigravity: '🌌', scout: '🕵️', solara: '❤️‍🔥', sage: '🧬',
 };
 
 const AGENT_ROLES: Record<string, string> = {
