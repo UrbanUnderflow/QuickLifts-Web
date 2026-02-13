@@ -1801,6 +1801,26 @@ ${smokeOutput}`.substring(0, 2000);
                         );
                     }
 
+                    // Inject available workflows so the agent knows about operational runbooks
+                    try {
+                        const workflowsDir = path.join(projectDir, '.agent', 'workflows');
+                        const workflowFiles = require('fs').readdirSync(workflowsDir)
+                            .filter(f => f.endsWith('.md'));
+                        if (workflowFiles.length > 0) {
+                            base.push(
+                                ``,
+                                `📋 AVAILABLE RUNBOOKS (read these BEFORE trying unfamiliar operations):`,
+                                ...workflowFiles.map(f => {
+                                    const content = require('fs').readFileSync(path.join(workflowsDir, f), 'utf-8');
+                                    const descMatch = content.match(/description:\s*(.+)/);
+                                    const desc = descMatch ? descMatch[1].trim() : '';
+                                    return `  - ${workflowsDir}/${f}${desc ? ` — ${desc}` : ''}`;
+                                }),
+                                `If your current step involves any of these topics, READ the relevant workflow file FIRST.`,
+                            );
+                        }
+                    } catch { /* no workflows dir, skip */ }
+
                     base.push(
                         ``,
                         `Instructions:`,
