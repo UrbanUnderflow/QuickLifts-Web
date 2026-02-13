@@ -7,6 +7,7 @@ import {
     Paperclip, FileText, FolderOpen, Code2,
 } from 'lucide-react';
 import { presenceService, type AgentPresence } from '../../api/firebase/presence/service';
+import { AGENT_ROLES } from '../../utils/agentConstants';
 import { db } from '../../api/firebase/config';
 import {
     collection, query, where, orderBy, limit,
@@ -45,12 +46,7 @@ const AGENT_EMOJIS: Record<string, string> = {
     nora: '⚡', antigravity: '🌌', scout: '🕵️', solara: '❤️‍🔥',
 };
 
-const AGENT_ROLES: Record<string, string> = {
-    nora: 'Director of System Ops',
-    antigravity: 'Co-CEO · Strategy & Architecture',
-    scout: 'Influencer Research Analyst',
-    solara: 'Brand Director',
-};
+/* AGENT_ROLES imported from utils/agentConstants.ts */
 
 const AGENT_HEARTBEAT_STALE_MS = 2 * 60_000;
 const OFFLINE_RESPONSE_TIMEOUT_MS = 45_000;

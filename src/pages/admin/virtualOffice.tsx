@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import ReactDOM from 'react-dom';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
+import { AGENT_ROLES } from '../../utils/agentConstants';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { presenceService, AgentPresence, AgentThoughtStep, TaskHistoryEntry } from '../../api/firebase/presence/service';
 import { kanbanService } from '../../api/firebase/kanban/service';
@@ -68,14 +69,7 @@ const DESK_POSITIONS = [
 
 /* ─── Agent roles / job titles ─────────────────────── */
 
-const AGENT_ROLES: Record<string, string> = {
-  antigravity: 'Co-CEO · Strategy & Architecture',
-  nora: 'Director of System Ops',
-  scout: 'Influencer Research Analyst',
-  solara: 'Brand Voice',
-  sage: 'Research Intelligence Envoy',
-  // Add more agents here as they join
-};
+/* AGENT_ROLES imported from utils/agentConstants.ts */
 
 const AGENT_DUTIES: Record<string, string> = {
   antigravity: 'Drives product strategy, system architecture, and pair-programs with the CEO. Coordinates cross-agent work and reviews critical code paths.',
@@ -274,7 +268,7 @@ const AGENT_PROFILES: Record<string, { title: string; location: string; sections
     footer: 'Scout is the focused research specialist for creator discovery and qualification workflows.',
   },
   sage: {
-    title: 'Research Intelligence Envoy',
+    title: 'Health Intelligence Researcher',
     location: 'Virtual Office (intel desk)',
     sections: [
       {
@@ -1129,6 +1123,7 @@ interface AgentDeskProps {
   isTransitioning?: boolean;
   transitionDelay?: number;
   isAtTable?: boolean;
+  onPositionChange?: (agentId: string, x: number, y: number) => void;
 }
 
 const AgentDeskSprite: React.FC<AgentDeskProps> = ({
@@ -1137,6 +1132,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   isTransitioning = false,
   transitionDelay = 0,
   isAtTable = false,
+  onPositionChange,
 }) => {
   const [hovered, setHovered] = useState(false);
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -1146,20 +1142,84 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   const sessionDuration = formatDuration(agent.sessionStartedAt);
   const hasSteps = agent.executionSteps && agent.executionSteps.length > 0;
 
+  // ─── Drag state ─────────────────────────────
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef<{
+    startX: number; startY: number;
+    startPosX: number; startPosY: number;
+    hasMoved: boolean;
+  } | null>(null);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only left click, ignore if on the hover panel
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('.hover-detail-panel')) return;
+    e.preventDefault();
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startPosX: position.x,
+      startPosY: position.y,
+      hasMoved: false,
+    };
+  }, [position.x, position.y]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragRef.current) return;
+      const dx = e.clientX - dragRef.current.startX;
+      const dy = e.clientY - dragRef.current.startY;
+      // Threshold before starting drag (5px)
+      if (!dragRef.current.hasMoved && Math.abs(dx) + Math.abs(dy) < 5) return;
+      dragRef.current.hasMoved = true;
+      if (!isDragging) setIsDragging(true);
+      // Suppress hover panel during drag
+      if (hovered) { setHovered(false); if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; } }
+
+      // Calculate new position as % of floor
+      const floor = document.querySelector('.office-floor') as HTMLElement;
+      if (!floor) return;
+      const rect = floor.getBoundingClientRect();
+      const newX = Math.max(5, Math.min(95, ((e.clientX - rect.left) / rect.width) * 100));
+      const newY = Math.max(5, Math.min(95, ((e.clientY - rect.top) / rect.height) * 100));
+      onPositionChange?.(agent.id, newX, newY);
+    };
+
+    const handleMouseUp = () => {
+      if (dragRef.current) {
+        dragRef.current = null;
+        setIsDragging(false);
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, hovered, agent.id, onPositionChange]);
+
   const handleMouseEnter = useCallback(() => {
+    if (isDragging) return;
     if (hoverTimerRef.current) {
       clearTimeout(hoverTimerRef.current);
       hoverTimerRef.current = null;
     }
-    setHovered(true);
-  }, []);
+    // Delay hover panel so user has time to start dragging
+    hoverTimerRef.current = setTimeout(() => {
+      setHovered(true);
+      hoverTimerRef.current = null;
+    }, 400);
+  }, [isDragging]);
 
   const handleMouseLeave = useCallback(() => {
+    if (isDragging) return;
     hoverTimerRef.current = setTimeout(() => {
       setHovered(false);
       hoverTimerRef.current = null;
     }, 500); // 0.5 second linger
-  }, []);
+  }, [isDragging]);
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -1221,12 +1281,14 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   return (
     <div
       ref={spriteRef}
-      className={`agent-desk-sprite ${isTransitioning ? 'transitioning' : ''}`}
+      className={`agent-desk-sprite ${isTransitioning ? 'transitioning' : ''} ${isDragging ? 'dragging' : ''}`}
       style={{
         left: `${position.x}%`,
         top: `${position.y}%`,
         transitionDelay: isTransitioning ? `${transitionDelay}ms` : '0ms',
+        cursor: isDragging ? 'grabbing' : 'grab',
       }}
+      onMouseDown={handleMouseDown}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -2017,6 +2079,16 @@ const VirtualOfficeContent: React.FC = () => {
                     isTransitioning={posInfo.state.includes('transitioning')}
                     transitionDelay={posInfo.transitionDelay}
                     isAtTable={posInfo.state === 'table'}
+                    onPositionChange={(id, x, y) => {
+                      setAgentPositions(prev => ({
+                        ...prev,
+                        [id]: {
+                          ...prev[id],
+                          deskPosition: { ...prev[id].deskPosition, x, y },
+                          position: { ...prev[id].position, x, y },
+                        }
+                      }));
+                    }}
                   />
                 </React.Fragment>
               );
@@ -2176,7 +2248,6 @@ const VirtualOfficeContent: React.FC = () => {
           position: relative;
           width: 100%;
           height: 100%;
-          overflow: hidden;
           background: linear-gradient(180deg, #0d1117 0%, #0a0e14 40%, #080c11 100%);
           border-top: 1px solid rgba(63,63,70,0.2);
         }
@@ -2392,7 +2463,13 @@ const VirtualOfficeContent: React.FC = () => {
         }
         .agent-desk-sprite:hover {
           transform: translate(-50%, -50%) scale(1.08);
-          z-index: 20;
+          z-index: 999;
+        }
+        .agent-desk-sprite.dragging {
+          transform: translate(-50%, -50%) scale(1.12);
+          z-index: 1000;
+          transition: none !important;
+          filter: drop-shadow(0 8px 24px rgba(59,130,246,0.3));
         }
         .desk-glow {
           position: absolute;
@@ -2577,7 +2654,7 @@ const VirtualOfficeContent: React.FC = () => {
           border: 1px solid rgba(63,63,70,0.35);
           border-radius: 16px;
           padding: 16px;
-          z-index: 100;
+          z-index: 9999;
           box-shadow: 0 12px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03);
           animation: panelSlideIn 0.2s ease-out;
           scrollbar-width: thin;

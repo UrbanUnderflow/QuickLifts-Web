@@ -85,8 +85,6 @@ CORE_FUNCTIONS=(
   # KPI / Press
   generateKpiSnapshot
   draftPress
-  triggerDraftPress
-  triggerGenerateKpiSnapshot
 
   # Mental training
   tts-mental-step
