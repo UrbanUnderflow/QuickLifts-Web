@@ -520,9 +520,44 @@ const ExecutionStepsPanel: React.FC<{
                     ) : isActive ? (
                       <span className="text-blue-400/70 flex items-center gap-1">
                         <Zap className="w-2.5 h-2.5" /> Processing…
+                        {step.lastActivityAt && (() => {
+                          const secAgo = Math.round((Date.now() - new Date(step.lastActivityAt).getTime()) / 1000);
+                          const isStale = secAgo > 60;
+                          const isStuck = secAgo > 120;
+                          return (
+                            <span style={{
+                              marginLeft: '6px', fontSize: '9px', fontWeight: 500,
+                              color: isStuck ? '#f87171' : isStale ? '#fbbf24' : '#6b7280',
+                            }}>
+                              {isStuck ? '⚠ may be stuck' : isStale ? `⏳ ${secAgo}s ago` : `${secAgo}s ago`}
+                            </span>
+                          );
+                        })()}
                       </span>
                     ) : null}
                   </div>
+
+                  {/* Sub-step activity feed */}
+                  {isActive && step.subSteps && step.subSteps.length > 0 && (
+                    <div style={{
+                      marginTop: '4px', padding: '4px 6px',
+                      background: 'rgba(59,130,246,0.06)', borderRadius: '4px',
+                      border: '1px solid rgba(59,130,246,0.1)',
+                      maxHeight: '120px', overflowY: 'auto',
+                    }}>
+                      {step.subSteps.map((sub, si) => (
+                        <div key={si} style={{
+                          fontSize: '9px', lineHeight: '16px',
+                          color: si === step.subSteps!.length - 1 ? '#93c5fd' : '#6b7280',
+                          fontFamily: 'monospace', display: 'flex', gap: '4px',
+                          fontWeight: si === step.subSteps!.length - 1 ? 600 : 400,
+                        }}>
+                          <span style={{ flexShrink: 0 }}>{sub.action}</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub.detail}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {hasDetail && (
                   <ChevronDown className={`w-3 h-3 text-zinc-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />

@@ -244,6 +244,65 @@ function serializeStep(step) {
         output: step.output || '',
         durationMs: step.durationMs || 0,
         verificationFlag: step.verificationFlag || '',
+        subSteps: (step.subSteps || []).slice(-8),
+        lastActivityAt: step.lastActivityAt || null,
+    };
+}
+
+/* ─── Stderr Activity Parser ─────────────────────────── */
+const ACTIVITY_PATTERNS = [
+    { rx: /(?:Read(?:ing)?|View(?:ing)?)\s+(?:file:?\s*)?[`'"]?([^`'"\n]+)/i, action: '📖 Reading', extract: 1 },
+    { rx: /(?:Writ(?:e|ing)|Edit(?:ing)?|Updat(?:e|ing)|Creat(?:e|ing))\s+(?:file:?\s*)?[`'"]?([^`'"\n]+)/i, action: '✏️ Editing', extract: 1 },
+    { rx: /(?:Search(?:ing)?|Grep(?:ping)?|Find(?:ing)?)\s/i, action: '🔍 Searching', extract: null },
+    { rx: /(?:Run(?:ning)?|Exec(?:uting)?)\s+(?:command:?\s*)?[`'"]?([^`'"\n]{0,60})/i, action: '⚙️ Running', extract: 1 },
+    { rx: /(?:Install(?:ing)?|npm|yarn|pip)\s/i, action: '📦 Installing', extract: null },
+    { rx: /(?:Test(?:ing)?|Assert(?:ing)?)\s/i, action: '🧪 Testing', extract: null },
+    { rx: /(?:Think(?:ing)?|Plan(?:ning)?|Analyz(?:e|ing))\s/i, action: '🧠 Analyzing', extract: null },
+    { rx: /(?:Compil(?:e|ing)|Build(?:ing)?)\s/i, action: '🔨 Building', extract: null },
+    { rx: /tool[_\s]?(?:use|call|result)/i, action: '⚡ Tool call', extract: null },
+];
+
+function parseStderrLine(line) {
+    var trimmed = (line || '').trim();
+    if (!trimmed || trimmed.length < 3) return null;
+    for (var pat of ACTIVITY_PATTERNS) {
+        var match = trimmed.match(pat.rx);
+        if (match) {
+            var detail = pat.extract !== null && match[pat.extract] ? match[pat.extract].trim() : trimmed.substring(0, 80);
+            // Clean up file paths to just basenames
+            if (detail.includes('/')) {
+                var parts = detail.split('/');
+                detail = parts[parts.length - 1] || detail;
+            }
+            return { action: pat.action, detail: detail.substring(0, 60), ts: new Date().toISOString() };
+        }
+    }
+    return null;
+}
+
+function createProgressCallback(step, allSteps, stepIndex, progress) {
+    var lastWrite = 0;
+    var THROTTLE_MS = 5000;
+    var pending = false;
+
+    return async function onProgress(activity) {
+        step.subSteps = step.subSteps || [];
+        step.subSteps.push(activity);
+        if (step.subSteps.length > 8) step.subSteps.shift();
+        step.lastActivityAt = new Date().toISOString();
+
+        var now = Date.now();
+        if (!pending && (now - lastWrite) >= THROTTLE_MS) {
+            pending = true;
+            lastWrite = now;
+            try {
+                await reportSteps(allSteps, stepIndex, progress);
+            } catch (e) {
+                console.warn('   ⚠️ Progress write failed:', e.message);
+            } finally {
+                pending = false;
+            }
+        }
     };
 }
 
@@ -1742,7 +1801,7 @@ ${smokeOutput}`.substring(0, 2000);
                 };
 
                 // Helper: run OpenClaw with a given prompt
-                const invokeOpenClaw = (promptText) => new Promise((resolve, reject) => {
+                const invokeOpenClaw = (promptText, onProgress) => new Promise((resolve, reject) => {
                     const clawArgs = [
                         '--no-color', 'agent', '--local', '--json',
                         '--agent', OPENCLAW_AGENT_ID,
@@ -1752,6 +1811,7 @@ ${smokeOutput}`.substring(0, 2000);
                     const child = spawn(OPENCLAW_BIN, clawArgs, { cwd: projectDir, env: process.env });
                     let stdout = '';
                     let stderr = '';
+                    let stderrLineBuf = '';
                     let timedOut = false;
                     const maxLen = 10 * 1024 * 1024;
 
@@ -1766,12 +1826,31 @@ ${smokeOutput}`.substring(0, 2000);
                         if (stdout.length > maxLen) { clearTimeout(timeout); child.kill('SIGKILL'); reject(new Error('OpenClaw output exceeded 10MB')); }
                     });
                     child.stderr.on('data', (chunk) => {
-                        stderr += chunk.toString();
+                        var text = chunk.toString();
+                        stderr += text;
                         if (stderr.length > maxLen) { clearTimeout(timeout); child.kill('SIGKILL'); reject(new Error('OpenClaw error output exceeded 10MB')); }
+
+                        // Parse stderr lines for progress activities
+                        if (onProgress) {
+                            stderrLineBuf += text;
+                            var lines = stderrLineBuf.split('\n');
+                            stderrLineBuf = lines.pop() || ''; // keep incomplete last line in buffer
+                            for (var line of lines) {
+                                var activity = parseStderrLine(line);
+                                if (activity) {
+                                    onProgress(activity);
+                                }
+                            }
+                        }
                     });
                     child.on('error', (err) => { clearTimeout(timeout); reject(new Error(`Failed to launch ${OPENCLAW_BIN}: ${err.message}`)); });
                     child.on('close', (code) => {
                         clearTimeout(timeout);
+                        // Flush remaining stderr buffer
+                        if (onProgress && stderrLineBuf.trim()) {
+                            var activity = parseStderrLine(stderrLineBuf);
+                            if (activity) onProgress(activity);
+                        }
                         if (timedOut) { reject(new Error('OpenClaw timed out after 600s')); return; }
                         if (code !== 0) { reject(new Error(`OpenClaw failed (exit ${code}): ${(stderr || stdout || '').trim()}`)); return; }
                         resolve({ stdout, stderr });
@@ -1802,7 +1881,10 @@ ${smokeOutput}`.substring(0, 2000);
                     }
 
                     const prompt = await buildPrompt(attempt, lastOutput);
-                    const result = await invokeOpenClaw(prompt);
+                    step.subSteps = [];
+                    step.lastActivityAt = new Date().toISOString();
+                    const progressCb = createProgressCallback(step, allSteps, stepIndex, progress);
+                    const result = await invokeOpenClaw(prompt, progressCb);
                     const outputText = parseOutput((result.stdout || '').trim());
                     step.output = outputText;
                     lastOutput = outputText;
