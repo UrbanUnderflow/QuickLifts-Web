@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { X, Send, Sparkles, MessageSquare, AtSign } from 'lucide-react';
+import { X, Send, Sparkles, MessageSquare, AtSign, Paperclip, FileText, Loader2, FolderOpen, Code2, ChevronDown, Lightbulb, ListTodo, Terminal } from 'lucide-react';
+import { db } from '../../api/firebase/config';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { groupChatService } from '../../api/firebase/groupChat/service';
 import { presenceService, AgentPresence } from '../../api/firebase/presence/service';
 import type { GroupChatMessage } from '../../api/firebase/groupChat/types';
 import { MessageBubble } from './MessageBubble';
+import { meetingMinutesService } from '../../api/firebase/meetingMinutes/service';
+import type { MeetingMinutes } from '../../api/firebase/meetingMinutes/types';
 
 interface GroupChatModalProps {
   chatId: string;
@@ -39,7 +43,27 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
   const [showMentions, setShowMentions] = useState(false);
   const [mentionFilter, setMentionFilter] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
+
+  // Chat mode switcher
+  type ChatMode = 'brainstorm' | 'task' | 'command';
+  const [chatMode, setChatMode] = useState<ChatMode>('brainstorm');
+
+  // Meeting minutes attachment state
+  const [showMinutesPicker, setShowMinutesPicker] = useState(false);
+  const [allMinutes, setAllMinutes] = useState<MeetingMinutes[]>([]);
+  const [attachedMinutes, setAttachedMinutes] = useState<MeetingMinutes | null>(null);
+  const [loadingMinutes, setLoadingMinutes] = useState(false);
+
+  // File browser state
+  const [showFileBrowser, setShowFileBrowser] = useState(false);
+  const [fileBrowserPath, setFileBrowserPath] = useState('/');
+  const [fileBrowserItems, setFileBrowserItems] = useState<any[]>([]);
+  const [fileBrowserLoading, setFileBrowserLoading] = useState(false);
+  const [attachedFile, setAttachedFile] = useState<{ name: string; path: string; content: string; size: number } | null>(null);
+  const [fileFilter, setFileFilter] = useState('');
 
   // Listen to messages
   useEffect(() => {
@@ -59,10 +83,29 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
     return () => unsubscribe();
   }, []);
 
-  // Auto-scroll to latest message
+  // Smart scroll — only auto-scroll if user is near bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distFromBottom < 120) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      setHasNewMessages(true);
+    }
   }, [messages]);
+
+  const handleMessagesScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const distFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distFromBottom < 80) setHasNewMessages(false);
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setHasNewMessages(false);
+  };
 
   // Focus input on mount
   useEffect(() => {
@@ -79,8 +122,48 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
     if (!inputText.trim() || sending) return;
     setSending(true);
     try {
-      await groupChatService.broadcastMessage(chatId, inputText.trim(), participants);
+      let messageContent = inputText.trim();
+      if (attachedFile) {
+        messageContent += `\n\n--- ATTACHED FILE: ${attachedFile.path} ---\n\`\`\`\n${attachedFile.content}\n\`\`\`\n--- END FILE ---`;
+      }
+      if (attachedMinutes) {
+        const md = meetingMinutesService.toMarkdown(attachedMinutes);
+        messageContent += `\n\n--- ATTACHED MEETING MINUTES ---\n${md}\n--- END MEETING MINUTES ---`;
+      }
+
+      if (chatMode === 'brainstorm') {
+        // Default: broadcast to all agents for group discussion
+        await groupChatService.broadcastMessage(chatId, messageContent, participants);
+      } else {
+        // Task or Command mode: extract @mentioned agents and send directly as commands
+        const mentionedAgents = participants.filter(agentId => {
+          const name = (agentStatuses[agentId]?.displayName || agentId).toLowerCase();
+          return messageContent.toLowerCase().includes(`@${name}`) || messageContent.includes(`@${agentId}`);
+        });
+
+        // If no agents mentioned, send to all participants
+        const targets = mentionedAgents.length > 0 ? mentionedAgents : participants;
+
+        // Also broadcast the message to group chat so everyone sees it
+        await groupChatService.broadcastMessage(chatId, `[${chatMode.toUpperCase()}] ${messageContent}`, participants);
+
+        // Send individual task/command to each targeted agent
+        for (const agentId of targets) {
+          await addDoc(collection(db, 'agent-commands'), {
+            from: 'admin',
+            to: agentId,
+            type: chatMode, // 'task' or 'command'
+            content: messageContent.replace(new RegExp(`@\\w+`, 'gi'), '').trim(),
+            metadata: { source: 'group-chat', chatId },
+            status: 'pending',
+            createdAt: serverTimestamp(),
+          });
+        }
+      }
+
       setInputText('');
+      setAttachedMinutes(null);
+      setAttachedFile(null);
       inputRef.current?.focus();
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -113,7 +196,23 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
       setShowMentions(false);
       setMentionFilter('');
     }
-  }, []);
+
+    // Check for / trigger for file browser
+    const slashIdx = textBeforeCursor.lastIndexOf('/');
+    if (slashIdx >= 0) {
+      const charBefore = slashIdx > 0 ? textBeforeCursor[slashIdx - 1] : ' ';
+      if (slashIdx === 0 || /\s/.test(charBefore)) {
+        const filterTxt = textBeforeCursor.slice(slashIdx + 1);
+        setFileFilter(filterTxt);
+        if (!showFileBrowser) {
+          setShowFileBrowser(true);
+          browseDir('/');
+        }
+        return;
+      }
+    }
+    if (showFileBrowser) setShowFileBrowser(false);
+  }, [showFileBrowser]);
 
   // Insert mention
   const insertMention = useCallback((agentId: string, agentName: string) => {
@@ -137,6 +236,36 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
       textarea.setSelectionRange(newCursorPos, newCursorPos);
     }, 10);
   }, [inputText]);
+
+  const browseDir = async (dirPath: string) => {
+    setFileBrowserLoading(true);
+    setFileBrowserPath(dirPath);
+    try {
+      const res = await fetch(`/api/files/browse?path=${encodeURIComponent(dirPath)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setFileBrowserItems(data.items || []);
+      }
+    } catch (e) {
+      console.error('Failed to browse files:', e);
+    }
+    setFileBrowserLoading(false);
+  };
+
+  const selectFile = async (filePath: string) => {
+    try {
+      const res = await fetch(`/api/files/browse?path=${encodeURIComponent(filePath)}&read=true`);
+      if (res.ok) {
+        const data = await res.json();
+        setAttachedFile({ name: data.name, path: data.path, content: data.content, size: data.size });
+      }
+    } catch (e) {
+      console.error('Failed to read file:', e);
+    }
+    setShowFileBrowser(false);
+    const slashIdx = inputText.lastIndexOf('/');
+    if (slashIdx >= 0) setInputText(inputText.slice(0, slashIdx));
+  };
 
   const handleClose = () => {
     const hasActiveResponses = messages.some(msg =>
@@ -226,7 +355,7 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
         </div>
 
         {/* ── Messages ── */}
-        <div className="rt-messages">
+        <div className="rt-messages" ref={messagesContainerRef} onScroll={handleMessagesScroll}>
           {messages.length === 0 && (
             <div className="rt-empty">
               <div className="rt-empty-icon">
@@ -251,6 +380,14 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
           ))}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* New messages indicator */}
+        {hasNewMessages && (
+          <button className="rt-new-msg-btn" onClick={scrollToBottom}>
+            <ChevronDown className="w-4 h-4" />
+            <span>New messages</span>
+          </button>
+        )}
 
         {/* ── Typing indicator ── */}
         {typingAgents.length > 0 && (
@@ -299,7 +436,176 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
 
         {/* ── Input ── */}
         <div className="rt-input-area">
+          {/* Mode Switcher */}
+          <div className="rt-mode-switcher">
+            <button
+              className={`rt-mode-pill ${chatMode === 'brainstorm' ? 'active' : ''}`}
+              onClick={() => setChatMode('brainstorm')}
+              data-mode="brainstorm"
+            >
+              <Lightbulb className="w-3 h-3" />
+              Brainstorm
+            </button>
+            <button
+              className={`rt-mode-pill ${chatMode === 'task' ? 'active' : ''}`}
+              onClick={() => setChatMode('task')}
+              data-mode="task"
+            >
+              <ListTodo className="w-3 h-3" />
+              Task
+            </button>
+            <button
+              className={`rt-mode-pill ${chatMode === 'command' ? 'active' : ''}`}
+              onClick={() => setChatMode('command')}
+              data-mode="command"
+            >
+              <Terminal className="w-3 h-3" />
+              Command
+            </button>
+          </div>
+          {/* Attached minutes chip */}
+          {attachedMinutes && (
+            <div className="rt-attached-chip">
+              <FileText className="w-3 h-3" />
+              <span>{attachedMinutes.executiveSummary?.slice(0, 50) || 'Meeting Minutes'}...</span>
+              <button className="rt-chip-remove" onClick={() => setAttachedMinutes(null)}>✕</button>
+            </div>
+          )}
+
+          {/* Minutes picker dropdown */}
+          {showMinutesPicker && (
+            <div className="rt-minutes-picker">
+              <div className="rt-minutes-picker-header">
+                <FileText className="w-3.5 h-3.5" />
+                <span>Attach Meeting Minutes</span>
+              </div>
+              {loadingMinutes ? (
+                <div className="rt-minutes-loading">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Loading minutes...</span>
+                </div>
+              ) : allMinutes.length === 0 ? (
+                <div className="rt-minutes-empty">No saved meeting minutes yet</div>
+              ) : (
+                <div className="rt-minutes-list">
+                  {allMinutes.map(m => {
+                    const date = m.createdAt instanceof Date
+                      ? m.createdAt
+                      : (m.createdAt as any)?.toDate?.() || new Date();
+                    return (
+                      <button
+                        key={m.id}
+                        className="rt-minutes-item"
+                        onClick={() => {
+                          setAttachedMinutes(m);
+                          setShowMinutesPicker(false);
+                        }}
+                      >
+                        <div className="rt-minutes-item-top">
+                          <span className="rt-minutes-date">
+                            {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                          <span className="rt-minutes-duration">{m.duration}</span>
+                        </div>
+                        <p className="rt-minutes-summary">
+                          {m.executiveSummary?.slice(0, 80) || 'Meeting minutes'}...
+                        </p>
+                        <div className="rt-minutes-agents">
+                          {m.participants.map(p => (
+                            <span key={p} className="rt-minutes-agent-tag">{p}</span>
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Attached file chip */}
+          {attachedFile && (
+            <div className="rt-attached-chip rt-file-chip">
+              <Code2 className="w-3 h-3" />
+              <span>{attachedFile.path}</span>
+              <span className="rt-file-size">{(attachedFile.size / 1024).toFixed(1)}KB</span>
+              <button className="rt-chip-remove" onClick={() => setAttachedFile(null)}>✕</button>
+            </div>
+          )}
+
+          {/* File browser dropdown */}
+          {showFileBrowser && (
+            <div className="rt-file-browser">
+              <div className="rt-fb-header">
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span className="rt-fb-path">{fileBrowserPath}</span>
+                {fileBrowserPath !== '/' && (
+                  <button className="rt-fb-up" onClick={() => {
+                    const parent = fileBrowserPath.split('/').slice(0, -1).join('/') || '/';
+                    browseDir(parent);
+                  }}>↑ Up</button>
+                )}
+                <button className="rt-fb-close" onClick={() => setShowFileBrowser(false)}>✕</button>
+              </div>
+              {fileBrowserLoading ? (
+                <div className="rt-fb-loading"><Loader2 className="w-4 h-4 animate-spin" /><span>Loading...</span></div>
+              ) : (
+                <div className="rt-fb-list">
+                  {fileBrowserItems
+                    .filter(item => !fileFilter || item.name.toLowerCase().includes(fileFilter.toLowerCase()))
+                    .map(item => (
+                      <button
+                        key={item.path}
+                        className="rt-fb-item"
+                        onClick={() => {
+                          if (item.isDirectory) {
+                            browseDir(item.path);
+                            setFileFilter('');
+                          } else {
+                            selectFile(item.path);
+                          }
+                        }}
+                      >
+                        <span className="rt-fb-icon">{item.icon}</span>
+                        <span className="rt-fb-name">{item.name}</span>
+                        {item.isDirectory && <span className="rt-fb-count">{item.children} items</span>}
+                        {!item.isDirectory && item.size != null && (
+                          <span className="rt-fb-size">{(item.size / 1024).toFixed(1)}KB</span>
+                        )}
+                      </button>
+                    ))}
+                  {fileBrowserItems.filter(item => !fileFilter || item.name.toLowerCase().includes(fileFilter.toLowerCase())).length === 0 && (
+                    <div className="rt-fb-empty">No matching files</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="rt-input-row">
+            <button
+              className="rt-attach-btn"
+              title="Attach meeting minutes"
+              onClick={async () => {
+                if (showMinutesPicker) {
+                  setShowMinutesPicker(false);
+                  return;
+                }
+                setShowMinutesPicker(true);
+                if (allMinutes.length === 0) {
+                  setLoadingMinutes(true);
+                  try {
+                    const mins = await meetingMinutesService.getAll();
+                    setAllMinutes(mins);
+                  } catch (e) {
+                    console.error('Failed to load minutes:', e);
+                  }
+                  setLoadingMinutes(false);
+                }
+              }}
+            >
+              <Paperclip className="w-4 h-4" />
+            </button>
             <button
               className="rt-at-btn"
               onClick={() => {
@@ -316,7 +622,13 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
             <textarea
               ref={inputRef}
               className="rt-textarea"
-              placeholder="Message all agents…"
+              placeholder={
+                chatMode === 'brainstorm'
+                  ? 'Brainstorm with all agents…'
+                  : chatMode === 'task'
+                    ? 'Describe a task… @mention an agent to assign'
+                    : 'Send a command… @mention an agent to target'
+              }
               value={inputText}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
@@ -338,6 +650,11 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
           </div>
           <p className="rt-input-hint">
             <kbd>↵</kbd> to send · <kbd>⇧</kbd> + <kbd>↵</kbd> new line · <kbd>@</kbd> to mention
+            {chatMode !== 'brainstorm' && (
+              <span className="rt-mode-hint">
+                &nbsp;· Mode: <strong>{chatMode}</strong> — {chatMode === 'task' ? 'creates a kanban task' : 'sends a direct command'}
+              </span>
+            )}
           </p>
         </div>
       </div>
@@ -577,6 +894,72 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
           border-top: 1px solid rgba(255, 255, 255, 0.04);
         }
 
+        /* ═══ MODE SWITCHER ═══ */
+        .rt-mode-switcher {
+          display: flex;
+          gap: 4px;
+          margin-bottom: 10px;
+          padding: 3px;
+          background: rgba(255,255,255,0.02);
+          border-radius: 10px;
+          border: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .rt-mode-pill {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          padding: 6px 10px;
+          font-size: 11px;
+          font-weight: 500;
+          letter-spacing: 0.02em;
+          border-radius: 8px;
+          border: 1px solid transparent;
+          background: transparent;
+          color: #52525b;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .rt-mode-pill:hover {
+          color: #a1a1aa;
+          background: rgba(255,255,255,0.04);
+        }
+
+        /* Brainstorm active */
+        .rt-mode-pill[data-mode="brainstorm"].active {
+          background: rgba(139, 92, 246, 0.12);
+          border-color: rgba(139, 92, 246, 0.3);
+          color: #a78bfa;
+          box-shadow: 0 0 12px rgba(139, 92, 246, 0.08);
+        }
+
+        /* Task active */
+        .rt-mode-pill[data-mode="task"].active {
+          background: rgba(34, 197, 94, 0.12);
+          border-color: rgba(34, 197, 94, 0.3);
+          color: #4ade80;
+          box-shadow: 0 0 12px rgba(34, 197, 94, 0.08);
+        }
+
+        /* Command active */
+        .rt-mode-pill[data-mode="command"].active {
+          background: rgba(245, 158, 11, 0.12);
+          border-color: rgba(245, 158, 11, 0.3);
+          color: #fbbf24;
+          box-shadow: 0 0 12px rgba(245, 158, 11, 0.08);
+        }
+
+        .rt-mode-hint {
+          color: #71717a;
+        }
+        .rt-mode-hint strong {
+          text-transform: capitalize;
+          color: #a1a1aa;
+        }
+
         .rt-input-row {
           display: flex;
           gap: 8px;
@@ -733,6 +1116,146 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
           0%, 60%, 100% { transform: translateY(0); opacity: 0.3; }
           30% { transform: translateY(-3px); opacity: 1; }
         }
+
+        /* ── Attachment UI ── */
+        .rt-attach-btn {
+          flex-shrink: 0; width: 32px; height: 32px;
+          border-radius: 8px; border: none; background: transparent;
+          color: #52525b; display: flex; align-items: center;
+          justify-content: center; cursor: pointer; transition: all 0.15s;
+        }
+        .rt-attach-btn:hover { background: rgba(255,255,255,0.06); color: #a1a1aa; }
+
+        .rt-attached-chip {
+          display: flex; align-items: center; gap: 6px;
+          padding: 5px 10px; border-radius: 8px;
+          background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.2);
+          font-size: 11px; color: #a78bfa; margin-bottom: 4px;
+        }
+        .rt-attached-chip span {
+          flex: 1; white-space: nowrap; overflow: hidden;
+          text-overflow: ellipsis; min-width: 0;
+        }
+        .rt-chip-remove {
+          background: none; border: none; color: #52525b;
+          cursor: pointer; font-size: 11px; padding: 0 2px; flex-shrink: 0;
+        }
+        .rt-chip-remove:hover { color: #ef4444; }
+
+        .rt-minutes-picker {
+          position: absolute; bottom: 80px; left: 12px; right: 12px;
+          background: #1a1a20; border: 1px solid #222228;
+          border-radius: 14px; z-index: 21;
+          box-shadow: 0 -6px 24px rgba(0,0,0,0.5);
+          max-height: 320px; display: flex; flex-direction: column;
+          animation: rtFade 0.15s ease-out;
+        }
+        .rt-minutes-picker-header {
+          display: flex; align-items: center; gap: 6px;
+          padding: 12px 14px; border-bottom: 1px solid #222228;
+          font-size: 12px; font-weight: 600; color: #a1a1aa;
+        }
+        .rt-minutes-loading {
+          display: flex; align-items: center; justify-content: center;
+          gap: 8px; padding: 24px; color: #52525b; font-size: 12px;
+        }
+        .rt-minutes-empty {
+          padding: 24px; text-align: center;
+          color: #3f3f46; font-size: 12px;
+        }
+        .rt-minutes-list { overflow-y: auto; flex: 1; }
+        .rt-minutes-list::-webkit-scrollbar { width: 3px; }
+        .rt-minutes-list::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+        .rt-minutes-item {
+          display: block; width: 100%; padding: 10px 14px;
+          border: none; border-bottom: 1px solid rgba(63,63,70,0.08);
+          background: transparent; color: inherit; text-align: left;
+          cursor: pointer; transition: background 0.12s;
+        }
+        .rt-minutes-item:hover { background: rgba(139,92,246,0.06); }
+        .rt-minutes-item:last-child { border-bottom: none; }
+        .rt-minutes-item-top {
+          display: flex; justify-content: space-between;
+          align-items: center; margin-bottom: 3px;
+        }
+        .rt-minutes-date { font-size: 11px; font-weight: 600; color: #e4e4e7; }
+        .rt-minutes-duration { font-size: 10px; color: #52525b; }
+        .rt-minutes-summary {
+          font-size: 11px; color: #71717a; margin: 0 0 4px;
+          line-height: 1.3; display: -webkit-box;
+          -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .rt-minutes-agents { display: flex; gap: 4px; flex-wrap: wrap; }
+        .rt-minutes-agent-tag {
+          font-size: 9px; font-weight: 600; text-transform: capitalize;
+          padding: 1px 6px; border-radius: 4px;
+          background: rgba(63,63,70,0.2); color: #71717a;
+        }
+
+        /* ── New Messages Indicator ── */
+        .rt-new-msg-btn {
+          position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%);
+          display: flex; align-items: center; gap: 5px;
+          padding: 6px 14px; border-radius: 20px;
+          background: rgba(139,92,246,0.9); color: #fff;
+          border: none; cursor: pointer; font-size: 11px; font-weight: 600;
+          box-shadow: 0 4px 16px rgba(139,92,246,0.3);
+          z-index: 20; animation: rtFade 0.2s ease-out;
+          transition: background 0.15s;
+        }
+        .rt-new-msg-btn:hover { background: rgba(139,92,246,1); }
+
+        /* ── File Browser ── */
+        .rt-file-chip { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.2); color: #4ade80; }
+        .rt-file-size { font-size: 9px; color: #52525b; flex-shrink: 0; }
+
+        .rt-file-browser {
+          position: absolute; bottom: 80px; left: 12px; right: 12px;
+          background: #1a1a20; border: 1px solid #222228;
+          border-radius: 14px; z-index: 22;
+          box-shadow: 0 -6px 24px rgba(0,0,0,0.5);
+          animation: rtFade 0.15s ease-out;
+          max-height: 340px; display: flex; flex-direction: column;
+        }
+        .rt-fb-header {
+          display: flex; align-items: center; gap: 6px;
+          padding: 10px 14px; border-bottom: 1px solid #222228;
+          font-size: 11px; font-weight: 600; color: #a1a1aa;
+        }
+        .rt-fb-path {
+          flex: 1; font-family: 'SF Mono', 'Fira Code', monospace;
+          font-size: 11px; color: #a78bfa;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .rt-fb-up, .rt-fb-close {
+          background: none; border: none; color: #52525b;
+          cursor: pointer; font-size: 10px; font-weight: 600;
+          padding: 3px 6px; border-radius: 4px; transition: all 0.12s;
+        }
+        .rt-fb-up:hover { background: rgba(139,92,246,0.1); color: #a78bfa; }
+        .rt-fb-close:hover { color: #ef4444; }
+        .rt-fb-loading {
+          display: flex; align-items: center; justify-content: center;
+          gap: 8px; padding: 24px; color: #52525b; font-size: 12px;
+        }
+        .rt-fb-list { overflow-y: auto; flex: 1; }
+        .rt-fb-list::-webkit-scrollbar { width: 3px; }
+        .rt-fb-list::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+        .rt-fb-item {
+          display: flex; align-items: center; gap: 8px;
+          width: 100%; padding: 7px 14px; border: none;
+          border-bottom: 1px solid rgba(63,63,70,0.06);
+          background: transparent; color: inherit; text-align: left;
+          cursor: pointer; transition: background 0.12s; font-size: 12px;
+        }
+        .rt-fb-item:hover { background: rgba(139,92,246,0.06); }
+        .rt-fb-item:last-child { border-bottom: none; }
+        .rt-fb-icon { font-size: 13px; flex-shrink: 0; width: 18px; text-align: center; }
+        .rt-fb-name { flex: 1; color: #d4d4d8; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11.5px; }
+        .rt-fb-count { font-size: 9px; color: #3f3f46; }
+        .rt-fb-size { font-size: 9px; color: #3f3f46; }
+        .rt-fb-empty { padding: 20px; text-align: center; color: #3f3f46; font-size: 11px; }
 
         @media (max-width: 768px) {
           .rt-overlay { padding: 0; }
