@@ -42,19 +42,23 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
         }
     };
 
-    const handleDownload = (minutes: MeetingMinutes, e: React.MouseEvent) => {
+    const handleDownload = async (minutes: MeetingMinutes, e: React.MouseEvent) => {
         e.stopPropagation();
-        const md = meetingMinutesService.toMarkdown(minutes);
-        const blob = new Blob([md], { type: 'text/markdown' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const date = minutes.createdAt instanceof Date
-            ? minutes.createdAt
-            : (minutes.createdAt as any)?.toDate?.() || new Date();
-        a.download = `meeting-minutes-${date.toISOString().split('T')[0]}.md`;
-        a.click();
-        URL.revokeObjectURL(url);
+        try {
+            const html = meetingMinutesService.toHTML(minutes);
+            const pdfBlob = await import('../../utils/pdf').then(mod => mod.renderHtmlToPdf(html));
+            const url = URL.createObjectURL(pdfBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            const date = minutes.createdAt instanceof Date
+                ? minutes.createdAt
+                : (minutes.createdAt as any)?.toDate?.() || new Date();
+            a.download = `meeting-minutes-${date.toISOString().split('T')[0]}.pdf`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('Failed to download PDF minutes:', err);
+        }
     };
 
     const handleDelete = async (id: string, e: React.MouseEvent) => {
@@ -191,51 +195,52 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
                                             <p>{minutes.executiveSummary}</p>
                                         </div>
 
-                                        {/* Topics */}
-                                        {minutes.topicsDiscussed.length > 0 && (
+                                        {/* Highlights */}
+                                        {(minutes.highlights && minutes.highlights.length > 0) && (
                                             <div className="fc-section">
-                                                <h4><MessageSquare className="w-3 h-3" /> Topics</h4>
-                                                {minutes.topicsDiscussed.map((t, i) => (
+                                                <h4><MessageSquare className="w-3 h-3" /> Highlights</h4>
+                                                <ul>{minutes.highlights?.map((h, i) => <li key={i}><strong>{h.speaker}:</strong> {h.summary}</li>)}</ul>
+                                            </div>
+                                        )}
+
+                                        {/* Value Insights */}
+                                        {(minutes.valueInsights && minutes.valueInsights.length > 0) && (
+                                            <div className="fc-section">
+                                                <h4><Lightbulb className="w-3 h-3" /> Value Insights</h4>
+                                                {minutes.valueInsights?.map((insight, i) => (
                                                     <div key={i} className="fc-topic">
-                                                        <strong>{t.title}:</strong> {t.summary}
+                                                        <strong>{insight.title}:</strong> {insight.takeaway}
+                                                        <div className="fc-topic-impact">Impact: {insight.impact}</div>
                                                     </div>
                                                 ))}
                                             </div>
                                         )}
 
-                                        {/* Key Insights */}
-                                        {minutes.keyInsights.length > 0 && (
+                                        {/* Strategic Decisions */}
+                                        {(minutes.strategicDecisions && minutes.strategicDecisions.length > 0) && (
                                             <div className="fc-section">
-                                                <h4><Lightbulb className="w-3 h-3" /> Key Insights</h4>
-                                                <ul>{minutes.keyInsights.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                                                <h4><CheckSquare className="w-3 h-3" /> Strategic Decisions</h4>
+                                                <ul>{minutes.strategicDecisions?.map((s, i) => <li key={i}>{s}</li>)}</ul>
                                             </div>
                                         )}
 
-                                        {/* Decisions */}
-                                        {minutes.decisions.length > 0 && (
+                                        {/* Risks / Open Questions */}
+                                        {(minutes.risksOrOpenQuestions && minutes.risksOrOpenQuestions.length > 0) && (
                                             <div className="fc-section">
-                                                <h4><CheckSquare className="w-3 h-3" /> Decisions</h4>
-                                                <ul>{minutes.decisions.map((s, i) => <li key={i}>{s}</li>)}</ul>
+                                                <h4><HelpCircle className="w-3 h-3" /> Risks & Open Questions</h4>
+                                                <ul>{minutes.risksOrOpenQuestions?.map((s, i) => <li key={i}>{s}</li>)}</ul>
                                             </div>
                                         )}
 
-                                        {/* Open Questions */}
-                                        {minutes.openQuestions.length > 0 && (
+                                        {/* Next Actions */}
+                                        {(minutes.nextActions && minutes.nextActions.length > 0) && (
                                             <div className="fc-section">
-                                                <h4><HelpCircle className="w-3 h-3" /> Open Questions</h4>
-                                                <ul>{minutes.openQuestions.map((s, i) => <li key={i}>{s}</li>)}</ul>
-                                            </div>
-                                        )}
-
-                                        {/* Action Items */}
-                                        {minutes.actionItems.length > 0 && (
-                                            <div className="fc-section">
-                                                <h4><Sparkles className="w-3 h-3" /> Action Items</h4>
-                                                {minutes.actionItems.map((a, i) => (
+                                                <h4><Sparkles className="w-3 h-3" /> Next Actions</h4>
+                                                {minutes.nextActions?.map((a, i) => (
                                                     <div key={i} className="fc-action-row">
                                                         <div className="fc-checkbox" />
                                                         <span className="fc-action-text">{a.task}</span>
-                                                        <span className="fc-action-owner">{a.owner}</span>
+                                                        <span className="fc-action-owner">{a.owner}{a.due ? (" (Due: " + a.due + ")") : ''}</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -473,6 +478,13 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
           line-height: 1.4;
         }
         .fc-topic strong { color: #93c5fd; }
+        .fc-topic-impact {
+          display: block;
+          font-size: 11px;
+          color: #fcd34d;
+          margin-top: 2px;
+          font-weight: 600;
+        }
 
         .fc-action-row {
           display: flex;
