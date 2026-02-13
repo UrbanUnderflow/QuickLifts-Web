@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
+import { AGENT_ROLES, AGENT_EMOJIS } from '../../utils/agentConstants';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { presenceService, AgentPresence } from '../../api/firebase/presence/service';
 import { db } from '../../api/firebase/config';
@@ -41,19 +42,7 @@ const MESSAGE_TYPES: { type: MessageType; label: string; icon: React.ReactNode; 
 
 /* ─── Helpers ─────────────────────────────────────────── */
 
-const AGENT_EMOJIS: Record<string, string> = {
-  nora: '⚡',
-  antigravity: '🌌',
-  scout: '🕵️',
-  solara: '❤️‍🔥',
-};
-
-const AGENT_ROLES: Record<string, string> = {
-  nora: 'Director of System Ops',
-  antigravity: 'Co-CEO · Strategy & Architecture',
-  scout: 'Influencer Research Analyst',
-  solara: 'Brand Director',
-};
+/* AGENT_EMOJIS and AGENT_ROLES imported from utils/agentConstants.ts */
 
 const AGENT_ID_ALIASES: Record<string, string> = {
   branddirector: 'solara',
