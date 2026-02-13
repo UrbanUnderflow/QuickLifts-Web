@@ -49,8 +49,8 @@ const AGENT_ROLES: Record<string, string> = {
     nora: 'Director of System Ops',
     antigravity: 'Co-CEO · Strategy & Architecture',
     scout: 'Influencer Research Analyst',
-    solara: 'Brand Director',
-    sage: 'Lead Engineer',
+    solara: 'Brand Voice',
+    sage: 'Health Intelligence Researcher',
 };
 
 const AGENT_HEARTBEAT_STALE_MS = 2 * 60_000;

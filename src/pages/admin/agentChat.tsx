@@ -52,7 +52,8 @@ const AGENT_ROLES: Record<string, string> = {
   nora: 'Director of System Ops',
   antigravity: 'Co-CEO · Strategy & Architecture',
   scout: 'Influencer Research Analyst',
-  solara: 'Brand Director',
+  solara: 'Brand Voice',
+  sage: 'Health Intelligence Researcher',
 };
 
 const AGENT_ID_ALIASES: Record<string, string> = {
