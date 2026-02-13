@@ -412,5 +412,21 @@ export const presenceService = {
   async toggleManifesto(agentId: string, enabled: boolean): Promise<void> {
     const docRef = doc(db, COLLECTION, agentId);
     await updateDoc(docRef, { manifestoEnabled: enabled });
-  }
+  },
+
+  /**
+   * Send a command to an agent (e.g., force-recovery, task, chat)
+   */
+  async sendCommand(agentId: string, type: string, content: string): Promise<string> {
+    const colRef = collection(db, 'agent-commands');
+    const docRef = await addDoc(colRef, {
+      to: agentId,
+      from: 'admin',
+      type,
+      content,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+  },
 };

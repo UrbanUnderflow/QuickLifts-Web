@@ -448,8 +448,10 @@ const ExecutionStepsPanel: React.FC<{
   taskProgress: number;
   taskName?: string;
   taskStartedAt?: Date;
-}> = ({ steps, currentStepIndex, taskProgress, taskName, taskStartedAt }) => {
+  agentId: string;
+}> = ({ steps, currentStepIndex, taskProgress, taskName, taskStartedAt, agentId }) => {
   const [expandedStep, setExpandedStep] = useState<string | null>(null);
+  const [recovering, setRecovering] = useState(false);
   const stepsContainerRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to active step
@@ -558,6 +560,35 @@ const ExecutionStepsPanel: React.FC<{
                       ))}
                     </div>
                   )}
+
+                  {/* Force Recovery button */}
+                  {isActive && step.lastActivityAt && (() => {
+                    const secAgo = Math.round((Date.now() - new Date(step.lastActivityAt).getTime()) / 1000);
+                    return secAgo > 60;
+                  })() && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (recovering) return;
+                          setRecovering(true);
+                          presenceService.sendCommand(agentId, 'force-recovery', `Step stuck: ${step.description}`)
+                            .then(() => setTimeout(() => setRecovering(false), 10000))
+                            .catch(() => setRecovering(false));
+                        }}
+                        style={{
+                          marginTop: '6px', padding: '4px 10px',
+                          background: recovering ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.12)',
+                          border: `1px solid ${recovering ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.25)'}`,
+                          borderRadius: '4px', cursor: recovering ? 'default' : 'pointer',
+                          color: recovering ? '#4ade80' : '#f87171',
+                          fontSize: '10px', fontWeight: 600,
+                          display: 'flex', alignItems: 'center', gap: '4px',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        {recovering ? '✅ Recovery sent — agent restarting step...' : '🔄 Force Recovery'}
+                      </button>
+                    )}
                 </div>
                 {hasDetail && (
                   <ChevronDown className={`w-3 h-3 text-zinc-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
@@ -1306,6 +1337,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
               taskProgress={agent.taskProgress}
               taskName={agent.currentTask}
               taskStartedAt={agent.taskStartedAt}
+              agentId={agent.id}
             />
           )}
 
