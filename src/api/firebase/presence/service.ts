@@ -8,12 +8,15 @@ export type AgentStatus = 'offline' | 'idle' | 'working';
 export interface AgentThoughtStep {
   id: string;
   description: string;
-  status: 'pending' | 'in-progress' | 'completed' | 'failed';
+  status: 'pending' | 'in-progress' | 'completed' | 'completed-with-issues' | 'failed';
   startedAt?: Date;
   completedAt?: Date;
   reasoning?: string;     // The agent's reasoning / thought process
   output?: string;        // Result or artifact produced
   durationMs?: number;    // How long this step took
+  verificationFlag?: string; // Failure signals detected in output
+  subSteps?: { action: string; detail: string; ts: string }[];  // Live activity feed from OpenClaw stderr
+  lastActivityAt?: string;  // ISO timestamp of last detected activity
 }
 
 /* ─── Agent presence with execution context ────────────── */
@@ -35,6 +38,23 @@ export interface AgentPresence {
   taskStartedAt?: Date;                // When agent began this task
   taskProgress: number;                // 0-100 completion percentage
 
+  // Manifesto / self-correction
+  manifestoEnabled?: boolean;          // Toggle: allow manifesto injection
+  manifestoInjections?: number;        // How many times manifesto was injected this session
+  lastManifestoInjection?: Date;       // When it was last injected
+
+  // AI Model & Token Usage
+  currentModel?: string;               // Which AI model is active (gpt-4o, gpt-4o-mini, openclaw)
+  currentModelRaw?: string;            // Provider-qualified model (e.g., openai/gpt-5.1-codex)
+  currentModelProvider?: string;       // Provider (e.g., openai, anthropic)
+  openClawAgentId?: string;            // Which OpenClaw isolated agent is driving this runner (e.g., main, scout, solara)
+  tokenUsage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    callCount: number;
+  };
+
   // Timestamps
   lastUpdate?: Date;
   sessionStartedAt?: Date;
@@ -46,7 +66,7 @@ export interface TaskHistoryEntry {
   id?: string;
   taskName: string;
   taskId: string;
-  status: 'completed' | 'failed';
+  status: 'completed' | 'completed-with-issues' | 'failed';
   steps: AgentThoughtStep[];
   startedAt: Date;
   completedAt: Date;
@@ -70,6 +90,8 @@ function serialiseStep(step: AgentThoughtStep): Record<string, any> {
     reasoning: step.reasoning || '',
     output: step.output || '',
     durationMs: step.durationMs || 0,
+    subSteps: step.subSteps || [],
+    lastActivityAt: step.lastActivityAt || null,
   };
 }
 
@@ -83,6 +105,9 @@ function deserialiseStep(data: any): AgentThoughtStep {
     reasoning: data.reasoning || '',
     output: data.output || '',
     durationMs: data.durationMs || 0,
+    verificationFlag: data.verificationFlag || '',
+    subSteps: data.subSteps || [],
+    lastActivityAt: data.lastActivityAt || null,
   };
 }
 
@@ -365,11 +390,43 @@ export const presenceService = {
           currentStepIndex: data.currentStepIndex ?? -1,
           taskProgress: data.taskProgress ?? 0,
           taskStartedAt: data.taskStartedAt?.toDate?.() || undefined,
+          manifestoEnabled: data.manifestoEnabled !== false, // default true
+          manifestoInjections: data.manifestoInjections ?? 0,
+          lastManifestoInjection: data.lastManifestoInjection?.toDate?.() || undefined,
+          currentModel: data.currentModel || undefined,
+          currentModelRaw: data.currentModelRaw || undefined,
+          currentModelProvider: data.currentModelProvider || undefined,
+          openClawAgentId: data.openClawAgentId || undefined,
+          tokenUsage: data.tokenUsage || undefined,
           lastUpdate: data.lastUpdate?.toDate?.() || undefined,
           sessionStartedAt: data.sessionStartedAt?.toDate?.() || undefined,
         };
       });
       callback(agents);
     });
-  }
+  },
+
+  /**
+   * Toggle manifesto injection for a specific agent
+   */
+  async toggleManifesto(agentId: string, enabled: boolean): Promise<void> {
+    const docRef = doc(db, COLLECTION, agentId);
+    await updateDoc(docRef, { manifestoEnabled: enabled });
+  },
+
+  /**
+   * Send a command to an agent (e.g., force-recovery, task, chat)
+   */
+  async sendCommand(agentId: string, type: string, content: string): Promise<string> {
+    const colRef = collection(db, 'agent-commands');
+    const docRef = await addDoc(colRef, {
+      to: agentId,
+      from: 'admin',
+      type,
+      content,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+  },
 };
