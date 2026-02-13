@@ -11,6 +11,10 @@
   publish = ".next"
   functions = "netlify/functions"
 
+[build.environment]
+  # Increase Node heap to 4 GB so esbuild can bundle 190+ functions without OOM
+  NODE_OPTIONS = "--max-old-space-size=4096"
+
 # Environment variables should be set in Netlify UI, not in the toml file
 [context.production]
 [context.branch-deploy]
@@ -124,8 +128,11 @@
 [functions]
   directory = "netlify/functions"
   included_files = ["netlify/functions/**"]
-  external_node_modules = ["stripe"]
+  # Externalize heavy deps so esbuild doesn't duplicate them into every function bundle
+  external_node_modules = ["stripe", "firebase-admin", "firebase", "openai", "@google-cloud"]
   node_bundler = "esbuild"
+  # Exclude test / debug / backup functions from production builds
+  ignored_functions = ["hello-world", "test-*", "debug-*", "*-test", "setup-prize-test-scenario"]
 
 # Schedule the update-challenge-status function to run daily
 [functions.update-challenge-status]
