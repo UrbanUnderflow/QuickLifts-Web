@@ -196,7 +196,7 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
                                         </div>
 
                                         {/* Highlights */}
-                                        {minutes.highlights?.length > 0 && (
+                                        {(minutes.highlights?.length ?? 0) > 0 && (
                                             <div className="fc-section">
                                                 <h4><MessageSquare className="w-3 h-3" /> Highlights</h4>
                                                 <ul>{minutes.highlights?.map((h, i) => <li key={i}><strong>{h.speaker}:</strong> {h.summary}</li>)}</ul>
@@ -204,7 +204,7 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
                                         )}
 
                                         {/* Value Insights */}
-                                        {minutes.valueInsights?.length > 0 && (
+                                        {(minutes.valueInsights?.length ?? 0) > 0 && (
                                             <div className="fc-section">
                                                 <h4><Lightbulb className="w-3 h-3" /> Value Insights</h4>
                                                 {minutes.valueInsights?.map((insight, i) => (
@@ -217,7 +217,7 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
                                         )}
 
                                         {/* Strategic Decisions */}
-                                        {minutes.strategicDecisions?.length > 0 && (
+                                        {(minutes.strategicDecisions?.length ?? 0) > 0 && (
                                             <div className="fc-section">
                                                 <h4><CheckSquare className="w-3 h-3" /> Strategic Decisions</h4>
                                                 <ul>{minutes.strategicDecisions?.map((s, i) => <li key={i}>{s}</li>)}</ul>
@@ -225,7 +225,7 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
                                         )}
 
                                         {/* Risks / Open Questions */}
-                                        {minutes.risksOrOpenQuestions?.length > 0 && (
+                                        {(minutes.risksOrOpenQuestions?.length ?? 0) > 0 && (
                                             <div className="fc-section">
                                                 <h4><HelpCircle className="w-3 h-3" /> Risks & Open Questions</h4>
                                                 <ul>{minutes.risksOrOpenQuestions?.map((s, i) => <li key={i}>{s}</li>)}</ul>
@@ -233,7 +233,7 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
                                         )}
 
                                         {/* Next Actions */}
-                                        {minutes.nextActions?.length > 0 && (
+                                        {(minutes.nextActions?.length ?? 0) > 0 && (
                                             <div className="fc-section">
                                                 <h4><Sparkles className="w-3 h-3" /> Next Actions</h4>
                                                 {minutes.nextActions?.map((a, i) => (

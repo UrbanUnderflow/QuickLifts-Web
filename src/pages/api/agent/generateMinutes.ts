@@ -151,7 +151,7 @@ Guidelines:
             }))) || [],
             strategicDecisions: ['Further synthesis required—no concrete decision captured in fallback.'],
             nextActions: [{ task: 'Review meeting minutes and identify next steps', owner: 'Tremaine' }],
-            highlights: lines.slice(0, 3).map(line => {
+            highlights: lines.slice(0, 3).map((line: string) => {
                 const [speaker, ...rest] = line.split(':');
                 return {
                     speaker: speaker?.trim() || 'Participant',
