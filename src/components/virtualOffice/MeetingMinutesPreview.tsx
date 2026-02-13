@@ -72,19 +72,27 @@ export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!minutes) return;
-    const md = meetingMinutesService.toMarkdown({
-      ...minutes,
-      createdAt: new Date(),
-    } as MeetingMinutes);
-    const blob = new Blob([md], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `meeting-minutes-${new Date().toISOString().split('T')[0]}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      setLoading(true);
+      const html = meetingMinutesService.toHTML({
+        ...minutes,
+        createdAt: new Date(),
+      } as MeetingMinutes);
+      const pdfBlob = await import('../../utils/pdf').then(mod => mod.renderHtmlToPdf(html));
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `meeting-minutes-${new Date().toISOString().split('T')[0]}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to generate PDF minutes:', err);
+      setError('Failed to generate PDF minutes. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const totalResponses = messages.reduce((acc, msg) =>
@@ -111,7 +119,7 @@ export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
           <div className="mm-header-actions">
             {minutes && (
               <>
-                <button className="mm-btn mm-btn-ghost" onClick={handleDownload} title="Download as Markdown">
+                <button className="mm-btn mm-btn-ghost" onClick={handleDownload} title="Download as PDF">
                   <Download className="w-4 h-4" />
                 </button>
                 <button
@@ -175,83 +183,86 @@ export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
                 <p className="mm-section-body mm-summary">{minutes.executiveSummary}</p>
               </section>
 
-              {/* Topics Discussed */}
-              {minutes.topicsDiscussed.length > 0 && (
+              {/* Highlights */}
+              {(minutes.highlights && minutes.highlights.length > 0) && (
                 <section className="mm-section">
                   <div className="mm-section-header">
                     <MessageSquare className="w-4 h-4" style={{ color: '#3b82f6' }} />
-                    <h3>Topics Discussed</h3>
+                    <h3>Highlights</h3>
+                  </div>
+                  <ul className="mm-list">
+                    {minutes.highlights?.map((highlight, i) => (
+                      <li key={i}>
+                        <strong>{highlight.speaker}:</strong> {highlight.summary}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {/* Value Insights */}
+              {(minutes.valueInsights && minutes.valueInsights.length > 0) && (
+                <section className="mm-section">
+                  <div className="mm-section-header">
+                    <Lightbulb className="w-4 h-4" style={{ color: '#f59e0b' }} />
+                    <h3>Value Insights</h3>
                   </div>
                   <div className="mm-topics">
-                    {minutes.topicsDiscussed.map((topic, i) => (
+                    {minutes.valueInsights?.map((insight, i) => (
                       <div key={i} className="mm-topic">
-                        <h4 className="mm-topic-title">{topic.title}</h4>
-                        <p className="mm-topic-summary">{topic.summary}</p>
+                        <h4 className="mm-topic-title">{insight.title}</h4>
+                        <p className="mm-topic-summary">{insight.takeaway}</p>
+                        <p className="mm-topic-impact">Impact: {insight.impact}</p>
                       </div>
                     ))}
                   </div>
                 </section>
               )}
 
-              {/* Key Insights */}
-              {minutes.keyInsights.length > 0 && (
-                <section className="mm-section">
-                  <div className="mm-section-header">
-                    <Lightbulb className="w-4 h-4" style={{ color: '#f59e0b' }} />
-                    <h3>Key Insights</h3>
-                  </div>
-                  <ul className="mm-list">
-                    {minutes.keyInsights.map((insight, i) => (
-                      <li key={i}>{insight}</li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-
-              {/* Decisions */}
-              {minutes.decisions.length > 0 && (
+              {/* Strategic Decisions */}
+              {(minutes.strategicDecisions && minutes.strategicDecisions.length > 0) && (
                 <section className="mm-section">
                   <div className="mm-section-header">
                     <CheckSquare className="w-4 h-4" style={{ color: '#22c55e' }} />
-                    <h3>Decisions & Positions</h3>
+                    <h3>Strategic Decisions</h3>
                   </div>
                   <ul className="mm-list mm-decisions">
-                    {minutes.decisions.map((decision, i) => (
+                    {minutes.strategicDecisions?.map((decision, i) => (
                       <li key={i}>{decision}</li>
                     ))}
                   </ul>
                 </section>
               )}
 
-              {/* Open Questions */}
-              {minutes.openQuestions.length > 0 && (
+              {/* Risks / Open Questions */}
+              {(minutes.risksOrOpenQuestions && minutes.risksOrOpenQuestions.length > 0) && (
                 <section className="mm-section">
                   <div className="mm-section-header">
                     <HelpCircle className="w-4 h-4" style={{ color: '#ef4444' }} />
-                    <h3>Open Questions</h3>
+                    <h3>Risks & Open Questions</h3>
                   </div>
                   <ul className="mm-list mm-questions">
-                    {minutes.openQuestions.map((q, i) => (
+                    {minutes.risksOrOpenQuestions?.map((q, i) => (
                       <li key={i}>{q}</li>
                     ))}
                   </ul>
                 </section>
               )}
 
-              {/* Action Items */}
-              {minutes.actionItems.length > 0 && (
+              {/* Next Actions */}
+              {(minutes.nextActions && minutes.nextActions.length > 0) && (
                 <section className="mm-section">
                   <div className="mm-section-header">
                     <Sparkles className="w-4 h-4" style={{ color: '#8b5cf6' }} />
-                    <h3>Action Items</h3>
+                    <h3>Next Actions</h3>
                   </div>
                   <div className="mm-actions">
-                    {minutes.actionItems.map((item, i) => (
+                    {minutes.nextActions?.map((item, i) => (
                       <div key={i} className="mm-action-item">
                         <div className="mm-action-checkbox" />
                         <div className="mm-action-content">
                           <span className="mm-action-task">{item.task}</span>
-                          <span className="mm-action-owner">{item.owner}</span>
+                          <span className="mm-action-owner">{item.owner}{item.due ? (" (Due: " + item.due + ")") : ''}</span>
                         </div>
                       </div>
                     ))}
@@ -496,6 +507,12 @@ export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
           color: #a1a1aa;
           margin: 0;
           line-height: 1.5;
+        }
+        .mm-topic-impact {
+          font-size: 12px;
+          color: #fcd34d;
+          margin-top: 4px;
+          font-weight: 600;
         }
 
         .mm-list {
