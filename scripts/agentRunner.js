@@ -46,6 +46,9 @@ const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
 const OPENCLAW_MODEL_SYNC_MS = parseInt(process.env.OPENCLAW_MODEL_SYNC_MS || '60000', 10); // Keep presence model accurate after OpenClaw config changes
 const MAX_FOLLOW_UP_DEPTH = 4; // Max rounds of agent-to-agent @mention follow-ups
 const MAX_SELF_CORRECTION_RETRIES = 2; // Retry attempts when step output contains failure signals
+const STEP_INACTIVITY_TIMEOUT_MS = 120_000; // Kill step if no stderr activity for 120s
+const MAX_STEP_REWRITE_ATTEMPTS = 1; // Rewrite-from-different-angle attempts on crash/timeout
+const MAX_CONSECUTIVE_FAILURES = 2; // Stop task after this many steps fail in a row
 
 /* ─── Token Usage Tracking ─────────────────────────────── */
 var sessionTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
@@ -1821,6 +1824,19 @@ ${smokeOutput}`.substring(0, 2000);
                         setTimeout(() => child.kill('SIGKILL'), 5000);
                     }, 600_000);
 
+                    // Tier 3: Inactivity watchdog — kill if no stderr activity for 120s
+                    let lastStderrActivity = Date.now();
+                    const inactivityCheck = setInterval(() => {
+                        if (Date.now() - lastStderrActivity > STEP_INACTIVITY_TIMEOUT_MS) {
+                            clearInterval(inactivityCheck);
+                            clearTimeout(timeout);
+                            console.log(`   ⏰ Inactivity watchdog: No activity for ${STEP_INACTIVITY_TIMEOUT_MS / 1000}s — killing process`);
+                            child.kill('SIGTERM');
+                            setTimeout(() => child.kill('SIGKILL'), 5000);
+                            reject(new Error(`OpenClaw stalled: no activity for ${STEP_INACTIVITY_TIMEOUT_MS / 1000}s`));
+                        }
+                    }, 10_000);
+
                     child.stdout.on('data', (chunk) => {
                         stdout += chunk.toString();
                         if (stdout.length > maxLen) { clearTimeout(timeout); child.kill('SIGKILL'); reject(new Error('OpenClaw output exceeded 10MB')); }
@@ -1828,6 +1844,7 @@ ${smokeOutput}`.substring(0, 2000);
                     child.stderr.on('data', (chunk) => {
                         var text = chunk.toString();
                         stderr += text;
+                        lastStderrActivity = Date.now();
                         if (stderr.length > maxLen) { clearTimeout(timeout); child.kill('SIGKILL'); reject(new Error('OpenClaw error output exceeded 10MB')); }
 
                         // Parse stderr lines for progress activities
@@ -1843,8 +1860,9 @@ ${smokeOutput}`.substring(0, 2000);
                             }
                         }
                     });
-                    child.on('error', (err) => { clearTimeout(timeout); reject(new Error(`Failed to launch ${OPENCLAW_BIN}: ${err.message}`)); });
+                    child.on('error', (err) => { clearInterval(inactivityCheck); clearTimeout(timeout); reject(new Error(`Failed to launch ${OPENCLAW_BIN}: ${err.message}`)); });
                     child.on('close', (code) => {
+                        clearInterval(inactivityCheck);
                         clearTimeout(timeout);
                         // Flush remaining stderr buffer
                         if (onProgress && stderrLineBuf.trim()) {
@@ -1965,6 +1983,80 @@ ${smokeOutput}`.substring(0, 2000);
 
         return true;
     } catch (err) {
+        console.log(`   ❌ Step crashed: ${err.message.substring(0, 120)}`);
+
+        // ─── Tier 2: Rewrite & Retry from a different angle ─────
+        if (process.env.USE_OPENCLAW === 'true') {
+            for (let rewriteAttempt = 0; rewriteAttempt < MAX_STEP_REWRITE_ATTEMPTS; rewriteAttempt++) {
+                console.log(`   🔄 Rewrite attempt ${rewriteAttempt + 1}/${MAX_STEP_REWRITE_ATTEMPTS}: Trying a different approach...`);
+                step.status = 'in-progress';
+                step.reasoning = `Recovery attempt ${rewriteAttempt + 1}: The previous approach failed with "${err.message.substring(0, 100)}". Trying a different angle.`;
+                step.subSteps = [{ action: '🔄 Recovery', detail: `Rewrite attempt ${rewriteAttempt + 1}`, ts: new Date().toISOString() }];
+                step.lastActivityAt = new Date().toISOString();
+                await reportSteps(allSteps, stepIndex, -1, {
+                    notes: `🔄 Recovering step ${stepIndex + 1} — rewrite attempt ${rewriteAttempt + 1}`,
+                });
+
+                try {
+                    const recoveryPrompt = [
+                        `RECOVERY MODE — A previous attempt at this task FAILED. You must try a DIFFERENT approach.`,
+                        ``,
+                        `## Original task:`,
+                        `${step.description}`,
+                        ``,
+                        `## What went wrong:`,
+                        `${err.message.substring(0, 500)}`,
+                        ``,
+                        `## Instructions:`,
+                        `- Do NOT repeat the same approach that failed`,
+                        `- Try an alternative strategy or workaround`,
+                        `- If the original approach required a missing tool/resource, find another way`,
+                        `- If the task is genuinely impossible, explain why clearly`,
+                        `- Keep your response focused and concise`,
+                    ].join('\n');
+
+                    const progressCb = createProgressCallback(step, allSteps, stepIndex, -1);
+                    const result = await invokeOpenClaw(recoveryPrompt, progressCb);
+                    let outputText = (result.stdout || '').trim();
+                    if (outputText) {
+                        try {
+                            const parsed = JSON.parse(outputText);
+                            const payloadText = (parsed?.payloads || []).map(p => p?.text).filter(Boolean).join('\n\n');
+                            if (payloadText) outputText = payloadText;
+                        } catch { /* keep raw */ }
+                    }
+                    step.output = outputText.substring(0, 2000);
+
+                    // Check if recovery was genuinely successful
+                    const impossibleSignals = [/genuinely impossible/i, /cannot be done/i, /no way to/i, /not possible/i];
+                    const isImpossible = impossibleSignals.some(rx => rx.test(step.output));
+
+                    if (isImpossible) {
+                        console.log(`   ⚠️ Recovery reported task as impossible`);
+                        step.verificationFlag = 'impossible';
+                        step.status = 'completed-with-issues';
+                    } else {
+                        console.log(`   ✅ Recovery succeeded!`);
+                        step.status = 'completed';
+                    }
+                    step.completedAt = new Date();
+                    step.durationMs = Date.now() - startTime;
+
+                    const newCompletedCount = allSteps.filter(s => s.status === 'completed' || s.status === 'completed-with-issues').length;
+                    const newProgress = Math.round((newCompletedCount / allSteps.length) * 100);
+                    await reportSteps(allSteps, stepIndex, newProgress);
+                    return true; // Recovery worked!
+                } catch (rewriteErr) {
+                    console.log(`   ❌ Rewrite attempt ${rewriteAttempt + 1} also failed: ${rewriteErr.message.substring(0, 80)}`);
+                    appendLessonLearned(
+                        `Step "${step.description}" failed even after rewrite. Original error: "${err.message.substring(0, 100)}". ` +
+                        `Rewrite error: "${rewriteErr.message.substring(0, 100)}"`
+                    );
+                }
+            }
+        }
+
+        // All recovery attempts exhausted
         step.status = 'failed';
         step.completedAt = new Date();
         step.durationMs = Date.now() - startTime;
@@ -2067,16 +2159,44 @@ async function run() {
             await reportSteps(steps, 0, 0);
 
             let allPassed = true;
+            let consecutiveFailures = 0;
+            let lastFailureContext = '';
+
             for (let i = 0; i < steps.length; i++) {
                 console.log(`\n⚡ Step ${i + 1}/${steps.length}: ${steps[i].description}`);
+
+                // If previous step failed, inject failure context so agent can adapt
+                if (lastFailureContext && steps[i].status !== 'failed') {
+                    steps[i].reasoning = (steps[i].reasoning || '') +
+                        `\n⚠️ Note: A previous step failed with: ${lastFailureContext}. Adapt your approach if needed.`;
+                }
+
                 const success = await executeStep(steps[i], task, i, steps);
 
                 if (!success) {
-                    console.log(`❌ Step ${i + 1} failed. Stopping task.`);
+                    consecutiveFailures++;
+                    lastFailureContext = (steps[i].output || '').substring(0, 200);
+                    console.log(`❌ Step ${i + 1} failed (${consecutiveFailures} consecutive).`);
+
+                    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                        console.log(`🛑 ${MAX_CONSECUTIVE_FAILURES} consecutive failures — stopping task.`);
+                        allPassed = false;
+                        break;
+                    }
+
+                    console.log(`   ⏩ Skipping to next step...`);
                     allPassed = false;
-                    break;
+                    // Don't break — continue to next step
+                    if (i + 1 < steps.length) {
+                        steps[i + 1].status = 'in-progress';
+                        steps[i + 1].startedAt = new Date();
+                    }
+                    continue;
                 }
 
+                // Reset consecutive failures on success
+                consecutiveFailures = 0;
+                lastFailureContext = '';
                 console.log(`✅ Step ${i + 1} completed${steps[i].durationMs ? ` (${formatMs(steps[i].durationMs)})` : ''}`);
 
                 if (i + 1 < steps.length) {
