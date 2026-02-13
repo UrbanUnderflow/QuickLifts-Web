@@ -138,6 +138,8 @@ const db = getFirestore(app);
 const commandQueue = [];
 const processedMessageIds = new Set(); // Dedup: track group-chat messages we've already responded to
 const processedCommandIds = new Set(); // Dedup: track command IDs we've already queued/processed
+var _forceRecoveryRequested = false; // Set by force-recovery command to kill the current step
+var _forceRecoveryReason = '';
 
 /* ─── Firestore Helpers ───────────────────────────────── */
 
@@ -1834,8 +1836,22 @@ ${smokeOutput}`.substring(0, 2000);
                     }, 600_000);
 
                     // Tier 3: Inactivity watchdog — kill if no stderr activity for 120s
+                    // Also checks for manual force-recovery signal
                     let lastStderrActivity = Date.now();
                     const inactivityCheck = setInterval(() => {
+                        // Manual force-recovery
+                        if (_forceRecoveryRequested) {
+                            clearInterval(inactivityCheck);
+                            clearTimeout(timeout);
+                            const reason = _forceRecoveryReason || 'manual recovery';
+                            _forceRecoveryRequested = false;
+                            _forceRecoveryReason = '';
+                            console.log(`   🔧 Force recovery: killing current process (${reason})`);
+                            child.kill('SIGTERM');
+                            setTimeout(() => child.kill('SIGKILL'), 5000);
+                            reject(new Error(`Force recovery: ${reason}`));
+                            return;
+                        }
                         if (Date.now() - lastStderrActivity > STEP_INACTIVITY_TIMEOUT_MS) {
                             clearInterval(inactivityCheck);
                             clearTimeout(timeout);
@@ -1844,7 +1860,7 @@ ${smokeOutput}`.substring(0, 2000);
                             setTimeout(() => child.kill('SIGKILL'), 5000);
                             reject(new Error(`OpenClaw stalled: no activity for ${STEP_INACTIVITY_TIMEOUT_MS / 1000}s`));
                         }
-                    }, 10_000);
+                    }, 5_000);
 
                     child.stdout.on('data', (chunk) => {
                         stdout += chunk.toString();
