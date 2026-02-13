@@ -31,6 +31,7 @@ export interface AgentPresence {
   currentTask?: string;        // Human-readable task name
   currentTaskId?: string;      // Links to kanbanTasks document
   notes?: string;
+  role?: string;                 // Agent's role (e.g. "Brand Director")
 
   // Execution pipeline
   executionSteps: AgentThoughtStep[];  // Live step checklist
@@ -386,6 +387,7 @@ export const presenceService = {
           currentTask: data.currentTask || '',
           currentTaskId: data.currentTaskId || '',
           notes: data.notes || '',
+          role: data.role || undefined,
           executionSteps: (data.executionSteps || []).map(deserialiseStep),
           currentStepIndex: data.currentStepIndex ?? -1,
           taskProgress: data.taskProgress ?? 0,
