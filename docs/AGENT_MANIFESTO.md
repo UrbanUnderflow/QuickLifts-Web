@@ -125,7 +125,7 @@ Before marking any task complete:
 - **[2026-02-12] All** — When a step output says "failed" or "missing", do NOT mark it as completed. The agentRunner now detects failure signals in outputs and flags them. Investigate and retry before moving on.
 - **[2026-02-12] All** — The Virtual Office Task History modal now shows ⚠️ amber warnings for steps that contain failure signals. If you see these in your past tasks, those steps need rework.
 
-- **[2026-02-13] Nora** — Step "Provision or confirm the Sage OpenClaw runner using `.agent/workflows/sage-openclaw-config.json`, then start the runner and ensure it’s heartbeating." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-13] Nora** — Stalled Sage runner traced to stale `.jsonl.lock` files plus a missing `.env.local`. If OpenClaw reports "session file locked" + inactivity, delete the agent via `openclaw agents delete <id> --force`, recreate it from the workflow config, restore `.env.local`, then relaunch the runner to republish presence/feeds.
 - **[2026-02-13] Nora** — Step "Inspect recent runner logs (e.g., the prior session’s stderr/stdout) to identify why Sage’s OpenClaw process stalled after 120s." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 ---
 
