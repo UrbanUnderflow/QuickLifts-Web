@@ -31,7 +31,7 @@ export async function handleBrevoSubscribe({ email, listKey, utmCampaign = 'gene
       email,
       listIds: [chosenListId],
       updateEnabled: true,
-      attributes: { SOURCE: utmCampaign, ...attributes } as unknown as { [key: string]: object }
+      attributes: { SOURCE: utmCampaign, ...attributes } as any
     });
   } catch (err: any) {
     // Brevo's SDK throws HttpError with response + body

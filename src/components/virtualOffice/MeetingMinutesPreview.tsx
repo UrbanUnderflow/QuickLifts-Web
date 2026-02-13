@@ -184,7 +184,7 @@ export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
               </section>
 
               {/* Highlights */}
-              {minutes.highlights?.length > 0 && (
+              {(minutes.highlights?.length ?? 0) > 0 && (
                 <section className="mm-section">
                   <div className="mm-section-header">
                     <MessageSquare className="w-4 h-4" style={{ color: '#3b82f6' }} />
@@ -201,7 +201,7 @@ export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
               )}
 
               {/* Value Insights */}
-              {minutes.valueInsights?.length > 0 && (
+              {(minutes.valueInsights?.length ?? 0) > 0 && (
                 <section className="mm-section">
                   <div className="mm-section-header">
                     <Lightbulb className="w-4 h-4" style={{ color: '#f59e0b' }} />
@@ -220,7 +220,7 @@ export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
               )}
 
               {/* Strategic Decisions */}
-              {minutes.strategicDecisions?.length > 0 && (
+              {(minutes.strategicDecisions?.length ?? 0) > 0 && (
                 <section className="mm-section">
                   <div className="mm-section-header">
                     <CheckSquare className="w-4 h-4" style={{ color: '#22c55e' }} />
@@ -235,7 +235,7 @@ export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
               )}
 
               {/* Risks / Open Questions */}
-              {minutes.risksOrOpenQuestions?.length > 0 && (
+              {(minutes.risksOrOpenQuestions?.length ?? 0) > 0 && (
                 <section className="mm-section">
                   <div className="mm-section-header">
                     <HelpCircle className="w-4 h-4" style={{ color: '#ef4444' }} />
@@ -250,7 +250,7 @@ export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
               )}
 
               {/* Next Actions */}
-              {minutes.nextActions?.length > 0 && (
+              {(minutes.nextActions?.length ?? 0) > 0 && (
                 <section className="mm-section">
                   <div className="mm-section-header">
                     <Sparkles className="w-4 h-4" style={{ color: '#8b5cf6' }} />
