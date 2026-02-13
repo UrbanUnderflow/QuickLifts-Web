@@ -11,6 +11,9 @@
   publish = ".next"
   functions = "netlify/functions"
 
+[build.environment]
+  NODE_VERSION = "20"
+
 # Environment variables should be set in Netlify UI, not in the toml file
 [context.production]
 [context.branch-deploy]
