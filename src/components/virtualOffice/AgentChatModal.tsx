@@ -50,6 +50,7 @@ const AGENT_ROLES: Record<string, string> = {
     antigravity: 'Co-CEO · Strategy & Architecture',
     scout: 'Influencer Research Analyst',
     solara: 'Brand Director',
+    sage: 'Lead Engineer',
 };
 
 const AGENT_HEARTBEAT_STALE_MS = 2 * 60_000;
@@ -156,7 +157,7 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
                                             <span className="dm-agent-name">{agent.displayName}</span>
                                             {agent.lastUpdate && <span className="dm-agent-time">{formatRelative(agent.lastUpdate)}</span>}
                                         </div>
-                                        <p className="dm-agent-role">{AGENT_ROLES[agent.id] || 'Agent'}</p>
+                                        <p className="dm-agent-role">{agent.role || AGENT_ROLES[agent.id] || 'Agent'}</p>
                                         <p className="dm-agent-preview">{preview}</p>
                                     </div>
                                 </button>

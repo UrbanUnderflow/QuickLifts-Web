@@ -1280,8 +1280,8 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
         <span className={`status-dot ${agent.status}`} />
         <div className="nameplate-text">
           <span className="agent-name">{agent.displayName}</span>
-          {AGENT_ROLES[agent.id] && (
-            <span className="agent-role">{AGENT_ROLES[agent.id]}</span>
+          {(agent.role || AGENT_ROLES[agent.id]) && (
+            <span className="agent-role">{agent.role || AGENT_ROLES[agent.id]}</span>
           )}
         </div>
         {hasSteps && agent.taskProgress > 0 && (
@@ -1303,14 +1303,14 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
             </span>
           </div>
           {/* Role & duty (clickable → opens profile modal) */}
-          {(AGENT_ROLES[agent.id] || AGENT_DUTIES[agent.id]) && (
+          {(agent.role || AGENT_ROLES[agent.id] || AGENT_DUTIES[agent.id]) && (
             <div
               className="detail-duty clickable"
               onClick={() => setShowProfile(true)}
               title="Click to view full profile"
             >
-              {AGENT_ROLES[agent.id] && (
-                <p className="text-[10px] font-semibold text-indigo-400">{AGENT_ROLES[agent.id]}</p>
+              {(agent.role || AGENT_ROLES[agent.id]) && (
+                <p className="text-[10px] font-semibold text-indigo-400">{agent.role || AGENT_ROLES[agent.id]}</p>
               )}
               {AGENT_DUTIES[agent.id] && (
                 <p className="text-[10px] text-zinc-500 mt-0.5 leading-snug">{AGENT_DUTIES[agent.id]}</p>
