@@ -131,8 +131,6 @@
   # Externalize heavy deps so esbuild doesn't duplicate them into every function bundle
   external_node_modules = ["stripe", "firebase-admin", "firebase", "openai", "@google-cloud"]
   node_bundler = "esbuild"
-  # Exclude test / debug / backup functions from production builds
-  ignored_functions = ["hello-world", "test-*", "debug-*", "*-test", "setup-prize-test-scenario"]
 
 # Schedule the update-challenge-status function to run daily
 [functions.update-challenge-status]
