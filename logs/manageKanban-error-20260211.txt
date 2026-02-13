@@ -1,0 +1,3 @@
+[2026-02-11T00:00:00Z] Attempted `node scripts/manageKanban.js` but failed due to missing env vars.
+Error: Missing required env var: FIREBASE_PROJECT_ID
+Need FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_SECRET_KEY available before rerunning.

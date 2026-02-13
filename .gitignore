@@ -20,3 +20,6 @@ temp/
 
 # OpenClaw temp files
 .openclaw-prompt.tmp
+
+# Dev-only slim functions directory (symlinks)
+netlify/functions-dev/
