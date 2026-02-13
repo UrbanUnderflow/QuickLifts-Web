@@ -4,6 +4,7 @@ import {
     X, Send, ArrowLeft, Loader2, Zap, ChevronDown,
     AlertCircle, CheckCircle2, Circle, XCircle,
     MessageSquare, Terminal, HelpCircle, Mail, Sparkles,
+    Paperclip, FileText, FolderOpen, Code2,
 } from 'lucide-react';
 import { presenceService, type AgentPresence } from '../../api/firebase/presence/service';
 import { db } from '../../api/firebase/config';
@@ -11,6 +12,8 @@ import {
     collection, query, where, orderBy, limit,
     onSnapshot, addDoc, updateDoc, doc, serverTimestamp,
 } from 'firebase/firestore';
+import { meetingMinutesService } from '../../api/firebase/meetingMinutes/service';
+import type { MeetingMinutes } from '../../api/firebase/meetingMinutes/types';
 
 /* ─── Types & Constants ───────────────────────────────── */
 
@@ -382,8 +385,25 @@ const ChatPanel: React.FC<{
     const [sending, setSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const autoFailedMessageIdsRef = useRef<Set<string>>(new Set());
+    const [hasNewMessages, setHasNewMessages] = useState(false);
+
+    // Meeting minutes attachment state
+    const [showMinutesPicker, setShowMinutesPicker] = useState(false);
+    const [allMinutes, setAllMinutes] = useState<MeetingMinutes[]>([]);
+    const [attachedMinutes, setAttachedMinutes] = useState<MeetingMinutes | null>(null);
+    const [loadingMinutes, setLoadingMinutes] = useState(false);
+    const minutesPickerRef = useRef<HTMLDivElement>(null);
+
+    // File browser state
+    const [showFileBrowser, setShowFileBrowser] = useState(false);
+    const [fileBrowserPath, setFileBrowserPath] = useState('/');
+    const [fileBrowserItems, setFileBrowserItems] = useState<any[]>([]);
+    const [fileBrowserLoading, setFileBrowserLoading] = useState(false);
+    const [attachedFile, setAttachedFile] = useState<{ name: string; path: string; content: string; size: number } | null>(null);
+    const [fileFilter, setFileFilter] = useState('');
 
     const agentIsStale = isAgentStale(agent);
     const agentIsOnline = agent.status !== 'offline' && !agentIsStale;
@@ -436,15 +456,91 @@ const ChatPanel: React.FC<{
         return () => { unsub1(); unsub2(); };
     }, [agent.id]);
 
-    // Auto-scroll
+    // Smart scroll — only auto-scroll if user is near the bottom
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        if (distanceFromBottom < 120) {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        } else {
+            setHasNewMessages(true);
+        }
     }, [messages]);
 
+    // Clear new-message indicator when user scrolls to bottom
+    const handleMessagesScroll = () => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+        if (distanceFromBottom < 80) setHasNewMessages(false);
+    };
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        setHasNewMessages(false);
+    };
+
     const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setInputText(e.target.value);
+        const val = e.target.value;
+        setInputText(val);
         e.target.style.height = 'auto';
         e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+
+        // Detect `/` trigger for file browser
+        const cursorPos = e.target.selectionStart;
+        const textBeforeCursor = val.slice(0, cursorPos);
+        const lastSlashIdx = textBeforeCursor.lastIndexOf('/');
+
+        if (lastSlashIdx >= 0) {
+            const charBefore = lastSlashIdx > 0 ? textBeforeCursor[lastSlashIdx - 1] : ' ';
+            // Only trigger if `/` is at start of input or preceded by whitespace
+            if (lastSlashIdx === 0 || /\s/.test(charBefore)) {
+                const filterText = textBeforeCursor.slice(lastSlashIdx + 1);
+                setFileFilter(filterText);
+                if (!showFileBrowser) {
+                    setShowFileBrowser(true);
+                    browseDirectory('/');
+                }
+                return;
+            }
+        }
+        if (showFileBrowser) setShowFileBrowser(false);
+    };
+
+    const browseDirectory = async (dirPath: string) => {
+        setFileBrowserLoading(true);
+        setFileBrowserPath(dirPath);
+        try {
+            const res = await fetch(`/api/files/browse?path=${encodeURIComponent(dirPath)}`);
+            if (res.ok) {
+                const data = await res.json();
+                setFileBrowserItems(data.items || []);
+            }
+        } catch (e) {
+            console.error('Failed to browse files:', e);
+        }
+        setFileBrowserLoading(false);
+    };
+
+    const selectFile = async (filePath: string) => {
+        try {
+            const res = await fetch(`/api/files/browse?path=${encodeURIComponent(filePath)}&read=true`);
+            if (res.ok) {
+                const data = await res.json();
+                setAttachedFile({ name: data.name, path: data.path, content: data.content, size: data.size });
+            } else {
+                const errData = await res.json();
+                setError(errData.error || 'Failed to read file');
+                setTimeout(() => setError(null), 4000);
+            }
+        } catch (e) {
+            console.error('Failed to read file:', e);
+        }
+        setShowFileBrowser(false);
+        // Remove the `/...` text from input
+        const slashIdx = inputText.lastIndexOf('/');
+        if (slashIdx >= 0) setInputText(inputText.slice(0, slashIdx));
     };
 
     const sendMessage = async () => {
@@ -462,10 +558,21 @@ const ChatPanel: React.FC<{
         if (inputRef.current) inputRef.current.style.height = 'auto';
 
         try {
+            const contextParts: string[] = [text];
+            if (attachedFile) {
+                contextParts.push(`\n\n--- ATTACHED FILE: ${attachedFile.path} ---\n\`\`\`\n${attachedFile.content}\n\`\`\`\n--- END FILE ---`);
+            }
+            if (attachedMinutes) {
+                const md = meetingMinutesService.toMarkdown(attachedMinutes);
+                contextParts.push(`\n\n--- ATTACHED MEETING MINUTES ---\n${md}\n--- END MEETING MINUTES ---`);
+            }
+
             await addDoc(collection(db, 'agent-commands'), {
                 from: 'admin', to: agent.id, type: msgType,
-                content: text, metadata: {}, status: 'pending', createdAt: serverTimestamp(),
+                content: contextParts.join(''), metadata: {}, status: 'pending', createdAt: serverTimestamp(),
             });
+            setAttachedMinutes(null);
+            setAttachedFile(null);
         } catch (err: any) {
             console.error('Failed to send:', err);
             setError(`Send failed: ${err.message}`);
@@ -546,7 +653,7 @@ const ChatPanel: React.FC<{
             )}
 
             {/* Messages */}
-            <div className="dm-messages">
+            <div className="dm-messages" ref={messagesContainerRef} onScroll={handleMessagesScroll}>
                 {messages.length === 0 && (
                     <div className="dm-empty-chat">
                         <div className="dm-empty-emoji">{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</div>
@@ -613,6 +720,14 @@ const ChatPanel: React.FC<{
                 <div ref={messagesEndRef} />
             </div>
 
+            {/* New messages indicator */}
+            {hasNewMessages && (
+                <button className="dm-new-msg-btn" onClick={scrollToBottom}>
+                    <ChevronDown className="w-4 h-4" />
+                    <span>New messages</span>
+                </button>
+            )}
+
             {/* Type Selector */}
             {showTypeSelector && (
                 <div className="dm-type-dropdown">
@@ -640,7 +755,150 @@ const ChatPanel: React.FC<{
                 >
                     {selectedType.icon} <span>{selectedType.label}</span> <ChevronDown className="w-3 h-3" />
                 </button>
+
+                {/* Attached minutes chip */}
+                {attachedMinutes && (
+                    <div className="dm-attached-chip">
+                        <FileText className="w-3 h-3" />
+                        <span>{attachedMinutes.executiveSummary?.slice(0, 50) || 'Meeting Minutes'}...</span>
+                        <button className="dm-chip-remove" onClick={() => setAttachedMinutes(null)}>✕</button>
+                    </div>
+                )}
+
+                {/* Attached file chip */}
+                {attachedFile && (
+                    <div className="dm-attached-chip dm-file-chip">
+                        <Code2 className="w-3 h-3" />
+                        <span>{attachedFile.path}</span>
+                        <span className="dm-file-size">{(attachedFile.size / 1024).toFixed(1)}KB</span>
+                        <button className="dm-chip-remove" onClick={() => setAttachedFile(null)}>✕</button>
+                    </div>
+                )}
+
+                {/* Minutes picker dropdown */}
+                {showMinutesPicker && (
+                    <div className="dm-minutes-picker" ref={minutesPickerRef}>
+                        <div className="dm-minutes-picker-header">
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>Attach Meeting Minutes</span>
+                        </div>
+                        {loadingMinutes ? (
+                            <div className="dm-minutes-loading">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>Loading minutes...</span>
+                            </div>
+                        ) : allMinutes.length === 0 ? (
+                            <div className="dm-minutes-empty">No saved meeting minutes yet</div>
+                        ) : (
+                            <div className="dm-minutes-list">
+                                {allMinutes.map(m => {
+                                    const date = m.createdAt instanceof Date
+                                        ? m.createdAt
+                                        : (m.createdAt as any)?.toDate?.() || new Date();
+                                    return (
+                                        <button
+                                            key={m.id}
+                                            className="dm-minutes-item"
+                                            onClick={() => {
+                                                setAttachedMinutes(m);
+                                                setShowMinutesPicker(false);
+                                            }}
+                                        >
+                                            <div className="dm-minutes-item-top">
+                                                <span className="dm-minutes-date">
+                                                    {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                </span>
+                                                <span className="dm-minutes-duration">{m.duration}</span>
+                                            </div>
+                                            <p className="dm-minutes-summary">
+                                                {m.executiveSummary?.slice(0, 80) || 'Meeting minutes'}...
+                                            </p>
+                                            <div className="dm-minutes-agents">
+                                                {m.participants.map(p => (
+                                                    <span key={p} className="dm-minutes-agent-tag">{p}</span>
+                                                ))}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* File browser dropdown */}
+                {showFileBrowser && (
+                    <div className="dm-file-browser">
+                        <div className="dm-fb-header">
+                            <FolderOpen className="w-3.5 h-3.5" />
+                            <span className="dm-fb-path">{fileBrowserPath}</span>
+                            {fileBrowserPath !== '/' && (
+                                <button className="dm-fb-up" onClick={() => {
+                                    const parent = fileBrowserPath.split('/').slice(0, -1).join('/') || '/';
+                                    browseDirectory(parent);
+                                }}>↑ Up</button>
+                            )}
+                            <button className="dm-fb-close" onClick={() => setShowFileBrowser(false)}>✕</button>
+                        </div>
+                        {fileBrowserLoading ? (
+                            <div className="dm-fb-loading"><Loader2 className="w-4 h-4 animate-spin" /><span>Loading...</span></div>
+                        ) : (
+                            <div className="dm-fb-list">
+                                {fileBrowserItems
+                                    .filter(item => !fileFilter || item.name.toLowerCase().includes(fileFilter.toLowerCase()))
+                                    .map(item => (
+                                        <button
+                                            key={item.path}
+                                            className="dm-fb-item"
+                                            onClick={() => {
+                                                if (item.isDirectory) {
+                                                    browseDirectory(item.path);
+                                                    setFileFilter('');
+                                                } else {
+                                                    selectFile(item.path);
+                                                }
+                                            }}
+                                        >
+                                            <span className="dm-fb-icon">{item.icon}</span>
+                                            <span className="dm-fb-name">{item.name}</span>
+                                            {item.isDirectory && <span className="dm-fb-count">{item.children} items</span>}
+                                            {!item.isDirectory && item.size != null && (
+                                                <span className="dm-fb-size">{(item.size / 1024).toFixed(1)}KB</span>
+                                            )}
+                                        </button>
+                                    ))}
+                                {fileBrowserItems.filter(item => !fileFilter || item.name.toLowerCase().includes(fileFilter.toLowerCase())).length === 0 && (
+                                    <div className="dm-fb-empty">No matching files</div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <div className="dm-input-row">
+                    <button
+                        className="dm-attach-btn"
+                        title="Attach meeting minutes"
+                        onClick={async () => {
+                            if (showMinutesPicker) {
+                                setShowMinutesPicker(false);
+                                return;
+                            }
+                            setShowMinutesPicker(true);
+                            if (allMinutes.length === 0) {
+                                setLoadingMinutes(true);
+                                try {
+                                    const mins = await meetingMinutesService.getAll();
+                                    setAllMinutes(mins);
+                                } catch (e) {
+                                    console.error('Failed to load minutes:', e);
+                                }
+                                setLoadingMinutes(false);
+                            }
+                        }}
+                    >
+                        <Paperclip className="w-4 h-4" />
+                    </button>
                     <textarea
                         ref={inputRef}
                         className="dm-text-input"
@@ -861,6 +1119,150 @@ const ChatPanel: React.FC<{
         }
         .dm-send-btn:hover:not(:disabled) { transform: scale(1.05); box-shadow: 0 3px 12px rgba(99,102,241,0.3); }
         .dm-send-btn:disabled { opacity: 0.3; cursor: default; }
+
+        /* ─── Attachment UI ──────────────────────────── */
+        .dm-attach-btn {
+          width: 36px; height: 36px; border-radius: 50%;
+          border: none; background: transparent; color: #52525b;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; transition: all 0.15s; flex-shrink: 0;
+        }
+        .dm-attach-btn:hover { background: rgba(255,255,255,0.06); color: #a1a1aa; }
+
+        .dm-attached-chip {
+          display: flex; align-items: center; gap: 6px;
+          padding: 5px 10px; border-radius: 8px;
+          background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.2);
+          font-size: 11px; color: #818cf8; max-width: 100%;
+        }
+        .dm-attached-chip span {
+          flex: 1; white-space: nowrap; overflow: hidden;
+          text-overflow: ellipsis; min-width: 0;
+        }
+        .dm-chip-remove {
+          background: none; border: none; color: #52525b;
+          cursor: pointer; font-size: 11px; padding: 0 2px;
+          flex-shrink: 0;
+        }
+        .dm-chip-remove:hover { color: #ef4444; }
+
+        .dm-minutes-picker {
+          position: absolute; bottom: 80px; left: 12px; right: 12px;
+          background: #1a1a20; border: 1px solid #222228;
+          border-radius: 14px; z-index: 21;
+          box-shadow: 0 -6px 24px rgba(0,0,0,0.5);
+          animation: dmSlideUp2 0.15s ease-out;
+          max-height: 320px; display: flex; flex-direction: column;
+        }
+        .dm-minutes-picker-header {
+          display: flex; align-items: center; gap: 6px;
+          padding: 12px 14px; border-bottom: 1px solid #222228;
+          font-size: 12px; font-weight: 600; color: #a1a1aa;
+        }
+        .dm-minutes-loading {
+          display: flex; align-items: center; justify-content: center;
+          gap: 8px; padding: 24px; color: #52525b; font-size: 12px;
+        }
+        .dm-minutes-empty {
+          padding: 24px; text-align: center;
+          color: #3f3f46; font-size: 12px;
+        }
+        .dm-minutes-list {
+          overflow-y: auto; flex: 1;
+        }
+        .dm-minutes-list::-webkit-scrollbar { width: 3px; }
+        .dm-minutes-list::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+        .dm-minutes-item {
+          display: block; width: 100%; padding: 10px 14px;
+          border: none; border-bottom: 1px solid rgba(63,63,70,0.08);
+          background: transparent; color: inherit; text-align: left;
+          cursor: pointer; transition: background 0.12s;
+        }
+        .dm-minutes-item:hover { background: rgba(99,102,241,0.06); }
+        .dm-minutes-item:last-child { border-bottom: none; }
+        .dm-minutes-item-top {
+          display: flex; justify-content: space-between;
+          align-items: center; margin-bottom: 3px;
+        }
+        .dm-minutes-date { font-size: 11px; font-weight: 600; color: #e4e4e7; }
+        .dm-minutes-duration { font-size: 10px; color: #52525b; }
+        .dm-minutes-summary {
+          font-size: 11px; color: #71717a; margin: 0 0 4px;
+          line-height: 1.3; display: -webkit-box;
+          -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .dm-minutes-agents { display: flex; gap: 4px; flex-wrap: wrap; }
+        .dm-minutes-agent-tag {
+          font-size: 9px; font-weight: 600; text-transform: capitalize;
+          padding: 1px 6px; border-radius: 4px;
+          background: rgba(63,63,70,0.2); color: #71717a;
+        }
+
+        /* ─── New Messages Indicator ─────────────── */
+        .dm-new-msg-btn {
+          position: absolute; bottom: 90px; left: 50%; transform: translateX(-50%);
+          display: flex; align-items: center; gap: 5px;
+          padding: 6px 14px; border-radius: 20px;
+          background: rgba(99,102,241,0.9); color: #fff;
+          border: none; cursor: pointer; font-size: 11px; font-weight: 600;
+          box-shadow: 0 4px 16px rgba(99,102,241,0.3);
+          z-index: 20; animation: dmSlideUp2 0.2s ease-out;
+          transition: background 0.15s;
+        }
+        .dm-new-msg-btn:hover { background: rgba(99,102,241,1); }
+
+        /* ─── File Browser ──────────────────────────── */
+        .dm-file-chip { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.2); color: #4ade80; }
+        .dm-file-size { font-size: 9px; color: #52525b; flex-shrink: 0; }
+
+        .dm-file-browser {
+          position: absolute; bottom: 80px; left: 12px; right: 12px;
+          background: #1a1a20; border: 1px solid #222228;
+          border-radius: 14px; z-index: 22;
+          box-shadow: 0 -6px 24px rgba(0,0,0,0.5);
+          animation: dmSlideUp2 0.15s ease-out;
+          max-height: 340px; display: flex; flex-direction: column;
+        }
+        .dm-fb-header {
+          display: flex; align-items: center; gap: 6px;
+          padding: 10px 14px; border-bottom: 1px solid #222228;
+          font-size: 11px; font-weight: 600; color: #a1a1aa;
+        }
+        .dm-fb-path {
+          flex: 1; font-family: 'SF Mono', 'Fira Code', monospace;
+          font-size: 11px; color: #818cf8;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .dm-fb-up, .dm-fb-close {
+          background: none; border: none; color: #52525b;
+          cursor: pointer; font-size: 10px; font-weight: 600;
+          padding: 3px 6px; border-radius: 4px;
+          transition: all 0.12s;
+        }
+        .dm-fb-up:hover { background: rgba(99,102,241,0.1); color: #818cf8; }
+        .dm-fb-close:hover { color: #ef4444; }
+        .dm-fb-loading {
+          display: flex; align-items: center; justify-content: center;
+          gap: 8px; padding: 24px; color: #52525b; font-size: 12px;
+        }
+        .dm-fb-list { overflow-y: auto; flex: 1; }
+        .dm-fb-list::-webkit-scrollbar { width: 3px; }
+        .dm-fb-list::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+        .dm-fb-item {
+          display: flex; align-items: center; gap: 8px;
+          width: 100%; padding: 7px 14px; border: none;
+          border-bottom: 1px solid rgba(63,63,70,0.06);
+          background: transparent; color: inherit; text-align: left;
+          cursor: pointer; transition: background 0.12s; font-size: 12px;
+        }
+        .dm-fb-item:hover { background: rgba(99,102,241,0.06); }
+        .dm-fb-item:last-child { border-bottom: none; }
+        .dm-fb-icon { font-size: 13px; flex-shrink: 0; width: 18px; text-align: center; }
+        .dm-fb-name { flex: 1; color: #d4d4d8; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11.5px; }
+        .dm-fb-count { font-size: 9px; color: #3f3f46; }
+        .dm-fb-size { font-size: 9px; color: #3f3f46; }
+        .dm-fb-empty { padding: 20px; text-align: center; color: #3f3f46; font-size: 11px; }
 
         /* ─── Mobile: Full Screen Chat ───────────────── */
         @media (max-width: 767px) {
