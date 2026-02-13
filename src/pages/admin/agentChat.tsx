@@ -46,6 +46,7 @@ const AGENT_EMOJIS: Record<string, string> = {
   antigravity: '🌌',
   scout: '🕵️',
   solara: '❤️‍🔥',
+  sage: '🧬',
 };
 
 const AGENT_ROLES: Record<string, string> = {
