@@ -1,4 +1,35 @@
+const fs = require('fs');
+const path = require('path');
 const admin = require('firebase-admin');
+
+function loadLocalEnv() {
+  const envFiles = ['.env.local', '.env'];
+  for (const file of envFiles) {
+    const envPath = path.join(__dirname, '..', file);
+    if (!fs.existsSync(envPath)) continue;
+
+    const lines = fs.readFileSync(envPath, 'utf-8').split(/\r?\n/);
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) continue;
+
+      const sanitized = line.startsWith('export ') ? line.replace(/^export\s+/, '') : line;
+      const [key, ...rest] = sanitized.split('=');
+      if (!key || rest.length === 0) continue;
+
+      let value = rest.join('=').trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
+loadLocalEnv();
 
 function getEnv(name) {
   const value = process.env[name];
@@ -35,6 +66,21 @@ const makeSubtask = (title) => ({
 });
 
 const tasks = [
+  {
+    name: 'Stand up Research Intel Feed pipeline',
+    description: 'Design the living intel feed the new researcher will own: real-time drops, urgent flags, daily skim summaries, and a weekly digest tied to Tremaine’s “why now” questions.',
+    project: 'Strategic Ops',
+    theme: 'Insights',
+    assignee: 'Nora ⚡️',
+    status: 'todo',
+    notes: 'Outcome from Feb 11 roundtable; scoped in docs/kanban-task-plan-2026-02-11.md. Need structure before researcher onboarding.',
+    subtasks: [
+      'Define feed taxonomy (source, why-now signal, urgency, owner, status)',
+      'Draft urgent-vs-weekly escalation rules + notification path',
+      'Create weekly digest template + cadence notes for Tremaine/leadership',
+      'Document handoff checklist for incoming researcher + Kanban lane plugs',
+    ].map(makeSubtask),
+  },
   {
     name: 'Build Pulse systems overview',
     description: 'Create a single source of truth covering every repo, environments, release branches, and responsible owners. Include Firestore collections + tooling references for onboarding.',
