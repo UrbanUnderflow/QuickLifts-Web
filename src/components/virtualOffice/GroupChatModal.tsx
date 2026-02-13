@@ -64,6 +64,9 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
   const [fileBrowserLoading, setFileBrowserLoading] = useState(false);
   const [attachedFile, setAttachedFile] = useState<{ name: string; path: string; content: string; size: number } | null>(null);
   const [fileFilter, setFileFilter] = useState('');
+  const [fileBrowserMode, setFileBrowserMode] = useState<'search' | 'browse'>('search');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Listen to messages
   useEffect(() => {
@@ -197,15 +200,36 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
       setMentionFilter('');
     }
 
-    // Check for / trigger for file browser
+    // Check for /b trigger for file search
+    const slashBMatch = textBeforeCursor.match(/(^|\s)\/b\s(.*)$/i);
+
+    if (slashBMatch) {
+      const searchQuery = slashBMatch[2];
+      setFileFilter(searchQuery);
+      if (!showFileBrowser) {
+        setShowFileBrowser(true);
+        setFileBrowserMode('search');
+      }
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      if (searchQuery.trim().length > 0) {
+        searchDebounceRef.current = setTimeout(() => searchFilesGC(searchQuery.trim()), 200);
+      } else {
+        setSearchResults([]);
+      }
+      return;
+    }
+
+    // Check for / trigger for file browser (fallback)
     const slashIdx = textBeforeCursor.lastIndexOf('/');
     if (slashIdx >= 0) {
       const charBefore = slashIdx > 0 ? textBeforeCursor[slashIdx - 1] : ' ';
       if (slashIdx === 0 || /\s/.test(charBefore)) {
-        const filterTxt = textBeforeCursor.slice(slashIdx + 1);
-        setFileFilter(filterTxt);
+        const afterSlash = textBeforeCursor.slice(slashIdx + 1);
+        if (afterSlash.startsWith('b')) return;
+        setFileFilter(afterSlash);
         if (!showFileBrowser) {
           setShowFileBrowser(true);
+          setFileBrowserMode('browse');
           browseDir('/');
         }
         return;
@@ -237,6 +261,20 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
     }, 10);
   }, [inputText]);
 
+  const searchFilesGC = async (searchQuery: string) => {
+    setFileBrowserLoading(true);
+    try {
+      const res = await fetch(`/api/files/browse?search=${encodeURIComponent(searchQuery)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSearchResults(data.results || []);
+      }
+    } catch (e) {
+      console.error('Failed to search files:', e);
+    }
+    setFileBrowserLoading(false);
+  };
+
   const browseDir = async (dirPath: string) => {
     setFileBrowserLoading(true);
     setFileBrowserPath(dirPath);
@@ -263,8 +301,14 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
       console.error('Failed to read file:', e);
     }
     setShowFileBrowser(false);
-    const slashIdx = inputText.lastIndexOf('/');
-    if (slashIdx >= 0) setInputText(inputText.slice(0, slashIdx));
+    const slashBIdx = inputText.search(/(^|\s)\/b\s/i);
+    if (slashBIdx >= 0) {
+      const actualSlash = inputText.indexOf('/b', slashBIdx);
+      setInputText(inputText.slice(0, actualSlash).trimEnd());
+    } else {
+      const slashIdx2 = inputText.lastIndexOf('/');
+      if (slashIdx2 >= 0) setInputText(inputText.slice(0, slashIdx2));
+    }
   };
 
   const handleClose = () => {
@@ -537,18 +581,59 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
           {showFileBrowser && (
             <div className="rt-file-browser">
               <div className="rt-fb-header">
-                <FolderOpen className="w-3.5 h-3.5" />
-                <span className="rt-fb-path">{fileBrowserPath}</span>
-                {fileBrowserPath !== '/' && (
-                  <button className="rt-fb-up" onClick={() => {
-                    const parent = fileBrowserPath.split('/').slice(0, -1).join('/') || '/';
-                    browseDir(parent);
-                  }}>↑ Up</button>
+                {fileBrowserMode === 'search' ? (
+                  <>
+                    <Code2 className="w-3.5 h-3.5" style={{ color: '#818cf8' }} />
+                    <span className="rt-fb-path">Search: {fileFilter || '...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    <span className="rt-fb-path">{fileBrowserPath}</span>
+                    {fileBrowserPath !== '/' && (
+                      <button className="rt-fb-up" onClick={() => {
+                        const parent = fileBrowserPath.split('/').slice(0, -1).join('/') || '/';
+                        browseDir(parent);
+                      }}>↑ Up</button>
+                    )}
+                  </>
                 )}
                 <button className="rt-fb-close" onClick={() => setShowFileBrowser(false)}>✕</button>
               </div>
               {fileBrowserLoading ? (
-                <div className="rt-fb-loading"><Loader2 className="w-4 h-4 animate-spin" /><span>Loading...</span></div>
+                <div className="rt-fb-loading"><Loader2 className="w-4 h-4 animate-spin" /><span>Searching...</span></div>
+              ) : fileBrowserMode === 'search' ? (
+                <div className="rt-fb-list">
+                  {searchResults.length === 0 && fileFilter.trim() ? (
+                    <div className="rt-fb-empty">{fileFilter.trim().length < 2 ? 'Type to search files...' : 'No matching files'}</div>
+                  ) : searchResults.length === 0 ? (
+                    <div className="rt-fb-empty">Type a filename to search...</div>
+                  ) : (
+                    searchResults.map((item: any) => (
+                      <button
+                        key={item.path}
+                        className="rt-fb-item"
+                        onClick={() => {
+                          if (item.isDirectory) {
+                            setFileBrowserMode('browse');
+                            browseDir(item.path);
+                          } else {
+                            selectFile(item.path);
+                          }
+                        }}
+                      >
+                        <span className="rt-fb-icon">{item.icon}</span>
+                        <div className="rt-fb-info">
+                          <span className="rt-fb-name">{item.name}</span>
+                          <span className="rt-fb-parent">{item.parentDir}</span>
+                        </div>
+                        {!item.isDirectory && item.size != null && (
+                          <span className="rt-fb-size">{(item.size / 1024).toFixed(1)}KB</span>
+                        )}
+                      </button>
+                    ))
+                  )}
+                </div>
               ) : (
                 <div className="rt-fb-list">
                   {fileBrowserItems
@@ -1252,9 +1337,11 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
         .rt-fb-item:hover { background: rgba(139,92,246,0.06); }
         .rt-fb-item:last-child { border-bottom: none; }
         .rt-fb-icon { font-size: 13px; flex-shrink: 0; width: 18px; text-align: center; }
-        .rt-fb-name { flex: 1; color: #d4d4d8; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11.5px; }
+        .rt-fb-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .rt-fb-name { color: #d4d4d8; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .rt-fb-parent { font-size: 9px; color: #3f3f46; font-family: 'SF Mono', 'Fira Code', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .rt-fb-count { font-size: 9px; color: #3f3f46; }
-        .rt-fb-size { font-size: 9px; color: #3f3f46; }
+        .rt-fb-size { font-size: 9px; color: #3f3f46; flex-shrink: 0; }
         .rt-fb-empty { padding: 20px; text-align: center; color: #3f3f46; font-size: 11px; }
 
         @media (max-width: 768px) {

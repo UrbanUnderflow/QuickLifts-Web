@@ -36,6 +36,13 @@
   status = 200
   force = true
 
+# File browser API → Netlify function (keeps it out of Next.js build)
+[[redirects]]
+  from = "/api/files/browse"
+  to = "/.netlify/functions/files-browse"
+  status = 200
+  force = true
+
 
 # NOTE: Do NOT add SPA-style catch-all redirects like "/* → / 200" here.
 # The @netlify/plugin-nextjs plugin handles ALL Next.js routing automatically.
