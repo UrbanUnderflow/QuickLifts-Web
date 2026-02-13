@@ -58,12 +58,12 @@ const formatMs = (ms?: number) => {
 /* ─── Desk positions for the office floor plan ────────── */
 
 const DESK_POSITIONS = [
-  { x: 12, y: 35, facing: 'right' as const },   // Antigravity — far left, upper
-  { x: 75, y: 30, facing: 'left' as const },    // Nora — far right, upper
-  { x: 12, y: 70, facing: 'right' as const },   // Scout — far left, lower
-  { x: 75, y: 70, facing: 'left' as const },    // Brand Voice — far right, lower
-  { x: 42, y: 22, facing: 'right' as const },   // Sage — center upper desk
-  { x: 42, y: 85, facing: 'left' as const },    // slot 6
+  { x: 22, y: 32, facing: 'right' as const },   // Antigravity — left, upper
+  { x: 65, y: 28, facing: 'left' as const },    // Nora — right, upper
+  { x: 22, y: 65, facing: 'right' as const },   // Scout — left, lower
+  { x: 65, y: 65, facing: 'left' as const },    // Solara — right, lower
+  { x: 42, y: 20, facing: 'right' as const },   // Sage — center upper
+  { x: 42, y: 80, facing: 'left' as const },    // slot 6
 ];
 
 /* ─── Agent roles / job titles ─────────────────────── */
@@ -2117,30 +2117,31 @@ const VirtualOfficeContent: React.FC = () => {
       {/* ═══════════════════════════════════════════════════ */}
       <style jsx global>{`
         .voffice-root {
-          min-height: 100vh;
+          height: 100vh;
+          overflow: hidden;
           background: #030508;
           color: white;
           font-family: 'Inter', -apple-system, sans-serif;
+          display: flex;
+          flex-direction: column;
         }
 
         /* ── Top bar ── */
         .voffice-topbar {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 24px 28px 0;
+          padding: 16px 28px 0;
           display: flex;
           align-items: flex-end;
           justify-content: space-between;
+          flex-shrink: 0;
         }
 
         /* ── Stats ── */
         .voffice-stats {
-          max-width: 1200px;
-          margin: 20px auto 0;
-          padding: 0 28px;
+          padding: 16px 28px 0;
           display: flex;
           gap: 12px;
           flex-wrap: wrap;
+          flex-shrink: 0;
         }
         .stat-chip {
           display: flex;
@@ -2167,20 +2168,17 @@ const VirtualOfficeContent: React.FC = () => {
 
         /* ── Office Floor ── */
         .office-floor-container {
-          max-width: 1200px;
-          margin: 24px auto 0;
-          padding: 0 28px 40px;
+          flex: 1;
+          padding: 16px 0 0 0;
+          min-height: 0;
         }
         .office-floor {
           position: relative;
           width: 100%;
-          aspect-ratio: 16 / 10;
-          min-height: 500px;
-          border-radius: 20px;
+          height: 100%;
           overflow: hidden;
           background: linear-gradient(180deg, #0d1117 0%, #0a0e14 40%, #080c11 100%);
-          border: 1px solid rgba(63,63,70,0.25);
-          box-shadow: 0 4px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03);
+          border-top: 1px solid rgba(63,63,70,0.2);
         }
         .filing-cabinet-btn {
           position: absolute;
@@ -2567,33 +2565,31 @@ const VirtualOfficeContent: React.FC = () => {
         /*  HOVER DETAIL PANEL                               */
         /* ══════════════════════════════════════════════════ */
         .hover-detail-panel {
-          position: absolute;
+          position: fixed;
           top: 50%;
-          width: 300px;
-          max-height: 450px;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 320px;
+          max-height: 80vh;
           overflow-y: auto;
           background: rgba(8,12,17,0.97);
           backdrop-filter: blur(20px);
           border: 1px solid rgba(63,63,70,0.35);
           border-radius: 16px;
           padding: 16px;
-          z-index: 30;
+          z-index: 100;
           box-shadow: 0 12px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03);
-          animation: panelSlideIn 0.25s ease-out;
+          animation: panelSlideIn 0.2s ease-out;
           scrollbar-width: thin;
           scrollbar-color: rgba(63,63,70,0.3) transparent;
         }
-        .hover-detail-panel.right {
-          left: calc(100% + 20px);
-          transform: translateY(-50%);
-        }
+        .hover-detail-panel.right,
         .hover-detail-panel.left {
-          right: calc(100% + 20px);
-          transform: translateY(-50%);
+          /* no-op — always centered now */
         }
         @keyframes panelSlideIn {
-          from { opacity: 0; transform: translateY(-50%) translateX(-8px); }
-          to { opacity: 1; transform: translateY(-50%) translateX(0); }
+          from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+          to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
         }
 
         .detail-header {
@@ -2888,8 +2884,7 @@ const VirtualOfficeContent: React.FC = () => {
         @media (max-width: 768px) {
           .voffice-topbar { flex-direction: column; align-items: flex-start; gap: 12px; }
           .voffice-stats { flex-wrap: wrap; }
-          .office-floor { min-height: 400px; }
-          .hover-detail-panel { width: 240px; max-height: 350px; }
+          .hover-detail-panel { width: 280px; max-width: 90vw; max-height: 70vh; }
           .commander-card { flex-wrap: wrap; }
         }
 
