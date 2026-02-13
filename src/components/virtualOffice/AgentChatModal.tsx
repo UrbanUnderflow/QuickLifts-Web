@@ -404,6 +404,9 @@ const ChatPanel: React.FC<{
     const [fileBrowserLoading, setFileBrowserLoading] = useState(false);
     const [attachedFile, setAttachedFile] = useState<{ name: string; path: string; content: string; size: number } | null>(null);
     const [fileFilter, setFileFilter] = useState('');
+    const [fileBrowserMode, setFileBrowserMode] = useState<'search' | 'browse'>('search');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const agentIsStale = isAgentStale(agent);
     const agentIsOnline = agent.status !== 'offline' && !agentIsStale;
@@ -487,25 +490,60 @@ const ChatPanel: React.FC<{
         e.target.style.height = 'auto';
         e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
 
-        // Detect `/` trigger for file browser
+        // Detect `/b ` trigger for file search
         const cursorPos = e.target.selectionStart;
         const textBeforeCursor = val.slice(0, cursorPos);
-        const lastSlashIdx = textBeforeCursor.lastIndexOf('/');
+        const slashBMatch = textBeforeCursor.match(/(^|\s)\/b\s(.*)$/i);
 
+        if (slashBMatch) {
+            const searchQuery = slashBMatch[2];
+            setFileFilter(searchQuery);
+            if (!showFileBrowser) {
+                setShowFileBrowser(true);
+                setFileBrowserMode('search');
+            }
+            // Debounce the search
+            if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+            if (searchQuery.trim().length > 0) {
+                searchDebounceRef.current = setTimeout(() => searchFiles(searchQuery.trim()), 200);
+            } else {
+                setSearchResults([]);
+            }
+            return;
+        }
+
+        // Detect solo `/` trigger for directory browser (fallback)
+        const lastSlashIdx = textBeforeCursor.lastIndexOf('/');
         if (lastSlashIdx >= 0) {
             const charBefore = lastSlashIdx > 0 ? textBeforeCursor[lastSlashIdx - 1] : ' ';
-            // Only trigger if `/` is at start of input or preceded by whitespace
             if (lastSlashIdx === 0 || /\s/.test(charBefore)) {
-                const filterText = textBeforeCursor.slice(lastSlashIdx + 1);
-                setFileFilter(filterText);
+                const afterSlash = textBeforeCursor.slice(lastSlashIdx + 1);
+                // Don't trigger browse if it's /b (that's search)
+                if (afterSlash.startsWith('b')) return;
+                setFileFilter(afterSlash);
                 if (!showFileBrowser) {
                     setShowFileBrowser(true);
+                    setFileBrowserMode('browse');
                     browseDirectory('/');
                 }
                 return;
             }
         }
         if (showFileBrowser) setShowFileBrowser(false);
+    };
+
+    const searchFiles = async (searchQuery: string) => {
+        setFileBrowserLoading(true);
+        try {
+            const res = await fetch(`/api/files/browse?search=${encodeURIComponent(searchQuery)}`);
+            if (res.ok) {
+                const data = await res.json();
+                setSearchResults(data.results || []);
+            }
+        } catch (e) {
+            console.error('Failed to search files:', e);
+        }
+        setFileBrowserLoading(false);
     };
 
     const browseDirectory = async (dirPath: string) => {
@@ -538,9 +576,15 @@ const ChatPanel: React.FC<{
             console.error('Failed to read file:', e);
         }
         setShowFileBrowser(false);
-        // Remove the `/...` text from input
-        const slashIdx = inputText.lastIndexOf('/');
-        if (slashIdx >= 0) setInputText(inputText.slice(0, slashIdx));
+        // Remove the `/b ...` or `/...` text from input
+        const slashBIdx = inputText.search(/(^|\s)\/b\s/i);
+        if (slashBIdx >= 0) {
+            const actualSlash = inputText.indexOf('/b', slashBIdx);
+            setInputText(inputText.slice(0, actualSlash).trimEnd());
+        } else {
+            const slashIdx = inputText.lastIndexOf('/');
+            if (slashIdx >= 0) setInputText(inputText.slice(0, slashIdx));
+        }
     };
 
     const sendMessage = async () => {
@@ -830,18 +874,59 @@ const ChatPanel: React.FC<{
                 {showFileBrowser && (
                     <div className="dm-file-browser">
                         <div className="dm-fb-header">
-                            <FolderOpen className="w-3.5 h-3.5" />
-                            <span className="dm-fb-path">{fileBrowserPath}</span>
-                            {fileBrowserPath !== '/' && (
-                                <button className="dm-fb-up" onClick={() => {
-                                    const parent = fileBrowserPath.split('/').slice(0, -1).join('/') || '/';
-                                    browseDirectory(parent);
-                                }}>↑ Up</button>
+                            {fileBrowserMode === 'search' ? (
+                                <>
+                                    <Code2 className="w-3.5 h-3.5" style={{ color: '#818cf8' }} />
+                                    <span className="dm-fb-path">Search: {fileFilter || '...'}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <FolderOpen className="w-3.5 h-3.5" />
+                                    <span className="dm-fb-path">{fileBrowserPath}</span>
+                                    {fileBrowserPath !== '/' && (
+                                        <button className="dm-fb-up" onClick={() => {
+                                            const parent = fileBrowserPath.split('/').slice(0, -1).join('/') || '/';
+                                            browseDirectory(parent);
+                                        }}>↑ Up</button>
+                                    )}
+                                </>
                             )}
                             <button className="dm-fb-close" onClick={() => setShowFileBrowser(false)}>✕</button>
                         </div>
                         {fileBrowserLoading ? (
-                            <div className="dm-fb-loading"><Loader2 className="w-4 h-4 animate-spin" /><span>Loading...</span></div>
+                            <div className="dm-fb-loading"><Loader2 className="w-4 h-4 animate-spin" /><span>Searching...</span></div>
+                        ) : fileBrowserMode === 'search' ? (
+                            <div className="dm-fb-list">
+                                {searchResults.length === 0 && fileFilter.trim() ? (
+                                    <div className="dm-fb-empty">{fileFilter.trim().length < 2 ? 'Type to search files...' : 'No matching files'}</div>
+                                ) : searchResults.length === 0 ? (
+                                    <div className="dm-fb-empty">Type a filename to search...</div>
+                                ) : (
+                                    searchResults.map((item: any) => (
+                                        <button
+                                            key={item.path}
+                                            className="dm-fb-item"
+                                            onClick={() => {
+                                                if (item.isDirectory) {
+                                                    setFileBrowserMode('browse');
+                                                    browseDirectory(item.path);
+                                                } else {
+                                                    selectFile(item.path);
+                                                }
+                                            }}
+                                        >
+                                            <span className="dm-fb-icon">{item.icon}</span>
+                                            <div className="dm-fb-info">
+                                                <span className="dm-fb-name">{item.name}</span>
+                                                <span className="dm-fb-parent">{item.parentDir}</span>
+                                            </div>
+                                            {!item.isDirectory && item.size != null && (
+                                                <span className="dm-fb-size">{(item.size / 1024).toFixed(1)}KB</span>
+                                            )}
+                                        </button>
+                                    ))
+                                )}
+                            </div>
                         ) : (
                             <div className="dm-fb-list">
                                 {fileBrowserItems
@@ -1259,9 +1344,11 @@ const ChatPanel: React.FC<{
         .dm-fb-item:hover { background: rgba(99,102,241,0.06); }
         .dm-fb-item:last-child { border-bottom: none; }
         .dm-fb-icon { font-size: 13px; flex-shrink: 0; width: 18px; text-align: center; }
-        .dm-fb-name { flex: 1; color: #d4d4d8; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11.5px; }
+        .dm-fb-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .dm-fb-name { color: #d4d4d8; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .dm-fb-parent { font-size: 9px; color: #3f3f46; font-family: 'SF Mono', 'Fira Code', monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .dm-fb-count { font-size: 9px; color: #3f3f46; }
-        .dm-fb-size { font-size: 9px; color: #3f3f46; }
+        .dm-fb-size { font-size: 9px; color: #3f3f46; flex-shrink: 0; }
         .dm-fb-empty { padding: 20px; text-align: center; color: #3f3f46; font-size: 11px; }
 
         /* ─── Mobile: Full Screen Chat ───────────────── */
