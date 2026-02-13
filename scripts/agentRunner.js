@@ -1245,6 +1245,15 @@ async function processCommands() {
                 }
                 break;
 
+            case 'force-recovery': {
+                console.log(`   🔧 Force recovery triggered by ${cmd.from}`);
+                // Signal the runner to abort the current step and trigger recovery
+                _forceRecoveryRequested = true;
+                _forceRecoveryReason = cmd.content || 'Manual recovery triggered from Virtual Office';
+                response = `🔄 Recovery initiated. Will abort current step and try a different approach.`;
+                break;
+            }
+
             default:
                 response = `Received ${cmd.type}: "${cmd.content}". Not sure how to handle this type.`;
         }
