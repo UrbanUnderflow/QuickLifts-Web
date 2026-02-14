@@ -691,6 +691,17 @@ async function processCommands() {
 
             case 'question':
             case 'chat': {
+                // ── Greeting fast-path: skip LLM for casual greetings ──
+                var GREETING_RX = /^(hey|hi|hello|what'?s up|how are you|yo|sup|good morning|good evening|gm)\b/i;
+                if (GREETING_RX.test((cmd.content || '').trim())) {
+                    var presSnap = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
+                    var presData = presSnap.data();
+                    var quickStatus = presData?.currentTask ? `Working on: ${presData.currentTask} (${presData.taskProgress || 0}% done).` : 'No active task right now — ready for anything.';
+                    response = `Hey Tremaine! All good on my end. ${quickStatus}`;
+                    console.log('   ⚡ Greeting fast-path — skipped LLM');
+                    break;
+                }
+
                 // Generate intelligent DM response via OpenClaw or OpenAI
                 var presenceSnap2 = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
                 var presenceData = presenceSnap2.data();
@@ -699,22 +710,15 @@ async function processCommands() {
                 var dmPersonalities = {
                     nora: { role: 'Director of System Operations', style: 'Strategic, organized, decisive. You manage systems, architecture, and operational efficiency.' },
                     scout: { role: 'Influencer Research Analyst', style: 'Curious, analytical, detail-oriented. You focus on data, trends, and user insights.' },
-                    solara: { role: 'Brand Director', style: 'Visionary, expressive, values-driven. You focus on narrative, identity, and emotional resonance.' },
+                    solara: { role: 'Brand Voice', style: 'Visionary, expressive, values-driven. You focus on narrative, identity, and emotional resonance.' },
+                    sage: { role: 'Health Intelligence Researcher', style: 'Warm, evidence-driven, rigorous. You synthesize research into actionable briefs.' },
                 };
                 var dmPersonality = dmPersonalities[AGENT_ID] || { role: 'Team Member', style: 'Collaborative and thoughtful.' };
 
                 var dmPrompt = [
-                    `You are ${AGENT_NAME}, the ${dmPersonality.role} on the Pulse team (FitWithPulse.ai).`,
-                    `Personality: ${dmPersonality.style}`,
-                    ``,
-                    `Your current status: ${statusContext}`,
-                    ``,
-                    `Tremaine (your boss, the founder) just sent you a direct message.`,
-                    `Respond naturally and helpfully. Be honest about what you've done or haven't done.`,
-                    `If they're asking about tasks, check your status above and answer truthfully.`,
-                    `If you're idle and they expected work to be done, acknowledge it honestly.`,
-                    `Keep it to 2-4 sentences. Be conversational, real, and specific.`,
-                    `Respond in plain text only (no markdown). Just your natural reply:`,
+                    `You are ${AGENT_NAME}, the ${dmPersonality.role} at Pulse (FitWithPulse.ai). ${dmPersonality.style}`,
+                    `Status: ${statusContext}`,
+                    `Tremaine (founder) sent you a DM. Reply honestly in 2-4 sentences, plain text only:`,
                 ].join('\n');
 
                 var dmAiResponse = '';
@@ -726,13 +730,13 @@ async function processCommands() {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
                             body: JSON.stringify({
-                                model: 'gpt-4o',
+                                model: 'gpt-4o-mini',
                                 messages: [{ role: 'system', content: dmPrompt }, { role: 'user', content: cmd.content }],
                                 temperature: 0.7, max_tokens: 300,
                             }),
                         });
                         var dmData = await dmResp.json();
-                        trackTokenUsage(dmData.usage, 'gpt-4o');
+                        trackTokenUsage(dmData.usage, 'gpt-4o-mini');
                         dmAiResponse = dmData.choices?.[0]?.message?.content || '';
                     } catch (err) {
                         console.error('OpenAI DM generation failed:', err.message);
@@ -917,8 +921,8 @@ async function processCommands() {
                         strengths: 'brand voice, messaging strategy, content direction, value alignment, narrative guardrails, positioning',
                     },
                     sage: {
-                        role: 'Research Intelligence Envoy',
-                        style: 'Warm, evidence-driven, and rigorous. You synthesize field intel into actionable briefs. You speak as a field correspondent — citing sources, separating signal from hype, and always explaining why something matters.',
+                        role: 'Health Intelligence Researcher',
+                        style: 'Warm, evidence-driven, and rigorous. You synthesize field intel into actionable briefs — citing sources, separating signal from hype.',
                         strengths: 'health trends, exercise science, clinical research, sports psychology, wellness tech, competitor analysis, market intelligence',
                     },
                 };
@@ -946,38 +950,22 @@ async function processCommands() {
 
                 if (useOpenClaw || process.env.OPENAI_API_KEY) {
                     var chatPrompt = [
-                        `You are ${AGENT_NAME}, the ${personality.role} on the Pulse team (FitWithPulse.ai).`,
-                        ``,
-                        `Personality: ${personality.style}`,
-                        `Your strengths: ${personality.strengths}`,
-                        ``,
-                        `CONTEXT: You're in a Round Table brainstorm with: ${otherAgents.join(', ')}.`,
-                        `Tremaine (your boss, the founder) just said: "${cmd.content}"`,
-                        ``,
-                        `THIS IS A BRAINSTORM — NOT AN EXECUTION SESSION. Your job is to THINK, not to build.`,
-                        ``,
-                        `Brainstorming rules:`,
-                        `- THINK OUT LOUD. Share your reasoning, not conclusions.`,
-                        `- ASK QUESTIONS — to Tremaine, to ${otherAgents.join(', ')}, or to the room. Questions uncover the real answers.`,
-                        `- EXPLORE ANGLES from your expertise area. What do you see that others might miss?`,
-                        `- RAISE CONCERNS or unknowns. "Have we thought about...?" is more valuable than "I'll go build X."`,
-                        `- BUILD ON ideas, don't just agree. "That makes me wonder..." or "What if we..."`,
-                        `- NEVER offer to "start building" or "get started on" something. This is thinking time, not doing time.`,
-                        `- NEVER list action items or task breakdowns. Those come later.`,
-                        `- When you want another agent's take, use @TheirName (e.g. "@Scout, what are you seeing..."). This is important — it triggers them to respond.`,
-                        `- If the message is casual (greeting/check-in), be warm and genuine — share what's on your mind lately.`,
-                        ``,
-                        `Keep it to 2-4 sentences. Be conversational, curious, and real.`,
-                        `Respond in plain text only (no markdown, no bullet points). Just your natural reply:`,
+                        `You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai). ${personality.style}`,
+                        `Strengths: ${personality.strengths}`,
+                        `Round Table with: ${otherAgents.join(', ')}. Tremaine (founder) said: "${cmd.content}"`,
+                        `BRAINSTORM ONLY — think, don't execute. Rules: Think out loud (reasoning > conclusions). Ask questions, explore angles from your expertise, raise concerns. Build on others' ideas with "What if..." Never offer to build/execute — this is thinking time. Use @Name to tag agents. If casual, be warm and share what's on your mind.`,
+                        `2-4 sentences, plain text only, conversational and real:`,
                     ].join('\n');
 
                     // ── Etiquette: inject others' responses so we can build on them ──
-                    if (othersRespondedBefore.length > 0) {
-                        var contextBlock = '\n\nOther agents have already responded to this message:\n';
-                        for (var responder of othersRespondedBefore) {
+                    // Cap prior responses to last 2 to save tokens
+                    var recentResponses = othersRespondedBefore.slice(-2);
+                    if (recentResponses.length > 0) {
+                        var contextBlock = '\nPrior responses:\n';
+                        for (var responder of recentResponses) {
                             contextBlock += `${responder.name}: "${responder.content}"\n`;
                         }
-                        contextBlock += '\nBuild on their points — add NEW perspective from your expertise. Don\'t repeat what they said. If they covered it well, keep yours brief or add a different angle.\n';
+                        contextBlock += 'Add NEW perspective — don\'t repeat.\n';
                         chatPrompt += contextBlock;
                     }
                     if (someoneElseAddressed) {
@@ -1014,7 +1002,7 @@ async function processCommands() {
                                         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
                                     },
                                     body: JSON.stringify({
-                                        model: 'gpt-4o',
+                                        model: 'gpt-4o-mini',
                                         messages: [
                                             { role: 'system', content: chatPrompt },
                                             { role: 'user', content: cmd.content }
@@ -1024,7 +1012,7 @@ async function processCommands() {
                                     }),
                                 });
                                 var gcData = await gcResp.json();
-                                trackTokenUsage(gcData.usage, 'gpt-4o');
+                                trackTokenUsage(gcData.usage, 'gpt-4o-mini');
                                 gcResponse = gcData.choices?.[0]?.message?.content || '';
                             } else if (useOpenClaw) {
                                 var args = [
