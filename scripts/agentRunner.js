@@ -977,13 +977,25 @@ async function processCommands() {
                 var gcResponse = '';
                 var useOpenClaw = process.env.USE_OPENCLAW === 'true';
 
+                // ── "Think Deeper" boost: detect phrases that request deeper reasoning ──
+                var BOOST_RX = /\b(think\s+(deeper|longer|hard|harder|carefully)|go\s+deep|really\s+think|deep\s+dive|take\s+your\s+time|think\s+about\s+this\s+(carefully|deeply|thoroughly))\b/i;
+                var isBoosted = BOOST_RX.test(cmd.content || '');
+                var boostModel = isBoosted ? 'gpt-4o' : 'gpt-4o-mini';
+                var boostMaxTokens = isBoosted ? 800 : 300;
+                var boostSentences = isBoosted ? '4-8 sentences' : '2-4 sentences';
+                if (isBoosted) {
+                    console.log(`   🚀 BOOST MODE: upgrading to ${boostModel} (${boostMaxTokens} tokens) for deeper reasoning`);
+                }
+
                 if (useOpenClaw || process.env.OPENAI_API_KEY) {
                     var chatPrompt = [
                         `You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai). ${personality.style}`,
                         `Strengths: ${personality.strengths}`,
                         `Round Table with: ${otherAgents.join(', ')}. Tremaine (founder) said: "${cmd.content}"`,
                         `BRAINSTORM ONLY — think, don't execute. Rules: Think out loud (reasoning > conclusions). Ask questions, explore angles from your expertise, raise concerns. Build on others' ideas with "What if..." Never offer to build/execute — this is thinking time. Use @Name to tag agents. If casual, be warm and share what's on your mind.`,
-                        `2-4 sentences, plain text only, conversational and real:`,
+                        isBoosted
+                            ? `Tremaine asked you to THINK DEEPLY on this. Take your time, be thorough and analytical. Explore multiple angles. ${boostSentences}, plain text only, thoughtful and rigorous:`
+                            : `${boostSentences}, plain text only, conversational and real:`,
                     ].join('\n');
 
                     // ── Etiquette: inject others' responses so we can build on them ──
@@ -1031,26 +1043,26 @@ async function processCommands() {
                                         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
                                     },
                                     body: JSON.stringify({
-                                        model: 'gpt-4o-mini',
+                                        model: boostModel,
                                         messages: [
                                             { role: 'system', content: chatPrompt },
                                             { role: 'user', content: cmd.content }
                                         ],
-                                        temperature: 0.8,
-                                        max_tokens: 300,
+                                        temperature: isBoosted ? 0.6 : 0.8,
+                                        max_tokens: boostMaxTokens,
                                     }),
                                 });
                                 var gcData = await gcResp.json();
-                                trackTokenUsage(gcData.usage, 'gpt-4o-mini');
+                                trackTokenUsage(gcData.usage, boostModel);
                                 gcResponse = gcData.choices?.[0]?.message?.content || '';
                             } else if (useOpenClaw) {
                                 var args = [
                                     '--no-color',
                                     'agent',
                                     '--local',
-                                    '--agent', OPENCLAW_AGENT_ID,
+                                    '--agent', isBoosted ? getAgentIdForTier('heavy') : OPENCLAW_AGENT_ID,
                                     '--message', chatPrompt,
-                                    '--timeout', '30',
+                                    '--timeout', isBoosted ? '60' : '30',
                                 ];
 
                                 var clawResult = await new Promise((resolve, reject) => {
