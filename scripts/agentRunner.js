@@ -41,6 +41,26 @@ const COMMANDS_COLLECTION = 'agent-commands';
 const HISTORY_SUBCOLLECTION = 'task-history';
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || ({ 'nora': 'main', 'scout': 'scout', 'solara': 'solara', 'sage': 'sage' }[AGENT_ID] || 'main');
+
+// ── Complexity-based model routing ──
+// Maps complexity scores (1-5) to OpenClaw agent config tiers.
+// Each agent needs 3 configs: <id>-light, <id> (default), <id>-heavy
+const MODEL_TIERS = {
+    light: `${OPENCLAW_AGENT_ID}-light`,   // gpt-4o-mini — trivial edits, config tweaks
+    default: OPENCLAW_AGENT_ID,               // current model — standard dev work
+    heavy: `${OPENCLAW_AGENT_ID}-heavy`,    // o4-mini/codex — architecture, complex features
+};
+
+function getModelTier(complexity) {
+    if (typeof complexity !== 'number' || complexity <= 0) return 'default';
+    if (complexity <= 2) return 'light';
+    if (complexity <= 4) return 'default';
+    return 'heavy';
+}
+
+function getAgentIdForTier(tier) {
+    return MODEL_TIERS[tier] || MODEL_TIERS.default;
+}
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
 const OPENCLAW_MODEL_SYNC_MS = parseInt(process.env.OPENCLAW_MODEL_SYNC_MS || '60000', 10); // Keep presence model accurate after OpenClaw config changes
@@ -422,6 +442,7 @@ async function generateSmartTask(rawContent, conversationContext) {
         `Respond in EXACTLY this format (no markdown, no extra text):`,
         `TITLE: <the task title>`,
         `DESCRIPTION: <the task description>`,
+        `COMPLEXITY: <1-5 where 1=trivial config/copy tweak, 2=single-file edit, 3=multi-file refactor, 4=new feature with tests, 5=architecture/design change>`,
     ].join('\n');
 
     try {
@@ -464,18 +485,23 @@ async function generateSmartTask(rawContent, conversationContext) {
             aiOutput = clawResult.replace(/^```[\s\S]*?```$/gm, '').trim();
         }
 
-        // Parse the TITLE: ... DESCRIPTION: ... format
+        // Parse the TITLE: ... DESCRIPTION: ... COMPLEXITY: ... format
         if (aiOutput) {
             const titleMatch = aiOutput.match(/TITLE:\s*(.+?)(?:\n|$)/i);
             const descMatch = aiOutput.match(/DESCRIPTION:\s*(.+?)(?:\n\n|$)/is);
+            const complexityMatch = aiOutput.match(/COMPLEXITY:\s*(\d)/i);
 
             const title = titleMatch?.[1]?.trim().replace(/^["']|["']$/g, '') || '';
             const description = descMatch?.[1]?.trim().replace(/^["']|["']$/g, '') || '';
+            const complexity = complexityMatch ? parseInt(complexityMatch[1], 10) : 3;
 
             if (title.length >= 5 && title.length <= 120) {
+                const tier = getModelTier(complexity);
+                console.log(`   🎯 Complexity: ${complexity}/5 → tier: ${tier} (${getAgentIdForTier(tier)})`);
                 return {
                     title,
                     description: description || `Original request: "${rawContent}". AI-generated task.`,
+                    complexity,
                 };
             }
             // If we got *something* from AI but parsing failed, try using the first line
@@ -484,6 +510,7 @@ async function generateSmartTask(rawContent, conversationContext) {
                 return {
                     title: firstLine.replace(/^["']|["']$/g, ''),
                     description: description || `Original request: "${rawContent}". AI-generated task.`,
+                    complexity: complexity || 3,
                 };
             }
         }
@@ -630,6 +657,7 @@ async function processCommands() {
                     status: 'todo',
                     project: cmd.metadata?.project || 'General',
                     priority: cmd.metadata?.priority || 'medium',
+                    complexity: smartTask.complexity || 3,
                     subtasks: [],
                     createdAt: FieldValue.serverTimestamp(),
                     updatedAt: FieldValue.serverTimestamp(),
@@ -671,6 +699,7 @@ async function processCommands() {
                         status: 'todo',
                         project: cmd.metadata?.project || 'General',
                         priority: cmd.metadata?.priority || 'medium',
+                        complexity: upgSmart.complexity || 3,
                         subtasks: [],
                         createdAt: FieldValue.serverTimestamp(),
                         updatedAt: FieldValue.serverTimestamp(),
@@ -1690,6 +1719,11 @@ function autoCommitStep(stepDescription, taskName) {
 }
 
 async function executeStep(step, task, stepIndex, allSteps) {
+    // ── Complexity-based model tier selection ──
+    const taskComplexity = task.complexity || 3;
+    const modelTier = getModelTier(taskComplexity);
+    const tierAgentId = getAgentIdForTier(modelTier);
+    console.log(`   🎯 Model tier: ${modelTier} (${tierAgentId}) for complexity ${taskComplexity}/5`);
     const startTime = Date.now();
 
     step.reasoning = step.reasoning || `Working on: ${step.description}`;
@@ -1822,11 +1856,11 @@ ${smokeOutput}`.substring(0, 2000);
                     return base.filter(Boolean).join('\n');
                 };
 
-                // Helper: run OpenClaw with a given prompt
+                // Helper: run OpenClaw with a given prompt (uses complexity-based tier)
                 const invokeOpenClaw = (promptText, onProgress) => new Promise((resolve, reject) => {
                     const clawArgs = [
                         '--no-color', 'agent', '--local', '--json',
-                        '--agent', OPENCLAW_AGENT_ID,
+                        '--agent', tierAgentId,
                         '--message', promptText,
                         '--timeout', '600',
                     ];
