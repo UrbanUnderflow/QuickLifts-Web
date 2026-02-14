@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { X, Send, Sparkles, MessageSquare, AtSign, Paperclip, FileText, Loader2, FolderOpen, Code2, ChevronDown, Lightbulb, ListTodo, Terminal } from 'lucide-react';
+import { X, Send, Sparkles, MessageSquare, AtSign, Paperclip, FileText, Loader2, FolderOpen, Code2, ChevronDown, Lightbulb, ListTodo, Terminal, Zap } from 'lucide-react';
 import { db } from '../../api/firebase/config';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { groupChatService } from '../../api/firebase/groupChat/service';
@@ -29,6 +29,7 @@ const AGENT_EMOJIS: Record<string, string> = {
   antigravity: '🌌',
   scout: '🕵️',
   solara: '❤️‍🔥',
+  sage: '🧬',
 };
 
 export const GroupChatModal: React.FC<GroupChatModalProps> = ({
@@ -355,6 +356,30 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
     });
   });
 
+  // ── Aggregate token usage from all participating agents ──
+  const totalTokens = participants.reduce((sum, agentId) => {
+    const usage = agentStatuses[agentId]?.tokenUsage;
+    return sum + (usage?.totalTokens || 0);
+  }, 0);
+  const totalPromptTokens = participants.reduce((sum, agentId) => {
+    const usage = agentStatuses[agentId]?.tokenUsage;
+    return sum + (usage?.promptTokens || 0);
+  }, 0);
+  const totalCompletionTokens = participants.reduce((sum, agentId) => {
+    const usage = agentStatuses[agentId]?.tokenUsage;
+    return sum + (usage?.completionTokens || 0);
+  }, 0);
+  const totalCalls = participants.reduce((sum, agentId) => {
+    const usage = agentStatuses[agentId]?.tokenUsage;
+    return sum + (usage?.callCount || 0);
+  }, 0);
+
+  const formatTokens = (n: number) => {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+    return String(n);
+  };
+
   return ReactDOM.createPortal(
     <div className="rt-overlay" onClick={handleClose}>
       <div className="rt-modal" onClick={(e) => e.stopPropagation()}>
@@ -374,6 +399,13 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
             </div>
           </div>
           <div className="rt-header-right">
+            {/* Token counter */}
+            {totalTokens > 0 && (
+              <div className="rt-token-counter" title={`Prompt: ${formatTokens(totalPromptTokens)} · Completion: ${formatTokens(totalCompletionTokens)} · ${totalCalls} API calls`}>
+                <Zap className="w-3 h-3" />
+                <span>{formatTokens(totalTokens)}</span>
+              </div>
+            )}
             {/* Agent presence dots */}
             <div className="rt-presence-dots">
               {participants.map(agentId => {
@@ -809,6 +841,31 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
           display: flex;
           align-items: center;
           gap: 10px;
+        }
+
+        .rt-token-counter {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 10px;
+          border-radius: 20px;
+          background: rgba(234, 179, 8, 0.08);
+          border: 1px solid rgba(234, 179, 8, 0.2);
+          color: #eab308;
+          font-size: 11px;
+          font-weight: 600;
+          font-family: 'SF Mono', 'Fira Code', monospace;
+          cursor: default;
+          transition: all 0.2s ease;
+          animation: tokenPulse 2s ease-in-out infinite;
+        }
+        .rt-token-counter:hover {
+          background: rgba(234, 179, 8, 0.14);
+          border-color: rgba(234, 179, 8, 0.35);
+        }
+        @keyframes tokenPulse {
+          0%, 100% { opacity: 0.85; }
+          50% { opacity: 1; }
         }
 
         .rt-header-icon {
