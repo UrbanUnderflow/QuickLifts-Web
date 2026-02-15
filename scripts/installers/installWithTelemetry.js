@@ -16,6 +16,9 @@
  */
 
 const { spawn } = require('child_process');
+const path = require('path');
+const os = require('os');
+const fs = require('fs');
 const admin = require('firebase-admin');
 
 const SERVICE_ACCOUNT = {
@@ -60,6 +63,13 @@ const args = parseArgs(process.argv.slice(2));
 if (!args.command) {
   console.error('Usage: node installWithTelemetry.js --agent nora --command "~/bin/mas install 497799835"');
   process.exit(1);
+}
+
+const defaultAskpass = path.join(os.homedir(), '.openclaw/bin/openclaw-askpass');
+const askpassPath = process.env.SUDO_ASKPASS || defaultAskpass;
+process.env.SUDO_ASKPASS = askpassPath;
+if (!fs.existsSync(askpassPath)) {
+  console.warn(`[telemetry] Warning: askpass helper not found at ${askpassPath}. sudo may still prompt for a password.`);
 }
 
 const agentId = args.agent;
@@ -147,7 +157,7 @@ async function run() {
     lastUpdate: FieldValue.serverTimestamp(),
   }, { merge: true });
 
-  const child = spawn(command, { shell: true, env: process.env });
+  const child = spawn(command, { shell: true, env: { ...process.env, SUDO_ASKPASS: askpassPath } });
 
   child.stdout.on('data', (chunk) => {
     const text = chunk.toString();
