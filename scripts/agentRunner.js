@@ -1819,20 +1819,53 @@ ${smokeOutput}`.substring(0, 2000);
                             } catch { /* non-critical */ }
                         }
 
+                        // ─── Smart error classification for targeted self-correction ──
+                        const prevOut = previousOutput.substring(0, 600);
+                        let errorCategory = 'unknown';
+                        let rootCauseDiagnosis = '';
+                        if (/command not found|not found|not installed|no such file|zsh:\s*\d+:.*not found/i.test(prevOut)) {
+                            errorCategory = 'MISSING_TOOL';
+                            rootCauseDiagnosis = `A required tool/binary is NOT INSTALLED on this machine. Do NOT retry the same install command. Instead: (1) run 'which' or 'command -v' to check what IS available, (2) find an alternative approach using only tools that exist, (3) if no alternative exists, clearly state what needs manual installation.`;
+                        } else if (/permission denied|sudo|not permitted|access denied/i.test(prevOut)) {
+                            errorCategory = 'PERMISSION';
+                            rootCauseDiagnosis = `Permission error. Try: (1) check if there's a non-sudo alternative, (2) use a user-local install path like ~/bin or ~/.local, (3) if sudo is truly required, explain what the human needs to do.`;
+                        } else if (/timed?\s*out|deadline exceeded|ETIMEDOUT/i.test(prevOut)) {
+                            errorCategory = 'TIMEOUT';
+                            rootCauseDiagnosis = `Operation timed out. Try: (1) check network connectivity, (2) use a faster mirror or alternative source, (3) break the operation into smaller steps.`;
+                        } else if (/syntax error|unexpected token|parse error|invalid/i.test(prevOut)) {
+                            errorCategory = 'SYNTAX';
+                            rootCauseDiagnosis = `Code or config syntax error. Read the error message carefully, open the file, find the exact line, and fix it.`;
+                        } else if (/ENOENT|no such file|file not found/i.test(prevOut)) {
+                            errorCategory = 'FILE_NOT_FOUND';
+                            rootCauseDiagnosis = `A file or path doesn't exist. Run 'ls' or 'find' to discover the correct path. Don't guess — verify.`;
+                        }
+
                         base.push(
                             ``,
-                            `⚠️ SELF-CORRECTION (attempt ${attempt + 1}/${MAX_SELF_CORRECTION_RETRIES + 1})`,
-                            `Your previous attempt produced this output:`,
-                            `"${previousOutput.substring(0, 500)}"`,
+                            `🚨 SELF-CORRECTION (attempt ${attempt + 1}/${MAX_SELF_CORRECTION_RETRIES + 1}) — ERROR TYPE: ${errorCategory}`,
+                            `Your previous attempt FAILED with this output:`,
+                            `"${prevOut}"`,
                             ``,
-                            `The output contains failure signals. DO NOT just document the failure.`,
-                            `Instead:`,
-                            `1. Investigate WHY it failed — search the codebase (grep, find, cat files)`,
-                            `2. Look at how existing working code solves similar problems`,
-                            `3. Check .env.local, scripts/, src/api/ for existing configs and patterns`,
-                            `4. Try an alternative approach to accomplish the goal`,
-                            `5. If you truly cannot complete the step, explain exactly what's blocking you and what a human would need to do`,
+                            `ROOT CAUSE ANALYSIS: ${rootCauseDiagnosis || 'Analyze the error output above and determine the root cause before trying again.'}`,
+                            ``,
+                            `CRITICAL RULES:`,
+                            `❌ DO NOT retry the exact same command that just failed — it WILL fail again for the same reason.`,
+                            `❌ DO NOT just document the failure — FIX IT or find a DIFFERENT approach.`,
+                            `✅ First: diagnose WHY it failed (run diagnostic commands: which, ls, cat, env)`,
+                            `✅ Then: find a COMPLETELY DIFFERENT approach that avoids the broken dependency`,
+                            `✅ If on attempt ${attempt + 1}: be MORE creative — the obvious approaches already failed`,
                         );
+                        if (attempt >= 1) {
+                            base.push(
+                                ``,
+                                `⚡ ESCALATION: You've failed ${attempt + 1} times. Previous approaches did not work.`,
+                                `You MUST take a fundamentally different approach:`,
+                                `- Run 'ls /usr/local/bin /usr/bin /opt/homebrew/bin 2>/dev/null' to see what tools ARE available`,
+                                `- Consider: can this task be done WITHOUT the missing tool?`,
+                                `- Consider: is there a manual/scripted alternative (curl, wget, python)?`,
+                                `- If truly blocked, explain EXACTLY what a human needs to do (one clear action)`,
+                            );
+                        }
                     }
 
                     // Inject available workflows so the agent knows about operational runbooks
