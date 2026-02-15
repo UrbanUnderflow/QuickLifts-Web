@@ -127,6 +127,7 @@ Before marking any task complete:
 
 - **[2026-02-13] Nora** — Stalled Sage runner traced to stale `.jsonl.lock` files plus a missing `.env.local`. If OpenClaw reports "session file locked" + inactivity, delete the agent via `openclaw agents delete <id> --force`, recreate it from the workflow config, restore `.env.local`, then relaunch the runner to republish presence/feeds.
 - **[2026-02-13] Nora** — Step "Inspect recent runner logs (e.g., the prior session’s stderr/stdout) to identify why Sage’s OpenClaw process stalled after 120s." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-15] Nora** — Step "Install the Mac App Store CLI (`brew install mas` or download manually) so you can pull Xcode via `mas`." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 ---
 
 ## Operational Rules
