@@ -1155,6 +1155,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   const status = STATUS_CONFIG[agent.status];
   const sessionDuration = formatDuration(agent.sessionStartedAt);
   const hasSteps = agent.executionSteps && agent.executionSteps.length > 0;
+  const installProgress = agent.installProgress || null;
 
   // ─── Drag state ─────────────────────────────
   const [isDragging, setIsDragging] = useState(false);
@@ -1412,6 +1413,43 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
             <div className="detail-task">
               <p className="text-[10px] uppercase tracking-wider text-zinc-500">Current Task</p>
               <p className="text-xs text-zinc-100 mt-0.5 font-medium">{agent.currentTask}</p>
+            </div>
+          )}
+
+          {/* Install progress telemetry */}
+          {installProgress && (
+            <div className="detail-install">
+              <div className="install-header">
+                <div className="install-title">
+                  <Loader2 className={`w-3.5 h-3.5 ${installProgress.phase === 'running' ? 'install-spinner' : ''}`} />
+                  <span>Install in Progress</span>
+                </div>
+                <span className={`phase-tag ${installProgress.phase}`}>
+                  {installProgress.phase === 'completed' ? 'Completed'
+                    : installProgress.phase === 'failed' ? 'Failed'
+                      : installProgress.phase === 'verifying' ? 'Verifying'
+                        : installProgress.phase === 'running' ? 'Running'
+                          : 'Pending'}
+                </span>
+              </div>
+              <p className="install-command">{installProgress.command}</p>
+              <div className="install-progress-track">
+                <div className="install-progress-fill" style={{ width: `${Math.min(100, Math.max(0, installProgress.percent ?? 0))}%` }} />
+              </div>
+              <div className="install-meta">
+                <span className="install-percent">{installProgress.percent ?? 0}%</span>
+                {installProgress.message && (
+                  <span className="install-message">{installProgress.message}</span>
+                )}
+              </div>
+              {installProgress.logSnippet && installProgress.logSnippet.length > 0 && (
+                <pre className="install-log">
+                  {installProgress.logSnippet.slice(-4).join('\n')}
+                </pre>
+              )}
+              {installProgress.error && (
+                <p className="install-error">⚠️ {installProgress.error}</p>
+              )}
             </div>
           )}
 
@@ -2716,6 +2754,76 @@ const VirtualOfficeContent: React.FC = () => {
         }
         .detail-task {
           margin-bottom: 10px;
+        }
+        .detail-install {
+          margin-bottom: 10px;
+          padding: 8px 10px;
+          background: rgba(15,23,42,0.5);
+          border: 1px solid rgba(59,130,246,0.25);
+          border-radius: 10px;
+        }
+        .install-header {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 6px;
+        }
+        .install-title {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 11px; font-weight: 600; color: #bfdbfe;
+        }
+        .phase-tag {
+          font-size: 9px; font-weight: 600; padding: 1px 8px;
+          border-radius: 999px; border: 1px solid rgba(59,130,246,0.3);
+          color: #93c5fd; background: rgba(59,130,246,0.15);
+          text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .phase-tag.running { color: #38bdf8; border-color: rgba(56,189,248,0.4); background: rgba(56,189,248,0.15); }
+        .phase-tag.verifying { color: #fbbf24; border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.15); }
+        .phase-tag.completed { color: #34d399; border-color: rgba(52,211,153,0.4); background: rgba(52,211,153,0.15); }
+        .phase-tag.failed { color: #f87171; border-color: rgba(248,113,113,0.5); background: rgba(248,113,113,0.12); }
+        .install-command {
+          font-size: 10px; color: #9ca3af; margin-bottom: 6px;
+          font-family: 'JetBrains Mono', 'SFMono-Regular', monospace;
+        }
+        .install-progress-track {
+          position: relative;
+          height: 4px;
+          background: rgba(63,63,70,0.5);
+          border-radius: 999px;
+          overflow: hidden;
+          margin-bottom: 6px;
+        }
+        .install-progress-fill {
+          height: 100%;
+          background: linear-gradient(90deg, #3b82f6, #22d3ee);
+          transition: width 0.4s ease;
+        }
+        .install-meta {
+          display: flex; align-items: center; justify-content: space-between;
+          font-size: 10px; color: #9ca3af; margin-bottom: 6px;
+        }
+        .install-percent { font-weight: 600; color: #c4b5fd; }
+        .install-message { color: #d1d5db; margin-left: 8px; }
+        .install-log {
+          background: rgba(15,23,42,0.7);
+          border: 1px solid rgba(63,63,70,0.35);
+          border-radius: 6px;
+          font-size: 10px;
+          padding: 6px;
+          color: #e5e7eb;
+          font-family: 'JetBrains Mono', 'SFMono-Regular', monospace;
+          max-height: 100px;
+          overflow-y: auto;
+          white-space: pre-wrap;
+        }
+        .install-error {
+          color: #fca5a5;
+          font-size: 10px;
+          margin-top: 4px;
+        }
+        .install-spinner { animation: installSpin 1s linear infinite; }
+        @keyframes installSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
         .detail-notes {
           background: rgba(24,24,27,0.6);
