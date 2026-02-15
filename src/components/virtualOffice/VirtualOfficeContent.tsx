@@ -19,6 +19,7 @@ import { GroupChatModal } from './GroupChatModal';
 import { MeetingMinutesPreview } from './MeetingMinutesPreview';
 import { FilingCabinet } from './FilingCabinet';
 import { AgentChatModal } from './AgentChatModal';
+import { InterventionAlert } from './InterventionAlert';
 import { groupChatService } from '../../api/firebase/groupChat/service';
 import type { GroupChatMessage } from '../../api/firebase/groupChat/types';
 import {
@@ -420,6 +421,13 @@ const STATUS_CONFIG = {
     glow: 'transparent',
     monitorGlow: 'rgba(82,82,91,0.2)',
     badge: 'bg-zinc-600/15 text-zinc-400 border-zinc-600/30',
+  },
+  'needs-help': {
+    label: 'Needs Help',
+    color: '#f59e0b',
+    glow: 'rgba(245,158,11,0.5)',
+    monitorGlow: 'rgba(245,158,11,0.6)',
+    badge: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
   },
 };
 
@@ -1339,6 +1347,20 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
         {isOnCoffeeBreak && <div className="coffee-cup-held">☕</div>}
       </div>
 
+      {/* Needs-help indicator — pulsing SOS above desk */}
+      {agent.status === 'needs-help' && (
+        <div style={{
+          position: 'absolute',
+          top: -28,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          fontSize: 18,
+          animation: 'needsHelpBounce 1.5s ease-in-out infinite',
+          zIndex: 20,
+          filter: 'drop-shadow(0 0 8px rgba(245,158,11,0.6))',
+        }}>🆘</div>
+      )}
+
       {/* Nameplate + role + progress */}
       <div className="agent-nameplate">
         <span className={`status-dot ${agent.status}`} />
@@ -2185,6 +2207,9 @@ const VirtualOfficeContent: React.FC = () => {
             onClose={() => setChatAgent(null)}
           />
         )}
+
+        {/* Intervention Alert Pop-ups */}
+        <InterventionAlert />
       </AdminRouteGuard>
 
       {/* ═══════════════════════════════════════════════════ */}
@@ -2637,7 +2662,10 @@ const VirtualOfficeContent: React.FC = () => {
         .status-dot.working { background: #22c55e; animation: dotPulse 2s infinite; }
         .status-dot.idle { background: #f59e0b; }
         .status-dot.offline { background: #52525b; }
+        .status-dot.needs-help { background: #f59e0b; animation: needsHelpPulse 1.5s infinite; }
         @keyframes dotPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); } 50% { box-shadow: 0 0 0 4px rgba(34,197,94,0); } }
+        @keyframes needsHelpPulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.6); } 50% { box-shadow: 0 0 0 6px rgba(245,158,11,0); } }
+        @keyframes needsHelpBounce { 0%, 100% { transform: translateX(-50%) translateY(0); } 50% { transform: translateX(-50%) translateY(-6px); } }
         .agent-name { font-size: 10px; font-weight: 600; color: #d4d4d8; letter-spacing: 0.02em; }
         .agent-role { font-size: 8px; font-weight: 500; color: #71717a; letter-spacing: 0.03em; line-height: 1; margin-top: -1px; }
         .name-progress { font-size: 9px; font-weight: 700; color: #3b82f6; margin-left: 2px; }

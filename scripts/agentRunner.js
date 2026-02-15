@@ -1340,6 +1340,101 @@ async function sendProactiveMessage(content, proactiveType = 'update') {
     return sendMessage('admin', content, 'chat', { proactiveType });
 }
 
+/**
+ * Request human intervention — agent is blocked and needs admin input.
+ * Creates a Firestore document that triggers a pop-up in the Virtual Office,
+ * then polls until the admin responds (or timeout).
+ *
+ * @param {string} question - What the agent needs from the admin
+ * @param {object} opts - Optional context
+ * @param {string} opts.context - Error output or context string
+ * @param {string} opts.taskId - The blocked task's Firestore ID
+ * @param {string} opts.taskName - The blocked task's name
+ * @param {string} opts.category - Error category (PERMISSION, MISSING_TOOL, etc.)
+ * @returns {Promise<{responded: boolean, response: string}>}
+ */
+async function requestHumanIntervention(question, opts = {}) {
+    const INTERVENTION_COLLECTION = 'agent-interventions';
+    const POLL_INTERVAL_MS = 5_000;
+    const TIMEOUT_MS = 30 * 60_000; // 30 minutes
+
+    try {
+        // Create the intervention request
+        const interventionRef = await db.collection(INTERVENTION_COLLECTION).add({
+            agentId: AGENT_ID,
+            agentName: AGENT_NAME,
+            question,
+            context: (opts.context || '').substring(0, 1000),
+            taskId: opts.taskId || '',
+            taskName: opts.taskName || '',
+            category: opts.category || 'unknown',
+            status: 'pending',
+            createdAt: FieldValue.serverTimestamp(),
+        });
+
+        console.log(`🆘 Intervention requested: "${question.substring(0, 100)}..." (${interventionRef.id})`);
+
+        // Update agent status to needs-help
+        await setStatus('needs-help', {
+            notes: `🆘 Needs help: ${question.substring(0, 120)}`,
+            interventionId: interventionRef.id,
+        });
+
+        // Also send a proactive chat message so it appears in the chat UI
+        await sendProactiveMessage(
+            `🆘 I'm blocked and need your help:\n\n${question}\n\n` +
+            (opts.context ? `Context: ${opts.context.substring(0, 200)}\n\n` : '') +
+            `Please respond via the intervention pop-up or reply here.`,
+            'intervention'
+        );
+
+        // Poll for response
+        const startTime = Date.now();
+        while (Date.now() - startTime < TIMEOUT_MS) {
+            await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+
+            const snap = await db.collection(INTERVENTION_COLLECTION).doc(interventionRef.id).get();
+            const data = snap.data();
+
+            if (!data) break; // Document deleted
+
+            if (data.status === 'resolved' && data.response) {
+                console.log(`✅ Admin responded to intervention: "${data.response.substring(0, 100)}"`);
+                await setStatus('working', {
+                    notes: `Resuming after admin help: ${data.response.substring(0, 80)}`,
+                    interventionId: '',
+                });
+                return { responded: true, response: data.response };
+            }
+
+            if (data.status === 'dismissed') {
+                console.log(`⏩ Admin dismissed intervention — continuing without response`);
+                await setStatus('working', {
+                    notes: `Admin dismissed help request — continuing`,
+                    interventionId: '',
+                });
+                return { responded: false, response: '' };
+            }
+        }
+
+        // Timeout
+        console.log(`⏰ Intervention timed out after 30 minutes`);
+        await db.collection(INTERVENTION_COLLECTION).doc(interventionRef.id).update({
+            status: 'expired',
+            resolvedAt: FieldValue.serverTimestamp(),
+        });
+        await setStatus('working', {
+            notes: `Help request expired — continuing`,
+            interventionId: '',
+        });
+        return { responded: false, response: '' };
+
+    } catch (err) {
+        console.error(`⚠️ Intervention request failed: ${err.message}`);
+        return { responded: false, response: '' };
+    }
+}
+
 /* ─── Kanban Integration ──────────────────────────────── */
 
 async function fetchNextTask() {
@@ -2182,6 +2277,31 @@ ${smokeOutput}`.substring(0, 2000);
                             `Step "${step.description}" still had issues after ${MAX_SELF_CORRECTION_RETRIES} retries. ` +
                             `Output signals: ${step.verificationFlag}. Last output: "${outputText.substring(0, 120)}..."`
                         );
+
+                        // ─── Request human intervention for permission/tool issues ──
+                        const outSnippet = outputText.substring(0, 600);
+                        const needsHuman = /permission denied|sudo|not permitted|requires.*admin/i.test(outSnippet)
+                            || /command not found|not installed|not available/i.test(outSnippet);
+                        if (needsHuman) {
+                            const category = /permission denied|sudo|not permitted|requires.*admin/i.test(outSnippet)
+                                ? 'PERMISSION' : 'MISSING_TOOL';
+                            const intervention = await requestHumanIntervention(
+                                `I'm stuck on step "${step.description}" after ${MAX_SELF_CORRECTION_RETRIES + 1} attempts. ` +
+                                `Error type: ${category}.\n\n` +
+                                `Last output:\n${outSnippet.substring(0, 300)}\n\n` +
+                                `Can you help me resolve this? For example, run the required command manually or install the missing tool.`,
+                                {
+                                    context: outSnippet,
+                                    taskId: task.id,
+                                    taskName: task.name,
+                                    category,
+                                }
+                            );
+                            if (intervention.responded) {
+                                step.reasoning = `Admin responded: ${intervention.response}`;
+                                console.log(`   📝 Admin guidance received — will incorporate in next steps`);
+                            }
+                        }
                     } else {
                         console.log(`   ⚠️  Failure signals detected (attempt ${attempt + 1}): ${hitSignals.map(rx => rx.source).join(', ')}. Will retry...`);
                     }
