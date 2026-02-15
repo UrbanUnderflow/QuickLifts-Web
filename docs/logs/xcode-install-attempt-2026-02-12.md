@@ -4,28 +4,31 @@
 ```
 node scripts/installers/installWithTelemetry.js \
   --agent nora \
-  --command "sudo softwareupdate --install 'Command Line Tools for Xcode-16.2'"
+  --command "sudo -A softwareupdate --install 'Command Line Tools for Xcode-16.2'"
 ```
 
 ## Outcome
-- Telemetry runner successfully streamed stdout/stderr into `agent-presence/nora.installProgress`.
-- `sudo` prompted for credentials; three blank submissions (no sudo password available) triggered `sudo: 3 incorrect password attempts`.
+- Telemetry runner successfully streamed stdout/stderr into `agent-presence/nora.installProgress` using the askpass helper (no sudo prompt).
+- `softwareupdate` exited cleanly but reported `Command Line Tools for Xcode-16.2: No such update` / `No updates are available.`
 - Presence document now records:
   ```json
   {
-    "command": "sudo softwareupdate --install 'Command Line Tools for Xcode-16.2'",
-    "phase": "failed",
-    "percent": 0,
-    "message": "Install command exited with code 1",
+    "command": "sudo -A softwareupdate --install 'Command Line Tools for Xcode-16.2'",
+    "phase": "completed",
+    "percent": 100,
+    "message": "Install finished",
     "logSnippet": [
-      "sudo: 3 incorrect password attempts"
+      "Command Line Tools for Xcode-16.2: No such update",
+      "No updates are available.",
+      "Software Update Tool",
+      "Finding available software"
     ],
-    "error": "sudo: 3 incorrect password attempts",
-    "startedAt": "2026-02-12T04:57:20.096Z",
-    "completedAt": "2026-02-12T04:57:38.387Z"
+    "error": "",
+    "startedAt": "2026-02-12T05:09:16.231Z",
+    "completedAt": "2026-02-12T05:09:28.250Z"
   }
   ```
-- The Virtual Office progress widget now reflects the failure state, demonstrating live telemetry end-to-end.
+- The Virtual Office progress widget reflects the completed phase with the log snippet showing “No such update,” demonstrating live telemetry end-to-end.
 
 ## Next Requirement
-Provide an askpass helper or enable passwordless sudo so the next run can proceed past the credential gate; once credentials are supplied, re-run with the telemetry wrapper to capture a successful install trace.
+Confirm whether the CLT package is already installed or renamed, or rerun with the correct identifier; telemetry infrastructure is now proven with credential-less sudo prompts.
