@@ -1,7 +1,7 @@
 import { collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, addDoc, getDocs, query, orderBy, limit, Unsubscribe, Timestamp } from 'firebase/firestore';
 import { db } from '../config';
 
-export type AgentStatus = 'offline' | 'idle' | 'working';
+export type AgentStatus = 'offline' | 'idle' | 'working' | 'needs-help';
 
 /* ─── Granular thought step ────────────────────────────── */
 
