@@ -21,6 +21,17 @@ export interface AgentThoughtStep {
 
 /* ─── Agent presence with execution context ────────────── */
 
+export interface InstallProgress {
+  command: string;                     // e.g., "mas install 497799835"
+  phase: 'pending' | 'running' | 'verifying' | 'completed' | 'failed';
+  percent: number;                     // 0-100
+  message?: string;                    // Latest log line or status text
+  logSnippet?: string[];               // Recent stdout/stderr lines for context
+  startedAt?: Date;
+  completedAt?: Date;
+  error?: string;                      // Failure reason if failed
+}
+
 export interface AgentPresence {
   id: string;
   displayName: string;
@@ -38,6 +49,9 @@ export interface AgentPresence {
   currentStepIndex: number;            // Which step is active (-1 = none)
   taskStartedAt?: Date;                // When agent began this task
   taskProgress: number;                // 0-100 completion percentage
+
+  // Install progress telemetry
+  installProgress?: InstallProgress | null;
 
   // Manifesto / self-correction
   manifestoEnabled?: boolean;          // Toggle: allow manifesto injection
@@ -112,6 +126,34 @@ function deserialiseStep(data: any): AgentThoughtStep {
   };
 }
 
+function serialiseInstallProgress(progress?: InstallProgress | null): Record<string, any> | null {
+  if (!progress) return null;
+  return {
+    command: progress.command,
+    phase: progress.phase,
+    percent: progress.percent,
+    message: progress.message || '',
+    logSnippet: progress.logSnippet || [],
+    startedAt: progress.startedAt || null,
+    completedAt: progress.completedAt || null,
+    error: progress.error || '',
+  };
+}
+
+function deserialiseInstallProgress(data: any): InstallProgress | undefined {
+  if (!data) return undefined;
+  return {
+    command: data.command || '',
+    phase: data.phase || 'pending',
+    percent: data.percent ?? 0,
+    message: data.message || '',
+    logSnippet: data.logSnippet || [],
+    startedAt: data.startedAt?.toDate?.() || (data.startedAt ? new Date(data.startedAt) : undefined),
+    completedAt: data.completedAt?.toDate?.() || (data.completedAt ? new Date(data.completedAt) : undefined),
+    error: data.error || '',
+  };
+}
+
 /* ─── Presence service ─────────────────────────────────── */
 
 export const presenceService = {
@@ -134,6 +176,11 @@ export const presenceService = {
     };
     if (payload.taskStartedAt) data.taskStartedAt = payload.taskStartedAt;
     if (payload.sessionStartedAt) data.sessionStartedAt = payload.sessionStartedAt;
+    if (payload.installProgress !== undefined) {
+      const serialised = serialiseInstallProgress(payload.installProgress);
+      if (serialised) data.installProgress = serialised;
+      else data.installProgress = null;
+    }
     await setDoc(docRef, data, { merge: true });
   },
 
@@ -402,9 +449,21 @@ export const presenceService = {
           tokenUsage: data.tokenUsage || undefined,
           lastUpdate: data.lastUpdate?.toDate?.() || undefined,
           sessionStartedAt: data.sessionStartedAt?.toDate?.() || undefined,
+          installProgress: deserialiseInstallProgress(data.installProgress) || null,
         };
       });
       callback(agents);
+    });
+  },
+
+  /**
+   * Push install-progress telemetry for long-running commands
+   */
+  async updateInstallProgress(agentId: string, progress: InstallProgress | null) {
+    const docRef = doc(db, COLLECTION, agentId);
+    await updateDoc(docRef, {
+      installProgress: progress ? serialiseInstallProgress(progress) : null,
+      lastUpdate: serverTimestamp(),
     });
   },
 
