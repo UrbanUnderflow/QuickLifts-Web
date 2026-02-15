@@ -629,20 +629,31 @@ async function processCommands() {
             } else {
                 response = inference.response;
             }
-        } else if (cmd.type === 'auto' && !process.env.OPENAI_API_KEY) {
+        } else if ((cmd.type === 'auto' || cmd.type === 'chat') && !process.env.OPENAI_API_KEY) {
             // Fallback heuristic when OpenAI isn't available
+            // This now covers BOTH 'auto' AND 'chat' messages — so admin DMs
+            // with actionable intent get routed to task creation, not just a chat reply.
             const lower = cmd.content.toLowerCase();
-            if (lower.includes('status') || lower.includes('what') || lower.includes('how') || lower.endsWith('?')) {
+            if (lower.includes('status') || (lower.includes('what') && lower.endsWith('?')) || (lower.includes('how') && lower.endsWith('?'))) {
                 detectedType = 'question';
             } else if (lower.includes('stop') || lower.includes('pause') || lower.includes('restart')) {
                 detectedType = 'command';
-            } else if (cmd.content.length > 60 || lower.includes('build') || lower.includes('create') || lower.includes('implement') || lower.includes('fix') || lower.includes('add')) {
+            } else if (
+                cmd.content.length > 50 ||
+                lower.includes('install') || lower.includes('build') || lower.includes('create') ||
+                lower.includes('implement') || lower.includes('fix') || lower.includes('add') ||
+                lower.includes('update') || lower.includes('run') || lower.includes('set up') ||
+                lower.includes('configure') || lower.includes('deploy') || lower.includes('remove') ||
+                lower.includes('delete') || lower.includes('migrate') || lower.includes('refactor')
+            ) {
                 detectedType = 'task';
             } else {
                 detectedType = 'chat';
             }
             console.log(`   🔍 Heuristic intent: ${detectedType.toUpperCase()} (no OpenAI key)`);
-            response = `[Auto-detected ${detectedType}] `;
+            if (detectedType !== 'chat') {
+                response = `[Auto-detected ${detectedType}] `;
+            }
         }
 
         switch (detectedType) {
@@ -749,7 +760,14 @@ async function processCommands() {
                 var dmPrompt = [
                     `You are ${AGENT_NAME}, the ${dmPersonality.role} at Pulse (FitWithPulse.ai). ${dmPersonality.style}`,
                     `Status: ${statusContext}`,
-                    `Tremaine (founder) sent you a DM. Reply honestly in 2-4 sentences, plain text only:`,
+                    `Tremaine (founder) sent you a DM. Reply honestly in 2-4 sentences, plain text only.`,
+                    ``,
+                    `CRITICAL RULES:`,
+                    `- NEVER say "I'll do that", "I'll get on it", "I'll queue it up", "I'll report back", or promise ANY future action.`,
+                    `- You CANNOT create tasks, run commands, or take action from this chat — only the task queue can do that.`,
+                    `- If the admin is asking you to DO something, tell them you've understood the request and it has been queued as a task.`,
+                    `- Focus on: acknowledging the request, giving current status, and asking clarifying questions if needed.`,
+                    `- If you don't know something, say so. Don't fabricate.`,
                 ].join('\n');
 
                 var dmAiResponse = '';
@@ -808,7 +826,35 @@ async function processCommands() {
                     response = dmAiResponse;
                 } else {
                     // Fallback: at least give useful status instead of canned text
-                    response = `${statusContext} Let me know what you need and I'll get on it.`;
+                    response = `${statusContext} Send me a task and I'll add it to my queue right away.`;
+                }
+
+                // ── Safety net: if the AI response promises action, auto-create a task ──
+                // This catches cases where the LLM said "I'll do X" despite the prompt guardrail.
+                var actionPromiseRx = /\b(I'll|I will|I'm going to|let me|I'll go ahead|I'll queue|I'll kick off|I'll fetch|I'll pull|I'll run|I'll start|I'll report back)\b/i;
+                var isActionable = /\b(install|build|create|implement|fix|add|update|run|set up|configure|deploy|remove|delete|migrate|refactor|download|upgrade)\b/i;
+                if (actionPromiseRx.test(response) && isActionable.test(cmd.content)) {
+                    console.log(`   🔧 Safety net: AI promised action in chat response — auto-creating task from message`);
+                    try {
+                        var safetyConvoCtx = await getRecentConversationContext();
+                        var safetyTask = await generateSmartTask(cmd.content, safetyConvoCtx);
+                        var safetyRef = await db.collection(KANBAN_COLLECTION).add({
+                            name: safetyTask.title,
+                            description: safetyTask.description,
+                            assignee: AGENT_NAME,
+                            status: 'todo',
+                            priority: 'high',
+                            complexity: safetyTask.complexity || 3,
+                            subtasks: [],
+                            createdAt: FieldValue.serverTimestamp(),
+                            updatedAt: FieldValue.serverTimestamp(),
+                            source: 'chat-safety-net',
+                        });
+                        response += `\n\n📋 Task queued: "${safetyTask.title}" (${safetyRef.id})`;
+                        console.log(`   📋 Safety net task created: ${safetyTask.title} → ${safetyRef.id}`);
+                    } catch (taskErr) {
+                        console.error(`   ❌ Safety net task creation failed:`, taskErr.message);
+                    }
                 }
                 break;
             }
