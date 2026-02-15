@@ -69,6 +69,8 @@ const MAX_SELF_CORRECTION_RETRIES = 2; // Retry attempts when step output contai
 const STEP_INACTIVITY_TIMEOUT_MS = 120_000; // Kill step if no stderr activity for 120s
 const MAX_STEP_REWRITE_ATTEMPTS = 1; // Rewrite-from-different-angle attempts on crash/timeout
 const MAX_CONSECUTIVE_FAILURES = 2; // Stop task after this many steps fail in a row
+const VALIDATION_MODEL = process.env.VALIDATION_MODEL || 'gpt-4o-mini'; // Cheap model for post-task validation
+const ENABLE_TASK_VALIDATION = process.env.ENABLE_TASK_VALIDATION !== 'false'; // Disable with ENABLE_TASK_VALIDATION=false
 
 /* ─── Token Usage Tracking ─────────────────────────────── */
 var sessionTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
@@ -1378,6 +1380,136 @@ async function fetchNextTask() {
     return null;
 }
 
+/* ─── Post-task Validation Gate ───────────────────────── */
+
+async function validateTaskCompletion(task, steps) {
+    const defaultPass = { passed: true, reason: 'Validation skipped (no API key)', evidence: [] };
+    if (!process.env.OPENAI_API_KEY) return defaultPass;
+
+    try {
+        // Phase 1: Ask the validator to generate verification commands
+        const stepSummaries = steps
+            .filter(s => s.status === 'completed' || s.status === 'completed-with-issues')
+            .map((s, i) => `Step ${i + 1}: ${s.description}\nOutput: ${(s.output || '').substring(0, 300)}`)
+            .join('\n\n');
+
+        const phase1Prompt = [
+            `You are a post-task validation auditor. An AI agent just completed a task and reported success.`,
+            `Your job: generate shell commands to VERIFY the work was actually done (not hallucinated).`,
+            ``,
+            `TASK: "${task.name}"`,
+            task.description ? `Description: ${task.description}` : '',
+            ``,
+            `STEP OUTPUTS:`,
+            stepSummaries,
+            ``,
+            `Generate 2-5 shell commands that would verify this task was actually completed.`,
+            `Focus on checking that files exist, binaries are installed, configs are correct, etc.`,
+            `Each command should be a simple, safe, read-only check (ls, cat, which, grep, test, etc).`,
+            `DO NOT generate destructive commands (rm, mv, etc).`,
+            ``,
+            `If this task has no verifiable artifacts (e.g., research, analysis, planning), respond with: NO_VERIFICATION_NEEDED`,
+            ``,
+            `Format: One command per line, no numbering, no explanations. Just the raw shell commands.`,
+        ].filter(Boolean).join('\n');
+
+        const phase1Resp = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+            body: JSON.stringify({
+                model: VALIDATION_MODEL,
+                messages: [{ role: 'user', content: phase1Prompt }],
+                temperature: 0.1, max_tokens: 300,
+            }),
+        });
+        const phase1Data = await phase1Resp.json();
+        trackTokenUsage(phase1Data.usage, VALIDATION_MODEL);
+        const cmdOutput = phase1Data.choices?.[0]?.message?.content?.trim() || '';
+
+        // If no verification needed, auto-pass
+        if (/NO_VERIFICATION_NEEDED/i.test(cmdOutput)) {
+            return { passed: true, reason: 'Task has no verifiable artifacts (research/planning)', evidence: [] };
+        }
+
+        // Parse commands (one per line, skip empty/comment lines)
+        const commands = cmdOutput.split('\n')
+            .map(l => l.trim().replace(/^\d+[\.\)]\s*/, '').replace(/^[`$]\s*/, '').replace(/`$/, ''))
+            .filter(l => l.length > 3 && !l.startsWith('#') && !l.startsWith('//'))
+            .slice(0, 5); // Max 5 commands
+
+        if (commands.length === 0) {
+            return { passed: true, reason: 'Validator generated no verification commands', evidence: [] };
+        }
+
+        // Phase 2: Run each verification command
+        console.log(`   🔍 Running ${commands.length} verification commands...`);
+        const evidence = [];
+        for (const cmd of commands) {
+            try {
+                // Safety: block dangerous commands
+                if (/\b(rm|mv|dd|mkfs|format|sudo\s+rm)\b/i.test(cmd)) {
+                    evidence.push({ cmd, output: '[BLOCKED — destructive command]', exitCode: -1 });
+                    continue;
+                }
+                const output = execSync(cmd, {
+                    cwd: projectDir,
+                    timeout: 15_000,
+                    encoding: 'utf-8',
+                    env: { ...process.env, PATH: `${process.env.HOME}/bin:${process.env.PATH}` },
+                }).trim().substring(0, 500);
+                evidence.push({ cmd, output, exitCode: 0 });
+                console.log(`   ✅ ${cmd} → ${output.substring(0, 80)}`);
+            } catch (err) {
+                const stderr = (err.stderr || err.message || '').substring(0, 300);
+                evidence.push({ cmd, output: stderr || `Exit code: ${err.status}`, exitCode: err.status || 1 });
+                console.log(`   ❌ ${cmd} → ${stderr.substring(0, 80)}`);
+            }
+        }
+
+        // Phase 3: Ask the validator to judge PASS/FAIL
+        const phase3Prompt = [
+            `You are a post-task validation auditor. An AI agent completed: "${task.name}"`,
+            ``,
+            `Here are the verification command results:`,
+            ...evidence.map(e => `Command: ${e.cmd}\nExit code: ${e.exitCode}\nOutput: ${e.output}\n`),
+            ``,
+            `Based on these results, did the agent ACTUALLY complete the task?`,
+            ``,
+            `Respond in this exact format:`,
+            `VERDICT: PASS or FAIL`,
+            `REASON: One sentence explaining why`,
+            `INSTRUCTIONS: If FAIL, specific instructions to fix it (otherwise leave blank)`,
+        ].join('\n');
+
+        const phase3Resp = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+            body: JSON.stringify({
+                model: VALIDATION_MODEL,
+                messages: [{ role: 'user', content: phase3Prompt }],
+                temperature: 0.0, max_tokens: 200,
+            }),
+        });
+        const phase3Data = await phase3Resp.json();
+        trackTokenUsage(phase3Data.usage, VALIDATION_MODEL);
+        const judgment = phase3Data.choices?.[0]?.message?.content?.trim() || '';
+
+        const verdictMatch = judgment.match(/VERDICT:\s*(PASS|FAIL)/i);
+        const reasonMatch = judgment.match(/REASON:\s*(.+?)(?:\n|$)/i);
+        const instrMatch = judgment.match(/INSTRUCTIONS:\s*(.+?)$/is);
+
+        const passed = verdictMatch ? verdictMatch[1].toUpperCase() === 'PASS' : true;
+        const reason = reasonMatch?.[1]?.trim() || (passed ? 'All verification commands passed' : 'Verification commands indicate incomplete work');
+        const instructions = instrMatch?.[1]?.trim() || '';
+
+        return { passed, reason, evidence, instructions };
+    } catch (err) {
+        console.error(`   ⚠️ Validation gate error: ${err.message}`);
+        // On validation system error, don't block the task — pass with warning
+        return { passed: true, reason: `Validation system error (auto-passed): ${err.message}`, evidence: [] };
+    }
+}
+
 async function markTaskDone(taskId) {
     await db.collection(KANBAN_COLLECTION).doc(taskId).update({
         status: 'done',
@@ -2321,6 +2453,72 @@ async function run() {
             const finalStatus = hasIssues ? 'completed-with-issues' : 'completed';
 
             if (allPassed) {
+                // ─── Post-task validation gate ──────────────────
+                // Independent AI auditor verifies the work was actually completed
+                const useOpenClaw = process.env.USE_OPENCLAW === 'true';
+                if (ENABLE_TASK_VALIDATION && !hasIssues && useOpenClaw) {
+                    console.log(`\n🔍 VALIDATION GATE: Verifying task completion...`);
+                    await setStatus('working', {
+                        notes: `🔍 Validating: ${task.name}`,
+                        taskProgress: 95,
+                    });
+                    const validation = await validateTaskCompletion(task, steps);
+                    if (!validation.passed) {
+                        console.log(`\n❌ VALIDATION FAILED: ${validation.reason}`);
+                        console.log(`   📤 Creating corrective task...`);
+
+                        // Create a corrective task for the same agent
+                        const correctiveDesc = [
+                            `VALIDATION FAILURE — CORRECTIVE ACTION REQUIRED`,
+                            ``,
+                            `Your previous task "${task.name}" was marked complete but FAILED validation.`,
+                            ``,
+                            `VALIDATION RESULT: ${validation.reason}`,
+                            ``,
+                            `VERIFICATION EVIDENCE:`,
+                            ...validation.evidence.map(e => `  • Command: ${e.cmd}\n    Output: ${e.output}`),
+                            ``,
+                            `CORRECTIVE INSTRUCTIONS:`,
+                            validation.instructions || 'Re-do the task, verifying each step actually succeeds before moving on.',
+                            ``,
+                            `DO NOT mark this task complete unless the verification commands above produce passing results.`,
+                        ].join('\n');
+
+                        // Add corrective task to Kanban
+                        await db.collection(KANBAN_COLLECTION).add({
+                            name: `[CORRECTION] ${task.name}`,
+                            description: correctiveDesc,
+                            assignee: AGENT_NAME,
+                            status: 'todo',
+                            priority: 'high',
+                            createdAt: new Date(),
+                            source: 'validation-gate',
+                            originalTaskId: task.id,
+                        });
+
+                        // Send proactive message about the failure
+                        await sendProactiveMessage(
+                            `🔍 VALIDATION FAILED for "${task.name}"\n\n` +
+                            `Reason: ${validation.reason}\n\n` +
+                            `A corrective task has been auto-created. I'll re-attempt with specific verification steps.`,
+                            'failed'
+                        );
+
+                        // Mark original as failed, save history, continue
+                        await saveTaskHistory(task.name, task.id, steps, 'validation-failed', taskStartTime);
+                        await markTaskFailed(task.id, `Validation failed: ${validation.reason}`);
+                        await setStatus('idle', {
+                            currentTask: '',
+                            currentTaskId: '',
+                            notes: `🔍 Validation failed: ${task.name} — corrective task created`,
+                            taskProgress: 0,
+                        });
+                        await new Promise(r => setTimeout(r, 5_000));
+                        continue; // Skip to next task (the corrective one)
+                    }
+                    console.log(`\n✅ VALIDATION PASSED: ${validation.reason}`);
+                }
+
                 console.log(hasIssues
                     ? `\n⚠️  Task completed with issues: ${task.name}`
                     : `\n🎉 Task completed: ${task.name}`);
