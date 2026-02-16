@@ -73,7 +73,8 @@ function getAgentIdForTier(tier) {
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
 const OPENCLAW_MODEL_SYNC_MS = parseInt(process.env.OPENCLAW_MODEL_SYNC_MS || '60000', 10); // Keep presence model accurate after OpenClaw config changes
-const MAX_FOLLOW_UP_DEPTH = 4; // Max rounds of agent-to-agent @mention follow-ups
+const MAX_FOLLOW_UP_DEPTH = 3; // Max rounds of agent-to-agent @mention follow-ups
+const MAX_FOLLOW_UP_DEPTH_EXEC = 1; // Execution-mode: one reply max, then go build
 const MAX_SELF_CORRECTION_RETRIES = 2; // Retry attempts when step output contains failure signals
 const STEP_INACTIVITY_TIMEOUT_MS = 120_000; // Kill step if no stderr activity for 120s
 const MAX_STEP_REWRITE_ATTEMPTS = 1; // Rewrite-from-different-angle attempts on crash/timeout
@@ -1044,16 +1045,51 @@ async function processCommands() {
                     console.log(`   🚀 BOOST MODE: upgrading to ${boostModel} (${boostMaxTokens} tokens) for deeper reasoning`);
                 }
 
+                // ── Execution mode: detect [TASK], [COMMAND], or "stop planning" directives ──
+                var msgContent = cmd.content || '';
+                var EXEC_RX = /\[(TASK|COMMAND)\]|stop\s+planning|start\s+building|start\s+executing|queue\s+(up\s+)?(your|the)\s+tasks?|no\s+more\s+planning|enough\s+planning|stop\s+talking|go\s+build|do\s+work|start\s+working/i;
+                var isExecMode = EXEC_RX.test(msgContent);
+                var currentDepth = cmd.context?.followUpDepth || 0;
+                // Also auto-detect exec mode at high follow-up depths (conversation is dragging)
+                if (currentDepth >= 2) isExecMode = true;
+                if (isExecMode) {
+                    console.log(`   ⚡ EXEC MODE: agent will respond with action items, not discussion`);
+                }
+
                 if (useOpenClaw || process.env.OPENAI_API_KEY) {
-                    var chatPrompt = [
-                        `You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai). ${personality.style}`,
-                        `Strengths: ${personality.strengths}`,
-                        `Round Table with: ${otherAgents.join(', ')}. Tremaine (founder) said: "${cmd.content}"`,
-                        `BRAINSTORM ONLY — think, don't execute. Rules: Think out loud (reasoning > conclusions). Ask questions, explore angles from your expertise, raise concerns. Build on others' ideas with "What if..." Never offer to build/execute — this is thinking time. Use @Name to tag agents. If casual, be warm and share what's on your mind.`,
-                        isBoosted
-                            ? `Tremaine asked you to THINK DEEPLY on this. Take your time, be thorough and analytical. Explore multiple angles. ${boostSentences}, plain text only, thoughtful and rigorous:`
-                            : `${boostSentences}, plain text only, conversational and real:`,
-                    ].join('\n');
+                    var chatPrompt;
+
+                    if (isExecMode) {
+                        // EXECUTION PROMPT — stop planning, start doing
+                        chatPrompt = [
+                            `You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai). ${personality.style}`,
+                            `Strengths: ${personality.strengths}`,
+                            `Round Table with: ${otherAgents.join(', ')}. Tremaine (founder) said: "${msgContent}"`,
+                            ``,
+                            `⚡ EXECUTION MODE — Tremaine has ended the planning phase. The brainstorm is OVER.`,
+                            `RULES:`,
+                            `- DO NOT discuss, debate, ask clarifying questions, or propose "what if" scenarios.`,
+                            `- DO NOT ask other agents for input, definitions, or dependencies.`,
+                            `- DO NOT say you need alignment, a glossary, a shared doc, or a preflight checklist before you can start.`,
+                            `- State in 1-3 sentences what YOU will build/do RIGHT NOW based on the brainstorm.`,
+                            `- Name the specific deliverable (doc, feature, schema, etc.) and commit to it.`,
+                            `- If you are unsure about details, MAKE A DECISION and build it. Don't ask for consensus.`,
+                            `- Your response should read like a commit message, not a conversation.`,
+                            ``,
+                            `2-3 sentences max, plain text only, action-oriented:`,
+                        ].join('\n');
+                    } else {
+                        // BRAINSTORM PROMPT — original behavior
+                        chatPrompt = [
+                            `You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai). ${personality.style}`,
+                            `Strengths: ${personality.strengths}`,
+                            `Round Table with: ${otherAgents.join(', ')}. Tremaine (founder) said: "${msgContent}"`,
+                            `BRAINSTORM ONLY — think, don't execute. Rules: Think out loud (reasoning > conclusions). Ask questions, explore angles from your expertise, raise concerns. Build on others' ideas with "What if..." Never offer to build/execute — this is thinking time. Use @Name to tag agents. If casual, be warm and share what's on your mind.`,
+                            isBoosted
+                                ? `Tremaine asked you to THINK DEEPLY on this. Take your time, be thorough and analytical. Explore multiple angles. ${boostSentences}, plain text only, thoughtful and rigorous:`
+                                : `${boostSentences}, plain text only, conversational and real:`,
+                        ].join('\n');
+                    }
 
                     // ── Etiquette: inject others' responses so we can build on them ──
                     // Cap prior responses to last 2 to save tokens
@@ -1264,8 +1300,9 @@ async function processCommands() {
                         }
 
 
-                        if (mentionedAgentIds.length > 0 && gcChatId && currentDepth < MAX_FOLLOW_UP_DEPTH) {
-                            console.log(`   💬 ${AGENT_NAME} mentioned: ${mentionedAgentIds.join(', ')} (depth ${currentDepth}/${MAX_FOLLOW_UP_DEPTH}) — pausing 15s to let admin cut in...`);
+                        var effectiveMaxDepth = isExecMode ? MAX_FOLLOW_UP_DEPTH_EXEC : MAX_FOLLOW_UP_DEPTH;
+                        if (mentionedAgentIds.length > 0 && gcChatId && currentDepth < effectiveMaxDepth) {
+                            console.log(`   💬 ${AGENT_NAME} mentioned: ${mentionedAgentIds.join(', ')} (depth ${currentDepth}/${effectiveMaxDepth}${isExecMode ? ' EXEC' : ''}) — pausing 15s to let admin cut in...`);
 
                             await new Promise(resolve => setTimeout(resolve, 15_000));
 
