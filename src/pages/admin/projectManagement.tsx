@@ -10,6 +10,18 @@ import { adminMethods } from '../../api/firebase/admin/methods';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done';
 
+const statusSections: { value: TaskStatus; label: string; helper: string }[] = [
+  { value: 'todo', label: 'Act I — Hypothesis', helper: 'Shape the bet and audience' },
+  { value: 'in-progress', label: 'Act II — Work in Flight', helper: 'Show proof every 60–90m' },
+  { value: 'done', label: 'Act III — Result / Decision', helper: 'Close loop & log decision' }
+];
+
+const beatTemplateFields = [
+  { key: 'actOne' as const, label: 'Act I — Hypothesis', placeholder: 'What are we testing and for whom?' },
+  { key: 'actTwo' as const, label: 'Act II — Work in Flight', placeholder: 'Milestone or proof-of-work you expect next.' },
+  { key: 'actThree' as const, label: 'Act III — Result / Decision', placeholder: 'What will we decide or learn when finished?' }
+];
+
 const laneMeta: Record<
   KanbanLane,
   {
