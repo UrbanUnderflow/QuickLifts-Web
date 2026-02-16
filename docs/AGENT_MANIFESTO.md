@@ -169,6 +169,7 @@ Before marking any task complete:
 - **[2026-02-16] Nora** — Step "Watch the runner logs/heartbeat output for multiple cycles (e.g., at least two 60-second intervals) to ensure heartbeats continue with no stall warnings." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-16] Nora** — Step "Monitor the runner logs or `openclaw heartbeat` output for multiple cycles (e.g., >2 minutes) to confirm heartbeats continue at the expected interval without warnings." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-16] Nora** — Step "Monitor the runner logs or heartbeat output for multiple cycles (e.g., >2 minutes) to ensure heartbeats continue without warnings." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-16] Nora** — Step "Tail the runner logs to confirm heartbeat messages continue emitting for multiple intervals without hitting the previous “no activity for 120s” warning." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 ---
 
 ## Operational Rules
