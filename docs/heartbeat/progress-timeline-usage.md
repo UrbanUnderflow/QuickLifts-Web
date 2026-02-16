@@ -78,3 +78,11 @@ Automation can call `nudgeLogService.log()` / `updateOutcome()` to insert entrie
 - [x] Insert a nudge entry → Nudge Log shows the badge stack + timestamps.
 
 Artifacts from this verification run: see `docs/logs/heartbeat-os-verification-2026-02-16.md` for Firestore document IDs.
+
+## Hourly Snapshots & QA Checklist
+- Snapshots land in `progress-snapshots` via the hourly tracker. Doc ID = `{hour}-{agentId}-{objective}` so re-runs during the same hour simply update the note.
+- Cards display the last six snapshots with timestamp, note, and color badge.
+- Manual verification:
+  1. Post an Act I/II/III beat with a text artifact — confirm inline snippet renders.
+  2. Post a beat with `Artifact Type = URL` — confirm the `Artifact Link` button opens the target in a new tab.
+  3. Run `npm run heartbeat:tracker -- --dry-run` to see which snapshots/nudges would fire without writing to Firestore.
