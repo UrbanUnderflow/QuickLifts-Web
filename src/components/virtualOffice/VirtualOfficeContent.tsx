@@ -6,7 +6,7 @@ import AdminRouteGuard from '../auth/AdminRouteGuard';
 import { presenceService, AgentPresence, AgentThoughtStep, TaskHistoryEntry } from '../../api/firebase/presence/service';
 import { kanbanService } from '../../api/firebase/kanban/service';
 import { db } from '../../api/firebase/config';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, query, where, onSnapshot } from 'firebase/firestore';
 import { KanbanTask } from '../../api/firebase/kanban/types';
 import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
@@ -22,7 +22,7 @@ import { AgentChatModal } from './AgentChatModal';
 import { InterventionAlert } from './InterventionAlert';
 import ProgressTimelinePanel from './ProgressTimelinePanel';
 import { groupChatService } from '../../api/firebase/groupChat/service';
-import type { GroupChatMessage } from '../../api/firebase/groupChat/types';
+import type { GroupChatMessage, GroupChat } from '../../api/firebase/groupChat/types';
 import {
   getAllTablePositions,
   getDeskPosition,
@@ -1809,6 +1809,10 @@ const VirtualOfficeContent: React.FC = () => {
   const [manifestoContent, setManifestoContent] = useState<string | null>(null);
   const [manifestoLoading, setManifestoLoading] = useState(false);
 
+  // ── Standup detection state ──
+  const [activeStandup, setActiveStandup] = useState<GroupChat | null>(null);
+  const [isStandupObserving, setIsStandupObserving] = useState(false);
+
   const handleOpenManifesto = useCallback(async () => {
     setShowManifesto(true);
     if (!manifestoContent) {
@@ -2082,14 +2086,121 @@ const VirtualOfficeContent: React.FC = () => {
     setMinutesPreviewData(null);
   }, []);
 
+  // ── Standup session listener ──
+  // Watches for active group chats with standupMeta (automated standups)
+  useEffect(() => {
+    const standupQuery = query(
+      collection(db, 'agent-group-chats'),
+      where('status', '==', 'active'),
+    );
+
+    const unsubStandup = onSnapshot(standupQuery, (snapshot) => {
+      // Find the first active session that has standupMeta
+      const standupDoc = snapshot.docs.find(doc => {
+        const data = doc.data();
+        return data.standupMeta != null;
+      });
+
+      if (standupDoc) {
+        const data = standupDoc.data() as Omit<GroupChat, 'id'>;
+        const standup: GroupChat = { id: standupDoc.id, ...data };
+
+        // Only trigger animation if this is a NEW standup (not already tracking)
+        if (!activeStandup || activeStandup.id !== standup.id) {
+          setActiveStandup(standup);
+          setGroupChatId(standup.id!);
+          setIsCollaborating(true);
+          setCollabStartTime(new Date());
+
+          // Animate agents to table (without opening modal)
+          const agentIds = allAgents.filter(a => a.id !== 'antigravity').map(a => a.id);
+          const tablePositions = getAllTablePositions(agentIds);
+          const updatedPositions = { ...agentPositions };
+          agentIds.forEach((agentId, index) => {
+            updatedPositions[agentId] = {
+              state: 'transitioning-to-table',
+              position: tablePositions[agentId],
+              deskPosition: updatedPositions[agentId]?.deskPosition || getDeskPosition(index),
+              transitionDelay: getStaggerDelay(index),
+            };
+          });
+          setAgentPositions(updatedPositions);
+
+          // Mark as "at table" after animation
+          const lastAgentDelay = getStaggerDelay(agentIds.length - 1);
+          setTimeout(() => {
+            setAgentPositions(prev => {
+              const final = { ...prev };
+              agentIds.forEach(agentId => {
+                if (final[agentId]) {
+                  final[agentId] = { ...final[agentId], state: 'table', transitionDelay: 0 };
+                }
+              });
+              return final;
+            });
+          }, lastAgentDelay + 2000);
+        }
+      } else if (activeStandup) {
+        // Standup ended — animate agents back to desks
+        setActiveStandup(null);
+        setIsStandupObserving(false);
+        setShowGroupChatModal(false);
+
+        const agentIds = allAgents.filter(a => a.id !== 'antigravity').map(a => a.id);
+        const updatedPositions = { ...agentPositions };
+        agentIds.forEach((agentId, i) => {
+          const originalIndex = allAgents.findIndex(a => a.id === agentId);
+          updatedPositions[agentId] = {
+            state: 'transitioning-to-desk',
+            position: getDeskPosition(originalIndex),
+            deskPosition: getDeskPosition(originalIndex),
+            transitionDelay: getExitStaggerDelay(i, agentIds.length),
+          };
+        });
+        setAgentPositions(updatedPositions);
+
+        const lastExitDelay = getExitStaggerDelay(0, agentIds.length);
+        setTimeout(() => {
+          setAgentPositions(prev => {
+            const final = { ...prev };
+            agentIds.forEach(agentId => {
+              if (final[agentId]) {
+                final[agentId] = { ...final[agentId], state: 'desk', transitionDelay: 0 };
+              }
+            });
+            return final;
+          });
+          setIsCollaborating(false);
+          setGroupChatId(null);
+          setCollabStartTime(null);
+        }, lastExitDelay + 2000);
+      }
+    });
+
+    return () => unsubStandup();
+  }, [allAgents, agentPositions, activeStandup]);
+
   // Update table click handler
   const handleTableClick = useCallback(() => {
+    // During an automated standup: click opens/closes the observer view
+    if (activeStandup) {
+      if (isStandupObserving) {
+        setShowGroupChatModal(false);
+        setIsStandupObserving(false);
+      } else {
+        setShowGroupChatModal(true);
+        setIsStandupObserving(true);
+      }
+      return;
+    }
+
+    // Manual collaboration toggle (no standup active)
     if (isCollaborating) {
       endCollaboration();
     } else {
       startCollaboration();
     }
-  }, [isCollaborating, startCollaboration, endCollaboration]);
+  }, [isCollaborating, startCollaboration, endCollaboration, activeStandup, isStandupObserving]);
 
   return (
     <div className="voffice-root">
@@ -2204,6 +2315,35 @@ const VirtualOfficeContent: React.FC = () => {
               onClick={handleTableClick}
               participantCount={allAgents.filter(a => a.id !== 'antigravity').length}
             />
+            {/* Standup badge */}
+            {activeStandup && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '44%',
+                  transform: 'translateX(-50%)',
+                  zIndex: 10,
+                  background: activeStandup.standupMeta?.type === 'morning'
+                    ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                    : 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                  color: '#fff',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  letterSpacing: '0.5px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                  cursor: 'pointer',
+                  animation: 'tablePulse 2s ease-in-out infinite',
+                  whiteSpace: 'nowrap',
+                }}
+                onClick={handleTableClick}
+              >
+                {activeStandup.standupMeta?.type === 'morning' ? '☀️ Morning Standup' : '🌙 Evening Standup'}
+                {!isStandupObserving && <span style={{ marginLeft: 6, opacity: 0.8 }}>• Click to observe</span>}
+              </div>
+            )}
 
             {/* Filing Cabinet Button */}
             <div className="filing-cabinet-btn" onClick={() => setShowFilingCabinet(true)}>
