@@ -60,12 +60,32 @@ const lensOptions = [
 const stateLabel = (state: TimelineStateTag) =>
   state === 'signals' ? 'Signals (Listening)' : 'Meanings (Story)';
 
+type FeedItem =
+  | { id: string; type: 'beat'; createdAt: number; payload: ProgressTimelineEntry }
+  | { id: string; type: 'nudge'; createdAt: number; payload: NudgeLogEntry };
+
 const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, onClose }) => {
   const [entries, setEntries] = useState<ProgressTimelineEntry[]>([]);
   const [snapshots, setSnapshots] = useState<HourlySnapshotEntry[]>([]);
   const [nudges, setNudges] = useState<NudgeLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const feedItems = useMemo<FeedItem[]>(() => {
+    const beatItems: FeedItem[] = entries.map((entry) => ({
+      id: `beat-${entry.id}`,
+      type: 'beat',
+      createdAt: entry.createdAt?.getTime?.() || 0,
+      payload: entry,
+    }));
+    const nudgeItems: FeedItem[] = nudges.map((entry) => ({
+      id: `nudge-${entry.id}`,
+      type: 'nudge',
+      createdAt: entry.createdAt?.getTime?.() || 0,
+      payload: entry,
+    }));
+    return [...beatItems, ...nudgeItems].sort((a, b) => b.createdAt - a.createdAt);
+  }, [entries, nudges]);
 
   // form fields
   const [agentId, setAgentId] = useState<string>('');
@@ -189,6 +209,33 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
       </div>
       <div className="pt-headline">{entry.headline}</div>
       {renderArtifact(entry)}
+    </div>
+  );
+
+  const renderNudgeFeedCard = (entry: NudgeLogEntry) => (
+    <div key={entry.id} className={`pt-card pt-nudge-inline color-${entry.color}`}>
+      <div className="pt-card-top">
+        <div>
+          <div className="pt-agent-name">{entry.agentName}</div>
+          <div className="pt-meta-line">
+            <span>⚡️ Nudge · {entry.objectiveCode}</span>
+            <span>· {formatDistanceToNow(entry.createdAt || new Date(), { addSuffix: true })}</span>
+          </div>
+        </div>
+        <div className="pt-card-badges">
+          <span className={`state-tag state-${entry.lane}`}>{stateLabel(entry.lane)}</span>
+          <span className="pt-chip objective">{channelLabels[entry.channel]}</span>
+          <span className={outcomeBadges[entry.outcome].className}>{outcomeBadges[entry.outcome].label}</span>
+        </div>
+      </div>
+      <div className="pt-headline">{entry.message}</div>
+      <div className="pt-nudge-inline-meta">
+        {entry.respondedAt ? (
+          <span>Response {formatDistanceToNow(entry.respondedAt, { addSuffix: true })}</span>
+        ) : (
+          <span>Awaiting response…</span>
+        )}
+      </div>
     </div>
   );
 
@@ -373,13 +420,17 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
               <div className="pt-feed-list">
                 {loading ? (
                   <div className="pt-empty">Loading timeline…</div>
-                ) : entries.length === 0 ? (
+                ) : feedItems.length === 0 ? (
                   <div className="pt-empty">
                     <AlertTriangle size={18} />
-                    <p>No beats have been posted yet today.</p>
+                    <p>No beats or nudges logged yet today.</p>
                   </div>
                 ) : (
-                  entries.map(renderTimelineCard)
+                  feedItems.map((item) =>
+                    item.type === 'beat'
+                      ? renderTimelineCard(item.payload as ProgressTimelineEntry)
+                      : renderNudgeFeedCard(item.payload as NudgeLogEntry)
+                  )
                 )}
               </div>
             </div>
@@ -536,6 +587,8 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
         }
         .pt-card-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
         .pt-card-badges { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+        .pt-nudge-inline { border-color: rgba(250,204,21,0.4); background: rgba(76,29,149,0.35); }
+        .pt-nudge-inline-meta { font-size: 11px; color: #cbd5f5; margin-top: 6px; display: flex; gap: 10px; }
         .pt-chip { font-size: 10px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.15); text-transform: uppercase; letter-spacing: 0.08em; }
         .pt-chip.objective { border-color: rgba(59,130,246,0.4); color: #60a5fa; }
         .pt-chip.lens { border-color: rgba(234,179,8,0.4); color: #facc15; }

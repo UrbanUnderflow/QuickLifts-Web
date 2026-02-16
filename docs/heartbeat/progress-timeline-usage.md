@@ -41,11 +41,14 @@ await progressTimelineService.publish({
 
 `listen()` and `listenSnapshots()` keep the UI synced; both support an optional `limit` for lightweight subscriptions. Hourly snapshots are written via `progressTimelineService.logHourlySnapshot` (used by automation) and display in the right column with time, note, and lane badge.
 
-## Nudge Log Surface
-Although Step 3 owns the dedicated build, the panel already listens to `nudge-log` to show the latest nudges under Hourly Snapshots:
+## Inline Nudge View
+As of Step 3, nudges stream directly into the Live Feed next to three-beat posts. Every entry displays:
 
-- Badge stack: lane (Signals/Meanings), channel (Auto/Manual/System), outcome (Pending/Ack/Resolved).
-- Metadata includes `createdAt` and optional `respondedAt` time delta.
+- Badge stack (lane + channel + outcome) with confidence color border.
+- Timestamps for when Nora nudged and when the agent replied.
+- Objective code + message body so idle alerts and hourly prompts read like a Twitter-threaded update.
+
+The side panel still shows the latest 8 nudges, but the main feed is now the canonical history. Automation should continue to write to `nudge-log`—the UI handles ordering and rendering automatically.
 
 Automation can call `nudgeLogService.log()` / `updateOutcome()` to insert entries that appear here immediately.
 
