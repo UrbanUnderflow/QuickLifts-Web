@@ -1462,7 +1462,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
           )}
 
           {/* Current task */}
-          {agent.currentTask && (
+          {agent.currentTask && agent.status === 'working' && (
             <div className="detail-task">
               <p className="text-[10px] uppercase tracking-wider text-zinc-500">Current Task</p>
               <p className="text-xs text-zinc-100 mt-0.5 font-medium">{agent.currentTask}</p>
@@ -1470,7 +1470,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
           )}
 
           {/* Install progress telemetry */}
-          {installProgress && (
+          {installProgress && agent.status === 'working' && (
             <div className="detail-install">
               <div className="install-header">
                 <div className="install-title">
@@ -1507,7 +1507,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
           )}
 
           {/* Live Execution Steps Checklist */}
-          {hasSteps && (
+          {hasSteps && agent.status === 'working' && (
             <ExecutionStepsPanel
               steps={agent.executionSteps}
               currentStepIndex={agent.currentStepIndex}
