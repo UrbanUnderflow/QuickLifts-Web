@@ -11,6 +11,12 @@ export interface GroupChat {
     sessionDuration?: number;
     messageCount?: number;
   };
+  standupMeta?: {
+    type: 'morning' | 'evening';
+    scheduledAt: Timestamp | Date;
+    moderator: string;
+    maxDurationMinutes: number;
+  };
 }
 
 export interface AgentResponse {
