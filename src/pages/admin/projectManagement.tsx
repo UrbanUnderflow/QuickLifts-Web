@@ -2026,10 +2026,6 @@ const ProjectManagement: React.FC = () => {
     setTaskDetailModalOpen(true);
   };
 
-  const todoTasks = filteredTasks.filter(task => task.status === 'todo');
-  const inProgressTasks = filteredTasks.filter(task => task.status === 'in-progress');
-  const doneTasks = filteredTasks.filter(task => task.status === 'done');
-
   return (
     <AdminRouteGuard>
       <Head>
