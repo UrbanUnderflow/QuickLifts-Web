@@ -18,6 +18,10 @@ export interface KanbanTaskData {
   status: 'todo' | 'in-progress' | 'done';
   lane: KanbanLane;
   color: KanbanColor;
+  objectiveCode: string;
+  actOne: string;
+  actTwo: string;
+  actThree: string;
   lastWorkBeatAt?: Date;
   idleThresholdMinutes: number;
   notes?: string;
@@ -36,6 +40,10 @@ export class KanbanTask {
   status: 'todo' | 'in-progress' | 'done';
   lane: KanbanLane;
   color: KanbanColor;
+  objectiveCode: string;
+  actOne: string;
+  actTwo: string;
+  actThree: string;
   lastWorkBeatAt?: Date;
   idleThresholdMinutes: number;
   notes: string;
@@ -53,6 +61,10 @@ export class KanbanTask {
     this.status = data.status || 'todo';
     this.lane = data.lane || 'signals';
     this.color = data.color || 'blue';
+    this.objectiveCode = data.objectiveCode || '';
+    this.actOne = data.actOne || '';
+    this.actTwo = data.actTwo || '';
+    this.actThree = data.actThree || '';
     this.lastWorkBeatAt = data.lastWorkBeatAt || data.updatedAt || new Date();
     this.idleThresholdMinutes = typeof data.idleThresholdMinutes === 'number' ? data.idleThresholdMinutes : 120;
     this.notes = data.notes || '';
@@ -90,6 +102,10 @@ export class KanbanTask {
       status: this.status,
       lane: this.lane,
       color: this.color,
+      objectiveCode: this.objectiveCode,
+      actOne: this.actOne,
+      actTwo: this.actTwo,
+      actThree: this.actThree,
       lastWorkBeatAt: this.lastWorkBeatAt || null,
       idleThresholdMinutes: this.idleThresholdMinutes,
       notes: this.notes,
@@ -105,6 +121,10 @@ export class KanbanTask {
       ...data,
       notes: data.notes || '',
       subtasks: data.subtasks || [],
+      objectiveCode: data.objectiveCode || '',
+      actOne: data.actOne || '',
+      actTwo: data.actTwo || '',
+      actThree: data.actThree || '',
       lastWorkBeatAt: data.lastWorkBeatAt?.toDate?.() || (data.lastWorkBeatAt ? new Date(data.lastWorkBeatAt) : undefined),
       createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
       updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt)

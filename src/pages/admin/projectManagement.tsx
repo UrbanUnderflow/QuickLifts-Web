@@ -10,20 +10,38 @@ import { adminMethods } from '../../api/firebase/admin/methods';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done';
 
-const laneMeta: Record<KanbanLane, { label: string; subtitle: string; bg: string; text: string; border: string }> = {
+const laneMeta: Record<
+  KanbanLane,
+  {
+    label: string;
+    subtitle: string;
+    bg: string;
+    text: string;
+    border: string;
+    accent: string;
+    defaultIdle: number;
+    idleHint: string;
+  }
+> = {
   signals: {
     label: 'Signals',
     subtitle: 'Listening Mode',
     bg: 'bg-sky-800/20',
     text: 'text-sky-200',
-    border: 'border-sky-500/30'
+    border: 'border-sky-500/30',
+    accent: 'text-sky-300',
+    defaultIdle: 120,
+    idleHint: 'Blue lane resets every hypothesis pulse (120m idle threshold).'
   },
   meanings: {
     label: 'Meanings',
     subtitle: 'Story Mode',
     bg: 'bg-orange-800/20',
     text: 'text-orange-100',
-    border: 'border-orange-500/30'
+    border: 'border-orange-500/30',
+    accent: 'text-orange-200',
+    defaultIdle: 45,
+    idleHint: 'Orange lane enforces 45m friction checks before nudges escalate.'
   }
 };
 
@@ -45,6 +63,8 @@ const colorOptions: { value: KanbanColor; label: string }[] = [
   { value: 'yellow', label: 'Yellow · Friction' },
   { value: 'red', label: 'Red · Hot' }
 ];
+
+const laneColumns: KanbanLane[] = ['signals', 'meanings'];
 
 type AdminUser = {
   id: string;
