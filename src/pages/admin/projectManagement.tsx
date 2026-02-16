@@ -556,6 +556,19 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
     setEditingSubtaskTitle('');
   };
 
+  const handleLogWorkBeat = async () => {
+    if (!task) return;
+    try {
+      setIsLoggingWorkBeat(true);
+      await kanbanService.logWorkBeat(task.id);
+      onRefresh?.();
+    } catch (error) {
+      console.error('Error logging work beat:', error);
+    } finally {
+      setIsLoggingWorkBeat(false);
+    }
+  };
+
   // Drag and drop handlers for subtasks
   const handleSubtaskDragStart = (e: React.DragEvent, subtaskId: string) => {
     setDraggedSubtaskId(subtaskId);
@@ -1057,6 +1070,34 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
                 <p className="text-xs text-zinc-500 mt-1">Only visible to admins inside this board.</p>
               </div>
 
+              <div className="bg-[#15191f] border border-zinc-700 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-zinc-200">Objective Code</label>
+                  <span className="text-[10px] uppercase tracking-widest text-zinc-500">Three-Beat Template</span>
+                </div>
+                <input
+                  type="text"
+                  value={formData.objectiveCode}
+                  onChange={(e) => setFormData({ ...formData, objectiveCode: e.target.value.toUpperCase() })}
+                  className="w-full px-3 py-2 bg-[#262a30] border border-zinc-600 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+                  placeholder="CR-02"
+                />
+                <div className="grid grid-cols-1 gap-2">
+                  {beatTemplateFields.map((beat) => (
+                    <div key={beat.key}>
+                      <label className="block text-xs font-semibold text-zinc-400 mb-1">{beat.label}</label>
+                      <textarea
+                        value={(formData as any)[beat.key] as string}
+                        onChange={(e) => setBeatField(beat.key, e.target.value)}
+                        className="w-full px-3 py-2 bg-[#262a30] border border-zinc-600 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 resize-none"
+                        placeholder={beat.placeholder}
+                        rows={2}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="relative">
                   <label className="block text-sm font-medium text-zinc-300 mb-2">
@@ -1229,6 +1270,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
                 </label>
               </div>
             </div>
+            </>
           )}
         </div>
       </div>
@@ -1255,7 +1297,11 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
     lane: 'signals' as KanbanLane,
     color: 'blue' as KanbanColor,
     idleThresholdMinutes: 120,
-    notes: ''
+    notes: '',
+    objectiveCode: '',
+    actOne: '',
+    actTwo: '',
+    actThree: ''
   });
 
   // @ tagging system for assignee (similar to programming page)
@@ -1277,6 +1323,10 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
       loadExistingProjectsAndThemes();
     }
   }, [isOpen]);
+
+  const setModalBeatField = (key: typeof beatTemplateFields[number]['key'], value: string) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+  };
 
   const loadExistingProjectsAndThemes = async () => {
     try {
@@ -1320,7 +1370,11 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
         lane: task.lane || 'signals',
         color: task.color || 'blue',
         idleThresholdMinutes: task.idleThresholdMinutes ?? 120,
-        notes: task.notes || ''
+        notes: task.notes || '',
+        objectiveCode: task.objectiveCode || '',
+        actOne: task.actOne || '',
+        actTwo: task.actTwo || '',
+        actThree: task.actThree || ''
       });
       setAssigneeQuery(task.assignee);
     } else {
@@ -1334,7 +1388,11 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
         lane: 'signals',
         color: 'blue',
         idleThresholdMinutes: 120,
-        notes: ''
+        notes: '',
+        objectiveCode: '',
+        actOne: '',
+        actTwo: '',
+        actThree: ''
       });
       setAssigneeQuery('');
     }
@@ -1472,10 +1530,12 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
     e.preventDefault();
     if (!formData.name.trim()) return;
 
+    const payload = { ...formData, objectiveCode: formData.objectiveCode.toUpperCase() };
+
     if (mode === 'edit' && task) {
-      onSave({ ...task, ...formData });
+      onSave({ ...task, ...payload });
     } else {
-      onSave(formData);
+      onSave(payload);
     }
     onClose();
   };
@@ -1548,7 +1608,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
                   <label className="block text-xs font-semibold text-zinc-400 mb-1">{beat.label}</label>
                   <textarea
                     value={(formData as any)[beat.key] as string}
-                    onChange={(e) => setBeatField(beat.key, e.target.value)}
+                    onChange={(e) => setModalBeatField(beat.key, e.target.value)}
                     className="w-full px-3 py-2 bg-[#262a30] border border-zinc-600 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 resize-none"
                     placeholder={beat.placeholder}
                     rows={2}

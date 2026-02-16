@@ -8,9 +8,7 @@ import {
   deleteDoc,
   query,
   orderBy,
-  where,
-  writeBatch,
-  serverTimestamp
+  where
 } from 'firebase/firestore';
 import { db } from '../config';
 import { KanbanTask, KanbanTaskData, Subtask, KanbanLane } from './types';
