@@ -35,6 +35,15 @@ const AGENT_ID = process.env.AGENT_ID || 'nora';
 const AGENT_NAME = process.env.AGENT_NAME || AGENT_ID;
 const AGENT_EMOJI = process.env.AGENT_EMOJI || '⚡️';
 const HEARTBEAT_MS = parseInt(process.env.HEARTBEAT_MS || '30000', 10);
+
+// Ensure SUDO_ASKPASS is always available for child processes (OpenClaw, installWithTelemetry, etc.)
+if (!process.env.SUDO_ASKPASS) {
+    const askpassPath = path.join(require('os').homedir(), '.openclaw/bin/openclaw-askpass');
+    if (require('fs').existsSync(askpassPath)) {
+        process.env.SUDO_ASKPASS = askpassPath;
+        console.log(`🔑 SUDO_ASKPASS set to ${askpassPath}`);
+    }
+}
 const PRESENCE_COLLECTION = 'agent-presence';
 const KANBAN_COLLECTION = 'kanbanTasks';
 const COMMANDS_COLLECTION = 'agent-commands';
