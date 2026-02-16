@@ -3,7 +3,7 @@ import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { kanbanService } from '../../api/firebase/kanban/service';
 import { KanbanTask, KanbanLane, KanbanColor } from '../../api/firebase/kanban/types';
-import { Plus, Edit, Trash2, Calendar, User, Tag, GripVertical, Clock, Filter, CheckSquare, Square, X } from 'lucide-react';
+import { Plus, Edit, Trash2, Calendar, User, Tag, GripVertical, Clock, Filter, CheckSquare, Square, X, ListOrdered } from 'lucide-react';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { adminMethods } from '../../api/firebase/admin/methods';
@@ -184,6 +184,23 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onDragStart
         </div>
       )}
 
+      {beatDetails.length > 0 && (
+        <div className="bg-[#101318] border border-zinc-700/70 rounded-md p-3 mb-3">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 flex items-center gap-2 mb-2">
+            <ListOrdered className="w-3 h-3 text-zinc-400" />
+            Three-Beat Objective
+          </div>
+          <div className="space-y-1.5">
+            {beatDetails.map((beat) => (
+              <div key={beat.label} className="text-xs">
+                <span className="text-zinc-500 mr-2 font-semibold">{beat.label}:</span>
+                <span className="text-zinc-100">{beat.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Subtask progress indicator */}
       {task.subtasks.length > 0 && (
         <div className="mb-3">
@@ -262,7 +279,11 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
     lane: 'signals' as KanbanLane,
     color: 'blue' as KanbanColor,
     idleThresholdMinutes: 120,
-    notes: ''
+    notes: '',
+    objectiveCode: '',
+    actOne: '',
+    actTwo: '',
+    actThree: ''
   });
 
   // Subtask management states
@@ -287,6 +308,13 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
   const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
   const [assigneeQuery, setAssigneeQuery] = useState('');
   const [isLoggingWorkBeat, setIsLoggingWorkBeat] = useState(false);
+
+  const viewBeatDetails = React.useMemo(() => {
+    if (!task) return [];
+    return beatTemplateFields
+      .map(({ key, label }) => ({ label, value: (task as any)[key] as string }))
+      .filter((beat) => beat.value && beat.value.trim().length > 0);
+  }, [task]);
 
   // Load existing projects and themes when modal opens
   useEffect(() => {
@@ -330,7 +358,11 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
         lane: task.lane || 'signals',
         color: task.color || 'blue',
         idleThresholdMinutes: task.idleThresholdMinutes ?? 120,
-        notes: task.notes || ''
+        notes: task.notes || '',
+        objectiveCode: task.objectiveCode || '',
+        actOne: task.actOne || '',
+        actTwo: task.actTwo || '',
+        actThree: task.actThree || ''
       });
       setAssigneeQuery(task.assignee);
     }
@@ -693,6 +725,28 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
                     <span className="text-sm font-medium text-zinc-400">Notes</span>
                   </div>
                   <p className="text-zinc-200 whitespace-pre-wrap text-sm leading-relaxed">{task.notes}</p>
+                </div>
+              )}
+
+              {(task.objectiveCode || viewBeatDetails.length > 0) && (
+                <div className="bg-[#262a30] rounded-lg p-4 border border-sky-700/50">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <ListOrdered className="w-4 h-4 text-sky-300" />
+                      <span className="text-sm font-medium text-zinc-300">Three-Beat Objective</span>
+                    </div>
+                    {task.objectiveCode && (
+                      <span className="text-xs text-sky-300 uppercase tracking-widest">{task.objectiveCode}</span>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {viewBeatDetails.map((beat) => (
+                      <div key={beat.label}>
+                        <p className="text-[11px] text-zinc-500 uppercase tracking-widest mb-1">{beat.label}</p>
+                        <p className="text-sm text-white leading-snug">{beat.value}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -1471,6 +1525,34 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
               rows={3}
             />
           </div>
+
+          <div className="bg-[#15191f] border border-zinc-700 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-zinc-200">Objective Code</label>
+              <span className="text-[10px] uppercase tracking-widest text-zinc-500">Three-Beat Template</span>
+            </div>
+            <input
+              type="text"
+              value={formData.objectiveCode}
+              onChange={(e) => setFormData({ ...formData, objectiveCode: e.target.value.toUpperCase() })}
+              className="w-full px-3 py-2 bg-[#262a30] border border-zinc-600 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+              placeholder="CR-02"
+            />
+            <div className="grid grid-cols-1 gap-2">
+              {beatTemplateFields.map((beat) => (
+                <div key={beat.key}>
+                  <label className="block text-xs font-semibold text-zinc-400 mb-1">{beat.label}</label>
+                  <textarea
+                    value={(formData as any)[beat.key] as string}
+                    onChange={(e) => setFormData({ ...formData, [beat.key]: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#262a30] border border-zinc-600 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 resize-none"
+                    placeholder={beat.placeholder}
+                    rows={2}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
           
           <div className="grid grid-cols-2 gap-3">
             <div className="relative">
@@ -1660,21 +1742,19 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
   );
 };
 
-interface ColumnProps {
-  title: string;
-  status: TaskStatus;
+interface LaneColumnProps {
+  lane: KanbanLane;
   tasks: KanbanTask[];
   onTaskEdit: (task: KanbanTask) => void;
   onTaskDelete: (taskId: string) => void;
   onTaskClick: (task: KanbanTask) => void;
   onDragStart: (e: React.DragEvent, task: KanbanTask) => void;
-  onDrop: (e: React.DragEvent, status: TaskStatus) => void;
+  onDrop: (e: React.DragEvent, status: TaskStatus, lane: KanbanLane) => void;
   onDragOver: (e: React.DragEvent) => void;
 }
 
-const Column: React.FC<ColumnProps> = ({
-  title,
-  status,
+const LaneColumn: React.FC<LaneColumnProps> = ({
+  lane,
   tasks,
   onTaskEdit,
   onTaskDelete,
@@ -1683,57 +1763,66 @@ const Column: React.FC<ColumnProps> = ({
   onDrop,
   onDragOver
 }) => {
-  const getColumnColor = () => {
-    switch (status) {
-      case 'todo':
-        return 'border-blue-500/30 bg-blue-500/5';
-      case 'in-progress':
-        return 'border-yellow-500/30 bg-yellow-500/5';
-      case 'done':
-        return 'border-green-500/30 bg-green-500/5';
-      default:
-        return 'border-zinc-700';
-    }
+  const laneInfo = laneMeta[lane];
+  const groupedByStatus: Record<TaskStatus, KanbanTask[]> = {
+    'todo': [],
+    'in-progress': [],
+    'done': []
   };
-
-  const getHeaderColor = () => {
-    switch (status) {
-      case 'todo':
-        return 'text-blue-400';
-      case 'in-progress':
-        return 'text-yellow-400';
-      case 'done':
-        return 'text-green-400';
-      default:
-        return 'text-zinc-400';
-    }
-  };
+  tasks.forEach((task) => {
+    groupedByStatus[task.status] = groupedByStatus[task.status] || [];
+    groupedByStatus[task.status].push(task);
+  });
 
   return (
-    <div
-      className={`flex-1 bg-[#111417] border rounded-xl p-4 min-h-[500px] ${getColumnColor()}`}
-      onDrop={(e) => onDrop(e, status)}
-      onDragOver={onDragOver}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <h3 className={`font-semibold text-lg ${getHeaderColor()}`}>
-          {title}
-        </h3>
-        <span className="bg-zinc-800 text-zinc-400 text-xs px-2 py-1 rounded-full">
-          {tasks.length}
-        </span>
+    <div className={`bg-[#101418] border rounded-2xl p-5 flex flex-col gap-4 ${laneInfo.border}`}>
+      <div className="flex items-start justify-between">
+        <div>
+          <p className={`text-xs uppercase tracking-[0.3em] ${laneInfo.text}`}>{laneInfo.subtitle}</p>
+          <h3 className="text-2xl font-semibold text-white">{laneInfo.label}</h3>
+          <p className="text-[11px] text-zinc-500 mt-1">{laneInfo.idleHint}</p>
+        </div>
+        <div className="text-right">
+          <p className={`text-xs ${laneInfo.accent}`}>Default Idle</p>
+          <p className="text-lg font-semibold text-white">{laneInfo.defaultIdle}m</p>
+        </div>
       </div>
-      
-      <div className="space-y-3">
-        {tasks.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            onEdit={onTaskEdit}
-            onDelete={onTaskDelete}
-            onDragStart={onDragStart}
-            onClick={onTaskClick}
-          />
+
+      <div className="space-y-4">
+        {statusSections.map((section) => (
+          <div
+            key={`${lane}-${section.value}`}
+            className="bg-[#0c0f13] border border-dashed border-zinc-700 rounded-xl p-4"
+            onDrop={(e) => onDrop(e, section.value, lane)}
+            onDragOver={onDragOver}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-zinc-200">{section.label}</p>
+                <p className="text-[11px] text-zinc-500">{section.helper}</p>
+              </div>
+              <span className="bg-zinc-800 text-zinc-400 text-xs px-2 py-1 rounded-full">
+                {groupedByStatus[section.value]?.length || 0}
+              </span>
+            </div>
+            <div className="space-y-3 mt-3 min-h-[90px]">
+              {groupedByStatus[section.value]?.map((task) => (
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onEdit={onTaskEdit}
+                  onDelete={onTaskDelete}
+                  onDragStart={onDragStart}
+                  onClick={onTaskClick}
+                />
+              ))}
+              {groupedByStatus[section.value]?.length === 0 && (
+                <div className="text-[11px] text-zinc-500 border border-dashed border-zinc-700 rounded-lg p-3 text-center">
+                  Drop {section.label.split('—')[0].trim()} cards here
+                </div>
+              )}
+            </div>
+          </div>
         ))}
       </div>
     </div>
@@ -1826,6 +1915,11 @@ const ProjectManagement: React.FC = () => {
     });
   }, [tasks, selectedProject, selectedTheme, selectedAssignee]);
 
+  const laneTaskMap = React.useMemo(() => ({
+    signals: filteredTasks.filter(task => (task.lane || 'signals') === 'signals'),
+    meanings: filteredTasks.filter(task => task.lane === 'meanings')
+  }), [filteredTasks]);
+
   const handleCreateTask = () => {
     setSelectedTask(null);
     setModalMode('create');
@@ -1866,7 +1960,11 @@ const ProjectManagement: React.FC = () => {
           lane: taskData.lane,
           color: taskData.color,
           idleThresholdMinutes: taskData.idleThresholdMinutes,
-          notes: taskData.notes
+          notes: taskData.notes,
+          objectiveCode: taskData.objectiveCode,
+          actOne: taskData.actOne,
+          actTwo: taskData.actTwo,
+          actThree: taskData.actThree
         });
       } else {
         await kanbanService.createTask({
@@ -1880,6 +1978,10 @@ const ProjectManagement: React.FC = () => {
           color: taskData.color || 'blue',
           idleThresholdMinutes: taskData.idleThresholdMinutes ?? 120,
           notes: taskData.notes || '',
+          objectiveCode: taskData.objectiveCode || '',
+          actOne: taskData.actOne || '',
+          actTwo: taskData.actTwo || '',
+          actThree: taskData.actThree || '',
           subtasks: []
         });
       }
@@ -1897,16 +1999,19 @@ const ProjectManagement: React.FC = () => {
     e.preventDefault();
   };
 
-  const handleDrop = async (e: React.DragEvent, newStatus: TaskStatus) => {
+  const handleDrop = async (e: React.DragEvent, newStatus: TaskStatus, lane: KanbanLane) => {
     e.preventDefault();
     
-    if (!draggedTask || draggedTask.status === newStatus) {
+    if (!draggedTask || (draggedTask.status === newStatus && draggedTask.lane === lane)) {
       setDraggedTask(null);
       return;
     }
 
     try {
-      await kanbanService.updateTaskStatus(draggedTask.id, newStatus);
+      await kanbanService.updateTask(draggedTask.id, {
+        status: newStatus,
+        lane
+      });
       await fetchTasks();
     } catch (error) {
       console.error('Error updating task status:', error);
