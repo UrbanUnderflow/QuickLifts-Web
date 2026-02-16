@@ -48,6 +48,9 @@ const PRESENCE_COLLECTION = 'agent-presence';
 const KANBAN_COLLECTION = 'kanbanTasks';
 const COMMANDS_COLLECTION = 'agent-commands';
 const HISTORY_SUBCOLLECTION = 'task-history';
+const TIMELINE_COLLECTION = 'progress-timeline';
+const SNAPSHOT_COLLECTION = 'progress-snapshots';
+const NUDGE_COLLECTION = 'progress-timeline';  // nudge entries live in the same feed
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || ({ 'nora': 'main', 'scout': 'scout', 'solara': 'solara', 'sage': 'sage' }[AGENT_ID] || 'main');
 
@@ -656,6 +659,155 @@ function hasVerifiableArtifacts(steps) {
     });
 
     return substantiveFiles.length > 0;
+}
+
+/* ─── Heartbeat OS: Beat Posting ──────────────────────── */
+
+/**
+ * Post a progress beat to the progress-timeline Firestore collection.
+ * Beat types: hypothesis | work-in-flight | result | block | signal-spike
+ * Confidence colors: blue (exploring) | green (momentum) | yellow (friction) | red (stalled)
+ */
+async function postBeat(beat, headline, opts = {}) {
+    try {
+        await db.collection(TIMELINE_COLLECTION).add({
+            agentId: AGENT_ID,
+            agentName: AGENT_NAME,
+            emoji: AGENT_EMOJI,
+            objectiveCode: opts.objectiveCode || opts.taskId || '',
+            beat: beat,               // hypothesis | work-in-flight | result | block
+            headline: headline,
+            artifactType: opts.artifactType || 'none',
+            artifactText: opts.artifactText || '',
+            artifactUrl: opts.artifactUrl || '',
+            lensTag: opts.lensTag || '',
+            confidenceColor: opts.color || 'blue',
+            stateTag: opts.stateTag || 'signals',
+            createdAt: FieldValue.serverTimestamp(),
+        });
+        console.log(`📊 Beat posted: [${beat}] ${headline}`);
+    } catch (err) {
+        console.error('⚠️  Failed to post beat:', err.message);
+    }
+}
+
+/**
+ * Determine confidence color based on task/step state.
+ */
+function inferColor(steps, currentIndex) {
+    if (!steps || steps.length === 0) return 'blue';
+    const failed = steps.filter(s => s.status === 'failed').length;
+    const issues = steps.filter(s => s.status === 'completed-with-issues').length;
+    if (failed > 0) return 'red';
+    if (issues > 0) return 'yellow';
+    const progress = currentIndex / steps.length;
+    if (progress > 0.5) return 'green';
+    return 'blue';
+}
+
+/* ─── Heartbeat OS: Hourly Snapshots ─────────────────── */
+
+let lastSnapshotHour = null;
+
+/**
+ * Post an hourly snapshot of this agent's current state.
+ * Called on an interval; only fires once per calendar hour.
+ */
+async function postHourlySnapshot(currentTask) {
+    const now = new Date();
+    const hourIso = now.toISOString().replace(/:\d{2}\.\d{3}Z$/, ':00:00Z'); // Round to hour
+    if (hourIso === lastSnapshotHour) return;  // Already posted this hour
+    lastSnapshotHour = hourIso;
+
+    try {
+        await db.collection(SNAPSHOT_COLLECTION).add({
+            hourIso: hourIso,
+            agentId: AGENT_ID,
+            agentName: AGENT_NAME,
+            objectiveCode: currentTask?.id || '',
+            beatCompleted: currentTask ? 'work-in-flight' : null,
+            color: currentTask ? 'green' : 'blue',
+            stateTag: 'signals',
+            note: currentTask
+                ? `Working on: ${currentTask.name}`
+                : 'Idle — waiting for tasks',
+            createdAt: FieldValue.serverTimestamp(),
+        });
+        console.log(`📸 Hourly snapshot posted for ${hourIso}`);
+    } catch (err) {
+        console.error('⚠️  Failed to post hourly snapshot:', err.message);
+    }
+}
+
+/* ─── Heartbeat OS: Idle Detection & Nudge ───────────── */
+
+/**
+ * Check all kanban tasks for idle agents and send nudges.
+ * An agent is "idle" if their card is yellow/red and has had no work-beat
+ * within the idleThresholdMinutes window.
+ */
+async function checkIdleAndNudge() {
+    try {
+        const snap = await db.collection(KANBAN_COLLECTION)
+            .where('status', '==', 'in-progress')
+            .get();
+
+        const now = new Date();
+        for (const doc of snap.docs) {
+            const data = doc.data();
+            const color = data.color || 'blue';
+            if (!['yellow', 'red'].includes(color)) continue;
+
+            const lastBeat = data.lastWorkBeatAt?.toDate?.() || data.updatedAt?.toDate?.() || new Date(0);
+            const threshold = data.idleThresholdMinutes || 120;
+            const minutesSince = Math.floor((now.getTime() - lastBeat.getTime()) / 60000);
+
+            if (minutesSince >= threshold) {
+                const assignee = data.assignee || 'unknown';
+                const taskName = data.name || doc.id;
+                console.log(`🔔 Idle nudge: ${assignee} on "${taskName}" — ${minutesSince}m since last beat (threshold: ${threshold}m)`);
+
+                // Post nudge entry to the timeline feed
+                await db.collection(TIMELINE_COLLECTION).add({
+                    agentId: AGENT_ID,
+                    agentName: AGENT_NAME,
+                    emoji: AGENT_EMOJI,
+                    objectiveCode: data.objectiveCode || doc.id,
+                    beat: 'signal-spike',
+                    headline: `🔔 Nudge → ${assignee}: "${taskName}" idle for ${minutesSince}m (${color} state)`,
+                    artifactType: 'none',
+                    artifactText: '',
+                    artifactUrl: '',
+                    lensTag: '',
+                    confidenceColor: color,
+                    stateTag: 'meanings',
+                    // Mark as nudge for the NudgeLogEntry type in the UI
+                    isNudge: true,
+                    nudgeChannel: 'automation',
+                    nudgeOutcome: 'pending',
+                    nudgeAgentId: assignee.toLowerCase(),
+                    nudgeAgentName: assignee,
+                    nudgeMessage: `No progress on "${taskName}" for ${minutesSince} minutes. Color: ${color}. Please post a beat update or flag a blocker.`,
+                    createdAt: FieldValue.serverTimestamp(),
+                });
+
+                // Also send a direct command to the idle agent
+                const targetId = assignee.toLowerCase();
+                if (targetId !== AGENT_ID) {  // Don't nudge yourself
+                    await db.collection(COMMANDS_COLLECTION).add({
+                        from: AGENT_ID,
+                        to: targetId,
+                        type: 'nudge',
+                        content: `Your task "${taskName}" has been idle for ${minutesSince} minutes (${color} state). Please post a progress beat or flag a blocker.`,
+                        status: 'pending',
+                        createdAt: FieldValue.serverTimestamp(),
+                    });
+                }
+            }
+        }
+    } catch (err) {
+        console.error('⚠️  Idle nudge check failed:', err.message);
+    }
 }
 
 /* ─── Agent-to-Agent Messaging ────────────────────────── */
@@ -2735,6 +2887,13 @@ async function run() {
     // Start heartbeat
     const heartbeatInterval = setInterval(heartbeat, HEARTBEAT_MS);
 
+    // Start Heartbeat OS hourly snapshot + idle nudge check (every 10 minutes)
+    let currentTaskRef = null;  // Tracks what we're working on for snapshots
+    const heartbeatOsInterval = setInterval(async () => {
+        await postHourlySnapshot(currentTaskRef);
+        await checkIdleAndNudge();
+    }, 10 * 60 * 1000);  // Check every 10 minutes
+
     // Start command listener (real-time Firestore listener)
     const unsubCommands = startCommandListener();
 
@@ -2742,6 +2901,7 @@ async function run() {
     const shutdown = async () => {
         console.log('\n👋 Shutting down...');
         clearInterval(heartbeatInterval);
+        clearInterval(heartbeatOsInterval);
         unsubCommands();
         await setStatus('offline', {
             notes: 'Agent shut down gracefully',
@@ -2782,6 +2942,7 @@ async function run() {
             }
 
             console.log(`📋 Found task: ${task.name} (${task.id})`);
+            currentTaskRef = task;  // Track for hourly snapshots
 
             console.log('🧠 Breaking down task into steps...');
             const steps = await decomposeTask(task);
@@ -2793,6 +2954,13 @@ async function run() {
                 currentTaskId: task.id,
                 taskStartedAt: taskStartTime,
                 notes: `Starting: ${task.name}`,
+            });
+
+            // ─── Heartbeat: post hypothesis beat at task start ──
+            await postBeat('hypothesis', `Starting: ${task.name}`, {
+                taskId: task.id,
+                color: 'blue',
+                objectiveCode: task.objectiveCode || task.id,
             });
 
             steps[0].status = 'in-progress';
@@ -2839,6 +3007,13 @@ async function run() {
                 consecutiveFailures = 0;
                 lastFailureContext = '';
                 console.log(`✅ Step ${i + 1} completed${steps[i].durationMs ? ` (${formatMs(steps[i].durationMs)})` : ''}`);
+
+                // ─── Heartbeat: post work-in-flight beat on step completion ──
+                await postBeat('work-in-flight', `Step ${i + 1}/${steps.length}: ${steps[i].description}`, {
+                    taskId: task.id,
+                    color: inferColor(steps, i + 1),
+                    objectiveCode: task.objectiveCode || task.id,
+                });
 
                 if (i + 1 < steps.length) {
                     steps[i + 1].status = 'in-progress';
@@ -2953,6 +3128,19 @@ async function run() {
                 // Record deliverables to Firestore for the PulseCommand tray
                 await recordDeliverables(task, steps);
 
+                // ─── Heartbeat: post result beat on task completion ──
+                await postBeat('result', `✅ Completed: ${task.name}`, {
+                    taskId: task.id,
+                    color: hasIssues ? 'yellow' : 'green',
+                    objectiveCode: task.objectiveCode || task.id,
+                });
+                // Update lastWorkBeatAt on the kanban card for idle tracking
+                try {
+                    await db.collection(KANBAN_COLLECTION).doc(task.id).update({
+                        lastWorkBeatAt: FieldValue.serverTimestamp(),
+                    });
+                } catch (_) { /* card may already be removed */ }
+
                 // Auto-unblock any previously-blocked tasks so they re-enter the queue
                 await unblockTasks();
 
@@ -3024,9 +3212,16 @@ async function run() {
             } else {
                 await saveTaskHistory(task.name, task.id, steps, 'failed', taskStartTime);
 
-                // Proactively report failure to the chat
+                // ─── Heartbeat: post block beat on task failure ──
                 const failedStep = steps.find(s => s.status === 'failed');
                 const failedIndex = steps.indexOf(failedStep);
+                await postBeat('block', `❌ Failed: ${task.name} — step ${failedIndex + 1}: ${failedStep?.description || 'unknown'}`, {
+                    taskId: task.id,
+                    color: 'red',
+                    objectiveCode: task.objectiveCode || task.id,
+                });
+
+                // Proactively report failure to the chat
                 await markTaskFailed(task.id, failedStep?.output || 'Unknown error');
                 await sendProactiveMessage(
                     `❌ Task failed: "${task.name}"\n\n` +
@@ -3038,6 +3233,7 @@ async function run() {
                 );
             }
 
+            currentTaskRef = null;  // Reset for hourly snapshots
             await new Promise(r => setTimeout(r, 5_000));
 
         } catch (err) {
