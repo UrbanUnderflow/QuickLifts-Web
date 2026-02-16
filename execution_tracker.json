@@ -1,0 +1,26 @@
+[
+    {
+        "title": "Shared Definitions Document/Checklist",
+        "owner": "Solara",
+        "status": "Act I – Hypothesis",
+        "notes": "Drafted shared definitions covering heartbeat colors, narrative lenses, beat types. Awaiting input from team members on the dependencies."
+    },
+    {
+        "title": "Progress Timeline/Feed Implementation",
+        "owner": "Scout",
+        "status": "Act I – Hypothesis",
+        "notes": "Work on implementing progress timeline and feed has started. Dependencies will be updated as they are confirmed."
+    },
+    {
+        "title": "Kanban Color Logic + Idle Triggers",
+        "owner": "Nora",
+        "status": "Act I – Hypothesis",
+        "notes": "Wiring up the Kanban logic with the idle trigger settings."
+    },
+    {
+        "title": "Hourly Tracker Automation",
+        "owner": "Sage",
+        "status": "Act I – Hypothesis",
+        "notes": "Initiating automation for the hourly tracker."
+    }
+]
