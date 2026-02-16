@@ -12,7 +12,7 @@ import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
   ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
   History, ChevronRight, MessageSquare, Archive, X, ListOrdered, Activity, AlertTriangle,
-  BookOpen, ToggleLeft, ToggleRight, Power
+  BookOpen, ToggleLeft, ToggleRight, Power, Calendar
 } from 'lucide-react';
 import { RoundTable } from './RoundTable';
 import { GroupChatModal } from './GroupChatModal';
@@ -21,6 +21,7 @@ import { FilingCabinet } from './FilingCabinet';
 import { AgentChatModal } from './AgentChatModal';
 import { InterventionAlert } from './InterventionAlert';
 import ProgressTimelinePanel from './ProgressTimelinePanel';
+import { StandupConfigPanel } from './StandupConfigPanel';
 import { groupChatService } from '../../api/firebase/groupChat/service';
 import type { GroupChatMessage, GroupChat } from '../../api/firebase/groupChat/types';
 import {
@@ -1804,6 +1805,7 @@ const VirtualOfficeContent: React.FC = () => {
   } | null>(null);
   const [showFilingCabinet, setShowFilingCabinet] = useState(false);
   const [showProgressTimeline, setShowProgressTimeline] = useState(false);
+  const [showStandupConfig, setShowStandupConfig] = useState(false);
   const [chatAgent, setChatAgent] = useState<AgentPresence | null>(null);
   const [showManifesto, setShowManifesto] = useState(false);
   const [manifestoContent, setManifestoContent] = useState<string | null>(null);
@@ -2356,6 +2358,11 @@ const VirtualOfficeContent: React.FC = () => {
               <span>Progress Timeline</span>
             </div>
 
+            <div className="standup-config-btn" onClick={() => setShowStandupConfig(true)}>
+              <Calendar className="w-4 h-4" />
+              <span>Standup Schedule</span>
+            </div>
+
             {allAgents.length === 0 && (
               <div className="empty-office">
                 <div className="empty-icon">🏢</div>
@@ -2447,6 +2454,10 @@ const VirtualOfficeContent: React.FC = () => {
 
         {showProgressTimeline && (
           <ProgressTimelinePanel agents={allAgents} onClose={() => setShowProgressTimeline(false)} />
+        )}
+
+        {showStandupConfig && (
+          <StandupConfigPanel onClose={() => setShowStandupConfig(false)} />
         )}
 
         {/* Manifesto Reader Modal */}
@@ -2722,6 +2733,31 @@ const VirtualOfficeContent: React.FC = () => {
           border-color: rgba(59,130,246,0.4);
           transform: translateY(-1px);
           box-shadow: 0 4px 16px rgba(59,130,246,0.2);
+        }
+        .standup-config-btn {
+          position: absolute;
+          bottom: 16px;
+          left: 180px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 14px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, rgba(139,92,246,0.12), rgba(99,102,241,0.08));
+          border: 1px solid rgba(139,92,246,0.2);
+          color: #a78bfa;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          z-index: 10;
+          backdrop-filter: blur(8px);
+        }
+        .standup-config-btn:hover {
+          background: linear-gradient(135deg, rgba(139,92,246,0.22), rgba(99,102,241,0.14));
+          border-color: rgba(139,92,246,0.35);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(139,92,246,0.15);
         }
 
         .floor-grid {

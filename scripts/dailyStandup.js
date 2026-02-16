@@ -25,14 +25,51 @@ const serviceAccountPath = path.resolve(__dirname, '../serviceAccountKey.json');
 const app = initializeApp({ credential: cert(require(serviceAccountPath)) });
 const db = getFirestore(app);
 
-/* ─── Configuration ──────────────────────────────────── */
+/* ─── Configuration (defaults — overridden by Firestore) ─ */
 
-const AGENTS = ['nora', 'scout', 'solara', 'sage'];
-const MODERATOR = 'nora';
-const MAX_DURATION_MS = 20 * 60 * 1000;   // Hard 20-minute cap
+let AGENTS = ['nora', 'scout', 'solara', 'sage'];
+let MODERATOR = 'nora';
+let MAX_DURATION_MS = 20 * 60 * 1000;   // Hard 20-minute cap
 const ROUND_WAIT_MS = 4 * 60 * 1000;      // Wait up to 4 min for agents to respond per round
 const POLL_INTERVAL_MS = 10_000;           // Check for responses every 10s
 const MAX_ROUNDS = 4;                       // 4 rounds × ~5 min = ~20 min
+
+/**
+ * Load schedule config from Firestore (standup-config/default).
+ * Returns the config object, or null if not found.
+ */
+async function loadConfig() {
+    const snap = await db.doc('standup-config/default').get();
+    if (!snap.exists) return null;
+    return snap.data();
+}
+
+/**
+ * Check if we should run a standup right now based on Firestore config.
+ * Only proceeds if the standup is enabled AND the current time is within
+ * a 30-minute window of the scheduled time.
+ */
+function shouldRunNow(config, type) {
+    if (!config) return true; // No config → run with defaults (backward compat)
+
+    const now = new Date();
+    const estHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours();
+    const estMinute = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })).getMinutes();
+
+    if (type === 'morning') {
+        if (!config.morningEnabled) return false;
+        const targetH = config.morningHour ?? 9;
+        const targetM = config.morningMinute ?? 0;
+        const diffMins = Math.abs((estHour * 60 + estMinute) - (targetH * 60 + targetM));
+        return diffMins <= 30;
+    } else {
+        if (!config.eveningEnabled) return false;
+        const targetH = config.eveningHour ?? 21;
+        const targetM = config.eveningMinute ?? 0;
+        const diffMins = Math.abs((estHour * 60 + estMinute) - (targetH * 60 + targetM));
+        return diffMins <= 30;
+    }
+}
 
 /* ─── Standup Prompts ────────────────────────────────── */
 
@@ -222,6 +259,23 @@ async function setAgentPresenceStatus(agents, status, note) {
 
 async function runStandup() {
     const type = getStandupType();
+
+    // Load config from Firestore and check schedule
+    const config = await loadConfig();
+
+    // Apply config overrides
+    if (config) {
+        if (config.agents && config.agents.length > 0) AGENTS = config.agents;
+        if (config.moderator) MODERATOR = config.moderator;
+        if (config.maxDurationMinutes) MAX_DURATION_MS = config.maxDurationMinutes * 60 * 1000;
+    }
+
+    // Only proceed if this standup is scheduled (unless manually forced via CLI arg)
+    if (!process.argv[2] && !shouldRunNow(config, type)) {
+        console.log(`⏭️  ${type} standup not scheduled for now — exiting.`);
+        process.exit(0);
+    }
+
     const prompts = type === 'morning' ? MORNING_PROMPTS : EVENING_PROMPTS;
     const emoji = type === 'morning' ? '☀️' : '🌙';
     const label = type === 'morning' ? 'Morning Standup' : 'Evening Standup';
