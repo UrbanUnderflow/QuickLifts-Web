@@ -1,0 +1,32 @@
+[
+    {
+        "title": "Create Definitions Document",
+        "description": "Compile a comprehensive definitions document for project terms and jargon.",
+        "assignedTo": "Nora"
+    },
+    {
+        "title": "Develop Feed Taxonomy",
+        "description": "Establish a structured taxonomy for the content feed.",
+        "assignedTo": "Scout"
+    },
+    {
+        "title": "Build Timeline UI",
+        "description": "Design and implement the user interface for the timeline feature.",
+        "assignedTo": "Solara"
+    },
+    {
+        "title": "Implement Kanban Logic",
+        "description": "Develop the logic to manage tasks within the Kanban framework.",
+        "assignedTo": "Sage"
+    },
+    {
+        "title": "Create Hourly Tracker",
+        "description": "Develop a system to track hours worked on tasks.",
+        "assignedTo": "Nora"
+    },
+    {
+        "title": "Create Narrative Lens System",
+        "description": "Build and integrate the narrative lens system for data visualization.",
+        "assignedTo": "Scout"
+    }
+]
