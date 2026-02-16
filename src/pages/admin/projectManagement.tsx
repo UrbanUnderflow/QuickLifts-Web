@@ -1915,7 +1915,7 @@ const ProjectManagement: React.FC = () => {
     });
   }, [tasks, selectedProject, selectedTheme, selectedAssignee]);
 
-  const laneTaskMap = React.useMemo(() => ({
+  const laneTaskMap: Record<KanbanLane, KanbanTask[]> = React.useMemo(() => ({
     signals: filteredTasks.filter(task => (task.lane || 'signals') === 'signals'),
     meanings: filteredTasks.filter(task => task.lane === 'meanings')
   }), [filteredTasks]);
@@ -2127,42 +2127,20 @@ const ProjectManagement: React.FC = () => {
               <div className="text-zinc-400">Loading tasks...</div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Column
-                title="Todo"
-                status="todo"
-                tasks={todoTasks}
-                onTaskEdit={handleEditTask}
-                onTaskDelete={handleDeleteTask}
-                onTaskClick={handleViewTaskDetails}
-                onDragStart={handleDragStart}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-              />
-              
-              <Column
-                title="In Progress"
-                status="in-progress"
-                tasks={inProgressTasks}
-                onTaskEdit={handleEditTask}
-                onTaskDelete={handleDeleteTask}
-                onTaskClick={handleViewTaskDetails}
-                onDragStart={handleDragStart}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-              />
-              
-              <Column
-                title="Done"
-                status="done"
-                tasks={doneTasks}
-                onTaskEdit={handleEditTask}
-                onTaskDelete={handleDeleteTask}
-                onTaskClick={handleViewTaskDetails}
-                onDragStart={handleDragStart}
-                onDrop={handleDrop}
-                onDragOver={handleDragOver}
-              />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {laneColumns.map((lane) => (
+                <LaneColumn
+                  key={lane}
+                  lane={lane}
+                  tasks={laneTaskMap[lane]}
+                  onTaskEdit={handleEditTask}
+                  onTaskDelete={handleDeleteTask}
+                  onTaskClick={handleViewTaskDetails}
+                  onDragStart={handleDragStart}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                />
+              ))}
             </div>
           )}
 
