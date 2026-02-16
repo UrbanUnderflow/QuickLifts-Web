@@ -2313,6 +2313,16 @@ ${smokeOutput}`.substring(0, 2000);
                         /no\s+error/i, /without\s+error/i, /error.?free/i,
                         /0\s+error/i, /fixed.*error/i, /resolved.*error/i,
                         /error.*resolved/i, /error.*fixed/i,
+                        // Conversational AI output guards — the model often DESCRIBES situations
+                        // using words like "blocked" or "unable" without an actual command failure
+                        /already\s+installed/i, /up\s+to\s+date/i,
+                        /no\s+(update|package|label).*available/i,
+                        /not\s+available\s+in\s+(the\s+)?(catalog|list)/i,
+                        /step\s+\d+\s+is\s+blocked\s+because/i,
+                        /is\s+blocked\s+because/i,
+                        /currently\s+blocked/i,
+                        /successfully\s+(installed|completed|updated|configured)/i,
+                        /install\s+(finished|succeeded|completed)/i,
                     ];
                     const hitSignals = FAILURE_SIGNALS.filter(rx => rx.test(outputText));
                     const isFalsePositive = FALSE_POSITIVE_GUARDS.some(rx => rx.test(outputText));
