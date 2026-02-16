@@ -155,6 +155,7 @@ Before marking any task complete:
 - **[2026-02-16] Nora** — Step "Build the progress timeline + nudge log UI component (Twitter-style feed) that renders beat states, color badges, artifacts, and nudge history using the new services." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-16] Nora** — Step "Watch runner logs for multiple heartbeat cycles (>=120s) to ensure heartbeats continue without the prior stall warning; capture timestamps or log excerpts." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-16] Nora** — Step "Watch runner logs for multiple heartbeat cycles (>=120s) to ensure heartbeats continue without the prior stall warning; capture timestamps or log excerpts." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-16] Nora** — Step "Restart the Sage runner using the freshly provisioned config and tail the runner logs to confirm initialization completes without the previous “no activity for 120s” warning." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 ---
 
 ## Operational Rules
