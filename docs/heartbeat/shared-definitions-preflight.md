@@ -1,6 +1,6 @@
 # Heartbeat Operating System — Shared Definitions & Preflight Checklist
 
-_Last updated: 2026-02-16_
+_Last updated: 2026-02-16_ · **Status: Green**
 
 ## 1. Purpose
 This document is the single source of truth for the Heartbeat OS. Every build task must reference these definitions before implementation. Sections are frozen once the owner sets status to `ready_for_review`; Nora flips to `green` after sanity-checking.
