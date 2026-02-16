@@ -14,8 +14,10 @@ Snapshots appear in the “Hourly Snapshots” rail; nudges stream inline in the
 
 ## Command
 ```
-node scripts/hourlyObjectiveTracker.js          # normal run
-node scripts/hourlyObjectiveTracker.js --dry-run
+npm run heartbeat:tracker                       # normal run
+npm run heartbeat:tracker -- --dry-run          # dry run through npm script
+# or call node directly:
+node scripts/hourlyObjectiveTracker.js
 ```
 - `--dry-run` logs intended writes without touching Firestore (handy for local tests).
 - Requires the same Firebase service-account env vars as other admin scripts (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_SECRET_KEY`).
