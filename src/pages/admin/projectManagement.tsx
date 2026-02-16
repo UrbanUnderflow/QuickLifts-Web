@@ -246,6 +246,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
   const [loadingAdminUsers, setLoadingAdminUsers] = useState(false);
   const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
   const [assigneeQuery, setAssigneeQuery] = useState('');
+  const [isLoggingWorkBeat, setIsLoggingWorkBeat] = useState(false);
 
   // Load existing projects and themes when modal opens
   useEffect(() => {
@@ -891,6 +892,32 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
             </>
           ) : (
             /* Edit Mode - similar to the original TaskModal but with more space */
+            <div className="bg-[#262a30] rounded-lg p-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-zinc-400">Lane</span>
+                <span className="px-2 py-1 rounded-full border text-xs">{laneMeta[task.lane || 'signals'].label}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-zinc-400">Color</span>
+                <span className="px-2 py-1 rounded-full border text-xs">{colorMeta[task.color || 'blue'].label}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-zinc-400">Idle Threshold</span>
+                <span className="text-white">{task.idleThresholdMinutes}m</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-zinc-400">Last Work Beat</span>
+                <span className="text-white">{task.lastWorkBeatAt ? `${task.getMinutesSinceWorkBeat()}m ago` : 'Not logged yet'}</span>
+              </div>
+              <button
+                onClick={handleLogWorkBeat}
+                disabled={isLoggingWorkBeat}
+                className="mt-2 text-xs bg-sky-600 px-3 py-1.5 rounded-lg text-white hover:bg-sky-500 disabled:opacity-50"
+              >
+                {isLoggingWorkBeat ? 'Logging…' : 'Log Work Beat'}
+              </button>
+            </div>
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-300 mb-2">
@@ -1067,6 +1094,42 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
                   </select>
                 </div>
               </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+                <label className="block text-sm font-medium text-zinc-300">
+                  Lane
+                  <select
+                    value={formData.lane}
+                    onChange={(e) => setFormData({ ...formData, lane: e.target.value as KanbanLane })}
+                    className="mt-1 w-full px-3 py-2 bg-[#262a30] border border-zinc-600 rounded-lg text-white"
+                  >
+                    {laneOptions.map((lane) => (
+                      <option key={lane.value} value={lane.value}>{lane.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-medium text-zinc-300">
+                  Color
+                  <select
+                    value={formData.color}
+                    onChange={(e) => setFormData({ ...formData, color: e.target.value as KanbanColor })}
+                    className="mt-1 w-full px-3 py-2 bg-[#262a30] border border-zinc-600 rounded-lg text-white"
+                  >
+                    {colorOptions.map((color) => (
+                      <option key={color.value} value={color.value}>{color.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm font-medium text-zinc-300">
+                  Idle Threshold (minutes)
+                  <input
+                    type="number"
+                    min={30}
+                    value={formData.idleThresholdMinutes}
+                    onChange={(e) => setFormData({ ...formData, idleThresholdMinutes: Number(e.target.value) || 0 })}
+                    className="mt-1 w-full px-3 py-2 bg-[#262a30] border border-zinc-600 rounded-lg text-white"
+                  />
+                </label>
+              </div>
             </div>
           )}
         </div>
@@ -1091,6 +1154,9 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
     theme: '',
     assignee: '',
     status: 'todo' as TaskStatus,
+    lane: 'signals' as KanbanLane,
+    color: 'blue' as KanbanColor,
+    idleThresholdMinutes: 120,
     notes: ''
   });
 
@@ -1153,6 +1219,9 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
         theme: task.theme,
         assignee: task.assignee,
         status: task.status,
+        lane: task.lane || 'signals',
+        color: task.color || 'blue',
+        idleThresholdMinutes: task.idleThresholdMinutes ?? 120,
         notes: task.notes || ''
       });
       setAssigneeQuery(task.assignee);
@@ -1164,6 +1233,9 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
         theme: '',
         assignee: '',
         status: 'todo',
+        lane: 'signals',
+        color: 'blue',
+        idleThresholdMinutes: 120,
         notes: ''
       });
       setAssigneeQuery('');
@@ -1490,6 +1562,43 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
             </select>
           </div>
           
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <label className="block text-sm font-medium text-zinc-300">
+              Lane
+              <select
+                value={formData.lane}
+                onChange={(e) => setFormData({ ...formData, lane: e.target.value as KanbanLane })}
+                className="mt-1 w-full px-3 py-2 bg-[#262a30] border border-zinc-600 rounded-lg text-white"
+              >
+                {laneOptions.map((lane) => (
+                  <option key={lane.value} value={lane.value}>{lane.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm font-medium text-zinc-300">
+              Color
+              <select
+                value={formData.color}
+                onChange={(e) => setFormData({ ...formData, color: e.target.value as KanbanColor })}
+                className="mt-1 w-full px-3 py-2 bg-[#262a30] border border-zinc-600 rounded-lg text-white"
+              >
+                {colorOptions.map((color) => (
+                  <option key={color.value} value={color.value}>{color.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm font-medium text-zinc-300">
+              Idle Threshold (minutes)
+              <input
+                type="number"
+                min={30}
+                value={formData.idleThresholdMinutes}
+                onChange={(e) => setFormData({ ...formData, idleThresholdMinutes: Number(e.target.value) || 0 })}
+                className="mt-1 w-full px-3 py-2 bg-[#262a30] border border-zinc-600 rounded-lg text-white"
+              />
+            </label>
+          </div>
+          
           <div className="flex gap-3 pt-4">
             <button
               type="submit"
@@ -1714,6 +1823,9 @@ const ProjectManagement: React.FC = () => {
           theme: taskData.theme,
           assignee: taskData.assignee,
           status: taskData.status,
+          lane: taskData.lane,
+          color: taskData.color,
+          idleThresholdMinutes: taskData.idleThresholdMinutes,
           notes: taskData.notes
         });
       } else {
@@ -1724,6 +1836,9 @@ const ProjectManagement: React.FC = () => {
           theme: taskData.theme!,
           assignee: taskData.assignee!,
           status: taskData.status!,
+          lane: taskData.lane || 'signals',
+          color: taskData.color || 'blue',
+          idleThresholdMinutes: taskData.idleThresholdMinutes ?? 120,
           notes: taskData.notes || '',
           subtasks: []
         });
