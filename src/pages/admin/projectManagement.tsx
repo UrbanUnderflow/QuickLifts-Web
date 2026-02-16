@@ -285,6 +285,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
     actTwo: '',
     actThree: ''
   });
+  const setBeatField = (key: typeof beatTemplateFields[number]['key'], value: string) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+  };
 
   // Subtask management states
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
@@ -1544,7 +1547,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onSave, mo
                   <label className="block text-xs font-semibold text-zinc-400 mb-1">{beat.label}</label>
                   <textarea
                     value={(formData as any)[beat.key] as string}
-                    onChange={(e) => setFormData({ ...formData, [beat.key]: e.target.value })}
+                    onChange={(e) => setBeatField(beat.key, e.target.value)}
                     className="w-full px-3 py-2 bg-[#262a30] border border-zinc-600 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-blue-500 resize-none"
                     placeholder={beat.placeholder}
                     rows={2}
@@ -1770,7 +1773,6 @@ const LaneColumn: React.FC<LaneColumnProps> = ({
     'done': []
   };
   tasks.forEach((task) => {
-    groupedByStatus[task.status] = groupedByStatus[task.status] || [];
     groupedByStatus[task.status].push(task);
   });
 
