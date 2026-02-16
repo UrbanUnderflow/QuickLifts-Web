@@ -989,35 +989,36 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
             </>
           ) : (
             /* Edit Mode - similar to the original TaskModal but with more space */
-            <div className="bg-[#262a30] rounded-lg p-4 space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-zinc-400">Lane</span>
-                <span className="px-2 py-1 rounded-full border text-xs">{laneMeta[task.lane || 'signals'].label}</span>
+            <>
+              <div className="bg-[#262a30] rounded-lg p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-zinc-400">Lane</span>
+                  <span className="px-2 py-1 rounded-full border text-xs">{laneMeta[task.lane || 'signals'].label}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-zinc-400">Color</span>
+                  <span className="px-2 py-1 rounded-full border text-xs">{colorMeta[task.color || 'blue'].label}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-zinc-400">Idle Threshold</span>
+                  <span className="text-white">{task.idleThresholdMinutes}m</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-zinc-400">Last Work Beat</span>
+                  <span className="text-white">{task.lastWorkBeatAt ? `${task.getMinutesSinceWorkBeat()}m ago` : 'Not logged yet'}</span>
+                </div>
+                <button
+                  onClick={handleLogWorkBeat}
+                  disabled={isLoggingWorkBeat}
+                  className="mt-2 text-xs bg-sky-600 px-3 py-1.5 rounded-lg text-white hover:bg-sky-500 disabled:opacity-50"
+                >
+                  {isLoggingWorkBeat ? 'Logging…' : 'Log Work Beat'}
+                </button>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-zinc-400">Color</span>
-                <span className="px-2 py-1 rounded-full border text-xs">{colorMeta[task.color || 'blue'].label}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-zinc-400">Idle Threshold</span>
-                <span className="text-white">{task.idleThresholdMinutes}m</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-zinc-400">Last Work Beat</span>
-                <span className="text-white">{task.lastWorkBeatAt ? `${task.getMinutesSinceWorkBeat()}m ago` : 'Not logged yet'}</span>
-              </div>
-              <button
-                onClick={handleLogWorkBeat}
-                disabled={isLoggingWorkBeat}
-                className="mt-2 text-xs bg-sky-600 px-3 py-1.5 rounded-lg text-white hover:bg-sky-500 disabled:opacity-50"
-              >
-                {isLoggingWorkBeat ? 'Logging…' : 'Log Work Beat'}
-              </button>
-            </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-300 mb-2">
                   Task Name *
                 </label>
                 <input

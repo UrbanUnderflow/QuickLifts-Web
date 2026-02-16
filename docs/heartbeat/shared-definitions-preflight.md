@@ -116,5 +116,8 @@ _Preflight ritual:_
 | 2026-02-16 | Idle trigger matrix | Sage | ✅ | Integrated into automation brief. |
 | 2026-02-16 | Preflight checklist | All | ✅ | Build gate cleared. |
 
+## 10. KanBan Lane Reference
+See `docs/heartbeat/kanban-lane-playbook.md` for the lane-first board, idle thresholds, and objective template rollout. Keep that file updated as automation evolves.
+
 ---
 Next steps: Owners complete their sections, mark `ready_for_review`, and notify Nora in the feed. Once all sections are green, downstream build tasks may proceed.
