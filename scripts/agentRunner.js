@@ -53,22 +53,25 @@ const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || ({ 'nora': 'main', 's
 
 // ── Complexity-based model routing ──
 // Maps complexity scores (1-5) to OpenClaw agent config tiers.
-// Each agent needs 3 configs: <id>-light, <id> (default), <id>-heavy
+// Each agent has 3 configs: <id>-light, <id>-med, <id> (base = heaviest)
+//   light → gpt-4o-mini / claude-haiku-3.5  (trivial: config tweaks, parsing, simple edits)
+//   med   → gpt-4o / claude-sonnet-4.0      (standard: typical feature work, bug fixes)
+//   heavy → gpt-5.1-codex / claude-sonnet-4.5 (complex: architecture, multi-file refactors)
 const MODEL_TIERS = {
-    light: `${OPENCLAW_AGENT_ID}-light`,   // gpt-4o-mini — trivial edits, config tweaks
-    default: OPENCLAW_AGENT_ID,               // current model — standard dev work
-    heavy: `${OPENCLAW_AGENT_ID}-heavy`,    // o4-mini/codex — architecture, complex features
+    light: `${OPENCLAW_AGENT_ID}-light`,   // cheapest — trivial edits, config tweaks
+    med: `${OPENCLAW_AGENT_ID}-med`,     // mid-range — standard dev work
+    heavy: OPENCLAW_AGENT_ID,              // base agent is the powerhouse
 };
 
 function getModelTier(complexity) {
-    if (typeof complexity !== 'number' || complexity <= 0) return 'default';
+    if (typeof complexity !== 'number' || complexity <= 0) return 'med';
     if (complexity <= 2) return 'light';
-    if (complexity <= 4) return 'default';
+    if (complexity <= 4) return 'med';
     return 'heavy';
 }
 
 function getAgentIdForTier(tier) {
-    return MODEL_TIERS[tier] || MODEL_TIERS.default;
+    return MODEL_TIERS[tier] || MODEL_TIERS.med;
 }
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
