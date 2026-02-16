@@ -1,32 +1,21 @@
-import { addDoc, collection, limit, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp
+} from 'firebase/firestore';
 import { db } from '../config';
+import { ConfidenceColor, HourlySnapshotEntry, ProgressTimelineEntry, TimelineStateTag } from './types';
 
-export type ProgressBeat = 'hypothesis' | 'work-in-flight' | 'result' | 'block' | 'signal-spike';
-export type ArtifactType = 'none' | 'text' | 'url';
-export type ConfidenceColor = 'blue' | 'green' | 'yellow' | 'red';
-
-export interface ProgressTimelineEntry {
-  id?: string;
-  agentId: string;
-  agentName: string;
-  emoji?: string;
-  objectiveCode: string;
-  beat: ProgressBeat;
-  headline: string;
-  artifactType?: ArtifactType;
-  artifactText?: string;
-  artifactUrl?: string;
-  lensTag?: string;
-  confidenceColor: ConfidenceColor;
-  stateTag?: 'signals' | 'meanings';
-  createdAt?: Date;
-}
-
-const COLLECTION = 'progress-timeline';
+const TIMELINE_COLLECTION = 'progress-timeline';
+const SNAPSHOT_COLLECTION = 'progress-snapshots';
 
 export const progressTimelineService = {
   async publish(entry: Omit<ProgressTimelineEntry, 'id' | 'createdAt'>) {
-    await addDoc(collection(db, COLLECTION), {
+    await addDoc(collection(db, TIMELINE_COLLECTION), {
       agentId: entry.agentId,
       agentName: entry.agentName,
       emoji: entry.emoji || '⚡️',
@@ -45,7 +34,7 @@ export const progressTimelineService = {
 
   listen(callback: (entries: ProgressTimelineEntry[]) => void, opts?: { limit?: number }) {
     const q = query(
-      collection(db, COLLECTION),
+      collection(db, TIMELINE_COLLECTION),
       orderBy('createdAt', 'desc'),
       limit(opts?.limit ?? 100)
     );
@@ -67,6 +56,47 @@ export const progressTimelineService = {
           lensTag: data.lensTag || '',
           confidenceColor: data.confidenceColor || 'blue',
           stateTag: data.stateTag || 'signals',
+          createdAt: data.createdAt?.toDate?.() || undefined,
+        };
+      });
+      callback(items);
+    });
+  },
+
+  async logHourlySnapshot(entry: Omit<HourlySnapshotEntry, 'id' | 'createdAt'>) {
+    await addDoc(collection(db, SNAPSHOT_COLLECTION), {
+      hourIso: entry.hourIso,
+      agentId: entry.agentId,
+      agentName: entry.agentName,
+      objectiveCode: entry.objectiveCode,
+      beatCompleted: entry.beatCompleted || null,
+      color: entry.color,
+      stateTag: entry.stateTag,
+      note: entry.note || '',
+      createdAt: serverTimestamp(),
+    });
+  },
+
+  listenSnapshots(callback: (entries: HourlySnapshotEntry[]) => void, opts?: { limit?: number }) {
+    const q = query(
+      collection(db, SNAPSHOT_COLLECTION),
+      orderBy('hourIso', 'desc'),
+      limit(opts?.limit ?? 100)
+    );
+
+    return onSnapshot(q, (snap) => {
+      const items: HourlySnapshotEntry[] = snap.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          hourIso: data.hourIso,
+          agentId: data.agentId,
+          agentName: data.agentName,
+          objectiveCode: data.objectiveCode,
+          beatCompleted: data.beatCompleted || undefined,
+          color: (data.color || 'blue') as ConfidenceColor,
+          stateTag: (data.stateTag || 'signals') as TimelineStateTag,
+          note: data.note || '',
           createdAt: data.createdAt?.toDate?.() || undefined,
         };
       });
