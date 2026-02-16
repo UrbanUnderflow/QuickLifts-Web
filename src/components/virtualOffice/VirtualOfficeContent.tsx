@@ -2100,6 +2100,43 @@ const VirtualOfficeContent: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* ── Active Tasks Ticker ── */}
+          {(() => {
+            const activeTasks = allAgents.filter(a => a.status === 'working' && a.currentTask);
+            if (activeTasks.length === 0) return null;
+            const agentColors: Record<string, string> = {
+              nora: '#22c55e', scout: '#f59e0b', solara: '#f43f5e', sage: '#8b5cf6', antigravity: '#6366f1',
+            };
+            return (
+              <div className="active-tasks-ticker">
+                {activeTasks.map(agent => {
+                  const color = agentColors[agent.id] || '#8b5cf6';
+                  const progress = agent.taskProgress || 0;
+                  const stepsTotal = agent.executionSteps?.length || 0;
+                  const stepsDone = agent.executionSteps?.filter((s: any) => s.status === 'completed').length || 0;
+                  return (
+                    <div key={agent.id} className="active-task-item" style={{ borderColor: `${color}30` }}>
+                      <div className="active-task-dot" style={{ background: color, boxShadow: `0 0 6px ${color}80` }} />
+                      <div className="active-task-info">
+                        <span className="active-task-agent" style={{ color }}>{agent.displayName}</span>
+                        <span className="active-task-name">{agent.currentTask}</span>
+                      </div>
+                      <div className="active-task-progress">
+                        <span className="active-task-pct" style={{ color }}>{progress}%</span>
+                        {stepsTotal > 0 && (
+                          <span className="active-task-steps">{stepsDone}/{stepsTotal}</span>
+                        )}
+                      </div>
+                      <div className="active-task-bar">
+                        <div className="active-task-bar-fill" style={{ width: `${progress}%`, background: color }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
 
         {/* ── The Office Floor ── */}
@@ -2329,6 +2366,97 @@ const VirtualOfficeContent: React.FC = () => {
         .stat-dot.working { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,0.5); }
         .stat-dot.idle { background: #f59e0b; box-shadow: 0 0 8px rgba(245,158,11,0.4); }
         .stat-dot.total { background: #3b82f6; box-shadow: 0 0 8px rgba(59,130,246,0.4); }
+
+        /* ── Active Tasks Ticker ── */
+        .active-tasks-ticker {
+          display: flex;
+          gap: 8px;
+          flex: 1;
+          min-width: 0;
+          overflow-x: auto;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+          padding: 2px 0;
+        }
+        .active-tasks-ticker::-webkit-scrollbar { display: none; }
+        .active-task-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: rgba(17,20,23,0.85);
+          border: 1px solid;
+          border-radius: 10px;
+          padding: 8px 12px;
+          backdrop-filter: blur(8px);
+          min-width: 200px;
+          max-width: 320px;
+          position: relative;
+          overflow: hidden;
+          flex-shrink: 0;
+          transition: border-color 0.3s ease;
+        }
+        .active-task-item:hover {
+          background: rgba(24,28,33,0.9);
+        }
+        .active-task-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          flex-shrink: 0;
+          animation: dotPulse 2s infinite;
+        }
+        .active-task-info {
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+          flex: 1;
+          gap: 1px;
+        }
+        .active-task-agent {
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          line-height: 1;
+        }
+        .active-task-name {
+          font-size: 11px;
+          color: #d4d4d8;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.3;
+        }
+        .active-task-progress {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          flex-shrink: 0;
+          gap: 1px;
+        }
+        .active-task-pct {
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1;
+        }
+        .active-task-steps {
+          font-size: 9px;
+          color: #71717a;
+          line-height: 1;
+        }
+        .active-task-bar {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background: rgba(255,255,255,0.04);
+        }
+        .active-task-bar-fill {
+          height: 100%;
+          border-radius: 0 1px 0 0;
+          transition: width 0.5s ease;
+        }
 
         /* ── Office Floor ── */
         .office-floor-container {
