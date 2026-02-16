@@ -161,6 +161,9 @@ Before marking any task complete:
 - **[2026-02-16] Nora** — Step "Add the nudge log “twitter-style” view (inline with the timeline) that records Nora’s hourly prompts, agent responses, and idle alerts for quick scanning." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-16] Nora** — Step "Extend the KanBan board with color-coded columns (Signals/Meanings), idle thresholds, and three-beat objective templates so every card carries lane/color context and last work-beat data." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-16] Nora** — Step "Share the draft with Scout, Solara, and Sage for review (e.g., via feed or PR) and capture their approval comments or edits." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-16] Nora** — Step "Verify the cards appear in the shared work queue and link them to the Progress Timeline so beats/nudges can reference the same IDs." still had issues after 2 retries. Output signals: \bunable to\b. Last output: "It appears that I'm unable to run the `manageKanban.js` script again and cannot perform the linking for the tasks. 
+
+###..."
 ---
 
 ## Operational Rules
