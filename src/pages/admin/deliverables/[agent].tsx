@@ -241,21 +241,36 @@ const AGENT_ARTIFACTS: Record<string, Artifact[]> = {
 /* ────────────────── file content cache ────────────────── */
 
 const fileContentCache: Record<string, string> = {};
+const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/UrbanUnderflow/QuickLifts-Web/main';
 
 async function fetchFileContent(path: string): Promise<string> {
     if (fileContentCache[path]) return fileContentCache[path];
+
+    // Try local API first (works in dev)
     try {
         const res = await fetch(`/api/read-file?path=${encodeURIComponent(path)}`);
         if (res.ok) {
             const data = await res.json();
-            const content = data.content ?? '(file not found)';
+            const content = data.content ?? '';
+            if (content) {
+                fileContentCache[path] = content;
+                return content;
+            }
+        }
+    } catch { /* local API unavailable — try GitHub */ }
+
+    // Fallback: fetch from GitHub raw (works in production)
+    try {
+        const ghUrl = `${GITHUB_RAW_BASE}/${path}`;
+        const res = await fetch(ghUrl);
+        if (res.ok) {
+            const content = await res.text();
             fileContentCache[path] = content;
             return content;
         }
-        return `⚠️ Could not load file.\n\nPath: ${path}`;
-    } catch {
-        return `📂 File path: ${path}\n\nOpen this file in your code editor to view its contents.`;
-    }
+    } catch { /* GitHub unreachable */ }
+
+    return `⚠️ Could not load file.\n\nPath: ${path}`;
 }
 
 /* ──────────── expandable artifact card ──────────── */
@@ -395,52 +410,62 @@ export default function AgentDeliverablesPage() {
         let cancelled = false;
 
         const loadManifest = async () => {
+            let manifest: any = null;
+
+            // Try local API first (works in dev)
             try {
                 const res = await fetch('/api/read-file?path=' + encodeURIComponent(`${meta.deliverableDir}/manifest.json`));
-                if (!res.ok || cancelled) {
-                    if (!cancelled) setAllArtifacts(staticArts);
-                    return;
+                if (res.ok) {
+                    const data = await res.json();
+                    manifest = JSON.parse(data.content);
                 }
-                const data = await res.json();
-                const manifest = JSON.parse(data.content);
-                if (!manifest.deliverables?.length) {
-                    if (!cancelled) setAllArtifacts(staticArts);
-                    return;
-                }
+            } catch { /* local API unavailable */ }
 
-                const dynamicArtifacts: Artifact[] = manifest.deliverables.map((d: any) => ({
-                    id: d.id,
-                    title: d.title,
-                    category: 'deliverable' as ArtifactCategory,
-                    path: `${meta.deliverableDir}/${d.filename}`,
-                    description: d.description,
-                    tags: d.tags ?? [],
-                    emoji: d.emoji ?? '📡',
-                    status: d.status,
-                    completedAt: d.completedAt,
-                    taskRef: d.taskRef,
-                }));
+            // Fallback: GitHub raw (works in production)
+            if (!manifest) {
+                try {
+                    const ghRes = await fetch(`${GITHUB_RAW_BASE}/${meta.deliverableDir}/manifest.json`);
+                    if (ghRes.ok) {
+                        manifest = await ghRes.json();
+                    }
+                } catch { /* GitHub unavailable */ }
+            }
 
-                // For pending-recovery items, check if file actually exists now
-                const verified = await Promise.all(
-                    dynamicArtifacts.map(async (art) => {
-                        if (art.status !== 'pending-recovery') return art;
-                        try {
-                            const check = await fetch(`/api/read-file?path=${encodeURIComponent(art.path)}`);
-                            if (check.ok) return { ...art, status: 'complete' as const };
-                        } catch { /* still pending */ }
-                        return art;
-                    }),
-                );
-
-                if (!cancelled) {
-                    // Deduplicate: dynamic takes precedence over static with same id
-                    const staticIds = new Set(staticArts.map(a => a.id));
-                    const dedupedDynamic = verified.filter(a => !staticIds.has(a.id));
-                    setAllArtifacts([...dedupedDynamic, ...staticArts]);
-                }
-            } catch {
+            if (!manifest?.deliverables?.length || cancelled) {
                 if (!cancelled) setAllArtifacts(staticArts);
+                return;
+            }
+
+            const dynamicArtifacts: Artifact[] = manifest.deliverables.map((d: any) => ({
+                id: d.id,
+                title: d.title,
+                category: 'deliverable' as ArtifactCategory,
+                path: `${meta.deliverableDir}/${d.filename}`,
+                description: d.description,
+                tags: d.tags ?? [],
+                emoji: d.emoji ?? '📡',
+                status: d.status,
+                completedAt: d.completedAt,
+                taskRef: d.taskRef,
+            }));
+
+            // For pending-recovery items, check if file actually exists now
+            const verified = await Promise.all(
+                dynamicArtifacts.map(async (art) => {
+                    if (art.status !== 'pending-recovery') return art;
+                    try {
+                        const check = await fetch(`/api/read-file?path=${encodeURIComponent(art.path)}`);
+                        if (check.ok) return { ...art, status: 'complete' as const };
+                    } catch { /* still pending */ }
+                    return art;
+                }),
+            );
+
+            if (!cancelled) {
+                // Deduplicate: static takes precedence over dynamic with same id
+                const staticIds = new Set(staticArts.map(a => a.id));
+                const dedupedDynamic = verified.filter(a => !staticIds.has(a.id));
+                setAllArtifacts([...dedupedDynamic, ...staticArts]);
             }
         };
 
