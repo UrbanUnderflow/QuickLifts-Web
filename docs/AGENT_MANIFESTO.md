@@ -164,6 +164,7 @@ Before marking any task complete:
 - **[2026-02-16] Nora** — Step "Verify the cards appear in the shared work queue and link them to the Progress Timeline so beats/nudges can reference the same IDs." still had issues after 2 retries. Output signals: \bunable to\b. Last output: "It appears that I'm unable to run the `manageKanban.js` script again and cannot perform the linking for the tasks. 
 
 ###..."
+- **[2026-02-16] Nora** — Step "Tail the runner logs (or `openclaw logs sage`) for at least two heartbeat intervals (~4 minutes) to confirm continuous heartbeat messages with no stall warnings." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 ---
 
 ## Operational Rules
