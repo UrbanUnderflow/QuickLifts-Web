@@ -1,14 +1,41 @@
 {
-  "entries": [
+  "version": 1,
+  "lastUpdated": "2026-02-16T19:50:00Z",
+  "deliverables": [
     {
-      "name": "peptide-research-brief",
-      "status": "complete",
-      "lastUpdated": "2023-10-04T12:00:00Z"
+      "id": "peptide-research-brief",
+      "title": "Peptide Research Brief",
+      "filename": "peptide-research-brief.md",
+      "category": "research-output",
+      "description": "Research brief synthesizing peptide findings into Pulse's brand voice — FDA status, WADA classifications, market analysis, and consumer safety considerations.",
+      "tags": [
+        "peptides",
+        "research",
+        "FDA",
+        "WADA",
+        "brand-voice"
+      ],
+      "emoji": "🧬",
+      "completedAt": "2026-02-10T00:00:00Z",
+      "taskRef": "Sage Task #4 — Draft a research brief synthesizing findings into Pulse's brand voice",
+      "status": "complete"
     },
     {
-      "name": "peptide-whitepaper-outline",
-      "status": "complete",
-      "lastUpdated": "2023-10-04T12:00:00Z"
+      "id": "peptide-whitepaper-outline",
+      "title": "Peptide Whitepaper Outline",
+      "filename": "peptide-whitepaper-outline.md",
+      "category": "research-output",
+      "description": "Proposed outline segment for the peptide whitepaper — structured sections covering science, regulation, market landscape, and Pulse's positioning.",
+      "tags": [
+        "peptides",
+        "whitepaper",
+        "outline",
+        "content-strategy"
+      ],
+      "emoji": "📄",
+      "completedAt": "2026-02-10T00:00:00Z",
+      "taskRef": "Sage Task #5 — Propose an outline segment for the whitepaper",
+      "status": "complete"
     }
   ]
 }

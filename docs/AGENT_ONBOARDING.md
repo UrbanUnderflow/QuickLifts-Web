@@ -259,6 +259,59 @@ Add a section under "Core Identity" introducing the new agent and their role.
 
 ---
 
+## Step 5.5: Set Up Deliverables Directory & Page
+
+Every agent gets a deliverables page at `/admin/deliverables/AGENT_ID` where their research output and documentation is browsable.
+
+### 5.5a. Create the deliverables directory
+
+```bash
+mkdir -p docs/agents/NEW_AGENT_ID/deliverables
+```
+
+Create the manifest file `docs/agents/NEW_AGENT_ID/deliverables/manifest.json`:
+```json
+{
+  "version": 1,
+  "lastUpdated": "YYYY-MM-DDTHH:mm:ssZ",
+  "deliverables": []
+}
+```
+
+### 5.5b. Register in the Deliverables page
+
+**File:** `src/pages/admin/deliverables/[agent].tsx`
+
+Add the new agent to `AGENT_REGISTRY`:
+```typescript
+const AGENT_REGISTRY: Record<string, AgentMeta> = {
+  // ... existing agents ...
+  NEW_AGENT_ID: {
+    displayName: 'DISPLAY_NAME',
+    emoji: 'EMOJI',
+    role: 'ROLE_TITLE',
+    tagline: 'Short tagline describing workflow',
+    color: 'HEX_COLOR',
+    gradient: 'linear-gradient(135deg, DARKER 0%, LIGHTER 100%)',
+    docsDir: 'docs/agents/NEW_AGENT_ID',
+    deliverableDir: 'docs/agents/NEW_AGENT_ID/deliverables',
+  },
+};
+```
+
+Optionally, add static artifacts to `AGENT_ARTIFACTS[NEW_AGENT_ID]` for any existing docs.
+
+### 5.5c. Deliverables Workflow
+
+The agent should follow `.agent/workflows/sage-deliverables.md` after completing tasks:
+1. Save output to `docs/agents/NEW_AGENT_ID/deliverables/<slug>.md`
+2. Update `manifest.json`
+3. `git commit` and `git push`
+
+> The deliverables page is automatically linked from the Virtual Office — clicking "View deliverables" on any agent's hover panel navigates to `/admin/deliverables/AGENT_ID`.
+
+---
+
 ## Step 6: Verify Everything Works
 
 ### 6a. Check the runner is alive
@@ -306,6 +359,8 @@ launchctl kickstart -k gui/$(id -u)/com.quicklifts.agent.solara
 | 8 | `src/components/virtualOffice/MeetingMinutesPreview.tsx` | AGENT_COLORS |
 | 9 | `src/pages/admin/agentChat.tsx` | AGENT_EMOJIS |
 | 10 | `docs/AGENT_MANIFESTO.md` | Team introduction |
+| 11 | `docs/agents/NEW_AGENT_ID/deliverables/manifest.json` | Deliverables manifest |
+| 12 | `src/pages/admin/deliverables/[agent].tsx` | Agent registry + static artifacts |
 
 ---
 

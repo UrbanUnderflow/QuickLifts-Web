@@ -12,12 +12,13 @@ import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
   ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
   History, ChevronRight, MessageSquare, Archive, X, ListOrdered, Activity, AlertTriangle,
-  BookOpen, ToggleLeft, ToggleRight, Power, Calendar
+  BookOpen, ToggleLeft, ToggleRight, Power, Calendar, Package
 } from 'lucide-react';
 import { RoundTable } from './RoundTable';
 import { GroupChatModal } from './GroupChatModal';
 import { MeetingMinutesPreview } from './MeetingMinutesPreview';
 import { FilingCabinet } from './FilingCabinet';
+import { SharedDeliverables } from './SharedDeliverables';
 import { AgentChatModal } from './AgentChatModal';
 import { InterventionAlert } from './InterventionAlert';
 import ProgressTimelinePanel from './ProgressTimelinePanel';
@@ -119,7 +120,7 @@ const normalizeIncomingAgents = (incoming: AgentPresence[]): AgentPresence[] => 
       ...rawAgent,
       id: canonicalId,
       displayName: rawAgent.displayName || AGENT_DISPLAY_NAMES[canonicalId] || canonicalId,
-      emoji: rawAgent.emoji || AGENT_EMOJI_DEFAULTS[canonicalId],
+      emoji: AGENT_EMOJI_DEFAULTS[canonicalId] || rawAgent.emoji || '⚡️',
     };
 
     const candidate = { agent: normalized, canonicalSource: rawAgent.id === canonicalId };
@@ -1441,12 +1442,12 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
               }
             </button>
           </div>
-          {/* Role & duty (clickable → opens profile modal) */}
+          {/* Role & duty (clickable → opens deliverables page) */}
           {(agent.role || AGENT_ROLES[agent.id] || AGENT_DUTIES[agent.id]) && (
             <div
               className="detail-duty clickable"
-              onClick={() => setShowProfile(true)}
-              title="Click to view full profile"
+              onClick={() => router.push(`/admin/deliverables/${agent.id}`)}
+              title="Click to view deliverables & profile"
             >
               {(agent.role || AGENT_ROLES[agent.id]) && (
                 <p className="text-[10px] font-semibold text-indigo-400">{agent.role || AGENT_ROLES[agent.id]}</p>
@@ -1455,7 +1456,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
                 <p className="text-[10px] text-zinc-500 mt-0.5 leading-snug">{AGENT_DUTIES[agent.id]}</p>
               )}
               <p className="text-[9px] text-indigo-500 mt-1 flex items-center gap-1">
-                <ExternalLink className="w-2.5 h-2.5" />View full profile
+                <ExternalLink className="w-2.5 h-2.5" />View deliverables
               </p>
             </div>
           )}
@@ -1806,6 +1807,7 @@ const VirtualOfficeContent: React.FC = () => {
   const [showFilingCabinet, setShowFilingCabinet] = useState(false);
   const [showProgressTimeline, setShowProgressTimeline] = useState(false);
   const [showStandupConfig, setShowStandupConfig] = useState(false);
+  const [showSharedDeliverables, setShowSharedDeliverables] = useState(false);
   const [chatAgent, setChatAgent] = useState<AgentPresence | null>(null);
   const [showManifesto, setShowManifesto] = useState(false);
   const [manifestoContent, setManifestoContent] = useState<string | null>(null);
@@ -1814,6 +1816,39 @@ const VirtualOfficeContent: React.FC = () => {
   // ── Standup detection state ──
   const [activeStandup, setActiveStandup] = useState<GroupChat | null>(null);
   const [isStandupObserving, setIsStandupObserving] = useState(false);
+
+  // ── Restart Agents state ──
+  const [restartingAgents, setRestartingAgents] = useState(false);
+  const [restartResult, setRestartResult] = useState<'success' | 'error' | null>(null);
+
+  const handleRestartAgents = useCallback(async () => {
+    if (restartingAgents) return;
+    setRestartingAgents(true);
+    setRestartResult(null);
+    try {
+      // Send restart command to Nora (she runs launchctl on the Mac Mini)
+      await addDoc(collection(db, 'agent-commands'), {
+        from: 'admin',
+        to: 'nora',
+        type: 'restart-agents',
+        content: 'Restart all agents to pick up latest code changes.',
+        metadata: {
+          agents: ['nora', 'scout', 'solara', 'sage'],
+          source: 'virtual-office-restart-button',
+        },
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      setRestartResult('success');
+      setTimeout(() => setRestartResult(null), 5000);
+    } catch (err) {
+      console.error('Failed to send restart command:', err);
+      setRestartResult('error');
+      setTimeout(() => setRestartResult(null), 5000);
+    } finally {
+      setRestartingAgents(false);
+    }
+  }, [restartingAgents]);
 
   const handleOpenManifesto = useCallback(async () => {
     setShowManifesto(true);
@@ -2230,6 +2265,35 @@ const VirtualOfficeContent: React.FC = () => {
             >
               <RefreshCcw className="w-3.5 h-3.5" /> Refresh
             </button>
+            <button
+              id="restart-agents-btn"
+              onClick={handleRestartAgents}
+              disabled={restartingAgents}
+              title="Send restart command to Nora → restarts all agents on the Mac Mini"
+              className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border transition-all ${restartResult === 'success'
+                  ? 'border-emerald-500/50 text-emerald-300 bg-emerald-900/30'
+                  : restartResult === 'error'
+                    ? 'border-red-500/50 text-red-300 bg-red-900/30'
+                    : 'border-amber-500/30 text-amber-300 hover:bg-amber-900/30 hover:border-amber-400/50'
+                }`}
+            >
+              {restartingAgents ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : restartResult === 'success' ? (
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              ) : restartResult === 'error' ? (
+                <XCircle className="w-3.5 h-3.5" />
+              ) : (
+                <Power className="w-3.5 h-3.5" />
+              )}
+              {restartingAgents
+                ? 'Restarting...'
+                : restartResult === 'success'
+                  ? 'Sent!'
+                  : restartResult === 'error'
+                    ? 'Failed'
+                    : 'Restart Agents'}
+            </button>
           </div>
         </div>
 
@@ -2363,6 +2427,12 @@ const VirtualOfficeContent: React.FC = () => {
               <span>Standup Schedule</span>
             </div>
 
+            {/* Shared Deliverables Button */}
+            <div className="shared-deliverables-btn" onClick={() => setShowSharedDeliverables(true)}>
+              <Package className="w-4 h-4" />
+              <span>Deliverables</span>
+            </div>
+
             {allAgents.length === 0 && (
               <div className="empty-office">
                 <div className="empty-icon">🏢</div>
@@ -2458,6 +2528,11 @@ const VirtualOfficeContent: React.FC = () => {
 
         {showStandupConfig && (
           <StandupConfigPanel onClose={() => setShowStandupConfig(false)} />
+        )}
+
+        {/* Shared Deliverables */}
+        {showSharedDeliverables && (
+          <SharedDeliverables onClose={() => setShowSharedDeliverables(false)} />
         )}
 
         {/* Manifesto Reader Modal */}
@@ -2758,6 +2833,32 @@ const VirtualOfficeContent: React.FC = () => {
           border-color: rgba(139,92,246,0.35);
           transform: translateY(-1px);
           box-shadow: 0 4px 16px rgba(139,92,246,0.15);
+        }
+
+        .shared-deliverables-btn {
+          position: absolute;
+          bottom: 16px;
+          right: 164px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 14px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.08));
+          border: 1px solid rgba(99,102,241,0.15);
+          color: #818cf8;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          z-index: 10;
+          backdrop-filter: blur(8px);
+        }
+        .shared-deliverables-btn:hover {
+          background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.14));
+          border-color: rgba(99,102,241,0.3);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(99,102,241,0.1);
         }
 
         .floor-grid {

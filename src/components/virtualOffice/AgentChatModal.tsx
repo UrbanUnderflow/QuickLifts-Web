@@ -149,7 +149,7 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
                                     onClick={() => setSelectedAgent(agent)}
                                 >
                                     <div className="dm-agent-avatar">
-                                        <span className="dm-avatar-emoji">{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</span>
+                                        <span className="dm-avatar-emoji">{AGENT_EMOJIS[agent.id] || agent.emoji || '🤖'}</span>
                                         <div className="dm-status-dot" style={{ background: statusColor(displayStatus) }} />
                                     </div>
                                     <div className="dm-agent-info">
@@ -668,7 +668,7 @@ const ChatPanel: React.FC<{
                 </button>
                 <div className="dm-chat-agent">
                     <div className="dm-chat-avatar">
-                        <span>{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</span>
+                        <span>{AGENT_EMOJIS[agent.id] || agent.emoji || '🤖'}</span>
                         <div className="dm-chat-dot" style={{ background: statusColor(agentIsOnline ? agent.status : 'offline') }} />
                     </div>
                     <div>
@@ -701,7 +701,7 @@ const ChatPanel: React.FC<{
             <div className="dm-messages" ref={messagesContainerRef} onScroll={handleMessagesScroll}>
                 {messages.length === 0 && (
                     <div className="dm-empty-chat">
-                        <div className="dm-empty-emoji">{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</div>
+                        <div className="dm-empty-emoji">{AGENT_EMOJIS[agent.id] || agent.emoji || '🤖'}</div>
                         <h3>Chat with {agent.displayName}</h3>
                         <p>Send a task, question, or command.</p>
                     </div>
@@ -712,7 +712,7 @@ const ChatPanel: React.FC<{
                         <div key={msg.id} className="dm-msg-group">
                             {isProactive ? (
                                 <div className="dm-msg dm-msg-in">
-                                    <div className="dm-msg-avi">{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</div>
+                                    <div className="dm-msg-avi">{AGENT_EMOJIS[agent.id] || agent.emoji || '🤖'}</div>
                                     <div className="dm-msg-in-wrap">
                                         <div className="dm-bubble dm-bubble-in dm-bubble-proactive"><p>{msg.content}</p></div>
                                         <div className="dm-msg-meta-in">
@@ -732,7 +732,7 @@ const ChatPanel: React.FC<{
                                     </div>
                                     {msg.response && (
                                         <div className="dm-msg dm-msg-in">
-                                            <div className="dm-msg-avi">{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</div>
+                                            <div className="dm-msg-avi">{AGENT_EMOJIS[agent.id] || agent.emoji || '🤖'}</div>
                                             <div className="dm-msg-in-wrap">
                                                 <div className="dm-bubble dm-bubble-in"><p>{msg.response}</p></div>
                                                 <div className="dm-msg-meta-in">
@@ -744,7 +744,7 @@ const ChatPanel: React.FC<{
                                     )}
                                     {!msg.response && msg.status !== 'completed' && (
                                         <div className="dm-msg dm-msg-in">
-                                            <div className="dm-msg-avi">{agent.emoji || AGENT_EMOJIS[agent.id] || '🤖'}</div>
+                                            <div className="dm-msg-avi">{AGENT_EMOJIS[agent.id] || agent.emoji || '🤖'}</div>
                                             <div className="dm-msg-in-wrap">
                                                 <div className="dm-bubble dm-bubble-in dm-bubble-pending">
                                                     <span className="dm-typing">
