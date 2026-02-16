@@ -11,7 +11,7 @@ import { KanbanTask } from '../../api/firebase/kanban/types';
 import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
   ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
-  History, ChevronRight, MessageSquare, Archive, X, ListOrdered, AlertTriangle,
+  History, ChevronRight, MessageSquare, Archive, X, ListOrdered, Activity, AlertTriangle,
   BookOpen, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import { RoundTable } from './RoundTable';
@@ -20,6 +20,7 @@ import { MeetingMinutesPreview } from './MeetingMinutesPreview';
 import { FilingCabinet } from './FilingCabinet';
 import { AgentChatModal } from './AgentChatModal';
 import { InterventionAlert } from './InterventionAlert';
+import ProgressTimelinePanel from './ProgressTimelinePanel';
 import { groupChatService } from '../../api/firebase/groupChat/service';
 import type { GroupChatMessage } from '../../api/firebase/groupChat/types';
 import {
@@ -1752,6 +1753,7 @@ const VirtualOfficeContent: React.FC = () => {
     chatId: string; messages: GroupChatMessage[]; participants: string[]; duration: string;
   } | null>(null);
   const [showFilingCabinet, setShowFilingCabinet] = useState(false);
+  const [showProgressTimeline, setShowProgressTimeline] = useState(false);
   const [chatAgent, setChatAgent] = useState<AgentPresence | null>(null);
   const [showManifesto, setShowManifesto] = useState(false);
   const [manifestoContent, setManifestoContent] = useState<string | null>(null);
@@ -2159,6 +2161,11 @@ const VirtualOfficeContent: React.FC = () => {
               <span>Filing Cabinet</span>
             </div>
 
+            <div className="progress-timeline-btn" onClick={() => setShowProgressTimeline(true)}>
+              <Activity className="w-4 h-4" />
+              <span>Progress Timeline</span>
+            </div>
+
             {allAgents.length === 0 && (
               <div className="empty-office">
                 <div className="empty-icon">🏢</div>
@@ -2246,6 +2253,10 @@ const VirtualOfficeContent: React.FC = () => {
         {/* Filing Cabinet */}
         {showFilingCabinet && (
           <FilingCabinet onClose={() => setShowFilingCabinet(false)} />
+        )}
+
+        {showProgressTimeline && (
+          <ProgressTimelinePanel agents={allAgents} onClose={() => setShowProgressTimeline(false)} />
         )}
 
         {/* Manifesto Reader Modal */}
@@ -2496,6 +2507,31 @@ const VirtualOfficeContent: React.FC = () => {
           border-color: rgba(245,158,11,0.3);
           transform: translateY(-1px);
           box-shadow: 0 4px 16px rgba(245,158,11,0.1);
+        }
+        .progress-timeline-btn {
+          position: absolute;
+          bottom: 16px;
+          left: 16px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 14px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(96,165,250,0.08));
+          border: 1px solid rgba(59,130,246,0.25);
+          color: #60a5fa;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          z-index: 10;
+          backdrop-filter: blur(8px);
+        }
+        .progress-timeline-btn:hover {
+          background: linear-gradient(135deg, rgba(59,130,246,0.25), rgba(96,165,250,0.16));
+          border-color: rgba(59,130,246,0.4);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(59,130,246,0.2);
         }
 
         .floor-grid {

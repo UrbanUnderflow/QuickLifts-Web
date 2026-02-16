@@ -2,13 +2,49 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { kanbanService } from '../../api/firebase/kanban/service';
-import { KanbanTask } from '../../api/firebase/kanban/types';
+import { KanbanTask, KanbanLane, KanbanColor } from '../../api/firebase/kanban/types';
 import { Plus, Edit, Trash2, Calendar, User, Tag, GripVertical, Clock, Filter, CheckSquare, Square, X } from 'lucide-react';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { adminMethods } from '../../api/firebase/admin/methods';
 
 type TaskStatus = 'todo' | 'in-progress' | 'done';
+
+const laneMeta: Record<KanbanLane, { label: string; subtitle: string; bg: string; text: string; border: string }> = {
+  signals: {
+    label: 'Signals',
+    subtitle: 'Listening Mode',
+    bg: 'bg-sky-800/20',
+    text: 'text-sky-200',
+    border: 'border-sky-500/30'
+  },
+  meanings: {
+    label: 'Meanings',
+    subtitle: 'Story Mode',
+    bg: 'bg-orange-800/20',
+    text: 'text-orange-100',
+    border: 'border-orange-500/30'
+  }
+};
+
+const colorMeta: Record<KanbanColor, { label: string; classes: string }> = {
+  blue: { label: 'Blue • Listening', classes: 'bg-sky-500/15 border-sky-500/40 text-sky-200' },
+  green: { label: 'Green • Momentum', classes: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200' },
+  yellow: { label: 'Yellow • Friction', classes: 'bg-amber-500/15 border-amber-500/40 text-amber-100' },
+  red: { label: 'Red • Hot', classes: 'bg-red-500/15 border-red-500/40 text-red-100' }
+};
+
+const laneOptions: { value: KanbanLane; label: string }[] = [
+  { value: 'signals', label: 'Signals (Listening Mode)' },
+  { value: 'meanings', label: 'Meanings (Story Mode)' }
+];
+
+const colorOptions: { value: KanbanColor; label: string }[] = [
+  { value: 'blue', label: 'Blue · Listening' },
+  { value: 'green', label: 'Green · Momentum' },
+  { value: 'yellow', label: 'Yellow · Friction' },
+  { value: 'red', label: 'Red · Hot' }
+];
 
 type AdminUser = {
   id: string;
@@ -34,12 +70,23 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onDragStart
     }).format(date);
   };
 
+  const minutesSinceBeat = task.getMinutesSinceWorkBeat();
+  const idleAlert = task.getNeedsIdleAlert();
+  const lastBeatDisplay = task.lastWorkBeatAt
+    ? `${minutesSinceBeat}m since work beat`
+    : 'No work beat logged yet';
+
+  const laneInfo = laneMeta[task.lane || 'signals'];
+  const colorInfo = colorMeta[task.color || 'blue'];
+
   return (
     <div
       draggable
       onDragStart={(e) => onDragStart(e, task)}
       onClick={() => onClick(task)}
-      className="bg-[#1a1e24] border border-zinc-700 rounded-lg p-4 mb-3 cursor-pointer hover:border-zinc-600 transition-colors group"
+      className={`bg-[#1a1e24] border rounded-lg p-4 mb-3 cursor-pointer hover:border-zinc-500 transition-colors group ${
+        idleAlert ? 'border-red-500/70 shadow-[0_0_12px_rgba(239,68,68,0.35)]' : 'border-zinc-700'
+      }`}
     >
       <div className="flex items-start justify-between mb-2">
         <h4 className="text-white font-medium text-sm leading-5 flex-1 mr-2">{task.name}</h4>
@@ -67,7 +114,26 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onDragStart
           <GripVertical className="w-3 h-3 text-zinc-600" />
         </div>
       </div>
-      
+
+      <div className="flex flex-wrap gap-2 mb-3 text-[11px]">
+        <span className={`px-2 py-1 rounded-full border ${laneInfo.bg} ${laneInfo.text} ${laneInfo.border}`}>
+          {laneInfo.label} · {laneInfo.subtitle}
+        </span>
+        <span className={`px-2 py-1 rounded-full border ${colorInfo.classes}`}>
+          {colorInfo.label}
+        </span>
+        <span className="px-2 py-1 rounded-full border border-zinc-600 text-zinc-300">
+          Status: {task.status.replace('-', ' ')}
+        </span>
+      </div>
+
+      {idleAlert && (
+        <div className="bg-red-500/15 border border-red-500/40 text-red-100 text-xs rounded-md px-3 py-2 mb-3 flex items-center gap-2">
+          <Clock className="w-3 h-3" />
+          <span>Idle threshold exceeded · {minutesSinceBeat}m since last work beat</span>
+        </div>
+      )}
+
       {task.description && (
         <p className="text-zinc-400 text-xs mb-3 line-clamp-2">{task.description}</p>
       )}
@@ -126,6 +192,10 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onDragStart
           <Calendar className="w-3 h-3" />
           <span>{formatDate(task.createdAt)}</span>
         </div>
+        <div className="flex items-center gap-1 text-xs text-zinc-400">
+          <Clock className="w-3 h-3" />
+          <span>{lastBeatDisplay}</span>
+        </div>
       </div>
     </div>
   );
@@ -149,6 +219,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
     theme: '',
     assignee: '',
     status: 'todo' as TaskStatus,
+    lane: 'signals' as KanbanLane,
+    color: 'blue' as KanbanColor,
+    idleThresholdMinutes: 120,
     notes: ''
   });
 
@@ -213,6 +286,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, isOpen, onClose
         theme: task.theme,
         assignee: task.assignee,
         status: task.status,
+        lane: task.lane || 'signals',
+        color: task.color || 'blue',
+        idleThresholdMinutes: task.idleThresholdMinutes ?? 120,
         notes: task.notes || ''
       });
       setAssigneeQuery(task.assignee);
