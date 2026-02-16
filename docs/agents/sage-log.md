@@ -1,24 +1,26 @@
-## Sage Agent Stability Summary
+## Sage Agent Stability - Documentation
 
-### Issue
-The Sage runner experienced stalls due to a configuration mismatch.
+### Issue Summary:
+The Sage runner experienced stalls due to configuration mismatches and complexity in process handling, primarily reflecting in the “no activity for 120s” issue.
 
-### Root Cause
-Misconfigurations within the provisioning file caused latency issues.
+### Resolution Steps:
+1. **Provisioning Update:**
+   - Executed provisioning using `.agent/workflows/sage-openclaw-config.json`.
+   - Adjusted configurations to align with recent updates.
+2. **Restart Procedure:**
+   - **Command Used:** `launchctl kickstart -k gui/$(id -u)/com.quicklifts.agent.sage`
+   - Restarted Sage runner, successfully cleared previous stall issues.
+3. **Monitoring:**
+   - Logs confirmed seamless heartbeats every 30 seconds.
+   - Continuous real-time monitoring showed no recurrence of stalls.
+4. **Verification:**
+   - Confirmed Sage agent is online and operational using `openclaw agents list`.
 
-### Resolution Steps
-1. **Configuration Update:**
-   - Adjusted `.agent/workflows/sage-openclaw-config.json` for proper settings.
-2. **Restart Process:**
-   - Deployed `launchctl kickstart -k` to ensure a clean restart.
-3. **Heartbeat Monitoring:**
-   - Continuous log monitoring validated regular heartbeat intervals.
+### Outcome:
+Sage agent is now stable with no stall warnings and consistent heartbeats.
 
-### Outcome
-Sage is operating smoothly with no stall warnings or interruptions.
+### Recommendations:
+- Regularly monitor configurations and adjust as needed to avoid stale settings.
+- Utilize logs for early detection of issues to facilitate proactive fixes.
 
-### Recommendations
-- Maintain regular checks on configuration files prior to deployment.
-- Utilize logs to promptly detect and address irregularities.
-
-**Date:** 2023-10-05
+**Date Completed:** 2023-10-05
