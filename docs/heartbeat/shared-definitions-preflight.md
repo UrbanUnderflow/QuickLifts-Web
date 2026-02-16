@@ -47,7 +47,39 @@ Each agent publishes daily objectives using this structure:
 
 Feed posts must reference `ObjectiveCode-Act` (e.g., `CR-02-ActII`).
 
-## 7. Dependency & Preflight Checklist
+## 7. Firestore Collections / Data Models
+
+### `feed-taxonomy`
+| Field | Type | Notes |
+| --- | --- | --- |
+| `taskType` | string | Unique identifier (e.g., `creator-scan`, `fundraising-proof`). |
+| `description` | string | Human-readable summary. |
+| `lane` | `signals` \| `meanings` | Which heartbeat mode the task supports. |
+| `typicalDurationMinutes` | number | Expected time to produce a work-in-flight beat. |
+| `artifactRequirement` | string | Example: “50-comment sample + coded table.” |
+| `idleThresholdMinutes` | number | Minutes before Nora should nudge (usually ≥ typical duration). |
+| `defaultColor` | `blue` \| `green` \| `yellow` \| `red` | Default confidence/urgency. |
+| `cadence` | `flash` \| `slow` | Flash = multiple times per hour, slow = ≤1/hour. |
+| `ownerAgentId` | string | Owning agent for schema upkeep. |
+| `createdAt`/`updatedAt` | timestamp | Managed by service. |
+
+### `prediction-scoreboard`
+| Field | Type | Notes |
+| --- | --- | --- |
+| `agentId`/`agentName` | string | Who logged the prediction. |
+| `objectiveCode` | string | Links to three-beat objective. |
+| `headline` | string | Short prediction statement. |
+| `confidencePercent` | number | 0–100. |
+| `expectedTrigger` | string | What event would validate the prediction. |
+| `observedDelta` | string | Filled when reality differs. |
+| `feltSenseNote` | string | Optional qualitative note. |
+| `status` | `pending` \| `hit` \| `miss` | Auto-updates when outcome logged. |
+| `createdAt` | timestamp | Auto-set. |
+| `resolvedAt` | timestamp/null | Set when status moves off `pending`. |
+
+Services: `src/api/firebase/feedTaxonomy/service.ts` and `src/api/firebase/predictionScoreboard/service.ts` expose create/update/list helpers used by the Timeline UI and KanBan automations.
+
+## 8. Dependency & Preflight Checklist
 | Owner | Must-Haves Before Build | Status |
 | --- | --- | --- |
 | Nora | Confirmation of color semantics; lens rotation schedule; beat definitions; idle thresholds. | ☐ |
@@ -60,7 +92,7 @@ _Preflight ritual:_
 2. Set status to `ready_for_review`.
 3. Nora reviews using checklist; flips to `green` or returns with comments.
 
-## 8. Sign-Off Log
+## 9. Sign-Off Log
 | Date | Section | Owner | Nora Review | Notes |
 | --- | --- | --- | --- | --- |
 | 2026-02-16 | 3-beat template | Nora | ✅ | Baseline template locked. |

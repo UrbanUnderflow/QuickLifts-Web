@@ -1733,6 +1733,50 @@ async function markTaskFailed(taskId, failureMessage) {
     });
 }
 
+/**
+ * After a successful task completion, unblock any previously-blocked tasks
+ * so they re-enter the queue automatically (no manual resetBlockedTasks.js needed).
+ */
+async function unblockTasks() {
+    try {
+        const blockedSnap = await db.collection(KANBAN_COLLECTION)
+            .where('assignee', '==', AGENT_NAME)
+            .where('runnerBlocked', '==', true)
+            .get();
+
+        if (blockedSnap.empty) return 0;
+
+        let count = 0;
+        for (const doc of blockedSnap.docs) {
+            const data = doc.data();
+            // Skip tasks that failed very recently (within 2 minutes) to avoid immediate retry loops
+            const failedAt = data.runnerFailureAt?.toDate?.();
+            if (failedAt && (Date.now() - failedAt.getTime()) < 120_000) {
+                console.log(`   ⏳ Skipping recently-failed task: "${data.name}" (failed ${Math.round((Date.now() - failedAt.getTime()) / 1000)}s ago)`);
+                continue;
+            }
+
+            await db.collection(KANBAN_COLLECTION).doc(doc.id).update({
+                runnerBlocked: FieldValue.delete(),
+                runnerFailureAt: FieldValue.delete(),
+                runnerFailureMessage: FieldValue.delete(),
+                status: 'todo',
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+            console.log(`   🔓 Unblocked task: "${data.name}" (${doc.id})`);
+            count++;
+        }
+
+        if (count > 0) {
+            console.log(`🔓 Auto-unblocked ${count} previously-blocked task(s) — they'll be picked up next cycle`);
+        }
+        return count;
+    } catch (err) {
+        console.warn(`⚠️ Failed to unblock tasks: ${err.message}`);
+        return 0;
+    }
+}
+
 /* ─── Email Response Generation ───────────────────────── */
 
 async function generateEmailResponse(emailBody, metadata) {
@@ -2800,6 +2844,10 @@ async function run() {
                     : `\n🎉 Task completed: ${task.name}`);
                 await saveTaskHistory(task.name, task.id, steps, finalStatus, taskStartTime);
                 await markTaskDone(task.id);
+
+                // Auto-unblock any previously-blocked tasks so they re-enter the queue
+                await unblockTasks();
+
                 await setStatus('idle', {
                     currentTask: '',
                     currentTaskId: '',
