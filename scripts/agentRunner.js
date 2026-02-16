@@ -147,8 +147,25 @@ function appendLessonLearned(lesson) {
     }
 }
 
-// Load manifesto once at startup (will be refreshed each task cycle if needed)
+/* ─── Codebase Map (structural navigation for agents) ── */
+
+function loadCodebaseMap() {
+    const mapPath = path.join(projectDir, 'docs', 'CODEBASE_MAP.md');
+    try {
+        if (fs.existsSync(mapPath)) {
+            const content = fs.readFileSync(mapPath, 'utf-8');
+            console.log(`📍 Codebase map loaded (${content.length} chars)`);
+            return content;
+        }
+    } catch (err) {
+        console.log(`📍 Could not load codebase map: ${err.message}`);
+    }
+    return null;
+}
+
+// Load manifesto and codebase map once at startup (will be refreshed each task cycle if needed)
 let cachedManifesto = loadManifesto();
+let cachedCodebaseMap = loadCodebaseMap();
 
 const SERVICE_ACCOUNT = {
     type: "service_account",
@@ -2105,9 +2122,13 @@ ${smokeOutput}`.substring(0, 2000);
 
                 // Helper: build prompt for a given attempt
                 const buildPrompt = async (attempt, previousOutput) => {
+                    // Refresh codebase map each task cycle (may have been updated by other agents)
+                    if (attempt === 0) cachedCodebaseMap = loadCodebaseMap();
+
                     const base = [
                         `You are ${AGENT_NAME}, an AI engineer working on the Pulse Fitness project.`,
                         `Project directory: ${projectDir}`,
+                        cachedCodebaseMap ? `\n=== CODEBASE MAP (use this to find files — do NOT guess paths) ===\n${cachedCodebaseMap}\n=== END CODEBASE MAP ===\n` : '',
                         `TASK: "${task.name}"`,
                         task.description ? `Description: ${task.description}` : '',
                         task.notes ? `Notes: ${task.notes}` : '',
@@ -2159,7 +2180,7 @@ ${smokeOutput}`.substring(0, 2000);
                             rootCauseDiagnosis = `Code or config syntax error. Read the error message carefully, open the file, find the exact line, and fix it.`;
                         } else if (/ENOENT|no such file|file not found/i.test(prevOut)) {
                             errorCategory = 'FILE_NOT_FOUND';
-                            rootCauseDiagnosis = `A file or path doesn't exist. Run 'ls' or 'find' to discover the correct path. Don't guess — verify.`;
+                            rootCauseDiagnosis = `A file or path doesn't exist. BEFORE retrying: (1) Check the CODEBASE MAP above for the correct path — it maps every feature to its actual files. (2) If the file isn't in the map, run 'find src/ -name "*keyword*" -type f' to locate it. (3) NEVER guess paths — always verify with ls or find first.`;
                         }
 
                         base.push(
