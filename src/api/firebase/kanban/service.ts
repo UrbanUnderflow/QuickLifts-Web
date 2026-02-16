@@ -13,7 +13,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../config';
-import { KanbanTask, KanbanTaskData, Subtask } from './types';
+import { KanbanTask, KanbanTaskData, Subtask, KanbanLane } from './types';
 import { adminMethods } from '../admin/methods';
 
 class KanbanService {
@@ -38,6 +38,10 @@ class KanbanService {
       const task = new KanbanTask({
         id: taskRef.id,
         ...taskData,
+        lane: taskData.lane || 'signals',
+        color: taskData.color || 'blue',
+        idleThresholdMinutes: typeof taskData.idleThresholdMinutes === 'number' ? taskData.idleThresholdMinutes : 120,
+        lastWorkBeatAt: taskData.lastWorkBeatAt || now,
         createdAt: now,
         updatedAt: now
       });
@@ -110,6 +114,14 @@ class KanbanService {
       console.error('Error updating kanban task:', error);
       throw error;
     }
+  }
+
+  async updateTaskLane(taskId: string, lane: KanbanLane): Promise<void> {
+    return this.updateTask(taskId, { lane });
+  }
+
+  async logWorkBeat(taskId: string): Promise<void> {
+    return this.updateTask(taskId, { lastWorkBeatAt: new Date() });
   }
 
   /**
