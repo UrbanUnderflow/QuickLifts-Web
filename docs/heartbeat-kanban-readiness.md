@@ -15,8 +15,8 @@
 ---
 
 ## Alignment Note (posted to team log)
-> **Heartbeat OS Ready for Build — 2026-02-16 13:05 UTC**  
-> All three heartbeat OS tickets (HB-01/02/03) are live on the KanBan board with owners, objectives, deliverables, and start criteria linked back to the docs folder. Scout, Solara, Nora, and Sage acknowledged their lanes, and dependencies (emotional states → vibe cadence → color logic) are captured in `heartbeat-lane-objectives.md`. We are cleared to proceed into build once the preflight checklist items toggle green.
+> **Heartbeat OS Ready for Build — 2026-02-16 13:20 UTC**  
+> All three heartbeat OS tickets (HB-01/02/03) are live on the KanBan board with owners, objectives, deliverables, and start criteria linked back to the docs folder. Preflight gating artifacts are now published: `docs/heartbeat-preflight-checklist.md` and `docs/heartbeat-dependency-log.md` are linked inside each ticket’s description under “Preflight.” Scout, Solara, Nora, and Sage acknowledged their lanes, and dependencies (emotional states → vibe cadence → color logic) are captured in `heartbeat-lane-objectives.md`. We are cleared to proceed into build once the checklist rows flip to ✅.
 
 ---
 
