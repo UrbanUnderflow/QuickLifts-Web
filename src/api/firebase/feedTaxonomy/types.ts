@@ -1,4 +1,4 @@
-import { ConfidenceColor } from '../progressTimeline/service';
+import { ConfidenceColor } from '../progressTimeline/types';
 import { KanbanLane } from '../kanban/types';
 
 export interface FeedTaxonomyEntry {
