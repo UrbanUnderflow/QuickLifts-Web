@@ -165,6 +165,7 @@ Before marking any task complete:
 
 ###..."
 - **[2026-02-16] Nora** — Step "Tail the runner logs (or `openclaw logs sage`) for at least two heartbeat intervals (~4 minutes) to confirm continuous heartbeat messages with no stall warnings." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-16] Nora** — Step "Implement the hourly objective tracker automation: read KanBan metadata, post beat snapshots to the timeline, write nudge entries, and trigger idle escalations; then document the workflow in `docs/heartbeat`." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 ---
 
 ## Operational Rules
