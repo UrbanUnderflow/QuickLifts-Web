@@ -160,6 +160,9 @@ const AGENT_ARTIFACTS: Record<string, Artifact[]> = {
         { id: 'sage-profile-vo', title: 'Virtual Office Profile Notes', category: 'profile', path: 'docs/sage/profile.md', description: 'How Sage renders in the Virtual Office — presence card, SAGE_PRESENCE fallback.', tags: ['virtual-office', 'ui'], emoji: '🖥️' },
         { id: 'presence-card-structure', title: 'Presence Card Structure', category: 'profile', path: 'docs/sage/presence-card-structure.md', description: "Layout sections, styling, and Firestore data requirements for Sage's hover panel.", tags: ['presence-card', 'layout'], emoji: '🃏' },
         { id: 'intel-feed', title: 'Intel Feed Integration', category: 'research', path: 'docs/agents/sage-intel-feed.md', description: 'How Sage publishes research drops to the intel-feed Firestore collection.', tags: ['intel-feed', 'firestore', 'api'], emoji: '📡' },
+        // ─── Research Deliverables (peptides) ───
+        { id: 'peptide-research-brief', title: 'Peptide Research Brief', category: 'deliverable', path: 'docs/sage/deliverables/peptide-research-brief.md', description: "Research brief synthesizing peptide findings into Pulse's brand voice — FDA status, WADA classifications, market analysis, and consumer safety considerations.", tags: ['peptides', 'research', 'FDA', 'WADA', 'brand-voice'], emoji: '🧬' },
+        { id: 'peptide-whitepaper-outline', title: 'Peptide Whitepaper Outline', category: 'deliverable', path: 'docs/sage/deliverables/peptide-whitepaper-outline.md', description: "Proposed outline segment for the peptide whitepaper — structured sections covering science, regulation, market landscape, and Pulse's positioning.", tags: ['peptides', 'whitepaper', 'outline', 'content-strategy'], emoji: '📄' },
         { id: 'integration-checklist', title: 'Integration Verification Checklist', category: 'integration', path: 'docs/testing/sage-integration-checklist.md', description: 'UI presence, OpenClaw runner, and intel feed verification steps.', tags: ['testing', 'checklist'], emoji: '✅' },
         { id: 'virtual-office-verification', title: 'Virtual Office Verification Report', category: 'integration', path: 'docs/testing/sage-virtual-office-verification.md', description: 'Full rendering pass, intel feed confirmation, and Firestore presence check.', tags: ['verification', 'debugging'], emoji: '🔍' },
         { id: 'config-status', title: 'Configuration Status Report', category: 'analysis', path: '.agent/analysis/sage-configuration-status.md', description: 'Comprehensive comparison of requested vs. actual Sage configuration.', tags: ['status', 'comparison'], emoji: '📊' },
@@ -431,7 +434,10 @@ export default function AgentDeliverablesPage() {
                 );
 
                 if (!cancelled) {
-                    setAllArtifacts([...verified, ...staticArts]);
+                    // Deduplicate: dynamic takes precedence over static with same id
+                    const staticIds = new Set(staticArts.map(a => a.id));
+                    const dedupedDynamic = verified.filter(a => !staticIds.has(a.id));
+                    setAllArtifacts([...dedupedDynamic, ...staticArts]);
                 }
             } catch {
                 if (!cancelled) setAllArtifacts(staticArts);
