@@ -581,6 +581,83 @@ async function saveTaskHistory(taskName, taskId, steps, status, startedAt) {
     console.log(`📜 Task history saved: ${taskName} (${status}, ${formatMs(totalDurationMs)})`);
 }
 
+/* ─── Deliverable Recording ──────────────────────────── */
+
+/**
+ * Record deliverables produced by a task into the `agent-deliverables` Firestore
+ * collection so the PulseCommand deliverables tray can display them.
+ */
+async function recordDeliverables(task, steps) {
+    const allFiles = [...new Set(steps.flatMap(s => s.filesChanged || []))];
+    if (allFiles.length === 0) return [];
+
+    const deliverables = [];
+    const batch = db.batch();
+
+    for (const filePath of allFiles) {
+        // Determine artifact type from file extension
+        const ext = (filePath.split('.').pop() || '').toLowerCase();
+        let artifactType = 'document';
+        if (['js', 'ts', 'tsx', 'jsx', 'swift', 'py', 'rb', 'go', 'rs', 'java', 'kt', 'css', 'scss', 'html'].includes(ext)) {
+            artifactType = 'code';
+        } else if (['test', 'spec'].some(t => filePath.toLowerCase().includes(t))) {
+            artifactType = 'test';
+        } else if (['json', 'yaml', 'yml', 'toml', 'plist', 'env', 'config'].includes(ext)) {
+            artifactType = 'config';
+        }
+
+        // Use basename for title
+        const basename = filePath.split('/').pop() || filePath;
+
+        const ref = db.collection('agent-deliverables').doc();
+        const deliverable = {
+            title: basename,
+            description: `Changed during task: ${task.name}`,
+            agentId: AGENT_ID,
+            agentName: AGENT_NAME,
+            taskId: task.id,
+            taskName: task.name,
+            artifactType,
+            filePath: filePath,
+            status: 'pending',
+            createdAt: FieldValue.serverTimestamp(),
+        };
+        batch.set(ref, deliverable);
+        deliverables.push({ id: ref.id, ...deliverable });
+    }
+
+    try {
+        await batch.commit();
+        console.log(`📦 Recorded ${deliverables.length} deliverables for task: ${task.name}`);
+    } catch (err) {
+        console.error(`❌ Failed to record deliverables:`, err.message);
+    }
+
+    return deliverables;
+}
+
+/**
+ * Check if the task produced substantive file changes (not just markdown docs about docs).
+ * Returns true if the task has verifiable artifacts.
+ */
+function hasVerifiableArtifacts(steps) {
+    const allFiles = [...new Set(steps.flatMap(s => s.filesChanged || []))];
+    if (allFiles.length === 0) return false;
+
+    // Filter out meta-documents (summaries, action items, notifications)
+    const META_PATTERNS = [
+        /summary/i, /action.?items/i, /notification/i, /checklist/i,
+        /preflight/i, /meeting.?minutes/i, /team.?notification/i,
+    ];
+
+    const substantiveFiles = allFiles.filter(f => {
+        const basename = (f.split('/').pop() || '').toLowerCase();
+        return !META_PATTERNS.some(rx => rx.test(basename));
+    });
+
+    return substantiveFiles.length > 0;
+}
+
 /* ─── Agent-to-Agent Messaging ────────────────────────── */
 
 /**
@@ -2839,11 +2916,42 @@ async function run() {
                     console.log(`\n✅ VALIDATION PASSED: ${validation.reason}`);
                 }
 
+                // ─── Verifiable artifact gate ──────────────────
+                // Tasks that produce no real file changes get flagged
+                const hasArtifacts = hasVerifiableArtifacts(steps);
+                if (!hasArtifacts && !hasIssues) {
+                    console.log(`\n⚠️  NO VERIFIABLE ARTIFACTS — task produced no substantive file changes`);
+                    await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
+                    await db.collection(KANBAN_COLLECTION).doc(task.id).update({
+                        status: 'needs-review',
+                        reviewReason: 'Task completed all steps but produced no verifiable file artifacts (code, config, tests). Only meta-documents were generated.',
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+                    await sendProactiveMessage(
+                        `⚠️ Task "${task.name}" completed all steps but produced NO verifiable artifacts.\n\n` +
+                        `No new code, configs, or tests were created — only documentation/summaries.\n` +
+                        `Task has been flagged as needs-review instead of done.\n\n` +
+                        `Please review and either approve or reassign with clearer deliverable requirements.`,
+                        'needs-review'
+                    );
+                    await setStatus('idle', {
+                        currentTask: '',
+                        currentTaskId: '',
+                        notes: `⚠️ Needs review (no artifacts): ${task.name}`,
+                        taskProgress: 0,
+                    });
+                    await new Promise(r => setTimeout(r, 5_000));
+                    continue;
+                }
+
                 console.log(hasIssues
                     ? `\n⚠️  Task completed with issues: ${task.name}`
                     : `\n🎉 Task completed: ${task.name}`);
                 await saveTaskHistory(task.name, task.id, steps, finalStatus, taskStartTime);
                 await markTaskDone(task.id);
+
+                // Record deliverables to Firestore for the PulseCommand tray
+                await recordDeliverables(task, steps);
 
                 // Auto-unblock any previously-blocked tasks so they re-enter the queue
                 await unblockTasks();
