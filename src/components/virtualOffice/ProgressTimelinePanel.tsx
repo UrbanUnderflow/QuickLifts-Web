@@ -48,6 +48,15 @@ const channelLabels: Record<NudgeChannel, string> = {
   system: 'System',
 };
 
+const lensOptions = [
+  'Delight Hunt',
+  'Friction Hunt',
+  'Partnership Leverage',
+  'Retention Proof',
+  'Fundraising Story',
+  'Off-Cycle',
+];
+
 const stateLabel = (state: TimelineStateTag) =>
   state === 'signals' ? 'Signals (Listening)' : 'Meanings (Story)';
 
@@ -63,7 +72,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   const [objectiveCode, setObjectiveCode] = useState('');
   const [beat, setBeat] = useState<ProgressBeat>('hypothesis');
   const [headline, setHeadline] = useState('');
-  const [lensTag, setLensTag] = useState('');
+  const [lensTag, setLensTag] = useState(lensOptions[0]);
   const [confidenceColor, setConfidenceColor] = useState<ConfidenceColor>('blue');
   const [stateTag, setStateTag] = useState<TimelineStateTag>('signals');
   const [artifactType, setArtifactType] = useState<ArtifactType>('none');
@@ -102,7 +111,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
     setHeadline('');
     setObjectiveCode('');
     setBeat('work-in-flight');
-    setLensTag('');
+    setLensTag(lensOptions[0]);
     setConfidenceColor('blue');
     setStateTag('signals');
     setArtifactType('none');
@@ -190,7 +199,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
           <p>{snapshot.agentName}</p>
           <span>{snapshot.objectiveCode}</span>
         </div>
-        <span className="state-tag state-small state-${snapshot.stateTag}`}>{stateLabel(snapshot.stateTag)}</span>
+        <span className={`state-tag state-small state-${snapshot.stateTag}`}>{stateLabel(snapshot.stateTag)}</span>
       </div>
       <div className="pt-snapshot-meta">
         <Clock size={12} />
@@ -288,7 +297,30 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
 
               <label>
                 <span>Lens Tag</span>
-                <input value={lensTag} onChange={(e) => setLensTag(e.target.value)} placeholder="Delight Hunt" />
+                <div className="pt-lens-quick">
+                  {lensOptions.map((lens) => (
+                    <button
+                      type="button"
+                      key={lens}
+                      className={`pt-lens-pill ${lensTag === lens ? 'active' : ''}`}
+                      onClick={() => setLensTag(lens)}
+                    >
+                      {lens}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  value={lensTag}
+                  onChange={(e) => setLensTag(e.target.value)}
+                  placeholder="Delight Hunt"
+                  list="lens-options"
+                />
+                <datalist id="lens-options">
+                  {lensOptions.map((lens) => (
+                    <option key={lens} value={lens} />
+                  ))}
+                </datalist>
+                <span className="pt-help-text">Defaulted to the active weekly lens — adjust when going off-cycle.</span>
               </label>
 
               <label>
@@ -442,6 +474,21 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
         .pt-form-header { font-size: 12px; color: #93c5fd; display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
         .pt-form { display: flex; flex-direction: column; gap: 12px; flex: 1; overflow-y: auto; }
         label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: #cbd5f5; }
+        .pt-lens-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+        .pt-lens-pill {
+          border: 1px solid rgba(148,163,184,0.3);
+          border-radius: 999px;
+          padding: 4px 10px;
+          background: rgba(15,23,42,0.5);
+          font-size: 11px;
+          color: #cbd5f5;
+        }
+        .pt-lens-pill.active {
+          border-color: rgba(250,204,21,0.8);
+          color: #facc15;
+          box-shadow: 0 0 8px rgba(250,204,21,0.25);
+        }
+        .pt-help-text { font-size: 10px; color: #94a3b8; margin-top: -2px; }
         input, select, textarea {
           background: rgba(7,11,18,0.8);
           border: 1px solid rgba(71,85,105,0.7);

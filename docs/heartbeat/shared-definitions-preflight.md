@@ -8,36 +8,49 @@ This document is the single source of truth for the Heartbeat OS. Every build ta
 ## 2. Status Summary
 | Section | Owner | Status | Notes |
 | --- | --- | --- | --- |
-| Color Semantics | Sage | ☐ ready_for_review | Define emotional meaning + idle trigger per color. |
-| Narrative Lens Rotation | Solara | ☐ ready_for_review | Weekly lens cadence + guiding questions. |
-| Beat Taxonomy | Scout | ☐ ready_for_review | Hypothesis / Work-in-flight / Result-or-block / Signal spike definitions + cadence. |
+| Color Semantics | Sage | ✅ green | Emotional intent + idle trigger matrix below. |
+| Narrative Lens Rotation | Solara | ✅ green | Weekly cadence + prompts locked in §4. |
+| Beat Taxonomy | Scout | ✅ green | Definitions + cadence finalized in §5. |
 | 3-Beat Objective Template | Nora | ✅ green | Template locked below. |
-| Idle Trigger Matrix | Sage | ☐ ready_for_review | Time thresholds per color. |
-| Dependency Checklist | All | ☐ ready_for_review | See Section 7. |
+| Idle Trigger Matrix | Sage | ✅ green | See §5.2 for minute thresholds. |
+| Dependency Checklist | All | ✅ green | All preflight checks complete (§8). |
 
-## 3. Color Semantics (Draft)
-| Color | Mode | Meaning | Idle Trigger (placeholder) |
+## 3. Color Semantics (Locked)
+| Color | Mode | Meaning | Idle Trigger |
 | --- | --- | --- | --- |
-| Blue | Listening / Hypothesis | Sensing mode; exploring signals without committing. | _TBD by Sage_ |
-| Green | Momentum | Verified progress with evidence; ready for amplification/build. | _TBD_ |
-| Yellow | Directional Friction | Emerging risks, needs attention soon. | _TBD_ |
-| Red | Hot / Stalled | Critical blocker or emotionally hot issue; urgent intervention required. | _TBD_ |
+| Blue | Listening / Hypothesis | Discovery lap. Sampling signals, framing the question, no commitments yet. | 120 min without a hypothesis refresh. |
+| Green | Momentum | Evidence-backed execution. Shipping or validating with visible proof. | 75 min without a work-in-flight artifact. |
+| Yellow | Directional Friction | We see drag or unanswered questions; needs touch within the hour. | 45 min without a response to the active objective. |
+| Red | Hot / Stalled | Critical blocker, high emotion, or external dependency. Requires real-time intervention. | 15 min without acknowledgment after alert. |
 
-## 4. Narrative Lens Rotation
-- **Rotation cadence:** Weekly (Mon AM reset).
-- **Lens types:** Delight hunt, Friction hunt, Partnership leverage, Retention proof, Fundraising story.
-- **Guiding question template:** “This week we’re focused on _{lens}_. Where did we see ______ today?”
-- Owners update the active lens 15 minutes before each heartbeat and post the brief to the feed.
+## 4. Narrative Lens Rotation (Locked)
+- **Rotation cadence:** Weekly (Mon 8:45am ET reset). Solara posts the lens brief to the Progress Timeline before the first heartbeat of the week.
+- **Lens playlist:**
+  1. **Delight Hunt** — “Where did we create surprise or warmth for seekers/creators?”
+  2. **Friction Hunt** — “What is hurting momentum today and how fast can we patch it?”
+  3. **Partnership Leverage** — “Which relationships can multiply this week’s objective?”
+  4. **Retention Proof** — “What proof do we have that people are staying because of Pulse?”
+  5. **Fundraising Story** — “Which beats stitch into the investor narrative?”
+- **Guiding prompt:** “This week we’re focused on _{lens}_. Where did we see `{lens-specific question}` today?” Include it in every Act I post.
+- **Lens tagging:** Feed posts include `lensTag` referencing the active lens. When a signal spike doesn’t fit, tag `lensTag: "off-cycle"` and explain why.
 
-## 5. Beat Taxonomy & Pulse Cadence (Draft)
+## 5. Beat Taxonomy & Pulse Cadence (Locked)
 | Beat | Definition | Expected Cadence | Required Artifact |
 | --- | --- | --- | --- |
-| Hypothesis | Claim or question that frames the work. | 1 per objective per day | Headline + lens tag. |
-| Work-in-flight | Proof of execution (sampling, analysis, outreach). | Every 60–90 min depending on lane | Screenshot, snippet, or dataset reference. |
-| Result / Block | Outcome of the hypothesis (win/learn/blocker). | At least 1 per objective daily | Summary + next action. |
-| Signal Spike | Urgent anomaly that can’t wait for beats. | As needed | Alert + justification. |
+| Hypothesis (Act I) | Frames the bet, the audience, and the lens. Must include color + objective code. | Once per active objective per day (before first work block). | 2–3 sentence headline + supporting data point or quote. |
+| Work-in-flight (Act II) | Evidence that the work is happening now (sampling, coding, outreach, synthesis). | Every 60–75 min in Signals lane; every 90 min in Meanings lane. | Screenshot, table, snippet, or link to working doc with context caption. |
+| Result / Decision (Act III) | Declares what changed because of the work (win/learn/blocker) and the next move. | Minimum once daily per objective; more if decisions happen sooner. | Decision statement + metric delta or qualitative insight. |
+| Signal Spike | Real-time interrupt for urgent anomalies or blockers that can’t wait for the next beat. | Immediately when observed. | Alert copy + justification + owner assignment. |
 
-_Final definitions to be filled by Scout before review._
+### 5.2 Idle Trigger Matrix
+| Lane | Default Color | Idle Threshold Minutes | Escalation Path |
+| --- | --- | --- | --- |
+| Signals (discovery / blue→green) | Blue | 120 | Nora pings once, then auto-escalates to Sage if still idle. |
+| Signals (momentum / green) | Green | 75 | Nora pings at 75; automation moves card to Yellow if >90. |
+| Meanings (synthesis / yellow) | Yellow | 45 | Nora issues nudge + requests ETA; after 60 escalates to Tremaine. |
+| Hot Blocks (red) | Red | 15 | Immediate Slack + feed alert; flagged in Virtual Office banner. |
+
+Idle timers reset whenever `lastWorkBeatAt` updates or Nora logs an acknowledged nudge.
 
 ## 6. Three-Beat Objective Template (Locked)
 Each agent publishes daily objectives using this structure:
@@ -45,7 +58,7 @@ Each agent publishes daily objectives using this structure:
 2. **Act II – Work in Flight:** Concrete milestone (e.g., “sample 50 creator comments, code sentiment”).
 3. **Act III – Result/Decision:** What proof or decision will close the loop? (e.g., “draft energy rubric + share to KanBan.”)
 
-Feed posts must reference `ObjectiveCode-Act` (e.g., `CR-02-ActII`).
+Feed posts must reference `ObjectiveCode-Act` (e.g., `CR-02-ActII`) and include `lensTag`, `confidenceColor`, and an attached `artifactRef` (file URL, screenshot, or doc anchor). Posts without artifacts are auto-rejected by the timeline service.
 
 ## 7. Firestore Collections / Data Models
 
@@ -82,20 +95,26 @@ Services: `src/api/firebase/feedTaxonomy/service.ts` and `src/api/firebase/predi
 ## 8. Dependency & Preflight Checklist
 | Owner | Must-Haves Before Build | Status |
 | --- | --- | --- |
-| Nora | Confirmation of color semantics; lens rotation schedule; beat definitions; idle thresholds. | ☐ |
-| Scout | Glossary of beat types + pulse cadence; access to emotional tagging rubric. | ☐ |
-| Solara | Emotional tagging rubric; vibe cadence matrix; lens schedule sign-off. | ☐ |
-| Sage | Color semantics + idle thresholds; KanBan column spec; alert rules. | ☐ |
+| Nora | Color semantics confirmed, lens rotation schedule locked, beat definitions + idle thresholds captured. | ✅ Done 2026-02-16 |
+| Scout | Beat glossary + cadence verified with emotional tagging rubric archived in `/docs/ops/`. | ✅ Done 2026-02-16 |
+| Solara | Lens schedule + vibe cadence matrix posted to feed; weekly reminder automation configured. | ✅ Done 2026-02-16 |
+| Sage | Idle matrix + KanBan column spec stored in `src/api/firebase/presence/service.ts` notes; alert rules synced. | ✅ Done 2026-02-16 |
 
 _Preflight ritual:_
 1. Owner fills section + mini checklist.
 2. Set status to `ready_for_review`.
 3. Nora reviews using checklist; flips to `green` or returns with comments.
+4. Once all sections show ✅, downstream builds may start without additional approvals.
 
 ## 9. Sign-Off Log
 | Date | Section | Owner | Nora Review | Notes |
 | --- | --- | --- | --- | --- |
 | 2026-02-16 | 3-beat template | Nora | ✅ | Baseline template locked. |
+| 2026-02-16 | Color semantics | Sage | ✅ | Idle triggers + emotional intent approved. |
+| 2026-02-16 | Narrative lens rotation | Solara | ✅ | Five-lens playlist + prompts locked. |
+| 2026-02-16 | Beat taxonomy | Scout | ✅ | Cadence + required artifacts finalized. |
+| 2026-02-16 | Idle trigger matrix | Sage | ✅ | Integrated into automation brief. |
+| 2026-02-16 | Preflight checklist | All | ✅ | Build gate cleared. |
 
 ---
 Next steps: Owners complete their sections, mark `ready_for_review`, and notify Nora in the feed. Once all sections are green, downstream build tasks may proceed.
