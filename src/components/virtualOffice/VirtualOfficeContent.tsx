@@ -1939,10 +1939,36 @@ const VirtualOfficeContent: React.FC = () => {
     // Close the chat modal
     setShowGroupChatModal(false);
 
-    // Calculate session duration
-    const durationMs = collabStartTime ? Date.now() - collabStartTime.getTime() : 0;
-    const mins = Math.floor(durationMs / 60_000);
-    const durationStr = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+    // Calculate duration from actual message activity (first→last message), not wall-clock session time
+    let durationStr = '< 1m';
+    if (chatMessages && chatMessages.length > 1) {
+      // Extract timestamps from messages, filtering out nulls
+      const timestamps = chatMessages
+        .map(m => {
+          const ts = (m as any).createdAt;
+          if (!ts) return null;
+          if (ts instanceof Date) return ts.getTime();
+          if (typeof ts === 'number') return ts;
+          if (ts.toDate) return ts.toDate().getTime();   // Firestore Timestamp
+          if (ts.seconds) return ts.seconds * 1000;      // Firestore-like
+          return null;
+        })
+        .filter((t): t is number => t !== null)
+        .sort((a, b) => a - b);
+
+      if (timestamps.length >= 2) {
+        const spanMs = timestamps[timestamps.length - 1] - timestamps[0];
+        const mins = Math.floor(spanMs / 60_000);
+        durationStr = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins || '< 1'}m`;
+      } else {
+        durationStr = '< 1m';
+      }
+    } else if (collabStartTime) {
+      // Fallback: use session start time (single message or no timestamps)
+      const durationMs = Date.now() - collabStartTime.getTime();
+      const mins = Math.floor(durationMs / 60_000);
+      durationStr = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins || '< 1'}m`;
+    }
 
     // If we have messages, show the meeting minutes preview
     const agentParticipants = allAgents.filter(a => a.id !== 'antigravity').map(a => a.id);
