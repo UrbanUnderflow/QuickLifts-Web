@@ -90,6 +90,7 @@ const ENABLE_TASK_VALIDATION = process.env.ENABLE_TASK_VALIDATION !== 'false'; /
 
 /* ─── Token Usage Tracking ─────────────────────────────── */
 var sessionTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
+var taskTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
 // If OpenClaw is enabled, we'll sync the actual configured model from OpenClaw at runtime.
 var currentModel = process.env.USE_OPENCLAW === 'true' ? 'openclaw' : 'gpt-4o';
 var currentModelProvider = '';
@@ -97,14 +98,68 @@ var currentModelRaw = '';
 var lastOpenClawModelSyncAt = 0;
 var openClawModelSyncInFlight = null;
 
+// Rough token estimator for OpenClaw calls (no usage object returned)
+// Uses ~4 chars per token heuristic (GPT tokenizer average)
+function estimateTokens(promptText, outputText) {
+    var promptTokens = Math.ceil((promptText || '').length / 4);
+    var completionTokens = Math.ceil((outputText || '').length / 4);
+    return {
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        total_tokens: promptTokens + completionTokens,
+        estimated: true,
+    };
+}
+
 function trackTokenUsage(usage, model) {
     if (!usage) return;
-    sessionTokens.promptTokens += (usage.prompt_tokens || 0);
-    sessionTokens.completionTokens += (usage.completion_tokens || 0);
-    sessionTokens.totalTokens += (usage.total_tokens || 0);
+    var prompt = usage.prompt_tokens || 0;
+    var completion = usage.completion_tokens || 0;
+    var total = usage.total_tokens || (prompt + completion);
+
+    // Session counters (in-memory, reset on restart)
+    sessionTokens.promptTokens += prompt;
+    sessionTokens.completionTokens += completion;
+    sessionTokens.totalTokens += total;
     sessionTokens.callCount += 1;
+
+    // Per-task counters (reset each task)
+    taskTokens.promptTokens += prompt;
+    taskTokens.completionTokens += completion;
+    taskTokens.totalTokens += total;
+    taskTokens.callCount += 1;
+
     if (model) currentModel = model;
-    console.log(`   📊 Tokens: +${usage.total_tokens || 0} (session total: ${sessionTokens.totalTokens}, calls: ${sessionTokens.callCount})`);
+
+    var isEstimate = usage.estimated ? ' (est)' : '';
+    console.log(`   📊 Tokens: +${total.toLocaleString()}${isEstimate} | task: ${taskTokens.totalTokens.toLocaleString()} | session: ${sessionTokens.totalTokens.toLocaleString()} | calls: ${sessionTokens.callCount}`);
+
+    // Persist to Firestore — cumulative + daily counters (survives restarts)
+    var today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    try {
+        // Fire-and-forget — don't await to avoid blocking the pipeline
+        db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).set({
+            tokenUsage: { ...sessionTokens },
+            tokenUsageTask: { ...taskTokens },
+            tokenUsageCumulative: {
+                promptTokens: FieldValue.increment(prompt),
+                completionTokens: FieldValue.increment(completion),
+                totalTokens: FieldValue.increment(total),
+                callCount: FieldValue.increment(1),
+            },
+            [`tokenUsageDaily.${today}`]: {
+                promptTokens: FieldValue.increment(prompt),
+                completionTokens: FieldValue.increment(completion),
+                totalTokens: FieldValue.increment(total),
+                callCount: FieldValue.increment(1),
+            },
+            lastTokenUpdate: FieldValue.serverTimestamp(),
+        }, { merge: true }).catch(() => { }); // Swallow errors — non-critical
+    } catch { /* non-critical */ }
+}
+
+function resetTaskTokens() {
+    taskTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
 }
 
 /* ─── Agent Manifesto (shared institutional knowledge) ── */
@@ -2780,6 +2835,8 @@ ${smokeOutput}`.substring(0, 2000);
                     const progressCb = createProgressCallback(step, allSteps, stepIndex, progress);
                     const result = await invokeOpenClaw(prompt, progressCb);
                     const outputText = parseOutput((result.stdout || '').trim());
+                    // Track estimated token usage for OpenClaw calls
+                    trackTokenUsage(estimateTokens(prompt, outputText), currentModel || 'openclaw');
                     step.output = outputText;
                     lastOutput = outputText;
 
@@ -2929,6 +2986,7 @@ ${smokeOutput}`.substring(0, 2000);
                     const progressCb = createProgressCallback(step, allSteps, stepIndex, -1);
                     const result = await invokeOpenClaw(recoveryPrompt, progressCb);
                     let outputText = (result.stdout || '').trim();
+                    trackTokenUsage(estimateTokens(recoveryPrompt, outputText), currentModel || 'openclaw');
                     if (outputText) {
                         try {
                             const parsed = JSON.parse(outputText);
@@ -3067,6 +3125,7 @@ async function run() {
             console.log(`   → ${steps.length} steps planned`);
 
             const taskStartTime = new Date();
+            resetTaskTokens(); // Reset per-task token counters
             await setStatus('working', {
                 currentTask: task.name,
                 currentTaskId: task.id,

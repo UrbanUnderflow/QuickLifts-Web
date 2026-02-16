@@ -1635,24 +1635,84 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
                 );
               })()}
             </div>
-            {agent.tokenUsage && agent.tokenUsage.totalTokens > 0 && (
-              <div style={{ display: 'flex', gap: '10px', color: '#9ca3af', fontSize: '9px', flexWrap: 'wrap' }}>
-                <span>
-                  Tokens: <strong style={{ color: '#4ade80' }}>
-                    {agent.tokenUsage.totalTokens.toLocaleString()}
-                  </strong>
-                </span>
-                <span>
-                  In: <strong style={{ color: '#60a5fa' }}>{agent.tokenUsage.promptTokens.toLocaleString()}</strong>
-                </span>
-                <span>
-                  Out: <strong style={{ color: '#f59e0b' }}>{agent.tokenUsage.completionTokens.toLocaleString()}</strong>
-                </span>
-                <span>
-                  Calls: <strong style={{ color: '#a1a1aa' }}>{agent.tokenUsage.callCount}</strong>
-                </span>
-              </div>
-            )}
+            {/* ── Token Usage Monitor ── */}
+            {(() => {
+              const session = agent.tokenUsage;
+              const task = agent.tokenUsageTask;
+              const cumulative = agent.tokenUsageCumulative;
+              const daily = agent.tokenUsageDaily;
+              const today = new Date().toISOString().split('T')[0];
+              const todayUsage = daily?.[today];
+              const hasAny = (session?.totalTokens ?? 0) > 0 || (cumulative?.totalTokens ?? 0) > 0 || (todayUsage?.totalTokens ?? 0) > 0;
+              if (!hasAny) return null;
+              return (
+                <div style={{
+                  margin: '8px 0', padding: '8px 10px',
+                  background: 'rgba(59, 130, 246, 0.08)',
+                  border: '1px solid rgba(59, 130, 246, 0.2)',
+                  borderRadius: '6px', fontSize: '10px',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#60a5fa', marginBottom: '6px' }}>
+                    <Zap className="w-3 h-3" />
+                    <span style={{ fontWeight: 700 }}>Token Usage</span>
+                  </div>
+
+                  {/* Main metrics row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                    {/* Session total */}
+                    <div style={{
+                      background: 'rgba(34, 197, 94, 0.1)', borderRadius: '4px', padding: '4px 6px',
+                      border: '1px solid rgba(34, 197, 94, 0.2)',
+                    }}>
+                      <div style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Session</div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>
+                        {(session?.totalTokens ?? 0).toLocaleString()}
+                      </div>
+                    </div>
+
+                    {/* Today */}
+                    <div style={{
+                      background: 'rgba(245, 158, 11, 0.1)', borderRadius: '4px', padding: '4px 6px',
+                      border: '1px solid rgba(245, 158, 11, 0.2)',
+                    }}>
+                      <div style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Today</div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#fbbf24', fontVariantNumeric: 'tabular-nums' }}>
+                        {(todayUsage?.totalTokens ?? 0).toLocaleString()}
+                      </div>
+                    </div>
+
+                    {/* Current Task */}
+                    <div style={{
+                      background: 'rgba(6, 182, 212, 0.1)', borderRadius: '4px', padding: '4px 6px',
+                      border: '1px solid rgba(6, 182, 212, 0.2)',
+                    }}>
+                      <div style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>This Task</div>
+                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#22d3ee', fontVariantNumeric: 'tabular-nums' }}>
+                        {(task?.totalTokens ?? 0).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Breakdown row */}
+                  <div style={{ display: 'flex', gap: '10px', color: '#9ca3af', fontSize: '9px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
+                    <span>
+                      In: <strong style={{ color: '#60a5fa' }}>{(session?.promptTokens ?? 0).toLocaleString()}</strong>
+                    </span>
+                    <span>
+                      Out: <strong style={{ color: '#f59e0b' }}>{(session?.completionTokens ?? 0).toLocaleString()}</strong>
+                    </span>
+                    <span>
+                      Calls: <strong style={{ color: '#a1a1aa' }}>{session?.callCount ?? 0}</strong>
+                    </span>
+                    {cumulative && (
+                      <span style={{ marginLeft: 'auto' }}>
+                        Lifetime: <strong style={{ color: '#c084fc' }}>{(cumulative.totalTokens ?? 0).toLocaleString()}</strong>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Task History */}
@@ -2271,10 +2331,10 @@ const VirtualOfficeContent: React.FC = () => {
               disabled={restartingAgents}
               title="Send restart command to Nora → restarts all agents on the Mac Mini"
               className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border transition-all ${restartResult === 'success'
-                  ? 'border-emerald-500/50 text-emerald-300 bg-emerald-900/30'
-                  : restartResult === 'error'
-                    ? 'border-red-500/50 text-red-300 bg-red-900/30'
-                    : 'border-amber-500/30 text-amber-300 hover:bg-amber-900/30 hover:border-amber-400/50'
+                ? 'border-emerald-500/50 text-emerald-300 bg-emerald-900/30'
+                : restartResult === 'error'
+                  ? 'border-red-500/50 text-red-300 bg-red-900/30'
+                  : 'border-amber-500/30 text-amber-300 hover:bg-amber-900/30 hover:border-amber-400/50'
                 }`}
             >
               {restartingAgents ? (
@@ -2330,6 +2390,24 @@ const VirtualOfficeContent: React.FC = () => {
             </div>
           )}
 
+          {/* ── Today's Token Usage (all agents) ── */}
+          {(() => {
+            const today = new Date().toISOString().split('T')[0];
+            const todayTotal = allAgents.reduce((sum, a) => {
+              const daily = (a as any).tokenUsageDaily?.[today];
+              return sum + (daily?.totalTokens ?? 0);
+            }, 0);
+            const sessionTotal = allAgents.reduce((sum, a) => sum + (a.tokenUsage?.totalTokens ?? 0), 0);
+            return (
+              <div className="stat-chip" title={`Session: ${sessionTotal.toLocaleString()} tokens`}>
+                <Zap className="w-4 h-4 text-amber-400" />
+                <div>
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Tokens Today</p>
+                  <p className="text-lg font-semibold text-amber-400">{todayTotal.toLocaleString()}</p>
+                </div>
+              </div>
+            );
+          })()}
           {/* ── Active Tasks Ticker ── */}
           {(() => {
             const activeTasks = allAgents.filter(a => a.status === 'working' && a.currentTask);
