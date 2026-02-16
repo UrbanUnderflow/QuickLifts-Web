@@ -160,6 +160,7 @@ Before marking any task complete:
 - **[2026-02-16] Nora** — Step "Finalize the shared heartbeat glossary (beat definitions, color semantics, rotating narrative lenses, hourly objective template) and publish the preflight checklist for all agents." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-16] Nora** — Step "Add the nudge log “twitter-style” view (inline with the timeline) that records Nora’s hourly prompts, agent responses, and idle alerts for quick scanning." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-16] Nora** — Step "Extend the KanBan board with color-coded columns (Signals/Meanings), idle thresholds, and three-beat objective templates so every card carries lane/color context and last work-beat data." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-16] Nora** — Step "Share the draft with Scout, Solara, and Sage for review (e.g., via feed or PR) and capture their approval comments or edits." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 ---
 
 ## Operational Rules
