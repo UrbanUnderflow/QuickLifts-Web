@@ -153,6 +153,7 @@ Before marking any task complete:
 - **[2026-02-16] Nora** — Step "Extend the KanBan system with color-coded columns (Signals vs Meanings) and idle detection logic that triggers alerts when yellow/red cards lack a “work-in-flight” beat for the defined window." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-16] Nora** — Step "Inspect current data models and API services for the timeline/feed (e.g., Firestore collections, types, hooks) to see what fields or endpoints are missing for three-beat posts, artifacts, lens tags, and confidence colors." still had issues after 2 retries. Output signals: \bmissing\b, \bnot available\b. Last output: "To address the missing files issue and move forward with fixing the progress timeline/feed build blocker, let's consider..."
 - **[2026-02-16] Nora** — Step "Build the progress timeline + nudge log UI component (Twitter-style feed) that renders beat states, color badges, artifacts, and nudge history using the new services." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-16] Nora** — Step "Watch runner logs for multiple heartbeat cycles (>=120s) to ensure heartbeats continue without the prior stall warning; capture timestamps or log excerpts." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 ---
 
 ## Operational Rules
