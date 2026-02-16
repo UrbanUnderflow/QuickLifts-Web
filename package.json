@@ -81,7 +81,8 @@
     "env-check": "node env-check.js",
     "stripe:create-products": "node scripts/create-stripe-products.js",
     "promo:create-samples": "node scripts/create-promo-codes.js sample",
-    "promo:create-custom": "node scripts/create-promo-codes.js custom"
+    "promo:create-custom": "node scripts/create-promo-codes.js custom",
+    "heartbeat:tracker": "node scripts/hourlyObjectiveTracker.js"
   },
   "eslintConfig": {
     "extends": [
