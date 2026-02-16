@@ -57,8 +57,11 @@ As of Step 3, nudges stream directly into the Live Feed next to three-beat posts
 - Badge stack (lane + channel + outcome) with confidence color border.
 - Timestamps for when Nora nudged and when the agent replied.
 - Objective code + message body so idle alerts and hourly prompts read like a Twitter-threaded update.
+- “Awaiting response…” chip whenever `respondedAt` is empty so it’s obvious who still owes a beat.
 
 The side panel still shows the latest 8 nudges, but the main feed is now the canonical history. Automation should continue to write to `nudge-log`—the UI handles ordering and rendering automatically.
+
+Nudges are merged with beats in `ProgressTimelinePanel.tsx` via the `feedItems` memo (two listeners: `progressTimelineService.listen` + `nudgeLogService.listen`) which sorts on `createdAt` so entries interleave chronologically.
 
 Automation can call `nudgeLogService.log()` / `updateOutcome()` to insert entries that appear here immediately.
 
