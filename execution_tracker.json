@@ -4,24 +4,24 @@
         "owner": "Solara",
         "status": "Act I – Hypothesis",
         "status": "Act I – Hypothesis",
-        "notes": "Drafted shared definitions covering heartbeat colors, narrative lenses, beat types. Awaiting input from team members on the dependencies."
+        "notes": "Drafted shared definitions covering heartbeat colors, narrative lenses, beat types. \n Scope: Create a governance structure for heartbeat definitions.\n Acceptance Criteria: Document must be peer-reviewed and approved by all stakeholders.\n Dependencies: Requires feedback from Scout, Solara, and Sage on initial drafts."
     },
     {
         "title": "Progress Timeline/Feed Implementation",
         "owner": "Scout",
         "status": "Act I – Hypothesis",
-        "notes": "Work on implementing progress timeline and feed has started. Dependencies will be updated as they are confirmed."
+        "notes": "Work on implementing progress timeline and feed has started. \n Scope: Establish the environment and UI components for the progress timeline feed.\n Acceptance Criteria: Timeline must reflect real-time updates and manage user inputs.\n Dependencies: Needs backend support for data retrieval from Firestore."
     },
     {
         "title": "Kanban Color Logic + Idle Triggers",
         "owner": "Nora",
         "status": "Act I – Hypothesis",
-        "notes": "Wiring up the Kanban logic with the idle trigger settings."
+        "notes": "Wiring up the Kanban logic with the idle trigger settings. \n Scope: Implement the logic for Kanban colors and idle trigger functionality.\n Acceptance Criteria: Successful integration of color logic within user interface and functional triggers.\n Dependencies: Requires input on color semantics from the heartbeat definitions document."
     },
     {
         "title": "Hourly Tracker Automation",
         "owner": "Sage",
         "status": "Act I – Hypothesis",
-        "notes": "Initiating automation for the hourly tracker."
+        "notes": "Initiating automation for the hourly tracker. \n Scope: Automate the data collection process for hourly tracking.\n Acceptance Criteria: Tracker must accurately log hours and integrate with overall performance metrics.\n Dependencies: Coordination with backend services to ensure data integrity and flow."
     }
 ]
