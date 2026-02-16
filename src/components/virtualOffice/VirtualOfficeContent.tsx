@@ -12,7 +12,7 @@ import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
   ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
   History, ChevronRight, MessageSquare, Archive, X, ListOrdered, Activity, AlertTriangle,
-  BookOpen, ToggleLeft, ToggleRight
+  BookOpen, ToggleLeft, ToggleRight, Power
 } from 'lucide-react';
 import { RoundTable } from './RoundTable';
 import { GroupChatModal } from './GroupChatModal';
@@ -1157,6 +1157,38 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   const sessionDuration = formatDuration(agent.sessionStartedAt);
   const hasSteps = agent.executionSteps && agent.executionSteps.length > 0;
   const installProgress = agent.installProgress || null;
+  const [powerLoading, setPowerLoading] = useState(false);
+  const isOnline = agent.status !== 'offline';
+
+  const handlePowerToggle = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (powerLoading) return;
+    setPowerLoading(true);
+    try {
+      if (isOnline) {
+        // Stop: send command + call API to bootout launchd
+        await presenceService.sendCommand(agent.id, 'command', 'stop');
+        await presenceService.setOffline(agent.id);
+        await fetch('/api/agent/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId: agent.id, action: 'stop' }),
+        });
+      } else {
+        // Start: set to idle + call API to bootstrap launchd
+        await presenceService.setIdle(agent.id, 'Starting up...');
+        await fetch('/api/agent/control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agentId: agent.id, action: 'start' }),
+        });
+      }
+    } catch (err) {
+      console.error('Power toggle failed:', err);
+    } finally {
+      setPowerLoading(false);
+    }
+  }, [agent.id, isOnline, powerLoading]);
 
   // ─── Drag state ─────────────────────────────
   const [isDragging, setIsDragging] = useState(false);
@@ -1389,6 +1421,24 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
             <span className={`text-[10px] px-2 py-0.5 rounded-full border ${status.badge}`}>
               {status.label}
             </span>
+            {/* Power toggle */}
+            <button
+              onClick={handlePowerToggle}
+              disabled={powerLoading}
+              title={isOnline ? `Stop ${agent.displayName}` : `Start ${agent.displayName}`}
+              style={{
+                background: 'none', border: 'none', cursor: powerLoading ? 'wait' : 'pointer',
+                padding: '2px', display: 'flex', alignItems: 'center',
+                color: isOnline ? '#22c55e' : '#ef4444',
+                opacity: powerLoading ? 0.5 : 1,
+                transition: 'color 0.2s, opacity 0.2s',
+              }}
+            >
+              {powerLoading
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <Power className="w-4 h-4" />
+              }
+            </button>
           </div>
           {/* Role & duty (clickable → opens profile modal) */}
           {(agent.role || AGENT_ROLES[agent.id] || AGENT_DUTIES[agent.id]) && (
