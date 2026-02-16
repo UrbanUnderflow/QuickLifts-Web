@@ -31,10 +31,11 @@
 - **Dependency Name**: Related lanes and their relevance.
   - Example: **Data Collection**: Relies on inputs from research and analytics.
 
-## 7. Dependencies Status Checklist
-| Agent  | Required Inputs | Status  |
-|--------|-----------------|---------|
-| Nora   | Input Details   | Pending |
-| Scout  | Input Details   | Pending |
-| Solara | Input Details   | Pending |
-| Sage   | Input Details   | Pending |
+## Dependency/Preflight Checklist
+
+| Agent  | Required Inputs                                 | Status        |
+|--------|-------------------------------------------------|---------------|
+| Nora   | List of inputs needed for the heartbeat system. | Pending       |
+| Scout  | List of inputs needed for the heartbeat system. | Pending       |
+| Solara | List of inputs needed for the heartbeat system. | Pending       |
+| Sage   | List of inputs needed for the heartbeat system. | Pending       |

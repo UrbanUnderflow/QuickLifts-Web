@@ -110,6 +110,9 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onDragStart
 
   const laneInfo = laneMeta[task.lane || 'signals'];
   const colorInfo = colorMeta[task.color || 'blue'];
+  const beatDetails = beatTemplateFields
+    .map(({ key, label }) => ({ label, value: (task as any)[key] as string }))
+    .filter((beat) => beat.value && beat.value.trim().length > 0);
 
   return (
     <div
@@ -157,6 +160,11 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onEdit, onDelete, onDragStart
         <span className="px-2 py-1 rounded-full border border-zinc-600 text-zinc-300">
           Status: {task.status.replace('-', ' ')}
         </span>
+        {task.objectiveCode && (
+          <span className="px-2 py-1 rounded-full border border-indigo-500/40 text-indigo-200">
+            Objective · {task.objectiveCode}
+          </span>
+        )}
       </div>
 
       {idleAlert && (
