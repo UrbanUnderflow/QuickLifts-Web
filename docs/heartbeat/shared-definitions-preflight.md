@@ -35,10 +35,10 @@
 
 | Agent  | Required Inputs                                 | Status        |
 |--------|-------------------------------------------------|---------------|
-| Nora   | Details on Kanban wiring requirements            | Pending       |
+| Nora   | Kanban wiring requirements                        | Pending       |
 | Scout  | Data sources for progress timeline and feed     | Pending       |
-| Solara | Feedback on shared definitions                   | Pending       |
-| Sage   | Inputs for automation processes                  | Pending       |
+| Solara | Input for definitions and checklist               | Pending       |
+| Sage   | Automation input requirements                     | Pending       |
 
 ---
 
