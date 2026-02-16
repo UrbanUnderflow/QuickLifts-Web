@@ -2527,29 +2527,10 @@ ${smokeOutput}`.substring(0, 2000);
                         `CURRENT STEP (${stepIndex + 1}/${allSteps.length}): ${step.description}`,
                     ];
 
-                    // Only inject manifesto + correction context on retries (saves tokens on first attempt)
+                    // Only inject manifesto as LAST RESORT — when normal self-correction has already failed.
+                    // The error classification + correction guidance handles retries 1..N-1.
+                    // The manifesto is only for when we've hit a wall and need institutional knowledge.
                     if (attempt > 0 && previousOutput) {
-                        // Check if manifesto is enabled for this agent (toggle from Virtual Office)
-                        let manifestoAllowed = true;
-                        try {
-                            const presDoc = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
-                            if (presDoc.exists && presDoc.data()?.manifestoEnabled === false) {
-                                manifestoAllowed = false;
-                                console.log(`   📜 Manifesto disabled via toggle — skipping knowledge injection`);
-                            }
-                        } catch { /* default to allowed */ }
-
-                        if (manifestoAllowed) {
-                            base.push(``, getManifestoBlock());
-                            // Track the injection in presence for monitoring
-                            try {
-                                await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).update({
-                                    manifestoInjections: FieldValue.increment(1),
-                                    lastManifestoInjection: new Date(),
-                                });
-                            } catch { /* non-critical */ }
-                        }
-
                         // ─── Smart error classification for targeted self-correction ──
                         const prevOut = previousOutput.substring(0, 600);
                         let errorCategory = 'unknown';
@@ -2587,6 +2568,28 @@ ${smokeOutput}`.substring(0, 2000);
                             `✅ If on attempt ${attempt + 1}: be MORE creative — the obvious approaches already failed`,
                         );
                         if (attempt >= 1) {
+                            // ─── LAST RESORT: Inject manifesto as reinforcement ──
+                            // Only when we've hit a wall after normal self-correction failed.
+                            let manifestoAllowed = true;
+                            try {
+                                const presDoc = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
+                                if (presDoc.exists && presDoc.data()?.manifestoEnabled === false) {
+                                    manifestoAllowed = false;
+                                    console.log(`   📜 Manifesto disabled via toggle — skipping`);
+                                }
+                            } catch { /* default to allowed */ }
+
+                            if (manifestoAllowed) {
+                                base.push(``, getManifestoBlock());
+                                console.log(`   📜 Manifesto injected (LAST RESORT — attempt ${attempt + 1}, normal correction failed)`);
+                                try {
+                                    await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).update({
+                                        manifestoInjections: FieldValue.increment(1),
+                                        lastManifestoInjection: new Date(),
+                                    });
+                                } catch { /* non-critical */ }
+                            }
+
                             base.push(
                                 ``,
                                 `⚡ ESCALATION: You've failed ${attempt + 1} times. Previous approaches did not work.`,
