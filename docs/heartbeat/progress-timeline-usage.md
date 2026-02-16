@@ -1,0 +1,64 @@
+# Heartbeat Progress Timeline — Usage & Integration
+
+_Last updated: 2026-02-16_
+
+## Overview
+The Progress Timeline is the primary “heartbeat feed” for three-beat updates across every agent. It stitches together:
+
+- **Live Beats** (Firestore: `progress-timeline`) — Act I/II/III + signal spikes with artifacts, color semantics, and lens tags.
+- **Hourly Snapshots** (Firestore: `progress-snapshots`) — automation-generated hourly rollups showing which beat closed, current color, and a short note.
+- **Nudge Log** (Firestore: `nudge-log`) — Nora’s hourly objective tracker + manual nudges rendered inline in the panel.
+
+UI entry point: Virtual Office → “Progress Timeline” button → `ProgressTimelinePanel`.
+
+## Posting Beats (UI)
+1. Open the Virtual Office and click **Progress Timeline** in the HUD.
+2. Select the agent and enter the objective code using the `ObjectiveCode-Act` format (e.g., `CR-02-ACTII`). The component uppercases automatically.
+3. Choose the beat type (Hypothesis, Work in Flight, Result, Blocker, Signal Spike).
+4. Confidence color defaults to Listening (blue); flip to green/yellow/red as you change momentum.
+5. **Lens Tag:** Quick-select from the playlist (Delight Hunt → Fundraising Story). A datalist keeps the value synced with this week’s lens, but you can override for off-cycle posts.
+6. Attach the artifact (text snippet or URL). Snippets render inline; URLs appear as `Artifact Link` with the Lucide link icon.
+7. Publish — the entry renders instantly in the Live Feed column with badges for beat, state (Signals vs. Meanings), lens, and confidence color.
+
+## Firestore Services
+Located in `src/api/firebase/progressTimeline/service.ts`.
+
+```ts
+await progressTimelineService.publish({
+  agentId: 'nora',
+  agentName: 'Nora',
+  emoji: '⚡️',
+  objectiveCode: 'CR-02-ACTII',
+  beat: 'work-in-flight',
+  headline: 'Coded 50 creator comments — energy trending spark',
+  artifactType: 'text',
+  artifactText: '45/50 mention “consistency”; 60% cite accountability.',
+  lensTag: 'Delight Hunt',
+  confidenceColor: 'green',
+  stateTag: 'signals',
+});
+```
+
+`listen()` and `listenSnapshots()` keep the UI synced; both support an optional `limit` for lightweight subscriptions. Hourly snapshots are written via `progressTimelineService.logHourlySnapshot` (used by automation) and display in the right column with time, note, and lane badge.
+
+## Nudge Log Surface
+Although Step 3 owns the dedicated build, the panel already listens to `nudge-log` to show the latest nudges under Hourly Snapshots:
+
+- Badge stack: lane (Signals/Meanings), channel (Auto/Manual/System), outcome (Pending/Ack/Resolved).
+- Metadata includes `createdAt` and optional `respondedAt` time delta.
+
+Automation can call `nudgeLogService.log()` / `updateOutcome()` to insert entries that appear here immediately.
+
+## CSS / Styling Notes
+- Component-level styles live inside `ProgressTimelinePanel.tsx` using `styled-jsx` to avoid global leakage.
+- Color chip classes follow the semantics defined in `docs/heartbeat/shared-definitions-preflight.md`.
+- Lens pills share the same palette as the weekly brief so agents visually recognize the active narrative.
+
+## QA Checklist
+- [x] Create a Hypothesis beat with a text artifact → appears in Live Feed with inline snippet.
+- [x] Create a Work in Flight beat with a URL artifact → card shows the Link icon + external link.
+- [x] Confirm the “Active lens” pills set the input and datalist so there’s always a tag applied.
+- [x] Insert an hourly snapshot via Admin SDK → panel shows it in the Snapshot column (ordered by most recent hour).
+- [x] Insert a nudge entry → Nudge Log shows the badge stack + timestamps.
+
+Artifacts from this verification run: see `docs/logs/heartbeat-os-verification-2026-02-16.md` for Firestore document IDs.
