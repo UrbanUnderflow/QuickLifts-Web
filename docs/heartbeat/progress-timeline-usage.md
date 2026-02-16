@@ -41,6 +41,16 @@ await progressTimelineService.publish({
 
 `listen()` and `listenSnapshots()` keep the UI synced; both support an optional `limit` for lightweight subscriptions. Hourly snapshots are written via `progressTimelineService.logHourlySnapshot` (used by automation) and display in the right column with time, note, and lane badge.
 
+### Payload schema (Firestore `progress-timeline`)
+- `agentId`, `agentName`, optional `emoji`
+- `objectiveCode` (always include `Act` suffix in UI)
+- `beat` (enum: hypothesis/work-in-flight/result/block/signal-spike)
+- `headline` + optional `artifactType/text/url`
+- `lensTag`, `confidenceColor`, `stateTag`
+- `createdAt` server timestamp
+
+Snapshots live in `progress-snapshots` with `hourIso`, `beatCompleted`, `color`, `stateTag`, and optional `note`. The UI renders the last six entries in the side rail.
+
 ## Inline Nudge View
 As of Step 3, nudges stream directly into the Live Feed next to three-beat posts. Every entry displays:
 
