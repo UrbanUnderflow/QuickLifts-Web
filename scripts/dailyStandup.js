@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 
 /**
- * Daily Standup Orchestrator
+ * Daily Standup Orchestrator  (v2 — grounded in real data)
  *
  * Runs automated 15-20 minute standup meetings with Nora as moderator.
  * Creates a group-chat session in Firestore, sends discussion prompts,
  * waits for agent responses, and enforces a hard 20-minute cap.
+ *
+ * KEY IMPROVEMENTS over v1:
+ *  • Agents receive their REAL work history (kanban tasks, heartbeat beats)
+ *    so they cannot hallucinate. If no work exists, they must say so.
+ *  • Meeting minutes are posted to progress-timeline tagged as "standup".
+ *  • After standup, Nora creates kanban tasks for idle agents.
  *
  * Usage:
  *   node scripts/dailyStandup.js              # auto-detect morning/evening
@@ -33,6 +39,17 @@ let MAX_DURATION_MS = 20 * 60 * 1000;   // Hard 20-minute cap
 const ROUND_WAIT_MS = 4 * 60 * 1000;      // Wait up to 4 min for agents to respond per round
 const POLL_INTERVAL_MS = 10_000;           // Check for responses every 10s
 const MAX_ROUNDS = 4;                       // 4 rounds × ~5 min = ~20 min
+
+const KANBAN_COLLECTION = 'kanbanTasks';
+const TIMELINE_COLLECTION = 'progress-timeline';
+
+/* ─── Agent display names ──────────────────────────────── */
+const AGENT_DISPLAY_NAMES = {
+    nora: 'Nora', scout: 'Scout', solara: 'Solara', sage: 'Sage', antigravity: 'Antigravity',
+};
+const AGENT_EMOJIS = {
+    nora: '🟢', scout: '🟡', solara: '🔴', sage: '🧬', antigravity: '🔮',
+};
 
 /**
  * Load schedule config from Firestore (standup-config/default).
@@ -71,68 +88,221 @@ function shouldRunNow(config, type) {
     }
 }
 
-/* ─── Standup Prompts ────────────────────────────────── */
+/* ─── Fetch REAL Work History per Agent ───────────────── */
 
-const MORNING_PROMPTS = [
-    // Round 1: Opening — what are you working on today?
-    `☀️ Good morning team! This is our 9 AM daily standup. Let's keep it focused — we have 20 minutes.
+/**
+ * Pull the last 24h of real work for a specific agent:
+ *  - Kanban tasks completed/in-progress
+ *  - Progress-timeline beats posted
+ * Returns a formatted text block the agent can reference.
+ */
+async function fetchAgentWorkHistory(agentId) {
+    const displayName = AGENT_DISPLAY_NAMES[agentId] || agentId;
+    const nameVariants = [displayName, displayName.toLowerCase(), agentId];
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
+    const lines = [];
 
-**Round 1 — Today's Plan:**
-Each of you, share:
-1. What you accomplished yesterday (one line)
-2. What you're working on today (be specific — name the task or feature)
-3. Any blockers or dependencies you need help with
+    // ── Kanban tasks updated in last 24h ──
+    try {
+        const taskSnap = await db.collection(KANBAN_COLLECTION)
+            .where('assignee', 'in', nameVariants)
+            .where('updatedAt', '>=', since)
+            .orderBy('updatedAt', 'desc')
+            .limit(10)
+            .get();
 
-Keep it concise — 3-4 sentences max.`,
+        if (!taskSnap.empty) {
+            lines.push('📋 KANBAN TASKS (last 24h):');
+            taskSnap.docs.forEach(doc => {
+                const d = doc.data();
+                const status = d.status || 'unknown';
+                const name = d.name || d.title || '(unnamed)';
+                const updated = d.updatedAt?.toDate?.()?.toISOString?.() || '';
+                lines.push(`  • [${status.toUpperCase()}] ${name}${updated ? ` (${updated})` : ''}`);
+            });
+        } else {
+            lines.push('📋 KANBAN TASKS: None updated in the last 24 hours.');
+        }
+    } catch (err) {
+        // Fallback: try without the updatedAt filter (index might not exist)
+        try {
+            const fallbackSnap = await db.collection(KANBAN_COLLECTION)
+                .where('assignee', 'in', nameVariants)
+                .where('status', 'in', ['in-progress', 'done', 'completed'])
+                .limit(5)
+                .get();
+            if (!fallbackSnap.empty) {
+                lines.push('📋 RECENT KANBAN TASKS:');
+                fallbackSnap.docs.forEach(doc => {
+                    const d = doc.data();
+                    lines.push(`  • [${(d.status || '?').toUpperCase()}] ${d.name || d.title || '(unnamed)'}`);
+                });
+            } else {
+                lines.push('📋 KANBAN TASKS: No tasks assigned to this agent.');
+            }
+        } catch {
+            lines.push('📋 KANBAN TASKS: Could not fetch (missing index).');
+        }
+    }
 
-    // Round 2: Cross-team coordination
-    `**Round 2 — Coordination:**
-Based on what everyone shared, does anyone:
-- Need something from another agent to unblock their work?
-- See overlap or conflict in today's plans?
-- Have a suggestion for reprioritizing?
+    // ── Progress-timeline beats in last 24h ──
+    try {
+        const beatSnap = await db.collection(TIMELINE_COLLECTION)
+            .where('agentId', '==', agentId)
+            .where('createdAt', '>=', since)
+            .orderBy('createdAt', 'desc')
+            .limit(10)
+            .get();
 
-If nothing, just say "No coordination needed."`,
+        if (!beatSnap.empty) {
+            lines.push('');
+            lines.push('💓 HEARTBEAT ENTRIES (last 24h):');
+            beatSnap.docs.forEach(doc => {
+                const d = doc.data();
+                const beat = d.beat || '?';
+                const headline = d.headline || '';
+                const time = d.createdAt?.toDate?.()?.toISOString?.() || '';
+                lines.push(`  • [${beat.toUpperCase()}] ${headline}${time ? ` (${time})` : ''}`);
+            });
+        } else {
+            lines.push('');
+            lines.push('💓 HEARTBEAT: No beats logged in the last 24 hours.');
+        }
+    } catch (err) {
+        lines.push('');
+        lines.push('💓 HEARTBEAT: Could not fetch beats.');
+    }
 
-    // Round 3: Priorities alignment
-    `**Round 3 — Priority Check:**
-Given our current objectives, are we focused on the right things? Any signals or insights from yesterday that should change today's priorities?
+    // ── Current agent presence snapshot ──
+    try {
+        const presSnap = await db.doc(`agent-presence/${agentId}`).get();
+        if (presSnap.exists) {
+            const p = presSnap.data();
+            const status = p.status || 'unknown';
+            const task = p.currentTask || 'none';
+            const progress = p.taskProgress || 0;
+            lines.push('');
+            lines.push(`🔹 CURRENT STATUS: ${status} | Task: ${task} | Progress: ${progress}%`);
+        }
+    } catch { /* best effort */ }
 
-Quick takes only — we're wrapping up soon.`,
+    if (lines.length === 0) {
+        return `NO WORK HISTORY FOUND for ${displayName} in the last 24 hours. This agent has not completed any tasks, logged any heartbeat beats, or updated any kanban items.`;
+    }
 
-    // Round 4 (if time): Closing
-    `**Wrap-up:**
-Thanks team. Quick final thoughts? Otherwise, let's get to work. 💪`,
-];
+    return lines.join('\n');
+}
 
-const EVENING_PROMPTS = [
-    // Round 1: Opening — what did you accomplish?
-    `🌙 Good evening team! This is our 9 PM daily recap. Let's review the day — 20 minutes max.
+/**
+ * Build a combined work-history context block for all agents.
+ */
+async function buildWorkHistoryContext() {
+    const sections = [];
+    for (const agentId of AGENTS) {
+        const displayName = AGENT_DISPLAY_NAMES[agentId] || agentId;
+        const history = await fetchAgentWorkHistory(agentId);
+        sections.push(`═══ ${displayName}'s VERIFIED Work History ═══\n${history}`);
+    }
+    return sections.join('\n\n');
+}
 
-**Round 1 — End of Day Report:**
-Each of you, share:
-1. What you completed today (specific deliverables — commits, docs, research, etc.)
-2. What's still in progress and expected completion
-3. Any unresolved blockers to flag for tomorrow
+/* ─── Standup Prompts (v2 — grounded) ──────────────────── */
 
-Be specific about deliverables. No vague "worked on X" — name the artifact.`,
+function buildMorningPrompts(workHistory) {
+    return [
+        // Round 1: Opening — GROUNDED in real data
+        `☀️ Good morning team! This is our daily standup. Let's keep it focused — we have 20 minutes.
 
-    // Round 2: Wins and friction
-    `**Round 2 — Wins & Friction:**
-- What went well today? Any wins worth celebrating?
+**IMPORTANT — REAL DATA BELOW. You MUST base your report on this data. Do NOT make up work you didn't do.**
+
+${workHistory}
+
+─── INSTRUCTIONS ───
+
+**Round 1 — Yesterday's Report (FROM THE DATA ABOVE):**
+Each of you:
+1. Report ONLY what the data above shows you actually did. Reference specific task names, beat entries, and timestamps.
+2. If the data shows NO completed work for you — say: "I did not complete any tasks yesterday."
+3. Do NOT fabricate accomplishments. The data above is the single source of truth.
+4. Mention any in-progress work that is still ongoing.
+
+Keep it honest — 3-4 sentences max.`,
+
+        // Round 2: Today's Plan
+        `**Round 2 — Today's Plan:**
+Based on the kanban board and your current priorities:
+1. What specific task will you work on TODAY? Name it exactly.
+2. Are there blockers, dependencies, or things you need from another agent?
+3. If you have no assigned tasks, say so explicitly.
+
+@Nora — take note of who has no tasks. You'll need to assign work after this standup.
+
+Quick and specific — 2-3 sentences each.`,
+
+        // Round 3: Coordination
+        `**Round 3 — Coordination & Blockers:**
+- Does anyone need help from another agent?
+- Are there any overlaps or conflicts in today's plans?
+- @Nora — summarize what each agent committed to and identify anyone who needs task assignments.
+
+If nothing to add, say "No blockers."`,
+
+        // Round 4: Closing
+        `**Wrap-up:**
+Thanks team. Let's get to work.
+
+@Nora — After this standup:
+1. Summarize what each agent reported and committed to.
+2. For any agent with NO assigned tasks, create a kanban task for them immediately.
+3. Post meeting minutes to the heartbeat feed.
+
+💪 Let's go.`,
+    ];
+}
+
+function buildEveningPrompts(workHistory) {
+    return [
+        // Round 1: End-of-day — GROUNDED in real data
+        `🌙 Good evening team! This is our daily recap. Let's review the day — 20 minutes max.
+
+**IMPORTANT — REAL DATA BELOW. You MUST base your report on this data. Do NOT make up work you didn't do.**
+
+${workHistory}
+
+─── INSTRUCTIONS ───
+
+**Round 1 — End of Day Report (FROM THE DATA ABOVE):**
+Each of you:
+1. Report ONLY what the data above shows you actually completed today. Reference specific tasks, beat entries, and timestamps.
+2. If the data shows NO completed work — say: "I did not complete any tasks today." Be honest.
+3. What is still in-progress and what's the expected completion?
+4. Any unresolved blockers to flag for tomorrow?
+
+Be specific about REAL deliverables. No vague "worked on X" — name the actual artifact. If there's nothing, say nothing.`,
+
+        // Round 2: Wins and friction
+        `**Round 2 — Wins & Friction:**
+- Based on the ACTUAL data from today, what went well?
 - Where did you hit friction? What slowed you down?
-- Any process improvements to suggest?`,
+- If you had no tasks or did no work today, reflect on why and what should change.`,
 
-    // Round 3: Tomorrow preview
-    `**Round 3 — Tomorrow Preview:**
-What's the single most important thing you need to accomplish tomorrow? 
+        // Round 3: Tomorrow preview
+        `**Round 3 — Tomorrow Preview:**
+What's the single most important thing you need to accomplish tomorrow?
+If you need something from another agent, flag it now.
 
-If you need something from another agent, flag it now so they can prepare overnight.`,
+@Nora — note any agents that were idle today. They need task assignments for tomorrow.`,
 
-    // Round 4 (if time): Closing
-    `**Wrap-up:**
-Great work today, team. Get some rest — see you at the morning standup. 🌃`,
-];
+        // Round 4: Closing
+        `**Wrap-up:**
+@Nora — Post meeting minutes summarizing:
+- What each agent actually accomplished (based on data, not what they claimed)
+- Who was idle and needs work assignments
+- Priority items for tomorrow
+
+Get some rest — see you at the morning standup. 🌃`,
+    ];
+}
 
 /* ─── Helpers ────────────────────────────────────────── */
 
@@ -255,6 +425,188 @@ async function setAgentPresenceStatus(agents, status, note) {
     }
 }
 
+/* ─── Post-Standup: Meeting Minutes ─────────────────── */
+
+/**
+ * Collect all responses from the standup and post meeting minutes
+ * to the progress-timeline as a heartbeat beat tagged as "standup".
+ */
+async function postMeetingMinutes(chatId, type, durationMin, roundsCompleted) {
+    const label = type === 'morning' ? 'Morning Standup' : 'Evening Standup';
+    const emoji = type === 'morning' ? '☀️' : '🌙';
+
+    // Collect all responses from the session
+    const messagesSnap = await db.collection(`agent-group-chats/${chatId}/messages`)
+        .orderBy('createdAt', 'asc')
+        .get();
+
+    const minutesSections = [];
+    let roundNum = 0;
+
+    for (const msgDoc of messagesSnap.docs) {
+        const msgData = msgDoc.data();
+        if (msgData.from !== 'admin') continue; // Only count prompts from admin
+        roundNum++;
+
+        const prompt = (msgData.content || '').split('\n')[0].substring(0, 80); // First line as section header
+        const responses = msgData.responses || {};
+
+        const agentResponses = [];
+        for (const agentId of AGENTS) {
+            const resp = responses[agentId];
+            const displayName = AGENT_DISPLAY_NAMES[agentId] || agentId;
+            if (resp?.status === 'completed' && resp.content) {
+                agentResponses.push(`**${displayName}**: ${resp.content.substring(0, 300)}`);
+            } else if (resp?.skipped) {
+                agentResponses.push(`**${displayName}**: (skipped)`);
+            } else {
+                agentResponses.push(`**${displayName}**: (no response)`);
+            }
+        }
+
+        minutesSections.push(`Round ${roundNum}: ${prompt}\n${agentResponses.join('\n')}`);
+    }
+
+    const minutesText = minutesSections.join('\n\n---\n\n');
+    const headline = `${emoji} ${label} — ${roundsCompleted} rounds, ${durationMin} min`;
+
+    // Post to progress-timeline as a standup beat
+    try {
+        await db.collection(TIMELINE_COLLECTION).add({
+            agentId: MODERATOR,
+            agentName: AGENT_DISPLAY_NAMES[MODERATOR] || MODERATOR,
+            emoji: AGENT_EMOJIS[MODERATOR] || '🟢',
+            objectiveCode: `STANDUP-${type.toUpperCase()}`,
+            beat: 'result',
+            headline: headline,
+            artifactType: 'text',
+            artifactText: minutesText,
+            artifactUrl: '',
+            lensTag: 'standup',
+            confidenceColor: 'green',
+            stateTag: 'signals',
+            standupChatId: chatId,
+            standupType: type,
+            isStandup: true,
+            createdAt: FieldValue.serverTimestamp(),
+        });
+        console.log(`📝 Meeting minutes posted to heartbeat feed`);
+    } catch (err) {
+        console.error('⚠️  Failed to post meeting minutes:', err.message);
+    }
+}
+
+/* ─── Post-Standup: Auto-assign Tasks for Idle Agents ── */
+
+/**
+ * After standup, check which agents have no tasks assigned.
+ * For each idle agent, create a kanban task so they have work to do.
+ */
+async function assignTasksToIdleAgents(type) {
+    console.log('\n📋 Checking for idle agents to assign tasks...');
+
+    for (const agentId of AGENTS) {
+        const displayName = AGENT_DISPLAY_NAMES[agentId] || agentId;
+        const nameVariants = [displayName, displayName.toLowerCase(), agentId];
+
+        // Check if agent already has tasks
+        try {
+            const existingTasks = await db.collection(KANBAN_COLLECTION)
+                .where('assignee', 'in', nameVariants)
+                .where('status', 'in', ['todo', 'in-progress'])
+                .limit(1)
+                .get();
+
+            if (!existingTasks.empty) {
+                console.log(`   ✅ ${displayName} has active tasks — skipping`);
+                continue;
+            }
+
+            // Agent has no tasks — create one based on their role
+            const taskForAgent = getDefaultTask(agentId, type);
+            if (!taskForAgent) continue;
+
+            await db.collection(KANBAN_COLLECTION).add({
+                name: taskForAgent.name,
+                description: taskForAgent.description,
+                assignee: displayName,
+                status: 'todo',
+                priority: 'medium',
+                source: 'standup-auto-assign',
+                standupType: type,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            console.log(`   📌 Created task for ${displayName}: "${taskForAgent.name}"`);
+
+            // Also post a beat about the assignment
+            await db.collection(TIMELINE_COLLECTION).add({
+                agentId: MODERATOR,
+                agentName: AGENT_DISPLAY_NAMES[MODERATOR] || MODERATOR,
+                emoji: AGENT_EMOJIS[MODERATOR] || '🟢',
+                objectiveCode: 'TASK-ASSIGN',
+                beat: 'work-in-flight',
+                headline: `Assigned "${taskForAgent.name}" to ${displayName} (post-standup auto-assignment)`,
+                artifactType: 'none',
+                artifactText: '',
+                artifactUrl: '',
+                lensTag: 'standup',
+                confidenceColor: 'blue',
+                stateTag: 'signals',
+                isStandup: true,
+                createdAt: FieldValue.serverTimestamp(),
+            });
+
+        } catch (err) {
+            console.error(`   ⚠️ Could not check/assign for ${displayName}:`, err.message);
+        }
+    }
+}
+
+/**
+ * Generate a default task for an idle agent based on their role.
+ */
+function getDefaultTask(agentId, standupType) {
+    const isEvening = standupType === 'evening';
+    const tasks = {
+        nora: {
+            name: isEvening
+                ? 'Review and organize tomorrow\'s task queue'
+                : 'Audit agent task queues and identify blockers',
+            description: isEvening
+                ? 'Review all agent kanban boards, close completed tasks, organize priorities for tomorrow. Ensure every agent will have work to do in the morning.'
+                : 'Review the kanban board for all agents. Check for blocked tasks, stale in-progress items, and re-prioritize based on current objectives. Create follow-up tasks as needed.',
+        },
+        scout: {
+            name: isEvening
+                ? 'Research brief: fitness industry trends this week'
+                : 'Competitive analysis: top 3 fitness app features launched this month',
+            description: isEvening
+                ? 'Compile a short research brief covering notable fitness industry trends, competitor moves, and emerging opportunities. Focus on actionable insights for Pulse.'
+                : 'Analyze features recently launched by competitor fitness apps (e.g., Strava, Peloton, Nike Run Club). Identify opportunities for Pulse to differentiate. Write findings to a deliverable.',
+        },
+        solara: {
+            name: isEvening
+                ? 'Brand voice audit on latest Pulse content'
+                : 'Draft content for the next community engagement post',
+            description: isEvening
+                ? 'Review the latest Pulse-facing content (app copy, social posts, documentation) for brand consistency. Flag any messaging that doesn\'t align with Pulse\'s voice.'
+                : 'Create a draft for a community-focused social post or in-app notification. Ensure it reflects Pulse\'s brand values: authenticity, community, and movement.',
+        },
+        sage: {
+            name: isEvening
+                ? 'Literature scan: latest sports science publications'
+                : 'Research synthesis: top 3 recovery science insights this month',
+            description: isEvening
+                ? 'Scan recent sports science and wellness publications for findings relevant to Pulse\'s product. Focus on recovery, training optimization, and health tech.'
+                : 'Synthesize the top 3 most relevant recovery science or exercise science insights from recent literature. Create a brief that could inform Pulse\'s content or product decisions.',
+        },
+    };
+
+    return tasks[agentId] || null;
+}
+
 /* ─── Main Standup Flow ──────────────────────────────── */
 
 async function runStandup() {
@@ -276,7 +628,6 @@ async function runStandup() {
         process.exit(0);
     }
 
-    const prompts = type === 'morning' ? MORNING_PROMPTS : EVENING_PROMPTS;
     const emoji = type === 'morning' ? '☀️' : '🌙';
     const label = type === 'morning' ? 'Morning Standup' : 'Evening Standup';
 
@@ -285,7 +636,15 @@ async function runStandup() {
     console.log(`   Moderator: ${MODERATOR}`);
     console.log(`   Max duration: ${MAX_DURATION_MS / 60000} minutes`);
     console.log(`   Rounds: up to ${MAX_ROUNDS}`);
-    console.log('');
+
+    // ── Step 0: Fetch real work history for all agents ──
+    console.log('\n📊 Fetching real work history for all agents...');
+    const workHistory = await buildWorkHistoryContext();
+    console.log('   ✅ Work history loaded\n');
+
+    const prompts = type === 'morning'
+        ? buildMorningPrompts(workHistory)
+        : buildEveningPrompts(workHistory);
 
     const startTime = Date.now();
 
@@ -305,6 +664,7 @@ async function runStandup() {
             scheduledAt: FieldValue.serverTimestamp(),
             moderator: MODERATOR,
             maxDurationMinutes: 20,
+            grounded: true,  // v2: indicates data-grounded standup
         },
     });
     const chatId = chatRef.id;
@@ -379,10 +739,17 @@ async function runStandup() {
         },
     });
 
-    // 5. Reset agent presence
+    // 5. Post meeting minutes to heartbeat feed
+    console.log('\n📝 Posting meeting minutes...');
+    await postMeetingMinutes(chatId, type, durationMin, roundsCompleted);
+
+    // 6. Auto-assign tasks to idle agents
+    await assignTasksToIdleAgents(type);
+
+    // 7. Reset agent presence
     await setAgentPresenceStatus(AGENTS, 'idle', `✅ ${label} complete`);
 
-    console.log('👋 Done.\n');
+    console.log('\n👋 Done.\n');
     process.exit(0);
 }
 
