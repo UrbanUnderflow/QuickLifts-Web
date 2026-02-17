@@ -23,6 +23,7 @@ import { AgentChatModal } from './AgentChatModal';
 import { InterventionAlert } from './InterventionAlert';
 import ProgressTimelinePanel from './ProgressTimelinePanel';
 import { StandupConfigPanel } from './StandupConfigPanel';
+import { NorthStarPanel } from './NorthStarPanel';
 import { groupChatService } from '../../api/firebase/groupChat/service';
 import type { GroupChatMessage, GroupChat } from '../../api/firebase/groupChat/types';
 import {
@@ -1867,6 +1868,7 @@ const VirtualOfficeContent: React.FC = () => {
   const [showFilingCabinet, setShowFilingCabinet] = useState(false);
   const [showProgressTimeline, setShowProgressTimeline] = useState(false);
   const [showStandupConfig, setShowStandupConfig] = useState(false);
+  const [showNorthStar, setShowNorthStar] = useState(false);
   const [showSharedDeliverables, setShowSharedDeliverables] = useState(false);
   const [chatAgent, setChatAgent] = useState<AgentPresence | null>(null);
   const [showManifesto, setShowManifesto] = useState(false);
@@ -2531,6 +2533,25 @@ const VirtualOfficeContent: React.FC = () => {
               <span>Standup Schedule</span>
             </div>
 
+            {/* North Star */}
+            <div
+              onClick={() => setShowNorthStar(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '8px 14px', borderRadius: 10,
+                background: 'rgba(251,191,36,0.08)',
+                border: '1px solid rgba(251,191,36,0.2)',
+                color: '#fbbf24', fontSize: 13, fontWeight: 500,
+                cursor: 'pointer', transition: 'all 0.2s',
+                whiteSpace: 'nowrap' as any,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(251,191,36,0.15)'; e.currentTarget.style.borderColor = 'rgba(251,191,36,0.35)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(251,191,36,0.08)'; e.currentTarget.style.borderColor = 'rgba(251,191,36,0.2)'; }}
+            >
+              <span style={{ fontSize: 15 }}>⭐</span>
+              <span>North Star</span>
+            </div>
+
             {/* Manual Standup Trigger */}
             <div style={{ position: 'relative', display: 'inline-block' }}>
               <div
@@ -2711,6 +2732,10 @@ const VirtualOfficeContent: React.FC = () => {
 
         {showStandupConfig && (
           <StandupConfigPanel onClose={() => setShowStandupConfig(false)} />
+        )}
+
+        {showNorthStar && (
+          <NorthStarPanel onClose={() => setShowNorthStar(false)} />
         )}
 
         {/* Shared Deliverables */}

@@ -231,6 +231,50 @@ function loadCodebaseMap() {
 // Load manifesto and codebase map once at startup (will be refreshed each task cycle if needed)
 let cachedManifesto = loadManifesto();
 let cachedCodebaseMap = loadCodebaseMap();
+let cachedNorthStar = null;
+let lastNorthStarFetch = 0;
+const NORTH_STAR_REFRESH_MS = 15 * 60 * 1000; // Re-fetch every 15 min
+
+/**
+ * Load the company's North Star from Firestore.
+ * Cached for 15 minutes so we don't hit Firestore on every step.
+ */
+async function loadNorthStar() {
+    const now = Date.now();
+    if (cachedNorthStar && (now - lastNorthStarFetch) < NORTH_STAR_REFRESH_MS) {
+        return cachedNorthStar;
+    }
+    try {
+        const snap = await db.collection('company-config').doc('north-star').get();
+        if (!snap.exists) { cachedNorthStar = ''; lastNorthStarFetch = now; return ''; }
+        const data = snap.data();
+        if (!data?.title) { cachedNorthStar = ''; lastNorthStarFetch = now; return ''; }
+
+        const lines = [
+            `=== COMPANY NORTH STAR ===`,
+            `Goal: ${data.title}`,
+        ];
+        if (data.description) {
+            lines.push(data.description);
+        }
+        if (data.objectives && data.objectives.length > 0) {
+            lines.push(`Key Objectives:`);
+            data.objectives.forEach((obj, i) => {
+                lines.push(`  ${i + 1}. ${obj}`);
+            });
+        }
+        lines.push(`=== Prioritize work that moves us toward this goal ===`);
+        cachedNorthStar = lines.join('\n');
+        lastNorthStarFetch = now;
+        console.log(`⭐ North Star loaded: "${data.title}"`);
+        return cachedNorthStar;
+    } catch (err) {
+        console.warn('⚠️  Could not load North Star:', err.message);
+        cachedNorthStar = '';
+        lastNorthStarFetch = now;
+        return '';
+    }
+}
 
 const SERVICE_ACCOUNT = {
     type: "service_account",
@@ -2576,13 +2620,23 @@ ${smokeOutput}`.substring(0, 2000);
                     // Refresh codebase map each task cycle (may have been updated by other agents)
                     if (attempt === 0) cachedCodebaseMap = loadCodebaseMap();
 
+                    const northStarBlock = await loadNorthStar();
+
                     const base = [
                         `You are ${AGENT_NAME}, an AI engineer working on the Pulse Fitness project.`,
                         `Project directory: ${projectDir}`,
+                        northStarBlock || '',
                         cachedCodebaseMap ? `\n=== CODEBASE MAP (use this to find files — do NOT guess paths) ===\n${cachedCodebaseMap}\n=== END CODEBASE MAP ===\n` : '',
                         `TASK: "${task.name}"`,
                         task.description ? `Description: ${task.description}` : '',
                         task.notes ? `Notes: ${task.notes}` : '',
+                        ``,
+                        `=== WORK OUTPUT RULES ===`,
+                        `All deliverables (research, analysis, docs, code) MUST be saved as files in the project repo.`,
+                        `Research and analysis → save as .md files in the appropriate directory (e.g., docs/research/, docs/deliverables/).`,
+                        `After completing meaningful work, commit and push your changes to the repo with a descriptive commit message.`,
+                        `This ensures all work is trackable and accessible from the artifacts/deliverables views.`,
+                        `=== END WORK OUTPUT RULES ===`,
                         ``,
                         `All steps:`,
                         stepsContext,
