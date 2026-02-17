@@ -69,6 +69,24 @@ export interface AgentPresence {
     totalTokens: number;
     callCount: number;
   };
+  tokenUsageTask?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    callCount: number;
+  };
+  tokenUsageCumulative?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    callCount: number;
+  };
+  tokenUsageDaily?: Record<string, {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    callCount: number;
+  }>;
 
   // Timestamps
   lastUpdate?: Date;
@@ -447,6 +465,9 @@ export const presenceService = {
           currentModelProvider: data.currentModelProvider || undefined,
           openClawAgentId: data.openClawAgentId || undefined,
           tokenUsage: data.tokenUsage || undefined,
+          tokenUsageTask: data.tokenUsageTask || undefined,
+          tokenUsageCumulative: data.tokenUsageCumulative || undefined,
+          tokenUsageDaily: data.tokenUsageDaily || undefined,
           lastUpdate: data.lastUpdate?.toDate?.() || undefined,
           sessionStartedAt: data.sessionStartedAt?.toDate?.() || undefined,
           installProgress: deserialiseInstallProgress(data.installProgress) || null,

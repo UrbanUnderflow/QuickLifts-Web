@@ -86,8 +86,8 @@ function getAgentIdForTier(tier) {
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
 const OPENCLAW_MODEL_SYNC_MS = parseInt(process.env.OPENCLAW_MODEL_SYNC_MS || '60000', 10); // Keep presence model accurate after OpenClaw config changes
-const MAX_FOLLOW_UP_DEPTH = 3; // Max rounds of agent-to-agent @mention follow-ups
-const MAX_FOLLOW_UP_DEPTH_EXEC = 1; // Execution-mode: one reply max, then go build
+const MAX_FOLLOW_UP_DEPTH = 5; // Max rounds of agent-to-agent @mention follow-ups
+const MAX_FOLLOW_UP_DEPTH_EXEC = 2; // Execution-mode: reduced but still allows one back-and-forth
 const MAX_SELF_CORRECTION_RETRIES = 2; // Retry attempts when step output contains failure signals
 const STEP_INACTIVITY_TIMEOUT_MS = 120_000; // Kill step if no stderr activity for 120s
 const MAX_STEP_REWRITE_ATTEMPTS = 1; // Rewrite-from-different-angle attempts on crash/timeout
@@ -97,6 +97,7 @@ const ENABLE_TASK_VALIDATION = process.env.ENABLE_TASK_VALIDATION !== 'false'; /
 
 /* ─── Token Usage Tracking ─────────────────────────────── */
 var sessionTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
+var taskTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
 // If OpenClaw is enabled, we'll sync the actual configured model from OpenClaw at runtime.
 var currentModel = process.env.USE_OPENCLAW === 'true' ? 'openclaw' : 'gpt-4o';
 var currentModelProvider = '';
@@ -104,14 +105,68 @@ var currentModelRaw = '';
 var lastOpenClawModelSyncAt = 0;
 var openClawModelSyncInFlight = null;
 
+// Rough token estimator for OpenClaw calls (no usage object returned)
+// Uses ~4 chars per token heuristic (GPT tokenizer average)
+function estimateTokens(promptText, outputText) {
+    var promptTokens = Math.ceil((promptText || '').length / 4);
+    var completionTokens = Math.ceil((outputText || '').length / 4);
+    return {
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        total_tokens: promptTokens + completionTokens,
+        estimated: true,
+    };
+}
+
 function trackTokenUsage(usage, model) {
     if (!usage) return;
-    sessionTokens.promptTokens += (usage.prompt_tokens || 0);
-    sessionTokens.completionTokens += (usage.completion_tokens || 0);
-    sessionTokens.totalTokens += (usage.total_tokens || 0);
+    var prompt = usage.prompt_tokens || 0;
+    var completion = usage.completion_tokens || 0;
+    var total = usage.total_tokens || (prompt + completion);
+
+    // Session counters (in-memory, reset on restart)
+    sessionTokens.promptTokens += prompt;
+    sessionTokens.completionTokens += completion;
+    sessionTokens.totalTokens += total;
     sessionTokens.callCount += 1;
+
+    // Per-task counters (reset each task)
+    taskTokens.promptTokens += prompt;
+    taskTokens.completionTokens += completion;
+    taskTokens.totalTokens += total;
+    taskTokens.callCount += 1;
+
     if (model) currentModel = model;
-    console.log(`   📊 Tokens: +${usage.total_tokens || 0} (session total: ${sessionTokens.totalTokens}, calls: ${sessionTokens.callCount})`);
+
+    var isEstimate = usage.estimated ? ' (est)' : '';
+    console.log(`   📊 Tokens: +${total.toLocaleString()}${isEstimate} | task: ${taskTokens.totalTokens.toLocaleString()} | session: ${sessionTokens.totalTokens.toLocaleString()} | calls: ${sessionTokens.callCount}`);
+
+    // Persist to Firestore — cumulative + daily counters (survives restarts)
+    var today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    try {
+        // Fire-and-forget — don't await to avoid blocking the pipeline
+        db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).set({
+            tokenUsage: { ...sessionTokens },
+            tokenUsageTask: { ...taskTokens },
+            tokenUsageCumulative: {
+                promptTokens: FieldValue.increment(prompt),
+                completionTokens: FieldValue.increment(completion),
+                totalTokens: FieldValue.increment(total),
+                callCount: FieldValue.increment(1),
+            },
+            [`tokenUsageDaily.${today}`]: {
+                promptTokens: FieldValue.increment(prompt),
+                completionTokens: FieldValue.increment(completion),
+                totalTokens: FieldValue.increment(total),
+                callCount: FieldValue.increment(1),
+            },
+            lastTokenUpdate: FieldValue.serverTimestamp(),
+        }, { merge: true }).catch(() => { }); // Swallow errors — non-critical
+    } catch { /* non-critical */ }
+}
+
+function resetTaskTokens() {
+    taskTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
 }
 
 /* ─── Agent Manifesto (shared institutional knowledge) ── */
@@ -1196,20 +1251,17 @@ async function processCommands() {
                         } catch (e) { /* proceed */ }
                     }
 
-                    // Relevance gate: skip if it's a 1:1 question that doesn't touch our expertise
+                    // Relevance gate: only skip in very narrow cases (direct 1:1 yes/no question to another agent)
                     if (othersRespondedBefore.length > 0) {
-                        var msgLower = cmd.content.toLowerCase();
-                        var isDirectQuestion = /\?\s*$/.test(msgLower.trim()) ||
-                            /^(have you|did you|can you|are you|what'?s|how'?s|where'?s|when did|when will)/i.test(cmd.content);
-                        var myStrengths = (personality?.strengths || '').split(',').map(function (s) { return s.trim().toLowerCase(); });
-                        var touchesMyExpertise = myStrengths.some(function (s) { return s && msgLower.includes(s); });
                         var othersReferencedMe = othersRespondedBefore.some(function (r) {
                             return new RegExp('@' + (etiquetteNames[AGENT_ID] || AGENT_NAME) + '\\b', 'i').test(r.content);
                         });
+                        // Only skip if: it's a very short direct yes/no question to a specific agent AND nobody referenced us
+                        var isShortDirectQuestion = cmd.content.length < 60 && /\?\s*$/.test(cmd.content.trim()) &&
+                            /^(have you|did you|can you|are you)\b/i.test(cmd.content);
 
-                        if (isDirectQuestion && !touchesMyExpertise && !othersReferencedMe) {
-                            console.log(`   🤫 Etiquette: Skipping — direct question to @${mentionedInMsg.join(',')} and doesn't touch my expertise`);
-                            // Mark as completed-skipped so it doesn't hang
+                        if (isShortDirectQuestion && !othersReferencedMe && mentionedInMsg.length === 1) {
+                            console.log(`   🤫 Etiquette: Skipping — short direct yes/no question to @${mentionedInMsg.join(',')}`);
                             try {
                                 await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).update({
                                     [`responses.${AGENT_ID}.content`]: '',
@@ -1223,7 +1275,7 @@ async function processCommands() {
                             response = '[skipped — etiquette]';
                             break;
                         } else {
-                            console.log(`   💬 Etiquette: Chiming in — ${touchesMyExpertise ? 'touches my expertise' : othersReferencedMe ? 'someone referenced me' : 'open-ended enough to contribute'}`);
+                            console.log(`   💬 Etiquette: Chiming in — ${othersReferencedMe ? 'someone referenced me' : 'conversation is open enough to contribute my perspective'}`);
                         }
                     }
                 } else {
@@ -1306,8 +1358,8 @@ async function processCommands() {
                 var EXEC_RX = /\[(TASK|COMMAND)\]|stop\s+planning|start\s+building|start\s+executing|queue\s+(up\s+)?(your|the)\s+tasks?|no\s+more\s+planning|enough\s+planning|stop\s+talking|go\s+build|do\s+work|start\s+working/i;
                 var isExecMode = EXEC_RX.test(msgContent);
                 var currentDepth = cmd.context?.followUpDepth || 0;
-                // Also auto-detect exec mode at high follow-up depths (conversation is dragging)
-                if (currentDepth >= 2) isExecMode = true;
+                // Only auto-trigger exec mode at very high depth — let the tree of thought breathe
+                if (currentDepth >= 5) isExecMode = true;
                 if (isExecMode) {
                     console.log(`   ⚡ EXEC MODE: agent will respond with action items, not discussion`);
                 }
@@ -1335,31 +1387,59 @@ async function processCommands() {
                             `2-3 sentences max, plain text only, action-oriented:`,
                         ].join('\n');
                     } else {
-                        // BRAINSTORM PROMPT — original behavior
+                        // BRAINSTORM PROMPT — Tree of Thought pattern
+                        // The key insight: agents MUST tag each other, build on ideas, and create threads
+                        var othersInRoom = otherAgents.filter(a => a.toLowerCase() !== AGENT_NAME.toLowerCase());
+                        var replyToAgent = cmd.context?.replyTo || null;
+                        var isFollowUp = cmd.context?.followUpDepth > 0;
+
                         chatPrompt = [
                             `You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai). ${personality.style}`,
-                            `Strengths: ${personality.strengths}`,
-                            `Round Table with: ${otherAgents.join(', ')}. Tremaine (founder) said: "${msgContent}"`,
-                            `BRAINSTORM ONLY — think, don't execute. Rules: Think out loud (reasoning > conclusions). Ask questions, explore angles from your expertise, raise concerns. Build on others' ideas with "What if..." Never offer to build/execute — this is thinking time. Use @Name to tag agents. If casual, be warm and share what's on your mind.`,
+                            `Your strengths: ${personality.strengths}`,
+                            ``,
+                            `You're at the Round Table with: ${otherAgents.join(', ')}. Tremaine (founder) is facilitating.`,
+                            isFollowUp && replyToAgent
+                                ? `${replyToAgent} just spoke and tagged you. This is a THREAD — build directly on what they said.`
+                                : `Tremaine said: "${msgContent}"`,
+                            ``,
+                            `─── TREE OF THOUGHT RULES ───`,
+                            `You are in a brainstorming session. This is where the best ideas come from — agents riffing off each other.`,
+                            ``,
+                            `CRITICAL — ENGAGE WITH YOUR TEAMMATES:`,
+                            `• You MUST @mention at least one other agent by name (use @Nora, @Scout, @Solara, or @Sage).`,
+                            `• Ask them a DIRECT question, build on something they said, or challenge their thinking.`,
+                            `• Examples: "@Scout, have you seen data on this?" or "Building on @Nora's point about architecture..." or "@Solara, how does this fit the brand?"`,
+                            ``,
+                            `THINK OUT LOUD:`,
+                            `• Show your reasoning process, not just conclusions.`,
+                            `• Use phrases like: "I'm thinking...", "What if...", "The pattern I see is...", "My concern is..."`,
+                            `• Connect ideas: "That connects to...", "Building on that...", "Flipping that around..."`,
+                            ``,
+                            `RULES:`,
+                            `• Do NOT offer to build, execute, or queue tasks. This is THINKING time.`,
+                            `• Do NOT just agree — add a new angle, challenge, or question.`,
+                            `• Do NOT repeat what others already said — build on it or push it further.`,
+                            `• Be conversational, warm, and real. This is colleagues brainstorming, not a formal report.`,
+                            ``,
                             isBoosted
-                                ? `Tremaine asked you to THINK DEEPLY on this. Take your time, be thorough and analytical. Explore multiple angles. ${boostSentences}, plain text only, thoughtful and rigorous:`
+                                ? `Tremaine asked you to THINK DEEPLY. Be thorough, analytical, and explore multiple angles. ${boostSentences}, plain text only:`
                                 : `${boostSentences}, plain text only, conversational and real:`,
                         ].join('\n');
                     }
 
                     // ── Etiquette: inject others' responses so we can build on them ──
-                    // Cap prior responses to last 2 to save tokens
-                    var recentResponses = othersRespondedBefore.slice(-2);
+                    // Include up to 5 prior responses for rich tree-of-thought context
+                    var recentResponses = othersRespondedBefore.slice(-5);
                     if (recentResponses.length > 0) {
-                        var contextBlock = '\nPrior responses:\n';
+                        var contextBlock = '\n─── What others have said so far ───\n';
                         for (var responder of recentResponses) {
-                            contextBlock += `${responder.name}: "${responder.content}"\n`;
+                            contextBlock += `@${responder.name}: "${responder.content}"\n\n`;
                         }
-                        contextBlock += 'Add NEW perspective — don\'t repeat.\n';
+                        contextBlock += '─── Your turn: Build on what\'s been said, challenge an idea, or open a new thread. REFERENCE specific things they said. ───\n';
                         chatPrompt += contextBlock;
                     }
                     if (someoneElseAddressed) {
-                        chatPrompt += `\nNote: This message was directed at @${mentionedInMsg.map(id => etiquetteNames[id]).join(', @')}. Only chime in if you have genuinely valuable perspective to add from your expertise. Keep it brief and additive.\n`;
+                        chatPrompt += `\nNote: This message was directed at @${mentionedInMsg.map(id => etiquetteNames[id]).join(', @')}. You should still contribute your perspective — the best ideas come from unexpected angles. Reference what the addressed agent said and build on it.\n`;
                     }
 
                     // Helper: detect if a response looks like an error
@@ -1539,6 +1619,8 @@ async function processCommands() {
                         }
 
                         // ── Detect @mentions and trigger follow-up responses ──
+                        // ALSO: organically trigger follow-ups even without explicit @mentions
+                        // This is the engine of the tree-of-thought pattern.
                         var currentDepth = cmd.context?.followUpDepth || 0;
                         var knownAgents = {
                             nora: 'Nora',
@@ -1555,12 +1637,42 @@ async function processCommands() {
                             }
                         }
 
+                        // ── Organic follow-up: if no explicit @mention but conversation is substantive,
+                        // pick the most relevant agent to continue the thread ──
+                        if (mentionedAgentIds.length === 0 && currentDepth < 3 && gcResponse.length > 100) {
+                            // Determine which agent would best continue this thread based on content
+                            var responseWords = gcResponse.toLowerCase();
+                            var agentRelevance = {};
+                            var strengthMap = {
+                                nora: ['system', 'architecture', 'deploy', 'pipeline', 'ops', 'plan', 'coordinate', 'infrastructure', 'code', 'build'],
+                                scout: ['data', 'research', 'trend', 'insight', 'analytics', 'user', 'market', 'competitor', 'growth', 'metrics'],
+                                solara: ['brand', 'voice', 'narrative', 'messaging', 'identity', 'values', 'positioning', 'content', 'story', 'community'],
+                                sage: ['health', 'wellness', 'science', 'evidence', 'clinical', 'research', 'fitness', 'nutrition', 'exercise', 'intel'],
+                            };
+                            for (var [agId, keywords] of Object.entries(strengthMap)) {
+                                if (agId === AGENT_ID) continue;
+                                agentRelevance[agId] = keywords.filter(k => responseWords.includes(k)).length;
+                            }
+                            // Pick the most relevant agent, or a random one if no strong match
+                            var sortedByRelevance = Object.entries(agentRelevance)
+                                .sort((a, b) => b[1] - a[1]);
+                            if (sortedByRelevance.length > 0 && sortedByRelevance[0][1] > 0) {
+                                mentionedAgentIds.push(sortedByRelevance[0][0]);
+                                console.log(`   🌿 Organic follow-up: ${AGENT_NAME}'s response touches ${knownAgents[sortedByRelevance[0][0]]}'s expertise → triggering thread`);
+                            } else if (currentDepth < 2) {
+                                // At early depths, always keep the conversation going
+                                var otherIds = Object.keys(knownAgents).filter(id => id !== AGENT_ID);
+                                var randomPick = otherIds[Math.floor(Math.random() * otherIds.length)];
+                                mentionedAgentIds.push(randomPick);
+                                console.log(`   🎲 Organic follow-up: random pick → @${knownAgents[randomPick]} to keep the thread alive (depth ${currentDepth})`);
+                            }
+                        }
 
                         var effectiveMaxDepth = isExecMode ? MAX_FOLLOW_UP_DEPTH_EXEC : MAX_FOLLOW_UP_DEPTH;
                         if (mentionedAgentIds.length > 0 && gcChatId && currentDepth < effectiveMaxDepth) {
-                            console.log(`   💬 ${AGENT_NAME} mentioned: ${mentionedAgentIds.join(', ')} (depth ${currentDepth}/${effectiveMaxDepth}${isExecMode ? ' EXEC' : ''}) — pausing 15s to let admin cut in...`);
+                            console.log(`   💬 ${AGENT_NAME} → ${mentionedAgentIds.map(id => '@' + knownAgents[id]).join(', ')} (depth ${currentDepth}/${effectiveMaxDepth}${isExecMode ? ' EXEC' : ''}) — pausing 10s to let admin cut in...`);
 
-                            await new Promise(resolve => setTimeout(resolve, 15_000));
+                            await new Promise(resolve => setTimeout(resolve, 10_000));
 
                             var adminCutIn = false;
                             try {
@@ -1572,9 +1684,9 @@ async function processCommands() {
                                 if (!recentMsgs.empty) {
                                     var latestAdminMsg = recentMsgs.docs[0].data();
                                     var latestTime = latestAdminMsg.createdAt?.toDate?.()?.getTime() || 0;
-                                    if (latestTime > Date.now() - 20_000) {
+                                    if (latestTime > Date.now() - 15_000) {
                                         adminCutIn = true;
-                                        console.log(`   ✋ Admin sent a new message — skipping follow-up chain`);
+                                        console.log(`   ✋ Admin sent a new message — pausing follow-up chain`);
                                     }
                                 }
                             } catch (e) {
@@ -1582,7 +1694,7 @@ async function processCommands() {
                             }
 
                             if (!adminCutIn) {
-                                console.log(`   ▶️ No admin message — continuing @mention chain`);
+                                console.log(`   ▶️ No admin message — continuing tree-of-thought chain`);
                                 for (var mentionedId of mentionedAgentIds) {
                                     var followUpRef = await db.collection(`agent-group-chats/${gcChatId}/messages`).add({
                                         from: AGENT_ID,
@@ -1598,6 +1710,7 @@ async function processCommands() {
                                         },
                                         allCompleted: false,
                                         isFollowUp: true,
+                                        threadDepth: currentDepth + 1,
                                     });
 
                                     await db.collection('agent-commands').add({
@@ -1610,13 +1723,13 @@ async function processCommands() {
                                         groupChatId: gcChatId,
                                         messageId: followUpRef.id,
                                         context: {
-                                            otherAgents: [AGENT_NAME],
+                                            otherAgents: [AGENT_NAME, ...otherAgents.filter(a => a !== knownAgents[mentionedId])],
                                             replyTo: AGENT_NAME,
                                             followUpDepth: currentDepth + 1,
                                         },
                                     });
 
-                                    console.log(`   📨 Triggered @${knownAgents[mentionedId]} to respond (msg: ${followUpRef.id})`);
+                                    console.log(`   📨 Triggered @${knownAgents[mentionedId]} to respond (msg: ${followUpRef.id}, depth: ${currentDepth + 1})`);
                                 }
                             }
                         }
@@ -1625,6 +1738,63 @@ async function processCommands() {
                     }
                 }
                 break;
+
+            case 'restart-agents': {
+                console.log(`\n🔄 RESTART AGENTS command from ${cmd.from}`);
+
+                // Step 1: Pull latest code so agents restart with new changes
+                try {
+                    var pullResult = execSync('git pull --rebase', { timeout: 30_000, cwd: process.cwd() }).toString().trim();
+                    console.log(`   📥 Git pull: ${pullResult}`);
+                } catch (pullErr) {
+                    console.warn(`   ⚠️ Git pull failed (continuing with restart): ${pullErr.message}`);
+                }
+
+                var targetAgents = cmd.metadata?.agents || ['nora', 'scout', 'solara', 'sage'];
+                if (typeof targetAgents === 'string') targetAgents = [targetAgents];
+                var uid = execSync('id -u').toString().trim();
+                var results = [];
+                var selfIncluded = targetAgents.includes(AGENT_ID);
+
+                // Restart OTHER agents first
+                for (var targetId of targetAgents) {
+                    if (targetId === AGENT_ID) continue; // Skip self — do last
+                    var serviceLabel = `com.quicklifts.agent.${targetId}`;
+                    try {
+                        execSync(`launchctl kickstart -k gui/${uid}/${serviceLabel}`, { timeout: 10_000 });
+                        results.push(`✅ ${targetId}: restarted`);
+                        console.log(`   ✅ Restarted ${targetId}`);
+                    } catch (e) {
+                        results.push(`❌ ${targetId}: ${e.message.substring(0, 100)}`);
+                        console.error(`   ❌ Failed to restart ${targetId}:`, e.message);
+                    }
+                }
+
+                response = `🔄 Agent restart results:\n${results.join('\n')}`;
+
+                if (selfIncluded) {
+                    response += `\n\n⏳ Restarting myself (${AGENT_ID}) in 3 seconds...`;
+                    // Write our response BEFORE we kill ourselves
+                    try {
+                        await cmdRef.update({
+                            status: 'completed',
+                            response,
+                            completedAt: FieldValue.serverTimestamp(),
+                        });
+                    } catch (e) { /* best effort */ }
+
+                    console.log(`   🔄 Self-restarting ${AGENT_ID} in 3 seconds...`);
+                    setTimeout(() => {
+                        try {
+                            execSync(`launchctl kickstart -k gui/${uid}/com.quicklifts.agent.${AGENT_ID}`, { timeout: 10_000 });
+                        } catch (e) {
+                            console.log(`   Self-restart exec returned (expected — process killed): ${e.message}`);
+                        }
+                    }, 3000);
+                    return true; // Don't let the outer code try to update cmdRef again
+                }
+                break;
+            }
 
             case 'force-recovery': {
                 console.log(`   🔧 Force recovery triggered by ${cmd.from}`);
@@ -2420,29 +2590,10 @@ ${smokeOutput}`.substring(0, 2000);
                         `CURRENT STEP (${stepIndex + 1}/${allSteps.length}): ${step.description}`,
                     ];
 
-                    // Only inject manifesto + correction context on retries (saves tokens on first attempt)
+                    // Only inject manifesto as LAST RESORT — when normal self-correction has already failed.
+                    // The error classification + correction guidance handles retries 1..N-1.
+                    // The manifesto is only for when we've hit a wall and need institutional knowledge.
                     if (attempt > 0 && previousOutput) {
-                        // Check if manifesto is enabled for this agent (toggle from Virtual Office)
-                        let manifestoAllowed = true;
-                        try {
-                            const presDoc = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
-                            if (presDoc.exists && presDoc.data()?.manifestoEnabled === false) {
-                                manifestoAllowed = false;
-                                console.log(`   📜 Manifesto disabled via toggle — skipping knowledge injection`);
-                            }
-                        } catch { /* default to allowed */ }
-
-                        if (manifestoAllowed) {
-                            base.push(``, getManifestoBlock());
-                            // Track the injection in presence for monitoring
-                            try {
-                                await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).update({
-                                    manifestoInjections: FieldValue.increment(1),
-                                    lastManifestoInjection: new Date(),
-                                });
-                            } catch { /* non-critical */ }
-                        }
-
                         // ─── Smart error classification for targeted self-correction ──
                         const prevOut = previousOutput.substring(0, 600);
                         let errorCategory = 'unknown';
@@ -2480,6 +2631,28 @@ ${smokeOutput}`.substring(0, 2000);
                             `✅ If on attempt ${attempt + 1}: be MORE creative — the obvious approaches already failed`,
                         );
                         if (attempt >= 1) {
+                            // ─── LAST RESORT: Inject manifesto as reinforcement ──
+                            // Only when we've hit a wall after normal self-correction failed.
+                            let manifestoAllowed = true;
+                            try {
+                                const presDoc = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
+                                if (presDoc.exists && presDoc.data()?.manifestoEnabled === false) {
+                                    manifestoAllowed = false;
+                                    console.log(`   📜 Manifesto disabled via toggle — skipping`);
+                                }
+                            } catch { /* default to allowed */ }
+
+                            if (manifestoAllowed) {
+                                base.push(``, getManifestoBlock());
+                                console.log(`   📜 Manifesto injected (LAST RESORT — attempt ${attempt + 1}, normal correction failed)`);
+                                try {
+                                    await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).update({
+                                        manifestoInjections: FieldValue.increment(1),
+                                        lastManifestoInjection: new Date(),
+                                    });
+                                } catch { /* non-critical */ }
+                            }
+
                             base.push(
                                 ``,
                                 `⚡ ESCALATION: You've failed ${attempt + 1} times. Previous approaches did not work.`,
@@ -2670,6 +2843,8 @@ ${smokeOutput}`.substring(0, 2000);
                     const progressCb = createProgressCallback(step, allSteps, stepIndex, progress);
                     const result = await invokeOpenClaw(prompt, progressCb);
                     const outputText = parseOutput((result.stdout || '').trim());
+                    // Track estimated token usage for OpenClaw calls
+                    trackTokenUsage(estimateTokens(prompt, outputText), currentModel || 'openclaw');
                     step.output = outputText;
                     lastOutput = outputText;
 
@@ -2819,6 +2994,7 @@ ${smokeOutput}`.substring(0, 2000);
                     const progressCb = createProgressCallback(step, allSteps, stepIndex, -1);
                     const result = await invokeOpenClaw(recoveryPrompt, progressCb);
                     let outputText = (result.stdout || '').trim();
+                    trackTokenUsage(estimateTokens(recoveryPrompt, outputText), currentModel || 'openclaw');
                     if (outputText) {
                         try {
                             const parsed = JSON.parse(outputText);
@@ -2957,6 +3133,7 @@ async function run() {
             console.log(`   → ${steps.length} steps planned`);
 
             const taskStartTime = new Date();
+            resetTaskTokens(); // Reset per-task token counters
             await setStatus('working', {
                 currentTask: task.name,
                 currentTaskId: task.id,
