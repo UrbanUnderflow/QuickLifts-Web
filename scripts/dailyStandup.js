@@ -43,6 +43,7 @@ const MAX_ROUNDS = 6;                       // Up to 6 rounds: 4 core + 2 brains
 
 const KANBAN_COLLECTION = 'kanbanTasks';
 const TIMELINE_COLLECTION = 'progress-timeline';
+const NORTH_STAR_DOC = 'company-config/north-star';
 
 /* ─── Agent display names ──────────────────────────────── */
 const AGENT_DISPLAY_NAMES = {
@@ -207,13 +208,48 @@ async function buildWorkHistoryContext() {
     return sections.join('\n\n');
 }
 
+/* ─── Load North Star ───────────────────────────────── */
+
+/**
+ * Fetch the company's North Star from Firestore.
+ * Returns a formatted context block or empty string if not set.
+ */
+async function loadNorthStar() {
+    try {
+        const snap = await db.doc(NORTH_STAR_DOC).get();
+        if (!snap.exists) return '';
+        const data = snap.data();
+        if (!data?.title) return '';
+
+        const lines = [
+            `⭐ COMPANY NORTH STAR ⭐`,
+            `Title: ${data.title}`,
+        ];
+        if (data.description) {
+            lines.push(``, `Description:`, data.description);
+        }
+        if (data.objectives && data.objectives.length > 0) {
+            lines.push(``, `Key Objectives:`);
+            data.objectives.forEach((obj, i) => {
+                lines.push(`  ${i + 1}. ${obj}`);
+            });
+        }
+        lines.push(``, `ALL work should move us toward this North Star. Reference it in your planning and brainstorming.`);
+        return lines.join('\n');
+    } catch (err) {
+        console.warn('⚠️  Could not load North Star:', err.message);
+        return '';
+    }
+}
+
 /* ─── Standup Prompts (v2 — grounded) ──────────────────── */
 
-function buildMorningPrompts(workHistory) {
+function buildMorningPrompts(workHistory, northStar) {
+    const nsBlock = northStar ? `\n${northStar}\n` : '';
     return [
         // Round 1: Opening — GROUNDED in real data
         `☀️ Good morning team! This is our daily standup. Let's keep it focused — we have 20 minutes.
-
+${nsBlock}
 **IMPORTANT — REAL DATA BELOW. You MUST base your report on this data. Do NOT make up work you didn't do.**
 
 ${workHistory}
@@ -254,10 +290,10 @@ Thanks team. Let's get to work.
 
 @Nora — After this standup:
 1. Summarize what each agent reported and committed to.
-2. For any agent with NO assigned tasks, create a kanban task for them immediately.
+2. For any agent with NO assigned tasks, create a kanban task for them — tasks should be aligned with the North Star.
 3. Post meeting minutes to the heartbeat feed.
 
-💪 Let's go.`,
+💪 Let's get to work — every task should move us toward the North Star.`,
     ];
 }
 
@@ -273,7 +309,7 @@ const BRAINSTORM_PROMPTS = [
 
 We have time before we wrap up, so let's use it well.
 
-Think about Pulse's biggest opportunity RIGHT NOW. What's the one thing that, if we nailed it this week, would make the biggest impact?
+Think about Pulse's biggest opportunity RIGHT NOW — keeping our North Star in mind. What's the one thing that, if we nailed it this week, would make the biggest impact toward our goal?
 
 **RULES — TREE OF THOUGHT:**
 • You MUST @mention at least one other agent and build on, challenge, or extend their idea.
@@ -286,7 +322,7 @@ Think about Pulse's biggest opportunity RIGHT NOW. What's the one thing that, if
 
     `💡 **Brainstorm Round — Creative Problem Solving**
 
-Pick one thing that's been frustrating, slow, or underperforming and propose a creative solution.
+Pick one thing that's been frustrating, slow, or underperforming — especially anything blocking our North Star — and propose a creative solution.
 
 **RULES — BUILD ON EACH OTHER:**
 • @mention someone who hasn't spoken much yet and ask their perspective.
@@ -299,7 +335,7 @@ Pick one thing that's been frustrating, slow, or underperforming and propose a c
 
     `🎯 **Brainstorm Round — What Are We Missing?**
 
-Look at the big picture. What's a blind spot we haven't addressed?
+Look at the big picture — and our North Star. What's a blind spot we haven't addressed?
 
 • @Sage — any health/science trends we're not leveraging?
 • @Scout — any competitor moves we need to respond to?
@@ -311,11 +347,12 @@ Be curious. Ask each other hard questions. This is how we find the insights hidi
 3-5 sentences per agent.`,
 ];
 
-function buildEveningPrompts(workHistory) {
+function buildEveningPrompts(workHistory, northStar) {
+    const nsBlock = northStar ? `\n${northStar}\n` : '';
     return [
         // Round 1: End-of-day — GROUNDED in real data
         `🌙 Good evening team! This is our daily recap. Let's review the day — 20 minutes max.
-
+${nsBlock}
 **IMPORTANT — REAL DATA BELOW. You MUST base your report on this data. Do NOT make up work you didn't do.**
 
 ${workHistory}
@@ -688,14 +725,22 @@ async function runStandup() {
     console.log(`   Max duration: ${MAX_DURATION_MS / 60000} minutes`);
     console.log(`   Rounds: up to ${MAX_ROUNDS}`);
 
-    // ── Step 0: Fetch real work history for all agents ──
+    // ── Step 0: Fetch real work history + North Star ──
     console.log('\n📊 Fetching real work history for all agents...');
     const workHistory = await buildWorkHistoryContext();
-    console.log('   ✅ Work history loaded\n');
+    console.log('   ✅ Work history loaded');
+
+    console.log('⭐ Loading North Star...');
+    const northStar = await loadNorthStar();
+    if (northStar) {
+        console.log('   ✅ North Star loaded\n');
+    } else {
+        console.log('   ⚠️  No North Star set — agents will brainstorm without a focus anchor\n');
+    }
 
     const prompts = type === 'morning'
-        ? buildMorningPrompts(workHistory)
-        : buildEveningPrompts(workHistory);
+        ? buildMorningPrompts(workHistory, northStar)
+        : buildEveningPrompts(workHistory, northStar);
 
     const startTime = Date.now();
 
