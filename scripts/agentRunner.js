@@ -34,6 +34,13 @@ const path = require('path');
 const AGENT_ID = process.env.AGENT_ID || 'nora';
 const AGENT_NAME = process.env.AGENT_NAME || AGENT_ID;
 const AGENT_EMOJI = process.env.AGENT_EMOJI || '⚡️';
+// All known assignee name variants this agent might be assigned as.
+// Handles mismatch between 'Nora' vs 'Nora ⚡️' in kanban tasks.
+const AGENT_NAME_VARIANTS = [
+    AGENT_NAME,
+    `${AGENT_NAME} ${AGENT_EMOJI}`,
+    AGENT_NAME.charAt(0).toUpperCase() + AGENT_NAME.slice(1),  // Title-case variant
+].filter((v, i, a) => a.indexOf(v) === i);  // dedupe
 const HEARTBEAT_MS = parseInt(process.env.HEARTBEAT_MS || '30000', 10);
 
 // Ensure SUDO_ASKPASS is always available for child processes (OpenClaw, installWithTelemetry, etc.)
@@ -1780,7 +1787,7 @@ async function requestHumanIntervention(question, opts = {}) {
 
 async function fetchNextTask() {
     const inProgressSnap = await db.collection(KANBAN_COLLECTION)
-        .where('assignee', '==', AGENT_NAME)
+        .where('assignee', 'in', AGENT_NAME_VARIANTS)
         .where('status', '==', 'in-progress')
         .orderBy('createdAt', 'asc')
         .limit(20)
@@ -1794,7 +1801,7 @@ async function fetchNextTask() {
     }
 
     const todoSnap = await db.collection(KANBAN_COLLECTION)
-        .where('assignee', '==', AGENT_NAME)
+        .where('assignee', 'in', AGENT_NAME_VARIANTS)
         .where('status', '==', 'todo')
         .orderBy('createdAt', 'asc')
         .limit(20)
@@ -1805,6 +1812,7 @@ async function fetchNextTask() {
         if (!doc) return null;
         await db.collection(KANBAN_COLLECTION).doc(doc.id).update({
             status: 'in-progress',
+            assignee: AGENT_NAME,  // normalize assignee to canonical name
             runnerBlocked: FieldValue.delete(),
             runnerFailureAt: FieldValue.delete(),
             runnerFailureMessage: FieldValue.delete(),
@@ -1969,7 +1977,7 @@ async function markTaskFailed(taskId, failureMessage) {
 async function unblockTasks() {
     try {
         const blockedSnap = await db.collection(KANBAN_COLLECTION)
-            .where('assignee', '==', AGENT_NAME)
+            .where('assignee', 'in', AGENT_NAME_VARIANTS)
             .where('runnerBlocked', '==', true)
             .get();
 
