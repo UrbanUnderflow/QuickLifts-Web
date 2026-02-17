@@ -916,6 +916,159 @@ async function checkIdleAndNudge() {
     }
 }
 
+/* ─── Self-Assign Task When Idle ──────────────────────── */
+
+/**
+ * If this agent has no tasks at all, generate one from the North Star.
+ * Called from the main loop after consecutive idle cycles.
+ */
+async function selfAssignTask() {
+    try {
+        // Double-check: do we really have no tasks?
+        const existing = await db.collection(KANBAN_COLLECTION)
+            .where('assignee', '==', AGENT_NAME)
+            .where('status', 'in', ['todo', 'in-progress'])
+            .limit(1)
+            .get();
+        if (!existing.empty) return null; // Race condition — task appeared
+
+        // Load North Star for alignment
+        const northStar = await loadNorthStar();
+        const nsTitle = northStar ? northStar.split('\n').find(l => l.startsWith('Goal:'))?.replace('Goal:', '').trim() : '';
+
+        // Role-based default tasks aligned to North Star
+        const roleTasks = {
+            nora: {
+                name: nsTitle
+                    ? `Audit task queues and plan next steps toward: ${nsTitle}`
+                    : 'Audit agent task queues and identify blockers',
+                description: `Review the kanban board for all agents. Check for blocked tasks, stale in-progress items. ${nsTitle ? `Create follow-up tasks aligned to our North Star: "${nsTitle}".` : 'Create follow-up tasks as needed.'}`,
+            },
+            scout: {
+                name: nsTitle
+                    ? `Research analysis supporting: ${nsTitle}`
+                    : 'Competitive analysis: top 3 fitness app features',
+                description: `Analyze features and trends relevant to Pulse. ${nsTitle ? `Focus on insights that support our North Star: "${nsTitle}".` : 'Identify opportunities for Pulse to differentiate.'} Write findings as a .md deliverable in docs/research/.`,
+            },
+            solara: {
+                name: nsTitle
+                    ? `Brand content aligned to: ${nsTitle}`
+                    : 'Draft content for the next community engagement post',
+                description: `Create content that reflects Pulse's brand values. ${nsTitle ? `Align messaging with our North Star: "${nsTitle}".` : 'Focus on authenticity, community, and movement.'} Save as .md in docs/deliverables/.`,
+            },
+            sage: {
+                name: nsTitle
+                    ? `Research synthesis supporting: ${nsTitle}`
+                    : 'Research synthesis: top 3 recovery science insights',
+                description: `Synthesize relevant health/science insights. ${nsTitle ? `Prioritize findings that support our North Star: "${nsTitle}".` : 'Focus on recovery, training, and health tech.'} Write as .md deliverable in docs/research/.`,
+            },
+        };
+
+        const taskData = roleTasks[AGENT_ID] || roleTasks.scout;
+
+        const docRef = await db.collection(KANBAN_COLLECTION).add({
+            name: taskData.name,
+            description: taskData.description,
+            assignee: AGENT_NAME,
+            status: 'todo',
+            priority: 'medium',
+            source: 'self-assigned-idle',
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        console.log(`⭐ Self-assigned task: "${taskData.name}" (${docRef.id})`);
+
+        // Post beat about self-assignment
+        await postBeat('hypothesis', `Self-assigned: "${taskData.name}" (idle — no tasks in queue)`, {
+            taskId: docRef.id,
+            color: 'blue',
+            objectiveCode: docRef.id,
+        });
+
+        return docRef.id;
+    } catch (err) {
+        console.error('⚠️  Self-assign failed:', err.message);
+        return null;
+    }
+}
+
+/* ─── Nora Task Manager Sweep ─────────────────────────── */
+
+/**
+ * If this agent IS Nora, periodically check all agents' queues.
+ * For any agent with zero tasks, create a North Star–aligned task.
+ * This is the safety net — catches idle agents that missed standup assignment.
+ */
+async function noraTaskManagerSweep() {
+    if (AGENT_ID !== 'nora') return;  // Only Nora does this
+
+    try {
+        const allAgents = ['nora', 'scout', 'solara', 'sage'];
+        const displayNames = { nora: 'Nora', scout: 'Scout', solara: 'Solara', sage: 'Sage' };
+
+        for (const agentId of allAgents) {
+            if (agentId === 'nora') continue;  // Nora manages others, not herself
+
+            const displayName = displayNames[agentId];
+            const snap = await db.collection(KANBAN_COLLECTION)
+                .where('assignee', '==', displayName)
+                .where('status', 'in', ['todo', 'in-progress'])
+                .limit(1)
+                .get();
+
+            if (!snap.empty) continue;  // Agent has work
+
+            // Check if we already auto-assigned in the last 2 hours
+            const recentAssign = await db.collection(KANBAN_COLLECTION)
+                .where('assignee', '==', displayName)
+                .where('source', '==', 'nora-task-manager')
+                .orderBy('createdAt', 'desc')
+                .limit(1)
+                .get();
+
+            if (!recentAssign.empty) {
+                const lastAssignTime = recentAssign.docs[0].data().createdAt?.toDate?.();
+                if (lastAssignTime && (Date.now() - lastAssignTime.getTime()) < 2 * 60 * 60 * 1000) {
+                    continue;  // Already assigned recently
+                }
+            }
+
+            const northStar = await loadNorthStar();
+            const nsTitle = northStar ? northStar.split('\n').find(l => l.startsWith('Goal:'))?.replace('Goal:', '').trim() : '';
+
+            const roleTasks = {
+                scout: `Research task aligned to${nsTitle ? ': ' + nsTitle : ' current priorities'}`,
+                solara: `Brand/content task aligned to${nsTitle ? ': ' + nsTitle : ' current priorities'}`,
+                sage: `Health science research aligned to${nsTitle ? ': ' + nsTitle : ' current priorities'}`,
+            };
+
+            const taskName = roleTasks[agentId] || `General task for ${displayName}`;
+
+            await db.collection(KANBAN_COLLECTION).add({
+                name: taskName,
+                description: `Auto-assigned by Nora (task manager sweep). ${nsTitle ? `Align work with North Star: "${nsTitle}".` : 'Work on current priorities.'} Commit deliverables as .md files to the repo.`,
+                assignee: displayName,
+                status: 'todo',
+                priority: 'medium',
+                source: 'nora-task-manager',
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            console.log(`📋 [Nora Task Manager] Created task for idle agent ${displayName}: "${taskName}"`);
+
+            await postBeat('work-in-flight', `📋 Task Manager: Assigned "${taskName}" to ${displayName} (idle agent detected)`, {
+                color: 'blue',
+                lensTag: 'ops',
+                objectiveCode: 'TASK-MANAGER',
+            });
+        }
+    } catch (err) {
+        console.error('⚠️  Nora task manager sweep failed:', err.message);
+    }
+}
+
 /* ─── Agent-to-Agent Messaging ────────────────────────── */
 
 /**
@@ -2556,10 +2709,19 @@ function autoCommitStep(stepDescription, taskName) {
         });
 
         const commit = getLatestCommit();
-        console.log(`   📝 Auto-committed: ${commit}`);
+        console.log(`   \u{1f4dd} Auto-committed: ${commit}`);
+
+        // Push immediately so work is always in the remote repo
+        try {
+            execSync('git push', { cwd: projectDir, timeout: 30_000 });
+            console.log(`   \u{1f680} Pushed to remote`);
+        } catch (pushErr) {
+            console.log(`   \u26a0\ufe0f Auto-push failed (will retry at task end): ${pushErr.message.split('\n')[0]}`);
+        }
+
         return commit;
     } catch (err) {
-        console.log(`   ⚠️ Auto-commit skipped: ${err.message.split('\n')[0]}`);
+        console.log(`   \u26a0\ufe0f Auto-commit skipped: ${err.message.split('\n')[0]}`);
         return null;
     }
 }
@@ -3130,6 +3292,7 @@ async function run() {
     const heartbeatOsInterval = setInterval(async () => {
         await postHourlySnapshot(currentTaskRef);
         await checkIdleAndNudge();
+        await noraTaskManagerSweep();  // Nora checks all agents' queues
     }, 10 * 60 * 1000);  // Check every 10 minutes
 
     // Start command listener (real-time Firestore listener)
@@ -3152,6 +3315,7 @@ async function run() {
     process.on('SIGTERM', shutdown);
 
     // Main task loop
+    let idleCycles = 0;  // Track consecutive idle cycles for self-assignment
     while (true) {
         try {
             // Process any pending commands first
@@ -3163,13 +3327,25 @@ async function run() {
             const task = await fetchNextTask();
 
             if (!task) {
-                console.log('💤 No tasks found. Waiting 30s...');
+                idleCycles++;
+                console.log(`💤 No tasks found (idle cycle ${idleCycles}). Waiting 30s...`);
                 await setStatus('idle', {
                     notes: 'No tasks in queue. Waiting...',
                     executionSteps: [],
                     currentStepIndex: -1,
                     taskProgress: 0,
                 });
+
+                // After 2 consecutive idle cycles (~60s), self-assign a task
+                if (idleCycles >= 2) {
+                    console.log(`⭐ Idle for ${idleCycles} cycles — attempting self-assignment...`);
+                    const created = await selfAssignTask();
+                    if (created) {
+                        idleCycles = 0;  // Reset — we have work now
+                        continue;  // Immediately try fetchNextTask again
+                    }
+                }
+
                 for (let w = 0; w < 6; w++) {
                     await new Promise(r => setTimeout(r, 5_000));
                     if (commandQueue.length > 0) {
@@ -3178,6 +3354,8 @@ async function run() {
                 }
                 continue;
             }
+
+            idleCycles = 0;  // Reset idle counter — we have a task
 
             console.log(`📋 Found task: ${task.name} (${task.id})`);
             currentTaskRef = task;  // Track for hourly snapshots
