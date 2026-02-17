@@ -12,7 +12,7 @@ import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
   ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
   History, ChevronRight, MessageSquare, Archive, X, ListOrdered, Activity, AlertTriangle,
-  BookOpen, ToggleLeft, ToggleRight, Power, Calendar, Package
+  BookOpen, ToggleLeft, ToggleRight, Power, Calendar, Package, Play
 } from 'lucide-react';
 import { RoundTable } from './RoundTable';
 import { GroupChatModal } from './GroupChatModal';
@@ -1877,6 +1877,32 @@ const VirtualOfficeContent: React.FC = () => {
   const [activeStandup, setActiveStandup] = useState<GroupChat | null>(null);
   const [isStandupObserving, setIsStandupObserving] = useState(false);
 
+  // ── Manual Standup Trigger state ──
+  const [triggeringStandup, setTriggeringStandup] = useState(false);
+  const [standupTriggerResult, setStandupTriggerResult] = useState<'success' | 'error' | null>(null);
+  const [showStandupDropdown, setShowStandupDropdown] = useState(false);
+
+  const handleTriggerStandup = useCallback(async (type?: 'morning' | 'evening') => {
+    if (triggeringStandup || activeStandup) return;
+    setTriggeringStandup(true);
+    setStandupTriggerResult(null);
+    setShowStandupDropdown(false);
+    try {
+      const res = await fetch('/api/agent/trigger-standup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      setStandupTriggerResult('success');
+    } catch {
+      setStandupTriggerResult('error');
+    } finally {
+      setTriggeringStandup(false);
+      setTimeout(() => setStandupTriggerResult(null), 5000);
+    }
+  }, [triggeringStandup, activeStandup]);
+
   // ── Restart Agents state ──
   const [restartingAgents, setRestartingAgents] = useState(false);
   const [restartResult, setRestartResult] = useState<'success' | 'error' | null>(null);
@@ -2503,6 +2529,85 @@ const VirtualOfficeContent: React.FC = () => {
             <div className="standup-config-btn" onClick={() => setShowStandupConfig(true)}>
               <Calendar className="w-4 h-4" />
               <span>Standup Schedule</span>
+            </div>
+
+            {/* Manual Standup Trigger */}
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <div
+                className="standup-trigger-btn"
+                onClick={() => {
+                  if (activeStandup) return;
+                  setShowStandupDropdown(!showStandupDropdown);
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '8px 14px', borderRadius: 10,
+                  background: activeStandup
+                    ? 'rgba(100,100,100,0.3)'
+                    : triggeringStandup
+                      ? 'rgba(34,197,94,0.2)'
+                      : standupTriggerResult === 'success'
+                        ? 'rgba(34,197,94,0.3)'
+                        : standupTriggerResult === 'error'
+                          ? 'rgba(239,68,68,0.3)'
+                          : 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(59,130,246,0.15))',
+                  border: `1px solid ${activeStandup ? 'rgba(100,100,100,0.3)' : 'rgba(168,85,247,0.3)'}`,
+                  color: activeStandup ? '#888' : '#e7e9ea',
+                  cursor: activeStandup ? 'not-allowed' : 'pointer',
+                  fontSize: 13, fontWeight: 500,
+                  transition: 'all 0.2s',
+                  whiteSpace: 'nowrap' as const,
+                }}
+              >
+                {triggeringStandup ? (
+                  <Loader2 className="w-4 h-4" style={{ animation: 'spin 1s linear infinite' }} />
+                ) : standupTriggerResult === 'success' ? (
+                  <CheckCircle2 className="w-4 h-4" style={{ color: '#22c55e' }} />
+                ) : standupTriggerResult === 'error' ? (
+                  <XCircle className="w-4 h-4" style={{ color: '#ef4444' }} />
+                ) : (
+                  <Play className="w-4 h-4" />
+                )}
+                <span>
+                  {triggeringStandup ? 'Starting...' :
+                    standupTriggerResult === 'success' ? 'Standup Started!' :
+                      standupTriggerResult === 'error' ? 'Failed' :
+                        activeStandup ? 'In Progress' :
+                          'Start Standup'}
+                </span>
+              </div>
+              {showStandupDropdown && !activeStandup && (
+                <div
+                  style={{
+                    position: 'absolute', top: '100%', left: 0, marginTop: 4,
+                    background: '#1a1f2e', border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: 10, overflow: 'hidden', zIndex: 100,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                    minWidth: 180,
+                  }}
+                >
+                  {[
+                    { label: '☀️ Morning Standup', value: 'morning' as const },
+                    { label: '🌙 Evening Standup', value: 'evening' as const },
+                    { label: '🔄 Auto-detect', value: undefined },
+                  ].map((opt, i) => (
+                    <div
+                      key={i}
+                      onClick={() => handleTriggerStandup(opt.value)}
+                      style={{
+                        padding: '10px 14px', cursor: 'pointer',
+                        fontSize: 13, color: '#e7e9ea',
+                        borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                        transition: 'background 0.15s',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(168,85,247,0.15)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      {opt.label}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Shared Deliverables Button */}
