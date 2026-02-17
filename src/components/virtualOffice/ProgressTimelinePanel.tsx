@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { format, formatDistanceToNow } from 'date-fns';
+import React, { useEffect, useMemo, useState, CSSProperties } from 'react';
+import { formatDistanceToNow, format } from 'date-fns';
 import { AgentPresence } from '../../api/firebase/presence/service';
 import { progressTimelineService } from '../../api/firebase/progressTimeline/service';
 import { nudgeLogService } from '../../api/firebase/nudgeLog/service';
@@ -14,81 +14,200 @@ import {
   NudgeOutcome,
   NudgeChannel,
 } from '../../api/firebase/progressTimeline/types';
-import { X, Send, ListFilter, AlertTriangle, Activity, Zap, Clock, Link2 } from 'lucide-react';
+import {
+  X, Send, ChevronDown, ChevronUp,
+  Lightbulb, Rocket, CheckCircle2, AlertTriangle, TrendingUp,
+  Zap, Clock, Link2, MessageCircle, Activity,
+} from 'lucide-react';
 
+/* ── Props ── */
 interface ProgressTimelinePanelProps {
   agents: AgentPresence[];
   onClose: () => void;
 }
 
-const beatLabels: Record<ProgressBeat, string> = {
-  hypothesis: 'Hypothesis',
-  'work-in-flight': 'Work in Flight',
-  result: 'Result',
-  block: 'Blocker',
-  'signal-spike': 'Signal Spike',
+/* ── Constants ── */
+const beatConfig: Record<ProgressBeat, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
+  hypothesis: { label: 'Hypothesis', icon: <Lightbulb size={13} />, color: '#60a5fa', bg: 'rgba(59,130,246,0.12)' },
+  'work-in-flight': { label: 'In Progress', icon: <Rocket size={13} />, color: '#a78bfa', bg: 'rgba(139,92,246,0.12)' },
+  result: { label: 'Result', icon: <CheckCircle2 size={13} />, color: '#34d399', bg: 'rgba(34,197,94,0.12)' },
+  block: { label: 'Blocker', icon: <AlertTriangle size={13} />, color: '#f87171', bg: 'rgba(248,113,113,0.12)' },
+  'signal-spike': { label: 'Signal Spike', icon: <TrendingUp size={13} />, color: '#fbbf24', bg: 'rgba(251,191,36,0.12)' },
 };
 
-const colorLabels: Record<ConfidenceColor, string> = {
-  blue: 'Listening / Hypothesis',
-  green: 'Momentum',
-  yellow: 'Directional Friction',
-  red: 'Hot / Stalled',
+const colorConfig: Record<ConfidenceColor, { label: string; dot: string }> = {
+  blue: { label: 'Listening', dot: '#3b82f6' },
+  green: { label: 'Momentum', dot: '#22c55e' },
+  yellow: { label: 'Friction', dot: '#eab308' },
+  red: { label: 'Stalled', dot: '#ef4444' },
 };
 
-const outcomeBadges: Record<NudgeOutcome, { label: string; className: string }> = {
-  pending: { label: 'Pending', className: 'badge badge-pending' },
-  acknowledged: { label: 'Ack', className: 'badge badge-ack' },
-  resolved: { label: 'Resolved', className: 'badge badge-resolved' },
+const avatarColors: Record<string, string> = {
+  nora: '#22c55e', scout: '#f59e0b', solara: '#f43f5e', sage: '#8b5cf6', antigravity: '#6366f1',
 };
 
-const channelLabels: Record<NudgeChannel, string> = {
-  automation: 'Auto',
-  manual: 'Manual',
-  system: 'System',
-};
-
-const lensOptions = [
-  'Delight Hunt',
-  'Friction Hunt',
-  'Partnership Leverage',
-  'Retention Proof',
-  'Fundraising Story',
-  'Off-Cycle',
-];
-
-const stateLabel = (state: TimelineStateTag) =>
-  state === 'signals' ? 'Signals (Listening)' : 'Meanings (Story)';
+const channelLabels: Record<NudgeChannel, string> = { automation: 'Auto', manual: 'Manual', system: 'System' };
+const lensOptions = ['Delight Hunt', 'Friction Hunt', 'Partnership Leverage', 'Retention Proof', 'Fundraising Story', 'Off-Cycle'];
 
 type FeedItem =
   | { id: string; type: 'beat'; createdAt: number; payload: ProgressTimelineEntry }
   | { id: string; type: 'nudge'; createdAt: number; payload: NudgeLogEntry };
 
+type TabKey = 'feed' | 'snapshots';
+
+/* ── Styles ── */
+const S = {
+  overlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+    zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  } as CSSProperties,
+  panel: {
+    width: 'min(640px, 92vw)', maxHeight: '85vh', background: '#0a0e14', border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: 20, display: 'flex', flexDirection: 'column', color: '#e7e9ea',
+    boxShadow: '0 32px 64px rgba(0,0,0,0.5)', overflow: 'hidden',
+  } as CSSProperties,
+  header: {
+    padding: '20px 24px 14px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+    borderBottom: '1px solid rgba(255,255,255,0.06)',
+  } as CSSProperties,
+  title: { fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: '-0.02em' } as CSSProperties,
+  subtitle: { fontSize: 13, color: '#6b7280', margin: '3px 0 0' } as CSSProperties,
+  closeBtn: {
+    width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(255,255,255,0.08)', color: '#6b7280', display: 'flex',
+    alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
+  } as CSSProperties,
+  tabs: {
+    display: 'flex', alignItems: 'center', gap: 0, padding: '0 24px',
+    borderBottom: '1px solid rgba(255,255,255,0.06)',
+  } as CSSProperties,
+  tab: (active: boolean): CSSProperties => ({
+    display: 'flex', alignItems: 'center', gap: 6, padding: '12px 16px', fontSize: 13, fontWeight: 600,
+    color: active ? '#1d9bf0' : '#6b7280', background: 'none', border: 'none',
+    borderBottom: active ? '2px solid #1d9bf0' : '2px solid transparent', cursor: 'pointer',
+  }),
+  tabCount: {
+    fontSize: 10, fontWeight: 700, padding: '1px 6px', background: 'rgba(29,155,240,0.15)',
+    color: '#1d9bf0', borderRadius: 10, marginLeft: 4,
+  } as CSSProperties,
+  composeToggle: (open: boolean): CSSProperties => ({
+    display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', fontSize: 13, fontWeight: 600,
+    background: open ? 'rgba(255,255,255,0.06)' : 'linear-gradient(135deg, #1d9bf0, #1a8cd8)',
+    color: open ? '#6b7280' : 'white', border: 'none', borderRadius: 20, cursor: 'pointer', marginLeft: 'auto', margin: '6px 0 6px auto',
+  }),
+  content: { flex: 1, overflowY: 'auto', overflowX: 'hidden' } as CSSProperties,
+  // Card styles
+  card: (borderColor: string): CSSProperties => ({
+    padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.04)',
+    borderLeft: `3px solid ${borderColor}`,
+  }),
+  cardRow: { display: 'flex', gap: 12, alignItems: 'flex-start' } as CSSProperties,
+  avatar: (color: string, size = 38): CSSProperties => ({
+    width: size, height: size, minWidth: size, borderRadius: '50%', flexShrink: 0,
+    background: `linear-gradient(135deg, ${color}30, ${color}15)`, border: `2px solid ${color}55`,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: size * 0.42, fontWeight: 700, color: color,
+  }),
+  cardBody: { flex: 1, minWidth: 0 } as CSSProperties,
+  cardHeader: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', lineHeight: 1.3 } as CSSProperties,
+  name: { fontWeight: 700, fontSize: 14, color: '#e7e9ea' } as CSSProperties,
+  objCode: { fontSize: 12, color: '#1d9bf0', fontWeight: 500 } as CSSProperties,
+  dot: { color: '#4b5563', fontSize: 12 } as CSSProperties,
+  time: { color: '#6b7280', fontSize: 12 } as CSSProperties,
+  headline: { margin: '6px 0 0', fontSize: 14, lineHeight: 1.5, color: '#d1d5db', wordWrap: 'break-word' } as CSSProperties,
+  tags: { display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 } as CSSProperties,
+  tag: (color: string, bg?: string): CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', fontSize: 11, fontWeight: 600,
+    border: `1px solid ${color}44`, borderRadius: 16, color, background: bg || 'transparent',
+  }),
+  confDot: (color: string): CSSProperties => ({
+    width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0,
+  }),
+  nudgeBadge: {
+    display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 700,
+    color: '#a78bfa', background: 'rgba(139,92,246,0.12)', padding: '1px 8px', borderRadius: 10,
+  } as CSSProperties,
+  artifact: {
+    marginTop: 10, padding: '10px 12px', background: 'rgba(29,155,240,0.06)',
+    border: '1px solid rgba(29,155,240,0.12)', borderRadius: 12, fontSize: 13, color: '#9ca3af', lineHeight: 1.45,
+  } as CSSProperties,
+  artifactLink: {
+    display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 10,
+    fontSize: 13, color: '#1d9bf0', textDecoration: 'none',
+  } as CSSProperties,
+  empty: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
+    padding: '60px 20px', color: '#4b5563', gap: 8,
+  } as CSSProperties,
+  // Composer
+  composer: {
+    padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)',
+    background: 'rgba(255,255,255,0.02)',
+  } as CSSProperties,
+  composeForm: { display: 'flex', flexDirection: 'column', gap: 12 } as CSSProperties,
+  composeTop: { display: 'flex', alignItems: 'center', gap: 10 } as CSSProperties,
+  input: (flex?: number): CSSProperties => ({
+    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: 8, padding: '7px 10px', color: '#e7e9ea', fontSize: 13, flex: flex ?? undefined,
+    outline: 'none', fontFamily: 'inherit',
+  }),
+  textarea: {
+    width: '100%', background: 'transparent', border: 'none', color: '#e7e9ea',
+    fontSize: 15, resize: 'none', padding: '8px 0', outline: 'none',
+    borderBottom: '1px solid rgba(255,255,255,0.06)', fontFamily: 'inherit',
+  } as CSSProperties,
+  beatChipGroup: { display: 'flex', flexWrap: 'wrap', gap: 6 } as CSSProperties,
+  beatChip: (active: boolean, color: string, bg: string): CSSProperties => ({
+    display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', fontSize: 11, fontWeight: active ? 700 : 500,
+    background: active ? bg : 'rgba(255,255,255,0.04)', color: active ? color : '#6b7280',
+    border: `1px solid ${active ? color + '66' : 'rgba(255,255,255,0.08)'}`, borderRadius: 16, cursor: 'pointer',
+  }),
+  optionRow: { display: 'flex', gap: 8 } as CSSProperties,
+  select: {
+    flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 8, padding: '6px 8px', color: '#e7e9ea', fontSize: 12, outline: 'none',
+  } as CSSProperties,
+  publishBtn: (disabled: boolean): CSSProperties => ({
+    alignSelf: 'flex-end', display: 'flex', alignItems: 'center', gap: 6,
+    padding: '8px 20px', fontSize: 13, fontWeight: 700,
+    background: 'linear-gradient(135deg, #1d9bf0, #1a8cd8)',
+    color: 'white', border: 'none', borderRadius: 20, cursor: disabled ? 'default' : 'pointer',
+    opacity: disabled ? 0.5 : 1,
+  }),
+  error: { color: '#f87171', fontSize: 12, margin: 0 } as CSSProperties,
+  // Snapshot
+  snapCard: (borderColor: string): CSSProperties => ({
+    padding: '14px 24px', borderBottom: '1px solid rgba(255,255,255,0.04)',
+    borderLeft: `3px solid ${borderColor}`,
+  }),
+  snapTop: { display: 'flex', alignItems: 'center', gap: 10 } as CSSProperties,
+  snapName: { fontSize: 13, fontWeight: 700, color: '#e7e9ea' } as CSSProperties,
+  snapCode: { fontSize: 12, color: '#1d9bf0', marginLeft: 6 } as CSSProperties,
+  snapTime: {
+    marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4,
+    fontSize: 11, color: '#6b7280',
+  } as CSSProperties,
+  snapNote: { fontSize: 13, color: '#9ca3af', margin: '8px 0 0 48px', lineHeight: 1.4 } as CSSProperties,
+};
+
+/* ── Component ── */
 const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, onClose }) => {
   const [entries, setEntries] = useState<ProgressTimelineEntry[]>([]);
   const [snapshots, setSnapshots] = useState<HourlySnapshotEntry[]>([]);
   const [nudges, setNudges] = useState<NudgeLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>('feed');
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [hoverCard, setHoverCard] = useState<string | null>(null);
 
   const feedItems = useMemo<FeedItem[]>(() => {
-    const beatItems: FeedItem[] = entries.map((entry) => ({
-      id: `beat-${entry.id}`,
-      type: 'beat',
-      createdAt: entry.createdAt?.getTime?.() || 0,
-      payload: entry,
-    }));
-    const nudgeItems: FeedItem[] = nudges.map((entry) => ({
-      id: `nudge-${entry.id}`,
-      type: 'nudge',
-      createdAt: entry.createdAt?.getTime?.() || 0,
-      payload: entry,
-    }));
-    return [...beatItems, ...nudgeItems].sort((a, b) => b.createdAt - a.createdAt);
+    const b: FeedItem[] = entries.map((e) => ({ id: `b-${e.id}`, type: 'beat', createdAt: e.createdAt?.getTime?.() || 0, payload: e }));
+    const n: FeedItem[] = nudges.map((e) => ({ id: `n-${e.id}`, type: 'nudge', createdAt: e.createdAt?.getTime?.() || 0, payload: e }));
+    return [...b, ...n].sort((a, b) => b.createdAt - a.createdAt);
   }, [entries, nudges]);
 
-  // form fields
-  const [agentId, setAgentId] = useState<string>('');
+  // Composer state
+  const [agentId, setAgentId] = useState('');
   const [objectiveCode, setObjectiveCode] = useState('');
   const [beat, setBeat] = useState<ProgressBeat>('hypothesis');
   const [headline, setHeadline] = useState('');
@@ -99,542 +218,277 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   const [artifactText, setArtifactText] = useState('');
   const [artifactUrl, setArtifactUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => { if (!agentId && agents.length > 0) setAgentId(agents[0].id); }, [agents, agentId]);
 
   useEffect(() => {
-    if (!agentId && agents.length > 0) setAgentId(agents[0].id);
-  }, [agents, agentId]);
-
-  useEffect(() => {
-    const unsubTimeline = progressTimelineService.listen((items) => {
-      setEntries(items);
-      setLoading(false);
-    }, { limit: 200 });
-
-    const unsubSnapshots = progressTimelineService.listenSnapshots((items) => {
-      setSnapshots(items);
-    }, { limit: 40 });
-
-    const unsubNudges = nudgeLogService.listen((items) => {
-      setNudges(items);
-    }, { limit: 80 });
-
-    return () => {
-      unsubTimeline();
-      unsubSnapshots();
-      unsubNudges();
-    };
+    const u1 = progressTimelineService.listen((items) => { setEntries(items); setLoading(false); }, { limit: 200 });
+    const u2 = progressTimelineService.listenSnapshots((items) => setSnapshots(items), { limit: 40 });
+    const u3 = nudgeLogService.listen((items) => setNudges(items), { limit: 80 });
+    return () => { u1(); u2(); u3(); };
   }, []);
 
   const selectedAgent = useMemo(() => agents.find((a) => a.id === agentId), [agents, agentId]);
 
   const resetForm = () => {
-    setHeadline('');
-    setObjectiveCode('');
-    setBeat('work-in-flight');
-    setLensTag(lensOptions[0]);
-    setConfidenceColor('blue');
-    setStateTag('signals');
-    setArtifactType('none');
-    setArtifactText('');
-    setArtifactUrl('');
+    setHeadline(''); setObjectiveCode(''); setBeat('work-in-flight');
+    setLensTag(lensOptions[0]); setConfidenceColor('blue'); setStateTag('signals');
+    setArtifactType('none'); setArtifactText(''); setArtifactUrl('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAgent) {
-      setError('Select an agent before posting.');
-      return;
-    }
-    if (!objectiveCode.trim() || !headline.trim()) {
-      setError('Objective code and headline are required.');
-      return;
-    }
-
-    setIsSaving(true);
-    setError(null);
+    if (!selectedAgent) { setError('Select an agent.'); return; }
+    if (!objectiveCode.trim() || !headline.trim()) { setError('Objective code and headline required.'); return; }
+    setIsSaving(true); setError(null);
     try {
       await progressTimelineService.publish({
-        agentId: selectedAgent.id,
-        agentName: selectedAgent.displayName,
-        emoji: selectedAgent.emoji,
-        objectiveCode: objectiveCode.trim(),
-        beat,
-        headline: headline.trim(),
-        lensTag: lensTag.trim(),
-        confidenceColor,
-        stateTag,
-        artifactType,
+        agentId: selectedAgent.id, agentName: selectedAgent.displayName, emoji: selectedAgent.emoji,
+        objectiveCode: objectiveCode.trim(), beat, headline: headline.trim(), lensTag: lensTag.trim(),
+        confidenceColor, stateTag, artifactType,
         artifactText: artifactType === 'text' ? artifactText.trim() : '',
         artifactUrl: artifactType === 'url' ? artifactUrl.trim() : '',
       });
-      resetForm();
-    } catch (err: any) {
-      console.error('progress timeline publish error', err);
-      setError(err?.message || 'Failed to publish entry.');
-    } finally {
-      setIsSaving(false);
-    }
+      resetForm(); setComposerOpen(false);
+    } catch (err: any) { setError(err?.message || 'Failed to publish.'); }
+    finally { setIsSaving(false); }
   };
 
-  const renderArtifact = (entry: ProgressTimelineEntry) => {
-    if (entry.artifactType === 'text' && entry.artifactText) {
-      return <div className="pt-artifact">{entry.artifactText}</div>;
-    }
-    if (entry.artifactType === 'url' && entry.artifactUrl) {
-      return (
-        <a className="pt-artifact-link" href={entry.artifactUrl} target="_blank" rel="noreferrer">
-          <Link2 size={14} /> Artifact Link
-        </a>
-      );
-    }
-    return null;
+  const getAvatarColor = (id?: string, name?: string) =>
+    avatarColors[(id ?? name ?? '').toLowerCase()] || '#6366f1';
+
+  /* ── Beat card ── */
+  const renderBeatCard = (entry: ProgressTimelineEntry) => {
+    const cfg = beatConfig[entry.beat];
+    const cc = colorConfig[entry.confidenceColor];
+    const timeAgo = formatDistanceToNow(entry.createdAt || new Date(), { addSuffix: true });
+    const color = getAvatarColor(entry.agentId, entry.agentName);
+    const isHovered = hoverCard === `b-${entry.id}`;
+
+    return (
+      <div key={entry.id}
+        style={{ ...S.card(cc.dot), background: isHovered ? 'rgba(255,255,255,0.02)' : 'transparent', transition: 'background 0.15s' }}
+        onMouseEnter={() => setHoverCard(`b-${entry.id}`)}
+        onMouseLeave={() => setHoverCard(null)}
+      >
+        <div style={S.cardRow}>
+          <div style={S.avatar(color)}>
+            {entry.emoji || entry.agentName?.charAt(0)?.toUpperCase() || '?'}
+          </div>
+          <div style={S.cardBody}>
+            <div style={S.cardHeader}>
+              <span style={S.name}>{entry.agentName}</span>
+              <span style={S.objCode}>{entry.objectiveCode}</span>
+              <span style={S.dot}>·</span>
+              <span style={S.time}>{timeAgo}</span>
+            </div>
+            <p style={S.headline}>{entry.headline}</p>
+            {entry.artifactType === 'text' && entry.artifactText && (
+              <div style={S.artifact}>{entry.artifactText}</div>
+            )}
+            {entry.artifactType === 'url' && entry.artifactUrl && (
+              <a href={entry.artifactUrl} target="_blank" rel="noreferrer" style={S.artifactLink}>
+                <Link2 size={13} /> {entry.artifactUrl.replace(/^https?:\/\//, '').slice(0, 50)}
+              </a>
+            )}
+            <div style={S.tags}>
+              <span style={S.tag(cfg.color, cfg.bg)}>{cfg.icon} {cfg.label}</span>
+              {entry.lensTag && <span style={S.tag('#fbbf24')}>{entry.lensTag}</span>}
+              <span style={S.tag('#6b7280')}>
+                <span style={S.confDot(cc.dot)} />
+                {cc.label}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
-  const renderTimelineCard = (entry: ProgressTimelineEntry) => (
-    <div key={entry.id} className={`pt-card color-${entry.confidenceColor}`}>
-      <div className="pt-card-top">
-        <div>
-          <div className="pt-agent-name">{entry.agentName}</div>
-          <div className="pt-meta-line">
-            <span>{entry.emoji || '⚡️'} {entry.objectiveCode}</span>
-            <span>· {formatDistanceToNow(entry.createdAt || new Date(), { addSuffix: true })}</span>
+  /* ── Nudge card ── */
+  const renderNudgeCard = (entry: NudgeLogEntry) => {
+    const timeAgo = formatDistanceToNow(entry.createdAt || new Date(), { addSuffix: true });
+    const oc: Record<NudgeOutcome, { color: string; icon: React.ReactNode }> = {
+      pending: { color: '#fbbf24', icon: <Clock size={12} /> },
+      acknowledged: { color: '#60a5fa', icon: <MessageCircle size={12} /> },
+      resolved: { color: '#34d399', icon: <CheckCircle2 size={12} /> },
+    };
+    const outcome = oc[entry.outcome];
+    const color = getAvatarColor(entry.agentId, entry.agentName);
+    const isHovered = hoverCard === `n-${entry.id}`;
+
+    return (
+      <div key={entry.id}
+        style={{ ...S.card('#a78bfa'), background: isHovered ? 'rgba(139,92,246,0.04)' : 'transparent', transition: 'background 0.15s' }}
+        onMouseEnter={() => setHoverCard(`n-${entry.id}`)}
+        onMouseLeave={() => setHoverCard(null)}
+      >
+        <div style={S.cardRow}>
+          <div style={S.avatar(color)}>
+            {entry.agentName?.charAt(0)?.toUpperCase() || '?'}
+          </div>
+          <div style={S.cardBody}>
+            <div style={S.cardHeader}>
+              <span style={S.name}>{entry.agentName}</span>
+              <span style={S.nudgeBadge}><Zap size={11} /> Nudge</span>
+              <span style={S.dot}>·</span>
+              <span style={S.time}>{timeAgo}</span>
+            </div>
+            <p style={S.headline}>{entry.message}</p>
+            <div style={S.tags}>
+              <span style={S.tag(outcome.color)}>
+                {outcome.icon}
+                {entry.outcome.charAt(0).toUpperCase() + entry.outcome.slice(1)}
+              </span>
+              <span style={S.tag('#6b7280')}>{channelLabels[entry.channel]}</span>
+              {entry.respondedAt && (
+                <span style={{ fontSize: 11, color: '#6b7280' }}>
+                  Replied {formatDistanceToNow(entry.respondedAt, { addSuffix: true })}
+                </span>
+              )}
+            </div>
           </div>
         </div>
-        <div className="pt-card-badges">
-          <span className="pt-chip objective">{beatLabels[entry.beat]}</span>
-          <span className={`state-tag state-${entry.stateTag}`}>{stateLabel(entry.stateTag || 'signals')}</span>
-          {entry.lensTag && <span className="pt-chip lens">{entry.lensTag}</span>}
-          <span className="pt-chip confidence">{colorLabels[entry.confidenceColor]}</span>
-        </div>
       </div>
-      <div className="pt-headline">{entry.headline}</div>
-      {renderArtifact(entry)}
-    </div>
-  );
+    );
+  };
 
-  const renderNudgeFeedCard = (entry: NudgeLogEntry) => (
-    <div key={entry.id} className={`pt-card pt-nudge-inline color-${entry.color}`}>
-      <div className="pt-card-top">
-        <div>
-          <div className="pt-agent-name">{entry.agentName}</div>
-          <div className="pt-meta-line">
-            <span>⚡️ Nudge · {entry.objectiveCode}</span>
-            <span>· {formatDistanceToNow(entry.createdAt || new Date(), { addSuffix: true })}</span>
+  /* ── Snapshot card ── */
+  const renderSnapshotCard = (s: HourlySnapshotEntry) => {
+    const cc = colorConfig[s.color] || colorConfig.blue;
+    const color = getAvatarColor(s.agentId, s.agentName);
+    return (
+      <div key={s.id} style={S.snapCard(cc.dot)}>
+        <div style={S.snapTop}>
+          <div style={S.avatar(color, 30)}>
+            {s.agentName?.charAt(0)?.toUpperCase() || '?'}
           </div>
+          <div>
+            <span style={S.snapName}>{s.agentName}</span>
+            <span style={S.snapCode}>{s.objectiveCode}</span>
+          </div>
+          <span style={S.snapTime}><Clock size={11} /> {format(new Date(s.hourIso), 'MMM d, HH:mm')}</span>
         </div>
-        <div className="pt-card-badges">
-          <span className={`state-tag state-${entry.lane}`}>{stateLabel(entry.lane)}</span>
-          <span className="pt-chip objective">{channelLabels[entry.channel]}</span>
-          <span className={outcomeBadges[entry.outcome].className}>{outcomeBadges[entry.outcome].label}</span>
-        </div>
+        <p style={S.snapNote}>{s.note || 'No note logged'}</p>
       </div>
-      <div className="pt-headline">{entry.message}</div>
-      <div className="pt-nudge-inline-meta">
-        {entry.respondedAt ? (
-          <span>Response {formatDistanceToNow(entry.respondedAt, { addSuffix: true })}</span>
-        ) : (
-          <span>Awaiting response…</span>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderSnapshotCard = (snapshot: HourlySnapshotEntry) => (
-    <div key={snapshot.id} className={`pt-snapshot-card color-${snapshot.color}`}>
-      <div className="pt-snapshot-top">
-        <div>
-          <p>{snapshot.agentName}</p>
-          <span>{snapshot.objectiveCode}</span>
-        </div>
-        <span className={`state-tag state-small state-${snapshot.stateTag}`}>{stateLabel(snapshot.stateTag)}</span>
-      </div>
-      <div className="pt-snapshot-meta">
-        <Clock size={12} />
-        <span>{format(new Date(snapshot.hourIso), 'MMM d, HH:00')}</span>
-      </div>
-      <p className="pt-snapshot-note">{snapshot.note || 'No note logged'}</p>
-    </div>
-  );
-
-  const renderNudgeCard = (entry: NudgeLogEntry) => (
-    <div key={entry.id} className="pt-nudge-card">
-      <div className="pt-nudge-header">
-        <div>
-          <p>{entry.agentName}</p>
-          <span>{entry.objectiveCode}</span>
-        </div>
-        <div className="pt-card-badges">
-          <span className={`state-tag state-${entry.lane}`}>{stateLabel(entry.lane)}</span>
-          <span className="pt-chip objective">{channelLabels[entry.channel]}</span>
-          <span className={outcomeBadges[entry.outcome].className}>{outcomeBadges[entry.outcome].label}</span>
-        </div>
-      </div>
-      <p className="pt-nudge-message">{entry.message}</p>
-      <div className="pt-nudge-meta">
-        <span>{formatDistanceToNow(entry.createdAt || new Date(), { addSuffix: true })}</span>
-        {entry.respondedAt && <span>· replied {formatDistanceToNow(entry.respondedAt, { addSuffix: true })}</span>}
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
-    <div className="pt-overlay">
-      <div className="pt-panel">
-        <div className="pt-header">
+    <div style={S.overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={S.panel}>
+
+        {/* ── Header ── */}
+        <div style={S.header}>
           <div>
-            <p className="pt-pill">Progress Timeline</p>
-            <h2>Heartbeat Proof of Work</h2>
-            <p className="pt-subhead">Log beats, artifacts, hourly snapshots, and nudge history in one stream.</p>
+            <h2 style={S.title}>Activity Feed</h2>
+            <p style={S.subtitle}>Beats, nudges, and team progress — all in one stream</p>
           </div>
-          <button className="pt-close" onClick={onClose}><X size={16} /></button>
+          <button style={S.closeBtn} onClick={onClose}><X size={18} /></button>
         </div>
 
-        <div className="pt-body">
-          <div className="pt-form-card">
-            <div className="pt-form-header">
-              <ListFilter size={16} />
-              <span>Post a Beat</span>
-            </div>
-            <form onSubmit={handleSubmit} className="pt-form">
-              <label>
-                <span>Agent</span>
-                <select value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-                  {agents.map((agent) => (
-                    <option key={agent.id} value={agent.id}>{agent.displayName}</option>
-                  ))}
-                </select>
-              </label>
+        {/* ── Tabs ── */}
+        <div style={S.tabs}>
+          <button style={S.tab(activeTab === 'feed')} onClick={() => setActiveTab('feed')}>
+            <Activity size={14} /> Feed
+            {feedItems.length > 0 && <span style={S.tabCount}>{feedItems.length}</span>}
+          </button>
+          <button style={S.tab(activeTab === 'snapshots')} onClick={() => setActiveTab('snapshots')}>
+            <Clock size={14} /> Snapshots
+            {snapshots.length > 0 && <span style={S.tabCount}>{snapshots.length}</span>}
+          </button>
+          <button style={S.composeToggle(composerOpen)} onClick={() => setComposerOpen(!composerOpen)}>
+            <Send size={14} /> Post Beat
+            {composerOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+        </div>
 
-              <label>
-                <span>Objective Code</span>
-                <input
+        {/* ── Composer ── */}
+        {composerOpen && (
+          <div style={S.composer}>
+            <form onSubmit={handleSubmit} style={S.composeForm}>
+              <div style={S.composeTop}>
+                {selectedAgent && (
+                  <div style={S.avatar(getAvatarColor(selectedAgent.id), 32)}>
+                    {selectedAgent.emoji || selectedAgent.displayName?.charAt(0)?.toUpperCase()}
+                  </div>
+                )}
+                <select style={{ ...S.input(1) } as CSSProperties} value={agentId} onChange={(e) => setAgentId(e.target.value)}>
+                  {agents.map((a) => <option key={a.id} value={a.id}>{a.displayName}</option>)}
+                </select>
+                <input style={{ ...S.input(), width: 110, textAlign: 'center', fontWeight: 700, letterSpacing: '0.05em' } as CSSProperties}
                   value={objectiveCode}
                   onChange={(e) => setObjectiveCode(e.target.value.toUpperCase())}
-                  placeholder="CR-02-ActII"
+                  placeholder="OBJ-CODE"
                 />
-              </label>
-
-              <div className="pt-grid">
-                <label>
-                  <span>Beat</span>
-                  <select value={beat} onChange={(e) => setBeat(e.target.value as ProgressBeat)}>
-                    {Object.entries(beatLabels).map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <label>
-                  <span>Confidence Color</span>
-                  <select value={confidenceColor} onChange={(e) => setConfidenceColor(e.target.value as ConfidenceColor)}>
-                    {Object.entries(colorLabels).map(([key, label]) => (
-                      <option key={key} value={key}>{`${label} (${key})`}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <label>
-                  <span>State</span>
-                  <select value={stateTag} onChange={(e) => setStateTag(e.target.value as TimelineStateTag)}>
-                    <option value="signals">Signals (listening mode)</option>
-                    <option value="meanings">Meanings (story mode)</option>
-                  </select>
-                </label>
               </div>
-
-              <label>
-                <span>Lens Tag</span>
-                <div className="pt-lens-quick">
-                  {lensOptions.map((lens) => (
-                    <button
-                      type="button"
-                      key={lens}
-                      className={`pt-lens-pill ${lensTag === lens ? 'active' : ''}`}
-                      onClick={() => setLensTag(lens)}
-                    >
-                      {lens}
+              <textarea style={S.textarea} value={headline} onChange={(e) => setHeadline(e.target.value)}
+                placeholder="What's happening? Describe the beat…" rows={2}
+              />
+              <div style={S.beatChipGroup}>
+                {(Object.keys(beatConfig) as ProgressBeat[]).map((b) => {
+                  const c = beatConfig[b];
+                  return (
+                    <button key={b} type="button" style={S.beatChip(beat === b, c.color, c.bg)} onClick={() => setBeat(b)}>
+                      {c.icon} {c.label}
                     </button>
-                  ))}
-                </div>
-                <input
-                  value={lensTag}
-                  onChange={(e) => setLensTag(e.target.value)}
-                  placeholder="Delight Hunt"
-                  list="lens-options"
-                />
-                <datalist id="lens-options">
-                  {lensOptions.map((lens) => (
-                    <option key={lens} value={lens} />
-                  ))}
-                </datalist>
-                <span className="pt-help-text">Defaulted to the active weekly lens — adjust when going off-cycle.</span>
-              </label>
-
-              <label>
-                <span>Headline</span>
-                <textarea
-                  value={headline}
-                  onChange={(e) => setHeadline(e.target.value)}
-                  placeholder="Coded 50 creator comments — energy trending 'spark'"
-                  rows={3}
-                />
-              </label>
-
-              <div className="pt-grid">
-                <label>
-                  <span>Artifact Type</span>
-                  <select value={artifactType} onChange={(e) => setArtifactType(e.target.value as ArtifactType)}>
-                    <option value="none">None</option>
-                    <option value="text">Text Snippet</option>
-                    <option value="url">URL</option>
-                  </select>
-                </label>
-                {artifactType === 'text' && (
-                  <label>
-                    <span>Artifact Text</span>
-                    <textarea value={artifactText} onChange={(e) => setArtifactText(e.target.value)} rows={2} />
-                  </label>
-                )}
-                {artifactType === 'url' && (
-                  <label>
-                    <span>Artifact URL</span>
-                    <input value={artifactUrl} onChange={(e) => setArtifactUrl(e.target.value)} placeholder="https://" />
-                  </label>
-                )}
+                  );
+                })}
               </div>
-
-              {error && <div className="pt-error">{error}</div>}
-
-              <button className="pt-submit" type="submit" disabled={isSaving}>
-                <Send size={14} /> {isSaving ? 'Posting…' : 'Publish Beat'}
+              <div style={S.optionRow}>
+                <select style={S.select} value={confidenceColor} onChange={(e) => setConfidenceColor(e.target.value as ConfidenceColor)}>
+                  {(Object.keys(colorConfig) as ConfidenceColor[]).map((c) => <option key={c} value={c}>{colorConfig[c].label}</option>)}
+                </select>
+                <select style={S.select} value={stateTag} onChange={(e) => setStateTag(e.target.value as TimelineStateTag)}>
+                  <option value="signals">Signals</option>
+                  <option value="meanings">Meanings</option>
+                </select>
+                <select style={S.select} value={lensTag} onChange={(e) => setLensTag(e.target.value)}>
+                  {lensOptions.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+              {error && <p style={S.error}>{error}</p>}
+              <button style={S.publishBtn(isSaving)} type="submit" disabled={isSaving}>
+                <Send size={14} /> {isSaving ? 'Posting…' : 'Publish'}
               </button>
             </form>
           </div>
+        )}
 
-          <div className="pt-feed-columns">
-            <div className="pt-feed-column">
-              <div className="pt-feed-header">
-                <h3>Live Feed</h3>
-                <p className="pt-muted">Three-beat stories with artifacts & color cues</p>
+        {/* ── Content ── */}
+        <div style={S.content}>
+          {activeTab === 'feed' && (
+            loading ? (
+              <div style={S.empty}><p style={{ margin: 0, fontSize: 14 }}>Loading feed…</p></div>
+            ) : feedItems.length === 0 ? (
+              <div style={S.empty}>
+                <Activity size={32} style={{ opacity: 0.3 }} />
+                <p style={{ margin: 0, fontSize: 14 }}>No beats or nudges logged yet.</p>
+                <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>Post the first one using the button above.</p>
               </div>
-              <div className="pt-feed-list">
-                {loading ? (
-                  <div className="pt-empty">Loading timeline…</div>
-                ) : feedItems.length === 0 ? (
-                  <div className="pt-empty">
-                    <AlertTriangle size={18} />
-                    <p>No beats or nudges logged yet today.</p>
-                  </div>
-                ) : (
-                  feedItems.map((item) =>
-                    item.type === 'beat'
-                      ? renderTimelineCard(item.payload as ProgressTimelineEntry)
-                      : renderNudgeFeedCard(item.payload as NudgeLogEntry)
-                  )
-                )}
-              </div>
-            </div>
+            ) : (
+              feedItems.map((item) =>
+                item.type === 'beat'
+                  ? renderBeatCard(item.payload as ProgressTimelineEntry)
+                  : renderNudgeCard(item.payload as NudgeLogEntry)
+              )
+            )
+          )}
 
-            <div className="pt-side-column">
-              <div className="pt-side-card">
-                <div className="pt-side-header">
-                  <Activity size={16} />
-                  <span>Hourly Snapshots</span>
-                </div>
-                <div className="pt-side-list">
-                  {snapshots.length === 0 ? (
-                    <p className="pt-muted">No hourly snapshots recorded yet.</p>
-                  ) : (
-                    snapshots.slice(0, 6).map(renderSnapshotCard)
-                  )}
-                </div>
+          {activeTab === 'snapshots' && (
+            snapshots.length === 0 ? (
+              <div style={S.empty}>
+                <Clock size={32} style={{ opacity: 0.3 }} />
+                <p style={{ margin: 0, fontSize: 14 }}>No hourly snapshots recorded yet.</p>
               </div>
-
-              <div className="pt-side-card">
-                <div className="pt-side-header">
-                  <Zap size={16} />
-                  <span>Nudge Log</span>
-                </div>
-                <div className="pt-side-list">
-                  {nudges.length === 0 ? (
-                    <p className="pt-muted">No nudges issued yet.</p>
-                  ) : (
-                    nudges.slice(0, 8).map(renderNudgeCard)
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+            ) : (
+              snapshots.map(renderSnapshotCard)
+            )
+          )}
         </div>
-      </div>
 
-      <style jsx>{`
-        .pt-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(3,5,8,0.92);
-          backdrop-filter: blur(6px);
-          z-index: 2000;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .pt-panel {
-          width: min(1200px, 95vw);
-          height: min(90vh, 760px);
-          background: #03070f;
-          border: 1px solid rgba(59,130,246,0.2);
-          border-radius: 24px;
-          display: flex;
-          flex-direction: column;
-          color: white;
-          box-shadow: 0 40px 80px rgba(0,0,0,0.5);
-        }
-        .pt-header {
-          padding: 24px 28px 12px;
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          border-bottom: 1px solid rgba(59,130,246,0.1);
-        }
-        .pt-pill {
-          font-size: 11px;
-          letter-spacing: 0.2em;
-          text-transform: uppercase;
-          color: #60a5fa;
-          margin-bottom: 6px;
-        }
-        .pt-subhead { color: #94a3b8; font-size: 13px; margin-top: 6px; }
-        .pt-close {
-          background: rgba(15,23,42,0.7);
-          border: 1px solid rgba(148,163,184,0.2);
-          border-radius: 999px;
-          width: 32px; height: 32px;
-          color: #e2e8f0;
-        }
-        .pt-body { flex: 1; display: flex; gap: 20px; padding: 20px 28px 28px; overflow: hidden; }
-        .pt-form-card {
-          width: 340px;
-          background: rgba(15,23,42,0.85);
-          border: 1px solid rgba(59,130,246,0.3);
-          border-radius: 16px;
-          padding: 18px;
-          display: flex;
-          flex-direction: column;
-        }
-        .pt-form-header { font-size: 12px; color: #93c5fd; display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
-        .pt-form { display: flex; flex-direction: column; gap: 12px; flex: 1; overflow-y: auto; }
-        label { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: #cbd5f5; }
-        .pt-lens-quick { display: flex; flex-wrap: wrap; gap: 6px; }
-        .pt-lens-pill {
-          border: 1px solid rgba(148,163,184,0.3);
-          border-radius: 999px;
-          padding: 4px 10px;
-          background: rgba(15,23,42,0.5);
-          font-size: 11px;
-          color: #cbd5f5;
-        }
-        .pt-lens-pill.active {
-          border-color: rgba(250,204,21,0.8);
-          color: #facc15;
-          box-shadow: 0 0 8px rgba(250,204,21,0.25);
-        }
-        .pt-help-text { font-size: 10px; color: #94a3b8; margin-top: -2px; }
-        input, select, textarea {
-          background: rgba(7,11,18,0.8);
-          border: 1px solid rgba(71,85,105,0.7);
-          border-radius: 8px;
-          padding: 8px;
-          color: white;
-          font-size: 13px;
-        }
-        textarea { resize: vertical; }
-        .pt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-        .pt-error { color: #fca5a5; font-size: 11px; }
-        .pt-submit {
-          margin-top: 4px;
-          padding: 10px;
-          background: linear-gradient(135deg, #3b82f6, #6366f1);
-          border: none;
-          border-radius: 10px;
-          color: white;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          cursor: pointer;
-        }
-        .pt-submit:disabled { opacity: 0.5; cursor: default; }
-        .pt-feed-columns { flex: 1; display: flex; gap: 18px; overflow: hidden; }
-        .pt-feed-column { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-        .pt-feed-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-        .pt-feed-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 6px; }
-        .pt-side-column { width: 320px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
-        .pt-side-card {
-          background: rgba(15,23,42,0.75);
-          border: 1px solid rgba(148,163,184,0.2);
-          border-radius: 14px;
-          padding: 14px;
-        }
-        .pt-side-header { display: flex; align-items: center; gap: 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: #cbd5f5; margin-bottom: 10px; }
-        .pt-side-list { display: flex; flex-direction: column; gap: 10px; }
-        .pt-card {
-          border: 1px solid rgba(148,163,184,0.2);
-          border-radius: 16px;
-          padding: 14px 16px;
-          background: rgba(15,23,42,0.6);
-        }
-        .pt-card-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-        .pt-card-badges { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
-        .pt-nudge-inline { border-color: rgba(250,204,21,0.4); background: rgba(76,29,149,0.35); }
-        .pt-nudge-inline-meta { font-size: 11px; color: #cbd5f5; margin-top: 6px; display: flex; gap: 10px; }
-        .pt-chip { font-size: 10px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.15); text-transform: uppercase; letter-spacing: 0.08em; }
-        .pt-chip.objective { border-color: rgba(59,130,246,0.4); color: #60a5fa; }
-        .pt-chip.lens { border-color: rgba(234,179,8,0.4); color: #facc15; }
-        .pt-chip.confidence { border-color: rgba(148,163,184,0.3); color: #e2e8f0; }
-        .pt-agent-name { font-size: 13px; font-weight: 700; }
-        .pt-meta-line { font-size: 11px; color: #94a3b8; display: flex; gap: 8px; }
-        .pt-headline { font-size: 15px; font-weight: 600; margin: 10px 0 8px; }
-        .pt-artifact { font-size: 12px; color: #f1f5f9; background: rgba(15,118,110,0.2); border: 1px solid rgba(45,212,191,0.2); border-radius: 8px; padding: 8px; margin-top: 10px; }
-        .pt-artifact-link { display: inline-flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 12px; color: #38bdf8; }
-        .pt-empty { text-align: center; padding: 40px; color: #94a3b8; border: 1px dashed rgba(148,163,184,0.4); border-radius: 14px; }
-        .state-tag { font-size: 10px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(148,163,184,0.3); text-transform: uppercase; letter-spacing: 0.08em; }
-        .state-signals { color: #60a5fa; border-color: rgba(59,130,246,0.4); }
-        .state-meanings { color: #f97316; border-color: rgba(249,115,22,0.4); }
-        .state-small { font-size: 9px; padding: 1px 6px; }
-        .color-blue { border-color: rgba(59,130,246,0.4); }
-        .color-green { border-color: rgba(34,197,94,0.4); }
-        .color-yellow { border-color: rgba(245,158,11,0.4); }
-        .color-red { border-color: rgba(248,113,113,0.5); }
-        .pt-snapshot-card {
-          border: 1px solid rgba(148,163,184,0.2);
-          border-radius: 12px;
-          padding: 10px;
-          background: rgba(15,23,42,0.6);
-        }
-        .pt-snapshot-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-        .pt-snapshot-top p { margin: 0; font-weight: 600; }
-        .pt-snapshot-top span { font-size: 11px; color: #94a3b8; }
-        .pt-snapshot-meta { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #cbd5f5; margin-bottom: 4px; }
-        .pt-snapshot-note { font-size: 12px; color: #e2e8f0; margin: 0; }
-        .pt-nudge-card {
-          border: 1px solid rgba(234,179,8,0.2);
-          border-radius: 12px;
-          padding: 12px;
-          background: rgba(67,56,202,0.15);
-        }
-        .pt-nudge-header { display: flex; justify-content: space-between; gap: 10px; }
-        .pt-nudge-header p { margin: 0; font-weight: 600; }
-        .pt-nudge-header span { font-size: 11px; color: #a5b4fc; }
-        .pt-nudge-message { font-size: 12px; color: #e0e7ff; margin: 8px 0; }
-        .pt-nudge-meta { font-size: 11px; color: #cbd5f5; display: flex; gap: 6px; }
-        .pt-muted { font-size: 12px; color: #94a3b8; }
-        .badge { font-size: 10px; padding: 2px 6px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.2); }
-        .badge-pending { color: #fbbf24; border-color: rgba(251,191,36,0.5); }
-        .badge-ack { color: #60a5fa; border-color: rgba(96,165,250,0.5); }
-        .badge-resolved { color: #34d399; border-color: rgba(52,211,153,0.5); }
-      `}</style>
+      </div>
     </div>
   );
 };

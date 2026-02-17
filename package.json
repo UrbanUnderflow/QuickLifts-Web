@@ -42,6 +42,7 @@
     "jspdf": "^4.0.0",
     "lodash.debounce": "^4.0.8",
     "lucide-react": "^0.460.0",
+    "marked": "^17.0.2",
     "mixpanel-browser": "^2.64.0",
     "next": "^14.0.0",
     "next-mdx-remote": "^5.0.0",
