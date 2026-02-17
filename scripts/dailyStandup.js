@@ -36,9 +36,10 @@ const db = getFirestore(app);
 let AGENTS = ['nora', 'scout', 'solara', 'sage'];
 let MODERATOR = 'nora';
 let MAX_DURATION_MS = 20 * 60 * 1000;   // Hard 20-minute cap
+const MIN_DURATION_MS = 5 * 60 * 1000;    // Minimum 5 minutes — standup continues with brainstorming if under this
 const ROUND_WAIT_MS = 4 * 60 * 1000;      // Wait up to 4 min for agents to respond per round
 const POLL_INTERVAL_MS = 10_000;           // Check for responses every 10s
-const MAX_ROUNDS = 4;                       // 4 rounds × ~5 min = ~20 min
+const MAX_ROUNDS = 6;                       // Up to 6 rounds: 4 core + 2 brainstorm bonus
 
 const KANBAN_COLLECTION = 'kanbanTasks';
 const TIMELINE_COLLECTION = 'progress-timeline';
@@ -259,6 +260,56 @@ Thanks team. Let's get to work.
 💪 Let's go.`,
     ];
 }
+
+/* ─── Brainstorming Bonus Rounds ─────────────────────── */
+
+/**
+ * These fire when the standup finishes its core rounds but hasn't
+ * hit the 5-minute minimum yet. They encourage tree-of-thought
+ * style collaboration, @mentions, and creative strategic thinking.
+ */
+const BRAINSTORM_PROMPTS = [
+    `🧠 **Brainstorm Round — Strategic Thinking**
+
+We have time before we wrap up, so let's use it well.
+
+Think about Pulse's biggest opportunity RIGHT NOW. What's the one thing that, if we nailed it this week, would make the biggest impact?
+
+**RULES — TREE OF THOUGHT:**
+• You MUST @mention at least one other agent and build on, challenge, or extend their idea.
+• Think out loud: "I'm considering...", "What if we...", "The pattern I see is..."
+• Be specific — name features, user outcomes, or metrics. No vague hand-waving.
+• Don't just agree — add a new angle, a concern, or a creative twist.
+• @Nora — synthesize the ideas into potential tasks at the end.
+
+3-5 sentences, conversational and real.`,
+
+    `💡 **Brainstorm Round — Creative Problem Solving**
+
+Pick one thing that's been frustrating, slow, or underperforming and propose a creative solution.
+
+**RULES — BUILD ON EACH OTHER:**
+• @mention someone who hasn't spoken much yet and ask their perspective.
+• Use "Yes, and..." thinking — build on what others said, don't tear it down.
+• If you see a connection between two ideas, call it out: "@Scout's research point connects to @Solara's brand idea because..."
+• Propose something bold. Even if it's risky, name it. We brainstorm to explore, not to be safe.
+• @Nora — if any idea is strong enough, draft a task for it.
+
+3-5 sentences, be bold.`,
+
+    `🎯 **Brainstorm Round — What Are We Missing?**
+
+Look at the big picture. What's a blind spot we haven't addressed?
+
+• @Sage — any health/science trends we're not leveraging?
+• @Scout — any competitor moves we need to respond to?
+• @Solara — is our brand story landing? What needs sharpening?
+• @Nora — are there operational gaps or tech debt we're ignoring?
+
+Be curious. Ask each other hard questions. This is how we find the insights hiding in plain sight.
+
+3-5 sentences per agent.`,
+];
 
 function buildEveningPrompts(workHistory) {
     return [
@@ -673,28 +724,21 @@ async function runStandup() {
     // 2. Set agent presence to 'meeting'
     await setAgentPresenceStatus(AGENTS, 'meeting', `${emoji} ${label} in progress`);
 
-    // 3. Run conversation rounds
+    // 3. Run conversation rounds (core reporting)
     let roundsCompleted = 0;
-    for (let round = 0; round < MAX_ROUNDS; round++) {
+    for (let round = 0; round < prompts.length; round++) {
         const elapsed = Date.now() - startTime;
         const remaining = MAX_DURATION_MS - elapsed;
 
-        // Hard time cap — if less than 2 minutes remain, skip to closing
-        if (remaining < 2 * 60 * 1000 && round < MAX_ROUNDS - 1) {
-            console.log(`\n⏰ Less than 2 minutes remaining — skipping to closing round`);
-            // Jump to the last prompt (wrap-up)
-            const closingPrompt = prompts[prompts.length - 1];
-            console.log(`\n📢 Closing Round: "${closingPrompt.substring(0, 60)}..."`);
-            const closingMsgId = await postMessage(chatId, closingPrompt, AGENTS);
-            await waitForResponses(chatId, closingMsgId, AGENTS, Math.min(remaining, ROUND_WAIT_MS));
-            roundsCompleted++;
+        // Hard time cap — if past MAX duration, stop immediately
+        if (elapsed >= MAX_DURATION_MS) {
+            console.log(`\n⏰ ${MAX_DURATION_MS / 60000}-minute cap reached — ending standup`);
             break;
         }
 
-        // Hard time cap — if past 20 minutes, stop immediately
-        if (elapsed >= MAX_DURATION_MS) {
-            console.log(`\n⏰ 20-minute cap reached — ending standup`);
-            break;
+        // Hard time cap — if less than 2 minutes remain and we're past core rounds, skip to closing
+        if (remaining < 2 * 60 * 1000 && round >= prompts.length - 1) {
+            console.log(`\n⏰ Less than 2 minutes remaining — running closing round`);
         }
 
         const prompt = prompts[round];
@@ -709,7 +753,6 @@ async function runStandup() {
 
         if (allResponded) {
             console.log(`   ✅ All agents responded`);
-            // Mark message as complete
             await db.doc(`agent-group-chats/${chatId}/messages/${messageId}`).update({
                 allCompleted: true,
             });
@@ -720,9 +763,48 @@ async function runStandup() {
         roundsCompleted++;
 
         // Brief pause between rounds
-        if (round < MAX_ROUNDS - 1) {
+        if (round < prompts.length - 1) {
             await sleep(5_000);
         }
+    }
+
+    // ── 3b. Minimum duration enforcement — brainstorming bonus rounds ──
+    const elapsedAfterCore = Date.now() - startTime;
+    if (elapsedAfterCore < MIN_DURATION_MS) {
+        const timeLeft = MIN_DURATION_MS - elapsedAfterCore;
+        const bonusCount = Math.min(
+            BRAINSTORM_PROMPTS.length,
+            Math.ceil(timeLeft / (ROUND_WAIT_MS + 10_000))  // Estimate how many rounds we can fit
+        );
+        console.log(`\n🧠 Core rounds finished in ${Math.floor(elapsedAfterCore / 60000)} min — under 5-min minimum`);
+        console.log(`   Adding ${bonusCount} brainstorming round(s) to fill the time...`);
+
+        for (let b = 0; b < bonusCount; b++) {
+            const elapsed = Date.now() - startTime;
+            if (elapsed >= MAX_DURATION_MS) break;
+
+            const bPrompt = BRAINSTORM_PROMPTS[b];
+            console.log(`\n🧠 Brainstorm ${b + 1}: "${bPrompt.substring(0, 60)}..."`);
+            const bMsgId = await postMessage(chatId, bPrompt, AGENTS);
+
+            const remaining = MAX_DURATION_MS - elapsed;
+            const bWait = Math.min(ROUND_WAIT_MS, remaining);
+            const bAllDone = await waitForResponses(chatId, bMsgId, AGENTS, bWait);
+
+            if (bAllDone) {
+                console.log(`   ✅ All agents responded to brainstorm`);
+                await db.doc(`agent-group-chats/${chatId}/messages/${bMsgId}`).update({
+                    allCompleted: true,
+                });
+            } else {
+                console.log(`   ⚠️  Some agents timed out on brainstorm — moving on`);
+            }
+
+            roundsCompleted++;
+            if (b < bonusCount - 1) await sleep(5_000);
+        }
+    } else {
+        console.log(`\n✅ Standup hit ${Math.floor(elapsedAfterCore / 60000)} min — no brainstorm rounds needed`);
     }
 
     // 4. Close the session
