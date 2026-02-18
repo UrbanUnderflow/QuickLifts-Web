@@ -72,20 +72,26 @@ function shouldRunNow(config, type) {
     if (!config) return true; // No config → run with defaults (backward compat)
 
     const now = new Date();
-    const estHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours();
-    const estMinute = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })).getMinutes();
+    // Detect system timezone automatically
+    const systemTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const localHour = new Date(now.toLocaleString('en-US', { timeZone: systemTimezone })).getHours();
+    const localMinute = new Date(now.toLocaleString('en-US', { timeZone: systemTimezone })).getMinutes();
+
+    console.log(`⏰ Checking schedule (local time: ${localHour}:${String(localMinute).padStart(2, '0')}, timezone: ${systemTimezone})`);
 
     if (type === 'morning') {
         if (!config.morningEnabled) return false;
         const targetH = config.morningHour ?? 9;
         const targetM = config.morningMinute ?? 0;
-        const diffMins = Math.abs((estHour * 60 + estMinute) - (targetH * 60 + targetM));
+        const diffMins = Math.abs((localHour * 60 + localMinute) - (targetH * 60 + targetM));
+        console.log(`   Morning check: target ${targetH}:${String(targetM).padStart(2, '0')}, diff ${diffMins} mins`);
         return diffMins <= 30;
     } else {
         if (!config.eveningEnabled) return false;
         const targetH = config.eveningHour ?? 21;
         const targetM = config.eveningMinute ?? 0;
-        const diffMins = Math.abs((estHour * 60 + estMinute) - (targetH * 60 + targetM));
+        const diffMins = Math.abs((localHour * 60 + localMinute) - (targetH * 60 + targetM));
+        console.log(`   Evening check: target ${targetH}:${String(targetM).padStart(2, '0')}, diff ${diffMins} mins`);
         return diffMins <= 30;
     }
 }
