@@ -5,8 +5,27 @@ This document will gather all recent agent outputs and research documents for th
 ## Instructions
 - Include all relevant briefs, telemetry analyses, and dashboard specifications here.
 
-## Collected Documents
-- Placeholder for document list.
+## Structured Outline
+
+### Telemetry
+- Key Findings:
+- Decisions:
+- Open Questions:
+
+### Partnerships
+- Key Findings:
+- Decisions:
+- Open Questions:
+
+### Narrative
+- Key Findings:
+- Decisions:
+- Open Questions:
+
+### Activation
+- Key Findings:
+- Decisions:
+- Open Questions:
 
 ---
 
