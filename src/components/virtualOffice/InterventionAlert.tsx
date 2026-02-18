@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { db } from '../../api/firebase/config';
 import {
-    collection, query, where, orderBy,
+    collection, query, where,
     onSnapshot, updateDoc, doc, serverTimestamp,
 } from 'firebase/firestore';
 
@@ -412,10 +412,10 @@ export const InterventionAlert: React.FC = () => {
 
     // Listen for pending interventions
     useEffect(() => {
+        // Removed orderBy to avoid requiring a composite index
         const q = query(
             collection(db, 'agent-interventions'),
-            where('status', '==', 'pending'),
-            orderBy('createdAt', 'desc'),
+            where('status', '==', 'pending')
         );
 
         const unsub = onSnapshot(q, (snap) => {
@@ -434,6 +434,10 @@ export const InterventionAlert: React.FC = () => {
                     createdAt: data.createdAt?.toDate?.() || new Date(),
                 };
             });
+
+            // Sort client-side instead
+            items.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+
             setInterventions(items);
         });
 
