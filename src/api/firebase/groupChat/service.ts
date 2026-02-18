@@ -47,11 +47,12 @@ export class GroupChatService {
   async broadcastMessage(
     chatId: string,
     content: string,
-    participants: string[]
+    participants: string[],
+    from: string = 'admin'
   ): Promise<string> {
     // 1. Add message to chat
     const messageData: Omit<GroupChatMessage, 'id'> = {
-      from: 'admin',
+      from,
       content,
       createdAt: serverTimestamp() as Timestamp,
       broadcastedAt: serverTimestamp() as Timestamp,
@@ -119,7 +120,7 @@ export class GroupChatService {
     response: Partial<AgentResponse>
   ): Promise<void> {
     const messageRef = doc(db, `agent-group-chats/${chatId}/messages`, messageId);
-    
+
     const updateData: any = {};
     if (response.content !== undefined) {
       updateData[`responses.${agentId}.content`] = response.content;
@@ -187,7 +188,7 @@ export class GroupChatService {
   async getChatMetadata(chatId: string): Promise<GroupChat | null> {
     const chatDoc = await getDoc(doc(db, 'agent-group-chats', chatId));
     if (!chatDoc.exists()) return null;
-    
+
     return {
       id: chatDoc.id,
       ...(chatDoc.data() as Omit<GroupChat, 'id'>),
