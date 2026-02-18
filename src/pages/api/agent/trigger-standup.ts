@@ -23,7 +23,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const scriptPath = path.resolve(process.cwd(), 'scripts/dailyStandup.js');
-    const args = type ? [scriptPath, type] : [scriptPath];
+    // Always pass --force when manually triggered so the script skips the time-window check.
+    // Without this, triggering at e.g. 11 PM would silently exit because it's not within
+    // 30 minutes of the scheduled standup time.
+    const args = type ? [scriptPath, type, '--force'] : [scriptPath, '--force'];
 
     try {
         // Spawn the standup script as a detached background process

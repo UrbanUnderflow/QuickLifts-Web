@@ -716,10 +716,15 @@ async function runStandup() {
         if (config.maxDurationMinutes) MAX_DURATION_MS = config.maxDurationMinutes * 60 * 1000;
     }
 
-    // Only proceed if this standup is scheduled (unless manually forced via CLI arg)
-    if (!process.argv[2] && !shouldRunNow(config, type)) {
+    // Only proceed if this standup is scheduled (unless manually forced)
+    // --force is passed by the UI trigger API to bypass the time-window check
+    const isForced = process.argv.includes('--force');
+    if (!isForced && !shouldRunNow(config, type)) {
         console.log(`⏭️  ${type} standup not scheduled for now — exiting.`);
         process.exit(0);
+    }
+    if (isForced) {
+        console.log('🔧 Force flag detected — skipping time-window check');
     }
 
     const emoji = type === 'morning' ? '☀️' : '🌙';

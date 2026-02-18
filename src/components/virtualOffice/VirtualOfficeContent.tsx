@@ -1898,6 +1898,18 @@ const VirtualOfficeContent: React.FC = () => {
       if (!res.ok) throw new Error('Failed');
       // Don't set success yet — wait for the actual standup session to appear
       // The Firestore listener will detect it and setActiveStandup, which will clear this state
+
+      // Safety timeout: if session never appears within 45s, reset the button
+      setTimeout(() => {
+        setTriggeringStandup(prev => {
+          if (prev) {
+            // Still waiting — script likely failed silently
+            setStandupTriggerResult('error');
+            setTimeout(() => setStandupTriggerResult(null), 4000);
+          }
+          return false;
+        });
+      }, 45_000);
     } catch {
       setStandupTriggerResult('error');
       setTriggeringStandup(false);
