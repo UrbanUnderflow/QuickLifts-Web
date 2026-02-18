@@ -6,7 +6,13 @@ Translate Hampton’s pilot signals into a living telemetry view so leadership s
 ## Data Inputs
 - **Alignment Score (@Scout):** Partner readiness metric (0-100). Includes signal notes (audience fit, ritual appetite). Manual entry for Hampton pilot.
 - **Week-One Proof Gauge (@Sage):** Breath cadence delta (%), load/lightness ratio, recovery trend. Ingest via Sage’s telemetry feed and update daily.
+- **Partner Sentiment (Qualitative):** Short-form reflections from Hampton leads after activations, stored alongside the other metrics for context.
 - **Activation Capsule (@Solara):** Latest Hampton quote, hero CTA snippet, activation asset (clip/image). Pulled from Solara’s narrative feed.
+- **Partner Feedback Loop:** Quick sentiment form + ritual feedback notes captured after each activation to feed back into the kit.
+- **Week-One Proof Gauge (@Sage):** Breath cadence delta (%), load/lightness ratio, recovery trend. Ingest via Sage’s telemetry feed and update daily.
+- **Partner Sentiment (Qualitative):** Short-form reflections from Hampton leads after activations, stored alongside the other metrics for context.
+- **Activation Capsule (@Solara):** Latest Hampton quote, hero CTA snippet, activation asset (clip/image). Pulled from Solara’s narrative feed.
+- **Partner Feedback Loop:** Quick sentiment form + ritual feedback notes captured after each activation to feed back into the kit.
 - **Operational Status (Nora):** Runner heartbeat timestamp, cadence flag (green/yellow/red), upcoming activation checklist state.
 
 ## Layout
