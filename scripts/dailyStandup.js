@@ -1,25 +1,27 @@
 #!/usr/bin/env node
 
 /**
- * Daily Standup Orchestrator  (v2 — grounded in real data)
+ * Telemetry Check Orchestrator  (Heartbeat Protocol)
  *
- * Runs automated 15-20 minute standup meetings with Nora as moderator.
- * Creates a group-chat session in Firestore, sends discussion prompts,
- * waits for agent responses, and enforces a hard 20-minute cap.
+ * Runs automated system health checks with Nora as lead.
+ * Creates a group-chat session in Firestore, sends diagnostic prompts,
+ * waits for agent responses, and enforces a hard time cap.
  *
- * KEY IMPROVEMENTS over v1:
+ * Part of the Heartbeat Protocol — replaces traditional standups with
+ * continuous telemetry: agent health monitoring, idle detection, and
+ * automatic work assignment.
+ *
+ * KEY CAPABILITIES:
  *  • Agents receive their REAL work history (kanban tasks, heartbeat beats)
  *    so they cannot hallucinate. If no work exists, they must say so.
- *  • Meeting minutes are posted to progress-timeline tagged as "standup".
- *  • After standup, Nora creates kanban tasks for idle agents.
+ *  • Meeting minutes are posted to progress-timeline tagged as "telemetry".
+ *  • After check, Nora creates kanban tasks for idle agents.
  *
  * Usage:
- *   node scripts/dailyStandup.js              # auto-detect morning/evening
- *   node scripts/dailyStandup.js morning      # force morning standup
- *   node scripts/dailyStandup.js evening      # force evening standup
+ *   node scripts/dailyStandup.js              # run telemetry check
+ *   node scripts/dailyStandup.js --force      # skip schedule check
  *
- * Scheduled via launchd at 9:00 AM and 9:00 PM EST.
- */
+ * Runs every hour on the hour via the Heartbeat Protocol scheduler.
 
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
@@ -35,11 +37,11 @@ const db = getFirestore(app);
 
 let AGENTS = ['nora', 'scout', 'solara', 'sage'];
 let MODERATOR = 'nora';
-let MAX_DURATION_MS = 20 * 60 * 1000;   // Hard 20-minute cap
-const MIN_DURATION_MS = 5 * 60 * 1000;    // Minimum 5 minutes — standup continues with brainstorming if under this
-const ROUND_WAIT_MS = 4 * 60 * 1000;      // Wait up to 4 min for agents to respond per round
+let MAX_DURATION_MS = 10 * 60 * 1000;   // Hard 10-minute cap (telemetry checks are fast)
+const MIN_DURATION_MS = 3 * 60 * 1000;    // Minimum 3 minutes — check continues with brainstorming if under this
+const ROUND_WAIT_MS = 3 * 60 * 1000;      // Wait up to 3 min for agents to respond per round
 const POLL_INTERVAL_MS = 10_000;           // Check for responses every 10s
-const MAX_ROUNDS = 6;                       // Up to 6 rounds: 4 core + 2 brainstorm bonus
+const MAX_ROUNDS = 5;                       // Up to 5 rounds: 3 core + 2 brainstorm bonus
 
 const KANBAN_COLLECTION = 'kanbanTasks';
 const TIMELINE_COLLECTION = 'progress-timeline';
@@ -64,36 +66,31 @@ async function loadConfig() {
 }
 
 /**
- * Check if we should run a standup right now based on Firestore config.
- * Only proceeds if the standup is enabled AND the current time is within
- * a 30-minute window of the scheduled time.
+ * Check if we should run a telemetry check right now based on Firestore config.
+ * Uses interval-based scheduling (e.g. every 60min) instead of fixed times.
+ * Passes if the current minute is within a 5-minute window of the interval boundary.
  */
-function shouldRunNow(config, type) {
+function shouldRunNow(config) {
     if (!config) return true; // No config → run with defaults (backward compat)
+    if (config.enabled === false) {
+        console.log('⏭️  Telemetry checks are disabled in config — exiting.');
+        return false;
+    }
 
     const now = new Date();
-    // Detect system timezone automatically
     const systemTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const localHour = new Date(now.toLocaleString('en-US', { timeZone: systemTimezone })).getHours();
     const localMinute = new Date(now.toLocaleString('en-US', { timeZone: systemTimezone })).getMinutes();
+    const totalMinutes = localHour * 60 + localMinute;
+    const interval = config.intervalMinutes || 60;
 
-    console.log(`⏰ Checking schedule (local time: ${localHour}:${String(localMinute).padStart(2, '0')}, timezone: ${systemTimezone})`);
+    console.log(`⏰ Checking schedule (local time: ${localHour}:${String(localMinute).padStart(2, '0')}, interval: every ${interval}min, timezone: ${systemTimezone})`);
 
-    if (type === 'morning') {
-        if (!config.morningEnabled) return false;
-        const targetH = config.morningHour ?? 9;
-        const targetM = config.morningMinute ?? 0;
-        const diffMins = Math.abs((localHour * 60 + localMinute) - (targetH * 60 + targetM));
-        console.log(`   Morning check: target ${targetH}:${String(targetM).padStart(2, '0')}, diff ${diffMins} mins`);
-        return diffMins <= 30;
-    } else {
-        if (!config.eveningEnabled) return false;
-        const targetH = config.eveningHour ?? 21;
-        const targetM = config.eveningMinute ?? 0;
-        const diffMins = Math.abs((localHour * 60 + localMinute) - (targetH * 60 + targetM));
-        console.log(`   Evening check: target ${targetH}:${String(targetM).padStart(2, '0')}, diff ${diffMins} mins`);
-        return diffMins <= 30;
-    }
+    // Check if we're within 5 minutes of an interval boundary
+    const nearestBoundary = Math.round(totalMinutes / interval) * interval;
+    const diff = Math.abs(totalMinutes - nearestBoundary);
+    console.log(`   Nearest boundary: ${Math.floor(nearestBoundary / 60)}:${String(nearestBoundary % 60).padStart(2, '0')}, diff: ${diff} min`);
+    return diff <= 5;
 }
 
 /* ─── Fetch REAL Work History per Agent ───────────────── */
@@ -248,58 +245,70 @@ async function loadNorthStar() {
     }
 }
 
-/* ─── Standup Prompts (v2 — grounded) ──────────────────── */
+/**
+ * Load the raw North Star data object from Firestore.
+ * Returns { title, description, objectives } or null if not set.
+ * Used by the Capsule generator for structured task creation.
+ */
+async function loadNorthStarRaw() {
+    try {
+        const snap = await db.doc(NORTH_STAR_DOC).get();
+        if (!snap.exists) return null;
+        const data = snap.data();
+        if (!data?.title) return null;
+        return {
+            title: data.title || '',
+            description: data.description || '',
+            objectives: data.objectives || [],
+        };
+    } catch (err) {
+        console.warn('⚠️  Could not load raw North Star:', err.message);
+        return null;
+    }
+}
 
-function buildMorningPrompts(workHistory, northStar) {
+/* ─── Telemetry Check Prompts (Heartbeat Protocol) ────── */
+
+function buildTelemetryPrompts(workHistory, northStar) {
     const nsBlock = northStar ? `\n${northStar}\n` : '';
     return [
-        // Round 1: Opening — GROUNDED in real data
-        `☀️ Good morning team! This is our daily standup. Let's keep it focused — we have 20 minutes.
+        // Round 1: System Health Scan
+        `⚡ **Telemetry Check** — System health scan. Let's be fast and precise.
 ${nsBlock}
-**IMPORTANT — REAL DATA BELOW. You MUST base your report on this data. Do NOT make up work you didn't do.**
+**REAL DATA BELOW. Base your status on this data only. Do NOT fabricate work.**
 
 ${workHistory}
 
 ─── INSTRUCTIONS ───
 
-**Round 1 — Yesterday's Report (FROM THE DATA ABOVE):**
+**Round 1 — Status & Health:**
 Each of you:
-1. Report ONLY what the data above shows you actually did. Reference specific task names, beat entries, and timestamps.
-2. If the data shows NO completed work for you — say: "I did not complete any tasks yesterday."
-3. Do NOT fabricate accomplishments. The data above is the single source of truth.
-4. Mention any in-progress work that is still ongoing.
+1. Report your current status: ACTIVE (working on something), IDLE (no assigned work), or BLOCKED (stuck).
+2. If ACTIVE: Name the exact task from the data above. What % complete? ETA?
+3. If IDLE: Say "I have no assigned Capsules" — Nora will assign work.
+4. If BLOCKED: What's blocking you and what do you need to unblock?
 
-Keep it honest — 3-4 sentences max.`,
+1-2 sentences each. Speed matters.`,
 
-        // Round 2: Today's Plan
-        `**Round 2 — Today's Plan:**
-Based on the kanban board and your current priorities:
-1. What specific task will you work on TODAY? Name it exactly.
-2. Are there blockers, dependencies, or things you need from another agent?
-3. If you have no assigned tasks, say so explicitly.
+        // Round 2: Idle Detection & Work Assignment
+        `**Round 2 — Work Assignment:**
+@Nora — Based on status reports:
+1. Which agents reported IDLE or have no in-progress tasks?
+2. Pull from the backlog/kanban and assign a Capsule to each idle agent.
+3. Verify no agents are duplicating work.
 
-@Nora — take note of who has no tasks. You'll need to assign work after this standup.
+Other agents: If you need something from another agent, flag it now.
 
-Quick and specific — 2-3 sentences each.`,
+Keep it surgical — 1-2 sentences.`,
 
-        // Round 3: Coordination
-        `**Round 3 — Coordination & Blockers:**
-- Does anyone need help from another agent?
-- Are there any overlaps or conflicts in today's plans?
-- @Nora — summarize what each agent committed to and identify anyone who needs task assignments.
+        // Round 3: Closing
+        `**Closing — Heartbeat logged.**
+@Nora — Post a summary:
+1. System health status (how many agents active vs idle vs blocked).
+2. Any Capsules assigned during this check.
+3. Flag anything that needs the Orchestrator's attention.
 
-If nothing to add, say "No blockers."`,
-
-        // Round 4: Closing
-        `**Wrap-up:**
-Thanks team. Let's get to work.
-
-@Nora — After this standup:
-1. Summarize what each agent reported and committed to.
-2. For any agent with NO assigned tasks, create a kanban task for them — tasks should be aligned with the North Star.
-3. Post meeting minutes to the heartbeat feed.
-
-💪 Let's get to work — every task should move us toward the North Star.`,
+Back to work. Next telemetry check runs automatically. ⚡`,
     ];
 }
 
@@ -353,61 +362,17 @@ Be curious. Ask each other hard questions. This is how we find the insights hidi
 3-5 sentences per agent.`,
 ];
 
+// Kept for backward compat — maps to telemetry prompts
 function buildEveningPrompts(workHistory, northStar) {
-    const nsBlock = northStar ? `\n${northStar}\n` : '';
-    return [
-        // Round 1: End-of-day — GROUNDED in real data
-        `🌙 Good evening team! This is our daily recap. Let's review the day — 20 minutes max.
-${nsBlock}
-**IMPORTANT — REAL DATA BELOW. You MUST base your report on this data. Do NOT make up work you didn't do.**
-
-${workHistory}
-
-─── INSTRUCTIONS ───
-
-**Round 1 — End of Day Report (FROM THE DATA ABOVE):**
-Each of you:
-1. Report ONLY what the data above shows you actually completed today. Reference specific tasks, beat entries, and timestamps.
-2. If the data shows NO completed work — say: "I did not complete any tasks today." Be honest.
-3. What is still in-progress and what's the expected completion?
-4. Any unresolved blockers to flag for tomorrow?
-
-Be specific about REAL deliverables. No vague "worked on X" — name the actual artifact. If there's nothing, say nothing.`,
-
-        // Round 2: Wins and friction
-        `**Round 2 — Wins & Friction:**
-- Based on the ACTUAL data from today, what went well?
-- Where did you hit friction? What slowed you down?
-- If you had no tasks or did no work today, reflect on why and what should change.`,
-
-        // Round 3: Tomorrow preview
-        `**Round 3 — Tomorrow Preview:**
-What's the single most important thing you need to accomplish tomorrow?
-If you need something from another agent, flag it now.
-
-@Nora — note any agents that were idle today. They need task assignments for tomorrow.`,
-
-        // Round 4: Closing
-        `**Wrap-up:**
-@Nora — Post meeting minutes summarizing:
-- What each agent actually accomplished (based on data, not what they claimed)
-- Who was idle and needs work assignments
-- Priority items for tomorrow
-
-Get some rest — see you at the morning standup. 🌃`,
-    ];
+    return buildTelemetryPrompts(workHistory, northStar);
 }
 
 /* ─── Helpers ────────────────────────────────────────── */
 
-function getStandupType() {
-    const arg = process.argv[2];
-    if (arg === 'morning' || arg === 'evening') return arg;
-
-    // Auto-detect based on current hour (EST)
-    const now = new Date();
-    const estHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' })).getHours();
-    return estHour < 15 ? 'morning' : 'evening';
+function getCheckType() {
+    // Telemetry checks are type-agnostic — they always run the same prompts.
+    // We still return a label for backward compat with Firestore metadata.
+    return 'telemetry';
 }
 
 function sleep(ms) {
@@ -623,21 +588,36 @@ async function postMeetingMinutes(chatId, type, durationMin, roundsCompleted) {
     }
 }
 
-/* ─── Post-Standup: Auto-assign Tasks for Idle Agents ── */
+/* ─── Post-Telemetry: Auto-assign Capsules for Idle Agents ── */
 
 /**
- * After standup, check which agents have no tasks assigned.
- * For each idle agent, create a kanban task so they have work to do.
+ * After telemetry check, scan which agents have no Capsules assigned.
+ * For each idle agent, create a North Star-aligned kanban task.
+ * This is the Heartbeat Protocol's work assignment engine.
  */
-async function assignTasksToIdleAgents(type) {
-    console.log('\n📋 Checking for idle agents to assign tasks...');
+async function assignTasksToIdleAgents(northStarData) {
+    console.log('\n📋 Scanning for idle agents — assigning Capsules...');
+
+    // Parse North Star for task alignment
+    const nsTitle = northStarData?.title || '';
+    const nsObjectives = northStarData?.objectives || [];
+    const nsDescription = northStarData?.description || '';
+
+    if (nsTitle) {
+        console.log(`   ⭐ North Star: "${nsTitle}"`);
+        if (nsObjectives.length > 0) {
+            console.log(`   🎯 Objectives: ${nsObjectives.join(' | ')}`);
+        }
+    } else {
+        console.log('   ⚠️  No North Star set — using role-based defaults');
+    }
 
     for (const agentId of AGENTS) {
         const displayName = AGENT_DISPLAY_NAMES[agentId] || agentId;
         const nameVariants = [displayName, displayName.toLowerCase(), agentId];
 
-        // Check if agent already has tasks
         try {
+            // Check if agent already has active Capsules
             const existingTasks = await db.collection(KANBAN_COLLECTION)
                 .where('assignee', 'in', nameVariants)
                 .where('status', 'in', ['todo', 'in-progress'])
@@ -645,43 +625,43 @@ async function assignTasksToIdleAgents(type) {
                 .get();
 
             if (!existingTasks.empty) {
-                console.log(`   ✅ ${displayName} has active tasks — skipping`);
+                console.log(`   ✅ ${displayName} has active Capsules — skipping`);
                 continue;
             }
 
-            // Agent has no tasks — create one based on their role
-            const taskForAgent = getDefaultTask(agentId, type);
-            if (!taskForAgent) continue;
+            // Agent is IDLE — generate a North Star-aligned Capsule
+            const capsule = generateCapsule(agentId, nsTitle, nsObjectives, nsDescription);
+            if (!capsule) continue;
 
-            await db.collection(KANBAN_COLLECTION).add({
-                name: taskForAgent.name,
-                description: taskForAgent.description,
+            const docRef = await db.collection(KANBAN_COLLECTION).add({
+                name: capsule.name,
+                description: capsule.description,
                 assignee: displayName,
                 status: 'todo',
-                priority: 'medium',
-                source: 'standup-auto-assign',
-                standupType: type,
+                priority: capsule.priority || 'medium',
+                source: 'telemetry-auto-assign',
+                northStarAligned: !!nsTitle,
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             });
 
-            console.log(`   📌 Created task for ${displayName}: "${taskForAgent.name}"`);
+            console.log(`   ⚡ Capsule assigned to ${displayName}: "${capsule.name}"`);
 
-            // Also post a beat about the assignment
+            // Post a beat about the assignment
             await db.collection(TIMELINE_COLLECTION).add({
                 agentId: MODERATOR,
                 agentName: AGENT_DISPLAY_NAMES[MODERATOR] || MODERATOR,
                 emoji: AGENT_EMOJIS[MODERATOR] || '🟢',
-                objectiveCode: 'TASK-ASSIGN',
+                objectiveCode: docRef.id,
                 beat: 'work-in-flight',
-                headline: `Assigned "${taskForAgent.name}" to ${displayName} (post-standup auto-assignment)`,
-                artifactType: 'none',
-                artifactText: '',
+                headline: `⚡ Capsule assigned to ${displayName}: "${capsule.name}"`,
+                artifactType: capsule.description ? 'text' : 'none',
+                artifactText: capsule.description.substring(0, 500),
                 artifactUrl: '',
-                lensTag: 'standup',
+                lensTag: 'telemetry',
                 confidenceColor: 'blue',
                 stateTag: 'signals',
-                isStandup: true,
+                isTelemetry: true,
                 createdAt: FieldValue.serverTimestamp(),
             });
 
@@ -692,52 +672,84 @@ async function assignTasksToIdleAgents(type) {
 }
 
 /**
- * Generate a default task for an idle agent based on their role.
+ * Generate a North Star-aligned Capsule for an idle agent.
+ * 
+ * Each agent gets work shaped by their role:
+ *   Nora   → Orchestration, ops, task queue management
+ *   Scout  → Research, competitive intel, discovery
+ *   Solara → Architecture, systems design, technical planning
+ *   Sage   → Synthesis, analysis, insight distillation
+ *
+ * If a North Star is set, every task is framed around it.
+ * If not, we fall back to role-based defaults.
  */
-function getDefaultTask(agentId, standupType) {
-    const isEvening = standupType === 'evening';
-    const tasks = {
-        nora: {
-            name: isEvening
-                ? 'Review and organize tomorrow\'s task queue'
-                : 'Audit agent task queues and identify blockers',
-            description: isEvening
-                ? 'Review all agent kanban boards, close completed tasks, organize priorities for tomorrow. Ensure every agent will have work to do in the morning.'
-                : 'Review the kanban board for all agents. Check for blocked tasks, stale in-progress items, and re-prioritize based on current objectives. Create follow-up tasks as needed.',
-        },
-        scout: {
-            name: isEvening
-                ? 'Research brief: fitness industry trends this week'
-                : 'Competitive analysis: top 3 fitness app features launched this month',
-            description: isEvening
-                ? 'Compile a short research brief covering notable fitness industry trends, competitor moves, and emerging opportunities. Focus on actionable insights for Pulse.'
-                : 'Analyze features recently launched by competitor fitness apps (e.g., Strava, Peloton, Nike Run Club). Identify opportunities for Pulse to differentiate. Write findings to a deliverable.',
-        },
-        solara: {
-            name: isEvening
-                ? 'Brand voice audit on latest Pulse content'
-                : 'Draft content for the next community engagement post',
-            description: isEvening
-                ? 'Review the latest Pulse-facing content (app copy, social posts, documentation) for brand consistency. Flag any messaging that doesn\'t align with Pulse\'s voice.'
-                : 'Create a draft for a community-focused social post or in-app notification. Ensure it reflects Pulse\'s brand values: authenticity, community, and movement.',
-        },
-        sage: {
-            name: isEvening
-                ? 'Literature scan: latest sports science publications'
-                : 'Research synthesis: top 3 recovery science insights this month',
-            description: isEvening
-                ? 'Scan recent sports science and wellness publications for findings relevant to Pulse\'s product. Focus on recovery, training optimization, and health tech.'
-                : 'Synthesize the top 3 most relevant recovery science or exercise science insights from recent literature. Create a brief that could inform Pulse\'s content or product decisions.',
-        },
+function generateCapsule(agentId, nsTitle, nsObjectives, nsDescription) {
+    // Pick a relevant objective to focus on (rotate through them)
+    const objectiveIdx = Math.floor(Date.now() / 3600000) % Math.max(nsObjectives.length, 1);
+    const focusObjective = nsObjectives[objectiveIdx] || '';
+
+    // Build context string for descriptions
+    const nsContext = nsTitle
+        ? `This Capsule is aligned to our North Star: "${nsTitle}".${focusObjective ? ` Focus area: "${focusObjective}".` : ''}`
+        : '';
+
+    const capsules = {
+        nora: nsTitle
+            ? {
+                name: `Ops audit: Ensure all agents are advancing "${nsTitle}"`,
+                description: `Review the kanban board for all agents. For each agent, verify their current task is aligned to our North Star: "${nsTitle}". ${focusObjective ? `Priority focus: "${focusObjective}".` : ''} Close stale tasks, re-prioritize blocked items, and ensure every agent has meaningful work. Post a summary to the heartbeat feed.`,
+                priority: 'high',
+            }
+            : {
+                name: 'Ops audit: Review all agent task queues and clear blockers',
+                description: 'Review the kanban board for all agents. Check for blocked tasks, stale in-progress items, and re-prioritize based on current objectives. Create follow-up tasks as needed.',
+                priority: 'medium',
+            },
+
+        scout: nsTitle
+            ? {
+                name: `Research: Discovery sprint for "${focusObjective || nsTitle}"`,
+                description: `Conduct a focused research sprint supporting our North Star: "${nsTitle}". ${focusObjective ? `Specific focus: "${focusObjective}".` : ''} Investigate competitive landscape, market opportunities, and emerging trends. Deliver a concise .md brief in docs/research/ with actionable findings. ${nsDescription ? `Context: ${nsDescription.substring(0, 200)}` : ''}`,
+                priority: 'high',
+            }
+            : {
+                name: 'Research: Competitive landscape analysis for Pulse',
+                description: 'Analyze the competitive landscape for Pulse. Identify top competitor moves, emerging opportunities, and gaps we can exploit. Write findings as a .md deliverable in docs/research/.',
+                priority: 'medium',
+            },
+
+        solara: nsTitle
+            ? {
+                name: `Architecture: Design system components for "${focusObjective || nsTitle}"`,
+                description: `Design and document the technical architecture needed to advance our North Star: "${nsTitle}". ${focusObjective ? `Focus on: "${focusObjective}".` : ''} Identify required system components, data flows, and integration points. Deliver a technical spec as .md in docs/architecture/. ${nsDescription ? `Context: ${nsDescription.substring(0, 200)}` : ''}`,
+                priority: 'high',
+            }
+            : {
+                name: 'Architecture: Document current system design and propose improvements',
+                description: 'Review current system architecture. Identify areas for improvement, potential technical debt, and opportunities for better design patterns. Write findings as .md deliverable in docs/architecture/.',
+                priority: 'medium',
+            },
+
+        sage: nsTitle
+            ? {
+                name: `Synthesis: Strategic analysis of "${focusObjective || nsTitle}"`,
+                description: `Synthesize all available data and insights related to our North Star: "${nsTitle}". ${focusObjective ? `Deep-dive on: "${focusObjective}".` : ''} Cross-reference agent outputs, research findings, and progress data. Produce a strategic brief with recommendations. Deliver as .md in docs/synthesis/. ${nsDescription ? `Context: ${nsDescription.substring(0, 200)}` : ''}`,
+                priority: 'high',
+            }
+            : {
+                name: 'Synthesis: Cross-team insight report',
+                description: 'Review all recent agent outputs and research findings. Identify patterns, connections, and strategic insights that span multiple workstreams. Write a synthesis brief as .md deliverable in docs/synthesis/.',
+                priority: 'medium',
+            },
     };
 
-    return tasks[agentId] || null;
+    return capsules[agentId] || null;
 }
 
 /* ─── Main Standup Flow ──────────────────────────────── */
 
 async function runStandup() {
-    const type = getStandupType();
+    const type = getCheckType();
 
     // Load config from Firestore and check schedule
     const config = await loadConfig();
@@ -749,21 +761,20 @@ async function runStandup() {
         if (config.maxDurationMinutes) MAX_DURATION_MS = config.maxDurationMinutes * 60 * 1000;
     }
 
-    // Only proceed if this standup is scheduled (unless manually forced)
-    // --force is passed by the UI trigger API to bypass the time-window check
+    // Only proceed if scheduled (unless manually forced via --force)
     const isForced = process.argv.includes('--force');
-    if (!isForced && !shouldRunNow(config, type)) {
-        console.log(`⏭️  ${type} standup not scheduled for now — exiting.`);
+    if (!isForced && !shouldRunNow(config)) {
+        console.log(`⏭️  Telemetry check not scheduled for now — exiting.`);
         process.exit(0);
     }
     if (isForced) {
-        console.log('🔧 Force flag detected — skipping time-window check');
+        console.log('🔧 Force flag detected — skipping schedule check');
     }
 
-    const emoji = type === 'morning' ? '☀️' : '🌙';
-    const label = type === 'morning' ? 'Morning Standup' : 'Evening Standup';
+    const emoji = '⚡';
+    const label = 'Telemetry Check';
 
-    console.log(`\n${emoji} Daily ${label} starting...`);
+    console.log(`\n${emoji} ${label} starting...`);
     console.log(`   Agents: ${AGENTS.join(', ')}`);
     console.log(`   Moderator: ${MODERATOR}`);
     console.log(`   Max duration: ${MAX_DURATION_MS / 60000} minutes`);
@@ -782,13 +793,11 @@ async function runStandup() {
         console.log('   ⚠️  No North Star set — agents will brainstorm without a focus anchor\n');
     }
 
-    const prompts = type === 'morning'
-        ? buildMorningPrompts(workHistory, northStar)
-        : buildEveningPrompts(workHistory, northStar);
+    const prompts = buildTelemetryPrompts(workHistory, northStar);
 
     const startTime = Date.now();
 
-    // 1. Create group chat session with standup metadata
+    // 1. Create group chat session with telemetry metadata
     const chatRef = await db.collection('agent-group-chats').add({
         participants: AGENTS,
         createdBy: 'admin',
@@ -800,18 +809,19 @@ async function runStandup() {
             sessionDuration: 0,
         },
         standupMeta: {
-            type: type,
+            type: 'telemetry',
             scheduledAt: FieldValue.serverTimestamp(),
             moderator: MODERATOR,
-            maxDurationMinutes: 20,
-            grounded: true,  // v2: indicates data-grounded standup
+            maxDurationMinutes: MAX_DURATION_MS / 60000,
+            grounded: true,
+            protocol: 'heartbeat', // Heartbeat Protocol marker
         },
     });
     const chatId = chatRef.id;
-    console.log(`📋 Session created: ${chatId}`);
+    console.log(`📋 Telemetry session created: ${chatId}`);
 
-    // 2. Set agent presence to 'meeting'
-    await setAgentPresenceStatus(AGENTS, 'meeting', `${emoji} ${label} in progress`);
+    // 2. Set agent presence to 'meeting' (telemetry check active)
+    await setAgentPresenceStatus(AGENTS, 'meeting', `${emoji} Telemetry check in progress`);
 
     // 3. Run conversation rounds (core reporting)
     let roundsCompleted = 0;
@@ -821,7 +831,7 @@ async function runStandup() {
 
         // Hard time cap — if past MAX duration, stop immediately
         if (elapsed >= MAX_DURATION_MS) {
-            console.log(`\n⏰ ${MAX_DURATION_MS / 60000}-minute cap reached — ending standup`);
+            console.log(`\n⏰ ${MAX_DURATION_MS / 60000}-minute cap reached — ending check`);
             break;
         }
 
@@ -893,13 +903,13 @@ async function runStandup() {
             if (b < bonusCount - 1) await sleep(5_000);
         }
     } else {
-        console.log(`\n✅ Standup hit ${Math.floor(elapsedAfterCore / 60000)} min — no brainstorm rounds needed`);
+        console.log(`\n✅ Check hit ${Math.floor(elapsedAfterCore / 60000)} min — no brainstorm rounds needed`);
     }
 
     // 4. Close the session
     const durationMs = Date.now() - startTime;
     const durationMin = Math.floor(durationMs / 60000);
-    console.log(`\n✅ Standup complete: ${roundsCompleted} rounds in ${durationMin} minutes`);
+    console.log(`\n✅ Telemetry check complete: ${roundsCompleted} rounds in ${durationMin} minutes`);
 
     await db.doc(`agent-group-chats/${chatId}`).update({
         status: 'closed',
@@ -910,15 +920,16 @@ async function runStandup() {
         },
     });
 
-    // 5. Post meeting minutes to heartbeat feed
-    console.log('\n📝 Posting meeting minutes...');
+    // 5. Post telemetry minutes to heartbeat feed
+    console.log('\n📝 Posting telemetry minutes...');
     await postMeetingMinutes(chatId, type, durationMin, roundsCompleted);
 
-    // 6. Auto-assign tasks to idle agents
-    await assignTasksToIdleAgents(type);
+    // 6. Auto-assign Capsules to idle agents (North Star-aligned)
+    const northStarData = await loadNorthStarRaw();
+    await assignTasksToIdleAgents(northStarData);
 
     // 7. Reset agent presence
-    await setAgentPresenceStatus(AGENTS, 'idle', `✅ ${label} complete`);
+    await setAgentPresenceStatus(AGENTS, 'idle', `✅ Telemetry check complete`);
 
     console.log('\n👋 Done.\n');
     process.exit(0);
@@ -927,6 +938,6 @@ async function runStandup() {
 /* ─── Entry Point ────────────────────────────────────── */
 
 runStandup().catch(err => {
-    console.error('❌ Standup failed:', err);
+    console.error('❌ Telemetry check failed:', err);
     process.exit(1);
 });

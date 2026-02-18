@@ -781,7 +781,7 @@ async function postBeat(beat, headline, opts = {}) {
             agentName: AGENT_NAME,
             emoji: AGENT_EMOJI,
             objectiveCode: opts.objectiveCode || opts.taskId || '',
-            beat: beat,               // hypothesis | work-in-flight | result | block
+            beat: beat,               // hypothesis | work-in-flight | result | block | signal-spike
             headline: headline,
             artifactType: opts.artifactType || 'none',
             artifactText: opts.artifactText || '',
@@ -795,6 +795,87 @@ async function postBeat(beat, headline, opts = {}) {
     } catch (err) {
         console.error('⚠️  Failed to post beat:', err.message);
     }
+}
+
+/* ─── Heartbeat OS: Insight Extraction ────────────────── */
+
+/**
+ * Scan step output for noteworthy findings and auto-post signal-spike beats.
+ *
+ * When an agent is doing research or analysis, the output may contain
+ * insights that are valuable to the whole team. This function detects
+ * those moments and surfaces them to the timeline so the team can see
+ * discoveries in real-time — not buried in a deliverable that gets read later.
+ *
+ * Rate-limited to max 1 insight per 5 minutes to avoid flooding the feed.
+ */
+let lastInsightAt = 0;
+const INSIGHT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes between signal-spike beats
+
+const INSIGHT_PATTERNS = [
+    // Strong discovery signals
+    { rx: /(?:key\s+)?(?:finding|insight|discovery|takeaway|conclusion)\s*[:—–-]\s*(.{20,200})/i, weight: 3 },
+    { rx: /(?:important(?:ly)?|significant(?:ly)?|notable|noteworthy|surprisingly|unexpectedly)\s*[,:]\s*(.{20,200})/i, weight: 3 },
+    { rx: /(?:found|discovered|uncovered|identified|revealed|noticed)\s+(?:that\s+)?(.{20,200})/i, weight: 2 },
+    // Competitive/market intelligence
+    { rx: /(?:competitor|rival|alternative)s?\s+(?:are|have|launched|released|offer)\s+(.{20,200})/i, weight: 3 },
+    { rx: /(?:market|trend|industry)\s+(?:data|analysis|research)\s+(?:shows?|indicates?|reveals?|suggests?)\s+(.{20,200})/i, weight: 3 },
+    // Data-driven findings
+    { rx: /(\d+%\s+(?:of|increase|decrease|growth|decline|more|less|higher|lower).{10,150})/i, weight: 3 },
+    { rx: /(?:data\s+)?(?:shows?|indicates?|suggests?|reveals?|confirms?)\s+(?:that\s+)?(.{20,200})/i, weight: 1 },
+    // Technical insights
+    { rx: /(?:pattern|architecture|approach|design)\s+(?:that|which)\s+(.{20,200})/i, weight: 2 },
+    { rx: /(?:root\s*cause|bottleneck|critical\s+path|blocking\s+issue)\s*[:—–-]?\s*(.{20,200})/i, weight: 3 },
+    // Strategic insights
+    { rx: /(?:opportunity|gap|whitespace|untapped|underserved)\s*[:—–-]?\s*(.{20,200})/i, weight: 3 },
+    { rx: /(?:recommend(?:ation)?|propos(?:e|al)|should\s+consider)\s*[:—–-]?\s*(.{20,200})/i, weight: 2 },
+];
+
+async function extractAndPostInsight(stepOutput, task, stepIndex, totalSteps) {
+    if (!stepOutput || stepOutput.length < 50) return;
+
+    // Rate limit — don't flood the timeline
+    const now = Date.now();
+    if (now - lastInsightAt < INSIGHT_COOLDOWN_MS) return;
+
+    // Scan for insight patterns
+    let bestMatch = null;
+    let bestWeight = 0;
+
+    for (const pattern of INSIGHT_PATTERNS) {
+        const match = stepOutput.match(pattern.rx);
+        if (match && match[1] && pattern.weight > bestWeight) {
+            bestMatch = match[1].trim();
+            bestWeight = pattern.weight;
+        }
+    }
+
+    // Only post if we found a strong signal (weight >= 2)
+    if (!bestMatch || bestWeight < 2) return;
+
+    // Clean up the insight text
+    let insight = bestMatch
+        .replace(/\s+/g, ' ')
+        .replace(/[.!?]+$/, '')
+        .trim();
+
+    // Truncate if too long
+    if (insight.length > 180) {
+        insight = insight.substring(0, 177) + '...';
+    }
+
+    lastInsightAt = now;
+
+    await postBeat('signal-spike', `🔍 ${insight}`, {
+        taskId: task.id,
+        color: 'green',
+        objectiveCode: task.objectiveCode || task.id,
+        artifactType: 'text',
+        artifactText: `Discovered during step ${stepIndex + 1}/${totalSteps} of "${task.name}":\n\n${bestMatch}`,
+        lensTag: 'insight',
+    });
+
+    console.log(`🔍 Insight surfaced to timeline: "${insight.substring(0, 80)}..."`);
 }
 
 /**
@@ -3391,6 +3472,15 @@ async function run() {
             for (let i = 0; i < steps.length; i++) {
                 console.log(`\n⚡ Step ${i + 1}/${steps.length}: ${steps[i].description}`);
 
+                // ─── Heartbeat: post beat when step STARTS ──
+                if (i > 0) { // Skip first step (already covered by task-start hypothesis beat)
+                    await postBeat('work-in-flight', `▶ Starting step ${i + 1}/${steps.length}: ${steps[i].description}`, {
+                        taskId: task.id,
+                        color: 'blue',
+                        objectiveCode: task.objectiveCode || task.id,
+                    });
+                }
+
                 // If previous step failed, inject failure context so agent can adapt
                 if (lastFailureContext && steps[i].status !== 'failed') {
                     steps[i].reasoning = (steps[i].reasoning || '') +
@@ -3403,6 +3493,15 @@ async function run() {
                     consecutiveFailures++;
                     lastFailureContext = (steps[i].output || '').substring(0, 200);
                     console.log(`❌ Step ${i + 1} failed (${consecutiveFailures} consecutive).`);
+
+                    // ─── Heartbeat: post block beat on step failure (non-fatal) ──
+                    await postBeat('block', `⚠️ Step ${i + 1}/${steps.length} failed: ${steps[i].description}`, {
+                        taskId: task.id,
+                        color: 'yellow',
+                        objectiveCode: task.objectiveCode || task.id,
+                        artifactText: lastFailureContext.substring(0, 300),
+                        artifactType: lastFailureContext ? 'text' : 'none',
+                    });
 
                     if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
                         console.log(`🛑 ${MAX_CONSECUTIVE_FAILURES} consecutive failures — stopping task.`);
@@ -3426,11 +3525,28 @@ async function run() {
                 console.log(`✅ Step ${i + 1} completed${steps[i].durationMs ? ` (${formatMs(steps[i].durationMs)})` : ''}`);
 
                 // ─── Heartbeat: post work-in-flight beat on step completion ──
-                await postBeat('work-in-flight', `Step ${i + 1}/${steps.length}: ${steps[i].description}`, {
+                await postBeat('work-in-flight', `✅ Step ${i + 1}/${steps.length}: ${steps[i].description}`, {
                     taskId: task.id,
                     color: inferColor(steps, i + 1),
                     objectiveCode: task.objectiveCode || task.id,
                 });
+
+                // ─── Heartbeat: extract and surface insights from step output ──
+                if (steps[i].output) {
+                    await extractAndPostInsight(steps[i].output, task, i, steps.length);
+                }
+
+                // ─── Heartbeat: halfway checkpoint for multi-step tasks ──
+                const halfwayIndex = Math.floor(steps.length / 2);
+                if (steps.length >= 4 && i === halfwayIndex) {
+                    const completedCount = steps.filter(s => s.status === 'completed' || s.status === 'completed-with-issues').length;
+                    const failedCount = steps.filter(s => s.status === 'failed').length;
+                    await postBeat('work-in-flight', `📍 Halfway checkpoint: ${completedCount}/${steps.length} steps done${failedCount > 0 ? `, ${failedCount} failed` : ''} — "${task.name}"`, {
+                        taskId: task.id,
+                        color: failedCount > 0 ? 'yellow' : 'green',
+                        objectiveCode: task.objectiveCode || task.id,
+                    });
+                }
 
                 if (i + 1 < steps.length) {
                     steps[i + 1].status = 'in-progress';
@@ -3455,6 +3571,15 @@ async function run() {
                     if (!validation.passed) {
                         console.log(`\n❌ VALIDATION FAILED: ${validation.reason}`);
                         console.log(`   📤 Creating corrective task...`);
+
+                        // ─── Heartbeat: post block beat for validation failure ──
+                        await postBeat('block', `🔍 Validation failed: ${task.name} — ${validation.reason}`, {
+                            taskId: task.id,
+                            color: 'red',
+                            objectiveCode: task.objectiveCode || task.id,
+                            artifactType: 'text',
+                            artifactText: `Reason: ${validation.reason}\n\nEvidence: ${validation.evidence?.map(e => e.output).join('\n').substring(0, 400)}`,
+                        });
 
                         // Create a corrective task for the same agent
                         const correctiveDesc = [
@@ -3506,6 +3631,13 @@ async function run() {
                         continue; // Skip to next task (the corrective one)
                     }
                     console.log(`\n✅ VALIDATION PASSED: ${validation.reason}`);
+
+                    // ─── Heartbeat: post result beat for validation pass ──
+                    await postBeat('work-in-flight', `🔍 Validation passed: ${task.name}`, {
+                        taskId: task.id,
+                        color: 'green',
+                        objectiveCode: task.objectiveCode || task.id,
+                    });
                 }
 
                 // ─── Verifiable artifact gate ──────────────────

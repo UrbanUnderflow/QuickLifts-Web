@@ -5,9 +5,12 @@ import fs from 'fs';
 
 /**
  * POST /api/agent/trigger-standup
- * Body: { type?: 'morning' | 'evening' }
+ * Body: { type?: 'telemetry' }
  *
- * Manually triggers a standup by running the dailyStandup.js script.
+ * Manually triggers a telemetry check by running the dailyStandup.js script.
+ * Part of the Heartbeat Protocol — replaces traditional standups with
+ * continuous system health monitoring, idle detection, and work assignment.
+ *
  * Waits up to 5 seconds to verify the script actually starts successfully
  * before returning. If it crashes immediately, the error is returned.
  */
@@ -16,25 +19,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    const { type } = req.body || {};
-
-    if (type && !['morning', 'evening'].includes(type)) {
-        return res.status(400).json({ error: 'Invalid type. Must be "morning" or "evening".' });
-    }
-
     const scriptPath = path.resolve(process.cwd(), 'scripts/dailyStandup.js');
 
     // Verify the script exists before trying to run it
     if (!fs.existsSync(scriptPath)) {
-        console.error(`[trigger-standup] Script not found: ${scriptPath}`);
+        console.error(`[telemetry] Script not found: ${scriptPath}`);
         return res.status(500).json({ error: `Script not found: ${scriptPath}` });
     }
 
     // Always pass --force when manually triggered so the script skips the time-window check.
-    const args = type ? [scriptPath, type, '--force'] : [scriptPath, '--force'];
+    const args = [scriptPath, '--force'];
 
-    console.log(`[trigger-standup] Spawning: node ${args.join(' ')}`);
-    console.log(`[trigger-standup] CWD: ${process.cwd()}`);
+    console.log(`[telemetry] Spawning: node ${args.join(' ')}`);
+    console.log(`[telemetry] CWD: ${process.cwd()}`);
 
     try {
         // Spawn with pipe so we can capture early errors
@@ -84,28 +81,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ]);
 
         if (result.status === 'started') {
-            console.log(`[trigger-standup] Script running (PID ${child.pid}). Early output: ${stdout.substring(0, 200)}`);
+            console.log(`[telemetry] Check running (PID ${child.pid}). Early output: ${stdout.substring(0, 200)}`);
             return res.status(200).json({
                 success: true,
-                message: `Standup triggered${type ? ` (${type})` : ' (auto-detect)'}`,
+                message: 'Telemetry check triggered',
                 pid: child.pid,
             });
         } else if (result.status === 'crashed') {
-            console.error(`[trigger-standup] Script crashed immediately:`, result.error);
+            console.error(`[telemetry] Script crashed immediately:`, result.error);
             return res.status(500).json({
-                error: 'Standup script crashed on startup',
+                error: 'Telemetry check script crashed on startup',
                 details: result.error.substring(0, 500),
                 exitCode: result.code,
             });
         } else {
-            console.error(`[trigger-standup] Spawn error:`, result.error);
+            console.error(`[telemetry] Spawn error:`, result.error);
             return res.status(500).json({
-                error: 'Failed to start standup script',
+                error: 'Failed to start telemetry check',
                 details: result.error,
             });
         }
     } catch (err: any) {
-        console.error('[trigger-standup] Failed to trigger standup:', err);
-        return res.status(500).json({ error: err.message || 'Failed to trigger standup' });
+        console.error('[telemetry] Failed to trigger check:', err);
+        return res.status(500).json({ error: err.message || 'Failed to trigger telemetry check' });
     }
 }
