@@ -197,10 +197,25 @@ export const getServerSideProps: GetServerSideProps = async ({ params }) => {
       return { notFound: true };
     }
 
+    // Fetch author profile if available
+    let authorTitle = '';
+    if (data?.author) {
+      try {
+        const authorSlug = data.author.toLowerCase().replace(/\s+/g, '-');
+        const authorDoc = await db.collection('authorProfiles').doc(authorSlug).get();
+        if (authorDoc.exists) {
+          authorTitle = authorDoc.data()?.title || '';
+        }
+      } catch (e) {
+        console.error('Error fetching author profile:', e);
+      }
+    }
+
     // Serialize Firestore timestamps
     const articleData = {
       ...data,
       slug: docSnap.id,
+      authorTitle,
       createdAt: data?.createdAt?.toDate?.()?.toISOString() || null,
       updatedAt: data?.updatedAt?.toDate?.()?.toISOString() || null,
       publishedAt: data?.publishedAt?.toDate?.()?.toISOString() || null,
@@ -276,6 +291,7 @@ interface DynamicArticle {
   title: string;
   subtitle: string;
   author: string;
+  authorTitle?: string; // e.g. "Founder, Pulse · Software Engineer · Clinical Research"
   category: string;
   excerpt: string;
   content: string;
@@ -325,75 +341,193 @@ const DynamicArticleContent: React.FC<{ article: DynamicArticle }> = ({ article 
 
     return toc;
   };
+  // Parse inline markdown: **bold**, *italic*, and [links](url)
+  const parseInlineMarkdown = (text: string): React.ReactNode[] => {
+    const parts: React.ReactNode[] = [];
+    // Regex for **bold**, *italic*, and [text](url)
+    const inlineRegex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(\[(.+?)\]\((.+?)\))/g;
+    let lastIdx = 0;
+    let m;
+
+    while ((m = inlineRegex.exec(text)) !== null) {
+      // Push text before match
+      if (m.index > lastIdx) {
+        parts.push(text.substring(lastIdx, m.index));
+      }
+
+      if (m[1]) {
+        // **bold**
+        parts.push(<strong key={`b-${m.index}`} className="font-bold text-stone-900">{m[2]}</strong>);
+      } else if (m[3]) {
+        // *italic*
+        parts.push(<em key={`i-${m.index}`}>{m[4]}</em>);
+      } else if (m[5]) {
+        // [text](url)
+        parts.push(
+          <a key={`l-${m.index}`} href={m[7]} className="text-stone-900 underline decoration-stone-300 hover:decoration-stone-900 transition-colors" target="_blank" rel="noopener noreferrer">
+            {m[6]}
+          </a>
+        );
+      }
+
+      lastIdx = m.index + m[0].length;
+    }
+
+    // Push remaining text
+    if (lastIdx < text.length) {
+      parts.push(text.substring(lastIdx));
+    }
+
+    return parts.length > 0 ? parts : [text];
+  };
 
   // Render content with section IDs on headings
   const renderContent = (content: string) => {
-    const paragraphs = content.split('\n\n').filter(p => p.trim());
+    // First, split on block-level custom syntax :::blocks, :::callout, :::stat
+    const blockRegex = /:::(blocks|callout|stat)\n([\s\S]*?):::/g;
+    const segments: { type: string; content: string }[] = [];
+    let lastIndex = 0;
+    let match;
 
-    return paragraphs.map((para, index) => {
-      // Check for # headers
-      if (para.startsWith('# ')) {
-        const heading = para.substring(2).trim();
-        const id = heading
-          .toLowerCase()
-          .replace(/[^a-z0-9\s-]/g, '')
-          .replace(/\s+/g, '-')
-          .replace(/-+/g, '-');
-        return (
-          <h2
-            key={index}
-            id={id}
-            className="scroll-mt-24 text-2xl md:text-3xl font-bold text-stone-900 mt-12 mb-6 leading-tight tracking-tight"
-          >
-            {heading}
-          </h2>
-        );
+    while ((match = blockRegex.exec(content)) !== null) {
+      // Text before this block
+      if (match.index > lastIndex) {
+        segments.push({ type: 'text', content: content.substring(lastIndex, match.index) });
       }
-      // Check for ## headers
-      if (para.startsWith('## ')) {
-        const heading = para.substring(3).trim();
-        const id = heading
-          .toLowerCase()
-          .replace(/[^a-z0-9\s-]/g, '')
-          .replace(/\s+/g, '-')
-          .replace(/-+/g, '-');
+      segments.push({ type: match[1], content: match[2].trim() });
+      lastIndex = match.index + match[0].length;
+    }
+    // Remaining text
+    if (lastIndex < content.length) {
+      segments.push({ type: 'text', content: content.substring(lastIndex) });
+    }
+
+    return segments.map((segment, segIndex) => {
+      // ─── Definition Blocks Grid ───────────────────────
+      if (segment.type === 'blocks') {
+        const items = segment.content.split('\n').filter(l => l.trim()).map(line => {
+          const colonIdx = line.indexOf(':');
+          if (colonIdx === -1) return { term: line.trim(), def: '' };
+          return { term: line.substring(0, colonIdx).trim(), def: line.substring(colonIdx + 1).trim() };
+        });
         return (
-          <h3
-            key={index}
-            id={id}
-            className="scroll-mt-24 text-xl md:text-2xl font-bold text-stone-900 mt-10 mb-4 leading-tight"
-          >
-            {heading}
-          </h3>
-        );
-      }
-      // Check for blockquotes
-      if (para.startsWith('> ')) {
-        return (
-          <blockquote key={index} className="border-l-4 border-[#E0FE10] pl-6 my-8 py-2">
-            <p className="text-lg text-stone-600 leading-[1.85] italic">
-              {para.substring(2)}
-            </p>
-          </blockquote>
-        );
-      }
-      // Check for bullet lists
-      if (para.startsWith('- ')) {
-        const items = para.split('\n').filter(line => line.startsWith('- '));
-        return (
-          <ul key={index} className="list-disc list-inside text-lg text-stone-700 leading-[1.85] mb-6 space-y-2">
+          <div key={`block-${segIndex}`} className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-8">
             {items.map((item, i) => (
-              <li key={i}>{item.substring(2)}</li>
+              <div
+                key={i}
+                className="bg-white rounded-xl p-5 border border-stone-200/80"
+                style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
+              >
+                <p className="text-sm font-bold text-stone-900 mb-1.5">{item.term}</p>
+                <p className="text-sm text-stone-500 leading-relaxed">{parseInlineMarkdown(item.def)}</p>
+              </div>
             ))}
-          </ul>
+          </div>
         );
       }
-      // Regular paragraph
-      return (
-        <p key={index} className="text-lg text-stone-700 leading-[1.85] mb-6">
-          {para}
-        </p>
-      );
+
+      // ─── Callout Box ──────────────────────────────────
+      if (segment.type === 'callout') {
+        return (
+          <div
+            key={`callout-${segIndex}`}
+            className="relative my-10 p-6 md:p-8 rounded-2xl border border-stone-200 bg-gradient-to-br from-stone-50 to-white overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 w-1 h-full rounded-l-2xl" style={{ background: 'linear-gradient(180deg, #E63946, #457B9D)' }} />
+            <p className="text-lg text-stone-700 leading-[1.85] italic pl-4">{parseInlineMarkdown(segment.content)}</p>
+          </div>
+        );
+      }
+
+      // ─── Stat Highlight ───────────────────────────────
+      if (segment.type === 'stat') {
+        const lines = segment.content.split('\n').filter(l => l.trim());
+        const statValue = lines[0] || '';
+        const statLabel = lines.slice(1).join(' ') || '';
+        return (
+          <div
+            key={`stat-${segIndex}`}
+            className="my-10 flex items-center gap-6 p-6 rounded-2xl bg-stone-900 text-white"
+          >
+            <span
+              className="text-4xl md:text-5xl font-bold tracking-tight"
+              style={{ color: '#E0FE10' }}
+            >
+              {statValue}
+            </span>
+            <p className="text-base text-stone-300 leading-relaxed">{parseInlineMarkdown(statLabel)}</p>
+          </div>
+        );
+      }
+
+      // ─── Regular text (parse paragraphs) ──────────────
+      const paragraphs = segment.content.split('\n\n').filter(p => p.trim());
+      return paragraphs.map((para, index) => {
+        const key = `${segIndex}-${index}`;
+        // # headers
+        if (para.startsWith('# ')) {
+          const heading = para.substring(2).trim();
+          const id = heading
+            .toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-');
+          return (
+            <h2
+              key={key}
+              id={id}
+              className="scroll-mt-24 text-2xl md:text-3xl font-bold text-stone-900 mt-12 mb-6 leading-tight tracking-tight"
+            >
+              {parseInlineMarkdown(heading)}
+            </h2>
+          );
+        }
+        // ## headers
+        if (para.startsWith('## ')) {
+          const heading = para.substring(3).trim();
+          const id = heading
+            .toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-');
+          return (
+            <h3
+              key={key}
+              id={id}
+              className="scroll-mt-24 text-xl md:text-2xl font-bold text-stone-900 mt-10 mb-4 leading-tight"
+            >
+              {parseInlineMarkdown(heading)}
+            </h3>
+          );
+        }
+        // Blockquotes (pull quotes)
+        if (para.startsWith('> ')) {
+          return (
+            <blockquote key={key} className="border-l-4 border-[#E0FE10] pl-6 my-8 py-2">
+              <p className="text-lg text-stone-600 leading-[1.85] italic">
+                {parseInlineMarkdown(para.substring(2))}
+              </p>
+            </blockquote>
+          );
+        }
+        // Bullet lists
+        if (para.startsWith('- ')) {
+          const items = para.split('\n').filter(line => line.startsWith('- '));
+          return (
+            <ul key={key} className="list-disc list-inside text-lg text-stone-700 leading-[1.85] mb-6 space-y-2">
+              {items.map((item, i) => (
+                <li key={i}>{parseInlineMarkdown(item.substring(2))}</li>
+              ))}
+            </ul>
+          );
+        }
+        // Regular paragraph
+        return (
+          <p key={key} className="text-lg text-stone-700 leading-[1.85] mb-6">
+            {parseInlineMarkdown(para)}
+          </p>
+        );
+      });
     });
   };
 
@@ -487,85 +621,165 @@ const DynamicArticleContent: React.FC<{ article: DynamicArticle }> = ({ article 
           </motion.div>
         )}
 
-        {/* Article Header */}
-        <header className="max-w-4xl mx-auto px-6 md:px-8 pt-12 md:pt-20 pb-10 md:pb-14">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <div className="flex items-center gap-3 mb-6">
-              <span className="text-sm font-medium text-stone-500">{article.category}</span>
-              <span className="text-stone-300">·</span>
-              <span className="text-sm text-stone-400">{formatDate(article.publishedAt || article.createdAt)}</span>
-            </div>
-
-            {article.subtitle && (
-              <p
-                className="text-sm font-semibold uppercase tracking-widest text-stone-400 mb-3"
-                style={{ letterSpacing: '0.15em' }}
+        {/* Article Header — split hero when featured image is available */}
+        {article.featuredImage ? (
+          <header className="w-full">
+            <div className="flex flex-col lg:flex-row lg:min-h-[560px]">
+              {/* Left side — text content on clean background */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                className="flex-1 flex flex-col justify-center px-6 md:px-10 lg:px-16 py-10 lg:py-14 order-2 lg:order-1"
               >
-                {article.subtitle}
-              </p>
-            )}
+                <div className="max-w-xl">
+                  {/* Category + date */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="text-sm font-medium text-stone-500">{article.category}</span>
+                    <span className="text-stone-300">·</span>
+                    <span className="text-sm text-stone-400">{formatDate(article.publishedAt || article.createdAt)}</span>
+                  </div>
 
-            <h1
-              className="text-3xl md:text-4xl lg:text-5xl font-bold text-stone-900 leading-[1.15] tracking-tight mb-4"
-              style={{
-                fontFamily: "'HK Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-              }}
-            >
-              {article.title}
-            </h1>
+                  {/* Title — leads massive */}
+                  <h1
+                    className="text-4xl md:text-5xl lg:text-[3.5rem] font-bold text-stone-900 leading-[1.08] tracking-tight mb-3"
+                    style={{
+                      fontFamily: "'HK Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                    }}
+                  >
+                    {article.title}
+                  </h1>
 
-            <div className="flex items-center gap-4 pt-2">
-              <div className="w-10 h-10 rounded-full bg-stone-900 flex items-center justify-center">
-                <span className="text-sm font-bold text-[#E0FE10]">{article.author.charAt(0).toUpperCase()}</span>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-stone-800">{article.author}</p>
-                <p className="text-xs text-stone-400">{article.readTime}</p>
-              </div>
-            </div>
-          </motion.div>
-        </header>
+                  {/* Subtitle — below the title */}
+                  {article.subtitle && (
+                    <p className="text-base md:text-lg text-stone-500 leading-relaxed mb-5">
+                      {article.subtitle}
+                    </p>
+                  )}
 
-        {/* Featured Image */}
-        {article.featuredImage && (
-          <div className="max-w-4xl mx-auto px-6 md:px-8 mb-12">
-            <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
-              className="relative w-full max-w-xl mx-auto"
-            >
-              <div
-                className="relative bg-white rounded-2xl overflow-hidden"
-                style={{
-                  boxShadow: '0 4px 20px -4px rgba(0, 0, 0, 0.08), 0 8px 32px -8px rgba(0, 0, 0, 0.06)',
-                  border: '1px solid rgba(0, 0, 0, 0.04)',
-                }}
+                  {/* Accent divider */}
+                  <div className="flex items-center gap-3 mb-5">
+                    <div className="w-8 h-[2px] rounded-full" style={{ background: 'linear-gradient(90deg, #E63946, #457B9D)' }} />
+                  </div>
+
+                  {/* Byline + audio player — all inline */}
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="w-10 h-10 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-bold text-[#E0FE10]">{article.author.charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div className="mr-2">
+                      <p className="text-sm font-semibold text-stone-800">{article.author}</p>
+                      <p className="text-xs text-stone-400">{article.authorTitle || article.readTime}</p>
+                    </div>
+                    <span className="text-stone-300 hidden sm:inline">·</span>
+                    <ArticleAudioPlayer
+                      articleText={article.content}
+                      title={article.title}
+                      author={article.author}
+                    />
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Right side — featured image */}
+              <motion.div
+                initial={{ opacity: 0, scale: 1.02 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.8, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+                className="lg:flex-1 lg:min-w-[50%] relative order-1 lg:order-2"
               >
-                <div className="aspect-[4/3] bg-gradient-to-b from-[#FAFAF7] to-[#F5F5F0] flex items-center justify-center p-6 md:p-10">
+                <div className="relative h-64 sm:h-80 lg:h-full w-full overflow-hidden">
                   <img
                     src={article.featuredImage}
                     alt={article.title}
-                    className="w-full h-full object-contain max-h-[360px]"
+                    className="w-full h-full object-cover"
                   />
+                  {/* Subtle bottom fade on mobile */}
+                  <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-[#FAFAF7] to-transparent lg:hidden" />
+                  {/* Subtle left edge fade on desktop to blend with text side */}
+                  <div className="hidden lg:block absolute top-0 bottom-0 left-0 w-16 bg-gradient-to-r from-[#FAFAF7] to-transparent" />
                 </div>
+              </motion.div>
+            </div>
+          </header>
+        ) : (
+          <header className="max-w-4xl mx-auto px-6 md:px-8 pt-12 md:pt-20 pb-10 md:pb-14">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-sm font-medium text-stone-500">{article.category}</span>
+                <span className="text-stone-300">·</span>
+                <span className="text-sm text-stone-400">{formatDate(article.publishedAt || article.createdAt)}</span>
+              </div>
+
+              {/* Title leads */}
+              <h1
+                className="text-4xl md:text-5xl lg:text-[3.5rem] font-bold text-stone-900 leading-[1.08] tracking-tight mb-3"
+                style={{
+                  fontFamily: "'HK Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                }}
+              >
+                {article.title}
+              </h1>
+
+              {article.subtitle && (
+                <p className="text-base md:text-lg text-stone-500 leading-relaxed mb-5">
+                  {article.subtitle}
+                </p>
+              )}
+
+              {/* Accent divider */}
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-8 h-[2px] rounded-full bg-stone-300" />
+              </div>
+
+              {/* Byline + audio player inline */}
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="w-10 h-10 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0">
+                  <span className="text-sm font-bold text-[#E0FE10]">{article.author.charAt(0).toUpperCase()}</span>
+                </div>
+                <div className="mr-2">
+                  <p className="text-sm font-semibold text-stone-800">{article.author}</p>
+                  <p className="text-xs text-stone-400">{article.authorTitle || article.readTime}</p>
+                </div>
+                <span className="text-stone-300 hidden sm:inline">·</span>
+                <ArticleAudioPlayer
+                  articleText={article.content}
+                  title={article.title}
+                  author={article.author}
+                />
               </div>
             </motion.div>
-          </div>
+          </header>
         )}
 
         <div className="max-w-4xl mx-auto px-6 md:px-8">
-          <div className="h-px bg-stone-200 mb-12" />
+          <div className="h-px mb-12" style={{ background: 'linear-gradient(90deg, transparent, #E63946 30%, #457B9D 70%, transparent)' }} />
         </div>
 
         {/* Article Content with Sidebar */}
         <div className="max-w-6xl mx-auto px-6 md:px-8 relative">
+          {/* Excerpt — full width, no sidebar competing */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="max-w-3xl mx-auto mb-10"
+            style={{
+              fontFamily: "'Georgia', 'Times New Roman', 'Noto Serif', serif",
+            }}
+          >
+            <p className="text-xl text-stone-600 leading-[1.85] font-medium">
+              {article.excerpt}
+            </p>
+          </motion.div>
+
+          {/* TOC + Content side by side */}
           <div className="flex gap-16">
-            {/* Desktop TOC sidebar */}
+            {/* Desktop TOC sidebar — appears after excerpt */}
             {hasToc && (
               <aside className="hidden lg:block w-56 flex-shrink-0">
                 <div className="sticky top-24">
@@ -590,17 +804,12 @@ const DynamicArticleContent: React.FC<{ article: DynamicArticle }> = ({ article 
             <motion.article
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
               className={`flex-1 ${hasToc ? 'max-w-[680px]' : 'max-w-3xl mx-auto'}`}
               style={{
                 fontFamily: "'Georgia', 'Times New Roman', 'Noto Serif', serif",
               }}
             >
-              {/* Excerpt as lead paragraph */}
-              <p className="text-xl text-stone-600 leading-[1.85] mb-8 font-medium">
-                {article.excerpt}
-              </p>
-
               {/* Main content */}
               {renderContent(article.content)}
 
@@ -615,7 +824,7 @@ const DynamicArticleContent: React.FC<{ article: DynamicArticle }> = ({ article 
                       {article.author}
                     </p>
                     <p className="text-sm text-stone-500 leading-relaxed" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-                      Writer for Pulse Research.
+                      {article.authorTitle || 'Writer for Pulse Research.'}
                     </p>
                   </div>
                 </div>

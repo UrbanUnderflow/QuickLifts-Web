@@ -345,6 +345,12 @@ const adminCardsData = [
     description: "Create, edit, and publish research articles. Substack-like editor for managing /research content.",
     icon: <FileText className="w-5 h-5" />,
     link: "/admin/researchArticles"
+  },
+  {
+    title: "Author Profiles",
+    description: "Manage author profiles for research articles. Set display names, titles, and bios.",
+    icon: <PenTool className="w-5 h-5" />,
+    link: "/admin/authorProfiles"
   }
 ];
 
