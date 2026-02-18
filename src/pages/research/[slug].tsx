@@ -295,23 +295,75 @@ interface ResearchArticlePageProps {
 
 // ─── Dynamic Article Renderer ──────────────────────────────────────
 const DynamicArticleContent: React.FC<{ article: DynamicArticle }> = ({ article }) => {
-  // Convert markdown-like content to paragraphs
+  const [showToc, setShowToc] = useState(false);
+
+  // Generate table of contents from # headings in content
+  const generateTocAndSections = (content: string) => {
+    const paragraphs = content.split('\n\n').filter(p => p.trim());
+    const toc: { id: string; label: string }[] = [];
+
+    // First pass: extract headings for TOC
+    paragraphs.forEach((para) => {
+      if (para.startsWith('# ')) {
+        const heading = para.substring(2).trim();
+        const id = heading
+          .toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+        toc.push({ id, label: heading });
+      } else if (para.startsWith('## ')) {
+        const heading = para.substring(3).trim();
+        const id = heading
+          .toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+        toc.push({ id, label: heading });
+      }
+    });
+
+    return toc;
+  };
+
+  // Render content with section IDs on headings
   const renderContent = (content: string) => {
     const paragraphs = content.split('\n\n').filter(p => p.trim());
 
     return paragraphs.map((para, index) => {
-      // Check for headers
+      // Check for # headers
       if (para.startsWith('# ')) {
+        const heading = para.substring(2).trim();
+        const id = heading
+          .toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
         return (
-          <h2 key={index} className="text-2xl md:text-3xl font-bold text-stone-900 mt-12 mb-6 leading-tight tracking-tight">
-            {para.substring(2)}
+          <h2
+            key={index}
+            id={id}
+            className="scroll-mt-24 text-2xl md:text-3xl font-bold text-stone-900 mt-12 mb-6 leading-tight tracking-tight"
+          >
+            {heading}
           </h2>
         );
       }
+      // Check for ## headers
       if (para.startsWith('## ')) {
+        const heading = para.substring(3).trim();
+        const id = heading
+          .toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
         return (
-          <h3 key={index} className="text-xl md:text-2xl font-bold text-stone-900 mt-10 mb-4 leading-tight">
-            {para.substring(3)}
+          <h3
+            key={index}
+            id={id}
+            className="scroll-mt-24 text-xl md:text-2xl font-bold text-stone-900 mt-10 mb-4 leading-tight"
+          >
+            {heading}
           </h3>
         );
       }
@@ -358,6 +410,9 @@ const DynamicArticleContent: React.FC<{ article: DynamicArticle }> = ({ article 
       : `https://fitwithpulse.ai${article.featuredImage}`)
     : 'https://fitwithpulse.ai/research-the-system-featured.png'; // Static fallback
 
+  const tocItems = generateTocAndSections(article.content);
+  const hasToc = tocItems.length > 0;
+
   return (
     <>
       <PageHead
@@ -386,15 +441,51 @@ const DynamicArticleContent: React.FC<{ article: DynamicArticle }> = ({ article 
                   Research
                 </span>
               </Link>
-              <Link
-                href="/research"
-                className="text-sm text-stone-500 hover:text-stone-900 transition-colors"
-              >
-                All articles
-              </Link>
+
+              <div className="flex items-center gap-4">
+                {hasToc && (
+                  <button
+                    onClick={() => setShowToc(!showToc)}
+                    className="lg:hidden text-sm text-stone-500 hover:text-stone-900 transition-colors"
+                  >
+                    Contents
+                  </button>
+                )}
+                <Link
+                  href="/research"
+                  className="text-sm text-stone-500 hover:text-stone-900 transition-colors"
+                >
+                  All articles
+                </Link>
+              </div>
             </div>
           </div>
         </nav>
+
+        {/* Mobile TOC panel */}
+        {hasToc && showToc && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="lg:hidden sticky top-16 z-40 bg-[#FAFAF7] border-b border-stone-200 shadow-sm"
+          >
+            <div className="max-w-4xl mx-auto px-6 py-4">
+              <nav className="flex flex-col gap-2">
+                {tocItems.map((item) => (
+                  <a
+                    key={item.id}
+                    href={`#${item.id}`}
+                    onClick={() => setShowToc(false)}
+                    className="text-sm text-stone-500 hover:text-stone-900 transition-colors py-1"
+                  >
+                    {item.label}
+                  </a>
+                ))}
+              </nav>
+            </div>
+          </motion.div>
+        )}
 
         {/* Article Header */}
         <header className="max-w-4xl mx-auto px-6 md:px-8 pt-12 md:pt-20 pb-10 md:pb-14">
@@ -471,55 +562,81 @@ const DynamicArticleContent: React.FC<{ article: DynamicArticle }> = ({ article 
           <div className="h-px bg-stone-200 mb-12" />
         </div>
 
-        {/* Article Content */}
-        <motion.article
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="max-w-3xl mx-auto px-6 md:px-8 pb-24"
-          style={{
-            fontFamily: "'Georgia', 'Times New Roman', 'Noto Serif', serif",
-          }}
-        >
-          {/* Excerpt as lead paragraph */}
-          <p className="text-xl text-stone-600 leading-[1.85] mb-8 font-medium">
-            {article.excerpt}
-          </p>
+        {/* Article Content with Sidebar */}
+        <div className="max-w-6xl mx-auto px-6 md:px-8 relative">
+          <div className="flex gap-16">
+            {/* Desktop TOC sidebar */}
+            {hasToc && (
+              <aside className="hidden lg:block w-56 flex-shrink-0">
+                <div className="sticky top-24">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-stone-400 mb-4">
+                    In this article
+                  </p>
+                  <nav className="flex flex-col gap-1.5">
+                    {tocItems.map((item) => (
+                      <a
+                        key={item.id}
+                        href={`#${item.id}`}
+                        className="text-[13px] text-stone-400 hover:text-stone-800 transition-colors py-1 leading-snug"
+                      >
+                        {item.label}
+                      </a>
+                    ))}
+                  </nav>
+                </div>
+              </aside>
+            )}
 
-          {/* Main content */}
-          {renderContent(article.content)}
-
-          {/* Author bio */}
-          <div className="mt-16 pt-10 border-t border-stone-200">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0">
-                <span className="text-base font-bold text-[#E0FE10]">{article.author.charAt(0).toUpperCase()}</span>
-              </div>
-              <div>
-                <p className="text-base font-bold text-stone-900 mb-1" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-                  {article.author}
-                </p>
-                <p className="text-sm text-stone-500 leading-relaxed" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-                  Writer for Pulse Research.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Back link */}
-          <div className="mt-12 mb-24">
-            <Link
-              href="/research"
-              className="inline-flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors"
-              style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
+            <motion.article
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className={`flex-1 ${hasToc ? 'max-w-[680px]' : 'max-w-3xl mx-auto'}`}
+              style={{
+                fontFamily: "'Georgia', 'Times New Roman', 'Noto Serif', serif",
+              }}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
-              </svg>
-              Back to all research
-            </Link>
+              {/* Excerpt as lead paragraph */}
+              <p className="text-xl text-stone-600 leading-[1.85] mb-8 font-medium">
+                {article.excerpt}
+              </p>
+
+              {/* Main content */}
+              {renderContent(article.content)}
+
+              {/* Author bio */}
+              <div className="mt-16 pt-10 border-t border-stone-200">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0">
+                    <span className="text-base font-bold text-[#E0FE10]">{article.author.charAt(0).toUpperCase()}</span>
+                  </div>
+                  <div>
+                    <p className="text-base font-bold text-stone-900 mb-1" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+                      {article.author}
+                    </p>
+                    <p className="text-sm text-stone-500 leading-relaxed" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+                      Writer for Pulse Research.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Back link */}
+              <div className="mt-12 mb-24">
+                <Link
+                  href="/research"
+                  className="inline-flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors"
+                  style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                  </svg>
+                  Back to all research
+                </Link>
+              </div>
+            </motion.article>
           </div>
-        </motion.article>
+        </div>
 
         {/* Footer */}
         <footer className="border-t border-stone-200 bg-[#FAFAF7]">

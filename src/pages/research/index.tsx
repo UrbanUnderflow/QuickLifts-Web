@@ -3,7 +3,7 @@ import type { NextPage } from 'next';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import PageHead from '../../components/PageHead';
-import { collection, getDocs, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 
 // ─── Research categories ───────────────────────────────────────────
@@ -157,19 +157,27 @@ const ResearchPage: NextPage = () => {
   const [loading, setLoading] = useState(true);
 
   // Fetch published articles from Firestore
+  // Note: We fetch all articles and filter client-side to avoid requiring
+  // a Firestore composite index (where + orderBy on different fields).
   useEffect(() => {
     const fetchArticles = async () => {
       try {
         const articlesQuery = query(
           collection(db, 'researchArticles'),
-          where('status', '==', 'published'),
-          orderBy('publishedAt', 'desc')
+          orderBy('createdAt', 'desc')
         );
         const snapshot = await getDocs(articlesQuery);
-        const articlesData = snapshot.docs.map(doc => ({
-          slug: doc.id,
-          ...doc.data()
-        })) as Article[];
+        const articlesData = snapshot.docs
+          .map(doc => ({
+            slug: doc.id,
+            ...doc.data()
+          }) as Article)
+          .filter(article => article.status === 'published')
+          .sort((a, b) => {
+            const aTime = a.publishedAt?.toMillis?.() || a.createdAt?.toMillis?.() || 0;
+            const bTime = b.publishedAt?.toMillis?.() || b.createdAt?.toMillis?.() || 0;
+            return bTime - aTime;
+          });
         setArticles(articlesData);
       } catch (error) {
         console.error('Error fetching articles:', error);
@@ -300,8 +308,8 @@ const ResearchPage: NextPage = () => {
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
                 className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${activeCategory === cat
-                    ? 'bg-stone-900 text-white'
-                    : 'bg-transparent text-stone-500 hover:text-stone-800 hover:bg-stone-100'
+                  ? 'bg-stone-900 text-white'
+                  : 'bg-transparent text-stone-500 hover:text-stone-800 hover:bg-stone-100'
                   }`}
               >
                 {cat}

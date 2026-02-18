@@ -29,7 +29,7 @@ export interface AgentResponse {
 
 export interface GroupChatMessage {
   id?: string;
-  from: 'admin';
+  from: string;
   content: string;
   createdAt: Timestamp | Date;
   broadcastedAt?: Timestamp | Date;

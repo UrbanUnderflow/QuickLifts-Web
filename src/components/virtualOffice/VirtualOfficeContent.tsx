@@ -2370,6 +2370,14 @@ const VirtualOfficeContent: React.FC = () => {
 
   // ── Standup session listener ──
   // Watches for active group chats with standupMeta (automated standups)
+  // Use refs to avoid re-subscribing on every agentPositions/activeStandup change
+  const activeStandupRef = useRef(activeStandup);
+  activeStandupRef.current = activeStandup;
+  const agentPositionsRef = useRef(agentPositions);
+  agentPositionsRef.current = agentPositions;
+  const isCollaboratingRef = useRef(isCollaborating);
+  isCollaboratingRef.current = isCollaborating;
+
   useEffect(() => {
     const standupQuery = query(
       collection(db, 'agent-group-chats'),
@@ -2388,9 +2396,9 @@ const VirtualOfficeContent: React.FC = () => {
         const standup: GroupChat = { id: standupDoc.id, ...data };
 
         // Only trigger if this is a NEW standup (not already tracking)
-        if (!activeStandup || activeStandup.id !== standup.id) {
+        if (!activeStandupRef.current || activeStandupRef.current.id !== standup.id) {
           // ── QUEUE if a non-standup collaboration is active ──
-          const isManualCollabActive = isCollaborating && !activeStandup;
+          const isManualCollabActive = isCollaboratingRef.current && !activeStandupRef.current;
           if (isManualCollabActive) {
             // Don't interrupt — queue it and let the user finish
             queuedStandupRef.current = standup;
@@ -2401,6 +2409,7 @@ const VirtualOfficeContent: React.FC = () => {
           }
 
           // ── ACTIVATE the standup now ──
+          console.log('[Standup] Activating standup:', standup.id);
           queuedStandupRef.current = null;
           setHasQueuedStandup(false);
           setActiveStandup(standup);
@@ -2413,12 +2422,13 @@ const VirtualOfficeContent: React.FC = () => {
           // Animate agents to table (without opening modal)
           const agentIds = allAgents.filter(a => a.id !== 'antigravity').map(a => a.id);
           const tablePositions = getAllTablePositions(agentIds);
-          const updatedPositions = { ...agentPositions };
+          const currentPositions = agentPositionsRef.current;
+          const updatedPositions = { ...currentPositions };
           agentIds.forEach((agentId, index) => {
             updatedPositions[agentId] = {
               state: 'transitioning-to-table',
               position: tablePositions[agentId],
-              deskPosition: updatedPositions[agentId]?.deskPosition || getDeskPosition(index),
+              deskPosition: currentPositions[agentId]?.deskPosition || getDeskPosition(index),
               transitionDelay: getStaggerDelay(index),
             };
           });
@@ -2438,14 +2448,16 @@ const VirtualOfficeContent: React.FC = () => {
             });
           }, lastAgentDelay + 2000);
         }
-      } else if (activeStandup) {
+      } else if (activeStandupRef.current) {
         // Standup ended — animate agents back to desks
+        console.log('[Standup] Ended — animating agents back to desks');
         setActiveStandup(null);
         setIsStandupObserving(false);
         setShowGroupChatModal(false);
 
         const agentIds = allAgents.filter(a => a.id !== 'antigravity').map(a => a.id);
-        const updatedPositions = { ...agentPositions };
+        const currentPositions = agentPositionsRef.current;
+        const updatedPositions = { ...currentPositions };
         agentIds.forEach((agentId, i) => {
           const originalIndex = allAgents.findIndex(a => a.id === agentId);
           updatedPositions[agentId] = {
@@ -2476,7 +2488,7 @@ const VirtualOfficeContent: React.FC = () => {
     });
 
     return () => unsubStandup();
-  }, [allAgents, agentPositions, activeStandup, isCollaborating]);
+  }, [allAgents]);
 
   // Update table click handler
   const handleTableClick = useCallback(() => {
@@ -4237,8 +4249,8 @@ const VirtualOfficeContent: React.FC = () => {
               : 'linear-gradient(135deg, #4f46e5, #6366f1)',
           boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
           border: `1px solid ${restartToast.type === 'success' ? 'rgba(16,185,129,0.4)'
-              : restartToast.type === 'error' ? 'rgba(239,68,68,0.4)'
-                : 'rgba(99,102,241,0.4)'
+            : restartToast.type === 'error' ? 'rgba(239,68,68,0.4)'
+              : 'rgba(99,102,241,0.4)'
             }`,
           animation: 'toastSlideUp 0.3s ease-out',
           display: 'flex',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import {
@@ -14,7 +14,8 @@ import {
     Timestamp,
     serverTimestamp
 } from 'firebase/firestore';
-import { db } from '../../api/firebase/config';
+import { db, storage } from '../../api/firebase/config';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
     FileText,
     Plus,
@@ -31,6 +32,7 @@ import {
     ArrowLeft,
     Send,
     Image as ImageIcon,
+    Upload,
     Bold,
     Italic,
     Quote,
@@ -193,6 +195,46 @@ const ResearchArticlesAdmin: React.FC = () => {
         featuredImage: '',
         featured: false,
     });
+
+    // Image upload state
+    const [uploadingImage, setUploadingImage] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            showMessage('error', 'Please select an image file');
+            return;
+        }
+
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            showMessage('error', 'Image must be under 5MB');
+            return;
+        }
+
+        setUploadingImage(true);
+        try {
+            const fileName = `research-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+            const storageRef = ref(storage, `research/${fileName}`);
+            await uploadBytes(storageRef, file, {
+                contentType: file.type,
+            });
+            const downloadURL = await getDownloadURL(storageRef);
+            setFormData(prev => ({ ...prev, featuredImage: downloadURL }));
+            showMessage('success', 'Image uploaded!');
+        } catch (error) {
+            console.error('Error uploading image:', error);
+            showMessage('error', 'Failed to upload image');
+        } finally {
+            setUploadingImage(false);
+            // Reset file input so same file can be re-selected
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
 
     // ─── Load Articles ─────────────────────────────────────────────
     const loadArticles = useCallback(async () => {
@@ -625,15 +667,58 @@ const ResearchArticlesAdmin: React.FC = () => {
                                                     ))}
                                                 </select>
                                             </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-stone-500 mb-1.5">Featured Image URL</label>
-                                                <input
-                                                    type="text"
-                                                    value={formData.featuredImage}
-                                                    onChange={(e) => setFormData({ ...formData, featuredImage: e.target.value })}
-                                                    placeholder="/research-image.png"
-                                                    className="w-full px-3 py-2 rounded-lg border border-stone-200 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400"
-                                                />
+                                            <div className="col-span-2 md:col-span-1">
+                                                <label className="block text-xs font-medium text-stone-500 mb-1.5">Featured Image</label>
+                                                <div className="space-y-2">
+                                                    {/* Upload button */}
+                                                    <input
+                                                        ref={fileInputRef}
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={handleImageUpload}
+                                                        className="hidden"
+                                                        id="featured-image-upload"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => fileInputRef.current?.click()}
+                                                        disabled={uploadingImage}
+                                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-stone-300 text-stone-500 text-sm hover:border-stone-400 hover:text-stone-700 hover:bg-stone-50 transition-all disabled:opacity-50"
+                                                    >
+                                                        {uploadingImage ? (
+                                                            <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</>
+                                                        ) : (
+                                                            <><Upload className="w-4 h-4" /> Upload Image</>
+                                                        )}
+                                                    </button>
+                                                    {/* URL fallback input */}
+                                                    <input
+                                                        type="text"
+                                                        value={formData.featuredImage}
+                                                        onChange={(e) => setFormData({ ...formData, featuredImage: e.target.value })}
+                                                        placeholder="Or paste image URL..."
+                                                        className="w-full px-3 py-2 rounded-lg border border-stone-200 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400"
+                                                    />
+                                                    {/* Preview thumbnail */}
+                                                    {formData.featuredImage && (
+                                                        <div className="relative w-full h-24 rounded-lg overflow-hidden bg-stone-100 border border-stone-200">
+                                                            <img
+                                                                src={formData.featuredImage}
+                                                                alt="Preview"
+                                                                className="w-full h-full object-cover"
+                                                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFormData({ ...formData, featuredImage: '' })}
+                                                                className="absolute top-1 right-1 p-1 bg-white/80 rounded-full hover:bg-white transition-colors"
+                                                                title="Remove image"
+                                                            >
+                                                                <X className="w-3 h-3 text-stone-600" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="flex items-end">
                                                 <label className="flex items-center gap-2 cursor-pointer">
