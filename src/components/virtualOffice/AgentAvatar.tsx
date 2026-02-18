@@ -3,7 +3,7 @@ import React from 'react';
 interface AgentAvatarProps {
   agentId: string;
   emoji: string;
-  name: string;
+  name: string;  // Leader of all agents overseeing project operations.
   status: 'working' | 'idle' | 'offline';
   isTyping?: boolean;
   color: string;
