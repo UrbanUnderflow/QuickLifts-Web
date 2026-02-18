@@ -523,7 +523,8 @@ async function setAgentPresenceStatus(agents, status, note) {
 
 /**
  * Collect all responses from the standup and post meeting minutes
- * to the progress-timeline as a heartbeat beat tagged as "standup".
+ * to BOTH the progress-timeline (heartbeat feed) AND the meeting-minutes
+ * collection (Filing Cabinet) so they appear in both places.
  */
 async function postMeetingMinutes(chatId, type, durationMin, roundsCompleted) {
     const label = type === 'morning' ? 'Morning Standup' : 'Evening Standup';
@@ -535,10 +536,13 @@ async function postMeetingMinutes(chatId, type, durationMin, roundsCompleted) {
         .get();
 
     const minutesSections = [];
+    const highlights = [];
     let roundNum = 0;
+    let messageCount = 0;
 
     for (const msgDoc of messagesSnap.docs) {
         const msgData = msgDoc.data();
+        messageCount++;
         if (msgData.from !== 'admin') continue; // Only count prompts from admin
         roundNum++;
 
@@ -551,6 +555,13 @@ async function postMeetingMinutes(chatId, type, durationMin, roundsCompleted) {
             const displayName = AGENT_DISPLAY_NAMES[agentId] || agentId;
             if (resp?.status === 'completed' && resp.content) {
                 agentResponses.push(`**${displayName}**: ${resp.content.substring(0, 300)}`);
+                // Collect highlights from first 2 rounds (core standup updates)
+                if (roundNum <= 2) {
+                    highlights.push({
+                        speaker: displayName,
+                        summary: resp.content.substring(0, 200),
+                    });
+                }
             } else if (resp?.skipped) {
                 agentResponses.push(`**${displayName}**: (skipped)`);
             } else {
@@ -564,7 +575,7 @@ async function postMeetingMinutes(chatId, type, durationMin, roundsCompleted) {
     const minutesText = minutesSections.join('\n\n---\n\n');
     const headline = `${emoji} ${label} — ${roundsCompleted} rounds, ${durationMin} min`;
 
-    // Post to progress-timeline as a standup beat
+    // 1. Post to progress-timeline as a standup beat (Activity Feed)
     try {
         await db.collection(TIMELINE_COLLECTION).add({
             agentId: MODERATOR,
@@ -586,7 +597,29 @@ async function postMeetingMinutes(chatId, type, durationMin, roundsCompleted) {
         });
         console.log(`📝 Meeting minutes posted to heartbeat feed`);
     } catch (err) {
-        console.error('⚠️  Failed to post meeting minutes:', err.message);
+        console.error('⚠️  Failed to post meeting minutes to timeline:', err.message);
+    }
+
+    // 2. Save to meeting-minutes collection (Filing Cabinet)
+    try {
+        await db.collection('meeting-minutes').add({
+            chatId: chatId,
+            duration: `${durationMin}m`,
+            participants: AGENTS,
+            messageCount: messageCount,
+            executiveSummary: `${label} completed with ${roundsCompleted} rounds over ${durationMin} minutes. ${AGENTS.length} agents participated.`,
+            highlights: highlights.slice(0, 8), // Cap at 8 highlights
+            valueInsights: [],
+            strategicDecisions: [],
+            nextActions: [],
+            risksOrOpenQuestions: [],
+            isStandup: true,
+            standupType: type,
+            createdAt: FieldValue.serverTimestamp(),
+        });
+        console.log(`📁 Meeting minutes saved to Filing Cabinet`);
+    } catch (err) {
+        console.error('⚠️  Failed to save meeting minutes to Filing Cabinet:', err.message);
     }
 }
 

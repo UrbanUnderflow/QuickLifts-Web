@@ -6,7 +6,7 @@ import AdminRouteGuard from '../auth/AdminRouteGuard';
 import { presenceService, AgentPresence, AgentThoughtStep, TaskHistoryEntry } from '../../api/firebase/presence/service';
 import { kanbanService } from '../../api/firebase/kanban/service';
 import { db } from '../../api/firebase/config';
-import { addDoc, collection, serverTimestamp, query, where, onSnapshot } from 'firebase/firestore';
+import { addDoc, collection, doc, serverTimestamp, query, where, onSnapshot, writeBatch } from 'firebase/firestore';
 import { KanbanTask } from '../../api/firebase/kanban/types';
 import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
@@ -433,7 +433,16 @@ const STATUS_CONFIG = {
     monitorGlow: 'rgba(245,158,11,0.6)',
     badge: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
   },
-};
+  meeting: {
+    label: 'In Meeting',
+    color: '#8b5cf6',
+    glow: 'rgba(139,92,246,0.5)',
+    monitorGlow: 'rgba(139,92,246,0.6)',
+    badge: 'bg-violet-500/15 text-violet-300 border-violet-500/30',
+  },
+} as const;
+
+const DEFAULT_STATUS = STATUS_CONFIG.idle;
 
 /* ─── Step status icon ────────────────────────────────── */
 
@@ -1156,7 +1165,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const status = STATUS_CONFIG[agent.status];
+  const status = STATUS_CONFIG[agent.status as keyof typeof STATUS_CONFIG] || DEFAULT_STATUS;
   const sessionDuration = formatDuration(agent.sessionStartedAt);
   const hasSteps = agent.executionSteps && agent.executionSteps.length > 0;
   const installProgress = agent.installProgress || null;
@@ -1919,70 +1928,126 @@ const VirtualOfficeContent: React.FC = () => {
   // ── Manual Standup Trigger state ──
   const [triggeringStandup, setTriggeringStandup] = useState(false);
   const [standupTriggerResult, setStandupTriggerResult] = useState<'success' | 'error' | null>(null);
-  const [showStandupDropdown, setShowStandupDropdown] = useState(false);
+
 
   const handleTriggerStandup = useCallback(async (type?: 'morning' | 'evening') => {
     if (triggeringStandup || activeStandup) return;
     setTriggeringStandup(true);
     setStandupTriggerResult(null);
-    setShowStandupDropdown(false);
+
     try {
       const res = await fetch('/api/agent/trigger-standup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ type }),
       });
-      if (!res.ok) throw new Error('Failed');
-      // Don't set success yet — wait for the actual standup session to appear
-      // The Firestore listener will detect it and setActiveStandup, which will clear this state
 
-      // Safety timeout: if session never appears within 45s, reset the button
+      if (!res.ok) {
+        // The API now returns detailed error info if the script crashed
+        const errData = await res.json().catch(() => ({}));
+        console.error('[Standup] Script failed:', errData);
+        throw new Error(errData.error || 'Failed to start standup');
+      }
+
+      const data = await res.json();
+      console.log('[Standup] Script started:', data);
+
+      // Safety timeout: if Firestore session never appears within 15s, reset
+      // (API already waited 5s to verify script didn't crash immediately)
       setTimeout(() => {
         setTriggeringStandup(prev => {
           if (prev) {
-            // Still waiting — script likely failed silently
             setStandupTriggerResult('error');
-            setTimeout(() => setStandupTriggerResult(null), 4000);
+            setTimeout(() => setStandupTriggerResult(null), 5000);
           }
           return false;
         });
-      }, 45_000);
-    } catch {
+      }, 15_000);
+    } catch (err: any) {
+      console.error('[Standup] Trigger failed:', err.message);
       setStandupTriggerResult('error');
       setTriggeringStandup(false);
       setTimeout(() => setStandupTriggerResult(null), 5000);
     }
-    // Note: triggeringStandup stays true until activeStandup is set by the Firestore listener
   }, [triggeringStandup, activeStandup]);
 
   // ── Restart Agents state ──
   const [restartingAgents, setRestartingAgents] = useState(false);
   const [restartResult, setRestartResult] = useState<'success' | 'error' | null>(null);
+  const [restartToast, setRestartToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null);
 
   const handleRestartAgents = useCallback(async () => {
     if (restartingAgents) return;
     setRestartingAgents(true);
     setRestartResult(null);
+
+    const agents = ['nora', 'scout', 'solara', 'sage'];
+
     try {
-      // Send restart command to Nora (she runs launchctl on the Mac Mini)
-      await addDoc(collection(db, 'agent-commands'), {
-        from: 'admin',
-        to: 'nora',
-        type: 'restart-agents',
-        content: 'Restart all agents to pick up latest code changes.',
-        metadata: {
-          agents: ['nora', 'scout', 'solara', 'sage'],
-          source: 'virtual-office-restart-button',
-        },
-        status: 'pending',
-        createdAt: serverTimestamp(),
+      // Phase 1: Nora acknowledges the task
+      setRestartToast({ message: '📋 Nora received the restart task...', type: 'info' });
+      await new Promise(r => setTimeout(r, 1500));
+
+      // Phase 2: Stop all agents → they go offline
+      setRestartToast({ message: '⏳ Shutting down agents...', type: 'info' });
+
+      await Promise.allSettled(
+        agents.map(agentId =>
+          fetch('/api/agent/control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentId, action: 'stop' }),
+          })
+        )
+      );
+
+      // Set all agents to offline in Firestore (visual: agents go dark)
+      const offlineBatch = writeBatch(db);
+      agents.forEach(agentId => {
+        offlineBatch.update(doc(db, 'agent-presence', agentId), {
+          status: 'offline',
+          notes: 'Restarting...',
+          lastUpdate: serverTimestamp(),
+        });
       });
+      await offlineBatch.commit();
+
+      // Phase 3: Brief dark period (agents visually offline)
+      setRestartToast({ message: '🔌 Agents offline — restarting...', type: 'info' });
+      await new Promise(r => setTimeout(r, 3000));
+
+      // Phase 4: Start all agents back up
+      const startResults = await Promise.allSettled(
+        agents.map(agentId =>
+          fetch('/api/agent/control', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agentId, action: 'start' }),
+          }).then(r => r.json())
+        )
+      );
+      console.log('[Restart] Start results:', startResults);
+
+      // Phase 5: Set agents to idle (they'll update their own status once runners are live)
+      const onlineBatch = writeBatch(db);
+      agents.forEach(agentId => {
+        onlineBatch.update(doc(db, 'agent-presence', agentId), {
+          status: 'idle',
+          notes: 'Restarted — warming up',
+          lastUpdate: serverTimestamp(),
+        });
+      });
+      await onlineBatch.commit();
+
+      // Success!
       setRestartResult('success');
-      setTimeout(() => setRestartResult(null), 5000);
+      setRestartToast({ message: '✅ All agents restarted successfully!', type: 'success' });
+      setTimeout(() => { setRestartResult(null); setRestartToast(null); }, 5000);
     } catch (err) {
-      console.error('Failed to send restart command:', err);
+      console.error('Failed to restart agents:', err);
       setRestartResult('error');
-      setTimeout(() => setRestartResult(null), 5000);
+      setRestartToast({ message: '❌ Failed to restart agents', type: 'error' });
+      setTimeout(() => { setRestartResult(null); setRestartToast(null); }, 5000);
     } finally {
       setRestartingAgents(false);
     }
@@ -2687,12 +2752,12 @@ const VirtualOfficeContent: React.FC = () => {
             </div>
 
             {/* Manual Standup Trigger */}
-            <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10, display: 'inline-block' }}>
+            <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10 }}>
               <div
                 className="standup-trigger-btn"
                 onClick={() => {
-                  if (activeStandup) return;
-                  setShowStandupDropdown(!showStandupDropdown);
+                  if (activeStandup || triggeringStandup) return;
+                  handleTriggerStandup();
                 }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 6,
@@ -2708,7 +2773,7 @@ const VirtualOfficeContent: React.FC = () => {
                           : 'linear-gradient(135deg, rgba(168,85,247,0.15), rgba(59,130,246,0.15))',
                   border: `1px solid ${activeStandup ? 'rgba(100,100,100,0.3)' : 'rgba(168,85,247,0.3)'}`,
                   color: activeStandup ? '#888' : '#e7e9ea',
-                  cursor: activeStandup ? 'not-allowed' : 'pointer',
+                  cursor: activeStandup || triggeringStandup ? 'not-allowed' : 'pointer',
                   fontSize: 13, fontWeight: 500,
                   transition: 'all 0.2s',
                   whiteSpace: 'nowrap' as const,
@@ -2724,45 +2789,13 @@ const VirtualOfficeContent: React.FC = () => {
                   <Play className="w-4 h-4" />
                 )}
                 <span>
-                  {triggeringStandup ? 'Waiting for session...' :
-                    standupTriggerResult === 'success' ? 'Agents Moving!' :
-                      standupTriggerResult === 'error' ? 'Failed' :
-                        activeStandup ? 'In Progress' :
+                  {triggeringStandup ? 'Starting...' :
+                    standupTriggerResult === 'success' ? 'Standup Started!' :
+                      standupTriggerResult === 'error' ? 'Failed — Retry?' :
+                        activeStandup ? 'Standup In Progress' :
                           'Start Standup'}
                 </span>
               </div>
-              {showStandupDropdown && !activeStandup && (
-                <div
-                  style={{
-                    position: 'absolute', top: '100%', left: 0, marginTop: 4,
-                    background: '#1a1f2e', border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 10, overflow: 'hidden', zIndex: 100,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                    minWidth: 180,
-                  }}
-                >
-                  {[
-                    { label: '☀️ Morning Standup', value: 'morning' as const },
-                    { label: '🌙 Evening Standup', value: 'evening' as const },
-                    { label: '🔄 Auto-detect', value: undefined },
-                  ].map((opt, i) => (
-                    <div
-                      key={i}
-                      onClick={() => handleTriggerStandup(opt.value)}
-                      style={{
-                        padding: '10px 14px', cursor: 'pointer',
-                        fontSize: 13, color: '#e7e9ea',
-                        borderBottom: i < 2 ? '1px solid rgba(255,255,255,0.06)' : 'none',
-                        transition: 'background 0.15s',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(168,85,247,0.15)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      {opt.label}
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Shared Deliverables Button */}
@@ -4181,6 +4214,49 @@ const VirtualOfficeContent: React.FC = () => {
           color: #a1a1aa;
           line-height: 1.6;
           font-style: italic;
+        }
+      `}</style>
+
+      {/* ── Toast Notification ── */}
+      {restartToast && (
+        <div style={{
+          position: 'fixed',
+          bottom: 24,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 99999,
+          padding: '12px 24px',
+          borderRadius: 12,
+          fontSize: 14,
+          fontWeight: 600,
+          color: '#fff',
+          background: restartToast.type === 'success'
+            ? 'linear-gradient(135deg, #059669, #10b981)'
+            : restartToast.type === 'error'
+              ? 'linear-gradient(135deg, #dc2626, #ef4444)'
+              : 'linear-gradient(135deg, #4f46e5, #6366f1)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          border: `1px solid ${restartToast.type === 'success' ? 'rgba(16,185,129,0.4)'
+              : restartToast.type === 'error' ? 'rgba(239,68,68,0.4)'
+                : 'rgba(99,102,241,0.4)'
+            }`,
+          animation: 'toastSlideUp 0.3s ease-out',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          whiteSpace: 'nowrap' as const,
+        }}>
+          {restartToast.type === 'info' && (
+            <Loader2 className="w-4 h-4" style={{ animation: 'spin 1s linear infinite' }} />
+          )}
+          {restartToast.message}
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes toastSlideUp {
+          from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+          to { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
       `}</style>
     </div>

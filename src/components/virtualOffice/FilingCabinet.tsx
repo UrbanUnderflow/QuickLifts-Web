@@ -147,7 +147,26 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
                                         <FileText className="w-4 h-4" />
                                     </div>
                                     <div className="fc-item-info">
-                                        <span className="fc-item-date">{formatDate(minutes.createdAt)}</span>
+                                        <span className="fc-item-date">
+                                            {formatDate(minutes.createdAt)}
+                                            {(minutes as any).isStandup && (
+                                                <span style={{
+                                                    marginLeft: 8,
+                                                    fontSize: 10,
+                                                    fontWeight: 600,
+                                                    padding: '1px 6px',
+                                                    borderRadius: 8,
+                                                    background: (minutes as any).standupType === 'morning'
+                                                        ? 'rgba(245,158,11,0.12)' : 'rgba(139,92,246,0.12)',
+                                                    color: (minutes as any).standupType === 'morning'
+                                                        ? '#fbbf24' : '#a78bfa',
+                                                    border: `1px solid ${(minutes as any).standupType === 'morning'
+                                                        ? 'rgba(245,158,11,0.2)' : 'rgba(139,92,246,0.2)'}`,
+                                                }}>
+                                                    {(minutes as any).standupType === 'morning' ? '☀️' : '🌙'} Standup
+                                                </span>
+                                            )}
+                                        </span>
                                         <span className="fc-item-meta">
                                             {minutes.duration} · {minutes.messageCount} msgs · {minutes.participants.length} agents
                                         </span>
