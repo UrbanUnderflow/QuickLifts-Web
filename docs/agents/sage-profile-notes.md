@@ -1,21 +1,15 @@
-# Sage Agent Incident Note
+# Sage Agent Documentation
 
-## Summary
-The Sage agent experienced stalls due to configuration mismatches, leading to the "no activity for 120s" warning.
+### Root Cause of Runner Stall
+The Sage runner was previously stalling due to a configuration issue that prevented the initial run from executing correctly. This was causing the runner to wait indefinitely for tasks without proper startup.
 
-## Root Cause
-- Misalignment in configuration settings in `.agent/workflows/sage-openclaw-config.json`.
+### Fix Applied
+1. Re-ran the Sage provisioning workflow to ensure configurations were correctly applied.
+2. Restarted the Sage runner to verify initialization without the 120-second stall issue.
+3. Confirmed that the Sage agent is registered and visible in the agent list.
+4. Monitoring is set up to ensure heartbeats emit steadily without interruptions.
 
-## Steps Taken
-1. **Configuration Update:** Revised and applied necessary changes to the `.agent/workflows/sage-openclaw-config.json`.
-2. **Agent Restart:** Executed a clean restart to ensure fresh initialization, using the `launchctl kickstart` command.
-3. **Monitoring:** Verified runner logs to confirm continuous heartbeats and resolved the previous stall issues.
-
-## Outcome
-The Sage agent is stable and operating with consistent heartbeats, confirmed over multiple cycles without recurrence of stall warnings.
-
-## Recommendations
-- Schedule regular reviews and updates of configuration files.
-- Maintain vigilant log monitoring to quickly identify and resolve any anomalies.
-
-**Date:** 2023-10-05
+### Recommendations
+- Regularly check the `openclaw agents list` to ensure all agents, including Sage, are visible and operational.
+- Monitor the agent logs for any future anomalies in heartbeat emissions.
+- Document any changes in configuration to facilitate easier troubleshooting in the future.
