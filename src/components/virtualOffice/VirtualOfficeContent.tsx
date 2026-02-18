@@ -1896,13 +1896,14 @@ const VirtualOfficeContent: React.FC = () => {
         body: JSON.stringify({ type }),
       });
       if (!res.ok) throw new Error('Failed');
-      setStandupTriggerResult('success');
+      // Don't set success yet — wait for the actual standup session to appear
+      // The Firestore listener will detect it and setActiveStandup, which will clear this state
     } catch {
       setStandupTriggerResult('error');
-    } finally {
       setTriggeringStandup(false);
       setTimeout(() => setStandupTriggerResult(null), 5000);
     }
+    // Note: triggeringStandup stays true until activeStandup is set by the Firestore listener
   }, [triggeringStandup, activeStandup]);
 
   // ── Restart Agents state ──
@@ -2236,6 +2237,8 @@ const VirtualOfficeContent: React.FC = () => {
           setGroupChatId(standup.id!);
           setIsCollaborating(true);
           setCollabStartTime(new Date());
+          setTriggeringStandup(false); // Clear manual trigger waiting state
+          setStandupTriggerResult('success'); // Show success briefly
 
           // Animate agents to table (without opening modal)
           const agentIds = allAgents.filter(a => a.id !== 'antigravity').map(a => a.id);
@@ -2590,8 +2593,8 @@ const VirtualOfficeContent: React.FC = () => {
                   <Play className="w-4 h-4" />
                 )}
                 <span>
-                  {triggeringStandup ? 'Starting...' :
-                    standupTriggerResult === 'success' ? 'Standup Started!' :
+                  {triggeringStandup ? 'Waiting for session...' :
+                    standupTriggerResult === 'success' ? 'Agents Moving!' :
                       standupTriggerResult === 'error' ? 'Failed' :
                         activeStandup ? 'In Progress' :
                           'Start Standup'}
