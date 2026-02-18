@@ -22,6 +22,7 @@
  *   node scripts/dailyStandup.js --force      # skip schedule check
  *
  * Runs every hour on the hour via the Heartbeat Protocol scheduler.
+ */
 
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
@@ -29,8 +30,21 @@ const path = require('path');
 
 /* ─── Firebase init ──────────────────────────────────── */
 
-const serviceAccountPath = path.resolve(__dirname, '../serviceAccountKey.json');
-const app = initializeApp({ credential: cert(require(serviceAccountPath)) });
+const SERVICE_ACCOUNT = {
+    type: "service_account",
+    project_id: "quicklifts-dd3f1",
+    private_key_id: "***REMOVED***",
+    private_key: "***REMOVED***",
+    client_email: "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
+    client_id: "111494077667496751062",
+    auth_uri: "https://accounts.google.com/o/oauth2/auth",
+    token_uri: "https://oauth2.googleapis.com/token",
+    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-1qxb0%40quicklifts-dd3f1.iam.gserviceaccount.com",
+    universe_domain: "googleapis.com"
+};
+
+const app = initializeApp({ credential: cert(SERVICE_ACCOUNT) });
 const db = getFirestore(app);
 
 /* ─── Configuration (defaults — overridden by Firestore) ─ */
@@ -492,9 +506,6 @@ async function setAgentPresenceStatus(agents, status, note) {
  * collection (Filing Cabinet) so they appear in both places.
  */
 async function postMeetingMinutes(chatId, type, durationMin, roundsCompleted) {
-    const label = type === 'morning' ? 'Morning Standup' : 'Evening Standup';
-    const emoji = type === 'morning' ? '☀️' : '🌙';
-
     // Collect all responses from the session
     const messagesSnap = await db.collection(`agent-group-chats/${chatId}/messages`)
         .orderBy('createdAt', 'asc')
@@ -504,14 +515,16 @@ async function postMeetingMinutes(chatId, type, durationMin, roundsCompleted) {
     const highlights = [];
     let roundNum = 0;
     let messageCount = 0;
+    let activeCount = 0;
+    let idleCount = 0;
 
     for (const msgDoc of messagesSnap.docs) {
         const msgData = msgDoc.data();
         messageCount++;
-        if (msgData.from !== 'admin') continue; // Only count prompts from admin
+        if (msgData.from !== 'admin') continue;
         roundNum++;
 
-        const prompt = (msgData.content || '').split('\n')[0].substring(0, 80); // First line as section header
+        const prompt = (msgData.content || '').split('\n')[0].substring(0, 80);
         const responses = msgData.responses || {};
 
         const agentResponses = [];
@@ -520,7 +533,12 @@ async function postMeetingMinutes(chatId, type, durationMin, roundsCompleted) {
             const displayName = AGENT_DISPLAY_NAMES[agentId] || agentId;
             if (resp?.status === 'completed' && resp.content) {
                 agentResponses.push(`**${displayName}**: ${resp.content.substring(0, 300)}`);
-                // Collect highlights from first 2 rounds (core standup updates)
+                // Track active/idle for summary
+                if (roundNum === 1) {
+                    if (/ACTIVE/i.test(resp.content)) activeCount++;
+                    else if (/IDLE|BLOCKED/i.test(resp.content)) idleCount++;
+                    else activeCount++; // Default to active if unclear
+                }
                 if (roundNum <= 2) {
                     highlights.push({
                         speaker: displayName,
@@ -538,55 +556,64 @@ async function postMeetingMinutes(chatId, type, durationMin, roundsCompleted) {
     }
 
     const minutesText = minutesSections.join('\n\n---\n\n');
-    const headline = `${emoji} ${label} — ${roundsCompleted} rounds, ${durationMin} min`;
 
-    // 1. Post to progress-timeline as a standup beat (Activity Feed)
-    try {
-        await db.collection(TIMELINE_COLLECTION).add({
-            agentId: MODERATOR,
-            agentName: AGENT_DISPLAY_NAMES[MODERATOR] || MODERATOR,
-            emoji: AGENT_EMOJIS[MODERATOR] || '🟢',
-            objectiveCode: `STANDUP-${type.toUpperCase()}`,
-            beat: 'result',
-            headline: headline,
-            artifactType: 'text',
-            artifactText: minutesText,
-            artifactUrl: '',
-            lensTag: 'standup',
-            confidenceColor: 'green',
-            stateTag: 'signals',
-            standupChatId: chatId,
-            standupType: type,
-            isStandup: true,
-            createdAt: FieldValue.serverTimestamp(),
-        });
-        console.log(`📝 Meeting minutes posted to heartbeat feed`);
-    } catch (err) {
-        console.error('⚠️  Failed to post meeting minutes to timeline:', err.message);
-    }
+    // Build executive summary
+    const agentSummary = activeCount > 0 || idleCount > 0
+        ? `${activeCount} active, ${idleCount} idle`
+        : `${AGENTS.length} agents`;
+    const execSummary = `⚡ Telemetry check completed: ${roundsCompleted} rounds, ${durationMin} min — ${agentSummary}.`;
 
-    // 2. Save to meeting-minutes collection (Filing Cabinet)
+    // 1. Save to meeting-minutes collection (Filing Cabinet) — do this first to get the doc ID
+    let minutesDocId = '';
     try {
-        await db.collection('meeting-minutes').add({
+        const minutesRef = await db.collection('meeting-minutes').add({
             chatId: chatId,
             duration: `${durationMin}m`,
             participants: AGENTS,
             messageCount: messageCount,
-            executiveSummary: `${label} completed with ${roundsCompleted} rounds over ${durationMin} minutes. ${AGENTS.length} agents participated.`,
-            highlights: highlights.slice(0, 8), // Cap at 8 highlights
+            executiveSummary: execSummary,
+            highlights: highlights.slice(0, 8),
             valueInsights: [],
             strategicDecisions: [],
             nextActions: [],
             risksOrOpenQuestions: [],
             isStandup: true,
             standupType: type,
+            protocol: 'heartbeat',
             createdAt: FieldValue.serverTimestamp(),
         });
-        console.log(`📁 Meeting minutes saved to Filing Cabinet`);
+        minutesDocId = minutesRef.id;
+        console.log(`📁 Meeting minutes saved to Filing Cabinet (${minutesDocId})`);
     } catch (err) {
         console.error('⚠️  Failed to save meeting minutes to Filing Cabinet:', err.message);
     }
+
+    // 2. Post summary beat to progress-timeline (Activity Feed)
+    try {
+        await db.collection(TIMELINE_COLLECTION).add({
+            agentId: MODERATOR,
+            agentName: AGENT_DISPLAY_NAMES[MODERATOR] || MODERATOR,
+            emoji: AGENT_EMOJIS[MODERATOR] || '⚡',
+            objectiveCode: 'TELEMETRY-CHECK',
+            beat: 'result',
+            headline: execSummary,
+            artifactType: 'text',
+            artifactText: minutesText.substring(0, 2000),
+            artifactUrl: minutesDocId ? `/admin/virtualOffice?minutes=${minutesDocId}` : '',
+            lensTag: 'telemetry',
+            confidenceColor: 'green',
+            stateTag: 'signals',
+            standupChatId: chatId,
+            minutesDocId: minutesDocId,
+            protocol: 'heartbeat',
+            createdAt: FieldValue.serverTimestamp(),
+        });
+        console.log(`📝 Telemetry summary beat posted to Activity Feed`);
+    } catch (err) {
+        console.error('⚠️  Failed to post telemetry beat to timeline:', err.message);
+    }
 }
+
 
 /* ─── Post-Telemetry: Auto-assign Capsules for Idle Agents ── */
 

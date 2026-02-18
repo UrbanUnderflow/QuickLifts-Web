@@ -1,9 +1,9 @@
 #!/bin/zsh
 set -euo pipefail
 
-cd /Users/noraclawdbot/Documents/GitHub/QuickLifts-Web
+cd /Users/tremainegrant/Documents/GitHub/QuickLifts-Web
 
-PATH="/Users/noraclawdbot/.local/node-v22.22.0-darwin-arm64/bin:$PATH"
+PATH="/opt/homebrew/bin:$PATH"
 
 if [ -f ".env.local" ]; then
   set -a
@@ -14,6 +14,5 @@ fi
 export USE_OPENCLAW=true
 export AGENT_ID=sage
 export AGENT_NAME="Sage"
-export AGENT_EMOJI="🧬"
 
 exec node scripts/agentRunner.js

@@ -64,7 +64,40 @@ export const MeetingMinutesPreview: React.FC<MeetingMinutesPreviewProps> = ({
     if (!minutes) return;
     setSaving(true);
     try {
-      await meetingMinutesService.save(minutes);
+      const minutesDocId = await meetingMinutesService.save(minutes);
+
+      // Also post a summary beat to the progress-timeline (Activity Feed)
+      try {
+        const { collection: fbCollection, addDoc, serverTimestamp: srvTs } = await import('firebase/firestore');
+        const { db: fireDb } = await import('../../api/firebase/config');
+        const summaryText = minutes.executiveSummary || 'Round Table session completed';
+        const highlightSnippets = (minutes.highlights || [])
+          .slice(0, 3)
+          .map(h => `${h.speaker}: ${h.summary}`)
+          .join('\n');
+
+        await addDoc(fbCollection(fireDb, 'progress-timeline'), {
+          agentId: 'nora',
+          agentName: 'Nora',
+          emoji: '⚡',
+          objectiveCode: 'ROUND-TABLE',
+          beat: 'result',
+          headline: `📋 Round Table Summary: ${summaryText.substring(0, 150)}`,
+          artifactType: 'text',
+          artifactText: highlightSnippets || summaryText,
+          artifactUrl: '',
+          lensTag: 'round-table',
+          confidenceColor: 'green',
+          stateTag: 'signals',
+          minutesDocId: minutesDocId,
+          protocol: 'heartbeat',
+          createdAt: srvTs(),
+        });
+        console.log('📝 Round Table summary beat posted to Activity Feed');
+      } catch (beatErr) {
+        console.error('⚠️ Failed to post summary beat:', beatErr);
+      }
+
       onSaveAndClose();
     } catch (e: any) {
       setError('Failed to save: ' + e.message);

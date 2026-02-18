@@ -175,7 +175,19 @@ export const getServerSideProps: GetServerSideProps = async ({ params }) => {
 
   // Check if it's the hardcoded article first
   if (RESEARCH_SLUGS.includes(slug as any)) {
-    return { props: { slug, articleData: null } };
+    return {
+      props: {
+        slug,
+        articleData: null,
+        ogMeta: {
+          title: 'Think Like an Athlete. Decoding Your Metabolism.',
+          description: 'Bodybuilding is applied physiology at its most extreme. The same systems we manipulate for aesthetics are the exact systems that break down in metabolic disease.',
+          image: 'https://fitwithpulse.ai/research-the-system-featured.png',
+          url: `https://fitwithpulse.ai/research/${slug}`,
+          lastUpdated: '2026-02-05T00:00:00.000Z',
+        },
+      },
+    };
   }
 
   // Otherwise, try to fetch from Firestore
@@ -221,7 +233,24 @@ export const getServerSideProps: GetServerSideProps = async ({ params }) => {
       publishedAt: data?.publishedAt?.toDate?.()?.toISOString() || null,
     };
 
-    return { props: { slug, articleData } };
+    // Build OG image URL — ensure absolute
+    let ogImage = data?.featuredImage || '';
+    if (ogImage && !ogImage.startsWith('http')) {
+      ogImage = `https://fitwithpulse.ai${ogImage}`;
+    }
+    if (!ogImage) {
+      ogImage = 'https://fitwithpulse.ai/research-the-system-featured.png';
+    }
+
+    const ogMeta = {
+      title: data?.title || 'Pulse Research',
+      description: data?.excerpt || 'Research from Pulse Intelligence Labs.',
+      image: ogImage,
+      url: `https://fitwithpulse.ai/research/${slug}`,
+      lastUpdated: articleData.updatedAt || articleData.publishedAt || new Date().toISOString(),
+    };
+
+    return { props: { slug, articleData, ogMeta } };
   } catch (error) {
     console.error('Error fetching article:', error);
     return { notFound: true };
@@ -304,9 +333,18 @@ interface DynamicArticle {
   publishedAt: string | null;
 }
 
+interface OgMeta {
+  title: string;
+  description: string;
+  image: string;
+  url: string;
+  lastUpdated: string;
+}
+
 interface ResearchArticlePageProps {
   slug: string;
   articleData: DynamicArticle | null;
+  ogMeta: OgMeta;
 }
 
 // ─── Dynamic Article Renderer ──────────────────────────────────────
@@ -537,30 +575,11 @@ const DynamicArticleContent: React.FC<{ article: DynamicArticle }> = ({ article 
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
-  // Ensure OG image is always an absolute URL for reliable link previews
-  const ogImageUrl = article.featuredImage
-    ? (article.featuredImage.startsWith('http')
-      ? article.featuredImage
-      : `https://fitwithpulse.ai${article.featuredImage}`)
-    : 'https://fitwithpulse.ai/research-the-system-featured.png'; // Static fallback
-
   const tocItems = generateTocAndSections(article.content);
   const hasToc = tocItems.length > 0;
 
   return (
     <>
-      <PageHead
-        metaData={{
-          pageId: `research-${article.slug}`,
-          pageTitle: `${article.title} – Pulse Research`,
-          metaDescription: article.excerpt,
-          ogTitle: article.title,
-          ogDescription: article.excerpt,
-          lastUpdated: article.updatedAt || new Date().toISOString(),
-        }}
-        pageOgUrl={`https://fitwithpulse.ai/research/${article.slug}`}
-        pageOgImage={ogImageUrl}
-      />
 
       <ReadingProgress />
 
@@ -883,12 +902,29 @@ const DynamicArticleContent: React.FC<{ article: DynamicArticle }> = ({ article 
 };
 
 // ─── Article page ──────────────────────────────────────────────────
-const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug, articleData }) => {
+const ResearchArticlePage: NextPage<ResearchArticlePageProps> = ({ slug, articleData, ogMeta }) => {
   const [showToc, setShowToc] = useState(false);
 
   // If articleData is provided, render the dynamic article
   if (articleData) {
-    return <DynamicArticleContent article={articleData} />;
+    return (
+      <>
+        {/* OG tags rendered at page-level for reliable SSR — crawlers see these in initial HTML */}
+        <PageHead
+          metaData={{
+            pageId: `research-${articleData.slug}`,
+            pageTitle: `${ogMeta.title} – Pulse Research`,
+            metaDescription: ogMeta.description,
+            ogTitle: ogMeta.title,
+            ogDescription: ogMeta.description,
+            lastUpdated: ogMeta.lastUpdated,
+          }}
+          pageOgUrl={ogMeta.url}
+          pageOgImage={ogMeta.image}
+        />
+        <DynamicArticleContent article={articleData} />
+      </>
+    );
   }
 
   // Otherwise, render the hardcoded "the-system" article

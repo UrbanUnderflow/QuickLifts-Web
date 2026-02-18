@@ -1511,9 +1511,10 @@ async function processCommands() {
                 if (isDirectlyAddressed) {
                     console.log(`   🎯 Etiquette: I'm directly @mentioned — responding immediately`);
                 } else if (someoneElseAddressed) {
-                    // Someone else was @mentioned — wait 15-25s, then decide if we should respond
+                    // Someone else was @mentioned — this message is NOT for us.
+                    // Default: SKIP. Only respond if the addressed agent calls us in.
                     var tierDelay = 15000 + Math.random() * 10000;
-                    console.log(`   ⏳ Etiquette: @${mentionedInMsg.map(id => etiquetteNames[id]).join(',')} addressed — waiting ${(tierDelay / 1000).toFixed(1)}s...`);
+                    console.log(`   ⏳ Etiquette: @${mentionedInMsg.map(id => etiquetteNames[id]).join(',')} addressed — waiting ${(tierDelay / 1000).toFixed(1)}s to see if we're needed...`);
                     await new Promise(function (r) { return setTimeout(r, tierDelay); });
 
                     // After waiting, read what others already said
@@ -1529,32 +1530,27 @@ async function processCommands() {
                         } catch (e) { /* proceed */ }
                     }
 
-                    // Relevance gate: only skip in very narrow cases (direct 1:1 yes/no question to another agent)
-                    if (othersRespondedBefore.length > 0) {
-                        var othersReferencedMe = othersRespondedBefore.some(function (r) {
-                            return new RegExp('@' + (etiquetteNames[AGENT_ID] || AGENT_NAME) + '\\b', 'i').test(r.content);
-                        });
-                        // Only skip if: it's a very short direct yes/no question to a specific agent AND nobody referenced us
-                        var isShortDirectQuestion = cmd.content.length < 60 && /\?\s*$/.test(cmd.content.trim()) &&
-                            /^(have you|did you|can you|are you)\b/i.test(cmd.content);
+                    // Only respond if the addressed agent explicitly @mentioned us in their response
+                    var othersReferencedMe = othersRespondedBefore.some(function (r) {
+                        return new RegExp('@' + (etiquetteNames[AGENT_ID] || AGENT_NAME) + '\\b', 'i').test(r.content);
+                    });
 
-                        if (isShortDirectQuestion && !othersReferencedMe && mentionedInMsg.length === 1) {
-                            console.log(`   🤫 Etiquette: Skipping — short direct yes/no question to @${mentionedInMsg.join(',')}`);
-                            try {
-                                await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).update({
-                                    [`responses.${AGENT_ID}.content`]: '',
-                                    [`responses.${AGENT_ID}.status`]: 'completed',
-                                    [`responses.${AGENT_ID}.skipped`]: true,
-                                    [`responses.${AGENT_ID}.reason`]: 'etiquette-skip',
-                                    [`responses.${AGENT_ID}.completedAt`]: FieldValue.serverTimestamp(),
-                                });
-                            } catch (e) { /* best effort */ }
-                            processedMessageIds.add(gcMessageId);
-                            response = '[skipped — etiquette]';
-                            break;
-                        } else {
-                            console.log(`   💬 Etiquette: Chiming in — ${othersReferencedMe ? 'someone referenced me' : 'conversation is open enough to contribute my perspective'}`);
-                        }
+                    if (!othersReferencedMe) {
+                        console.log(`   🤫 Etiquette: Deferring — message is for @${mentionedInMsg.map(id => etiquetteNames[id]).join(',')} and I wasn't called in`);
+                        try {
+                            await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).update({
+                                [`responses.${AGENT_ID}.content`]: '',
+                                [`responses.${AGENT_ID}.status`]: 'completed',
+                                [`responses.${AGENT_ID}.skipped`]: true,
+                                [`responses.${AGENT_ID}.reason`]: 'not-addressed',
+                                [`responses.${AGENT_ID}.completedAt`]: FieldValue.serverTimestamp(),
+                            });
+                        } catch (e) { /* best effort */ }
+                        processedMessageIds.add(gcMessageId);
+                        response = '[skipped — not addressed]';
+                        break;
+                    } else {
+                        console.log(`   💬 Etiquette: The addressed agent called me in — responding`);
                     }
                 } else {
                     // Open brainstorm — no @mention — everyone responds with a light stagger
@@ -1661,6 +1657,7 @@ async function processCommands() {
                             `- Name the specific deliverable (doc, feature, schema, etc.) and commit to it.`,
                             `- If you are unsure about details, MAKE A DECISION and build it. Don't ask for consensus.`,
                             `- Your response should read like a commit message, not a conversation.`,
+                            `- NEVER give time estimates like "within 2 hours" or "by end of day" — you execute tasks in MINUTES, not hours. Just say you're doing it NOW.`,
                             ``,
                             `2-3 sentences max, plain text only, action-oriented:`,
                         ].join('\n');
@@ -1717,7 +1714,7 @@ async function processCommands() {
                         chatPrompt += contextBlock;
                     }
                     if (someoneElseAddressed) {
-                        chatPrompt += `\nNote: This message was directed at @${mentionedInMsg.map(id => etiquetteNames[id]).join(', @')}. You should still contribute your perspective — the best ideas come from unexpected angles. Reference what the addressed agent said and build on it.\n`;
+                        chatPrompt += `\nNote: This message was directed at @${mentionedInMsg.map(id => etiquetteNames[id]).join(', @')}. You were called in because they referenced you. Keep your response focused on what they asked you specifically.\n`;
                     }
 
                     // Helper: detect if a response looks like an error
@@ -1882,6 +1879,44 @@ async function processCommands() {
                         });
                         console.log(`   ✅ Wrote group-chat response to message ${gcMessageId}`);
                         processedMessageIds.add(gcMessageId);
+
+                        // ── Exec mode: auto-create kanban task + post beat ──
+                        // When an agent commits to a deliverable in exec mode, bridge the gap
+                        // between "I'll build X" and the agent runner actually doing it.
+                        if (isExecMode && gcResponse && gcResponse.length > 20) {
+                            try {
+                                // Extract a task name from the response
+                                // Look for quoted file names first, then fall back to first sentence
+                                var fileNameMatch = gcResponse.match(/[""]([a-zA-Z0-9_-]+\.[a-z]+)[""]|[""]([^""]{5,80})[""]|Creating\s+"?([^"".\n]{5,80})"?|Drafting\s+"?([^"".\n]{5,80})"?|Building\s+"?([^"".\n]{5,80})"?/i);
+                                var taskName = fileNameMatch
+                                    ? (fileNameMatch[1] || fileNameMatch[2] || fileNameMatch[3] || fileNameMatch[4] || fileNameMatch[5]).trim()
+                                    : gcResponse.split(/[.\n]/)[0].substring(0, 100).trim();
+
+                                // Create kanban task
+                                var taskRef = await db.collection(KANBAN_COLLECTION).add({
+                                    name: taskName,
+                                    description: gcResponse.substring(0, 500),
+                                    assignee: AGENT_NAME,
+                                    status: 'todo',
+                                    priority: 'high',
+                                    source: 'round-table-exec',
+                                    roundTableChatId: gcChatId,
+                                    createdAt: FieldValue.serverTimestamp(),
+                                });
+                                console.log(`   📋 Exec mode: Created kanban task "${taskName}" (${taskRef.id})`);
+
+                                // Post beat to timeline
+                                await postBeat('work-in-flight', `⚡ Queued from Round Table: ${taskName}`, {
+                                    objectiveCode: 'ROUND-TABLE',
+                                    artifactText: gcResponse.substring(0, 300),
+                                    color: 'blue',
+                                    lensTag: 'round-table',
+                                    stateTag: 'signals',
+                                });
+                            } catch (taskErr) {
+                                console.error(`   ⚠️ Failed to create exec-mode task:`, taskErr.message);
+                            }
+                        }
 
                         // Check if all agents have now completed
                         var msgSnap = await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).get();
