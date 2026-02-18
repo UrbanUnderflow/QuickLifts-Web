@@ -3,6 +3,14 @@ import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { presenceService, AgentPresence } from '../../api/firebase/presence/service';
 import { Activity, Database, Layers, Link2, Server, Users } from 'lucide-react';
+import HeartbeatProtocolTab from '../../components/admin/HeartbeatProtocolTab';
+
+const AGENT_EMOJIS: Record<string, string> = {
+  nora: '⚡',
+  scout: '🕵️',
+  solara: '❤️‍🔥',
+  sage: '🧬',
+};
 
 interface SystemNode {
   id: string;
@@ -275,15 +283,14 @@ function SystemMap({ nodes, selectedId, onSelect, highlightConnections }: { node
       {nodes.map((node) => (
         <button
           key={node.id}
-          className={`absolute px-3 py-2 rounded-xl text-left text-sm border shadow-lg transition-all duration-300 ${
-            node.layer === 'surface'
-              ? 'bg-blue-500/10 border-blue-400/40'
-              : node.layer === 'backend'
+          className={`absolute px-3 py-2 rounded-xl text-left text-sm border shadow-lg transition-all duration-300 ${node.layer === 'surface'
+            ? 'bg-blue-500/10 border-blue-400/40'
+            : node.layer === 'backend'
               ? 'bg-purple-500/10 border-purple-400/40'
               : node.layer === 'integration'
-              ? 'bg-amber-500/10 border-amber-400/40'
-              : 'bg-green-500/10 border-green-400/40'
-          } ${selectedId === node.id ? 'ring-2 ring-white/60' : ''}`}
+                ? 'bg-amber-500/10 border-amber-400/40'
+                : 'bg-green-500/10 border-green-400/40'
+            } ${selectedId === node.id ? 'ring-2 ring-white/60' : ''}`}
           style={{ left: `${node.x}%`, top: `${node.y}%`, transform: 'translate(-50%, -50%)' }}
           onClick={() => onSelect(node.id)}
         >
@@ -335,6 +342,7 @@ const SystemOverviewPage: React.FC = () => {
   const [agentPresence, setAgentPresence] = useState<AgentPresence[]>([]);
   const [layerFilter, setLayerFilter] = useState<'all' | SystemNode['layer']>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'architecture' | 'heartbeat'>('architecture');
 
   useEffect(() => {
     const unsubscribe = presenceService.listen((agents) => setAgentPresence(agents));
@@ -367,166 +375,192 @@ const SystemOverviewPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
           <header>
             <p className="text-sm text-zinc-500 uppercase">Operations</p>
-            <h1 className="text-3xl font-semibold">System Architecture Overview</h1>
+            <h1 className="text-3xl font-semibold">System Overview</h1>
             <p className="text-zinc-400 text-sm mt-1">Living map of surfaces, services, integrations, and agents powering Pulse.</p>
           </header>
 
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {summaryCards.map((card) => (
-              <SummaryCard key={card.title} {...card} />
+          {/* ─── Tab Switcher ─── */}
+          <div className="flex gap-2">
+            {[
+              { id: 'architecture' as const, label: 'System Architecture', icon: <Server className="w-4 h-4" /> },
+              { id: 'heartbeat' as const, label: 'Heartbeat Protocol', icon: <Activity className="w-4 h-4" /> },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 rounded-full text-sm border transition-all flex items-center gap-2 ${activeTab === tab.id
+                    ? 'bg-white text-black border-white font-semibold'
+                    : 'text-zinc-400 border-zinc-700 hover:border-white/40'
+                  }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
             ))}
-          </section>
+          </div>
 
-          <section className="bg-[#070b12] border border-zinc-900 rounded-2xl p-4 flex flex-col gap-3">
-            <div className="flex flex-wrap gap-2">
-              {['all', 'surface', 'backend', 'integration', 'agent'].map((layer) => (
-                <button
-                  key={layer}
-                  onClick={() => setLayerFilter(layer as typeof layerFilter)}
-                  className={`px-3 py-1.5 rounded-full text-xs uppercase tracking-wide border transition-colors ${
-                    layerFilter === layer
+          {activeTab === 'architecture' && (<>
+
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {summaryCards.map((card) => (
+                <SummaryCard key={card.title} {...card} />
+              ))}
+            </section>
+
+            <section className="bg-[#070b12] border border-zinc-900 rounded-2xl p-4 flex flex-col gap-3">
+              <div className="flex flex-wrap gap-2">
+                {['all', 'surface', 'backend', 'integration', 'agent'].map((layer) => (
+                  <button
+                    key={layer}
+                    onClick={() => setLayerFilter(layer as typeof layerFilter)}
+                    className={`px-3 py-1.5 rounded-full text-xs uppercase tracking-wide border transition-colors ${layerFilter === layer
                       ? 'bg-white text-black border-white'
                       : 'text-zinc-400 border-zinc-700 hover:border-white/40'
-                  }`}
-                >
-                  {layer === 'all' ? 'All Layers' : layer}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <input
-                type="text"
-                placeholder="Search node..."
-                className="flex-1 min-w-[200px] bg-black/30 border border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-white/60"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <div className="text-xs text-zinc-500 flex items-center gap-3">
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#38bdf8] inline-block" /> Data</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#a78bfa] inline-block" /> Auth</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#facc15] inline-block" /> Events</span>
+                      }`}
+                  >
+                    {layer === 'all' ? 'All Layers' : layer}
+                  </button>
+                ))}
               </div>
-            </div>
-          </section>
-
-          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-            <div className="lg:col-span-2 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">Systems Map</h2>
-                  <p className="text-xs text-zinc-500">Highlight connections in {layerFilter === 'all' ? 'all layers' : `${layerFilter}`} view.</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <input
+                  type="text"
+                  placeholder="Search node..."
+                  className="flex-1 min-w-[200px] bg-black/30 border border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-white/60"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                <div className="text-xs text-zinc-500 flex items-center gap-3">
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#38bdf8] inline-block" /> Data</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#a78bfa] inline-block" /> Auth</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#facc15] inline-block" /> Events</span>
                 </div>
-                <span className="text-xs text-zinc-500 flex items-center gap-1"><Activity className="w-3 h-3" /> Live</span>
               </div>
-              <SystemMap
-                nodes={filteredNodes.length ? filteredNodes : systemNodes}
-                selectedId={selectedNodeId}
-                onSelect={setSelectedNodeId}
-                highlightConnections
-              />
-            </div>
-            <DetailPanel node={selectedNode} agents={agentPresence} />
-          </section>
+            </section>
 
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Layers className="w-4 h-4 text-blue-300" />
-                <h3 className="text-lg font-semibold">Client Surfaces</h3>
+            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+              <div className="lg:col-span-2 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold">Systems Map</h2>
+                    <p className="text-xs text-zinc-500">Highlight connections in {layerFilter === 'all' ? 'all layers' : `${layerFilter}`} view.</p>
+                  </div>
+                  <span className="text-xs text-zinc-500 flex items-center gap-1"><Activity className="w-3 h-3" /> Live</span>
+                </div>
+                <SystemMap
+                  nodes={filteredNodes.length ? filteredNodes : systemNodes}
+                  selectedId={selectedNodeId}
+                  onSelect={setSelectedNodeId}
+                  highlightConnections
+                />
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-zinc-500 text-xs uppercase">
-                    <tr>
-                      <th className="text-left py-2">Surface</th>
-                      <th className="text-left">Repo</th>
-                      <th className="text-left">Release</th>
-                      <th className="text-left">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-zinc-300">
-                    {surfacesTable.map((row) => (
-                      <tr key={row.name} className="border-t border-zinc-800">
-                        <td className="py-2">{row.name}</td>
-                        <td>{row.repo}</td>
-                        <td>{row.release}</td>
-                        <td>{row.status}</td>
+              <DetailPanel node={selectedNode} agents={agentPresence} />
+            </section>
+
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Layers className="w-4 h-4 text-blue-300" />
+                  <h3 className="text-lg font-semibold">Client Surfaces</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-zinc-500 text-xs uppercase">
+                      <tr>
+                        <th className="text-left py-2">Surface</th>
+                        <th className="text-left">Repo</th>
+                        <th className="text-left">Release</th>
+                        <th className="text-left">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="text-zinc-300">
+                      {surfacesTable.map((row) => (
+                        <tr key={row.name} className="border-t border-zinc-800">
+                          <td className="py-2">{row.name}</td>
+                          <td>{row.repo}</td>
+                          <td>{row.release}</td>
+                          <td>{row.status}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
 
-            <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Server className="w-4 h-4 text-purple-300" />
-                <h3 className="text-lg font-semibold">Backend Services</h3>
+              <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Server className="w-4 h-4 text-purple-300" />
+                  <h3 className="text-lg font-semibold">Backend Services</h3>
+                </div>
+                <div className="space-y-3 text-sm text-zinc-300">
+                  {backendTable.map((service) => (
+                    <div key={service.name} className="border border-zinc-800 rounded-xl p-3 bg-white/5">
+                      <p className="text-white font-semibold">{service.name}</p>
+                      <p className="text-xs text-zinc-400">{service.detail}</p>
+                      <p className="text-xs text-zinc-500 mt-1">Owner: {service.owner} • Status: {service.status}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-3 text-sm text-zinc-300">
-                {backendTable.map((service) => (
-                  <div key={service.name} className="border border-zinc-800 rounded-xl p-3 bg-white/5">
-                    <p className="text-white font-semibold">{service.name}</p>
-                    <p className="text-xs text-zinc-400">{service.detail}</p>
-                    <p className="text-xs text-zinc-500 mt-1">Owner: {service.owner} • Status: {service.status}</p>
-                  </div>
+            </section>
+
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Users className="w-4 h-4 text-green-300" />
+                  <h3 className="text-lg font-semibold">Agent Infrastructure</h3>
+                </div>
+                <div className="space-y-3 text-sm">
+                  {agentPresence.length === 0 && <p className="text-zinc-500">No agents online.</p>}
+                  {agentPresence.map((agent) => (
+                    <div key={agent.id} className="border border-zinc-800 rounded-xl p-3 bg-white/5">
+                      <p className="text-white font-semibold flex items-center gap-2">
+                        {AGENT_EMOJIS[agent.id] || agent.emoji} {agent.displayName}
+                      </p>
+                      <p className="text-xs text-zinc-400">Status: {agent.status}</p>
+                      <p className="text-xs text-zinc-400">Task: {agent.currentTask || '—'}</p>
+                      <p className="text-xs text-zinc-500">Last heartbeat: {agent.lastUpdate ? agent.lastUpdate.toLocaleTimeString() : '—'}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-amber-300" />
+                  <h3 className="text-lg font-semibold">Integrations</h3>
+                </div>
+                <div className="space-y-3 text-sm text-zinc-300">
+                  {integrationsTable.map((integration) => (
+                    <div key={integration.name} className="border border-zinc-800 rounded-xl p-3 bg-white/5">
+                      <p className="text-white font-semibold">{integration.name}</p>
+                      <p className="text-xs text-zinc-400">{integration.purpose}</p>
+                      <p className="text-xs text-zinc-500 mt-1">Status: {integration.status}</p>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-xs text-zinc-500 border border-zinc-800 rounded-xl p-3 bg-black/20">
+                  <p className="uppercase tracking-wide mb-1">Onboarding</p>
+                  <p className="text-zinc-300">
+                    New teammate? Read the <a href="https://github.com/UrbanUnderflow/QuickLifts-Web/blob/main/docs/system-architecture-overview-plan.md" className="text-blue-300 underline" target="_blank" rel="noreferrer">Systems Handbook</a> and watch the Loom in /admin/systems-handbook (coming soon).
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
+              <h3 className="text-lg font-semibold mb-3">Data Flow Highlights</h3>
+              <ul className="space-y-2 text-sm text-zinc-300 list-disc pl-5">
+                {flowHighlights.map((item, idx) => (
+                  <li key={idx}>{item}</li>
                 ))}
-              </div>
-            </div>
-          </section>
+              </ul>
+            </section>
+          </>)}
 
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Users className="w-4 h-4 text-green-300" />
-                <h3 className="text-lg font-semibold">Agent Infrastructure</h3>
-              </div>
-              <div className="space-y-3 text-sm">
-                {agentPresence.length === 0 && <p className="text-zinc-500">No agents online.</p>}
-                {agentPresence.map((agent) => (
-                  <div key={agent.id} className="border border-zinc-800 rounded-xl p-3 bg-white/5">
-                    <p className="text-white font-semibold flex items-center gap-2">
-                      {agent.emoji} {agent.displayName}
-                    </p>
-                    <p className="text-xs text-zinc-400">Status: {agent.status}</p>
-                    <p className="text-xs text-zinc-400">Task: {agent.currentTask || '—'}</p>
-                    <p className="text-xs text-zinc-500">Last heartbeat: {agent.lastUpdate ? agent.lastUpdate.toLocaleTimeString() : '—'}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center gap-2">
-                <Database className="w-4 h-4 text-amber-300" />
-                <h3 className="text-lg font-semibold">Integrations</h3>
-              </div>
-              <div className="space-y-3 text-sm text-zinc-300">
-                {integrationsTable.map((integration) => (
-                  <div key={integration.name} className="border border-zinc-800 rounded-xl p-3 bg-white/5">
-                    <p className="text-white font-semibold">{integration.name}</p>
-                    <p className="text-xs text-zinc-400">{integration.purpose}</p>
-                    <p className="text-xs text-zinc-500 mt-1">Status: {integration.status}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="text-xs text-zinc-500 border border-zinc-800 rounded-xl p-3 bg-black/20">
-                <p className="uppercase tracking-wide mb-1">Onboarding</p>
-                <p className="text-zinc-300">
-                  New teammate? Read the <a href="https://github.com/UrbanUnderflow/QuickLifts-Web/blob/main/docs/system-architecture-overview-plan.md" className="text-blue-300 underline" target="_blank" rel="noreferrer">Systems Handbook</a> and watch the Loom in /admin/systems-handbook (coming soon).
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
-            <h3 className="text-lg font-semibold mb-3">Data Flow Highlights</h3>
-            <ul className="space-y-2 text-sm text-zinc-300 list-disc pl-5">
-              {flowHighlights.map((item, idx) => (
-                <li key={idx}>{item}</li>
-              ))}
-            </ul>
-          </section>
+          {activeTab === 'heartbeat' && (
+            <HeartbeatProtocolTab />
+          )}
         </div>
       </AdminRouteGuard>
     </div>
