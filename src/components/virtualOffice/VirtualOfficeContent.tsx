@@ -1307,446 +1307,504 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
     }
   }, [hovered]);
 
-  // Random coffee break
-  const [isOnCoffeeBreak, setIsOnCoffeeBreak] = useState(false);
+  // Random coffee break — agent walks to the coffee station and back
+  const [coffeePhase, setCoffeePhase] = useState<'none' | 'walking-to' | 'pouring' | 'walking-back'>('none');
+  const isOnCoffeeBreak = coffeePhase !== 'none';
   const [showProfile, setShowProfile] = useState(false);
+
+  // Coffee station position (matches CSS: bottom: 14%, right: 12% → ~left: 85%, top: 78%)
+  const coffeeStationPos = { x: 85, y: 78 };
+
+  // Store the desk position for returning
+  const deskPosRef = useRef(position);
   useEffect(() => {
+    if (coffeePhase === 'none') {
+      deskPosRef.current = position;
+    }
+  }, [position, coffeePhase]);
+
+  useEffect(() => {
+    // Don't trigger coffee when collaborating at the table
+    if (isTransitioning || isAtTable) return;
+
     const scheduleCoffee = () => {
-      const delay = 45_000 + Math.random() * 45_000; // 45-90s
+      const delay = 60_000 + Math.random() * 60_000; // 60-120s
       return setTimeout(() => {
-        setIsOnCoffeeBreak(true);
-        // Come back after animation completes (8s)
-        setTimeout(() => setIsOnCoffeeBreak(false), 8000);
-        // Schedule next break
-        coffeeTimer.current = scheduleCoffee();
+        // Phase 1: Walk to coffee station (2s transition)
+        setCoffeePhase('walking-to');
+
+        // Phase 2: Arrive, pour coffee (after 2s walk)
+        setTimeout(() => setCoffeePhase('pouring'), 2000);
+
+        // Phase 3: Walk back to desk (after 3s pouring)
+        setTimeout(() => setCoffeePhase('walking-back'), 5000);
+
+        // Phase 4: Back at desk (after 2s return walk)
+        setTimeout(() => {
+          setCoffeePhase('none');
+          // Schedule next break
+          coffeeTimer.current = scheduleCoffee();
+        }, 7000);
       }, delay);
     };
     const coffeeTimer = { current: scheduleCoffee() };
     return () => clearTimeout(coffeeTimer.current);
-  }, []);
+  }, [isTransitioning, isAtTable]);
+
+  // Determine actual display position based on coffee phase
+  const isWalkingCoffee = coffeePhase === 'walking-to' || coffeePhase === 'walking-back';
+  const isAtCoffeeStation = coffeePhase === 'walking-to' || coffeePhase === 'pouring';
+  const displayPos = isAtCoffeeStation ? coffeeStationPos
+    : coffeePhase === 'walking-back' ? deskPosRef.current
+      : position;
 
   return (
-    <div
-      ref={spriteRef}
-      className={`agent-desk-sprite ${isTransitioning ? 'transitioning' : ''} ${isDragging ? 'dragging' : ''}`}
-      style={{
-        left: `${position.x}%`,
-        top: `${position.y}%`,
-        transitionDelay: isTransitioning ? `${transitionDelay}ms` : '0ms',
-        cursor: isDragging ? 'grabbing' : 'grab',
-      }}
-      onMouseDown={handleMouseDown}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {/* Desk furniture — hidden when agent is at the table */}
-      {!isAtTable && !isTransitioning && (
-        <>
-          {/* Status halo / glow under the desk */}
-          <div className="desk-glow" style={{ boxShadow: `0 0 40px 15px ${status.glow}` }} />
-
-          {/* The desk surface */}
+    <>
+      {/* Empty desk left behind when agent walks to coffee */}
+      {isOnCoffeeBreak && !isAtTable && (
+        <div
+          className="agent-desk-sprite agent-desk-empty"
+          style={{
+            left: `${deskPosRef.current.x}%`,
+            top: `${deskPosRef.current.y}%`,
+          }}
+        >
+          <div className="desk-glow" style={{ boxShadow: `0 0 40px 15px ${status.glow}`, opacity: 0.3 }} />
           <div className="office-desk">
             <div className="desk-surface" />
             <div className="desk-leg left" />
             <div className="desk-leg right" />
           </div>
-
-          {/* Monitor */}
-          <div className="agent-monitor" style={{ boxShadow: `0 0 20px ${status.monitorGlow}` }}>
-            <div className="monitor-screen" style={{ background: agent.status === 'working' ? '#0c1222' : '#0a0a0a' }}>
-              {agent.status === 'working' && (
-                <>
-                  <div className="code-line l1" />
-                  <div className="code-line l2" />
-                  <div className="code-line l3" />
-                  <div className="cursor-blink" />
-                </>
-              )}
-            </div>
+          <div className="agent-monitor" style={{ boxShadow: `0 0 20px ${status.monitorGlow}`, opacity: 0.5 }}>
+            <div className="monitor-screen" style={{ background: '#0a0a0a' }} />
             <div className="monitor-stand" />
           </div>
-
-          {/* Chair */}
           <div className="office-chair" />
-        </>
-      )}
-
-      {/* Character — always visible, walks to table */}
-      <div className={`office-character ${agent.status} ${isOnCoffeeBreak ? 'coffee-walk' : ''
-        } ${isTransitioning ? 'walking' : ''
-        }`}>
-        <div className="char-head" />
-        <div className="char-body">
-          <div className="char-arm left" />
-          <div className="char-arm right" />
         </div>
-        {isOnCoffeeBreak && <div className="coffee-cup-held">☕</div>}
-      </div>
-
-      {/* Needs-help indicator — pulsing SOS above desk */}
-      {agent.status === 'needs-help' && (
-        <div style={{
-          position: 'absolute',
-          top: -28,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          fontSize: 18,
-          animation: 'needsHelpBounce 1.5s ease-in-out infinite',
-          zIndex: 20,
-          filter: 'drop-shadow(0 0 8px rgba(245,158,11,0.6))',
-        }}>🆘</div>
       )}
+      <div
+        ref={spriteRef}
+        className={`agent-desk-sprite ${isTransitioning ? 'transitioning' : ''} ${isDragging ? 'dragging' : ''} ${isWalkingCoffee ? 'coffee-transitioning' : ''}`}
+        style={{
+          left: `${displayPos.x}%`,
+          top: `${displayPos.y}%`,
+          transitionDelay: isTransitioning ? `${transitionDelay}ms` : '0ms',
+          cursor: isDragging ? 'grabbing' : 'grab',
+        }}
+        onMouseDown={handleMouseDown}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        {/* Desk furniture — hidden when agent is at the table or coffee station */}
+        {!isAtTable && !isTransitioning && !isOnCoffeeBreak && (
+          <>
+            {/* Status halo / glow under the desk */}
+            <div className="desk-glow" style={{ boxShadow: `0 0 40px 15px ${status.glow}` }} />
 
-      {/* Nameplate + role + progress */}
-      <div className="agent-nameplate">
-        <span className={`status-dot ${agent.status}`} />
-        <div className="nameplate-text">
-          <span className="agent-name">{agent.displayName}</span>
-          {(agent.role || AGENT_ROLES[agent.id]) && (
-            <span className="agent-role">{agent.role || AGENT_ROLES[agent.id]}</span>
-          )}
-        </div>
-        {hasSteps && agent.taskProgress > 0 && (
-          <span className="name-progress">{agent.taskProgress}%</span>
-        )}
-      </div>
-
-      {/* Hover Panel: Info + Live Execution Steps */}
-      {hovered && (
-        <div ref={panelRef} className={`hover-detail-panel ${position.facing}`}>
-          {/* Agent info header */}
-          <div className="detail-header">
-            <div className="flex items-center gap-2">
-              <span className="text-base">{agent.emoji || '⚡️'}</span>
-              <span className="text-white font-semibold text-sm">{agent.displayName}</span>
+            {/* The desk surface */}
+            <div className="office-desk">
+              <div className="desk-surface" />
+              <div className="desk-leg left" />
+              <div className="desk-leg right" />
             </div>
-            <span className={`text-[10px] px-2 py-0.5 rounded-full border ${status.badge}`}>
-              {status.label}
-            </span>
-            {/* Power toggle */}
-            <button
-              onClick={handlePowerToggle}
-              disabled={powerLoading}
-              title={isOnline ? `Stop ${agent.displayName}` : `Start ${agent.displayName}`}
-              style={{
-                background: 'none', border: 'none', cursor: powerLoading ? 'wait' : 'pointer',
-                padding: '2px', display: 'flex', alignItems: 'center',
-                color: isOnline ? '#22c55e' : '#ef4444',
-                opacity: powerLoading ? 0.5 : 1,
-                transition: 'color 0.2s, opacity 0.2s',
-              }}
-            >
-              {powerLoading
-                ? <Loader2 className="w-4 h-4 animate-spin" />
-                : <Power className="w-4 h-4" />
-              }
-            </button>
-          </div>
-          {/* Role & duty (clickable → opens deliverables page) */}
-          {(agent.role || AGENT_ROLES[agent.id] || AGENT_DUTIES[agent.id]) && (
-            <div
-              className="detail-duty clickable"
-              onClick={() => router.push(`/admin/deliverables/${agent.id}`)}
-              title="Click to view deliverables & profile"
-            >
-              {(agent.role || AGENT_ROLES[agent.id]) && (
-                <p className="text-[10px] font-semibold text-indigo-400">{agent.role || AGENT_ROLES[agent.id]}</p>
-              )}
-              {AGENT_DUTIES[agent.id] && (
-                <p className="text-[10px] text-zinc-500 mt-0.5 leading-snug">{AGENT_DUTIES[agent.id]}</p>
-              )}
-              <p className="text-[9px] text-indigo-500 mt-1 flex items-center gap-1">
-                <ExternalLink className="w-2.5 h-2.5" />View deliverables
-              </p>
-            </div>
-          )}
 
-          {/* Current task */}
-          {agent.currentTask && agent.status === 'working' && (
-            <div className="detail-task">
-              <p className="text-[10px] uppercase tracking-wider text-zinc-500">Current Task</p>
-              <p className="text-xs text-zinc-100 mt-0.5 font-medium">{agent.currentTask}</p>
-            </div>
-          )}
-
-          {/* Install progress telemetry */}
-          {installProgress && agent.status === 'working' && (
-            <div className="detail-install">
-              <div className="install-header">
-                <div className="install-title">
-                  <Loader2 className={`w-3.5 h-3.5 ${installProgress.phase === 'running' ? 'install-spinner' : ''}`} />
-                  <span>Install in Progress</span>
-                </div>
-                <span className={`phase-tag ${installProgress.phase}`}>
-                  {installProgress.phase === 'completed' ? 'Completed'
-                    : installProgress.phase === 'failed' ? 'Failed'
-                      : installProgress.phase === 'verifying' ? 'Verifying'
-                        : installProgress.phase === 'running' ? 'Running'
-                          : 'Pending'}
-                </span>
-              </div>
-              <p className="install-command">{installProgress.command}</p>
-              <div className="install-progress-track">
-                <div className="install-progress-fill" style={{ width: `${Math.min(100, Math.max(0, installProgress.percent ?? 0))}%` }} />
-              </div>
-              <div className="install-meta">
-                <span className="install-percent">{installProgress.percent ?? 0}%</span>
-                {installProgress.message && (
-                  <span className="install-message">{installProgress.message}</span>
+            {/* Monitor */}
+            <div className="agent-monitor" style={{ boxShadow: `0 0 20px ${status.monitorGlow}` }}>
+              <div className="monitor-screen" style={{ background: agent.status === 'working' ? '#0c1222' : '#0a0a0a' }}>
+                {agent.status === 'working' && (
+                  <>
+                    <div className="code-line l1" />
+                    <div className="code-line l2" />
+                    <div className="code-line l3" />
+                    <div className="cursor-blink" />
+                  </>
                 )}
               </div>
-              {installProgress.logSnippet && installProgress.logSnippet.length > 0 && (
-                <pre className="install-log">
-                  {installProgress.logSnippet.slice(-4).join('\n')}
-                </pre>
-              )}
-              {installProgress.error && (
-                <p className="install-error">⚠️ {installProgress.error}</p>
-              )}
+              <div className="monitor-stand" />
             </div>
-          )}
 
-          {/* Live Execution Steps Checklist */}
-          {hasSteps && agent.status === 'working' && (
-            <ExecutionStepsPanel
-              steps={agent.executionSteps}
-              currentStepIndex={agent.currentStepIndex}
-              taskProgress={agent.taskProgress}
-              taskName={agent.currentTask}
-              taskStartedAt={agent.taskStartedAt}
-              agentId={agent.id}
-            />
-          )}
+            {/* Chair */}
+            <div className="office-chair" />
+          </>
+        )}
 
-          {/* Notes (when no steps) */}
-          {!hasSteps && agent.notes && (
-            <div className="detail-notes">
-              <p className="text-[10px] text-zinc-500 mb-0.5">Notes</p>
-              <p className="text-[11px] text-zinc-300 whitespace-pre-wrap">{agent.notes}</p>
-            </div>
-          )}
+        {/* Character — always visible */}
+        <div className={`office-character ${agent.status} ${isWalkingCoffee ? 'walking' : ''
+          } ${coffeePhase === 'pouring' ? 'pouring-coffee' : ''
+          } ${isTransitioning ? 'walking' : ''
+          }`}>
+          <div className="char-head" />
+          <div className="char-body">
+            <div className="char-arm left" />
+            <div className="char-arm right" />
+          </div>
+          {(coffeePhase === 'walking-back' || coffeePhase === 'pouring') && <div className="coffee-cup-held">☕</div>}
+        </div>
 
-          {/* Manifesto Monitor */}
-          <div className="manifesto-monitor" style={{
-            margin: '8px 0', padding: '6px 8px',
-            background: 'rgba(139, 92, 246, 0.08)',
-            border: '1px solid rgba(139, 92, 246, 0.2)',
-            borderRadius: '6px', fontSize: '10px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#a78bfa' }}>
-                <BookOpen className="w-3 h-3" />
-                <span style={{ fontWeight: 600 }}>Manifesto</span>
+        {/* Needs-help indicator — pulsing SOS above desk */}
+        {agent.status === 'needs-help' && (
+          <div style={{
+            position: 'absolute',
+            top: -28,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            fontSize: 18,
+            animation: 'needsHelpBounce 1.5s ease-in-out infinite',
+            zIndex: 20,
+            filter: 'drop-shadow(0 0 8px rgba(245,158,11,0.6))',
+          }}>🆘</div>
+        )}
+
+        {/* Nameplate + role + progress */}
+        <div className="agent-nameplate">
+          <span className={`status-dot ${agent.status}`} />
+          <div className="nameplate-text">
+            <span className="agent-name">{agent.displayName}</span>
+            {(agent.role || AGENT_ROLES[agent.id]) && (
+              <span className="agent-role">{agent.role || AGENT_ROLES[agent.id]}</span>
+            )}
+          </div>
+          {hasSteps && agent.taskProgress > 0 && (
+            <span className="name-progress">{agent.taskProgress}%</span>
+          )}
+        </div>
+
+        {/* Hover Panel: Info + Live Execution Steps */}
+        {hovered && (
+          <div ref={panelRef} className={`hover-detail-panel ${position.facing}`}>
+            {/* Agent info header */}
+            <div className="detail-header">
+              <div className="flex items-center gap-2">
+                <span className="text-base">{agent.emoji || '⚡️'}</span>
+                <span className="text-white font-semibold text-sm">{agent.displayName}</span>
               </div>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full border ${status.badge}`}>
+                {status.label}
+              </span>
+              {/* Power toggle */}
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const newVal = !(agent.manifestoEnabled !== false);
-                  presenceService.toggleManifesto(agent.id, newVal);
-                }}
+                onClick={handlePowerToggle}
+                disabled={powerLoading}
+                title={isOnline ? `Stop ${agent.displayName}` : `Start ${agent.displayName}`}
                 style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  padding: 0, display: 'flex', alignItems: 'center', gap: '3px',
-                  color: agent.manifestoEnabled !== false ? '#34d399' : '#6b7280',
-                  fontSize: '9px',
+                  background: 'none', border: 'none', cursor: powerLoading ? 'wait' : 'pointer',
+                  padding: '2px', display: 'flex', alignItems: 'center',
+                  color: isOnline ? '#22c55e' : '#ef4444',
+                  opacity: powerLoading ? 0.5 : 1,
+                  transition: 'color 0.2s, opacity 0.2s',
                 }}
-                title={agent.manifestoEnabled !== false ? 'Click to disable manifesto injection' : 'Click to enable manifesto injection'}
               >
-                {agent.manifestoEnabled !== false
-                  ? <><ToggleRight className="w-4 h-4" /> On</>
-                  : <><ToggleLeft className="w-4 h-4" /> Off</>
+                {powerLoading
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <Power className="w-4 h-4" />
                 }
               </button>
             </div>
-            <div style={{ display: 'flex', gap: '12px', color: '#9ca3af', fontSize: '9px' }}>
-              <span>
-                Injections: <strong style={{ color: (agent.manifestoInjections ?? 0) > 0 ? '#a78bfa' : '#6b7280' }}>
-                  {agent.manifestoInjections ?? 0}
-                </strong>
-              </span>
-              {agent.lastManifestoInjection && (
-                <span>
-                  Last: {(() => {
-                    const mins = Math.round((Date.now() - agent.lastManifestoInjection.getTime()) / 60000);
-                    if (mins < 1) return 'just now';
-                    if (mins < 60) return `${mins}m ago`;
-                    return `${Math.round(mins / 60)}h ago`;
-                  })()}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* AI Model & Token Usage */}
-          <div className="model-token-monitor" style={{
-            margin: '8px 0', padding: '6px 8px',
-            background: 'rgba(34, 197, 94, 0.06)',
-            border: '1px solid rgba(34, 197, 94, 0.15)',
-            borderRadius: '6px', fontSize: '10px',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#4ade80' }}>
-                <Zap className="w-3 h-3" />
-                <span style={{ fontWeight: 600 }}>AI Model</span>
+            {/* Role & duty (clickable → opens deliverables page) */}
+            {(agent.role || AGENT_ROLES[agent.id] || AGENT_DUTIES[agent.id]) && (
+              <div
+                className="detail-duty clickable"
+                onClick={() => router.push(`/admin/deliverables/${agent.id}`)}
+                title="Click to view deliverables & profile"
+              >
+                {(agent.role || AGENT_ROLES[agent.id]) && (
+                  <p className="text-[10px] font-semibold text-indigo-400">{agent.role || AGENT_ROLES[agent.id]}</p>
+                )}
+                {AGENT_DUTIES[agent.id] && (
+                  <p className="text-[10px] text-zinc-500 mt-0.5 leading-snug">{AGENT_DUTIES[agent.id]}</p>
+                )}
+                <p className="text-[9px] text-indigo-500 mt-1 flex items-center gap-1">
+                  <ExternalLink className="w-2.5 h-2.5" />View deliverables
+                </p>
               </div>
-              {(() => {
-                const m = agent.currentModel || 'unknown';
-                const ml = m.toLowerCase();
-                const is4o = ml === 'gpt-4o';
-                const isMini = ml.includes('mini');
-                const isCodex = ml.includes('codex');
-                const isClaude = ml.includes('claude') || ml.includes('sonnet') || ml.includes('opus') || ml.includes('haiku');
-                const bg = is4o
-                  ? 'rgba(34,197,94,0.15)'
-                  : isMini
-                    ? 'rgba(59,130,246,0.15)'
-                    : isCodex
-                      ? 'rgba(139,92,246,0.15)'
-                      : isClaude
-                        ? 'rgba(245,158,11,0.15)'
-                        : 'rgba(113,113,122,0.15)';
-                const fg = is4o
-                  ? '#4ade80'
-                  : isMini
-                    ? '#60a5fa'
-                    : isCodex
-                      ? '#a78bfa'
-                      : isClaude
-                        ? '#fbbf24'
-                        : '#71717a';
-                const bd = is4o
-                  ? 'rgba(34,197,94,0.3)'
-                  : isMini
-                    ? 'rgba(59,130,246,0.3)'
-                    : isCodex
-                      ? 'rgba(139,92,246,0.3)'
-                      : isClaude
-                        ? 'rgba(245,158,11,0.3)'
-                        : 'rgba(113,113,122,0.2)';
-                return (
-                  <span style={{
-                    fontSize: '9px', fontWeight: 700,
-                    padding: '1px 6px', borderRadius: '4px',
-                    background: bg, color: fg, border: `1px solid ${bd}`,
-                    letterSpacing: '0.02em',
-                  }}>
-                    {m}
+            )}
+
+            {/* Current task */}
+            {agent.currentTask && agent.status === 'working' && (
+              <div className="detail-task">
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500">Current Task</p>
+                <p className="text-xs text-zinc-100 mt-0.5 font-medium">{agent.currentTask}</p>
+              </div>
+            )}
+
+            {/* Install progress telemetry */}
+            {installProgress && agent.status === 'working' && (
+              <div className="detail-install">
+                <div className="install-header">
+                  <div className="install-title">
+                    <Loader2 className={`w-3.5 h-3.5 ${installProgress.phase === 'running' ? 'install-spinner' : ''}`} />
+                    <span>Install in Progress</span>
+                  </div>
+                  <span className={`phase-tag ${installProgress.phase}`}>
+                    {installProgress.phase === 'completed' ? 'Completed'
+                      : installProgress.phase === 'failed' ? 'Failed'
+                        : installProgress.phase === 'verifying' ? 'Verifying'
+                          : installProgress.phase === 'running' ? 'Running'
+                            : 'Pending'}
                   </span>
+                </div>
+                <p className="install-command">{installProgress.command}</p>
+                <div className="install-progress-track">
+                  <div className="install-progress-fill" style={{ width: `${Math.min(100, Math.max(0, installProgress.percent ?? 0))}%` }} />
+                </div>
+                <div className="install-meta">
+                  <span className="install-percent">{installProgress.percent ?? 0}%</span>
+                  {installProgress.message && (
+                    <span className="install-message">{installProgress.message}</span>
+                  )}
+                </div>
+                {installProgress.logSnippet && installProgress.logSnippet.length > 0 && (
+                  <pre className="install-log">
+                    {installProgress.logSnippet.slice(-4).join('\n')}
+                  </pre>
+                )}
+                {installProgress.error && (
+                  <p className="install-error">⚠️ {installProgress.error}</p>
+                )}
+              </div>
+            )}
+
+            {/* Live Execution Steps Checklist */}
+            {hasSteps && agent.status === 'working' && (
+              <ExecutionStepsPanel
+                steps={agent.executionSteps}
+                currentStepIndex={agent.currentStepIndex}
+                taskProgress={agent.taskProgress}
+                taskName={agent.currentTask}
+                taskStartedAt={agent.taskStartedAt}
+                agentId={agent.id}
+              />
+            )}
+
+            {/* Notes (when no steps) */}
+            {!hasSteps && agent.notes && (
+              <div className="detail-notes">
+                <p className="text-[10px] text-zinc-500 mb-0.5">Notes</p>
+                <p className="text-[11px] text-zinc-300 whitespace-pre-wrap">{agent.notes}</p>
+              </div>
+            )}
+
+            {/* Manifesto Monitor */}
+            <div className="manifesto-monitor" style={{
+              margin: '8px 0', padding: '6px 8px',
+              background: 'rgba(139, 92, 246, 0.08)',
+              border: '1px solid rgba(139, 92, 246, 0.2)',
+              borderRadius: '6px', fontSize: '10px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#a78bfa' }}>
+                  <BookOpen className="w-3 h-3" />
+                  <span style={{ fontWeight: 600 }}>Manifesto</span>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newVal = !(agent.manifestoEnabled !== false);
+                    presenceService.toggleManifesto(agent.id, newVal);
+                  }}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    padding: 0, display: 'flex', alignItems: 'center', gap: '3px',
+                    color: agent.manifestoEnabled !== false ? '#34d399' : '#6b7280',
+                    fontSize: '9px',
+                  }}
+                  title={agent.manifestoEnabled !== false ? 'Click to disable manifesto injection' : 'Click to enable manifesto injection'}
+                >
+                  {agent.manifestoEnabled !== false
+                    ? <><ToggleRight className="w-4 h-4" /> On</>
+                    : <><ToggleLeft className="w-4 h-4" /> Off</>
+                  }
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', color: '#9ca3af', fontSize: '9px' }}>
+                <span>
+                  Injections: <strong style={{ color: (agent.manifestoInjections ?? 0) > 0 ? '#a78bfa' : '#6b7280' }}>
+                    {agent.manifestoInjections ?? 0}
+                  </strong>
+                </span>
+                {agent.lastManifestoInjection && (
+                  <span>
+                    Last: {(() => {
+                      const mins = Math.round((Date.now() - agent.lastManifestoInjection.getTime()) / 60000);
+                      if (mins < 1) return 'just now';
+                      if (mins < 60) return `${mins}m ago`;
+                      return `${Math.round(mins / 60)}h ago`;
+                    })()}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* AI Model & Token Usage */}
+            <div className="model-token-monitor" style={{
+              margin: '8px 0', padding: '6px 8px',
+              background: 'rgba(34, 197, 94, 0.06)',
+              border: '1px solid rgba(34, 197, 94, 0.15)',
+              borderRadius: '6px', fontSize: '10px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#4ade80' }}>
+                  <Zap className="w-3 h-3" />
+                  <span style={{ fontWeight: 600 }}>AI Model</span>
+                </div>
+                {(() => {
+                  const m = agent.currentModel || 'unknown';
+                  const ml = m.toLowerCase();
+                  const is4o = ml === 'gpt-4o';
+                  const isMini = ml.includes('mini');
+                  const isCodex = ml.includes('codex');
+                  const isClaude = ml.includes('claude') || ml.includes('sonnet') || ml.includes('opus') || ml.includes('haiku');
+                  const bg = is4o
+                    ? 'rgba(34,197,94,0.15)'
+                    : isMini
+                      ? 'rgba(59,130,246,0.15)'
+                      : isCodex
+                        ? 'rgba(139,92,246,0.15)'
+                        : isClaude
+                          ? 'rgba(245,158,11,0.15)'
+                          : 'rgba(113,113,122,0.15)';
+                  const fg = is4o
+                    ? '#4ade80'
+                    : isMini
+                      ? '#60a5fa'
+                      : isCodex
+                        ? '#a78bfa'
+                        : isClaude
+                          ? '#fbbf24'
+                          : '#71717a';
+                  const bd = is4o
+                    ? 'rgba(34,197,94,0.3)'
+                    : isMini
+                      ? 'rgba(59,130,246,0.3)'
+                      : isCodex
+                        ? 'rgba(139,92,246,0.3)'
+                        : isClaude
+                          ? 'rgba(245,158,11,0.3)'
+                          : 'rgba(113,113,122,0.2)';
+                  return (
+                    <span style={{
+                      fontSize: '9px', fontWeight: 700,
+                      padding: '1px 6px', borderRadius: '4px',
+                      background: bg, color: fg, border: `1px solid ${bd}`,
+                      letterSpacing: '0.02em',
+                    }}>
+                      {m}
+                    </span>
+                  );
+                })()}
+              </div>
+              {/* ── Token Usage Monitor ── */}
+              {(() => {
+                const session = agent.tokenUsage;
+                const task = agent.tokenUsageTask;
+                const cumulative = agent.tokenUsageCumulative;
+                const daily = agent.tokenUsageDaily;
+                const today = new Date().toISOString().split('T')[0];
+                const todayUsage = daily?.[today];
+                const hasAny = (session?.totalTokens ?? 0) > 0 || (cumulative?.totalTokens ?? 0) > 0 || (todayUsage?.totalTokens ?? 0) > 0;
+                if (!hasAny) return null;
+                return (
+                  <div style={{
+                    margin: '8px 0', padding: '8px 10px',
+                    background: 'rgba(59, 130, 246, 0.08)',
+                    border: '1px solid rgba(59, 130, 246, 0.2)',
+                    borderRadius: '6px', fontSize: '10px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#60a5fa', marginBottom: '6px' }}>
+                      <Zap className="w-3 h-3" />
+                      <span style={{ fontWeight: 700 }}>Token Usage</span>
+                    </div>
+
+                    {/* Main metrics row */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                      {/* Session total */}
+                      <div style={{
+                        background: 'rgba(34, 197, 94, 0.1)', borderRadius: '4px', padding: '4px 6px',
+                        border: '1px solid rgba(34, 197, 94, 0.2)',
+                      }}>
+                        <div style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Session</div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>
+                          {(session?.totalTokens ?? 0).toLocaleString()}
+                        </div>
+                      </div>
+
+                      {/* Today */}
+                      <div style={{
+                        background: 'rgba(245, 158, 11, 0.1)', borderRadius: '4px', padding: '4px 6px',
+                        border: '1px solid rgba(245, 158, 11, 0.2)',
+                      }}>
+                        <div style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Today</div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#fbbf24', fontVariantNumeric: 'tabular-nums' }}>
+                          {(todayUsage?.totalTokens ?? 0).toLocaleString()}
+                        </div>
+                      </div>
+
+                      {/* Current Task */}
+                      <div style={{
+                        background: 'rgba(6, 182, 212, 0.1)', borderRadius: '4px', padding: '4px 6px',
+                        border: '1px solid rgba(6, 182, 212, 0.2)',
+                      }}>
+                        <div style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>This Task</div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#22d3ee', fontVariantNumeric: 'tabular-nums' }}>
+                          {(task?.totalTokens ?? 0).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Breakdown row */}
+                    <div style={{ display: 'flex', gap: '10px', color: '#9ca3af', fontSize: '9px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
+                      <span>
+                        In: <strong style={{ color: '#60a5fa' }}>{(session?.promptTokens ?? 0).toLocaleString()}</strong>
+                      </span>
+                      <span>
+                        Out: <strong style={{ color: '#f59e0b' }}>{(session?.completionTokens ?? 0).toLocaleString()}</strong>
+                      </span>
+                      <span>
+                        Calls: <strong style={{ color: '#a1a1aa' }}>{session?.callCount ?? 0}</strong>
+                      </span>
+                      {cumulative && (
+                        <span style={{ marginLeft: 'auto' }}>
+                          Lifetime: <strong style={{ color: '#c084fc' }}>{(cumulative.totalTokens ?? 0).toLocaleString()}</strong>
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 );
               })()}
             </div>
-            {/* ── Token Usage Monitor ── */}
-            {(() => {
-              const session = agent.tokenUsage;
-              const task = agent.tokenUsageTask;
-              const cumulative = agent.tokenUsageCumulative;
-              const daily = agent.tokenUsageDaily;
-              const today = new Date().toISOString().split('T')[0];
-              const todayUsage = daily?.[today];
-              const hasAny = (session?.totalTokens ?? 0) > 0 || (cumulative?.totalTokens ?? 0) > 0 || (todayUsage?.totalTokens ?? 0) > 0;
-              if (!hasAny) return null;
-              return (
-                <div style={{
-                  margin: '8px 0', padding: '8px 10px',
-                  background: 'rgba(59, 130, 246, 0.08)',
-                  border: '1px solid rgba(59, 130, 246, 0.2)',
-                  borderRadius: '6px', fontSize: '10px',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#60a5fa', marginBottom: '6px' }}>
-                    <Zap className="w-3 h-3" />
-                    <span style={{ fontWeight: 700 }}>Token Usage</span>
-                  </div>
 
-                  {/* Main metrics row */}
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '6px' }}>
-                    {/* Session total */}
-                    <div style={{
-                      background: 'rgba(34, 197, 94, 0.1)', borderRadius: '4px', padding: '4px 6px',
-                      border: '1px solid rgba(34, 197, 94, 0.2)',
-                    }}>
-                      <div style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Session</div>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>
-                        {(session?.totalTokens ?? 0).toLocaleString()}
-                      </div>
-                    </div>
+            {/* Task History */}
+            <TaskHistoryPanel agentId={agent.id} agentName={agent.displayName} emoji={agent.emoji} />
 
-                    {/* Today */}
-                    <div style={{
-                      background: 'rgba(245, 158, 11, 0.1)', borderRadius: '4px', padding: '4px 6px',
-                      border: '1px solid rgba(245, 158, 11, 0.2)',
-                    }}>
-                      <div style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Today</div>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#fbbf24', fontVariantNumeric: 'tabular-nums' }}>
-                        {(todayUsage?.totalTokens ?? 0).toLocaleString()}
-                      </div>
-                    </div>
+            {/* Chat Button */}
+            <button
+              className="detail-chat-btn"
+              onClick={(e) => { e.stopPropagation(); (window as any).__openAgentChat?.(agent); }}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              Chat with {agent.displayName}
+            </button>
 
-                    {/* Current Task */}
-                    <div style={{
-                      background: 'rgba(6, 182, 212, 0.1)', borderRadius: '4px', padding: '4px 6px',
-                      border: '1px solid rgba(6, 182, 212, 0.2)',
-                    }}>
-                      <div style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>This Task</div>
-                      <div style={{ fontSize: '13px', fontWeight: 700, color: '#22d3ee', fontVariantNumeric: 'tabular-nums' }}>
-                        {(task?.totalTokens ?? 0).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Breakdown row */}
-                  <div style={{ display: 'flex', gap: '10px', color: '#9ca3af', fontSize: '9px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px' }}>
-                    <span>
-                      In: <strong style={{ color: '#60a5fa' }}>{(session?.promptTokens ?? 0).toLocaleString()}</strong>
-                    </span>
-                    <span>
-                      Out: <strong style={{ color: '#f59e0b' }}>{(session?.completionTokens ?? 0).toLocaleString()}</strong>
-                    </span>
-                    <span>
-                      Calls: <strong style={{ color: '#a1a1aa' }}>{session?.callCount ?? 0}</strong>
-                    </span>
-                    {cumulative && (
-                      <span style={{ marginLeft: 'auto' }}>
-                        Lifetime: <strong style={{ color: '#c084fc' }}>{(cumulative.totalTokens ?? 0).toLocaleString()}</strong>
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
+            {/* Footer */}
+            <div className="detail-footer">
+              <span className="flex items-center gap-1">
+                <Clock className="w-2.5 h-2.5" />{formatRelative(agent.lastUpdate)}
+              </span>
+              {sessionDuration && <span>Session: {sessionDuration}</span>}
+            </div>
           </div>
-
-          {/* Task History */}
-          <TaskHistoryPanel agentId={agent.id} agentName={agent.displayName} emoji={agent.emoji} />
-
-          {/* Chat Button */}
-          <button
-            className="detail-chat-btn"
-            onClick={(e) => { e.stopPropagation(); (window as any).__openAgentChat?.(agent); }}
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            Chat with {agent.displayName}
-          </button>
-
-          {/* Footer */}
-          <div className="detail-footer">
-            <span className="flex items-center gap-1">
-              <Clock className="w-2.5 h-2.5" />{formatRelative(agent.lastUpdate)}
-            </span>
-            {sessionDuration && <span>Session: {sessionDuration}</span>}
-          </div>
-        </div>
-      )}
-      {/* Agent Profile Modal */}
-      {showProfile && (
-        <AgentProfileModal
-          agentId={agent.id}
-          agentName={agent.displayName}
-          emoji={agent.emoji || '⚡️'}
-          onClose={() => setShowProfile(false)}
-        />
-      )}
-    </div>
+        )}
+        {/* Agent Profile Modal */}
+        {showProfile && (
+          <AgentProfileModal
+            agentId={agent.id}
+            agentName={agent.displayName}
+            emoji={agent.emoji || '⚡️'}
+            onClose={() => setShowProfile(false)}
+          />
+        )}
+      </div>
+    </>
   );
 };
 
@@ -1754,7 +1812,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
 
 const OfficeDecorations: React.FC<{ onOpenManifesto?: () => void }> = ({ onOpenManifesto }) => (
   <>
-    {/* Manifesto Picture Frame (replaces whiteboard) */}
+    {/* Manifesto Picture Frame */}
     <div className="office-manifesto-frame" onClick={onOpenManifesto} title="View Agent Manifesto">
       <div className="mf-frame">
         <div className="mf-inner">
@@ -1767,57 +1825,32 @@ const OfficeDecorations: React.FC<{ onOpenManifesto?: () => void }> = ({ onOpenM
       <div className="mf-shadow" />
     </div>
 
-    {/* Coffee machine — top right corner */}
-    <div className="coffee-machine">
-      <div className="cm-body">
-        <div className="cm-top" />
-        <div className="cm-screen" />
-        <div className="cm-nozzle" />
-        <div className="cm-drip-tray" />
+    {/* Coffee Station — floor-level, bottom-right area */}
+    <div className="coffee-station">
+      <div className="cs-counter">
+        <div className="cs-counter-surface" />
+        <div className="cs-counter-front" />
+        <div className="cs-leg left" />
+        <div className="cs-leg right" />
       </div>
-      <div className="cm-steam s1" />
-      <div className="cm-steam s2" />
-      <div className="cm-steam s3" />
-      <div className="cm-label">☕</div>
-    </div>
-
-    {/* Bookshelf */}
-    <div className="office-bookshelf">
-      <div className="shelf-unit">
-        <div className="shelf-row">
-          <div className="book b1" />
-          <div className="book b2" />
-          <div className="book b3" />
-          <div className="book b4" />
-        </div>
-        <div className="shelf-divider" />
-        <div className="shelf-row">
-          <div className="book b5" />
-          <div className="book b6" />
-          <div className="book b7" />
-        </div>
+      <div className="cs-espresso">
+        <div className="cs-espresso-body" />
+        <div className="cs-espresso-top" />
+        <div className="cs-espresso-nozzle" />
+        <div className="cs-steam s1" />
+        <div className="cs-steam s2" />
+        <div className="cs-steam s3" />
       </div>
+      <div className="cs-cups">
+        <div className="cs-cup" />
+        <div className="cs-cup" />
+      </div>
+      <div className="cs-glow" />
+      <div className="cs-label">☕ Coffee</div>
     </div>
 
     {/* Cozy rug */}
     <div className="office-rug" />
-
-    {/* Wall clock */}
-    <div className="wall-clock">
-      <div className="clock-face">
-        <div className="clock-hand hour" />
-        <div className="clock-hand minute" />
-        <div className="clock-center" />
-      </div>
-    </div>
-
-    {/* Window */}
-    <div className="office-window">
-      <div className="window-pane" />
-      <div className="window-divider v" />
-      <div className="window-divider h" />
-      <div className="window-glow" />
-    </div>
   </>
 );
 
@@ -1878,6 +1911,10 @@ const VirtualOfficeContent: React.FC = () => {
   // ── Standup detection state ──
   const [activeStandup, setActiveStandup] = useState<GroupChat | null>(null);
   const [isStandupObserving, setIsStandupObserving] = useState(false);
+
+  // ── Queued standup (waits for active collaboration to finish) ──
+  const queuedStandupRef = useRef<GroupChat | null>(null);
+  const [hasQueuedStandup, setHasQueuedStandup] = useState(false);
 
   // ── Manual Standup Trigger state ──
   const [triggeringStandup, setTriggeringStandup] = useState(false);
@@ -2199,7 +2236,7 @@ const VirtualOfficeContent: React.FC = () => {
     });
     setAgentPositions(updatedPositions);
 
-    // After animation completes, mark as "at desk"
+    // After animation completes, mark as "at desk" and check for queued standup
     const lastExitDelay = getExitStaggerDelay(0, agentIds.length);
     setTimeout(() => {
       const finalPositions = { ...updatedPositions };
@@ -2211,6 +2248,48 @@ const VirtualOfficeContent: React.FC = () => {
       setIsCollaborating(false);
       setGroupChatId(null);
       setCollabStartTime(null);
+
+      // ── Check for queued standup ──
+      const queued = queuedStandupRef.current;
+      if (queued) {
+        console.log('[Standup] Collaboration ended — activating queued standup in 3s');
+        // Brief pause so agents settle at desks before marching back to table
+        setTimeout(() => {
+          queuedStandupRef.current = null;
+          setHasQueuedStandup(false);
+          setActiveStandup(queued);
+          setGroupChatId(queued.id!);
+          setIsCollaborating(true);
+          setCollabStartTime(new Date());
+          setStandupTriggerResult('success');
+
+          // Animate agents to table for standup
+          const tablePositions = getAllTablePositions(agentIds);
+          const standupPositions = { ...finalPositions };
+          agentIds.forEach((agentId, index) => {
+            standupPositions[agentId] = {
+              state: 'transitioning-to-table',
+              position: tablePositions[agentId],
+              deskPosition: standupPositions[agentId]?.deskPosition || getDeskPosition(index),
+              transitionDelay: getStaggerDelay(index),
+            };
+          });
+          setAgentPositions(standupPositions);
+
+          const lastDelay = getStaggerDelay(agentIds.length - 1);
+          setTimeout(() => {
+            setAgentPositions(prev => {
+              const atTable = { ...prev };
+              agentIds.forEach(agentId => {
+                if (atTable[agentId]) {
+                  atTable[agentId] = { ...atTable[agentId], state: 'table', transitionDelay: 0 };
+                }
+              });
+              return atTable;
+            });
+          }, lastDelay + 2000);
+        }, 3000);
+      }
     }, lastExitDelay + 2000);
 
   }, [allAgents, agentPositions, groupChatId, collabStartTime]);
@@ -2243,8 +2322,22 @@ const VirtualOfficeContent: React.FC = () => {
         const data = standupDoc.data() as Omit<GroupChat, 'id'>;
         const standup: GroupChat = { id: standupDoc.id, ...data };
 
-        // Only trigger animation if this is a NEW standup (not already tracking)
+        // Only trigger if this is a NEW standup (not already tracking)
         if (!activeStandup || activeStandup.id !== standup.id) {
+          // ── QUEUE if a non-standup collaboration is active ──
+          const isManualCollabActive = isCollaborating && !activeStandup;
+          if (isManualCollabActive) {
+            // Don't interrupt — queue it and let the user finish
+            queuedStandupRef.current = standup;
+            setHasQueuedStandup(true);
+            setTriggeringStandup(false);
+            console.log('[Standup] Queued — waiting for collaboration to finish');
+            return;
+          }
+
+          // ── ACTIVATE the standup now ──
+          queuedStandupRef.current = null;
+          setHasQueuedStandup(false);
           setActiveStandup(standup);
           setGroupChatId(standup.id!);
           setIsCollaborating(true);
@@ -2318,7 +2411,7 @@ const VirtualOfficeContent: React.FC = () => {
     });
 
     return () => unsubStandup();
-  }, [allAgents, agentPositions, activeStandup]);
+  }, [allAgents, agentPositions, activeStandup, isCollaborating]);
 
   // Update table click handler
   const handleTableClick = useCallback(() => {
@@ -2433,20 +2526,30 @@ const VirtualOfficeContent: React.FC = () => {
             </div>
           )}
 
-          {/* ── Today's Token Usage (all agents) ── */}
+          {/* ── Token Usage (all agents) ── */}
           {(() => {
             const today = new Date().toISOString().split('T')[0];
+            // Try daily first, then cumulative, then session
             const todayTotal = allAgents.reduce((sum, a) => {
               const daily = (a as any).tokenUsageDaily?.[today];
               return sum + (daily?.totalTokens ?? 0);
             }, 0);
+            const cumulativeTotal = allAgents.reduce((sum, a) => sum + (a.tokenUsageCumulative?.totalTokens ?? 0), 0);
             const sessionTotal = allAgents.reduce((sum, a) => sum + (a.tokenUsage?.totalTokens ?? 0), 0);
+            // Pick the best available number
+            const displayTotal = todayTotal > 0 ? todayTotal : cumulativeTotal > 0 ? cumulativeTotal : sessionTotal;
+            const label = todayTotal > 0 ? 'Today' : cumulativeTotal > 0 ? 'Total' : 'Session';
+            const tooltipParts = [
+              todayTotal > 0 ? `Today: ${todayTotal.toLocaleString()}` : null,
+              cumulativeTotal > 0 ? `Cumulative: ${cumulativeTotal.toLocaleString()}` : null,
+              sessionTotal > 0 ? `Session: ${sessionTotal.toLocaleString()}` : null,
+            ].filter(Boolean).join(' • ');
             return (
-              <div className="stat-chip" title={`Session: ${sessionTotal.toLocaleString()} tokens`}>
+              <div className="stat-chip" title={tooltipParts || 'No token data available'}>
                 <Zap className="w-4 h-4 text-amber-400" />
                 <div>
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Tokens Today</p>
-                  <p className="text-lg font-semibold text-amber-400">{todayTotal.toLocaleString()}</p>
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Tokens {label}</p>
+                  <p className="text-lg font-semibold text-amber-400">{displayTotal.toLocaleString()}</p>
                 </div>
               </div>
             );
@@ -2532,6 +2635,35 @@ const VirtualOfficeContent: React.FC = () => {
               </div>
             )}
 
+            {/* Queued standup indicator */}
+            {hasQueuedStandup && !activeStandup && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '44%',
+                  transform: 'translateX(-50%)',
+                  zIndex: 10,
+                  background: 'linear-gradient(135deg, rgba(245,158,11,0.15), rgba(217,119,6,0.1))',
+                  border: '1px solid rgba(245,158,11,0.3)',
+                  color: '#fbbf24',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  letterSpacing: '0.3px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                  animation: 'tablePulse 2s ease-in-out infinite',
+                  whiteSpace: 'nowrap',
+                  backdropFilter: 'blur(8px)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                ⏳ Standup queued — waiting for meeting to end
+              </div>
+            )}
             {/* Filing Cabinet Button */}
             <div className="filing-cabinet-btn" onClick={() => setShowFilingCabinet(true)}>
               <Archive className="w-4 h-4" />
@@ -2549,26 +2681,13 @@ const VirtualOfficeContent: React.FC = () => {
             </div>
 
             {/* North Star */}
-            <div
-              onClick={() => setShowNorthStar(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '8px 14px', borderRadius: 10,
-                background: 'rgba(251,191,36,0.08)',
-                border: '1px solid rgba(251,191,36,0.2)',
-                color: '#fbbf24', fontSize: 13, fontWeight: 500,
-                cursor: 'pointer', transition: 'all 0.2s',
-                whiteSpace: 'nowrap' as any,
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(251,191,36,0.15)'; e.currentTarget.style.borderColor = 'rgba(251,191,36,0.35)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(251,191,36,0.08)'; e.currentTarget.style.borderColor = 'rgba(251,191,36,0.2)'; }}
-            >
+            <div className="north-star-btn" onClick={() => setShowNorthStar(true)}>
               <span style={{ fontSize: 15 }}>⭐</span>
               <span>North Star</span>
             </div>
 
             {/* Manual Standup Trigger */}
-            <div style={{ position: 'relative', display: 'inline-block' }}>
+            <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10, display: 'inline-block' }}>
               <div
                 className="standup-trigger-btn"
                 onClick={() => {
@@ -3057,6 +3176,32 @@ const VirtualOfficeContent: React.FC = () => {
           transform: translateY(-1px);
           box-shadow: 0 4px 16px rgba(139,92,246,0.15);
         }
+        .north-star-btn {
+          position: absolute;
+          top: 1%;
+          left: 50%;
+          transform: translateX(-50%);
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          border-radius: 8px;
+          background: linear-gradient(135deg, rgba(251,191,36,0.12), rgba(234,179,8,0.08));
+          border: 1px solid rgba(251,191,36,0.2);
+          color: #fbbf24;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          z-index: 10;
+          backdrop-filter: blur(8px);
+        }
+        .north-star-btn:hover {
+          background: linear-gradient(135deg, rgba(251,191,36,0.22), rgba(234,179,8,0.14));
+          border-color: rgba(251,191,36,0.35);
+          transform: translateX(-50%) translateY(-1px);
+          box-shadow: 0 4px 16px rgba(251,191,36,0.15);
+        }
 
         .shared-deliverables-btn {
           position: absolute;
@@ -3104,7 +3249,7 @@ const VirtualOfficeContent: React.FC = () => {
         /* ── Decorations ── */
         /* ── Manifesto Picture Frame ── */
         .office-manifesto-frame {
-          position: absolute; top: 1.5%; left: 50%; transform: translateX(-50%); z-index: 2;
+          position: absolute; top: 7%; left: 50%; transform: translateX(-50%); z-index: 2;
           cursor: pointer; transition: transform 0.2s ease;
         }
         .office-manifesto-frame:hover { transform: translateX(-50%) scale(1.05); }
@@ -3200,38 +3345,129 @@ const VirtualOfficeContent: React.FC = () => {
         .cooler-body { width: 22px; height: 28px; background: #d4d4d8; border-radius: 3px; margin: 0 auto; }
 
         /* Coffee machine */
-        .coffee-machine { position: absolute; top: 8%; right: 8%; z-index: 3; }
-        .cm-body { width: 36px; height: 46px; background: linear-gradient(180deg, #374151, #1f2937); border-radius: 6px 6px 3px 3px; position: relative; border: 1px solid rgba(75,85,99,0.5); box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
-        .cm-top { position: absolute; top: -3px; left: 2px; right: 2px; height: 6px; background: linear-gradient(180deg, #4b5563, #374151); border-radius: 4px 4px 0 0; }
-        .cm-screen { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 16px; height: 8px; background: rgba(34,197,94,0.3); border-radius: 2px; border: 1px solid rgba(34,197,94,0.2); animation: screenGlow 3s ease-in-out infinite; }
-        @keyframes screenGlow { 0%,100% { background: rgba(34,197,94,0.2); } 50% { background: rgba(34,197,94,0.5); } }
-        .cm-nozzle { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); width: 8px; height: 4px; background: #6b7280; border-radius: 0 0 2px 2px; }
-        .cm-drip-tray { position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); width: 24px; height: 4px; background: #4b5563; border-radius: 2px; }
-        .cm-steam { position: absolute; top: -8px; width: 2px; background: rgba(255,255,255,0.15); border-radius: 4px; animation: steamRise 2s ease-in-out infinite; }
-        .cm-steam.s1 { left: 12px; height: 10px; animation-delay: 0s; }
-        .cm-steam.s2 { left: 18px; height: 14px; animation-delay: 0.7s; }
-        .cm-steam.s3 { left: 24px; height: 8px; animation-delay: 1.4s; }
-        @keyframes steamRise {
-          0% { opacity: 0; transform: translateY(0) scaleX(1); }
-          30% { opacity: 0.6; }
-          70% { opacity: 0.3; transform: translateY(-12px) scaleX(1.5); }
-          100% { opacity: 0; transform: translateY(-20px) scaleX(2); }
+        /* ═══ Coffee Station ═══ */
+        .coffee-station {
+          position: absolute;
+          bottom: 14%;
+          right: 12%;
+          z-index: 3;
+          width: 80px;
+          height: 70px;
         }
-        .cm-label { position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%); font-size: 10px; }
+        .cs-counter {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+        }
+        .cs-counter-surface {
+          width: 80px;
+          height: 8px;
+          background: linear-gradient(90deg, #44403c, #57534e, #44403c);
+          border-radius: 3px 3px 0 0;
+          box-shadow: 0 -1px 8px rgba(245,158,11,0.06);
+        }
+        .cs-counter-front {
+          width: 80px;
+          height: 18px;
+          background: linear-gradient(180deg, #3f3f46, #27272a);
+          border-radius: 0 0 4px 4px;
+          border: 1px solid rgba(63,63,70,0.4);
+          border-top: none;
+        }
+        .cs-leg.left { position: absolute; bottom: -10px; left: 6px; width: 4px; height: 10px; background: #27272a; border-radius: 0 0 2px 2px; }
+        .cs-leg.right { position: absolute; bottom: -10px; right: 6px; width: 4px; height: 10px; background: #27272a; border-radius: 0 0 2px 2px; }
 
-        /* Bookshelf */
-        .office-bookshelf { position: absolute; top: 1.5%; left: 82%; z-index: 2; }
-        .shelf-unit { width: 56px; background: linear-gradient(180deg, #44403c, #292524); border-radius: 3px; padding: 3px; border: 1px solid rgba(68,64,60,0.5); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-        .shelf-row { display: flex; gap: 2px; padding: 2px 1px; justify-content: center; }
-        .shelf-divider { height: 2px; background: #57534e; margin: 1px 0; border-radius: 1px; }
-        .book { width: 6px; border-radius: 1px; }
-        .book.b1 { height: 18px; background: #ef4444; }
-        .book.b2 { height: 16px; background: #3b82f6; }
-        .book.b3 { height: 20px; background: #f59e0b; }
-        .book.b4 { height: 15px; background: #8b5cf6; }
-        .book.b5 { height: 17px; background: #10b981; }
-        .book.b6 { height: 19px; background: #ec4899; }
-        .book.b7 { height: 14px; background: #6366f1; }
+        .cs-espresso {
+          position: absolute;
+          bottom: 26px;
+          left: 10px;
+          width: 28px;
+          height: 30px;
+        }
+        .cs-espresso-body {
+          width: 28px;
+          height: 30px;
+          background: linear-gradient(180deg, #374151, #1f2937);
+          border-radius: 5px 5px 3px 3px;
+          border: 1px solid rgba(75,85,99,0.5);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        .cs-espresso-top {
+          position: absolute;
+          top: -2px;
+          left: 2px;
+          right: 2px;
+          height: 5px;
+          background: linear-gradient(180deg, #6b7280, #4b5563);
+          border-radius: 3px 3px 0 0;
+        }
+        .cs-espresso-nozzle {
+          position: absolute;
+          bottom: 3px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 6px;
+          height: 3px;
+          background: #6b7280;
+          border-radius: 0 0 2px 2px;
+        }
+        .cs-steam {
+          position: absolute;
+          top: -6px;
+          width: 2px;
+          background: rgba(255,255,255,0.12);
+          border-radius: 4px;
+          animation: csSteamRise 2.5s ease-in-out infinite;
+        }
+        .cs-steam.s1 { left: 8px; height: 10px; animation-delay: 0s; }
+        .cs-steam.s2 { left: 14px; height: 13px; animation-delay: 0.8s; }
+        .cs-steam.s3 { left: 20px; height: 8px; animation-delay: 1.6s; }
+        @keyframes csSteamRise {
+          0% { opacity: 0; transform: translateY(0) scaleX(1); }
+          30% { opacity: 0.5; }
+          70% { opacity: 0.2; transform: translateY(-10px) scaleX(1.4); }
+          100% { opacity: 0; transform: translateY(-16px) scaleX(2); }
+        }
+
+        .cs-cups {
+          position: absolute;
+          bottom: 26px;
+          right: 8px;
+          display: flex;
+          gap: 4px;
+        }
+        .cs-cup {
+          width: 8px;
+          height: 7px;
+          background: #e7e5e4;
+          border-radius: 1px 1px 3px 3px;
+          border: 1px solid rgba(168,162,158,0.4);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .cs-glow {
+          position: absolute;
+          bottom: -4px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 100px;
+          height: 16px;
+          border-radius: 50%;
+          background: radial-gradient(ellipse, rgba(245,158,11,0.08), transparent 70%);
+        }
+        .cs-label {
+          position: absolute;
+          bottom: -20px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 9px;
+          color: #71717a;
+          font-weight: 500;
+          letter-spacing: 0.03em;
+          white-space: nowrap;
+          font-family: Inter, -apple-system, sans-serif;
+        }
 
         /* Cozy rug */
         .office-rug {
@@ -3242,20 +3478,6 @@ const VirtualOfficeContent: React.FC = () => {
           border-radius: 50%;
           z-index: 0;
         }
-
-        .wall-clock { position: absolute; top: 2%; right: 18%; z-index: 2; }
-        .clock-face { width: 32px; height: 32px; border-radius: 50%; background: #1e293b; border: 2px solid #334155; position: relative; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-        .clock-hand { position: absolute; bottom: 50%; left: 50%; transform-origin: bottom center; border-radius: 2px; }
-        .clock-hand.hour { width: 2px; height: 8px; background: #e2e8f0; transform: translateX(-50%) rotate(30deg); }
-        .clock-hand.minute { width: 1.5px; height: 11px; background: #94a3b8; animation: clockSpin 60s linear infinite; transform: translateX(-50%); }
-        .clock-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 4px; height: 4px; border-radius: 50%; background: #f59e0b; }
-        @keyframes clockSpin { from { transform: translateX(-50%) rotate(0deg); } to { transform: translateX(-50%) rotate(360deg); } }
-
-        .office-window { position: absolute; top: 1%; left: 15%; width: 80px; height: 52px; z-index: 2; }
-        .window-pane { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(30,58,138,0.15), rgba(15,23,42,0.3)); border: 2px solid #334155; border-radius: 4px; }
-        .window-divider.v { position: absolute; top: 0; left: 50%; width: 2px; height: 100%; background: #334155; }
-        .window-divider.h { position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: #334155; }
-        .window-glow { position: absolute; inset: -4px; border-radius: 6px; background: radial-gradient(ellipse, rgba(96,165,250,0.04), transparent 70%); }
 
         /* ══════════════════════════════════════════════════ */
         /*  AGENT DESK SPRITES                               */
@@ -3326,39 +3548,35 @@ const VirtualOfficeContent: React.FC = () => {
         .office-character.offline { opacity: 0.3; filter: grayscale(0.8); }
         .office-character.offline .char-arm { animation: none; }
 
-        /* Coffee break animation */
-        .office-character.coffee-walk {
-          animation: coffeeTrip 8s ease-in-out forwards;
+        /* Coffee break — position-based transitions */
+        .agent-desk-sprite.coffee-transitioning {
+          transition: 
+            left 2s cubic-bezier(0.4, 0.0, 0.2, 1),
+            top 2s cubic-bezier(0.4, 0.0, 0.2, 1);
+          z-index: 15;
         }
-        .office-character.coffee-walk .char-arm {
-          animation: walkSwing 0.4s ease-in-out infinite alternate !important;
+
+        .office-character.pouring-coffee {
+          animation: pouringBob 1.5s ease-in-out infinite;
         }
+        .office-character.pouring-coffee .char-arm.right {
+          animation: pouringArm 1s ease-in-out infinite !important;
+        }
+        @keyframes pouringBob {
+          0%, 100% { transform: translateX(calc(-50% - 16px)) translateY(0); }
+          50% { transform: translateX(calc(-50% - 16px)) translateY(-2px); }
+        }
+        @keyframes pouringArm {
+          0%, 100% { transform: rotate(-5deg) translateY(0); }
+          50% { transform: rotate(10deg) translateY(-3px); }
+        }
+
         .coffee-cup-held {
           position: absolute;
           bottom: 4px;
           right: -10px;
           font-size: 8px;
-          opacity: 0;
-          animation: cupAppear 8s ease-in-out forwards;
-        }
-        @keyframes coffeeTrip {
-          0%   { transform: translateX(calc(-50% - 16px)) translateY(0); }
-          15%  { transform: translateX(calc(-50% - 16px)) translateY(-40px); }
-          30%  { transform: translateX(calc(-50% + 40px)) translateY(-60px); }
-          45%  { transform: translateX(calc(-50% + 40px)) translateY(-60px); }
-          60%  { transform: translateX(calc(-50% + 40px)) translateY(-60px); }
-          75%  { transform: translateX(calc(-50% - 16px)) translateY(-40px); }
-          90%  { transform: translateX(calc(-50% - 16px)) translateY(0); }
-          100% { transform: translateX(calc(-50% - 16px)) translateY(0); }
-        }
-        @keyframes walkSwing {
-          0%   { transform: rotate(-15deg); }
-          100% { transform: rotate(15deg); }
-        }
-        @keyframes cupAppear {
-          0%, 25%  { opacity: 0; }
-          35%, 80% { opacity: 1; }
-          90%, 100% { opacity: 0; }
+          opacity: 1;
         }
 
         .office-chair { position: absolute; bottom: 24px; left: 50%; transform: translateX(calc(-50% - 18px)); width: 22px; height: 24px; border-radius: 8px 8px 4px 4px; background: linear-gradient(180deg, #1e293b, #0f172a); box-shadow: 0 2px 4px rgba(0,0,0,0.3); z-index: 1; }
