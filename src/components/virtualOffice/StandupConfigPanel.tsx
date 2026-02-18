@@ -280,6 +280,14 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
                       : 'None scheduled'}
                 </span>
               </div>
+
+              {/* ── Timezone indicator ── */}
+              <div className="scp-tz-info">
+                <span style={{ fontSize: 11, color: '#71717a' }}>
+                  🌍 Timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                  {' '}({new Date().toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop()})
+                </span>
+              </div>
             </>
           )}
         </div>
@@ -489,6 +497,11 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
           background: rgba(129,140,248,0.06);
           border: 1px solid rgba(129,140,248,0.1);
           color: #a1a1aa; font-size: 12px;
+        }
+
+        /* ── Timezone info ── */
+        .scp-tz-info {
+          margin-top: 8px; padding-left: 14px;
         }
 
         /* ── Footer ── */
