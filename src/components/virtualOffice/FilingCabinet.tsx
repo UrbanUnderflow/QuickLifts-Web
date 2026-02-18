@@ -156,14 +156,11 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
                                                     fontWeight: 600,
                                                     padding: '1px 6px',
                                                     borderRadius: 8,
-                                                    background: (minutes as any).standupType === 'morning'
-                                                        ? 'rgba(245,158,11,0.12)' : 'rgba(139,92,246,0.12)',
-                                                    color: (minutes as any).standupType === 'morning'
-                                                        ? '#fbbf24' : '#a78bfa',
-                                                    border: `1px solid ${(minutes as any).standupType === 'morning'
-                                                        ? 'rgba(245,158,11,0.2)' : 'rgba(139,92,246,0.2)'}`,
+                                                    background: 'rgba(99,102,241,0.12)',
+                                                    color: '#a5b4fc',
+                                                    border: '1px solid rgba(99,102,241,0.2)',
                                                 }}>
-                                                    {(minutes as any).standupType === 'morning' ? '☀️' : '🌙'} Standup
+                                                    ⚡ Telemetry
                                                 </span>
                                             )}
                                         </span>

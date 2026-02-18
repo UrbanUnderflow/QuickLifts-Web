@@ -434,7 +434,7 @@ const STATUS_CONFIG = {
     badge: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
   },
   meeting: {
-    label: 'In Meeting',
+    label: 'Telemetry Check',
     color: '#8b5cf6',
     glow: 'rgba(139,92,246,0.5)',
     monitorGlow: 'rgba(139,92,246,0.6)',
@@ -1917,15 +1917,15 @@ const VirtualOfficeContent: React.FC = () => {
   const [manifestoContent, setManifestoContent] = useState<string | null>(null);
   const [manifestoLoading, setManifestoLoading] = useState(false);
 
-  // ── Standup detection state ──
+  // ── Telemetry check detection state ──
   const [activeStandup, setActiveStandup] = useState<GroupChat | null>(null);
   const [isStandupObserving, setIsStandupObserving] = useState(false);
 
-  // ── Queued standup (waits for active collaboration to finish) ──
+  // ── Queued telemetry check (waits for active collaboration to finish) ──
   const queuedStandupRef = useRef<GroupChat | null>(null);
   const [hasQueuedStandup, setHasQueuedStandup] = useState(false);
 
-  // ── Manual Standup Trigger state ──
+  // ── Manual Telemetry Trigger state ──
   const [triggeringStandup, setTriggeringStandup] = useState(false);
   const [standupTriggerResult, setStandupTriggerResult] = useState<'success' | 'error' | null>(null);
 
@@ -1945,12 +1945,12 @@ const VirtualOfficeContent: React.FC = () => {
       if (!res.ok) {
         // The API now returns detailed error info if the script crashed
         const errData = await res.json().catch(() => ({}));
-        console.error('[Standup] Script failed:', errData);
-        throw new Error(errData.error || 'Failed to start standup');
+        console.error('[Telemetry] Check script failed:', errData);
+        throw new Error(errData.error || 'Failed to start telemetry check');
       }
 
       const data = await res.json();
-      console.log('[Standup] Script started:', data);
+      console.log('[Telemetry] Check started:', data);
 
       // Safety timeout: if Firestore session never appears within 15s, reset
       // (API already waited 5s to verify script didn't crash immediately)
@@ -1964,7 +1964,7 @@ const VirtualOfficeContent: React.FC = () => {
         });
       }, 15_000);
     } catch (err: any) {
-      console.error('[Standup] Trigger failed:', err.message);
+      console.error('[Telemetry] Trigger failed:', err.message);
       setStandupTriggerResult('error');
       setTriggeringStandup(false);
       setTimeout(() => setStandupTriggerResult(null), 5000);
@@ -2301,7 +2301,7 @@ const VirtualOfficeContent: React.FC = () => {
     });
     setAgentPositions(updatedPositions);
 
-    // After animation completes, mark as "at desk" and check for queued standup
+    // After animation completes, mark as "at desk" and check for queued telemetry check
     const lastExitDelay = getExitStaggerDelay(0, agentIds.length);
     setTimeout(() => {
       const finalPositions = { ...updatedPositions };
@@ -2314,10 +2314,10 @@ const VirtualOfficeContent: React.FC = () => {
       setGroupChatId(null);
       setCollabStartTime(null);
 
-      // ── Check for queued standup ──
+      // ── Check for queued telemetry check ──
       const queued = queuedStandupRef.current;
       if (queued) {
-        console.log('[Standup] Collaboration ended — activating queued standup in 3s');
+        console.log('[Telemetry] Collaboration ended — activating queued check in 3s');
         // Brief pause so agents settle at desks before marching back to table
         setTimeout(() => {
           queuedStandupRef.current = null;
@@ -2328,7 +2328,7 @@ const VirtualOfficeContent: React.FC = () => {
           setCollabStartTime(new Date());
           setStandupTriggerResult('success');
 
-          // Animate agents to table for standup
+          // Animate agents to table for telemetry check
           const tablePositions = getAllTablePositions(agentIds);
           const standupPositions = { ...finalPositions };
           agentIds.forEach((agentId, index) => {
@@ -2368,8 +2368,8 @@ const VirtualOfficeContent: React.FC = () => {
     setMinutesPreviewData(null);
   }, []);
 
-  // ── Standup session listener ──
-  // Watches for active group chats with standupMeta (automated standups)
+  // ── Telemetry session listener ──
+  // Watches for active group chats with standupMeta (automated telemetry checks)
   // Use refs to avoid re-subscribing on every agentPositions/activeStandup change
   const activeStandupRef = useRef(activeStandup);
   activeStandupRef.current = activeStandup;
@@ -2404,12 +2404,12 @@ const VirtualOfficeContent: React.FC = () => {
             queuedStandupRef.current = standup;
             setHasQueuedStandup(true);
             setTriggeringStandup(false);
-            console.log('[Standup] Queued — waiting for collaboration to finish');
+            console.log('[Telemetry] Queued — waiting for collaboration to finish');
             return;
           }
 
-          // ── ACTIVATE the standup now ──
-          console.log('[Standup] Activating standup:', standup.id);
+          // ── ACTIVATE the telemetry check now ──
+          console.log('[Telemetry] Activating check:', standup.id);
           queuedStandupRef.current = null;
           setHasQueuedStandup(false);
           setActiveStandup(standup);
@@ -2449,8 +2449,8 @@ const VirtualOfficeContent: React.FC = () => {
           }, lastAgentDelay + 2000);
         }
       } else if (activeStandupRef.current) {
-        // Standup ended — animate agents back to desks
-        console.log('[Standup] Ended — animating agents back to desks');
+        // Telemetry check ended — animate agents back to desks
+        console.log('[Telemetry] Check ended — animating agents back to desks');
         setActiveStandup(null);
         setIsStandupObserving(false);
         setShowGroupChatModal(false);
@@ -2707,7 +2707,7 @@ const VirtualOfficeContent: React.FC = () => {
                 }}
                 onClick={handleTableClick}
               >
-                {activeStandup.standupMeta?.type === 'morning' ? '☀️ Morning Standup' : '🌙 Evening Standup'}
+                ⚡ Telemetry Check
                 {!isStandupObserving && <span style={{ marginLeft: 6, opacity: 0.8 }}>• Click to observe</span>}
               </div>
             )}
@@ -2738,7 +2738,7 @@ const VirtualOfficeContent: React.FC = () => {
                   gap: '6px',
                 }}
               >
-                ⏳ Standup queued — waiting for meeting to end
+                ⏳ Telemetry check queued — waiting for session to end
               </div>
             )}
             {/* Filing Cabinet Button */}
@@ -2754,7 +2754,7 @@ const VirtualOfficeContent: React.FC = () => {
 
             <div className="standup-config-btn" onClick={() => setShowStandupConfig(true)}>
               <Calendar className="w-4 h-4" />
-              <span>Standup Schedule</span>
+              <span>Telemetry Schedule</span>
             </div>
 
             {/* North Star */}
@@ -2801,11 +2801,11 @@ const VirtualOfficeContent: React.FC = () => {
                   <Play className="w-4 h-4" />
                 )}
                 <span>
-                  {triggeringStandup ? 'Starting...' :
-                    standupTriggerResult === 'success' ? 'Standup Started!' :
+                  {triggeringStandup ? 'Scanning...' :
+                    standupTriggerResult === 'success' ? 'Check Started!' :
                       standupTriggerResult === 'error' ? 'Failed — Retry?' :
-                        activeStandup ? 'Standup In Progress' :
-                          'Start Standup'}
+                        activeStandup ? 'Telemetry Check Active' :
+                          'Run Telemetry Check'}
                 </span>
               </div>
             </div>
