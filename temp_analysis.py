@@ -1,0 +1,5 @@
+import json; import pandas as pd; from datetime import datetime, timedelta; with open('/Users/noraclawdbot/Documents/GitHub/QuickLifts-Web/docs/research/escalation_records.json') as f: data = json.load(f); df = pd.DataFrame(data); df['alertCreatedAt'] = pd.to_datetime(df['alertCreatedAt']); df['clinicianOutreachAt'] = pd.to_datetime(df['clinicianOutreachAt']); df['sameDay'] = df['clinicianOutreachAt'] <= df['alertCreatedAt'] + timedelta(days=1); df['nextDay'] = df['clinicianOutreachAt'] <= df['alertCreatedAt'] + timedelta(days=2); result = df.groupby('demographicTags').agg({'sameDay': 'mean', 'nextDay': 'mean'}).reset_index(); result['sameDay'] *= 100; result['nextDay'] *= 100; analysis_file = '/Users/noraclawdbot/Documents/GitHub/QuickLifts-Web/docs/research/clinician_outreach_analysis.md'; with open(analysis_file, 'w') as f: f.write('# Clinician Outreach Analysis
+
+'); f.write('This document analyzes the same-day and next-day clinician outreach percentages by demographic group.
+
+'); f.write(result.to_markdown(index=False)); print('Analysis saved to', analysis_file)
