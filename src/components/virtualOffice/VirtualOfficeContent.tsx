@@ -12,7 +12,7 @@ import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
   ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
   History, ChevronRight, MessageSquare, Archive, X, ListOrdered, Activity, AlertTriangle,
-  BookOpen, ToggleLeft, ToggleRight, Power, Calendar, Package, Play, UserPlus
+  BookOpen, ToggleLeft, ToggleRight, Power, Calendar, Package, Play, UserPlus, Trash2, ShieldAlert
 } from 'lucide-react';
 import { RoundTable } from './RoundTable';
 import { GroupChatModal } from './GroupChatModal';
@@ -1900,6 +1900,12 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   const isOnCoffeeBreak = coffeePhase !== 'none';
   const [showProfile, setShowProfile] = useState(false);
 
+  // ─── Delete agent state ──────────────────────
+  type DeleteStep = 'idle' | 'confirm1' | 'confirm2' | 'confirm3' | 'deleting';
+  const [deleteStep, setDeleteStep] = useState<DeleteStep>('idle');
+  const [deleteNameInput, setDeleteNameInput] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+
   // Coffee station position (matches CSS: bottom: 14%, right: 12% → ~left: 85%, top: 78%)
   const coffeeStationPos = { x: 85, y: 78 };
 
@@ -2434,6 +2440,174 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
               <MessageSquare className="w-3.5 h-3.5" />
               Chat with {agent.displayName}
             </button>
+
+            {/* Delete Agent — multi-level confirmation */}
+            {agent.id !== 'antigravity' && agent.id !== 'nora' && (() => {
+              const PROTECTED = ['antigravity', 'nora'];
+              const isProtected = PROTECTED.includes(agent.id);
+              if (isProtected) return null;
+
+              return (
+                <div className="delete-agent-section">
+                  {deleteStep === 'idle' && (
+                    <button
+                      className="delete-agent-trigger"
+                      onClick={(e) => { e.stopPropagation(); setDeleteStep('confirm1'); }}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Remove Agent
+                    </button>
+                  )}
+
+                  {deleteStep === 'confirm1' && (
+                    <div className="delete-confirm-box">
+                      <div className="delete-confirm-header">
+                        <ShieldAlert className="w-4 h-4" />
+                        <span>Remove {agent.displayName}?</span>
+                      </div>
+                      <p className="delete-confirm-desc">
+                        This will stop the agent, remove its launchd service, and clean up its configuration.
+                        The soul file will be preserved as a backup.
+                      </p>
+                      <div className="delete-confirm-actions">
+                        <button
+                          className="delete-cancel-btn"
+                          onClick={(e) => { e.stopPropagation(); setDeleteStep('idle'); }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="delete-next-btn"
+                          onClick={(e) => { e.stopPropagation(); setDeleteStep('confirm2'); setDeleteNameInput(''); }}
+                        >
+                          Continue
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {deleteStep === 'confirm2' && (
+                    <div className="delete-confirm-box">
+                      <div className="delete-confirm-header">
+                        <AlertTriangle className="w-4 h-4" style={{ color: '#f59e0b' }} />
+                        <span>Type "{agent.displayName}" to confirm</span>
+                      </div>
+                      <input
+                        type="text"
+                        className="delete-name-input"
+                        placeholder={`Type ${agent.displayName} here...`}
+                        value={deleteNameInput}
+                        onChange={(e) => { setDeleteNameInput(e.target.value); setDeleteError(''); }}
+                        onClick={(e) => e.stopPropagation()}
+                        autoFocus
+                      />
+                      <div className="delete-confirm-actions">
+                        <button
+                          className="delete-cancel-btn"
+                          onClick={(e) => { e.stopPropagation(); setDeleteStep('idle'); setDeleteNameInput(''); }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="delete-next-btn"
+                          disabled={deleteNameInput.toLowerCase() !== agent.displayName.toLowerCase()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (deleteNameInput.toLowerCase() === agent.displayName.toLowerCase()) {
+                              setDeleteStep('confirm3');
+                            }
+                          }}
+                        >
+                          Continue
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {deleteStep === 'confirm3' && (
+                    <div className="delete-confirm-box delete-final">
+                      <div className="delete-confirm-header">
+                        <Trash2 className="w-4 h-4" style={{ color: '#ef4444' }} />
+                        <span>Final Confirmation</span>
+                      </div>
+                      <p className="delete-confirm-desc" style={{ color: '#fca5a5' }}>
+                        This action is <strong>irreversible</strong>. {agent.displayName}'s service will be
+                        stopped and removed from the system.
+                      </p>
+                      {deleteError && (
+                        <div className="delete-error">{deleteError}</div>
+                      )}
+                      <div className="delete-confirm-actions">
+                        <button
+                          className="delete-cancel-btn"
+                          onClick={(e) => { e.stopPropagation(); setDeleteStep('idle'); setDeleteNameInput(''); setDeleteError(''); }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="delete-final-btn"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setDeleteStep('deleting');
+                            setDeleteError('');
+                            try {
+                              const res = await fetch('/api/agent/control', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ agentId: agent.id, action: 'stop' }),
+                              });
+                              // Don't fail if already stopped
+                              if (!res.ok) {
+                                const data = await res.json().catch(() => ({}));
+                                console.warn('Stop returned non-ok:', data);
+                              }
+
+                              const delRes = await fetch('/api/agent/onboard', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  action: 'delete',
+                                  agentId: agent.id,
+                                  displayName: agent.displayName,
+                                }),
+                              });
+                              const delData = await delRes.json();
+                              if (!delData.success) {
+                                throw new Error(delData.error || 'Deletion failed');
+                              }
+
+                              // Remove presence from Firestore
+                              const { deleteDoc, doc: fbDoc } = await import('firebase/firestore');
+                              await deleteDoc(fbDoc(db, 'agent-presence', agent.id));
+
+                              alert(`${agent.emoji} ${agent.displayName} has been removed.\n\nCleanup:\n${delData.results.join('\n')}`);
+                              setDeleteStep('idle');
+                              setDeleteNameInput('');
+                            } catch (err: any) {
+                              console.error('Delete agent failed:', err);
+                              setDeleteError(err.message || 'Failed to delete agent');
+                              setDeleteStep('confirm3');
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Remove {agent.displayName} Permanently
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {deleteStep === 'deleting' && (
+                    <div className="delete-confirm-box">
+                      <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                        <Loader2 className="w-5 h-5" style={{ margin: '0 auto 8px', animation: 'spin 1s linear infinite', color: '#ef4444' }} />
+                        <p style={{ color: '#fca5a5', fontSize: 12 }}>Removing {agent.displayName}...</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Footer */}
             <div className="detail-footer">
@@ -5402,6 +5576,144 @@ const VirtualOfficeContent: React.FC = () => {
           background: rgba(139,92,246,0.2);
           border-color: rgba(139,92,246,0.4);
           color: #c4b5fd;
+        }
+
+        /* ─── Delete Agent Confirmation ─── */
+        .delete-agent-section {
+          margin-top: 6px;
+        }
+        .delete-agent-trigger {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 6px 0;
+          background: none;
+          border: 1px solid rgba(239,68,68,0.12);
+          border-radius: 8px;
+          color: #6b7280;
+          font-size: 10px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .delete-agent-trigger:hover {
+          color: #fca5a5;
+          border-color: rgba(239,68,68,0.3);
+          background: rgba(239,68,68,0.06);
+        }
+        .delete-confirm-box {
+          padding: 10px;
+          border-radius: 8px;
+          background: rgba(239,68,68,0.06);
+          border: 1px solid rgba(239,68,68,0.2);
+          animation: fadeIn 0.15s ease;
+        }
+        .delete-confirm-box.delete-final {
+          background: rgba(239,68,68,0.1);
+          border-color: rgba(239,68,68,0.35);
+        }
+        .delete-confirm-header {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          font-weight: 700;
+          color: #fca5a5;
+          margin-bottom: 6px;
+        }
+        .delete-confirm-desc {
+          font-size: 10px;
+          color: #9ca3af;
+          line-height: 1.5;
+          margin: 0 0 8px 0;
+        }
+        .delete-name-input {
+          width: 100%;
+          padding: 8px 10px;
+          border-radius: 6px;
+          border: 1px solid rgba(239,68,68,0.25);
+          background: rgba(0,0,0,0.3);
+          color: #e7e9ea;
+          font-size: 12px;
+          outline: none;
+          margin-bottom: 8px;
+          font-family: monospace;
+        }
+        .delete-name-input:focus {
+          border-color: rgba(239,68,68,0.5);
+          box-shadow: 0 0 0 2px rgba(239,68,68,0.1);
+        }
+        .delete-name-input::placeholder {
+          color: #4b5563;
+        }
+        .delete-confirm-actions {
+          display: flex;
+          gap: 6px;
+          justify-content: flex-end;
+        }
+        .delete-cancel-btn {
+          padding: 5px 12px;
+          border-radius: 6px;
+          border: 1px solid rgba(63,63,70,0.4);
+          background: rgba(255,255,255,0.04);
+          color: #9ca3af;
+          font-size: 10px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .delete-cancel-btn:hover {
+          background: rgba(255,255,255,0.08);
+          color: #e7e9ea;
+        }
+        .delete-next-btn {
+          padding: 5px 12px;
+          border-radius: 6px;
+          border: 1px solid rgba(245,158,11,0.3);
+          background: rgba(245,158,11,0.12);
+          color: #fbbf24;
+          font-size: 10px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .delete-next-btn:hover:not(:disabled) {
+          background: rgba(245,158,11,0.2);
+          border-color: rgba(245,158,11,0.5);
+        }
+        .delete-next-btn:disabled {
+          opacity: 0.35;
+          cursor: not-allowed;
+        }
+        .delete-final-btn {
+          padding: 5px 12px;
+          border-radius: 6px;
+          border: 1px solid rgba(239,68,68,0.5);
+          background: linear-gradient(135deg, rgba(239,68,68,0.25), rgba(185,28,28,0.2));
+          color: #fca5a5;
+          font-size: 10px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.15s;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .delete-final-btn:hover {
+          background: linear-gradient(135deg, rgba(239,68,68,0.4), rgba(185,28,28,0.35));
+          color: #fecaca;
+          box-shadow: 0 2px 12px rgba(239,68,68,0.2);
+        }
+        .delete-error {
+          padding: 6px 8px;
+          border-radius: 4px;
+          background: rgba(239,68,68,0.12);
+          border: 1px solid rgba(239,68,68,0.3);
+          color: #fca5a5;
+          font-size: 10px;
+          margin-bottom: 8px;
         }
 
         /* ══════════════════════════════════════════════════ */

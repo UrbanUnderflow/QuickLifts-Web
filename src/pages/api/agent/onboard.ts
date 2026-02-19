@@ -224,6 +224,92 @@ exec node scripts/agentRunner.js
             });
         }
 
+        if (action === 'delete') {
+            // Step 3: Delete an agent — remove infrastructure but preserve soul backup
+            const PROTECTED = ['nora', 'antigravity'];
+            if (PROTECTED.includes(agentId)) {
+                return res.status(403).json({ error: `Cannot delete protected agent: ${agentId}` });
+            }
+
+            const results: string[] = [];
+
+            // 3a. Remove the launchd plist
+            const plistPath = path.join(LAUNCH_AGENTS_DIR, `com.quicklifts.agent.${agentId}.plist`);
+            if (fs.existsSync(plistPath)) {
+                // Try to bootout first (in case it's loaded)
+                try {
+                    const uid = process.getuid?.() ?? 501;
+                    await execAsync(`launchctl bootout gui/${uid} "${plistPath}"`);
+                } catch (e: any) {
+                    // Ignore if already not loaded
+                    const msg = e?.stderr || e?.message || '';
+                    if (!msg.includes('No such process') && !msg.includes('Could not find')) {
+                        console.warn('bootout warning:', msg);
+                    }
+                }
+                fs.unlinkSync(plistPath);
+                results.push(`✅ Removed launchd plist`);
+            } else {
+                results.push(`⚠️ No launchd plist found — skipped`);
+            }
+
+            // 3b. Remove from openclaw.json
+            try {
+                const config = JSON.parse(fs.readFileSync(OPENCLAW_CONFIG, 'utf-8'));
+                const before = config.agents?.list?.length || 0;
+                config.agents.list = (config.agents.list || []).filter((a: any) => a.id !== agentId);
+                const after = config.agents.list.length;
+
+                if (before !== after) {
+                    fs.writeFileSync(OPENCLAW_CONFIG, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+                    results.push(`✅ Removed ${agentId} from openclaw.json`);
+                } else {
+                    results.push(`⚠️ ${agentId} not found in openclaw.json — skipped`);
+                }
+            } catch (configErr: any) {
+                results.push(`⚠️ Could not update openclaw.json: ${configErr.message}`);
+            }
+
+            // 3c. Remove start script
+            const scriptPath = path.join(PROJECT_DIR, 'scripts', `start-agent-${agentId}.sh`);
+            if (fs.existsSync(scriptPath)) {
+                fs.unlinkSync(scriptPath);
+                results.push(`✅ Removed start script`);
+            }
+
+            // 3d. Preserve soul file as backup
+            const soulPath = path.join(PROJECT_DIR, 'docs', 'agents', agentId, 'soul.md');
+            if (fs.existsSync(soulPath)) {
+                const backupPath = soulPath + `.bak.${new Date().toISOString().split('T')[0]}`;
+                fs.renameSync(soulPath, backupPath);
+                results.push(`📦 Soul file preserved as ${path.basename(backupPath)}`);
+            }
+
+            // 3e. Clean up log files
+            const outLog = `/tmp/quicklifts-agent-${agentId}.out.log`;
+            const errLog = `/tmp/quicklifts-agent-${agentId}.err.log`;
+            [outLog, errLog].forEach(logPath => {
+                if (fs.existsSync(logPath)) {
+                    fs.unlinkSync(logPath);
+                }
+            });
+            results.push(`✅ Cleaned up log files`);
+
+            // 3f. Remove OpenClaw workspace (but keep a note)
+            const openClawWorkspace = path.join(require('os').homedir(), '.openclaw', `workspace-${agentId}`);
+            if (fs.existsSync(openClawWorkspace)) {
+                // Don't fully remove — just add a tombstone
+                fs.writeFileSync(
+                    path.join(openClawWorkspace, 'REMOVED.md'),
+                    `# Agent Removed\n\nAgent \`${agentId}\` (${displayName}) was removed on ${new Date().toISOString()}\n`,
+                    'utf-8'
+                );
+                results.push(`✅ Marked OpenClaw workspace as removed`);
+            }
+
+            return res.status(200).json({ success: true, results });
+        }
+
         return res.status(400).json({ error: `Unknown action: ${action}` });
     } catch (err: any) {
         console.error('Onboard error:', err);
