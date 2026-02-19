@@ -26,13 +26,14 @@ interface AgentInfo {
   displayName: string;
   emoji: string;
   color: string;
+  deliverableDir?: string;
 }
 
 const AGENTS: AgentInfo[] = [
-  { id: 'sage', displayName: 'Sage', emoji: '🧬', color: '#34d399' },
-  { id: 'nora', displayName: 'Nora', emoji: '⚡', color: '#22c55e' },
-  { id: 'scout', displayName: 'Scout', emoji: '🕵️', color: '#f59e0b' },
-  { id: 'solara', displayName: 'Solara', emoji: '❤️‍🔥', color: '#f43f5e' },
+  { id: 'sage', displayName: 'Sage', emoji: '🧬', color: '#34d399', deliverableDir: 'docs/sage/deliverables' },
+  { id: 'nora', displayName: 'Nora', emoji: '⚡', color: '#22c55e', deliverableDir: 'docs/agents/nora/deliverables' },
+  { id: 'scout', displayName: 'Scout', emoji: '🕵️', color: '#f59e0b', deliverableDir: 'docs/agents/scout/deliverables' },
+  { id: 'solara', displayName: 'Solara', emoji: '❤️‍🔥', color: '#f43f5e', deliverableDir: 'docs/agents/solara/deliverables' },
 ];
 
 const ARTIFACT_EMOJI: Record<string, string> = {
@@ -103,7 +104,7 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
     ? deliverables
     : deliverables.filter((d) => d.agentId === filterAgent);
 
-  const getAgent = (id: string) => AGENTS.find((a) => a.id === id)!;
+  const getAgent = (id: string) => AGENTS.find((a) => a.id === id) || AGENTS[0];
 
   const handleExpand = async (d: Deliverable) => {
     if (expandedId === d.id) {
@@ -115,12 +116,23 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
     setFileLoading(true);
     try {
       const agent = getAgent(d.agentId);
-      const res = await fetch(`/api/read-file?path=${encodeURIComponent(`${agent.deliverableDir}/${d.filename}`)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setFileContent(data.content || '(empty file)');
+      const filePath = d.filePath?.trim();
+      const deliverableDir = (agent?.deliverableDir || '').trim().replace(/\/+$/, '');
+      const fullFilePath = filePath
+        ? deliverableDir && !filePath.includes('/') && !filePath.startsWith('http://') && !filePath.startsWith('https://')
+          ? `${deliverableDir}/${filePath}`
+          : filePath
+        : '';
+      if (!d.filePath) {
+        setFileContent('⚠️ No file path recorded for this deliverable.');
       } else {
-        setFileContent(`⚠️ File not found: ${d.filename}`);
+        const res = await fetch(`/api/read-file?path=${encodeURIComponent(fullFilePath)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setFileContent(data.content || '(empty file)');
+        } else {
+          setFileContent(`⚠️ File not found: ${fullFilePath}`);
+        }
       }
     } catch {
       setFileContent('Failed to load file content.');
