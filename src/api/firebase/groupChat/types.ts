@@ -35,6 +35,17 @@ export interface GroupChatMessage {
   broadcastedAt?: Timestamp | Date;
   responses: Record<string, AgentResponse>;
   allCompleted: boolean;
+  turnState?: GroupChatTurnState;
+}
+
+export interface GroupChatTurnState {
+  participants: string[];
+  turnOrder: string[];
+  coordinator: string;
+  turnIndex: number;
+  currentTurnAgent: string;
+  turnSlaMs: number;
+  currentTurnStartedAt?: Timestamp | Date;
 }
 
 export interface GroupChatCommand {
@@ -50,6 +61,10 @@ export interface GroupChatCommand {
   messageId: string;
   context: {
     otherAgents: string[];
+    mentionedAgents?: string[];
+    turnState?: GroupChatTurnState;
+    turnSlaMs?: number;
+    followUpDepth?: number;
     previousMessages?: Array<{
       from: string;
       content: string;

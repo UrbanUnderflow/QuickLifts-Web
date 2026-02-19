@@ -46,6 +46,12 @@ Before marking any task complete:
 - Did the expected files get created/modified?
 - Can you confirm the change in Firestore/the build/the UI?
 
+### 6. Claims Must Be Evidence-Backed
+For any lead/prospect/partnership claim:
+- Use `docs/partnership/lead-source-of-truth.md` as canonical.
+- Cite claims as `[SOT: LEAD-####, EVID-####]`.
+- If evidence is missing, mark the statement as `Unverified` and log evidence before publishing.
+
 ---
 
 ## Environment Knowledge
@@ -80,6 +86,7 @@ Before marking any task complete:
 | `src/pages/admin/` | Admin UI including Virtual Office |
 | `netlify/functions/` | Serverless API endpoints |
 | `docs/` | Documentation and reference docs |
+| `docs/partnership/lead-source-of-truth.md` | Canonical evidence ledger for lead/prospect claims |
 | `.env.local` | Environment variables (NEXT_PUBLIC_* prefix) |
 
 ### OpenClaw
@@ -124,6 +131,7 @@ Before marking any task complete:
 - **[2026-02-11] All** — Running multiple OpenClaw sessions simultaneously causes session lock conflicts. Always check for duplicate agent processes before starting. Use `launchctl kickstart -k` to restart cleanly.
 - **[2026-02-12] All** — When a step output says "failed" or "missing", do NOT mark it as completed. The agentRunner now detects failure signals in outputs and flags them. Investigate and retry before moving on.
 - **[2026-02-12] All** — The Virtual Office Task History modal now shows ⚠️ amber warnings for steps that contain failure signals. If you see these in your past tasks, those steps need rework.
+- **[2026-02-19] Sage** — A partnership brief included a fabricated claim ("expressed interest in collaboration") because it was not tied to a canonical evidence log. Use `docs/partnership/lead-source-of-truth.md` and cite `[SOT: LEAD-####, EVID-####]` before publishing any lead claim.
 
 - **[2026-02-13] Nora** — Stalled Sage runner traced to stale `.jsonl.lock` files plus a missing `.env.local`. If OpenClaw reports "session file locked" + inactivity, delete the agent via `openclaw agents delete <id> --force`, recreate it from the workflow config, restore `.env.local`, then relaunch the runner to republish presence/feeds.
 - **[2026-02-13] Nora** — Step "Inspect recent runner logs (e.g., the prior session’s stderr/stdout) to identify why Sage’s OpenClaw process stalled after 120s." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
@@ -225,5 +233,5 @@ Before marking any task complete:
 
 ---
 
-*Last updated: 2026-02-12 by system*
+*Last updated: 2026-02-19 by codex*
 *Next review: Agents should review at start of each session*

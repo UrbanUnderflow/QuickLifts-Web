@@ -39,6 +39,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     ? (agentNames[senderAgentId] || (message as any).fromName || senderAgentId)
     : '';
   const senderEmoji = isFromAgent ? (agentEmojis[senderAgentId] || '🤖') : '';
+  const hasAgentMessageContent = isFromAgent && Boolean(message.content?.trim());
 
   return (
     <>
@@ -57,6 +58,22 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         /* Admin (You) message — outgoing, right-aligned */
         <div className="rt-bubble rt-bubble-out">
           <div className="rt-bubble-content rt-out">
+            <p className="rt-bubble-text">{message.content}</p>
+            <span className="rt-bubble-time">{formatTime(message.createdAt)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Agent-authored message body */}
+      {hasAgentMessageContent && (
+        <div className="rt-bubble rt-bubble-in">
+          <div className="rt-avatar" style={{ background: `${senderColor}18`, borderColor: `${senderColor}40` }}>
+            <span>{senderEmoji}</span>
+          </div>
+          <div className="rt-bubble-content rt-in">
+            <div className="rt-bubble-sender">
+              <span style={{ color: senderColor }}>{senderName}</span>
+            </div>
             <p className="rt-bubble-text">{message.content}</p>
             <span className="rt-bubble-time">{formatTime(message.createdAt)}</span>
           </div>

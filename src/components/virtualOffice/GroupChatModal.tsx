@@ -32,6 +32,33 @@ const AGENT_EMOJIS: Record<string, string> = {
   sage: '🧬',
 };
 
+const COMPOSE_BASE_MESSAGE_BUDGET_CHARS = 2400;
+const COMPOSE_FILE_ATTACHMENT_BUDGET_CHARS = 3200;
+const COMPOSE_MINUTES_ATTACHMENT_BUDGET_CHARS = 2400;
+const COMPOSE_TOTAL_MESSAGE_BUDGET_CHARS = 7600;
+
+const countLines = (text: string): number => {
+  if (!text) return 0;
+  return text.split(/\r\n|\r|\n/).length;
+};
+
+const clampHeadTail = (text: string, maxChars: number): string => {
+  const raw = String(text || '');
+  if (!raw) return '';
+  if (!Number.isFinite(maxChars) || maxChars <= 0 || raw.length <= maxChars) return raw;
+
+  const headLen = Math.max(24, Math.floor(maxChars * 0.74));
+  const tailLen = Math.max(0, maxChars - headLen - 3);
+  if (tailLen <= 0) return `${raw.slice(0, Math.max(1, maxChars - 1)).trimEnd()}…`;
+  return `${raw.slice(0, headLen).trimEnd()}\n…\n${raw.slice(-tailLen).trimStart()}`;
+};
+
+const buildCompactionMeta = (label: string, originalText: string, compactedText: string): string => {
+  if (!originalText) return '';
+  if (originalText.length <= compactedText.length) return '';
+  return `[${label} auto-compacted from ${originalText.length.toLocaleString()} chars / ${countLines(originalText).toLocaleString()} lines]`;
+};
+
 export const GroupChatModal: React.FC<GroupChatModalProps> = ({
   chatId,
   participants,
@@ -238,13 +265,37 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
     if (!inputText.trim() || sending) return;
     setSending(true);
     try {
-      let messageContent = inputText.trim();
+      const rawBaseMessage = inputText.trim();
+      const compactBaseMessage = clampHeadTail(rawBaseMessage, COMPOSE_BASE_MESSAGE_BUDGET_CHARS);
+      let messageContent = compactBaseMessage;
+      const baseMeta = buildCompactionMeta('message', rawBaseMessage, compactBaseMessage);
+      if (baseMeta) messageContent += `\n\n${baseMeta}`;
+
       if (attachedFile) {
-        messageContent += `\n\n--- ATTACHED FILE: ${attachedFile.path} ---\n\`\`\`\n${attachedFile.content}\n\`\`\`\n--- END FILE ---`;
+        const rawFileContent = String(attachedFile.content || '');
+        const compactFileContent = clampHeadTail(rawFileContent, COMPOSE_FILE_ATTACHMENT_BUDGET_CHARS);
+        const fileMeta = buildCompactionMeta('file', rawFileContent, compactFileContent);
+        messageContent += `\n\n--- ATTACHED FILE: ${attachedFile.path} ---`;
+        if (fileMeta) messageContent += `\n${fileMeta}`;
+        messageContent += `\n\`\`\`\n${compactFileContent}\n\`\`\`\n--- END FILE ---`;
       }
       if (attachedMinutes) {
         const md = meetingMinutesService.toMarkdown(attachedMinutes);
-        messageContent += `\n\n--- ATTACHED MEETING MINUTES ---\n${md}\n--- END MEETING MINUTES ---`;
+        const normalizedMd = md.replace(/\n{3,}/g, '\n\n').trim();
+        const compactMinutes = clampHeadTail(normalizedMd, COMPOSE_MINUTES_ATTACHMENT_BUDGET_CHARS);
+        const minutesMeta = buildCompactionMeta('meeting minutes', normalizedMd, compactMinutes);
+        messageContent += `\n\n--- ATTACHED MEETING MINUTES ---`;
+        if (minutesMeta) messageContent += `\n${minutesMeta}`;
+        messageContent += `\n${compactMinutes}\n--- END MEETING MINUTES ---`;
+      }
+
+      if (messageContent.length > COMPOSE_TOTAL_MESSAGE_BUDGET_CHARS) {
+        const rawComposed = messageContent;
+        const compactComposed = clampHeadTail(rawComposed, COMPOSE_TOTAL_MESSAGE_BUDGET_CHARS);
+        const totalMeta = buildCompactionMeta('total prompt', rawComposed, compactComposed);
+        messageContent = totalMeta
+          ? `${compactComposed}\n\n${totalMeta}`
+          : compactComposed;
       }
 
       if (chatMode === 'brainstorm') {

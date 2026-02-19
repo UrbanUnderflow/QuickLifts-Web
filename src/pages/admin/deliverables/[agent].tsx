@@ -276,7 +276,8 @@ function sanitizeRecordedFilePath(rawPath?: string): string {
         next = next.slice(1, -1);
     }
 
-    return next.replace(/^\.\/+/, '');
+    const trimmed = next.replace(/^\.\/+/, '');
+    return trimmed.replace(/^docs\/agents\/sage\/deliverables(?=$|\/)/, 'docs/sage/deliverables');
 }
 
 async function fetchFileContent(path: string): Promise<string> {
