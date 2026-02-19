@@ -197,6 +197,8 @@ Before marking any task complete:
 - **[2026-02-19] Scout** — Step "Research and plan: Create shared glossary and preflight dependency checklist documents" failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=1 error="Error: Unknown". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-19] Scout** — Step "Execute: Create shared glossary and preflight dependency checklist documents" failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=1 error="Error: Unknown". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-19] Sage** — Step "Gather every recent artifact tied to the Partnerships North Star (agent briefs, kanban updates, research memos, user data exports) into a working folder for reference." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 300s". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-19] Scout** — Step "Research and plan: Create shared glossary and preflight dependency checklist documents" failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=0 error="Error: Unknown". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-19] Scout** — Step "Execute: Create shared glossary and preflight dependency checklist documents" failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=1 error="Error: Unknown". Rewrite error: "invokeOpenClaw is not defined"
 ---
 
 ## Operational Rules
