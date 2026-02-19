@@ -188,6 +188,7 @@ Before marking any task complete:
 - **[2026-02-19] Sage** — Step "Execute: Synthesis: Strategic analysis of "Close 3 strategic partnerships with revenue or co-marketing commitments by end of quarter"" still had issues after 2 retries. Output signals: \berror\b. Last output: "⚠️ API provider returned a billing error — your API key has run out of credits or has an insufficient balance. Check you..."
 - **[2026-02-19] Sage** — Step "Review and validate: Synthesis: Strategic analysis of "Close 3 strategic partnerships with revenue or co-marketing commitments by end of quarter"" still had issues after 2 retries. Output signals: \berror\b. Last output: "⚠️ API provider returned a billing error — your API key has run out of credits or has an insufficient balance. Check you..."
 - **[2026-02-19] Sage** — Step "Research and plan: Synthesis: Strategic analysis of "nsure every partnership clears Sage's research bar — no brand misalignment, no regulatory gray areas"" still had issues after 2 retries. Output signals: \berror\b. Last output: "⚠️ API provider returned a billing error — your API key has run out of credits or has an insufficient balance. Check you..."
+- **[2026-02-19] Sage** — Step "Execute: Synthesis: Strategic analysis of "nsure every partnership clears Sage's research bar — no brand misalignment, no regulatory gray areas"" still had issues after 2 retries. Output signals: \berror\b. Last output: "⚠️ API provider returned a billing error — your API key has run out of credits or has an insufficient balance. Check you..."
 ---
 
 ## Operational Rules
