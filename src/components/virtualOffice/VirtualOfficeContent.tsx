@@ -1746,22 +1746,30 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
     setPowerLoading(true);
     try {
       if (isOnline) {
-        // Stop: send command + call API to bootout launchd
-        await presenceService.sendCommand(agent.id, 'command', 'stop');
+        // Stop: disable runner in presence, stop process, and send stop command
+        await presenceService.setRunnerEnabled(agent.id, false);
         await presenceService.setOffline(agent.id);
-        await fetch('/api/agent/control', {
+        await presenceService.sendCommand(agent.id, 'command', 'stop');
+        const stopResp = await fetch('/api/agent/control', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ agentId: agent.id, action: 'stop' }),
         });
+        if (!stopResp.ok) {
+          throw new Error(`Agent control stop failed: ${stopResp.status}`);
+        }
       } else {
-        // Start: set to idle + call API to bootstrap launchd
-        await presenceService.setIdle(agent.id, 'Starting up...');
-        await fetch('/api/agent/control', {
+        // Start: bring runner online and bootstrap launchd
+        const startResp = await fetch('/api/agent/control', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ agentId: agent.id, action: 'start' }),
         });
+        if (!startResp.ok) {
+          throw new Error(`Agent control start failed: ${startResp.status}`);
+        }
+        await presenceService.setRunnerEnabled(agent.id, true);
+        await presenceService.setIdle(agent.id, 'Starting up...');
       }
     } catch (err) {
       console.error('Power toggle failed:', err);

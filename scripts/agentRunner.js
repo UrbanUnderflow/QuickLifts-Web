@@ -1315,6 +1315,9 @@ async function noraTaskManagerSweep() {
  * Commands land in the `agent-commands` collection addressed to this agent.
  */
 const RUNNER_START_TIME = Date.now();
+var runnerEnabled = true;
+var runnerEnabledCacheMs = 0;
+const RUNNER_ENABLED_CACHE_MS = 2_000;
 
 function startCommandListener() {
     console.log('📡 Listening for incoming commands...');
@@ -1354,6 +1357,40 @@ function startCommandListener() {
             }
         });
     });
+}
+
+/**
+ * Resolve whether this runner is currently allowed to process work.
+ * Defaults to true, and falls back to local cache when Firestore is unavailable.
+ */
+async function isRunnerEnabled() {
+    var now = Date.now();
+    if (runnerEnabledCacheMs && now - runnerEnabledCacheMs < RUNNER_ENABLED_CACHE_MS) {
+        return runnerEnabled;
+    }
+
+    try {
+        var snap = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
+        var raw = snap.data()?.runnerEnabled;
+        if (typeof raw === 'boolean') {
+            runnerEnabled = raw;
+        }
+    } catch (err) {
+        // Non-blocking fallback: keep in-memory value
+    }
+
+    runnerEnabledCacheMs = now;
+    return runnerEnabled;
+}
+
+async function setRunnerEnabled(enabled) {
+    runnerEnabled = enabled;
+    runnerEnabledCacheMs = Date.now();
+    try {
+        await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).set({ runnerEnabled: enabled }, { merge: true });
+    } catch (err) {
+        console.log(`   ⚠️ Could not persist runnerEnabled flag: ${err?.message || err}`);
+    }
 }
 
 /**
