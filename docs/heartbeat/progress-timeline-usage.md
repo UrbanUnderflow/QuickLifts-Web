@@ -5,7 +5,7 @@ _Last updated: 2026-02-16_
 ## Overview
 The Progress Timeline is the primary “heartbeat feed” for three-beat updates across every agent. It stitches together:
 
-- **Live Beats** (Firestore: `progress-timeline`) — Act I/II/III + signal spikes with artifacts, color semantics, and lens tags.
+- **Live Beats** (Firestore: `progress-timeline`) — Act I/II/III + signal spikes with artifacts, color semantics, lens tags, alignment references, and Radius markers so Partnership Pulse + Partner Pulse capsules share one narrative arc.
 - **Hourly Snapshots** (Firestore: `progress-snapshots`) — automation-generated hourly rollups showing which beat closed, current color, and a short note.
 - **Nudge Log** (Firestore: `nudge-log`) — Nora’s hourly objective tracker + manual nudges rendered inline in the panel.
 
