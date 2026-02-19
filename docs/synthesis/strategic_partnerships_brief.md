@@ -1,7 +1,7 @@
 # Strategic Partnerships Brief
 
 ## Overview
-This brief provides a synthesis of insights and findings to guide Pulse Fitness in securing three strategic partnerships with revenue or co-marketing commitments by the end of the quarter. The focus is to align with partners that resonate with our mission in movement, wellness, and community engagement.
+This brief provides a synthesis of insights and findings to guide Pulse Fitness in securing three strategic partnerships with revenue or co-marketing commitments by the end of the quarter. The focus is to align with partners that resonate with our mission in movement, wellness, and community engagement—science-backed proof plus community-native ritual.
 
 ## Key Findings
 - **Top Prospects**: FitWell, HealthSync, and WearTech show the highest potential for strategic collaboration.

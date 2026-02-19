@@ -1,7 +1,7 @@
 # Strategic Partnership Pitch Brief
 
 ## Overview
-Pulse only partners with proof-backed, community-native products—no testimonial-only evidence, no regulatory smoke, no exceptions. Proof buys you a seat; community-native impact keeps it. This brief synthesizes key insights from Pulse Fitness's data and brand positioning to inform strategic partnerships with companies that share our dedication to movement, wellness, and community.
+Pulse only partners with science-backed and community-native products—no testimonial-only evidence, no regulatory smoke, no exceptions. Proof buys you a seat; community-native impact keeps it. This brief synthesizes key insights from Pulse Fitness's data and brand positioning to inform strategic partnerships with companies that share our dedication to movement, wellness, and community.
 
 ## Key Insights
 1. **User Engagement**
