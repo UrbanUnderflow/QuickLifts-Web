@@ -178,6 +178,7 @@ Before marking any task complete:
 - **[2026-02-18] Sage** — Step "Research and identify 3-5 organizations in the health and wellness sector that align with Pulse’s telemetry-first strategy." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-18] Sage** — Step "For each identified organization, gather information on their target audience and how it aligns with Pulse’s audience." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-18] Sage** — Step "Review existing partnership notes, telemetry strategy docs, and recent market intel to identify 6-8 candidate organizations spanning collegiate athletics, wellness platforms, and recovery tech vendors." failed even after rewrite. Original error: "OpenClaw stalled: no activity for 120s". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-19] Sage** — Step "Research and plan: Create brief on potential health partnerships for strategic alignment" still had issues after 2 retries. Output signals: \berror\b. Last output: "⚠️ API provider returned a billing error — your API key has run out of credits or has an insufficient balance. Check you..."
 ---
 
 ## Operational Rules

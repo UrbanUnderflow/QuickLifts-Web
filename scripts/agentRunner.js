@@ -89,7 +89,7 @@ const OPENCLAW_MODEL_SYNC_MS = parseInt(process.env.OPENCLAW_MODEL_SYNC_MS || '6
 const MAX_FOLLOW_UP_DEPTH = 5; // Max rounds of agent-to-agent @mention follow-ups
 const MAX_FOLLOW_UP_DEPTH_EXEC = 2; // Execution-mode: reduced but still allows one back-and-forth
 const MAX_SELF_CORRECTION_RETRIES = 2; // Retry attempts when step output contains failure signals
-const STEP_INACTIVITY_TIMEOUT_MS = 120_000; // Kill step if no stderr activity for 120s
+const STEP_INACTIVITY_TIMEOUT_MS = parseInt(process.env.STEP_INACTIVITY_TIMEOUT_MS || '300000', 10); // Kill step if no stdout/stderr activity for 5m
 const MAX_STEP_REWRITE_ATTEMPTS = 1; // Rewrite-from-different-angle attempts on crash/timeout
 const MAX_CONSECUTIVE_FAILURES = 2; // Stop task after this many steps fail in a row
 const VALIDATION_MODEL = process.env.VALIDATION_MODEL || 'gpt-4o-mini'; // Cheap model for post-task validation
@@ -2749,9 +2749,9 @@ ${smokeOutput}`.substring(0, 2000);
                         setTimeout(() => child.kill('SIGKILL'), 5000);
                     }, 600_000);
 
-                    // Tier 3: Inactivity watchdog — kill if no stderr activity for 120s
+                    // Tier 3: Inactivity watchdog — kill if no stream activity for too long
                     // Also checks for manual force-recovery signal
-                    let lastStderrActivity = Date.now();
+                    let lastActivity = Date.now();
                     const inactivityCheck = setInterval(() => {
                         // Manual force-recovery
                         if (_forceRecoveryRequested) {
@@ -2766,7 +2766,7 @@ ${smokeOutput}`.substring(0, 2000);
                             reject(new Error(`Force recovery: ${reason}`));
                             return;
                         }
-                        if (Date.now() - lastStderrActivity > STEP_INACTIVITY_TIMEOUT_MS) {
+                        if (Date.now() - lastActivity > STEP_INACTIVITY_TIMEOUT_MS) {
                             clearInterval(inactivityCheck);
                             clearTimeout(timeout);
                             console.log(`   ⏰ Inactivity watchdog: No activity for ${STEP_INACTIVITY_TIMEOUT_MS / 1000}s — killing process`);
@@ -2778,12 +2778,13 @@ ${smokeOutput}`.substring(0, 2000);
 
                     child.stdout.on('data', (chunk) => {
                         stdout += chunk.toString();
+                        lastActivity = Date.now();
                         if (stdout.length > maxLen) { clearTimeout(timeout); child.kill('SIGKILL'); reject(new Error('OpenClaw output exceeded 10MB')); }
                     });
                     child.stderr.on('data', (chunk) => {
                         var text = chunk.toString();
                         stderr += text;
-                        lastStderrActivity = Date.now();
+                        lastActivity = Date.now();
                         if (stderr.length > maxLen) { clearTimeout(timeout); child.kill('SIGKILL'); reject(new Error('OpenClaw error output exceeded 10MB')); }
 
                         // Parse stderr lines for progress activities
