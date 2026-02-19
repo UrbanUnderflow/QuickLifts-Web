@@ -3122,6 +3122,9 @@ async function executeStep(step, task, stepIndex, allSteps) {
     const progress = Math.round((completedCount / allSteps.length) * 100);
     await reportSteps(allSteps, stepIndex, progress);
 
+    // Keep OpenClaw invoker in outer scope so recovery logic in catch can reuse it.
+    let invokeOpenClaw = null;
+
     try {
         const useOpenClaw = process.env.USE_OPENCLAW === 'true';
 
@@ -3325,7 +3328,7 @@ ${smokeOutput}`.substring(0, 2000);
                 };
 
                 // Helper: run OpenClaw with a given prompt (uses complexity-based tier)
-                const invokeOpenClaw = (promptText, onProgress) => new Promise((resolve, reject) => {
+                invokeOpenClaw = (promptText, onProgress) => new Promise((resolve, reject) => {
                     const clawArgs = [
                         '--no-color', 'agent', '--local', '--json',
                         '--agent', tierAgentId,
@@ -3559,7 +3562,7 @@ ${smokeOutput}`.substring(0, 2000);
         console.log(`   ❌ Step crashed: ${err.message.substring(0, 120)}`);
 
         // ─── Tier 2: Rewrite & Retry from a different angle ─────
-        if (process.env.USE_OPENCLAW === 'true') {
+        if (process.env.USE_OPENCLAW === 'true' && typeof invokeOpenClaw === 'function') {
             for (let rewriteAttempt = 0; rewriteAttempt < MAX_STEP_REWRITE_ATTEMPTS; rewriteAttempt++) {
                 console.log(`   🔄 Rewrite attempt ${rewriteAttempt + 1}/${MAX_STEP_REWRITE_ATTEMPTS}: Trying a different approach...`);
                 step.status = 'in-progress';
@@ -3628,6 +3631,8 @@ ${smokeOutput}`.substring(0, 2000);
                     );
                 }
             }
+        } else if (process.env.USE_OPENCLAW === 'true') {
+            console.log('   ⚠️ Rewrite skipped: OpenClaw invoker unavailable in recovery path.');
         }
 
         // All recovery attempts exhausted
