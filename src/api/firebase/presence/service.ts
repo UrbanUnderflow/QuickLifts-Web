@@ -1,4 +1,4 @@
-import { collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, addDoc, getDocs, query, orderBy, limit, Unsubscribe, Timestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, addDoc, getDocs, query, orderBy, limit, Unsubscribe } from 'firebase/firestore';
 import { db } from '../config';
 
 export type AgentStatus = 'offline' | 'idle' | 'working' | 'needs-help';
@@ -137,6 +137,20 @@ export interface TaskHistoryEntry {
 
 const COLLECTION = 'agent-presence';
 const HISTORY_SUBCOLLECTION = 'task-history';
+const SNAPSHOT_COLLECTION = 'progress-snapshots';
+
+const AGENT_NAME_FALLBACKS: Record<string, string> = {
+  scout: 'Scout',
+  solara: 'Solara',
+  sage: 'Sage',
+  nora: 'Nora',
+  antigravity: 'Antigravity',
+};
+
+function resolveAgentDisplayName(agentId: string): string {
+  const fallback = AGENT_NAME_FALLBACKS[(agentId || '').toLowerCase()];
+  return fallback || (agentId ? `${agentId[0].toUpperCase()}${agentId.slice(1)}` : 'Unknown Agent');
+}
 
 /* ─── Serialise thought steps for Firestore ────────────── */
 
@@ -412,9 +426,8 @@ export const presenceService = {
   /**
    * Toggle whether this runner is allowed to process tasks.
    */
-  async setRunnerEnabled(agentId: string, enabled: boolean): Promise<void> {
+  async setRunnerEnabled(agentId: string, enabled: boolean, actor = 'admin'): Promise<void> {
     const docRef = doc(db, COLLECTION, agentId);
-    const actor = 'admin';
     await setDoc(
       docRef,
       {
@@ -425,32 +438,23 @@ export const presenceService = {
       { merge: true }
     );
 
-    const hourIso = new Date().toISOString().replace(/:\d{2}\.\d{3}Z$/, ':00:00Z');
-    const displayName = normalizeAgentDisplay(agentId);
-    await addDoc(collection(db, 'progress-snapshots'), {
-      hourIso,
-      agentId,
-      agentName: displayName,
-      objectiveCode: 'runner-control',
-      beatCompleted: null,
-      color: enabled ? 'green' : 'yellow',
-      stateTag: 'signals',
-      note: `${displayName} runner ${enabled ? 'enabled' : 'disabled'} by ${actor}`,
-      createdAt: serverTimestamp(),
-    });
-  },
-
-  /**
-   * Toggle whether this runner is allowed to process tasks.
-   */
-  async setOffline(agentId: string) {
-    const docRef = doc(db, COLLECTION, agentId);
-    await updateDoc(docRef, {
-      status: 'offline',
-      executionSteps: [],
-      currentStepIndex: -1,
-      lastUpdate: serverTimestamp(),
-    });
+    const hourMarker = new Date();
+    hourMarker.setUTCMinutes(0, 0, 0);
+    try {
+      await addDoc(collection(db, SNAPSHOT_COLLECTION), {
+        hourIso: hourMarker.toISOString(),
+        agentId,
+        agentName: resolveAgentDisplayName(agentId),
+        objectiveCode: 'runner-control',
+        beatCompleted: null,
+        color: enabled ? 'green' : 'yellow',
+        stateTag: 'signals',
+        note: `${resolveAgentDisplayName(agentId)} runner ${enabled ? 'enabled' : 'disabled'} by ${actor}`,
+        createdAt: serverTimestamp(),
+      });
+    } catch {
+      // Non-critical telemetry path should not block runner controls.
+    }
   },
 
   /**
@@ -536,6 +540,8 @@ export const presenceService = {
           currentModelProvider: data.currentModelProvider || undefined,
           openClawAgentId: data.openClawAgentId || undefined,
           runnerEnabled: data.runnerEnabled !== false,
+          runnerEnabledBy: data.runnerEnabledBy || undefined,
+          runnerEnabledAt: data.runnerEnabledAt?.toDate?.() || undefined,
           tokenUsage: data.tokenUsage || undefined,
           tokenUsageTask: data.tokenUsageTask || undefined,
           tokenUsageByModel: data.tokenUsageByModel || undefined,
