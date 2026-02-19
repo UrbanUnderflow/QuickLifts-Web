@@ -3304,18 +3304,23 @@ const VirtualOfficeContent: React.FC = () => {
 
             const useToday = todayTotal > 0;
             const useCumulative = !useToday && cumulativeTotal > 0;
+            const scopeFallback: TokenUsageBucket = {
+              promptTokens: 0,
+              completionTokens: 0,
+              totalTokens: useToday
+                ? todayTotal
+                : useCumulative
+                  ? cumulativeTotal
+                  : sessionTotal,
+              callCount: useToday
+                ? allAgents.reduce((sum, a) => sum + ((a.tokenUsageDaily?.[today]?.callCount ?? 0)), 0)
+                : useCumulative
+                  ? allAgents.reduce((sum, a) => sum + (a.tokenUsageCumulative?.callCount ?? 0), 0)
+                  : allAgents.reduce((sum, a) => sum + (a.tokenUsage?.callCount ?? 0), 0),
+            };
             const scopeModelTotals = buildModelUsageOrFallback(
               useToday ? todayByModel : useCumulative ? cumulativeByModel : sessionByModel,
-              {
-                promptTokens: 0,
-                completionTokens: 0,
-                totalTokens: useToday ? todayTotal : useCumulative ? cumulativeTotal : sessionTotal,
-                callCount: useToday
-                  ? allAgents.reduce((sum, a) => sum + ((a.tokenUsageDaily?.[today]?.callCount ?? 0)), 0)
-                  : useCumulative
-                    ? allAgents.reduce((sum, a) => sum + (a.tokenUsageCumulative?.callCount ?? 0), 0)
-                    : allAgents.reduce((sum, a) => sum + (a.tokenUsage?.callCount ?? 0), 0),
-              },
+              scopeFallback,
             );
             // Pick the best available number
             const displayTotal = todayTotal > 0 ? todayTotal : cumulativeTotal > 0 ? cumulativeTotal : sessionTotal;
@@ -3329,13 +3334,13 @@ const VirtualOfficeContent: React.FC = () => {
               <div
                 className="stat-chip token-breakdown-trigger"
                 title={`${tooltipParts || 'No token data available'} • click to open model-level breakdown`}
-                onClick={() => openTokenBreakdown('All agents token usage', label, scopeModelTotals)}
+                onClick={() => openTokenBreakdown('All agents token usage', label, scopeModelTotals, scopeFallback)}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
-                    openTokenBreakdown('All agents token usage', label, scopeModelTotals);
+                    openTokenBreakdown('All agents token usage', label, scopeModelTotals, scopeFallback);
                   }
                 }}
               >
