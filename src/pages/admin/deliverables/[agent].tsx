@@ -285,6 +285,16 @@ async function fetchFileContent(path: string): Promise<string> {
     return `⚠️ Could not load file.\n\nPath: ${path}`;
 }
 
+function getQueryValue(value: string | string[] | undefined): string {
+    const raw = Array.isArray(value) ? value[0] : value;
+    if (typeof raw !== 'string') return '';
+    try {
+        return decodeURIComponent(raw).trim();
+    } catch {
+        return raw.trim();
+    }
+}
+
 /* ──────────── expandable artifact card ──────────── */
 
 function ModalArtifactCard({ artifact, catColor }: { artifact: Artifact; catColor: string }) {
@@ -348,12 +358,10 @@ function CategoryModal({
     category,
     onClose,
     artifacts: allArtifacts,
-    agentColor,
 }: {
     category: ArtifactCategory;
     onClose: () => void;
     artifacts: Artifact[];
-    agentColor: string;
 }) {
     const cat = CATEGORIES[category];
     const artifacts = allArtifacts.filter((a) => a.category === category);
@@ -415,6 +423,7 @@ export default function AgentDeliverablesPage() {
     const [hoveredCard, setHoveredCard] = useState<string | null>(null);
     const [modalCategory, setModalCategory] = useState<ArtifactCategory | null>(null);
     const [allArtifacts, setAllArtifacts] = useState<Artifact[]>([]);
+    const handledDeepLinkRef = useRef<string>('');
 
     /* Load static + dynamic artifacts — poll every 30s for real-time updates */
     useEffect(() => {
@@ -507,6 +516,64 @@ export default function AgentDeliverablesPage() {
         setFileContent(c);
         setLoading(false);
     }, []);
+
+    useEffect(() => {
+        if (!router.isReady || allArtifacts.length === 0) return;
+
+        const artifactQuery = getQueryValue(router.query.artifact);
+        const fileQuery = getQueryValue(router.query.file);
+        const taskQuery = getQueryValue(
+            (router.query.taskRef as string | string[] | undefined)
+            || (router.query.taskId as string | string[] | undefined)
+            || (router.query.objectiveCode as string | string[] | undefined),
+        );
+
+        if (!artifactQuery && !fileQuery && !taskQuery) return;
+
+        const deepLinkKey = `${artifactQuery}|${fileQuery}|${taskQuery}|${allArtifacts.length}`.toLowerCase();
+        if (handledDeepLinkRef.current === deepLinkKey) return;
+
+        const normalize = (value?: string) => (value || '').toLowerCase().trim();
+        let target: Artifact | undefined;
+
+        if (artifactQuery) {
+            target = allArtifacts.find((artifact) => artifact.id.toLowerCase() === artifactQuery.toLowerCase());
+        }
+
+        if (!target && fileQuery) {
+            const targetFile = fileQuery.toLowerCase();
+            target = allArtifacts.find((artifact) => {
+                const pathLower = artifact.path.toLowerCase();
+                return pathLower === targetFile || pathLower.endsWith(`/${targetFile}`);
+            });
+        }
+
+        if (!target && taskQuery) {
+            const targetTask = normalize(taskQuery);
+            target = allArtifacts.find((artifact) => normalize(artifact.taskRef) === targetTask);
+            if (!target) {
+                target = allArtifacts.find((artifact) => normalize(artifact.taskRef).includes(targetTask));
+            }
+            if (!target) {
+                target = allArtifacts.find((artifact) =>
+                    normalize(artifact.id).includes(targetTask) ||
+                    normalize(artifact.title).includes(targetTask),
+                );
+            }
+        }
+
+        if (!target) return;
+
+        handledDeepLinkRef.current = deepLinkKey;
+        const nextTab: TopLevelTab = TAB_CATEGORIES.deliverables.includes(target.category) ? 'deliverables' : 'profile';
+        if (activeTab !== nextTab) {
+            setActiveTab(nextTab);
+        }
+        setActiveCategory(target.category);
+        if (selectedArtifact?.id !== target.id) {
+            void loadFile(target);
+        }
+    }, [activeTab, allArtifacts, loadFile, router.isReady, router.query, selectedArtifact?.id]);
 
     const groupedArtifacts = filteredArtifacts.reduce<Record<ArtifactCategory, Artifact[]>>((acc, a) => {
         if (!acc[a.category]) acc[a.category] = [];
@@ -748,7 +815,6 @@ export default function AgentDeliverablesPage() {
                     category={modalCategory}
                     onClose={() => setModalCategory(null)}
                     artifacts={allArtifacts}
-                    agentColor={meta.color}
                 />
             )}
 
