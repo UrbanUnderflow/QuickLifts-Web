@@ -192,6 +192,8 @@ Before marking any task complete:
 - **[2026-02-19] Sage** — Step "Review and validate: Synthesis: Strategic analysis of "nsure every partnership clears Sage's research bar — no brand misalignment, no regulatory gray areas"" still had issues after 2 retries. Output signals: \berror\b. Last output: "⚠️ API provider returned a billing error — your API key has run out of credits or has an insufficient balance. Check you..."
 - **[2026-02-19] Scout** — Step "Research and plan: Create shared glossary and preflight dependency checklist documents" failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=1 error="Error: Unknown". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-19] Scout** — Step "Execute: Create shared glossary and preflight dependency checklist documents" failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=1 error="Error: Unknown". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-19] Scout** — Step "Research and plan: Create shared glossary and preflight dependency checklist documents" failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=1 error="Error: Unknown". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-19] Scout** — Step "Execute: Create shared glossary and preflight dependency checklist documents" failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=1 error="Error: Unknown". Rewrite error: "invokeOpenClaw is not defined"
 ---
 
 ## Operational Rules
