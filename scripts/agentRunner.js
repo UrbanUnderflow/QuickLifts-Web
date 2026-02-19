@@ -1483,7 +1483,11 @@ async function processCommands() {
 
             case 'command':
                 var lowerContent = pContent.toLowerCase();
-                if (lowerContent.includes('stop') || lowerContent.includes('pause')) {
+                var commandTokens = lowerContent.split(/[^a-z0-9]+/).filter(Boolean);
+                var stopRequested = commandTokens.includes('stop') || commandTokens.includes('pause');
+                var startRequested = commandTokens.includes('start') || commandTokens.includes('resume');
+
+                if (stopRequested) {
                     await setRunnerEnabled(false);
                     await setStatus('offline', {
                         notes: `Paused by command: "${pContent}"`,
@@ -1492,7 +1496,7 @@ async function processCommands() {
                     });
                     var stopMsg = 'Acknowledged. Runner disabled and moved offline.';
                     response = response ? response + "\n" + stopMsg : stopMsg;
-                } else if (lowerContent.includes('start') || lowerContent.includes('resume')) {
+                } else if (startRequested) {
                     await setRunnerEnabled(true);
                     await setStatus('idle', {
                         notes: `Resumed by command: "${pContent}"`,
