@@ -25,6 +25,7 @@ This brief synthesizes key insights from Pulse Fitness's data and brand position
 - **Develop Co-Creation Initiatives**: Engage partners in developing gamified content that aligns with wellness goals.
 - **Leverage Community Alignment**: Promote partnerships that build on the strong community values Pulse embodies.
 - **Enhance Technical Collaboration**: Prioritize partners with compatible tech solutions to streamline integration.
+- **Gate on Proof**: Embed “No proof = no motion” in every pitch—partners must surface measurable outcomes before Pulse wires anything new.
 
 ## Next Steps
 - Conduct further analysis of weekend engagement patterns to broaden insights.
