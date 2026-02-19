@@ -120,7 +120,7 @@ const MODEL_PRICE_RULES: Array<{
       label: 'GPT-5.1 Codex Max',
       inputPerMillion: 1.25,
       outputPerMillion: 10.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5.2-codex',
+      source: 'https://platform.openai.com/docs/models/gpt-5.1-codex-max',
     },
   },
   {
@@ -134,7 +134,17 @@ const MODEL_PRICE_RULES: Array<{
     },
   },
   {
-    match: /^gpt-5(?:\.1)?-codex(?:[\.-]|$)/,
+    match: /^gpt-5\.1-codex(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5.1-codex',
+      label: 'GPT-5.1 Codex',
+      inputPerMillion: 1.25,
+      outputPerMillion: 10.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5.1-codex',
+    },
+  },
+  {
+    match: /^gpt-5-codex(?:[\.-]|$)/,
     pricing: {
       model: 'gpt-5-codex',
       label: 'GPT-5 Codex',
@@ -158,69 +168,89 @@ const MODEL_PRICE_RULES: Array<{
     pricing: {
       model: 'o4-mini',
       label: 'o4-mini',
-      inputPerMillion: 4.0,
-      outputPerMillion: 16.0,
-      source: 'https://platform.openai.com/docs/pricing',
+      inputPerMillion: 1.1,
+      outputPerMillion: 4.4,
+      source: 'https://platform.openai.com/docs/models/o4-mini',
     },
   },
   {
-    match: /^gpt-5\.2(?:[\.-]|$)/,
+    match: /^o3-deep-research(?:[\.-]|$)/,
     pricing: {
-      model: 'gpt-5.2',
-      label: 'GPT-5.2',
-      inputPerMillion: 1.75,
-      outputPerMillion: 14.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5',
+      model: 'o3-deep-research',
+      label: 'o3 Deep Research',
+      inputPerMillion: 10.0,
+      outputPerMillion: 40.0,
+      source: 'https://platform.openai.com/docs/models/o3-deep-research',
     },
   },
   {
-    match: /^gpt-5\.2-chat-latest(?:[\.-]|$)/,
+    match: /^o4-mini-deep-research(?:[\.-]|$)/,
     pricing: {
-      model: 'gpt-5.2-chat-latest',
-      label: 'GPT-5.2 Chat',
-      inputPerMillion: 1.75,
-      outputPerMillion: 14.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5',
+      model: 'o4-mini-deep-research',
+      label: 'o4-mini Deep Research',
+      inputPerMillion: 2.0,
+      outputPerMillion: 8.0,
+      source: 'https://platform.openai.com/docs/models/o4-mini-deep-research',
     },
   },
   {
-    match: /^gpt-5\.1(?:[\.-]|$)/,
+    match: /^o3(?:[\.-]|$)/,
     pricing: {
-      model: 'gpt-5.1',
-      label: 'GPT-5.1',
-      inputPerMillion: 1.25,
-      outputPerMillion: 10.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5',
+      model: 'o3',
+      label: 'o3',
+      inputPerMillion: 2.0,
+      outputPerMillion: 8.0,
+      source: 'https://platform.openai.com/docs/models/o3',
     },
   },
   {
-    match: /^gpt-5\.1-chat-latest(?:[\.-]|$)/,
+    match: /^o3-pro(?:[\.-]|$)/,
     pricing: {
-      model: 'gpt-5.1-chat-latest',
-      label: 'GPT-5.1 Chat',
-      inputPerMillion: 1.25,
-      outputPerMillion: 10.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5',
+      model: 'o3-pro',
+      label: 'o3 Pro',
+      inputPerMillion: 20.0,
+      outputPerMillion: 80.0,
+      source: 'https://platform.openai.com/docs/models/o3-pro',
     },
   },
   {
-    match: /^gpt-5-mini(?:[\.-]|$)/,
+    match: /^o1-pro(?:[\.-]|$)/,
     pricing: {
-      model: 'gpt-5-mini',
-      label: 'GPT-5 Mini',
-      inputPerMillion: 0.25,
-      outputPerMillion: 2.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5',
+      model: 'o1-pro',
+      label: 'o1 Pro',
+      inputPerMillion: 150.0,
+      outputPerMillion: 600.0,
+      source: 'https://platform.openai.com/docs/models/o1-pro',
     },
   },
   {
-    match: /^gpt-5-nano(?:[\.-]|$)/,
+    match: /^o1-mini(?:[\.-]|$)/,
     pricing: {
-      model: 'gpt-5-nano',
-      label: 'GPT-5 Nano',
-      inputPerMillion: 0.05,
-      outputPerMillion: 0.4,
-      source: 'https://platform.openai.com/docs/models/gpt-5',
+      model: 'o1-mini',
+      label: 'o1-mini',
+      inputPerMillion: 1.1,
+      outputPerMillion: 4.4,
+      source: 'https://platform.openai.com/docs/models/o1-mini',
+    },
+  },
+  {
+    match: /^o1(?:[\.-]|$)/,
+    pricing: {
+      model: 'o1',
+      label: 'o1',
+      inputPerMillion: 15.0,
+      outputPerMillion: 60.0,
+      source: 'https://platform.openai.com/docs/models/o1',
+    },
+  },
+  {
+    match: /^gpt-5\.2-pro(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5.2-pro',
+      label: 'GPT-5.2 Pro',
+      inputPerMillion: 21.0,
+      outputPerMillion: 168.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5.2-pro',
     },
   },
   {
@@ -230,31 +260,91 @@ const MODEL_PRICE_RULES: Array<{
       label: 'GPT-5 Pro',
       inputPerMillion: 15.0,
       outputPerMillion: 120.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5',
+      source: 'https://platform.openai.com/docs/models/gpt-5-pro',
     },
   },
   {
-    match: /^gpt-5\.chat-latest(?:[\.-]|$)/,
+    match: /^gpt-5\.2(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5.2',
+      label: 'GPT-5.2',
+      inputPerMillion: 1.75,
+      outputPerMillion: 14.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5.2',
+    },
+  },
+  {
+    match: /^gpt-5\.2-chat-latest(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5.2-chat-latest',
+      label: 'GPT-5.2 Chat',
+      inputPerMillion: 1.75,
+      outputPerMillion: 14.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5.2-chat-latest',
+    },
+  },
+  {
+    match: /^gpt-5\.1(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5.1',
+      label: 'GPT-5.1',
+      inputPerMillion: 1.25,
+      outputPerMillion: 10.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5.1',
+    },
+  },
+  {
+    match: /^gpt-5\.1-chat-latest(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5.1-chat-latest',
+      label: 'GPT-5.1 Chat',
+      inputPerMillion: 1.25,
+      outputPerMillion: 10.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5.1-chat-latest',
+    },
+  },
+  {
+    match: /^gpt-5-mini(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5-mini',
+      label: 'GPT-5 Mini',
+      inputPerMillion: 0.25,
+      outputPerMillion: 2.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5-mini',
+    },
+  },
+  {
+    match: /^gpt-5-nano(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5-nano',
+      label: 'GPT-5 Nano',
+      inputPerMillion: 0.05,
+      outputPerMillion: 0.4,
+      source: 'https://platform.openai.com/docs/models/gpt-5-nano',
+    },
+  },
+  {
+    match: /^gpt-5-chat-latest(?:[\.-]|$)/,
     pricing: {
       model: 'gpt-5-chat-latest',
       label: 'GPT-5 Chat',
       inputPerMillion: 1.25,
       outputPerMillion: 10.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5',
+      source: 'https://platform.openai.com/docs/models/gpt-5-chat-latest',
     },
   },
   {
-    match: /^gpt-5(?:[\.-]|$)/,
+    match: /^codex-mini-latest(?:[\.-]|$)/,
     pricing: {
-      model: 'gpt-5',
-      label: 'GPT-5',
-      inputPerMillion: 1.25,
-      outputPerMillion: 10.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5',
+      model: 'codex-mini-latest',
+      label: 'Codex Mini Latest',
+      inputPerMillion: 1.5,
+      outputPerMillion: 6.0,
+      source: 'https://platform.openai.com/docs/models/codex-mini-latest',
     },
   },
   {
-    match: /^gpt-4\.1-nano(?:[\.-]|$)/,
+    match: /^gpt-4\.1(?:\.0)?-nano(?:[\.-]|$)/,
     pricing: {
       model: 'gpt-4.1-nano',
       label: 'GPT-4.1 Nano',
@@ -280,6 +370,16 @@ const MODEL_PRICE_RULES: Array<{
       label: 'GPT-4.1',
       inputPerMillion: 2.00,
       outputPerMillion: 8.00,
+      source: 'https://platform.openai.com/docs/pricing',
+    },
+  },
+  {
+    match: /^gpt-4o-2024-05-13(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-4o-2024-05-13',
+      label: 'GPT-4o (legacy snapshot)',
+      inputPerMillion: 5.0,
+      outputPerMillion: 15.0,
       source: 'https://platform.openai.com/docs/pricing',
     },
   },
@@ -2623,8 +2723,10 @@ const VirtualOfficeContent: React.FC = () => {
     byModel: Record<string, unknown> | undefined,
     fallback?: TokenUsageBucket | null,
   ) => {
-    const keyboardActivation = 'key' in event && (event.key === 'Enter' || event.key === ' ');
-    if (keyboardActivation) event.preventDefault();
+    if ('key' in event) {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+    }
     openTokenBreakdown(title, scope, byModel, fallback);
   }, [openTokenBreakdown]);
 
@@ -3735,6 +3837,184 @@ const VirtualOfficeContent: React.FC = () => {
           border-color: rgba(203,213,225,0.5);
           background: rgba(17,20,23,0.95);
         }
+        .token-breakdown-trigger {
+          cursor: pointer;
+          outline: none;
+        }
+        .token-breakdown-trigger:focus-visible {
+          box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.55);
+          outline: none;
+        }
+        .token-breakdown-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 1300;
+          background: rgba(0, 0, 0, 0.72);
+          backdrop-filter: blur(6px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+        }
+        .token-breakdown-modal {
+          width: min(900px, 95vw);
+          max-height: 85vh;
+          display: flex;
+          flex-direction: column;
+          background: #0f172a;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          border-radius: 14px;
+          overflow: hidden;
+          color: #e2e8f0;
+          box-shadow: 0 20px 80px rgba(0, 0, 0, 0.5);
+        }
+        .token-breakdown-modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+          padding: 14px 16px;
+          border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+          background: rgba(30, 41, 59, 0.7);
+        }
+        .token-breakdown-modal-title {
+          margin: 0;
+          font-size: 17px;
+          font-weight: 700;
+        }
+        .token-breakdown-modal-subtitle {
+          margin: 4px 0 0;
+          color: #94a3b8;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+        .token-breakdown-modal-close {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 26px;
+          height: 26px;
+          border-radius: 8px;
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          color: #94a3b8;
+          background: rgba(15, 23, 42, 0.8);
+          cursor: pointer;
+        }
+        .token-breakdown-modal-close:hover {
+          color: #f8fafc;
+          border-color: rgba(148, 163, 184, 0.5);
+          background: rgba(148, 163, 184, 0.12);
+        }
+        .token-breakdown-modal-body {
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          overflow: auto;
+        }
+        .token-breakdown-summary {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          padding: 10px;
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          border-radius: 10px;
+          background: rgba(15, 23, 42, 0.5);
+        }
+        .token-breakdown-summary-row {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          min-width: 140px;
+          font-size: 10px;
+          color: #94a3b8;
+        }
+        .token-breakdown-summary-row strong {
+          color: #e2e8f0;
+          font-size: 14px;
+          font-variant-numeric: tabular-nums;
+        }
+        .token-breakdown-table {
+          display: grid;
+          grid-template-columns: minmax(220px, 2fr) minmax(150px, 1fr) minmax(180px, 1fr);
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          border-radius: 10px;
+          overflow: hidden;
+          font-size: 11px;
+          background: rgba(15, 23, 42, 0.45);
+        }
+        .token-breakdown-table-head {
+          grid-column: 1 / -1;
+          display: grid;
+          grid-template-columns: inherit;
+          gap: 12px;
+          background: rgba(30, 41, 59, 0.8);
+          border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+          color: #cbd5e1;
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 0.03em;
+          text-transform: uppercase;
+          padding: 10px 12px;
+        }
+        .token-breakdown-row {
+          grid-column: 1 / -1;
+          display: grid;
+          grid-template-columns: inherit;
+          gap: 12px;
+          padding: 10px 12px;
+          border-top: 1px solid rgba(148, 163, 184, 0.12);
+        }
+        .token-breakdown-row-unpriced {
+          background: rgba(120, 53, 15, 0.12);
+        }
+        .token-breakdown-model {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+        }
+        .token-breakdown-model-id {
+          color: #94a5b8;
+          font-size: 10px;
+          font-family: monospace;
+        }
+        .token-breakdown-unpriced-note {
+          color: #f59e0b;
+          font-size: 10px;
+        }
+        .token-breakdown-metrics {
+          color: #d1d5db;
+          font-size: 10px;
+          font-variant-numeric: tabular-nums;
+          line-height: 1.45;
+        }
+        .token-breakdown-cost {
+          font-size: 11px;
+          color: #4ade80;
+          font-variant-numeric: tabular-nums;
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .token-breakdown-cost a {
+          color: #60a5fa;
+          text-decoration: none;
+        }
+        .token-breakdown-cost a:hover {
+          text-decoration: underline;
+        }
+        .token-breakdown-footnote {
+          margin: 0;
+          padding-top: 4px;
+          border-top: 1px solid rgba(148, 163, 184, 0.12);
+          color: #94a3b8;
+          font-size: 10px;
+        }
+        .token-breakdown-footnote a {
+          color: #60a5fa;
+        }
+
         .progress-chip {
           border-color: rgba(59,130,246,0.2);
           background: rgba(59,130,246,0.05);
