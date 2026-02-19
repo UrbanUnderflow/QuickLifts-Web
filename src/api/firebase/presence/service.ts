@@ -37,6 +37,7 @@ export interface AgentPresence {
   displayName: string;
   emoji?: string;
   status: AgentStatus;
+  runnerEnabled?: boolean;
 
   // Task context
   currentTask?: string;        // Human-readable task name
@@ -407,6 +408,14 @@ export const presenceService = {
   },
 
   /**
+   * Toggle whether this runner is allowed to process tasks.
+   */
+  async setRunnerEnabled(agentId: string, enabled: boolean): Promise<void> {
+    const docRef = doc(db, COLLECTION, agentId);
+    await updateDoc(docRef, { runnerEnabled: enabled });
+  },
+
+  /**
    * Save a completed task pipeline to history
    */
   async saveTaskHistory(
@@ -488,6 +497,7 @@ export const presenceService = {
           currentModelRaw: data.currentModelRaw || undefined,
           currentModelProvider: data.currentModelProvider || undefined,
           openClawAgentId: data.openClawAgentId || undefined,
+          runnerEnabled: data.runnerEnabled !== false,
           tokenUsage: data.tokenUsage || undefined,
           tokenUsageTask: data.tokenUsageTask || undefined,
           tokenUsageByModel: data.tokenUsageByModel || undefined,
