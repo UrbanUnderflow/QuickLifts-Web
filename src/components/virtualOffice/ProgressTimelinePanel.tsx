@@ -61,6 +61,30 @@ const AGENT_ROUTE_IDS = new Set(['antigravity', 'nora', 'scout', 'solara', 'sage
 
 const normalizeAgentKey = (value?: string) => (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
+const sanitizeRecordedFilePath = (rawPath?: string): string => {
+  if (!rawPath) return '';
+  let next = rawPath.trim();
+  if (!next) return '';
+
+  const porcelainMatch = next.match(/^[ MADRCU?!]{1,2}\s+(.*)$/);
+  if (porcelainMatch) {
+    next = porcelainMatch[1].trim();
+  }
+
+  if (next.includes(' -> ')) {
+    next = next.split(' -> ').pop()?.trim() || next;
+  }
+
+  if (
+    (next.startsWith('"') && next.endsWith('"')) ||
+    (next.startsWith("'") && next.endsWith("'"))
+  ) {
+    next = next.slice(1, -1);
+  }
+
+  return next.replace(/^\.\/+/, '');
+};
+
 const resolveAgentRouteId = (agentId?: string, agentName?: string): string | null => {
   const candidates = [agentId, agentName];
   for (const candidate of candidates) {
@@ -328,7 +352,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
 
     if (!data) return null;
 
-    const filePath = data.filePath?.trim();
+    const filePath = sanitizeRecordedFilePath(data.filePath);
     const agentRouteId = resolveAgentRouteId(data.agentId, data.agentName) || resolveAgentRouteId(entry.agentId, entry.agentName);
     if (!agentRouteId) return null;
 

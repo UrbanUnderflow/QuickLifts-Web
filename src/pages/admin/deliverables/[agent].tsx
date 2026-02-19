@@ -255,17 +255,42 @@ const AGENT_ARTIFACTS: Record<string, Artifact[]> = {
 const fileContentCache: Record<string, string> = {};
 const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/UrbanUnderflow/QuickLifts-Web/main';
 
+function sanitizeRecordedFilePath(rawPath?: string): string {
+    if (!rawPath) return '';
+    let next = rawPath.trim();
+    if (!next) return '';
+
+    const porcelainMatch = next.match(/^[ MADRCU?!]{1,2}\s+(.*)$/);
+    if (porcelainMatch) {
+        next = porcelainMatch[1].trim();
+    }
+
+    if (next.includes(' -> ')) {
+        next = next.split(' -> ').pop()?.trim() || next;
+    }
+
+    if (
+        (next.startsWith('"') && next.endsWith('"')) ||
+        (next.startsWith("'") && next.endsWith("'"))
+    ) {
+        next = next.slice(1, -1);
+    }
+
+    return next.replace(/^\.\/+/, '');
+}
+
 async function fetchFileContent(path: string): Promise<string> {
-    if (fileContentCache[path]) return fileContentCache[path];
+    const normalizedPath = sanitizeRecordedFilePath(path) || path;
+    if (fileContentCache[normalizedPath]) return fileContentCache[normalizedPath];
 
     // Try local API first (works in dev)
     try {
-        const res = await fetch(`/api/read-file?path=${encodeURIComponent(path)}`);
+        const res = await fetch(`/api/read-file?path=${encodeURIComponent(normalizedPath)}`);
         if (res.ok) {
             const data = await res.json();
             const content = data.content ?? '';
             if (content) {
-                fileContentCache[path] = content;
+                fileContentCache[normalizedPath] = content;
                 return content;
             }
         }
@@ -273,16 +298,16 @@ async function fetchFileContent(path: string): Promise<string> {
 
     // Fallback: fetch from GitHub raw (works in production)
     try {
-        const ghUrl = `${GITHUB_RAW_BASE}/${path}`;
+        const ghUrl = `${GITHUB_RAW_BASE}/${normalizedPath}`;
         const res = await fetch(ghUrl);
         if (res.ok) {
             const content = await res.text();
-            fileContentCache[path] = content;
+            fileContentCache[normalizedPath] = content;
             return content;
         }
     } catch { /* GitHub unreachable */ }
 
-    return `⚠️ Could not load file.\n\nPath: ${path}`;
+    return `⚠️ Could not load file.\n\nPath: ${normalizedPath}`;
 }
 
 function getQueryValue(value: string | string[] | undefined): string {
@@ -518,7 +543,7 @@ export default function AgentDeliverablesPage() {
   }, []);
 
   const buildDeepLinkedArtifact = (fileQuery: string, taskRef: string): Artifact => {
-    const normalizedFile = fileQuery.trim();
+    const normalizedFile = sanitizeRecordedFilePath(fileQuery);
     const fileName = normalizedFile.split('/').pop() || normalizedFile;
     return {
       id: `deep-link-${normalizedFile.toLowerCase()}`,
@@ -537,7 +562,7 @@ export default function AgentDeliverablesPage() {
     if (!router.isReady || allArtifacts.length === 0) return;
 
     const artifactQuery = getQueryValue(router.query.artifact);
-    const fileQuery = getQueryValue(router.query.file);
+    const fileQuery = sanitizeRecordedFilePath(getQueryValue(router.query.file));
         const taskQuery = getQueryValue(
             (router.query.taskRef as string | string[] | undefined)
             || (router.query.taskId as string | string[] | undefined)

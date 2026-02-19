@@ -741,7 +741,9 @@ async function saveTaskHistory(taskName, taskId, steps, status, startedAt) {
  * collection so the PulseCommand deliverables tray can display them.
  */
 async function recordDeliverables(task, steps) {
-    const allFiles = [...new Set(steps.flatMap(s => s.filesChanged || []))];
+    const allFiles = [...new Set(
+        steps.flatMap(s => s.filesChanged || []).map(parseGitStatusPath).filter(Boolean)
+    )];
     if (allFiles.length === 0) return [];
 
     const deliverables = [];
@@ -794,7 +796,9 @@ async function recordDeliverables(task, steps) {
  * Returns true if the task has verifiable artifacts.
  */
 function hasVerifiableArtifacts(steps) {
-    const allFiles = [...new Set(steps.flatMap(s => s.filesChanged || []))];
+    const allFiles = [...new Set(
+        steps.flatMap(s => s.filesChanged || []).map(parseGitStatusPath).filter(Boolean)
+    )];
     if (allFiles.length === 0) return false;
 
     // Filter out meta-documents (summaries, action items, notifications)
@@ -2909,6 +2913,29 @@ Notes: ${task.notes || 'None'}`;
 /**
  * Get the current git status (changed files) in the project directory.
  */
+function parseGitStatusPath(line) {
+    const entry = (line || '').trim();
+    if (!entry) return '';
+
+    // Parse `git status --porcelain` entries like:
+    // `M src/file.ts`, `?? docs/file.md`, `R old -> new`.
+    const porcelainMatch = entry.match(/^[ MADRCU?!]{1,2}\s+(.*)$/);
+    let pathValue = porcelainMatch ? porcelainMatch[1].trim() : entry;
+
+    if (pathValue.includes(' -> ')) {
+        pathValue = pathValue.split(' -> ').pop().trim();
+    }
+
+    if (
+        (pathValue.startsWith('"') && pathValue.endsWith('"')) ||
+        (pathValue.startsWith("'") && pathValue.endsWith("'"))
+    ) {
+        pathValue = pathValue.slice(1, -1);
+    }
+
+    return pathValue.replace(/^\.\/+/, '');
+}
+
 function getGitChanges() {
     try {
         const status = execSync('git status --porcelain', {
@@ -2916,7 +2943,12 @@ function getGitChanges() {
             encoding: 'utf-8',
             timeout: 10_000,
         }).trim();
-        return status ? status.split('\n').map(l => l.trim()) : [];
+        if (!status) return [];
+        const changedPaths = status
+            .split('\n')
+            .map(parseGitStatusPath)
+            .filter(Boolean);
+        return [...new Set(changedPaths)];
     } catch {
         return [];
     }

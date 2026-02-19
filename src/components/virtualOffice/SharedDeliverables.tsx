@@ -57,6 +57,33 @@ const resolveAgentRouteId = (agentId?: string): string | null => {
   return AGENTS.some((agent) => agent.id === canonical) ? canonical : null;
 };
 
+const sanitizeRecordedFilePath = (rawPath?: string): string => {
+  if (!rawPath) return '';
+  let next = rawPath.trim();
+  if (!next) return '';
+
+  // `git status --porcelain` entries are recorded like `M path/to/file` or `?? docs/file.md`.
+  const porcelainMatch = next.match(/^[ MADRCU?!]{1,2}\s+(.*)$/);
+  if (porcelainMatch) {
+    next = porcelainMatch[1].trim();
+  }
+
+  // Rename entries can appear like `old/path -> new/path`; we want the destination.
+  if (next.includes(' -> ')) {
+    next = next.split(' -> ').pop()?.trim() || next;
+  }
+
+  // Remove wrapping quotes from paths with spaces.
+  if (
+    (next.startsWith('"') && next.endsWith('"')) ||
+    (next.startsWith("'") && next.endsWith("'"))
+  ) {
+    next = next.slice(1, -1);
+  }
+
+  return next.replace(/^\.\/+/, '');
+};
+
 /* ─── component ─── */
 interface SharedDeliverablesProps {
   onClose: () => void;
@@ -86,7 +113,7 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
 
       for (const docSnap of snap.docs) {
         const data = docSnap.data();
-        const filePath = data.filePath || '';
+        const filePath = sanitizeRecordedFilePath(data.filePath || '');
         const basename = filePath.split('/').pop() || data.title || 'untitled';
 
         all.push({
@@ -134,14 +161,14 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
     setFileLoading(true);
     try {
       const agent = getAgent(d.agentId);
-      const filePath = d.filePath?.trim();
+      const filePath = sanitizeRecordedFilePath(d.filePath);
       const deliverableDir = (agent?.deliverableDir || '').trim().replace(/\/+$/, '');
       const fullFilePath = filePath
         ? deliverableDir && !filePath.includes('/') && !filePath.startsWith('http://') && !filePath.startsWith('https://')
           ? `${deliverableDir}/${filePath}`
           : filePath
         : '';
-      if (!d.filePath) {
+      if (!filePath) {
         setFileContent('⚠️ No file path recorded for this deliverable.');
       } else {
         const res = await fetch(`/api/read-file?path=${encodeURIComponent(fullFilePath)}`);
@@ -161,7 +188,8 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
   const navigateToAgent = (agentId: string, filePath?: string, taskRef?: string) => {
     const agent = getAgentRouteFromId(agentId);
     const params = new URLSearchParams();
-    if (filePath?.trim()) params.set('file', filePath.trim());
+    const normalizedFilePath = sanitizeRecordedFilePath(filePath);
+    if (normalizedFilePath) params.set('file', normalizedFilePath);
     if (taskRef?.trim()) {
       params.set('taskRef', taskRef.trim());
       params.set('taskId', taskRef.trim());
