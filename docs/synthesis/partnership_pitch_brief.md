@@ -1,7 +1,7 @@
 # Strategic Partnership Pitch Brief
 
 ## Overview
-This brief synthesizes key insights from Pulse Fitness's data and brand positioning to inform strategic partnerships. Our aim is to align with companies that share Pulse's dedication to promoting movement, wellness, and community.
+Pulse only partners with proof-backed, community-native products—no testimonial-only evidence, no regulatory smoke, no exceptions. Proof buys you a seat; community-native impact keeps it. This brief synthesizes key insights from Pulse Fitness's data and brand positioning to inform strategic partnerships with companies that share our dedication to movement, wellness, and community.
 
 ## Key Insights
 1. **User Engagement**
@@ -21,6 +21,7 @@ This brief synthesizes key insights from Pulse Fitness's data and brand position
    - Ease of tech integration ensures seamless collaboration.
    - **Evidence-first stance:** Pulse only partners with proof-backed products; prospects must show measurable outcomes before we wire anything new.
    - **Influencer-only rejection trigger:** decks built solely on testimonials/influencer hype are auto-rejected—partners must provide verifiable validation packets to advance.
+   - **Science-backed + community-native:** proof-backed products must also have believable Pulse rituals/community fit before we advance a conversation.
 
 ## Prioritized Recommendations
 - **Develop Co-Creation Initiatives**: Engage partners in developing gamified content that aligns with wellness goals.
