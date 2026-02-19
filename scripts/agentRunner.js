@@ -1482,9 +1482,26 @@ async function processCommands() {
                 break;
 
             case 'command':
-                if (pContent.toLowerCase().includes('stop') || pContent.toLowerCase().includes('pause')) {
-                    var stopMsg = 'Acknowledged. Will pause after current step completes.';
+                var lowerContent = pContent.toLowerCase();
+                if (lowerContent.includes('stop') || lowerContent.includes('pause')) {
+                    await setRunnerEnabled(false);
+                    await setStatus('offline', {
+                        notes: `Paused by command: "${pContent}"`,
+                        executionSteps: [],
+                        currentStepIndex: -1,
+                    });
+                    var stopMsg = 'Acknowledged. Runner disabled and moved offline.';
                     response = response ? response + "\n" + stopMsg : stopMsg;
+                } else if (lowerContent.includes('start') || lowerContent.includes('resume')) {
+                    await setRunnerEnabled(true);
+                    await setStatus('idle', {
+                        notes: `Resumed by command: "${pContent}"`,
+                        executionSteps: [],
+                        currentStepIndex: -1,
+                        taskProgress: 0,
+                    });
+                    var startMsg = 'Acknowledged. Runner enabled.';
+                    response = response ? response + "\n" + startMsg : startMsg;
                 } else if (pContent.toLowerCase().includes('status')) {
                     var presenceSnap = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
                     var data = presenceSnap.data();
@@ -3657,12 +3674,32 @@ async function run() {
 
     // Main task loop
     let idleCycles = 0;  // Track consecutive idle cycles for self-assignment
+    let lastRunnerDisabledNotice = 0;
+    await isRunnerEnabled();
     while (true) {
         try {
             // Process any pending commands first
             while (commandQueue.length > 0) {
                 await processCommands();
             }
+
+            // Respect UI toggles/policies that disable this runner
+            const enabled = await isRunnerEnabled();
+            if (!enabled) {
+                const now = Date.now();
+                if (now - lastRunnerDisabledNotice > 10_000) {
+                    await setStatus('offline', {
+                        notes: 'Runner disabled — waiting for start command.',
+                        executionSteps: [],
+                        currentStepIndex: -1,
+                        taskProgress: 0,
+                    });
+                    lastRunnerDisabledNotice = now;
+                }
+                await new Promise(r => setTimeout(r, 5_000));
+                continue;
+            }
+            lastRunnerDisabledNotice = 0;
 
             console.log('🔍 Looking for tasks...');
             const task = await fetchNextTask();
@@ -3728,8 +3765,17 @@ async function run() {
             let allPassed = true;
             let consecutiveFailures = 0;
             let lastFailureContext = '';
+            let pausedByCommand = false;
+            let currentStepIndex = 0;
 
             for (let i = 0; i < steps.length; i++) {
+                currentStepIndex = i;
+                if (!(await isRunnerEnabled())) {
+                    console.log(`🛑 Runner disabled while waiting to run step ${i + 1}/${steps.length}. Pausing.`);
+                    pausedByCommand = true;
+                    break;
+                }
+
                 console.log(`\n⚡ Step ${i + 1}/${steps.length}: ${steps[i].description}`);
 
                 // ─── Heartbeat: post beat when step STARTS ──
@@ -3748,6 +3794,12 @@ async function run() {
                 }
 
                 const success = await executeStep(steps[i], task, i, steps);
+
+                if (!(await isRunnerEnabled())) {
+                    console.log(`🛑 Runner disabled after step ${i + 1}/${steps.length}. Pausing.`);
+                    pausedByCommand = true;
+                    break;
+                }
 
                 if (!success) {
                     consecutiveFailures++;
@@ -3812,6 +3864,20 @@ async function run() {
                     steps[i + 1].status = 'in-progress';
                     steps[i + 1].startedAt = new Date();
                 }
+            }
+
+            if (pausedByCommand) {
+                const completedCount = steps.filter(s => s.status === 'completed' || s.status === 'completed-with-issues').length;
+                const taskProgress = steps.length > 0 ? Math.round((completedCount / steps.length) * 100) : 0;
+                await setStatus('offline', {
+                    currentTask: task.name,
+                    currentTaskId: task.id,
+                    executionSteps: steps.map(serializeStep),
+                    currentStepIndex,
+                    taskProgress,
+                    notes: 'Runner disabled — execution paused.',
+                });
+                continue;
             }
 
             const hasIssues = steps.some(s => s.status === 'completed-with-issues');
