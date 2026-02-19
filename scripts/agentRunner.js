@@ -265,6 +265,38 @@ function appendLessonLearned(lesson) {
     }
 }
 
+/* ─── Agent Soul (experiential identity) ──────────────── */
+
+function loadSoul() {
+    // Try agent-specific soul file first
+    const soulPath = path.join(projectDir, 'docs', 'agents', AGENT_ID, 'soul.md');
+    try {
+        if (fs.existsSync(soulPath)) {
+            const content = fs.readFileSync(soulPath, 'utf-8');
+            // Extract key sections for targeted injection
+            const identitySection = content.match(/## Who I Am[\s\S]*?(?=## My Beliefs|$)/)?.[0] || '';
+            const beliefsSection = content.match(/## My Beliefs[\s\S]*?(?=## What I Refuse|$)/)?.[0] || '';
+            const antiPatternsSection = content.match(/## What I Refuse To Do[\s\S]*?(?=## My Productive Flaw|$)/)?.[0] || '';
+            const flawSection = content.match(/## My Productive Flaw[\s\S]*?(?=## How I Think|$)/)?.[0] || '';
+            const thinkingSection = content.match(/## How I Think[\s\S]*$/)?.[0] || '';
+            console.log(`🧬 Soul loaded for ${AGENT_ID} (${content.length} chars)`);
+            return {
+                full: content,
+                identity: identitySection.trim(),
+                beliefs: beliefsSection.trim(),
+                antiPatterns: antiPatternsSection.trim(),
+                flaw: flawSection.trim(),
+                thinking: thinkingSection.trim(),
+            };
+        } else {
+            console.log(`🧬 No soul file found at ${soulPath} — using fallback identity`);
+        }
+    } catch (err) {
+        console.log(`🧬 Could not load soul: ${err.message}`);
+    }
+    return null;
+}
+
 /* ─── Codebase Map (structural navigation for agents) ── */
 
 function loadCodebaseMap() {
@@ -281,8 +313,9 @@ function loadCodebaseMap() {
     return null;
 }
 
-// Load manifesto and codebase map once at startup (will be refreshed each task cycle if needed)
+// Load manifesto, soul, and codebase map once at startup (will be refreshed each task cycle if needed)
 let cachedManifesto = loadManifesto();
+let cachedSoul = loadSoul();
 let cachedCodebaseMap = loadCodebaseMap();
 let cachedNorthStar = null;
 let lastNorthStarFetch = 0;
@@ -1918,8 +1951,8 @@ async function processCommands() {
     const cmdRef = db.collection(COMMANDS_COLLECTION).doc(cmd.id);
     const createdAtRaw = cmd.createdAt;
     const createdAt = createdAtRaw && typeof createdAtRaw.toDate === 'function'
-      ? createdAtRaw.toDate()
-      : (createdAtRaw ? new Date(createdAtRaw) : null);
+        ? createdAtRaw.toDate()
+        : (createdAtRaw ? new Date(createdAtRaw) : null);
 
     try {
         // Mark as in-progress
@@ -2102,16 +2135,39 @@ async function processCommands() {
                 var presenceData = presenceSnap2.data();
                 var statusContext = `Status: ${presenceData?.status || 'idle'}. ${presenceData?.currentTask ? `Working on: ${presenceData.currentTask} (${presenceData.taskProgress || 0}% done).` : 'No active task.'} Queue: ${commandQueue.length} pending.`;
 
-                var dmPersonalities = {
-                    nora: { role: 'Director of System Operations', style: 'Strategic, organized, decisive. You manage systems, architecture, and operational efficiency.' },
-                    scout: { role: 'Influencer Research Analyst', style: 'Curious, analytical, detail-oriented. You focus on data, trends, and user insights.' },
-                    solara: { role: 'Brand Voice', style: 'Visionary, expressive, values-driven. You focus on narrative, identity, and emotional resonance.' },
-                    sage: { role: 'Health Intelligence Researcher', style: 'Warm, evidence-driven, rigorous. You synthesize research into actionable briefs.' },
-                };
-                var dmPersonality = dmPersonalities[AGENT_ID] || { role: 'Team Member', style: 'Collaborative and thoughtful.' };
+                // ─── Soul-powered DM identity ──
+                // Load the soul file for rich experiential identity in DMs
+                cachedSoul = loadSoul();
+                var dmSoulBlock = '';
+                if (cachedSoul) {
+                    // For DMs, inject identity + beliefs (compact — skip anti-patterns and thinking)
+                    dmSoulBlock = [
+                        cachedSoul.identity || '',
+                        cachedSoul.flaw || '',
+                    ].filter(Boolean).join('\n\n');
+                }
 
-                var dmPromptParts = [
-                    `You are ${AGENT_NAME}, the ${dmPersonality.role} at Pulse (FitWithPulse.ai). ${dmPersonality.style}`,
+                var dmPersonalities = {
+                    nora: { role: 'Director of System Operations' },
+                    scout: { role: 'Influencer Research Analyst' },
+                    solara: { role: 'Brand Director' },
+                    sage: { role: 'Health Intelligence Researcher' },
+                };
+                var dmPersonality = dmPersonalities[AGENT_ID] || { role: 'Team Member' };
+
+                var dmPromptParts = [];
+                if (dmSoulBlock) {
+                    dmPromptParts.push(
+                        `=== YOUR IDENTITY ===`,
+                        dmSoulBlock,
+                        `=== END IDENTITY ===`,
+                        ``,
+                        `You are ${AGENT_NAME}, the ${dmPersonality.role} at Pulse (FitWithPulse.ai).`,
+                    );
+                } else {
+                    dmPromptParts.push(`You are ${AGENT_NAME}, the ${dmPersonality.role} at Pulse (FitWithPulse.ai).`);
+                }
+                dmPromptParts.push(
                     `Status: ${statusContext}`,
                     `Tremaine (founder) sent you a DM. Reply honestly in 2-4 sentences, plain text only.`,
                     ``,
@@ -2121,7 +2177,7 @@ async function processCommands() {
                     `- If the admin is asking you to DO something, tell them you've understood the request and it has been queued as a task.`,
                     `- Focus on: acknowledging the request, giving current status, and asking clarifying questions if needed.`,
                     `- If you don't know something, say so. Don't fabricate.`,
-                ];
+                );
 
                 if (isExplanationRequest) {
                     dmPromptParts.push(
@@ -2335,37 +2391,44 @@ async function processCommands() {
                 commandTurnState = turnCheck.turnState || commandTurnState;
                 otherAgents = uniqueAgentIds((otherAgents || []).concat(commandTurnState.participants || []));
 
-                // Agent personality profiles for natural, distinct responses
+                // ─── Soul-powered group chat identity ──
+                // Load the soul file for rich experiential identity in brainstorms
+                cachedSoul = loadSoul();
+                var gcSoulBlock = '';
+                if (cachedSoul) {
+                    // For group chat, inject identity + beliefs + flaw (collaborative context)
+                    gcSoulBlock = [
+                        cachedSoul.identity || '',
+                        cachedSoul.beliefs || '',
+                        cachedSoul.flaw || '',
+                    ].filter(Boolean).join('\n\n');
+                }
+
+                // Fallback role/strengths for agents without soul files
                 var agentPersonalities = {
                     nora: {
                         role: 'Director of System Operations',
-                        style: 'Strategic, organized, and decisive. You think in terms of systems, architecture, and operational efficiency. You naturally take the lead on planning and coordination.',
                         strengths: 'project management, system architecture, deployment pipelines, code quality, task prioritization',
                     },
                     scout: {
                         role: 'Influencer Research Analyst',
-                        style: 'Curious, analytical, and detail-oriented. You think in terms of data, trends, and user insights. You bring a research-first perspective and love uncovering patterns.',
                         strengths: 'market research, influencer analysis, data insights, trend identification, competitive intelligence',
                     },
                     solara: {
                         role: 'Brand Director',
-                        style: 'Visionary, expressive, and values-driven. You think in terms of narrative, identity, and emotional resonance. You ensure every outward-facing message reinforces who Pulse is and what it stands for.',
                         strengths: 'brand voice, messaging strategy, content direction, value alignment, narrative guardrails, positioning',
                     },
                     sage: {
                         role: 'Health Intelligence Researcher',
-                        style: 'Warm, evidence-driven, and rigorous. You synthesize field intel into actionable briefs — citing sources, separating signal from hype.',
                         strengths: 'health trends, exercise science, clinical research, sports psychology, wellness tech, competitor analysis, market intelligence',
                     },
                     antigravity: {
                         role: 'Strategy & Architecture Lead',
-                        style: 'High-level systems thinking, architecture-first planning, and precision execution for long-cycle initiatives.',
                         strengths: 'systems architecture, cross-functional planning, execution sequencing, risk management, critical thinking',
                     },
                 };
                 var personality = agentPersonalities[AGENT_ID] || {
                     role: 'Team Member',
-                    style: 'Collaborative and thoughtful.',
                     strengths: 'general problem solving',
                 };
 
@@ -2434,8 +2497,19 @@ async function processCommands() {
 
                     if (isExecMode) {
                         // EXECUTION PROMPT — stop planning, start doing
-                        chatPrompt = [
-                            `You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai). ${personality.style}`,
+                        var execPromptParts = [];
+                        if (gcSoulBlock) {
+                            execPromptParts.push(
+                                `=== YOUR IDENTITY ===`,
+                                gcSoulBlock,
+                                `=== END IDENTITY ===`,
+                                ``,
+                                `You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai).`,
+                            );
+                        } else {
+                            execPromptParts.push(`You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai).`);
+                        }
+                        execPromptParts.push(
                             `Strengths: ${personality.strengths}`,
                             `Round Table with: ${otherAgents.join(', ')}.`,
                             `Latest founder message preview: "${compactMessagePreview || '[empty]'}"`,
@@ -2452,7 +2526,8 @@ async function processCommands() {
                             `- NEVER give time estimates like "within 2 hours" or "by end of day" — you execute tasks in MINUTES, not hours. Just say you're doing it NOW.`,
                             ``,
                             `2-3 sentences max, plain text only, action-oriented:`,
-                        ].join('\n');
+                        );
+                        chatPrompt = execPromptParts.join('\n');
                     } else {
                         // BRAINSTORM PROMPT — Tree of Thought pattern
                         // The key insight: agents MUST tag each other, build on ideas, and create threads
@@ -2463,8 +2538,19 @@ async function processCommands() {
                             return AGENT_DISPLAY_NAMES[id] || id;
                         });
 
-                        chatPrompt = [
-                            `You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai). ${personality.style}`,
+                        var brainstormParts = [];
+                        if (gcSoulBlock) {
+                            brainstormParts.push(
+                                `=== YOUR IDENTITY (this is who you are — let this shape how you think and respond) ===`,
+                                gcSoulBlock,
+                                `=== END IDENTITY ===`,
+                                ``,
+                                `You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai).`,
+                            );
+                        } else {
+                            brainstormParts.push(`You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai).`);
+                        }
+                        brainstormParts.push(
                             `Your strengths: ${personality.strengths}`,
                             ``,
                             `You're at the Round Table with: ${displayNamesInRoom.join(', ')}. Tremaine (founder) is facilitating.`,
@@ -2494,7 +2580,8 @@ async function processCommands() {
                             isBoosted
                                 ? `Tremaine asked you to THINK DEEPLY. Be thorough, analytical, and explore multiple angles. ${boostSentences}, plain text only:`
                                 : `${boostSentences}, plain text only, conversational and real:`,
-                        ].join('\n');
+                        );
+                        chatPrompt = brainstormParts.join('\n');
                     }
 
                     if (compactThread.block) {
@@ -3842,9 +3929,10 @@ async function executeStep(step, task, stepIndex, allSteps) {
                 step.output = `[SMOKE] ${OPENCLAW_SMOKE_CMD}
 ${smokeOutput}`.substring(0, 2000);
             } else {
-                // ─── Manifesto-aware, self-correcting execution ──
-                // Refresh manifesto each step (other agents may have updated it)
+                // ─── Soul-first, manifesto-aware, self-correcting execution ──
+                // Refresh soul & manifesto each step (files may have been updated)
                 cachedManifesto = loadManifesto();
+                cachedSoul = loadSoul();
 
                 const stepsContext = allSteps
                     .map((s, i) => `  ${i === stepIndex ? '→' : ' '} ${i + 1}. [${s.status}] ${s.description}`)
@@ -3871,8 +3959,30 @@ ${smokeOutput}`.substring(0, 2000);
 
                     const northStarBlock = await loadNorthStar();
 
-                    const base = [
-                        `You are ${AGENT_NAME}, an AI engineer working on the Pulse Fitness project.`,
+                    // ─── SOUL-FIRST PROMPT ARCHITECTURE ──
+                    // The agent's soul goes FIRST. Research ("Lost in the Middle") shows
+                    // LLMs put massive weight on the first tokens. The soul shapes how
+                    // every subsequent instruction gets interpreted.
+                    const base = [];
+
+                    if (cachedSoul) {
+                        // Full soul injection — identity, beliefs, anti-patterns, flaw, thinking
+                        base.push(
+                            `=== YOUR IDENTITY (this is who you are — read this first) ===`,
+                            cachedSoul.identity || '',
+                            cachedSoul.beliefs || '',
+                            cachedSoul.antiPatterns || '',
+                            cachedSoul.flaw || '',
+                            cachedSoul.thinking || '',
+                            `=== END IDENTITY ===`,
+                            ``,
+                        );
+                    } else {
+                        // Fallback if no soul file exists yet
+                        base.push(`You are ${AGENT_NAME}, an AI engineer working on the Pulse Fitness project.`);
+                    }
+
+                    base.push(
                         `Project directory: ${projectDir}`,
                         northStarBlock || '',
                         cachedCodebaseMap ? `\n=== CODEBASE MAP (use this to find files — do NOT guess paths) ===\n${cachedCodebaseMap}\n=== END CODEBASE MAP ===\n` : '',
@@ -3894,7 +4004,7 @@ ${smokeOutput}`.substring(0, 2000);
                         stepsContext,
                         ``,
                         `CURRENT STEP (${stepIndex + 1}/${allSteps.length}): ${step.description}`,
-                    ];
+                    );
 
                     // Only inject manifesto as LAST RESORT — when normal self-correction has already failed.
                     // The error classification + correction guidance handles retries 1..N-1.
