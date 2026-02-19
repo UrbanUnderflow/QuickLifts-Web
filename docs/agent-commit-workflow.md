@@ -7,7 +7,7 @@ This repo now supports automatic agent attribution in commit metadata without cr
 A commit-message hook is installed at `.githooks/commit-msg`.
 
 On every commit it appends:
-- a subject tag: `[agent: <name>]`
+- a subject tag prefix: `[<name>]`
 - a commit trailer: `Agent: <name>`
 
 ## One-time setup
