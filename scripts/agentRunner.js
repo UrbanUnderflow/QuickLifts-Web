@@ -86,8 +86,9 @@ function getAgentIdForTier(tier) {
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
 const OPENCLAW_MODEL_SYNC_MS = parseInt(process.env.OPENCLAW_MODEL_SYNC_MS || '60000', 10); // Keep presence model accurate after OpenClaw config changes
-const MAX_FOLLOW_UP_DEPTH = 5; // Max rounds of agent-to-agent @mention follow-ups
-const MAX_FOLLOW_UP_DEPTH_EXEC = 2; // Execution-mode: reduced but still allows one back-and-forth
+const MAX_FOLLOW_UP_DEPTH = parseInt(process.env.MAX_FOLLOW_UP_DEPTH || '2', 10); // Keep brainstorm threads bounded
+const MAX_FOLLOW_UP_DEPTH_EXEC = parseInt(process.env.MAX_FOLLOW_UP_DEPTH_EXEC || '1', 10); // Execution mode should converge quickly
+const ENABLE_ORGANIC_FOLLOW_UPS = process.env.ENABLE_ORGANIC_FOLLOW_UPS === 'true'; // Off by default; only explicit @mentions continue threads
 const MAX_SELF_CORRECTION_RETRIES = 2; // Retry attempts when step output contains failure signals
 const STEP_INACTIVITY_TIMEOUT_MS = parseInt(process.env.STEP_INACTIVITY_TIMEOUT_MS || '300000', 10); // Kill step if no stdout/stderr activity for 5m
 const MAX_STEP_REWRITE_ATTEMPTS = 1; // Rewrite-from-different-angle attempts on crash/timeout
@@ -2561,9 +2562,9 @@ async function processCommands() {
                             `─── TREE OF THOUGHT RULES ───`,
                             `You are in a brainstorming session. This is where the best ideas come from — agents riffing off each other.`,
                             ``,
-                            `CRITICAL — ENGAGE WITH YOUR TEAMMATES:`,
-                            `• You MUST @mention at least one other agent by name (use @Nora, @Scout, @Solara, or @Sage).`,
-                            `• Ask them a DIRECT question, build on something they said, or challenge their thinking.`,
+                            `COLLABORATE WITH INTENT:`,
+                            `• @mention another agent only when you need that specific person's input.`,
+                            `• If you already have enough context to answer, do NOT tag someone just to continue the thread.`,
                             `• Examples: "@Scout, have you seen data on this?" or "Building on @Nora's point about architecture..." or "@Solara, how does this fit the brand?"`,
                             ``,
                             `THINK OUT LOUD:`,
@@ -2576,6 +2577,7 @@ async function processCommands() {
                             `• Do NOT just agree — add a new angle, challenge, or question.`,
                             `• Do NOT repeat what others already said — build on it or push it further.`,
                             `• Be conversational, warm, and real. This is colleagues brainstorming, not a formal report.`,
+                            `• End with one concrete line: "Next step: <owner> will <action>".`,
                             ``,
                             isBoosted
                                 ? `Tremaine asked you to THINK DEEPLY. Be thorough, analytical, and explore multiple angles. ${boostSentences}, plain text only:`
@@ -2841,9 +2843,8 @@ async function processCommands() {
                             }
                         }
 
-                        // ── Detect @mentions and trigger follow-up responses ──
-                        // ALSO: organically trigger follow-ups even without explicit @mentions
-                        // This is the engine of the tree-of-thought pattern.
+                        // ── Detect explicit @mentions and trigger follow-up responses ──
+                        // Follow-ups are intentionally conservative so chats converge.
                         var currentDepth = cmd.context?.followUpDepth || 0;
                         var knownAgents = AGENT_DISPLAY_NAMES;
                         var followUpCandidates = uniqueAgentIds((commandTurnState.participants || [AGENT_ID]).filter(function (id) {
@@ -2863,9 +2864,15 @@ async function processCommands() {
                             }
                         }
 
-                        // ── Organic follow-up: if no explicit @mention but conversation is substantive,
-                        // pick the most relevant agent to continue the thread ──
-                        if (mentionedAgentIds.length === 0 && currentDepth < 3 && gcResponse.length > 100) {
+                        var responseHasQuestion = /\?/.test(gcResponse || '');
+                        var responseHasClosureSignal = /\b(decision|recommend(?:ation)?|next step|owner|action)\b/i.test(gcResponse || '');
+                        if (mentionedAgentIds.length > 0 && responseHasClosureSignal && !responseHasQuestion) {
+                            console.log(`   ✅ ${AGENT_NAME} response looks conclusive — not extending follow-up chain`);
+                            mentionedAgentIds = [];
+                        }
+
+                        // Optional organic follow-up mode (off by default)
+                        if (ENABLE_ORGANIC_FOLLOW_UPS && mentionedAgentIds.length === 0 && currentDepth < 3 && gcResponse.length > 100) {
                             // Determine which agent would best continue this thread based on content
                             var responseWords = gcResponse.toLowerCase();
                             var agentRelevance = {};
@@ -2886,15 +2893,7 @@ async function processCommands() {
                                 .sort((a, b) => b[1] - a[1]);
                             if (sortedByRelevance.length > 0 && sortedByRelevance[0][1] > 0) {
                                 mentionedAgentIds.push(sortedByRelevance[0][0]);
-                                console.log(`   🌿 Organic follow-up: ${AGENT_NAME}'s response touches ${knownAgents[sortedByRelevance[0][0]]}'s expertise → triggering thread`);
-                            } else if (currentDepth < 2) {
-                                // At early depths, always keep the conversation going
-                                var otherIds = followUpCandidates;
-                                if (otherIds.length > 0) {
-                                    var randomPick = otherIds[Math.floor(Math.random() * otherIds.length)];
-                                    mentionedAgentIds.push(randomPick);
-                                    console.log(`   🎲 Organic follow-up: random pick → @${knownAgents[randomPick]} to keep the thread alive (depth ${currentDepth})`);
-                                }
+                                console.log(`   🌿 Organic follow-up enabled: ${AGENT_NAME}'s response touches ${knownAgents[sortedByRelevance[0][0]]}'s expertise`);
                             }
                         }
 
