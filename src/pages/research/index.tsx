@@ -3,7 +3,7 @@ import type { NextPage } from 'next';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import PageHead from '../../components/PageHead';
-import { collection, getDocs, query, where, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, Timestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 
 // ─── Research categories ───────────────────────────────────────────
@@ -54,28 +54,47 @@ const ArticleCard: React.FC<{ article: Article; index: number }> = ({ article, i
     >
       <Link href={`/research/${article.slug}`} className="block group">
         <article className="py-8 border-b border-stone-200 transition-colors duration-300 group-hover:border-stone-400">
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            {/* Left: content */}
-            <div className="flex-1 max-w-2xl">
-              <div className="flex items-center gap-3 mb-3">
-                <span className="text-sm font-medium text-stone-500">{article.category}</span>
-                <span className="text-stone-300">·</span>
-                <span className="text-sm text-stone-400">{formatDate(article.publishedAt || article.createdAt)}</span>
+          <div className="flex flex-col md:flex-row md:items-start gap-6">
+            {/* Featured image thumbnail */}
+            {article.featuredImage && (
+              <div className="w-full md:w-56 lg:w-64 flex-shrink-0 aspect-[16/10] rounded-lg overflow-hidden bg-stone-100 group-hover:shadow-md transition-shadow duration-300">
+                <img
+                  src={article.featuredImage}
+                  alt={article.title}
+                  className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500"
+                />
               </div>
+            )}
 
-              <h3 className="text-xl md:text-2xl font-semibold text-stone-900 mb-2 group-hover:text-stone-700 transition-colors duration-300 leading-tight">
-                {article.title}
-              </h3>
+            {/* Content */}
+            <div className="flex-1 flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+              <div className="flex-1 max-w-2xl">
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-sm font-medium text-stone-500">{article.category}</span>
+                  <span className="text-stone-300">·</span>
+                  <span className="text-sm text-stone-400">{formatDate(article.publishedAt || article.createdAt)}</span>
+                </div>
 
-              <p className="text-base text-stone-500 leading-relaxed line-clamp-3">
-                {article.excerpt}
-              </p>
-            </div>
+                <h3 className="text-xl md:text-2xl font-semibold text-stone-900 mb-2 group-hover:text-stone-700 transition-colors duration-300 leading-tight">
+                  {article.title}
+                </h3>
 
-            {/* Right: meta */}
-            <div className="flex items-center gap-4 md:flex-col md:items-end md:gap-2 flex-shrink-0">
-              <span className="text-sm text-stone-400">{article.readTime}</span>
-              <span className="text-sm text-stone-400">By {article.author}</span>
+                <p className="text-base text-stone-500 leading-relaxed line-clamp-3">
+                  {article.excerpt}
+                </p>
+
+                <div className="flex items-center gap-4 mt-4">
+                  <span className="text-sm text-stone-400">By {article.author}</span>
+                  <span className="text-stone-300">·</span>
+                  <span className="text-sm text-stone-400">{article.readTime}</span>
+                  <span className="inline-flex items-center gap-1 text-sm font-medium text-stone-900 group-hover:text-stone-600 transition-colors ml-auto">
+                    Read article
+                    <svg className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                    </svg>
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </article>
@@ -160,20 +179,18 @@ const ResearchPage: NextPage = () => {
   useEffect(() => {
     const fetchArticles = async () => {
       try {
-        const articlesQuery = query(
-          collection(db, 'researchArticles'),
-          where('status', '==', 'published'),
-          orderBy('publishedAt', 'desc')
-        );
-        const snapshot = await getDocs(articlesQuery);
-        const articlesData = snapshot.docs.map(doc => ({
-          slug: doc.id,
-          ...doc.data()
-        })) as Article[];
-        setArticles(articlesData);
+        const snapshot = await getDocs(collection(db, 'researchArticles'));
+        const publishedArticles = snapshot.docs
+          .map(doc => ({ slug: doc.id, ...doc.data() }) as Article)
+          .filter(article => article.status === 'published')
+          .sort((a, b) => {
+            const aTime = a.publishedAt?.toMillis?.() || a.createdAt?.toMillis?.() || 0;
+            const bTime = b.publishedAt?.toMillis?.() || b.createdAt?.toMillis?.() || 0;
+            return bTime - aTime;
+          });
+        setArticles(publishedArticles);
       } catch (error) {
-        console.error('Error fetching articles:', error);
-        // Fallback to empty array
+        console.error('[Research] Error fetching articles:', error);
         setArticles([]);
       } finally {
         setLoading(false);
@@ -188,7 +205,7 @@ const ResearchPage: NextPage = () => {
     : articles.filter((a) => a.category === activeCategory);
 
   const featuredArticle = filteredArticles.find((a) => a.featured);
-  const remainingArticles = filteredArticles.filter((a) => !a.featured);
+  const remainingArticles = filteredArticles.filter((a) => a.slug !== featuredArticle?.slug);
 
   return (
     <>
@@ -300,8 +317,8 @@ const ResearchPage: NextPage = () => {
                 key={cat}
                 onClick={() => setActiveCategory(cat)}
                 className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${activeCategory === cat
-                    ? 'bg-stone-900 text-white'
-                    : 'bg-transparent text-stone-500 hover:text-stone-800 hover:bg-stone-100'
+                  ? 'bg-stone-900 text-white'
+                  : 'bg-transparent text-stone-500 hover:text-stone-800 hover:bg-stone-100'
                   }`}
               >
                 {cat}

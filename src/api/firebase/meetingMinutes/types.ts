@@ -15,6 +15,10 @@ export interface MeetingMinutes {
     nextActions?: ActionItem[];
     highlights?: HighlightItem[];
     risksOrOpenQuestions?: string[];
+
+    // Standup metadata (present when auto-generated from standup)
+    isStandup?: boolean;
+    standupType?: 'morning' | 'evening';
 }
 
 export interface InsightItem {

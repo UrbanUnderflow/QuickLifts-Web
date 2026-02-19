@@ -1,37 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import {
-  X, Clock, Sun, Moon, Calendar, ToggleLeft, ToggleRight,
-  Users, Settings,
+  X, Clock, Activity, Calendar, ToggleLeft, ToggleRight,
+  Users, Settings, Zap,
 } from 'lucide-react';
 import { db } from '../../api/firebase/config';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 /* ─── Types ─────────────────────────────────────────── */
 
-interface StandupSchedule {
-  morningEnabled: boolean;
-  morningHour: number;
-  morningMinute: number;
-  eveningEnabled: boolean;
-  eveningHour: number;
-  eveningMinute: number;
+interface TelemetrySchedule {
+  enabled: boolean;
+  intervalMinutes: number; // 60 = every hour, 30 = every 30min, etc.
   moderator: string;
   agents: string[];
   maxDurationMinutes: number;
   lastUpdatedAt?: any;
 }
 
-const DEFAULT_CONFIG: StandupSchedule = {
-  morningEnabled: true,
-  morningHour: 9,
-  morningMinute: 0,
-  eveningEnabled: true,
-  eveningHour: 21,
-  eveningMinute: 0,
+const DEFAULT_CONFIG: TelemetrySchedule = {
+  enabled: true,
+  intervalMinutes: 60,
   moderator: 'nora',
   agents: ['nora', 'scout', 'solara', 'sage'],
-  maxDurationMinutes: 20,
+  maxDurationMinutes: 10,
 };
 
 const CONFIG_DOC_PATH = 'standup-config/default';
@@ -43,12 +35,12 @@ const AGENT_MAP: Record<string, { color: string; emoji: string }> = {
   sage: { color: '#06b6d4', emoji: '🧬' },
 };
 
-const formatTime12 = (hour: number, minute: number): string => {
-  const period = hour >= 12 ? 'PM' : 'AM';
-  const h = hour % 12 || 12;
-  const m = minute.toString().padStart(2, '0');
-  return `${h}:${m} ${period}`;
-};
+const INTERVAL_OPTIONS = [
+  { value: 30, label: 'Every 30 min' },
+  { value: 60, label: 'Every hour' },
+  { value: 120, label: 'Every 2 hours' },
+  { value: 180, label: 'Every 3 hours' },
+];
 
 interface StandupConfigPanelProps {
   onClose: () => void;
@@ -57,7 +49,7 @@ interface StandupConfigPanelProps {
 /* ─── Component ─────────────────────────────────────── */
 
 export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose }) => {
-  const [config, setConfig] = useState<StandupSchedule>(DEFAULT_CONFIG);
+  const [config, setConfig] = useState<TelemetrySchedule>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -68,10 +60,18 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
       try {
         const snap = await getDoc(doc(db, CONFIG_DOC_PATH));
         if (snap.exists()) {
-          setConfig({ ...DEFAULT_CONFIG, ...snap.data() } as StandupSchedule);
+          const data = snap.data();
+          // Migrate from old morning/evening format
+          setConfig({
+            enabled: data.enabled ?? data.morningEnabled ?? true,
+            intervalMinutes: data.intervalMinutes ?? 60,
+            moderator: data.moderator ?? 'nora',
+            agents: data.agents ?? ['nora', 'scout', 'solara', 'sage'],
+            maxDurationMinutes: data.maxDurationMinutes ?? 10,
+          });
         }
       } catch (err) {
-        console.error('Failed to load standup config:', err);
+        console.error('Failed to load telemetry config:', err);
       } finally {
         setLoading(false);
       }
@@ -89,13 +89,13 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
       setDirty(false);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
-      console.error('Failed to save standup config:', err);
+      console.error('Failed to save telemetry config:', err);
     } finally {
       setSaving(false);
     }
   };
 
-  const update = <K extends keyof StandupSchedule>(key: K, value: StandupSchedule[K]) => {
+  const update = <K extends keyof TelemetrySchedule>(key: K, value: TelemetrySchedule[K]) => {
     setConfig(prev => ({ ...prev, [key]: value }));
     setDirty(true);
   };
@@ -110,6 +110,26 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
     setDirty(true);
   };
 
+  // Compute the next check time (upcoming hour boundary)
+  const now = new Date();
+  const nextCheckMinute = config.intervalMinutes;
+  const nextCheck = new Date(now);
+  if (nextCheckMinute === 60) {
+    nextCheck.setHours(now.getHours() + 1, 0, 0, 0);
+  } else if (nextCheckMinute === 30) {
+    const nextHalf = now.getMinutes() < 30 ? 30 : 60;
+    if (nextHalf === 60) {
+      nextCheck.setHours(now.getHours() + 1, 0, 0, 0);
+    } else {
+      nextCheck.setMinutes(30, 0, 0);
+    }
+  } else {
+    const intervalsToday = Math.ceil((now.getHours() * 60 + now.getMinutes()) / nextCheckMinute);
+    const nextMinutes = intervalsToday * nextCheckMinute;
+    nextCheck.setHours(Math.floor(nextMinutes / 60), nextMinutes % 60, 0, 0);
+  }
+  const nextCheckStr = nextCheck.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
   const panel = (
     <div className="scp-overlay" onClick={onClose}>
       <div className="scp-panel" onClick={e => e.stopPropagation()}>
@@ -118,11 +138,11 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
         <div className="scp-header">
           <div className="scp-hdr-left">
             <div className="scp-hdr-icon">
-              <Calendar className="w-5 h-5" />
+              <Activity className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="scp-hdr-title">Standup Schedule</h2>
-              <p className="scp-hdr-sub">Daily meeting configuration</p>
+              <h2 className="scp-hdr-title">Telemetry Schedule</h2>
+              <p className="scp-hdr-sub">Heartbeat Protocol · System health checks</p>
             </div>
           </div>
           <button className="scp-close" onClick={onClose}><X className="w-4 h-4" /></button>
@@ -134,82 +154,56 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
             <div className="scp-loading"><div className="scp-spinner" /><p>Loading config…</p></div>
           ) : (
             <>
-              {/* ── Morning card ── */}
-              <div className={`scp-card ${config.morningEnabled ? '' : 'scp-card-off'}`}>
+              {/* ── Enable/Disable ── */}
+              <div className={`scp-card ${config.enabled ? '' : 'scp-card-off'}`}>
                 <div className="scp-card-row">
                   <div className="scp-card-left">
-                    <div className="scp-card-icon scp-morning-icon"><Sun className="w-4 h-4" /></div>
+                    <div className="scp-card-icon scp-telemetry-icon"><Zap className="w-4 h-4" /></div>
                     <div>
-                      <div className="scp-card-name">Morning Standup</div>
-                      <div className="scp-card-time">{formatTime12(config.morningHour, config.morningMinute)} EST</div>
+                      <div className="scp-card-name">Telemetry Checks</div>
+                      <div className="scp-card-time">
+                        {config.enabled
+                          ? `Running ${INTERVAL_OPTIONS.find(o => o.value === config.intervalMinutes)?.label?.toLowerCase() || 'every hour'}`
+                          : 'Disabled'}
+                      </div>
                     </div>
                   </div>
-                  <button className="scp-toggle" onClick={() => update('morningEnabled', !config.morningEnabled)}>
-                    {config.morningEnabled
-                      ? <ToggleRight className="w-7 h-7" style={{ color: '#f59e0b' }} />
-                      : <ToggleLeft className="w-7 h-7" style={{ color: '#3f3f46' }} />}
-                  </button>
-                </div>
-                {config.morningEnabled && (
-                  <div className="scp-time-row">
-                    <div className="scp-time-field">
-                      <span className="scp-time-label">Hour</span>
-                      <select className="scp-sel" value={config.morningHour} onChange={e => update('morningHour', +e.target.value)}>
-                        {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>)}
-                      </select>
-                    </div>
-                    <span className="scp-colon">:</span>
-                    <div className="scp-time-field">
-                      <span className="scp-time-label">Min</span>
-                      <select className="scp-sel" value={config.morningMinute} onChange={e => update('morningMinute', +e.target.value)}>
-                        {[0, 15, 30, 45].map(m => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* ── Evening card ── */}
-              <div className={`scp-card ${config.eveningEnabled ? '' : 'scp-card-off'}`}>
-                <div className="scp-card-row">
-                  <div className="scp-card-left">
-                    <div className="scp-card-icon scp-evening-icon"><Moon className="w-4 h-4" /></div>
-                    <div>
-                      <div className="scp-card-name">Evening Standup</div>
-                      <div className="scp-card-time">{formatTime12(config.eveningHour, config.eveningMinute)} EST</div>
-                    </div>
-                  </div>
-                  <button className="scp-toggle" onClick={() => update('eveningEnabled', !config.eveningEnabled)}>
-                    {config.eveningEnabled
+                  <button className="scp-toggle" onClick={() => update('enabled', !config.enabled)}>
+                    {config.enabled
                       ? <ToggleRight className="w-7 h-7" style={{ color: '#818cf8' }} />
                       : <ToggleLeft className="w-7 h-7" style={{ color: '#3f3f46' }} />}
                   </button>
                 </div>
-                {config.eveningEnabled && (
-                  <div className="scp-time-row">
-                    <div className="scp-time-field">
-                      <span className="scp-time-label">Hour</span>
-                      <select className="scp-sel" value={config.eveningHour} onChange={e => update('eveningHour', +e.target.value)}>
-                        {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{i.toString().padStart(2, '0')}</option>)}
-                      </select>
-                    </div>
-                    <span className="scp-colon">:</span>
-                    <div className="scp-time-field">
-                      <span className="scp-time-label">Min</span>
-                      <select className="scp-sel" value={config.eveningMinute} onChange={e => update('eveningMinute', +e.target.value)}>
-                        {[0, 15, 30, 45].map(m => <option key={m} value={m}>{m.toString().padStart(2, '0')}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                )}
               </div>
+
+              {/* ── Interval selector ── */}
+              {config.enabled && (
+                <div className="scp-section">
+                  <div className="scp-section-hdr"><Clock className="w-3.5 h-3.5" /> Check Frequency</div>
+                  <div className="scp-interval-grid">
+                    {INTERVAL_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        className={`scp-interval-btn ${config.intervalMinutes === opt.value ? 'scp-interval-active' : ''}`}
+                        onClick={() => update('intervalMinutes', opt.value)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="scp-section-desc">
+                    System health, idle agent detection, and work assignment runs on this cadence.
+                    Telemetry over ceremony.
+                  </p>
+                </div>
+              )}
 
               {/* ── Duration ── */}
               <div className="scp-section">
                 <div className="scp-section-hdr"><Clock className="w-3.5 h-3.5" /> Max Duration</div>
                 <div className="scp-dur-row">
                   <input
-                    type="range" min={10} max={30} step={5}
+                    type="range" min={5} max={20} step={5}
                     value={config.maxDurationMinutes}
                     onChange={e => update('maxDurationMinutes', +e.target.value)}
                     className="scp-slider"
@@ -220,7 +214,7 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
 
               {/* ── Moderator ── */}
               <div className="scp-section">
-                <div className="scp-section-hdr"><Settings className="w-3.5 h-3.5" /> Moderator</div>
+                <div className="scp-section-hdr"><Settings className="w-3.5 h-3.5" /> Check Lead</div>
                 <div className="scp-chips">
                   {Object.entries(AGENT_MAP).map(([id, { color, emoji }]) => {
                     const active = config.moderator === id;
@@ -245,7 +239,7 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
 
               {/* ── Participants ── */}
               <div className="scp-section">
-                <div className="scp-section-hdr"><Users className="w-3.5 h-3.5" /> Participants</div>
+                <div className="scp-section-hdr"><Users className="w-3.5 h-3.5" /> Agents Monitored</div>
                 <div className="scp-chips">
                   {Object.entries(AGENT_MAP).map(([id, { color, emoji }]) => {
                     const active = config.agents.includes(id);
@@ -268,16 +262,31 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
                 </div>
               </div>
 
-              {/* ── Next standup ── */}
+              {/* ── Next check ── */}
               <div className="scp-next">
-                <Clock className="w-3.5 h-3.5" />
+                <Activity className="w-3.5 h-3.5" />
                 <span>
-                  Next:{' '}
-                  {config.morningEnabled
-                    ? `Morning at ${formatTime12(config.morningHour, config.morningMinute)}`
-                    : config.eveningEnabled
-                      ? `Evening at ${formatTime12(config.eveningHour, config.eveningMinute)}`
-                      : 'None scheduled'}
+                  {config.enabled
+                    ? `Next telemetry check: ${nextCheckStr}`
+                    : 'Telemetry checks disabled'}
+                </span>
+              </div>
+
+              {/* ── Protocol info ── */}
+              <div className="scp-protocol-info">
+                <div className="scp-protocol-title">⚡ Heartbeat Protocol</div>
+                <p className="scp-protocol-desc">
+                  Replaces traditional standups with continuous system monitoring.
+                  Each check scans agent health, detects idle workers, and assigns
+                  new Capsules from the backlog automatically.
+                </p>
+              </div>
+
+              {/* ── Timezone indicator ── */}
+              <div className="scp-tz-info">
+                <span style={{ fontSize: 11, color: '#71717a' }}>
+                  🌍 Timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                  {' '}({new Date().toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop()})
                 </span>
               </div>
             </>
@@ -340,38 +349,33 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
         .scp-close {
           width: 32px; height: 32px; border-radius: 8px;
           border: none; background: rgba(255,255,255,0.04);
-          color: #71717a; cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-          transition: all .15s;
+          color: #a1a1aa; cursor: pointer; display: flex;
+          align-items: center; justify-content: center;
         }
-        .scp-close:hover { background: rgba(255,255,255,0.08); color: #d4d4d8; }
+        .scp-close:hover { background: rgba(255,255,255,0.08); }
 
         /* ── Body ── */
         .scp-body { flex: 1; overflow-y: auto; padding: 16px 18px; }
-
         .scp-loading {
           display: flex; flex-direction: column; align-items: center;
-          padding: 60px 20px; color: #52525b; font-size: 13px;
+          justify-content: center; gap: 12px; height: 200px; color: #71717a;
         }
         .scp-spinner {
-          width: 28px; height: 28px;
-          border: 2px solid rgba(129,140,248,0.15);
-          border-top-color: #818cf8;
-          border-radius: 50%; animation: scpSpin .7s linear infinite;
-          margin-bottom: 12px;
+          width: 28px; height: 28px; border-radius: 50%;
+          border: 2.5px solid rgba(255,255,255,0.06);
+          border-top-color: #818cf8; animation: spin 0.8s linear infinite;
         }
-        @keyframes scpSpin { to { transform: rotate(360deg) } }
+        @keyframes spin { to { transform: rotate(360deg) } }
 
-        /* ── Schedule cards ── */
+        /* ── Cards ── */
         .scp-card {
-          border-radius: 14px;
-          background: rgba(255,255,255,0.03);
           border: 1px solid rgba(255,255,255,0.06);
-          padding: 16px;
-          margin-bottom: 10px;
-          transition: opacity .2s;
+          border-radius: 14px; padding: 14px 16px;
+          background: rgba(255,255,255,0.02);
+          margin-bottom: 16px;
+          transition: all .2s;
         }
-        .scp-card-off { opacity: 0.4; }
+        .scp-card-off { opacity: 0.5; }
         .scp-card-row {
           display: flex; align-items: center; justify-content: space-between;
         }
@@ -379,146 +383,141 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
         .scp-card-icon {
           width: 36px; height: 36px; border-radius: 10px;
           display: flex; align-items: center; justify-content: center;
-          flex-shrink: 0;
         }
-        .scp-morning-icon {
-          background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.2);
-          color: #fbbf24;
-        }
-        .scp-evening-icon {
-          background: rgba(129,140,248,0.12); border: 1px solid rgba(129,140,248,0.2);
-          color: #a5b4fc;
+        .scp-telemetry-icon {
+          background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.1));
+          border: 1px solid rgba(129,140,248,0.2);
+          color: #818cf8;
         }
         .scp-card-name { font-size: 14px; font-weight: 600; color: #e4e4e7; }
         .scp-card-time { font-size: 11px; color: #71717a; margin-top: 1px; }
-
         .scp-toggle {
           background: none; border: none; cursor: pointer;
-          padding: 2px; border-radius: 6px; display: flex;
-        }
-        .scp-toggle:hover { background: rgba(255,255,255,0.04); }
-
-        /* ── Time picker row ── */
-        .scp-time-row {
-          display: flex; align-items: flex-end; gap: 0;
-          margin-top: 14px; padding-top: 14px;
-          border-top: 1px solid rgba(255,255,255,0.04);
-        }
-        .scp-time-field { display: flex; flex-direction: column; gap: 5px; }
-        .scp-time-label {
-          font-size: 10px; font-weight: 600; color: #52525b;
-          text-transform: uppercase; letter-spacing: .5px;
-        }
-        .scp-sel {
-          appearance: none; -webkit-appearance: none;
-          background: rgba(255,255,255,0.06);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 10px;
-          padding: 8px 14px;
-          color: #e4e4e7; font-size: 18px; font-weight: 700;
-          font-family: 'SF Mono', 'Menlo', monospace;
-          cursor: pointer; outline: none;
-          min-width: 72px; text-align: center;
-          transition: border-color .15s;
-        }
-        .scp-sel:focus { border-color: rgba(129,140,248,0.5); }
-        .scp-sel option { background: #1a1a2e; color: #e4e4e7; }
-        .scp-colon {
-          font-size: 22px; font-weight: 800; color: #3f3f46;
-          padding: 0 6px 8px;
+          display: flex; align-items: center; padding: 4px;
         }
 
         /* ── Sections ── */
-        .scp-section {
-          margin-top: 18px; padding-top: 18px;
-          border-top: 1px solid rgba(255,255,255,0.04);
-        }
+        .scp-section { margin-bottom: 18px; }
         .scp-section-hdr {
-          font-size: 10px; font-weight: 700; color: #71717a;
-          text-transform: uppercase; letter-spacing: .6px;
           display: flex; align-items: center; gap: 6px;
-          margin-bottom: 12px;
+          font-size: 11px; font-weight: 600; color: #a1a1aa;
+          text-transform: uppercase; letter-spacing: 0.7px;
+          margin-bottom: 10px;
+        }
+        .scp-section-desc {
+          font-size: 11px; color: #52525b; margin: 8px 0 0;
+          line-height: 1.5; font-style: italic;
         }
 
-        /* ── Duration slider ── */
-        .scp-dur-row { display: flex; align-items: center; gap: 14px; }
+        /* ── Interval grid ── */
+        .scp-interval-grid {
+          display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+        }
+        .scp-interval-btn {
+          padding: 10px 12px; border-radius: 10px;
+          border: 1px solid rgba(255,255,255,0.06);
+          background: rgba(255,255,255,0.02);
+          color: #a1a1aa; font-size: 12px; font-weight: 500;
+          cursor: pointer; transition: all .15s;
+        }
+        .scp-interval-btn:hover {
+          background: rgba(255,255,255,0.04);
+          border-color: rgba(255,255,255,0.1);
+        }
+        .scp-interval-active {
+          background: rgba(99,102,241,0.12) !important;
+          border-color: rgba(99,102,241,0.4) !important;
+          color: #a5b4fc !important;
+        }
+
+        /* ── Duration ── */
+        .scp-dur-row { display: flex; align-items: center; gap: 12px; }
         .scp-slider {
-          flex: 1; -webkit-appearance: none;
-          height: 5px; border-radius: 3px;
-          background: linear-gradient(90deg, rgba(129,140,248,0.25), rgba(129,140,248,0.08));
+          flex: 1; -webkit-appearance: none; height: 4px;
+          border-radius: 4px; background: rgba(255,255,255,0.06);
           outline: none;
         }
         .scp-slider::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          width: 20px; height: 20px; border-radius: 50%;
-          background: linear-gradient(135deg, #818cf8, #6366f1);
-          cursor: pointer;
-          box-shadow: 0 2px 10px rgba(99,102,241,0.4);
-          border: 2px solid #10101c;
+          -webkit-appearance: none; width: 16px; height: 16px;
+          border-radius: 50%; background: #818cf8; cursor: pointer;
+          border: 2px solid #1e1b4b;
         }
         .scp-dur-badge {
-          font-size: 15px; font-weight: 700; color: #a5b4fc;
-          min-width: 55px; text-align: right;
-          font-family: 'SF Mono', 'Menlo', monospace;
+          background: rgba(255,255,255,0.04); padding: 4px 10px;
+          border-radius: 6px; font-size: 12px; font-weight: 600;
+          color: #a5b4fc; min-width: 55px; text-align: center;
+          border: 1px solid rgba(129,140,248,0.15);
         }
 
-        /* ── Chips (moderator + participants) ── */
-        .scp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+        /* ── Chips ── */
+        .scp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
         .scp-chip {
           display: flex; align-items: center; gap: 6px;
           padding: 7px 14px; border-radius: 20px;
-          border: 1.5px solid rgba(255,255,255,0.08);
-          background: rgba(255,255,255,0.03);
-          color: #71717a;
-          font-size: 12px; font-weight: 600;
+          border: 1px solid rgba(255,255,255,0.06);
+          background: rgba(255,255,255,0.02);
+          color: #a1a1aa; font-size: 12px; font-weight: 500;
           cursor: pointer; transition: all .15s;
         }
-        .scp-chip:hover { border-color: rgba(255,255,255,0.15); color: #a1a1aa; }
-        .scp-chip-on { font-weight: 700; }
-        .scp-chip-emoji { font-size: 13px; }
+        .scp-chip:hover { background: rgba(255,255,255,0.04); }
+        .scp-chip-on { font-weight: 600; }
+        .scp-chip-emoji { font-size: 14px; }
         .scp-chip-dot {
-          width: 7px; height: 7px; border-radius: 50%;
-          transition: background .15s;
+          width: 6px; height: 6px; border-radius: 50%; transition: background .2s;
         }
 
-        /* ── Next standup info ── */
+        /* ── Next check ── */
         .scp-next {
           display: flex; align-items: center; gap: 8px;
-          margin-top: 20px; padding: 12px 14px;
-          border-radius: 10px;
-          background: rgba(129,140,248,0.06);
-          border: 1px solid rgba(129,140,248,0.1);
-          color: #a1a1aa; font-size: 12px;
+          padding: 10px 14px; border-radius: 10px;
+          background: rgba(99,102,241,0.06);
+          border: 1px solid rgba(99,102,241,0.12);
+          color: #a5b4fc; font-size: 12px; font-weight: 500;
+          margin-bottom: 12px;
         }
+
+        /* ── Protocol info ── */
+        .scp-protocol-info {
+          padding: 12px 14px; border-radius: 10px;
+          background: rgba(139,92,246,0.06);
+          border: 1px solid rgba(139,92,246,0.12);
+          margin-bottom: 12px;
+        }
+        .scp-protocol-title {
+          font-size: 12px; font-weight: 700; color: #c4b5fd;
+          margin-bottom: 6px;
+        }
+        .scp-protocol-desc {
+          font-size: 11px; color: #71717a; line-height: 1.6; margin: 0;
+        }
+
+        /* ── TZ ── */
+        .scp-tz-info { padding: 4px 0 8px; text-align: center; }
 
         /* ── Footer ── */
         .scp-footer {
-          display: flex; gap: 8px;
-          padding: 14px 18px;
+          display: flex; gap: 10px; padding: 14px 18px;
           border-top: 1px solid rgba(255,255,255,0.06);
         }
         .scp-btn-cancel {
-          flex: 1; padding: 11px;
-          border-radius: 10px;
-          border: 1px solid rgba(255,255,255,0.08);
-          background: transparent;
-          color: #71717a; font-size: 13px; font-weight: 600;
-          cursor: pointer; transition: all .15s;
+          flex: 1; padding: 10px; border-radius: 10px;
+          border: 1px solid rgba(255,255,255,0.06);
+          background: rgba(255,255,255,0.02);
+          color: #a1a1aa; font-size: 13px; cursor: pointer;
         }
-        .scp-btn-cancel:hover { background: rgba(255,255,255,0.04); color: #a1a1aa; }
         .scp-btn-save {
-          flex: 1; padding: 11px;
-          border-radius: 10px; border: none;
-          background: linear-gradient(135deg, #6366f1, #4f46e5);
-          color: #fff; font-size: 13px; font-weight: 600;
+          flex: 1; padding: 10px; border-radius: 10px;
+          border: 1px solid rgba(99,102,241,0.3);
+          background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.15));
+          color: #c7d2fe; font-size: 13px; font-weight: 600;
           cursor: pointer; transition: all .15s;
         }
-        .scp-btn-save:disabled { opacity: 0.35; cursor: not-allowed; }
-        .scp-btn-save:not(:disabled):hover {
-          filter: brightness(1.15);
-          box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+        .scp-btn-save:hover:not(:disabled) {
+          background: linear-gradient(135deg, rgba(99,102,241,0.3), rgba(139,92,246,0.25));
+          border-color: rgba(99,102,241,0.5);
         }
-        .scp-saved { background: linear-gradient(135deg, #22c55e, #16a34a) !important; }
+        .scp-btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
+        .scp-saved { border-color: rgba(34,197,94,0.4) !important; color: #86efac !important; }
       `}</style>
     </div>
   );

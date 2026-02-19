@@ -77,6 +77,118 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
     return () => unsubscribe();
   }, [chatId]);
 
+  // ── Nora auto-follow-up: keeps brainstorm dialog alive ──
+  // Triggers after 15 seconds of silence (no typing, no new messages)
+  const followUpCountRef = useRef(0);
+  const followUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isGeneratingFollowUp = useRef(false);
+  const MAX_AUTO_FOLLOWUPS = 10;
+
+  const clearFollowUpTimer = useCallback(() => {
+    if (followUpTimerRef.current) {
+      clearTimeout(followUpTimerRef.current);
+      followUpTimerRef.current = null;
+    }
+  }, []);
+
+  const startFollowUpTimer = useCallback(() => {
+    clearFollowUpTimer();
+    if (followUpCountRef.current >= MAX_AUTO_FOLLOWUPS) return;
+    if (isGeneratingFollowUp.current) return;
+
+    followUpTimerRef.current = setTimeout(async () => {
+      if (isGeneratingFollowUp.current) return;
+      isGeneratingFollowUp.current = true;
+
+      try {
+        // Gather recent conversation context
+        const currentMessages = messagesRef.current;
+        const recentContext = currentMessages.slice(-4).map(msg => {
+          const parts: string[] = [];
+          if (msg.from === 'admin') {
+            parts.push(`[Admin]: ${msg.content}`);
+          } else if (msg.from !== 'admin') {
+            parts.push(`[${msg.from}]: ${msg.content}`);
+          }
+          Object.entries(msg.responses).forEach(([agentId, r]) => {
+            if (r.status === 'completed' && r.content) {
+              parts.push(`[${agentId}]: ${r.content.substring(0, 300)}`);
+            }
+          });
+          return parts.join('\n');
+        }).join('\n---\n');
+
+        // Pick a target agent (not Nora herself)
+        const otherAgents = participants.filter(id => id !== 'nora');
+        const targetAgent = otherAgents[Math.floor(Math.random() * otherAgents.length)];
+
+        // Call the follow-up API
+        const res = await fetch('/api/agent/followup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chatId,
+            context: recentContext,
+            targetAgent,
+            participants: otherAgents,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.followUp) {
+            await groupChatService.broadcastMessage(chatId, data.followUp, participants, 'nora');
+            followUpCountRef.current++;
+            console.log(`[FollowUp] Nora stepped in (#${followUpCountRef.current}):`, data.followUp.substring(0, 80));
+          }
+        }
+      } catch (err) {
+        console.error('[FollowUp] Failed to generate follow-up:', err);
+      } finally {
+        isGeneratingFollowUp.current = false;
+      }
+    }, 15_000); // 15 seconds of silence
+  }, [chatId, participants, clearFollowUpTimer]);
+
+  // Keep a ref to messages so the timer callback can read the latest
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
+  // Reset the idle timer whenever messages change (new responses arrive)
+  useEffect(() => {
+    if (chatMode !== 'brainstorm') return;
+    if (messages.length === 0) return;
+
+    const latestMessage = messages[messages.length - 1];
+    const responses = Object.entries(latestMessage.responses);
+
+    // If any agent is still typing/pending, don't start timer
+    const anyPending = responses.some(([, r]) => r.status === 'pending' || r.status === 'processing');
+    if (anyPending) {
+      clearFollowUpTimer();
+      return;
+    }
+
+    // All agents done responding — start the 15s idle timer
+    startFollowUpTimer();
+
+    return () => clearFollowUpTimer();
+  }, [messages, chatMode, startFollowUpTimer, clearFollowUpTimer]);
+
+  // Reset idle timer when user is typing
+  useEffect(() => {
+    if (inputText.length > 0) {
+      clearFollowUpTimer();
+    }
+  }, [inputText, clearFollowUpTimer]);
+
+  // Reset idle timer when user is sending
+  useEffect(() => {
+    if (sending) {
+      clearFollowUpTimer();
+    }
+  }, [sending, clearFollowUpTimer]);
+
   // Listen to agent presence
   useEffect(() => {
     const unsubscribe = presenceService.listen((agents) => {
