@@ -494,6 +494,51 @@ function loadCodebaseMap() {
     return null;
 }
 
+/**
+ * Filter codebase map to only include sections relevant to the current task.
+ * Splits the map by markdown headers and matches against task keywords.
+ * Falls back to full map if no sections match (e.g., on retries).
+ */
+function getRelevantCodebaseMap(taskName, taskDescription) {
+    if (!cachedCodebaseMap) return '';
+
+    // Extract keywords from task name + description
+    const text = `${taskName || ''} ${taskDescription || ''}`.toLowerCase();
+    const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'to', 'for', 'in', 'on', 'of', 'is', 'it', 'this', 'that', 'with', 'as', 'by', 'from', 'at', 'be']);
+    const keywords = text
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 2 && !stopWords.has(w));
+
+    if (keywords.length === 0) return cachedCodebaseMap;
+
+    // Split map by ## headers
+    const sections = cachedCodebaseMap.split(/(?=^## )/m);
+    const headerSection = sections[0] || ''; // intro before first ##
+
+    // Score each section by keyword matches
+    const scored = sections.slice(1).map(section => {
+        const lower = section.toLowerCase();
+        const matches = keywords.filter(k => lower.includes(k)).length;
+        return { section, matches };
+    });
+
+    // Keep sections with at least 1 keyword match
+    const relevant = scored.filter(s => s.matches > 0).map(s => s.section);
+
+    if (relevant.length === 0) {
+        // No matches — return full map (fallback for unusual tasks)
+        return cachedCodebaseMap;
+    }
+
+    const filtered = headerSection + relevant.join('');
+    const savings = cachedCodebaseMap.length - filtered.length;
+    if (savings > 200) {
+        console.log(`📍 Codebase map filtered: ${filtered.length} chars (saved ${savings} chars)`);
+    }
+    return filtered;
+}
+
 // Load manifesto, soul, and codebase map once at startup (will be refreshed each task cycle if needed)
 let cachedManifesto = loadManifesto();
 let cachedSoul = loadSoul();
@@ -3726,8 +3771,13 @@ async function generateEmailResponse(emailBody, metadata) {
         console.warn('Could not gather context for email response:', err.message);
     }
 
-    const internalSystemPrompt = `You are ${AGENT_NAME}, the AI Chief of Staff at Pulse (FitWithPulse.ai).
-You are corresponding with a internal team member.
+    const soulIdentity = cachedSoul?.identity || '';
+    const soulFlaw = cachedSoul?.flaw || '';
+    const agentRole = dmPersonalities[AGENT_ID]?.role || 'AI team member';
+    const soulEmailBlock = soulIdentity ? `\n\n=== YOUR IDENTITY ===\n${soulIdentity}\n${soulFlaw}\n=== END IDENTITY ===` : '';
+
+    const internalSystemPrompt = `You are ${AGENT_NAME}, ${agentRole} at Pulse (FitWithPulse.ai).${soulEmailBlock}
+You are corresponding with an internal team member.
 Be concise, professional, but friendly.
 Verify if the email is asking for data, status, or action.
 If it asks for data you don't have, promise to look it up.
@@ -3736,7 +3786,7 @@ Sign off as "${AGENT_NAME} ⚡".
 Current context:
 ${context || 'No additional context available.'}`;
 
-    const externalSystemPrompt = `You are ${AGENT_NAME}, the AI Assistant at Pulse (FitWithPulse.ai).
+    const externalSystemPrompt = `You are ${AGENT_NAME}, ${agentRole} at Pulse (FitWithPulse.ai).${soulEmailBlock}
 You are corresponding with an external partner or user.
 Be polite, professional, and helpful.
 Do not promise internal data or timelines unless sure.
@@ -3812,7 +3862,7 @@ async function analyzeChatIntent(content, senderName) {
                 messages: [
                     {
                         role: 'system',
-                        content: `You are ${AGENT_NAME}, the AI Chief of Staff at Pulse.
+                        content: `You are ${AGENT_NAME}, ${dmPersonalities[AGENT_ID]?.role || 'an AI team member'} at Pulse.
 The user (${senderName}) sent a chat message. Analyze if they are asking you to DO something (Task/Command) or just chatting.
 
 Output JSON ONLY:
@@ -3826,7 +3876,7 @@ Output JSON ONLY:
 - "command": If the user gives a direct system instruction (e.g. "Stop", "Status", "Pause", "Prioritize this").
 - "chat": General conversation, questions, or greetings.
 
-If "chat", generate a friendly, helpful, specialized response as Nora.
+If "chat", generate a friendly, helpful, specialized response as ${AGENT_NAME}.
 If "task" or "command", the "content" field should be the clean instruction.`
                     },
                     { role: 'user', content }
@@ -3858,8 +3908,10 @@ async function decomposeTask(task) {
         }));
     }
 
-    var decomposePrompt = `You are a task decomposition agent. Break down tasks into 3-6 granular executable steps.
+    const thinkingStyle = cachedSoul?.thinking || '';
+    var decomposePrompt = `You are ${AGENT_NAME}, a task decomposition specialist. Break down tasks into 3-6 granular executable steps.
 Each step should be a clear, specific action — not generic like "Analyze" or "Implement".
+${thinkingStyle ? `\nYour thinking approach:\n${thinkingStyle}\nApply this thinking pattern when structuring the steps.\n` : ''}
 Return JSON only: { "steps": [{ "description": "...", "reasoning": "..." }] }
 
 Task: ${task.name}
@@ -4165,7 +4217,7 @@ ${smokeOutput}`.substring(0, 2000);
                     base.push(
                         `Project directory: ${projectDir}`,
                         northStarBlock || '',
-                        cachedCodebaseMap ? `\n=== CODEBASE MAP (use this to find files — do NOT guess paths) ===\n${cachedCodebaseMap}\n=== END CODEBASE MAP ===\n` : '',
+                        cachedCodebaseMap ? `\n=== CODEBASE MAP (use this to find files — do NOT guess paths) ===\n${getRelevantCodebaseMap(task.name, task.description)}\n=== END CODEBASE MAP ===\n` : '',
                         `TASK: "${task.name}"`,
                         task.description ? `Description: ${task.description}` : '',
                         task.notes ? `Notes: ${task.notes}` : '',
@@ -4281,37 +4333,52 @@ ${smokeOutput}`.substring(0, 2000);
                         }
                     } catch { /* no workflows dir, skip */ }
 
+                    // Conditional environment block: full details on step 1 or install-related steps
+                    const stepLower = (step.description || '').toLowerCase();
+                    const needsFullEnv = stepIndex === 0 || attempt > 0 ||
+                        /\b(install|brew|sudo|xcode|mas|npm install|update|setup|configure|provision)\b/i.test(stepLower);
+
+                    if (needsFullEnv) {
+                        base.push(
+                            ``,
+                            `=== ENVIRONMENT & TOOLS ===`,
+                            `This machine is a Mac (${process.arch}). The following tools are available:`,
+                            ``,
+                            `📦 APP INSTALLATION:`,
+                            `- Mac App Store apps: ~/bin/mas search "<name>" → ~/bin/mas install <app-id>`,
+                            `  Example: ~/bin/mas search "Xcode" → finds ID 497799835 → ~/bin/mas install 497799835`,
+                            `  IMPORTANT: "Xcode" is the FULL IDE app (Xcode.app), NOT "Command Line Tools".`,
+                            `  Command Line Tools are already installed. If someone says "install Xcode", they mean the app.`,
+                            `- Homebrew packages: brew install <package>`,
+                            `- npm packages: npm install [-g] <package>`,
+                            `- System updates: softwareupdate --list / softwareupdate --install <label>`,
+                            ``,
+                            `🔑 ELEVATED COMMANDS (sudo):`,
+                            `- SUDO_ASKPASS is configured. Always use: sudo -A <command>`,
+                            `- NEVER use plain "sudo <command>" — it will hang waiting for a password.`,
+                            `- The askpass helper reads the password from the macOS Keychain automatically.`,
+                            ``,
+                            `📊 LONG-RUNNING INSTALLS (telemetry):`,
+                            `- For any install that takes >30 seconds, wrap it with the telemetry runner:`,
+                            `  node scripts/installers/installWithTelemetry.js --agent ${AGENT_ID} --command "<full command>"`,
+                            `- This streams live progress (phase, percent, logs) to the Virtual Office UI.`,
+                            `- Example: node scripts/installers/installWithTelemetry.js --agent ${AGENT_ID} --command "sudo -A ~/bin/mas install 497799835"`,
+                            ``,
+                            `📁 KEY PATHS:`,
+                            `- Project: ${projectDir}`,
+                            `- Home: ${require('os').homedir()}`,
+                            `- mas binary: ~/bin/mas`,
+                            `- Telemetry runner: scripts/installers/installWithTelemetry.js`,
+                            `=== END ENVIRONMENT ===`,
+                        );
+                    } else {
+                        base.push(
+                            ``,
+                            `Environment: Mac (${process.arch}), project at ${projectDir}. sudo -A for elevated commands. Full env details provided in step 1.`,
+                        );
+                    }
+
                     base.push(
-                        ``,
-                        `=== ENVIRONMENT & TOOLS ===`,
-                        `This machine is a Mac (${process.arch}). The following tools are available:`,
-                        ``,
-                        `📦 APP INSTALLATION:`,
-                        `- Mac App Store apps: ~/bin/mas search "<name>" → ~/bin/mas install <app-id>`,
-                        `  Example: ~/bin/mas search "Xcode" → finds ID 497799835 → ~/bin/mas install 497799835`,
-                        `  IMPORTANT: "Xcode" is the FULL IDE app (Xcode.app), NOT "Command Line Tools".`,
-                        `  Command Line Tools are already installed. If someone says "install Xcode", they mean the app.`,
-                        `- Homebrew packages: brew install <package>`,
-                        `- npm packages: npm install [-g] <package>`,
-                        `- System updates: softwareupdate --list / softwareupdate --install <label>`,
-                        ``,
-                        `🔑 ELEVATED COMMANDS (sudo):`,
-                        `- SUDO_ASKPASS is configured. Always use: sudo -A <command>`,
-                        `- NEVER use plain "sudo <command>" — it will hang waiting for a password.`,
-                        `- The askpass helper reads the password from the macOS Keychain automatically.`,
-                        ``,
-                        `📊 LONG-RUNNING INSTALLS (telemetry):`,
-                        `- For any install that takes >30 seconds, wrap it with the telemetry runner:`,
-                        `  node scripts/installers/installWithTelemetry.js --agent ${AGENT_ID} --command "<full command>"`,
-                        `- This streams live progress (phase, percent, logs) to the Virtual Office UI.`,
-                        `- Example: node scripts/installers/installWithTelemetry.js --agent ${AGENT_ID} --command "sudo -A ~/bin/mas install 497799835"`,
-                        ``,
-                        `📁 KEY PATHS:`,
-                        `- Project: ${projectDir}`,
-                        `- Home: ${require('os').homedir()}`,
-                        `- mas binary: ~/bin/mas`,
-                        `- Telemetry runner: scripts/installers/installWithTelemetry.js`,
-                        `=== END ENVIRONMENT ===`,
                         ``,
                         `Instructions:`,
                         `- Complete ONLY this step.`,
@@ -4571,7 +4638,11 @@ ${smokeOutput}`.substring(0, 2000);
                 });
 
                 try {
+                    const recoverySoul = cachedSoul
+                        ? `=== YOUR IDENTITY ===\n${cachedSoul.identity || ''}\n${cachedSoul.thinking || ''}\n=== END IDENTITY ===\n\n`
+                        : '';
                     const recoveryPrompt = [
+                        recoverySoul,
                         `RECOVERY MODE — A previous attempt at this task FAILED. You must try a DIFFERENT approach.`,
                         ``,
                         `## Original task:`,
@@ -4586,7 +4657,7 @@ ${smokeOutput}`.substring(0, 2000);
                         `- If the original approach required a missing tool/resource, find another way`,
                         `- If the task is genuinely impossible, explain why clearly`,
                         `- Keep your response focused and concise`,
-                    ].join('\n');
+                    ].filter(Boolean).join('\n');
 
                     const progressCb = createProgressCallback(step, allSteps, stepIndex, -1);
                     const result = await invokeOpenClaw(recoveryPrompt, progressCb);
