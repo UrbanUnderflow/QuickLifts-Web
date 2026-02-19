@@ -474,6 +474,16 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   const renderSnapshotCard = (s: HourlySnapshotEntry) => {
     const cc = colorConfig[s.color] || colorConfig.blue;
     const color = getAvatarColor(s.agentId, s.agentName);
+
+    // Safe date formatting — guard against missing/invalid hourIso
+    let timeLabel = 'Unknown';
+    try {
+      const d = s.hourIso ? new Date(s.hourIso) : s.createdAt ? new Date(s.createdAt) : null;
+      if (d && !isNaN(d.getTime())) {
+        timeLabel = format(d, 'MMM d, HH:mm');
+      }
+    } catch { /* fall back to 'Unknown' */ }
+
     return (
       <div key={s.id} style={S.snapCard(cc.dot)}>
         <div style={S.snapTop}>
@@ -481,10 +491,10 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
             {s.agentName?.charAt(0)?.toUpperCase() || '?'}
           </div>
           <div>
-            <span style={S.snapName}>{s.agentName}</span>
+            <span style={S.snapName}>{s.agentName || 'Agent'}</span>
             <span style={S.snapCode}>{s.objectiveCode}</span>
           </div>
-          <span style={S.snapTime}><Clock size={11} /> {format(new Date(s.hourIso), 'MMM d, HH:mm')}</span>
+          <span style={S.snapTime}><Clock size={11} /> {timeLabel}</span>
         </div>
         <p style={S.snapNote}>{s.note || 'No note logged'}</p>
       </div>
