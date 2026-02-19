@@ -209,6 +209,8 @@ Before marking any task complete:
 - **[2026-02-19] Nora** — Step "Replace the Anthropic model entry with the Codex 5.1 alias (openai/gpt-5.1-codex) and save the configuration file." failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=11166 error="Error: ses". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-19] Scout** — Step "Research and plan: Create shared glossary and preflight dependency checklist documents" failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=2 error="Error: Unknown". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-19] Scout** — Step "Execute: Create shared glossary and preflight dependency checklist documents" failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=1 error="Error: Unknown". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-19] Scout** — Step "Research and plan: Create shared glossary and preflight dependency checklist documents" failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=3 error="Error: Unknown". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-19] Scout** — Step "Execute: Create shared glossary and preflight dependency checklist documents" failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=1 error="Error: Unknown". Rewrite error: "invokeOpenClaw is not defined"
 ---
 
 ## Operational Rules
