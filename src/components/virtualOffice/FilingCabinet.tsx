@@ -148,7 +148,7 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
                                     </div>
                                     <div className="fc-item-info">
                                         <span className="fc-item-date">
-                                            {formatDate(minutes.createdAt)}
+                                            {formatDate(minutes.createdAt)} at {formatTime(minutes.createdAt)}
                                             {(minutes as any).isStandup && (
                                                 <span style={{
                                                     marginLeft: 8,
