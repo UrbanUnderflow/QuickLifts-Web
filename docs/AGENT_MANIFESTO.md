@@ -223,6 +223,7 @@ For any lead/prospect/partnership claim:
 - **[2026-02-19] Scout** — Step "Execute: Create shared glossary and preflight dependency checklist documents" failed even after rewrite. Original error: "OpenClaw failed (exit 1): [diagnostic] lane task error: lane=main durationMs=1 error="Error: Unknown". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-19] Nora** — Step "Research and plan: a one-page PulseCheck → AuntEdna → Hampton playbook now: severity buckets mapped" failed even after rewrite. Original error: "Force recovery: Abort the currently stuck step and restart from the correct config path (~/.openclaw". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-19] Nora** — Step "Execute: a one-page PulseCheck → AuntEdna → Hampton playbook now: severity buckets mapped" failed even after rewrite. Original error: "OpenClaw stalled: no activity for 300s". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-19] Nora** — Step "Restart the Sage runner service/process (e.g., `openclaw agents restart sage`) and watch its startup logs until it reports “runner connected/ready.”" failed even after rewrite. Original error: "OpenClaw stalled: no activity for 300s". Rewrite error: "invokeOpenClaw is not defined"
 ---
 
 ## Operational Rules
