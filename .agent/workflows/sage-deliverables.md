@@ -15,7 +15,18 @@ docs/sage/deliverables/<slug>.md
 ```
 Use a descriptive kebab-case filename, e.g. `peptide-research-brief.md`.
 
-### 2. Update the manifest
+### 2. Run the lead source-of-truth gate (required for lead/prospect work)
+If the deliverable includes any lead, prospect, partnership, or collaboration claims:
+
+1. Read `docs/partnership/lead-source-of-truth.md` first.
+2. Add inline citations in the deliverable for each claim:
+   - `[SOT: LEAD-####, EVID-####]`
+3. If evidence is missing in the source-of-truth file, write the claim as `Unverified` and add the missing evidence entry before publishing.
+4. Confirm cited IDs exist in the source-of-truth file.
+
+Also review `.agent/workflows/lead-source-of-truth.md` for full operating rules.
+
+### 3. Update the manifest
 Add a new entry to `docs/sage/deliverables/manifest.json`:
 ```json
 {
@@ -33,15 +44,15 @@ Add a new entry to `docs/sage/deliverables/manifest.json`:
 ```
 Also update the `lastUpdated` timestamp at the top of the manifest.
 
-### 3. Commit and push
+### 4. Commit and push
 ```bash
 cd /path/to/QuickLifts-Web
-git add docs/sage/deliverables/
+git add docs/sage/deliverables/ docs/partnership/lead-source-of-truth.md
 git commit -m "📡 Sage deliverable: <title>"
 git push origin main
 ```
 
-### 4. Heartbeat integration (optional)
+### 5. Heartbeat integration (optional)
 If the intel-feed Firestore collection is available, also post a heartbeat entry:
 ```bash
 curl -X POST https://your-site.netlify.app/api/agent/intelFeed \

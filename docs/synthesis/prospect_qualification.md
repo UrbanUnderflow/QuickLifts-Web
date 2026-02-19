@@ -11,10 +11,10 @@ This document evaluates each identified partnership prospect by extracting readi
    - **Blockers/Next Steps**: Finalize API customizations and confirm engagement timeline.
 
 2. **PulseFit**
-   - **Readiness Signals**: Strong interest expressed in initial talks.
-   - **Quotes**: "Our collaboration could redefine fitness journeys," - PulseFit Executive.
-   - **Regulatory Checks**: Pending review.
-   - **Blockers/Next Steps**: Complete pending legal agreements.
+   - **Readiness Signals**: Unverified. No confirmed collaboration interest is currently on record. [SOT: LEAD-0002, EVID-0001]
+   - **Quotes**: No verified quote is currently recorded. [SOT: LEAD-0002, EVID-0001]
+   - **Regulatory Checks**: Pending review (no primary evidence attached yet). [SOT: LEAD-0002, EVID-0001]
+   - **Blockers/Next Steps**: Capture primary-source interaction evidence before legal progression. [SOT: LEAD-0002, EVID-0001]
 
 ### Wellness Prospects
 1. **HealthSync**

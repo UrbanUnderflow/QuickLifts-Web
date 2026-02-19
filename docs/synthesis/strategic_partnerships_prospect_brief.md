@@ -11,8 +11,8 @@ This brief synthesizes insights from the evaluation of potential partnership pro
    - **Action Items**: Finalize API customizations for seamless integration.
 
 2. **PulseFit**
-   - **Strengths**: Expressed interest in collaboration.
-   - **Action Items**: Complete pending legal agreements to advance partnership.
+   - **Strengths**: No confirmed collaboration interest is currently on record. [SOT: LEAD-0002, EVID-0001]
+   - **Action Items**: Capture primary-source evidence of interest before advancing partnership stage. [SOT: LEAD-0002, EVID-0001]
 
 ### Wellness Prospects
 1. **HealthSync**

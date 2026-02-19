@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useRouter } from 'next/router';
-import { X, Package, ExternalLink, FileText, ChevronRight, RefreshCw } from 'lucide-react';
+import { X, Package, ExternalLink, FileText, ChevronRight, RefreshCw, MessageSquare } from 'lucide-react';
 import { MarkdownRenderer } from '../MarkdownRenderer';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
@@ -81,7 +81,8 @@ const sanitizeRecordedFilePath = (rawPath?: string): string => {
     next = next.slice(1, -1);
   }
 
-  return next.replace(/^\.\/+/, '');
+  const trimmed = next.replace(/^\.\/+/, '');
+  return trimmed.replace(/^docs\/agents\/sage\/deliverables(?=$|\/)/, 'docs/sage/deliverables');
 };
 
 /* ─── component ─── */
@@ -197,6 +198,34 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
     }
     onClose();
     router.push(`/admin/deliverables/${agent.id}${params.toString() ? `?${params.toString()}` : ''}`);
+  };
+
+  const navigateToExplainChat = (deliverable: Deliverable) => {
+    const routeAgentId = resolveAgentRouteId(deliverable.agentId);
+    const normalizedFilePath = sanitizeRecordedFilePath(deliverable.filePath);
+    const taskRef = deliverable.taskRef?.trim();
+    const title = deliverable.title || deliverable.filename || 'this deliverable';
+
+    const prefillMessage = [
+      `Please explain the purpose of "${title}" and how it gets us to the North Star.`,
+      normalizedFilePath ? `Deliverable file: ${normalizedFilePath}` : '',
+      taskRef ? `Task context: ${taskRef}` : '',
+      '',
+      'Please include:',
+      '1) why this deliverable matters right now,',
+      '2) what impact it should create, and',
+      '3) what signal will confirm it is moving us toward the North Star.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const params = new URLSearchParams();
+    if (routeAgentId) params.set('agent', routeAgentId);
+    params.set('prefill', prefillMessage);
+    params.set('type', 'question');
+
+    onClose();
+    router.push(`/admin/agentChat?${params.toString()}`);
   };
 
   const agentCounts = AGENTS.map((a) => ({
@@ -338,6 +367,13 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
                         </div>
                       )}
                     </div>
+                    <button
+                      className="sd-explain-btn"
+                      onClick={() => navigateToExplainChat(d)}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      Ask for Explanation
+                    </button>
                     <button
                       className="sd-open-page-btn"
                       onClick={() => navigateToAgent(d.agentId, d.filePath, d.taskRef)}
@@ -602,6 +638,20 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
           background: rgba(99,102,241,0.12);
           border-color: rgba(99,102,241,0.3);
           box-shadow: 0 0 16px rgba(99,102,241,0.08);
+        }
+        .sd-explain-btn {
+          display: flex; align-items: center; justify-content: center; gap: 6px;
+          width: 100%; padding: 8px; margin-top: 10px;
+          border-radius: 8px;
+          border: 1px solid rgba(245,158,11,0.25);
+          background: rgba(245,158,11,0.08);
+          color: #fbbf24; font-size: 11px; font-weight: 600;
+          cursor: pointer; transition: all 0.2s; font-family: inherit;
+        }
+        .sd-explain-btn:hover {
+          background: rgba(245,158,11,0.16);
+          border-color: rgba(245,158,11,0.4);
+          box-shadow: 0 0 16px rgba(245,158,11,0.12);
         }
       `}</style>
     </div>

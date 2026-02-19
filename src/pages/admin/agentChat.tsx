@@ -49,6 +49,22 @@ const AGENT_EMOJIS: Record<string, string> = {
   sage: '🧬',
 };
 
+const AGENT_NAMES: Record<string, string> = {
+  nora: 'Nora',
+  antigravity: 'Antigravity',
+  scout: 'Scout',
+  solara: 'Solara',
+  sage: 'Sage',
+};
+
+const AGENT_COLORS: Record<string, string> = {
+  nora: '#22c55e',
+  antigravity: '#6366f1',
+  scout: '#f59e0b',
+  solara: '#f43f5e',
+  sage: '#06b6d4',
+};
+
 const AGENT_ROLES: Record<string, string> = {
   nora: 'Director of System Ops',
   antigravity: 'Co-CEO · Strategy & Architecture',
@@ -59,13 +75,31 @@ const AGENT_ROLES: Record<string, string> = {
 
 const AGENT_ID_ALIASES: Record<string, string> = {
   branddirector: 'solara',
+  scouts: 'scout',
+};
+
+const normalizeAgentId = (agentId?: string): string => {
+  const normalized = (agentId || '').trim().toLowerCase();
+  return AGENT_ID_ALIASES[normalized] ?? normalized;
+};
+
+const toAgentDisplayName = (agentId?: string, fallback?: string): string => {
+  const normalized = normalizeAgentId(agentId);
+  if (normalized && AGENT_NAMES[normalized]) return AGENT_NAMES[normalized];
+  if (fallback?.trim()) return fallback.trim();
+  if (!normalized) return 'Agent';
+  return normalized
+    .split(/[-_]/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 };
 
 const normalizeIncomingAgents = (incoming: AgentPresence[]): AgentPresence[] => {
   const merged = new Map<string, { agent: AgentPresence; canonicalSource: boolean }>();
 
   for (const rawAgent of incoming) {
-    const canonicalId = AGENT_ID_ALIASES[rawAgent.id] ?? rawAgent.id;
+    const canonicalId = normalizeAgentId(rawAgent.id);
     const normalized: AgentPresence = {
       ...rawAgent,
       id: canonicalId,
@@ -112,6 +146,38 @@ const formatRelative = (date?: Date) => {
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   return date.toLocaleDateString();
 };
+
+const getQueryValue = (value: string | string[] | undefined): string => {
+  if (Array.isArray(value)) return value[0] || '';
+  return value || '';
+};
+
+const isMessageType = (value: string): value is MessageType =>
+  value === 'auto'
+  || value === 'task'
+  || value === 'command'
+  || value === 'question'
+  || value === 'chat';
+
+const createOfflineFallbackAgent = (id: string): AgentPresence => ({
+  id,
+  displayName: AGENT_NAMES[id] || toAgentDisplayName(id),
+  emoji: AGENT_EMOJIS[id] || '🤖',
+  status: 'offline',
+  currentTask: '',
+  currentTaskId: '',
+  notes: 'Agent runner not connected',
+  executionSteps: [],
+  currentStepIndex: -1,
+  taskProgress: 0,
+  lastUpdate: new Date(0),
+  sessionStartedAt: undefined,
+});
+
+const SCOUT_FALLBACK = createOfflineFallbackAgent('scout');
+const SOLARA_FALLBACK = createOfflineFallbackAgent('solara');
+const NORA_FALLBACK = createOfflineFallbackAgent('nora');
+const SAGE_FALLBACK = createOfflineFallbackAgent('sage');
 
 const isAgentStale = (agent?: AgentPresence | null) => {
   if (!agent?.lastUpdate) return true;
@@ -223,7 +289,9 @@ const AgentListScreen: React.FC<{
 const ChatScreen: React.FC<{
   agent: AgentPresence;
   onBack: () => void;
-}> = ({ agent, onBack }) => {
+  prefillMessage?: string;
+  prefillType?: MessageType;
+}> = ({ agent, onBack, prefillMessage, prefillType }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [msgType, setMsgType] = useState<MessageType>('auto');
@@ -233,6 +301,7 @@ const ChatScreen: React.FC<{
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const autoFailedMessageIdsRef = useRef<Set<string>>(new Set());
+  const appliedPrefillRef = useRef<string>('');
   const agentIsStale = isAgentStale(agent);
   const agentIsOnline = agent.status !== 'offline' && !agentIsStale;
 
@@ -323,6 +392,25 @@ const ChatScreen: React.FC<{
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    const trimmed = prefillMessage?.trim();
+    if (!trimmed) return;
+
+    const prefillKey = `${agent.id}:${prefillType || 'auto'}:${trimmed}`;
+    if (appliedPrefillRef.current === prefillKey) return;
+
+    setInputText(trimmed);
+    if (prefillType) setMsgType(prefillType);
+    appliedPrefillRef.current = prefillKey;
+
+    requestAnimationFrame(() => {
+      if (!inputRef.current) return;
+      inputRef.current.focus();
+      const cursor = trimmed.length;
+      inputRef.current.setSelectionRange(cursor, cursor);
+    });
+  }, [agent.id, prefillMessage, prefillType]);
 
   // Auto-resize textarea
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -476,8 +564,20 @@ const ChatScreen: React.FC<{
         )}
 
         {messages.map((msg) => {
-          // Determine if this is an agent-initiated (proactive) message
-          const isProactive = msg.from === agent.id;
+          const selectedAgentId = normalizeAgentId(agent.id);
+          const senderAgentId = normalizeAgentId(msg.from);
+          const isProactive = senderAgentId === selectedAgentId;
+          const isFromAdmin = senderAgentId === 'admin';
+          const isExternalAgent = !isProactive && !isFromAdmin;
+          const externalName = isExternalAgent
+            ? toAgentDisplayName(senderAgentId, msg.metadata?.fromName)
+            : '';
+          const externalEmoji = isExternalAgent
+            ? (AGENT_EMOJIS[senderAgentId] || msg.metadata?.fromEmoji || '🤖')
+            : '';
+          const externalColor = isExternalAgent
+            ? (AGENT_COLORS[senderAgentId] || '#3b82f6')
+            : '#3b82f6';
 
           return (
             <div key={msg.id} className="ac-message-group">
@@ -499,23 +599,50 @@ const ChatScreen: React.FC<{
                     </div>
                   </div>
                 </div>
-              ) : (
-                /* ── User message (outgoing) ── */
-                <>
-                  <div className="ac-msg ac-msg-out">
-                    <div className="ac-msg-meta-out">
-                      <span className={`ac-msg-type-badge type-${msg.type}`}>
-                        {msg.type}
+              ) : isExternalAgent ? (
+                <div className="ac-msg ac-msg-in ac-msg-external">
+                  <div
+                    className="ac-msg-avatar-sm ac-msg-avatar-external"
+                    style={{ background: `${externalColor}26`, borderColor: `${externalColor}66` }}
+                  >
+                    {externalEmoji}
+                  </div>
+                  <div className="ac-msg-in-content">
+                    <div className="ac-msg-meta-in ac-msg-meta-external">
+                      <span className="ac-msg-type-badge type-external" style={{ background: `${externalColor}1f`, color: externalColor }}>
+                        External · {externalName}
                       </span>
                       {msg.createdAt && (
                         <span className="ac-msg-time">{formatTime(msg.createdAt)}</span>
                       )}
                     </div>
-                    <div className="ac-msg-bubble ac-bubble-out">
+                    <div
+                      className="ac-msg-bubble ac-bubble-in ac-bubble-external"
+                      style={{ borderColor: `${externalColor}55`, boxShadow: `inset 3px 0 0 ${externalColor}` }}
+                    >
                       <p>{msg.content}</p>
                     </div>
                   </div>
+                </div>
+              ) : (
+                /* ── User message (outgoing) ── */
+                <div className="ac-msg ac-msg-out">
+                  <div className="ac-msg-meta-out">
+                    <span className={`ac-msg-type-badge type-${msg.type}`}>
+                      {msg.type}
+                    </span>
+                    {msg.createdAt && (
+                      <span className="ac-msg-time">{formatTime(msg.createdAt)}</span>
+                    )}
+                  </div>
+                  <div className="ac-msg-bubble ac-bubble-out">
+                    <p>{msg.content}</p>
+                  </div>
+                </div>
+              )}
 
+              {!isProactive && (
+                <>
                   {/* Agent response (incoming) */}
                   {msg.response && (
                     <div className="ac-msg ac-msg-in">
@@ -544,7 +671,7 @@ const ChatScreen: React.FC<{
                         <div className="ac-msg-bubble ac-bubble-in ac-bubble-pending">
                           <span className="ac-typing">
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            Thinking
+                            {isExternalAgent ? `Replying to ${externalName}` : 'Thinking'}
                             <span className="ac-thinking-dots" aria-hidden>
                               <span>.</span><span>.</span><span>.</span>
                             </span>
@@ -636,36 +763,10 @@ const AgentChatContent: React.FC = () => {
   const router = useRouter();
   const [agents, setAgents] = useState<AgentPresence[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AgentPresence | null>(null);
-
-  const SCOUT_FALLBACK: AgentPresence = {
-    id: 'scout',
-    displayName: 'Scout',
-    emoji: '🕵️',
-    status: 'offline',
-    currentTask: '',
-    currentTaskId: '',
-    notes: 'Agent runner not connected',
-    executionSteps: [],
-    currentStepIndex: -1,
-    taskProgress: 0,
-    lastUpdate: new Date(0),
-    sessionStartedAt: undefined,
-  };
-
-  const SOLARA_FALLBACK: AgentPresence = {
-    id: 'solara',
-    displayName: 'Solara',
-    emoji: '❤️‍🔥',
-    status: 'offline',
-    currentTask: '',
-    currentTaskId: '',
-    notes: 'Agent runner not connected',
-    executionSteps: [],
-    currentStepIndex: -1,
-    taskProgress: 0,
-    lastUpdate: new Date(0),
-    sessionStartedAt: undefined,
-  };
+  const requestedAgentId = normalizeAgentId(getQueryValue(router.query.agent));
+  const prefillMessage = getQueryValue(router.query.prefill);
+  const requestedType = getQueryValue(router.query.type);
+  const prefillType = isMessageType(requestedType) ? requestedType : undefined;
 
   // Listen for agent presence
   useEffect(() => {
@@ -675,7 +776,13 @@ const AgentChatContent: React.FC = () => {
       // Filter out Antigravity — it communicates directly via the IDE
       const visible = normalized.filter(a => a.id !== 'antigravity');
 
-      // Ensure Scout can always be selected in chat
+      // Ensure deliverable authors can always be selected in chat
+      if (!visible.some(a => a.id === 'nora')) {
+        visible.push(NORA_FALLBACK);
+      }
+      if (!visible.some(a => a.id === 'sage')) {
+        visible.push(SAGE_FALLBACK);
+      }
       if (!visible.some(a => a.id === 'scout')) {
         visible.push(SCOUT_FALLBACK);
       }
@@ -696,12 +803,11 @@ const AgentChatContent: React.FC = () => {
 
   // Handle agent from URL param
   useEffect(() => {
-    const agentId = router.query.agent as string;
-    if (agentId && agents.length > 0 && !selectedAgent) {
-      const found = agents.find(a => a.id === agentId);
-      if (found) setSelectedAgent(found);
-    }
-  }, [router.query.agent, agents, selectedAgent]);
+    if (!requestedAgentId || agents.length === 0) return;
+    if (selectedAgent?.id === requestedAgentId) return;
+    const found = agents.find(a => a.id === requestedAgentId);
+    if (found) setSelectedAgent(found);
+  }, [requestedAgentId, agents, selectedAgent?.id]);
 
   return (
     <div className="ac-root">
@@ -718,20 +824,34 @@ const AgentChatContent: React.FC = () => {
         />
       </Head>
       <AdminRouteGuard>
-        {selectedAgent ? (
-          <ChatScreen
-            agent={selectedAgent}
-            onBack={() => {
-              setSelectedAgent(null);
-              router.replace('/admin/agentChat', undefined, { shallow: true });
-            }}
-          />
-        ) : (
-          <AgentListScreen agents={agents} onSelectAgent={(agent) => {
-            setSelectedAgent(agent);
-            router.replace(`/admin/agentChat?agent=${agent.id}`, undefined, { shallow: true });
-          }} />
-        )}
+        <div className={`ac-layout ${selectedAgent ? 'ac-layout-has-chat' : ''}`}>
+          <div className="ac-layout-list">
+            <AgentListScreen agents={agents} onSelectAgent={(agent) => {
+              setSelectedAgent(agent);
+              router.replace(`/admin/agentChat?agent=${agent.id}`, undefined, { shallow: true });
+            }} />
+          </div>
+
+          <div className="ac-layout-chat">
+            {selectedAgent ? (
+              <ChatScreen
+                agent={selectedAgent}
+                prefillMessage={prefillMessage}
+                prefillType={prefillType}
+                onBack={() => {
+                  setSelectedAgent(null);
+                  router.replace('/admin/agentChat', undefined, { shallow: true });
+                }}
+              />
+            ) : (
+              <div className="ac-desktop-empty">
+                <div className="ac-desktop-empty-icon">💬</div>
+                <h2>Select an agent to start chatting</h2>
+                <p>Desktop mode keeps agents on the left and the conversation on the right.</p>
+              </div>
+            )}
+          </div>
+        </div>
       </AdminRouteGuard>
 
       <style jsx global>{`
@@ -744,6 +864,33 @@ const AgentChatContent: React.FC = () => {
           color: #fafafa;
           overflow: hidden;
           position: relative;
+        }
+
+        .ac-layout {
+          height: 100vh;
+          height: 100dvh;
+        }
+
+        .ac-layout-list {
+          height: 100%;
+          display: block;
+        }
+
+        .ac-layout-chat {
+          height: 100%;
+          display: none;
+        }
+
+        .ac-layout.ac-layout-has-chat .ac-layout-list {
+          display: none;
+        }
+
+        .ac-layout.ac-layout-has-chat .ac-layout-chat {
+          display: block;
+        }
+
+        .ac-desktop-empty {
+          display: none;
         }
 
         /* ─── Agent List Screen ────────────────────────── */
@@ -1097,6 +1244,9 @@ const AgentChatContent: React.FC = () => {
         .ac-msg-in {
           align-self: flex-start;
         }
+        .ac-msg-external {
+          max-width: 92%;
+        }
 
         .ac-msg-meta-out {
           display: flex;
@@ -1179,6 +1329,10 @@ const AgentChatContent: React.FC = () => {
           border-bottom-left-radius: 6px;
           border: 1px solid #2a2a30;
         }
+        .ac-bubble-external {
+          background: rgba(27, 27, 34, 0.96);
+          border-bottom-left-radius: 10px;
+        }
 
         .ac-bubble-pending {
           padding: 10px 16px;
@@ -1200,6 +1354,10 @@ const AgentChatContent: React.FC = () => {
           flex-shrink: 0;
           margin-top: 2px;
         }
+        .ac-msg-avatar-external {
+          border: 1px solid;
+          box-shadow: 0 0 0 1px rgba(9, 9, 11, 0.55);
+        }
 
         .ac-msg-in-content {
           display: flex;
@@ -1212,6 +1370,9 @@ const AgentChatContent: React.FC = () => {
           align-items: center;
           gap: 4px;
           padding-left: 4px;
+        }
+        .ac-msg-meta-external {
+          margin-bottom: 3px;
         }
 
         .ac-typing {
@@ -1422,13 +1583,126 @@ const AgentChatContent: React.FC = () => {
           cursor: default;
         }
 
-        /* ─── Desktop adjustments ──────────────────────── */
-        @media (min-width: 640px) {
+        /* ─── Desktop / Wide Layout ────────────────────── */
+        @media (min-width: 1024px) {
           .ac-root {
-            max-width: 480px;
+            padding: 16px;
+            background:
+              radial-gradient(1100px 560px at 14% -18%, rgba(79, 70, 229, 0.16), transparent 62%),
+              radial-gradient(850px 500px at 96% 114%, rgba(34, 197, 94, 0.08), transparent 60%),
+              #07070a;
+          }
+
+          .ac-layout {
+            width: min(1600px, 100%);
             margin: 0 auto;
-            border-left: 1px solid #1a1a1e;
-            border-right: 1px solid #1a1a1e;
+            height: calc(100vh - 32px);
+            height: calc(100dvh - 32px);
+            display: grid;
+            grid-template-columns: 360px minmax(0, 1fr);
+            border: 1px solid #27272a;
+            border-radius: 18px;
+            overflow: hidden;
+            background: #09090b;
+            box-shadow: 0 32px 70px rgba(0, 0, 0, 0.45);
+          }
+
+          .ac-layout-list,
+          .ac-layout.ac-layout-has-chat .ac-layout-list {
+            display: block;
+            border-right: 1px solid #27272a;
+          }
+
+          .ac-layout-chat,
+          .ac-layout.ac-layout-has-chat .ac-layout-chat {
+            display: block;
+            min-width: 0;
+          }
+
+          .ac-agent-list,
+          .ac-chat-screen {
+            height: 100%;
+          }
+
+          .ac-list-header {
+            padding: 20px 20px 14px;
+          }
+
+          .ac-chat-header {
+            padding: 18px 20px 12px;
+          }
+
+          .ac-back-btn {
+            display: none;
+          }
+
+          .ac-chat-status {
+            max-width: 560px;
+          }
+
+          .ac-messages {
+            padding: 20px 24px;
+            gap: 14px;
+          }
+
+          .ac-msg {
+            max-width: min(78%, 900px);
+          }
+
+          .ac-msg-external {
+            max-width: min(84%, 980px);
+          }
+
+          .ac-input-area {
+            padding: 12px 16px;
+            padding-bottom: 12px;
+          }
+
+          .ac-type-dropdown {
+            left: 16px;
+            right: 16px;
+            bottom: 96px;
+          }
+
+          .ac-desktop-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            height: 100%;
+            text-align: center;
+            background: linear-gradient(180deg, rgba(24, 24, 27, 0.75), rgba(9, 9, 11, 0.95));
+            border-left: 1px solid rgba(39, 39, 42, 0.5);
+            color: #a1a1aa;
+            padding: 24px;
+          }
+
+          .ac-desktop-empty-icon {
+            width: 54px;
+            height: 54px;
+            border-radius: 16px;
+            background: rgba(99, 102, 241, 0.14);
+            border: 1px solid rgba(99, 102, 241, 0.26);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+          }
+
+          .ac-desktop-empty h2 {
+            margin: 2px 0 0;
+            font-size: 20px;
+            font-weight: 600;
+            color: #f4f4f5;
+          }
+
+          .ac-desktop-empty p {
+            margin: 0;
+            max-width: 480px;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #71717a;
           }
         }
 

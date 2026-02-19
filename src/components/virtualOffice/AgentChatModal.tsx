@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import {
     X, Send, ArrowLeft, Loader2, Zap, ChevronDown,
@@ -6,7 +6,7 @@ import {
     MessageSquare, Terminal, HelpCircle, Mail, Sparkles,
     Paperclip, FileText, FolderOpen, Code2,
 } from 'lucide-react';
-import { presenceService, type AgentPresence } from '../../api/firebase/presence/service';
+import { type AgentPresence } from '../../api/firebase/presence/service';
 import { db } from '../../api/firebase/config';
 import {
     collection, query, where, orderBy, limit,
@@ -45,6 +45,26 @@ const AGENT_EMOJIS: Record<string, string> = {
     nora: '⚡', antigravity: '🌌', scout: '🕵️', solara: '❤️‍🔥', sage: '🧬',
 };
 
+const AGENT_NAMES: Record<string, string> = {
+    nora: 'Nora',
+    antigravity: 'Antigravity',
+    scout: 'Scout',
+    solara: 'Solara',
+    sage: 'Sage',
+};
+
+const AGENT_COLORS: Record<string, string> = {
+    nora: '#22c55e',
+    antigravity: '#6366f1',
+    scout: '#f59e0b',
+    solara: '#f43f5e',
+    sage: '#06b6d4',
+};
+
+const AGENT_ID_ALIASES: Record<string, string> = {
+    branddirector: 'solara',
+};
+
 const AGENT_ROLES: Record<string, string> = {
     nora: 'Director of System Ops',
     antigravity: 'Co-CEO · Strategy & Architecture',
@@ -55,6 +75,10 @@ const AGENT_ROLES: Record<string, string> = {
 
 const AGENT_HEARTBEAT_STALE_MS = 2 * 60_000;
 const OFFLINE_RESPONSE_TIMEOUT_MS = 45_000;
+const DM_COMPOSE_BASE_MESSAGE_BUDGET_CHARS = 2200;
+const DM_COMPOSE_FILE_ATTACHMENT_BUDGET_CHARS = 3000;
+const DM_COMPOSE_MINUTES_ATTACHMENT_BUDGET_CHARS = 2200;
+const DM_COMPOSE_TOTAL_MESSAGE_BUDGET_CHARS = 7200;
 
 /* ─── Props ───────────────────────────────────────────── */
 
@@ -88,6 +112,45 @@ const statusColor = (status: string) => {
         case 'idle': return '#4ade80';
         default: return '#ef4444';
     }
+};
+
+const normalizeAgentId = (agentId?: string): string => {
+    const normalized = (agentId || '').trim().toLowerCase();
+    return AGENT_ID_ALIASES[normalized] || normalized;
+};
+
+const toAgentDisplayName = (agentId?: string, fallback?: string): string => {
+    const normalized = normalizeAgentId(agentId);
+    if (normalized && AGENT_NAMES[normalized]) return AGENT_NAMES[normalized];
+    if (fallback?.trim()) return fallback.trim();
+    if (!normalized) return 'Agent';
+    return normalized
+        .split(/[-_]/g)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+};
+
+const countLines = (text: string): number => {
+    if (!text) return 0;
+    return text.split(/\r\n|\r|\n/).length;
+};
+
+const clampHeadTail = (text: string, maxChars: number): string => {
+    const raw = String(text || '');
+    if (!raw) return '';
+    if (!Number.isFinite(maxChars) || maxChars <= 0 || raw.length <= maxChars) return raw;
+
+    const headLen = Math.max(24, Math.floor(maxChars * 0.74));
+    const tailLen = Math.max(0, maxChars - headLen - 3);
+    if (tailLen <= 0) return `${raw.slice(0, Math.max(1, maxChars - 1)).trimEnd()}…`;
+    return `${raw.slice(0, headLen).trimEnd()}\n…\n${raw.slice(-tailLen).trimStart()}`;
+};
+
+const buildCompactionMeta = (label: string, originalText: string, compactedText: string): string => {
+    if (!originalText) return '';
+    if (originalText.length <= compactedText.length) return '';
+    return `[${label} auto-compacted from ${originalText.length.toLocaleString()} chars / ${countLines(originalText).toLocaleString()} lines]`;
 };
 
 /* ─── StatusIcon ──────────────────────────────────────── */
@@ -603,18 +666,47 @@ const ChatPanel: React.FC<{
         if (inputRef.current) inputRef.current.style.height = 'auto';
 
         try {
-            const contextParts: string[] = [text];
+            const compactBaseMessage = clampHeadTail(text, DM_COMPOSE_BASE_MESSAGE_BUDGET_CHARS);
+            const contextParts: string[] = [compactBaseMessage];
+            const baseMeta = buildCompactionMeta('message', text, compactBaseMessage);
+            if (baseMeta) contextParts.push(`\n\n${baseMeta}`);
+
             if (attachedFile) {
-                contextParts.push(`\n\n--- ATTACHED FILE: ${attachedFile.path} ---\n\`\`\`\n${attachedFile.content}\n\`\`\`\n--- END FILE ---`);
+                const rawFileContent = String(attachedFile.content || '');
+                const compactFileContent = clampHeadTail(rawFileContent, DM_COMPOSE_FILE_ATTACHMENT_BUDGET_CHARS);
+                const fileMeta = buildCompactionMeta('file', rawFileContent, compactFileContent);
+                const section = [
+                    `\n\n--- ATTACHED FILE: ${attachedFile.path} ---`,
+                    fileMeta ? `\n${fileMeta}` : '',
+                    `\n\`\`\`\n${compactFileContent}\n\`\`\`\n--- END FILE ---`,
+                ].join('');
+                contextParts.push(section);
             }
             if (attachedMinutes) {
                 const md = meetingMinutesService.toMarkdown(attachedMinutes);
-                contextParts.push(`\n\n--- ATTACHED MEETING MINUTES ---\n${md}\n--- END MEETING MINUTES ---`);
+                const normalizedMd = md.replace(/\n{3,}/g, '\n\n').trim();
+                const compactMinutes = clampHeadTail(normalizedMd, DM_COMPOSE_MINUTES_ATTACHMENT_BUDGET_CHARS);
+                const minutesMeta = buildCompactionMeta('meeting minutes', normalizedMd, compactMinutes);
+                const section = [
+                    '\n\n--- ATTACHED MEETING MINUTES ---',
+                    minutesMeta ? `\n${minutesMeta}` : '',
+                    `\n${compactMinutes}\n--- END MEETING MINUTES ---`,
+                ].join('');
+                contextParts.push(section);
+            }
+
+            let composedContent = contextParts.join('');
+            if (composedContent.length > DM_COMPOSE_TOTAL_MESSAGE_BUDGET_CHARS) {
+                const compactComposed = clampHeadTail(composedContent, DM_COMPOSE_TOTAL_MESSAGE_BUDGET_CHARS);
+                const totalMeta = buildCompactionMeta('total prompt', composedContent, compactComposed);
+                composedContent = totalMeta
+                    ? `${compactComposed}\n\n${totalMeta}`
+                    : compactComposed;
             }
 
             await addDoc(collection(db, 'agent-commands'), {
                 from: 'admin', to: agent.id, type: msgType,
-                content: contextParts.join(''), metadata: {}, status: 'pending', createdAt: serverTimestamp(),
+                content: composedContent, metadata: {}, status: 'pending', createdAt: serverTimestamp(),
             });
             setAttachedMinutes(null);
             setAttachedFile(null);
@@ -707,7 +799,21 @@ const ChatPanel: React.FC<{
                     </div>
                 )}
                 {messages.map(msg => {
-                    const isProactive = msg.from === agent.id;
+                    const selectedAgentId = normalizeAgentId(agent.id);
+                    const senderAgentId = normalizeAgentId(msg.from);
+                    const isProactive = senderAgentId === selectedAgentId;
+                    const isFromAdmin = senderAgentId === 'admin';
+                    const isExternalAgent = !isProactive && !isFromAdmin;
+                    const externalEmoji = isExternalAgent
+                        ? (AGENT_EMOJIS[senderAgentId] || msg.metadata?.fromEmoji || '🤖')
+                        : '';
+                    const externalName = isExternalAgent
+                        ? toAgentDisplayName(senderAgentId, msg.metadata?.fromName)
+                        : '';
+                    const externalColor = isExternalAgent
+                        ? (AGENT_COLORS[senderAgentId] || '#3b82f6')
+                        : '#3b82f6';
+
                     return (
                         <div key={msg.id} className="dm-msg-group">
                             {isProactive ? (
@@ -721,15 +827,41 @@ const ChatPanel: React.FC<{
                                         </div>
                                     </div>
                                 </div>
-                            ) : (
-                                <>
-                                    <div className="dm-msg dm-msg-out">
-                                        <div className="dm-msg-meta-out">
-                                            <span className={`dm-type-tag type-${msg.type}`}>{msg.type}</span>
+                            ) : isExternalAgent ? (
+                                <div className="dm-msg dm-msg-in dm-msg-external">
+                                    <div
+                                        className="dm-msg-avi dm-msg-avi-external"
+                                        style={{ background: `${externalColor}26`, borderColor: `${externalColor}66` }}
+                                    >
+                                        {externalEmoji}
+                                    </div>
+                                    <div className="dm-msg-in-wrap">
+                                        <div className="dm-msg-meta-in dm-msg-meta-external">
+                                            <span className="dm-type-tag type-external" style={{ background: `${externalColor}1f`, color: externalColor }}>
+                                                External · {externalName}
+                                            </span>
                                             {msg.createdAt && <span className="dm-msg-time">{formatTime(msg.createdAt)}</span>}
                                         </div>
-                                        <div className="dm-bubble dm-bubble-out"><p>{msg.content}</p></div>
+                                        <div
+                                            className="dm-bubble dm-bubble-in dm-bubble-external"
+                                            style={{ borderColor: `${externalColor}55`, boxShadow: `inset 3px 0 0 ${externalColor}` }}
+                                        >
+                                            <p>{msg.content}</p>
+                                        </div>
                                     </div>
+                                </div>
+                            ) : (
+                                <div className="dm-msg dm-msg-out">
+                                    <div className="dm-msg-meta-out">
+                                        <span className={`dm-type-tag type-${msg.type}`}>{msg.type}</span>
+                                        {msg.createdAt && <span className="dm-msg-time">{formatTime(msg.createdAt)}</span>}
+                                    </div>
+                                    <div className="dm-bubble dm-bubble-out"><p>{msg.content}</p></div>
+                                </div>
+                            )}
+
+                            {!isProactive && (
+                                <>
                                     {msg.response && (
                                         <div className="dm-msg dm-msg-in">
                                             <div className="dm-msg-avi">{AGENT_EMOJIS[agent.id] || agent.emoji || '🤖'}</div>
@@ -748,7 +880,8 @@ const ChatPanel: React.FC<{
                                             <div className="dm-msg-in-wrap">
                                                 <div className="dm-bubble dm-bubble-in dm-bubble-pending">
                                                     <span className="dm-typing">
-                                                        <Loader2 className="w-3 h-3 animate-spin" /> Thinking
+                                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                                        {isExternalAgent ? `Replying to ${externalName}` : 'Thinking'}
                                                         <span className="dm-dots" aria-hidden>
                                                             <span>.</span><span>.</span><span>.</span>
                                                         </span>
@@ -1094,9 +1227,11 @@ const ChatPanel: React.FC<{
         .dm-msg { display: flex; gap: 6px; max-width: 85%; }
         .dm-msg-out { align-self: flex-end; flex-direction: column; align-items: flex-end; }
         .dm-msg-in { align-self: flex-start; }
+        .dm-msg-external { max-width: 90%; }
 
         .dm-msg-meta-out { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; }
         .dm-msg-meta-in { display: flex; align-items: center; gap: 4px; padding-left: 3px; }
+        .dm-msg-meta-external { margin-bottom: 3px; }
 
         .dm-type-tag {
           font-size: 9px; font-weight: 600;
@@ -1117,6 +1252,7 @@ const ChatPanel: React.FC<{
         .dm-bubble p { margin: 0; white-space: pre-wrap; }
         .dm-bubble-out { background: linear-gradient(135deg, #4f46e5, #6366f1); color: #fff; border-bottom-right-radius: 5px; }
         .dm-bubble-in { background: #1a1a20; color: #d4d4d8; border-bottom-left-radius: 5px; border: 1px solid #222228; }
+        .dm-bubble-external { background: rgba(24, 24, 31, 0.95); border-bottom-left-radius: 10px; }
         .dm-bubble-pending { padding: 9px 14px; }
         .dm-bubble-proactive { border-left: 3px solid #14b8a6; }
 
@@ -1124,6 +1260,10 @@ const ChatPanel: React.FC<{
           width: 24px; height: 24px; border-radius: 8px;
           background: #1e1e24; display: flex; align-items: center;
           justify-content: center; font-size: 12px; flex-shrink: 0; margin-top: 1px;
+        }
+        .dm-msg-avi-external {
+          border: 1px solid;
+          box-shadow: 0 0 0 1px rgba(10, 10, 14, 0.6);
         }
         .dm-msg-in-wrap { display: flex; flex-direction: column; gap: 2px; }
 

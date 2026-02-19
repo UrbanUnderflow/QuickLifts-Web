@@ -82,7 +82,8 @@ const sanitizeRecordedFilePath = (rawPath?: string): string => {
     next = next.slice(1, -1);
   }
 
-  return next.replace(/^\.\/+/, '');
+  const trimmed = next.replace(/^\.\/+/, '');
+  return trimmed.replace(/^docs\/agents\/sage\/deliverables(?=$|\/)/, 'docs/sage/deliverables');
 };
 
 const resolveAgentRouteId = (agentId?: string, agentName?: string): string | null => {

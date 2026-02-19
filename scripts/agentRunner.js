@@ -94,6 +94,13 @@ const MAX_STEP_REWRITE_ATTEMPTS = 1; // Rewrite-from-different-angle attempts on
 const MAX_CONSECUTIVE_FAILURES = 2; // Stop task after this many steps fail in a row
 const VALIDATION_MODEL = process.env.VALIDATION_MODEL || 'gpt-4o-mini'; // Cheap model for post-task validation
 const ENABLE_TASK_VALIDATION = process.env.ENABLE_TASK_VALIDATION !== 'false'; // Disable with ENABLE_TASK_VALIDATION=false
+const NO_ARTIFACT_LOOP_WINDOW_MS = parseInt(process.env.NO_ARTIFACT_LOOP_WINDOW_MS || String(45 * 60 * 1000), 10); // Look back 45m for repeat no-artifact loops
+const NO_ARTIFACT_LOOP_HISTORY_LIMIT = parseInt(process.env.NO_ARTIFACT_LOOP_HISTORY_LIMIT || '40', 10);
+const GROUP_CHAT_SYSTEM_PROMPT_BUDGET_CHARS = parseInt(process.env.GROUP_CHAT_SYSTEM_PROMPT_BUDGET_CHARS || '5600', 10);
+const GROUP_CHAT_USER_PROMPT_BUDGET_CHARS = parseInt(process.env.GROUP_CHAT_USER_PROMPT_BUDGET_CHARS || '1800', 10);
+const GROUP_CHAT_CONTEXT_BUDGET_CHARS = parseInt(process.env.GROUP_CHAT_CONTEXT_BUDGET_CHARS || '1600', 10);
+const GROUP_CHAT_RECENT_FULL_COUNT = parseInt(process.env.GROUP_CHAT_RECENT_FULL_COUNT || '2', 10);
+const GROUP_CHAT_RESPONSE_SNIPPET_CHARS = parseInt(process.env.GROUP_CHAT_RESPONSE_SNIPPET_CHARS || '320', 10);
 
 /* ─── Token Usage Tracking ─────────────────────────────── */
 var sessionTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
@@ -216,6 +223,8 @@ function resetTaskTokens() {
 /* ─── Agent Manifesto (shared institutional knowledge) ── */
 
 const projectDir = process.env.PROJECT_DIR || process.cwd();
+const LEAD_SOURCE_OF_TRUTH_REL_PATH = 'docs/partnership/lead-source-of-truth.md';
+const LEAD_SOURCE_OF_TRUTH_PATH = path.join(projectDir, LEAD_SOURCE_OF_TRUTH_REL_PATH);
 
 function loadManifesto() {
     const manifestoPath = path.join(projectDir, 'docs', 'AGENT_MANIFESTO.md');
@@ -345,6 +354,380 @@ const processedMessageIds = new Set(); // Dedup: track group-chat messages we've
 const processedCommandIds = new Set(); // Dedup: track command IDs we've already queued/processed
 var _forceRecoveryRequested = false; // Set by force-recovery command to kill the current step
 var _forceRecoveryReason = '';
+
+const ROUND_TABLE_PRIORITY = ['nora', 'solara', 'sage', 'scout', 'antigravity'];
+const ROUND_TABLE_COORDINATOR = 'nora';
+const ROUND_TABLE_TURN_SLA_MS = 90_000;
+const AGENT_DISPLAY_NAMES = {
+    nora: 'Nora',
+    scout: 'Scout',
+    solara: 'Solara',
+    sage: 'Sage',
+    antigravity: 'Antigravity',
+};
+
+function uniqueAgentIds(values) {
+    const seen = new Set();
+    const ordered = [];
+    for (var i = 0; i < values.length; i++) {
+        var candidate = String(values[i] || '').trim();
+        if (!candidate || seen.has(candidate)) continue;
+        seen.add(candidate);
+        ordered.push(candidate);
+    }
+    return ordered;
+}
+
+function sortByPriority(participants) {
+    var normalized = uniqueAgentIds(participants || []);
+    var preferred = ROUND_TABLE_PRIORITY.filter(function (id) { return normalized.includes(id); });
+    var remainder = normalized
+        .filter(function (id) { return preferred.indexOf(id) === -1; })
+        .sort();
+    return uniqueAgentIds(preferred.concat(remainder));
+}
+
+function parseMentionedAgents(content, participants) {
+    if (!content) return [];
+    var lowerText = String(content).toLowerCase();
+    var names = uniqueAgentIds(participants || []).reduce(function (acc, id) {
+        if (AGENT_DISPLAY_NAMES[id]) {
+            acc.push({ id: id, name: AGENT_DISPLAY_NAMES[id].toLowerCase() });
+            acc.push({ id: id, name: id.toLowerCase() });
+        }
+        return acc;
+    }, []);
+
+    var matchSet = new Set();
+    var tokens = (lowerText.match(/@([a-z][a-z0-9_-]*)/g) || []).map(function (token) {
+        return token.slice(1).toLowerCase();
+    });
+
+    for (var i = 0; i < tokens.length; i++) {
+        for (var j = 0; j < names.length; j++) {
+            if (names[j].name === tokens[i]) matchSet.add(names[j].id);
+        }
+    }
+
+    // Fallback for punctuation-heavy text
+    for (var k = 0; k < names.length; k++) {
+        if (lowerText.indexOf('@' + names[k].name) !== -1) {
+            matchSet.add(names[k].id);
+        }
+    }
+
+    return uniqueAgentIds(Array.from(matchSet));
+}
+
+function buildTurnStateFromMessage(participants, content) {
+    var orderedParticipants = sortByPriority(participants);
+    var mentioned = parseMentionedAgents(content || '', orderedParticipants);
+    var turnOrder = uniqueAgentIds([].concat(mentioned, orderedParticipants.filter(function (id) { return mentioned.indexOf(id) === -1; })));
+    return {
+        participants: orderedParticipants,
+        turnOrder: turnOrder,
+        coordinator: ROUND_TABLE_COORDINATOR,
+        turnIndex: 0,
+        currentTurnAgent: turnOrder[0] || null,
+        turnSlaMs: ROUND_TABLE_TURN_SLA_MS,
+        currentTurnStartedAt: Date.now(),
+    };
+}
+
+function normalizeTurnState(messageTurnState, fallbackParticipants, content, mentionedAgentIds) {
+    var fallback = buildTurnStateFromMessage(fallbackParticipants || [], content);
+    var mentioned = uniqueAgentIds(Array.isArray(mentionedAgentIds) ? mentionedAgentIds : []);
+
+    if (!messageTurnState) {
+        if (mentioned.length > 0) {
+            var mentionFirstOrder = uniqueAgentIds([].concat(mentioned, fallback.turnOrder.filter(function (id) { return mentioned.indexOf(id) === -1; })));
+            return {
+                ...fallback,
+                turnOrder: mentionFirstOrder,
+                turnIndex: 0,
+                currentTurnAgent: mentionFirstOrder[0] || fallback.currentTurnAgent,
+            };
+        }
+        return fallback;
+    }
+
+    var turnOrder = uniqueAgentIds(messageTurnState.turnOrder || fallback.turnOrder);
+    var normalizedTurnOrder = mentioned.length > 0
+        ? uniqueAgentIds([].concat(mentioned, turnOrder.filter(function (id) { return mentioned.indexOf(id) === -1; })))
+        : turnOrder;
+
+    return {
+        participants: uniqueAgentIds(messageTurnState.participants || fallback.participants),
+        turnOrder: normalizedTurnOrder,
+        coordinator: messageTurnState.coordinator || fallback.coordinator,
+        turnIndex: Number.isFinite(messageTurnState.turnIndex) && messageTurnState.turnIndex >= 0
+            ? messageTurnState.turnIndex
+            : fallback.turnIndex,
+        currentTurnAgent: messageTurnState.currentTurnAgent || normalizedTurnOrder[0] || fallback.currentTurnAgent,
+        turnSlaMs: Number.isFinite(messageTurnState.turnSlaMs) && messageTurnState.turnSlaMs > 0
+            ? messageTurnState.turnSlaMs
+            : fallback.turnSlaMs,
+        currentTurnStartedAt: messageTurnState.currentTurnStartedAt || fallback.currentTurnStartedAt,
+    };
+}
+
+function getTurnMetaFromResponse(response) {
+    if (!response) return {};
+    return {
+        status: response.status,
+        content: response.content,
+        error: response.error,
+    };
+}
+
+function hasAgentResponded(responses, agentId) {
+    var state = getTurnMetaFromResponse((responses || {})[agentId]);
+    return state.status === 'completed' || state.status === 'failed';
+}
+
+function nextActiveTurnIndex(turnState, responses) {
+    var order = turnState.turnOrder || [];
+    if (!order.length) return 0;
+    if (order.every(function (agentId) { return hasAgentResponded(responses, agentId); })) {
+        return -1;
+    }
+    var startIndex = Number.isFinite(turnState.turnIndex) ? turnState.turnIndex : 0;
+    var idx = startIndex;
+    var searched = 0;
+
+    while (searched < order.length) {
+        var candidate = order[idx];
+        if (!hasAgentResponded(responses, candidate)) return idx;
+        idx = (idx + 1) % order.length;
+        searched += 1;
+    }
+    return startIndex;
+}
+
+function toEpochMs(value) {
+    if (!value) return Date.now();
+    if (typeof value === 'number') return value;
+    if (typeof value.toMillis === 'function') return value.toMillis();
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'string') {
+        var parsed = Date.parse(value);
+        return Number.isFinite(parsed) ? parsed : Date.now();
+    }
+    return Date.now();
+}
+
+function isTurnStateExpired(turnState, responses) {
+    var startedAt = toEpochMs(turnState.currentTurnStartedAt);
+    var ageMs = Date.now() - startedAt;
+    var turnAgent = turnState.currentTurnAgent;
+    return (
+        !hasAgentResponded(responses || {}, turnAgent) &&
+        Number.isFinite(ageMs) &&
+        ageMs >= (turnState.turnSlaMs || ROUND_TABLE_TURN_SLA_MS)
+    );
+}
+
+async function advanceTurnState(messageRef, messageData, turnState) {
+    var responses = (messageData && messageData.responses) || {};
+    var order = turnState.turnOrder || [];
+    if (!order.length) return turnState;
+
+    var nextIndex = nextActiveTurnIndex({
+        participants: turnState.participants || [],
+        turnOrder: order,
+        coordinator: turnState.coordinator || ROUND_TABLE_COORDINATOR,
+        turnIndex: (turnState.turnIndex || 0) + 1,
+        currentTurnAgent: turnState.currentTurnAgent,
+        turnSlaMs: turnState.turnSlaMs || ROUND_TABLE_TURN_SLA_MS,
+    }, responses);
+
+    var normalizedNext = uniqueAgentIds(order);
+    if (nextIndex < 0 || nextIndex >= normalizedNext.length) {
+        return turnState;
+    }
+
+    var nextAgent = normalizedNext[nextIndex];
+    await messageRef.update({
+        'turnState.turnIndex': nextIndex,
+        'turnState.currentTurnAgent': nextAgent,
+        'turnState.currentTurnStartedAt': FieldValue.serverTimestamp(),
+    });
+    return {
+        ...turnState,
+        turnIndex: nextIndex,
+        currentTurnAgent: nextAgent,
+        currentTurnStartedAt: Date.now(),
+    };
+}
+
+async function ensureMyTurn({ gcMessageRef, messageData, turnState, responses, targetAgent, messageContent }) {
+    if (!gcMessageRef || !targetAgent) return { allowed: false, turnState: turnState };
+
+    var attempts = 0;
+    var maxAttempts = 24; // 24 x 1.5s ~= 36s
+    var waitMs = 1500;
+    var latestMessageData = messageData || {};
+    var latestTurnState = normalizeTurnState(
+        latestMessageData.turnState,
+        latestMessageData.participants || Object.keys(latestMessageData.responses || {}),
+        messageContent || latestMessageData.content || '',
+        latestMessageData.context?.mentionedAgents || [],
+    );
+
+    while (attempts < maxAttempts) {
+        var latestResponses = responses || latestMessageData.responses || {};
+        var coordinator = latestTurnState.coordinator || ROUND_TABLE_COORDINATOR;
+
+        if (latestTurnState.currentTurnAgent === targetAgent && !hasAgentResponded(latestResponses, targetAgent)) {
+            return { allowed: true, turnState: latestTurnState, messageData: latestMessageData };
+        }
+
+        if (latestTurnState.currentTurnAgent !== targetAgent) {
+            var isStale = isTurnStateExpired(latestTurnState, latestResponses);
+            if (isStale && AGENT_ID === coordinator) {
+                try {
+                    latestTurnState = await advanceTurnState(gcMessageRef, latestMessageData, latestTurnState);
+                } catch (err) {
+                    console.warn('⚠️ Turn advance failed:', err.message);
+                }
+            }
+            if (latestTurnState.currentTurnAgent === targetAgent && !hasAgentResponded(latestResponses, targetAgent)) {
+                return { allowed: true, turnState: latestTurnState, messageData: latestMessageData };
+            }
+        } else if (hasAgentResponded(latestResponses, latestTurnState.currentTurnAgent)) {
+            // current turn already done — coordinator rotates to next
+            if (coordinator === AGENT_ID) {
+                try {
+                    latestTurnState = await advanceTurnState(gcMessageRef, latestMessageData, latestTurnState);
+                } catch (err) {
+                    console.warn('⚠️ Turn auto-advance failed:', err.message);
+                }
+            } else {
+                // non-coordinator waits for next state
+            }
+        }
+
+        if (latestTurnState.currentTurnAgent === targetAgent && !hasAgentResponded(latestResponses, targetAgent)) {
+            return { allowed: true, turnState: latestTurnState, messageData: latestMessageData };
+        }
+
+        attempts += 1;
+        await new Promise(function (r) { return setTimeout(r, waitMs); });
+        try {
+            latestMessageData = (await gcMessageRef.get()).data() || {};
+            latestTurnState = normalizeTurnState(
+                latestMessageData.turnState,
+                latestMessageData.participants || Object.keys(latestMessageData.responses || {}),
+                latestMessageData.content || '',
+                latestMessageData.context?.mentionedAgents || [],
+            );
+            responses = latestMessageData.responses || {};
+        } catch (err) {
+            return { allowed: false, turnState: latestTurnState, messageData: latestMessageData };
+        }
+    }
+
+    return { allowed: false, turnState: latestTurnState, messageData: latestMessageData };
+}
+
+function normalizePromptWhitespace(text) {
+    return String(text || '').replace(/\s+/g, ' ').trim();
+}
+
+function clampPromptText(text, maxChars) {
+    var raw = String(text || '');
+    if (!raw) return '';
+    var budget = Number(maxChars || 0);
+    if (!Number.isFinite(budget) || budget <= 0) return raw;
+    if (raw.length <= budget) return raw;
+
+    var headLen = Math.max(24, Math.floor(budget * 0.74));
+    var tailLen = Math.max(0, budget - headLen - 3);
+    if (tailLen === 0) return raw.slice(0, budget - 1).trimEnd() + '…';
+
+    var head = raw.slice(0, headLen).trimEnd();
+    var tail = raw.slice(-tailLen).trimStart();
+    return `${head}\n…\n${tail}`;
+}
+
+function compactResponseSnippet(text, maxChars) {
+    if (!text) return '';
+    var normalized = String(text)
+        .replace(/```[\s\S]*?```/g, '[code omitted]')
+        .replace(/\r/g, '')
+        .trim();
+
+    if (!normalized) return '';
+    if (normalized.length > maxChars) {
+        normalized = normalizePromptWhitespace(normalized);
+    }
+    return clampPromptText(normalized, maxChars);
+}
+
+function buildCompactThreadContext(responses, budgetChars) {
+    var total = Array.isArray(responses) ? responses.length : 0;
+    if (!total || budgetChars < 120) {
+        return { block: '', includedCount: 0, omittedCount: total };
+    }
+
+    var lines = [];
+    var remaining = budgetChars;
+    var included = 0;
+    var recentFullCount = Math.max(1, GROUP_CHAT_RECENT_FULL_COUNT);
+
+    for (var i = total - 1; i >= 0; i--) {
+        var row = responses[i] || {};
+        var name = row.name || row.id || 'agent';
+        var isRecent = (total - i) <= recentFullCount;
+        var perItemBudget = isRecent
+            ? GROUP_CHAT_RESPONSE_SNIPPET_CHARS
+            : Math.max(120, Math.floor(GROUP_CHAT_RESPONSE_SNIPPET_CHARS * 0.55));
+
+        var snippet = compactResponseSnippet(row.content || '', perItemBudget);
+        if (!snippet) continue;
+
+        var line = `@${name}: ${snippet}`;
+        if (line.length + 2 > remaining) {
+            var fallbackBudget = Math.max(80, remaining - 10);
+            var shrunken = compactResponseSnippet(line, fallbackBudget);
+            if (!shrunken || shrunken.length + 2 > remaining) {
+                continue;
+            }
+            line = shrunken;
+        }
+
+        lines.unshift(line);
+        remaining -= line.length + 2;
+        included += 1;
+        if (remaining < 90) break;
+    }
+
+    var omitted = Math.max(0, total - included);
+    if (included === 0) {
+        return { block: '', includedCount: 0, omittedCount: total };
+    }
+
+    var header = '--- Prior agent context (auto-compacted) ---';
+    var footer = omitted > 0
+        ? `(${omitted} earlier response${omitted === 1 ? '' : 's'} omitted to fit context window)`
+        : '';
+
+    var block = `${header}\n${lines.join('\n\n')}`;
+    if (footer) block += `\n${footer}`;
+
+    return { block, includedCount: included, omittedCount: omitted };
+}
+
+function buildGroupUserPrompt(content, maxChars) {
+    var text = String(content || '').replace(/\r/g, '').trim();
+    if (!text) return '';
+    if (text.length > maxChars) {
+        text = normalizePromptWhitespace(text);
+    } else {
+        text = text.replace(/\n{3,}/g, '\n\n');
+    }
+    return clampPromptText(text, maxChars);
+}
 
 /* ─── Firestore Helpers ───────────────────────────────── */
 
@@ -796,9 +1179,7 @@ async function recordDeliverables(task, steps) {
  * Returns true if the task has verifiable artifacts.
  */
 function hasVerifiableArtifacts(steps) {
-    const allFiles = [...new Set(
-        steps.flatMap(s => s.filesChanged || []).map(parseGitStatusPath).filter(Boolean)
-    )];
+    const allFiles = getChangedFilesFromSteps(steps);
     if (allFiles.length === 0) return false;
 
     // Filter out meta-documents (summaries, action items, notifications)
@@ -813,6 +1194,137 @@ function hasVerifiableArtifacts(steps) {
     });
 
     return substantiveFiles.length > 0;
+}
+
+function parseSotIds(text) {
+    const ids = (String(text || '').match(/\b(?:LEAD|EVID)-\d{4}\b/g) || []);
+    return new Set(ids);
+}
+
+/**
+ * Lead/prospect deliverables must cite canonical IDs from docs/partnership/lead-source-of-truth.md.
+ * Required citation format: [SOT: LEAD-####, EVID-####]
+ */
+function validateLeadSourceOfTruthGate(task, steps) {
+    const changedFiles = getChangedFilesFromSteps(steps);
+    const leadKeywordRx = /\b(lead|prospect|partnership|collaboration|partner)\b/i;
+    const taskText = [task?.name, task?.description, task?.notes].filter(Boolean).join(' ');
+
+    const leadMarkdownFiles = changedFiles.filter((filePath) => {
+        if (!/\.md$/i.test(filePath)) return false;
+        if (/docs\/(sage\/deliverables|agents\/[^/]+\/deliverables|synthesis|partnership)\//i.test(filePath)) {
+            return true;
+        }
+        return leadKeywordRx.test(filePath);
+    });
+
+    const shouldCheck = leadKeywordRx.test(taskText) || leadMarkdownFiles.length > 0;
+    if (!shouldCheck) {
+        return { required: false, passed: true, reason: 'Lead source-of-truth gate not required for this task.' };
+    }
+
+    if (!fs.existsSync(LEAD_SOURCE_OF_TRUTH_PATH)) {
+        return {
+            required: true,
+            passed: false,
+            reason: `Missing canonical source file: ${LEAD_SOURCE_OF_TRUTH_REL_PATH}`,
+        };
+    }
+
+    let sourceContent = '';
+    try {
+        sourceContent = fs.readFileSync(LEAD_SOURCE_OF_TRUTH_PATH, 'utf-8');
+    } catch (err) {
+        return {
+            required: true,
+            passed: false,
+            reason: `Could not read canonical source file: ${LEAD_SOURCE_OF_TRUTH_REL_PATH} (${err.message})`,
+        };
+    }
+
+    const knownIds = parseSotIds(sourceContent);
+    if (knownIds.size === 0) {
+        return {
+            required: true,
+            passed: false,
+            reason: `Canonical source file has no LEAD/EVID IDs: ${LEAD_SOURCE_OF_TRUTH_REL_PATH}`,
+        };
+    }
+
+    const contentLeadSignalRx = /\b(lead|prospect|partnership|collaboration|partner|interest|status|fitwell|pulsefit|healthsync|wellnesslife|weartech|movewear)\b/i;
+    const missingCitations = [];
+    const unknownIds = [];
+    const inspectedFiles = [];
+
+    for (const filePath of leadMarkdownFiles) {
+        const absPath = path.join(projectDir, filePath);
+        if (!fs.existsSync(absPath)) continue;
+
+        let content = '';
+        try {
+            content = fs.readFileSync(absPath, 'utf-8');
+        } catch (err) {
+            return {
+                required: true,
+                passed: false,
+                reason: `Could not read changed deliverable ${filePath}: ${err.message}`,
+            };
+        }
+
+        if (!contentLeadSignalRx.test(content)) continue;
+        inspectedFiles.push(filePath);
+
+        const citations = content.match(/\[SOT:[^\]]+\]/g) || [];
+        if (citations.length === 0) {
+            missingCitations.push(filePath);
+            continue;
+        }
+
+        for (const citation of citations) {
+            const citedIds = [...parseSotIds(citation)];
+            if (citedIds.length === 0) {
+                unknownIds.push(`${filePath} => ${citation}`);
+                continue;
+            }
+            for (const id of citedIds) {
+                if (!knownIds.has(id)) {
+                    unknownIds.push(`${filePath} => ${id}`);
+                }
+            }
+        }
+    }
+
+    if (inspectedFiles.length === 0) {
+        return {
+            required: false,
+            passed: true,
+            reason: 'No lead/prospect markdown deliverables required citation checks.',
+        };
+    }
+
+    const dedupedMissing = [...new Set(missingCitations)];
+    const dedupedUnknown = [...new Set(unknownIds)];
+
+    if (dedupedMissing.length > 0 || dedupedUnknown.length > 0) {
+        const details = [];
+        if (dedupedMissing.length > 0) {
+            details.push(`Missing [SOT: ...] citations in: ${dedupedMissing.join(', ')}`);
+        }
+        if (dedupedUnknown.length > 0) {
+            details.push(`Unknown or malformed citation IDs: ${dedupedUnknown.join(', ')}`);
+        }
+        return {
+            required: true,
+            passed: false,
+            reason: details.join(' | '),
+        };
+    }
+
+    return {
+        required: true,
+        passed: true,
+        reason: `Validated ${inspectedFiles.length} lead/prospect deliverable(s) against ${LEAD_SOURCE_OF_TRUTH_REL_PATH}.`,
+    };
 }
 
 /* ─── Heartbeat OS: Beat Posting ──────────────────────── */
@@ -1092,6 +1604,8 @@ async function postHourlySnapshot(currentTask) {
  * within the idleThresholdMinutes window.
  */
 async function checkIdleAndNudge() {
+    if (AGENT_ID !== 'nora') return;
+
     try {
         const snap = await db.collection(KANBAN_COLLECTION)
             .where('status', '==', 'in-progress')
@@ -1568,9 +2082,11 @@ async function processCommands() {
 
             case 'question':
             case 'chat': {
+                var dmRawContent = (cmd.content || '').trim();
                 // ── Greeting fast-path: skip LLM for casual greetings ──
-                var GREETING_RX = /^(hey|hi|hello|what'?s up|how are you|yo|sup|good morning|good evening|gm)\b/i;
-                if (GREETING_RX.test((cmd.content || '').trim())) {
+                // NOTE: Require greeting-only message so "Hey Scout, can you explain..." does NOT bypass real answering.
+                var GREETING_ONLY_RX = /^(hey|hi|hello|what'?s up|how are you|yo|sup|good morning|good evening|gm)([\s!?.]*)$/i;
+                if (GREETING_ONLY_RX.test(dmRawContent)) {
                     var presSnap = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
                     var presData = presSnap.data();
                     var quickStatus = presData?.currentTask ? `Working on: ${presData.currentTask} (${presData.taskProgress || 0}% done).` : 'No active task right now — ready for anything.';
@@ -1578,6 +2094,8 @@ async function processCommands() {
                     console.log('   ⚡ Greeting fast-path — skipped LLM');
                     break;
                 }
+
+                var isExplanationRequest = /\b(explain|purpose|north\s*star|deliverable|why\s+(this|it)|how\s+(this|it)\s+(maps|connects|supports|gets))\b/i.test(dmRawContent);
 
                 // Generate intelligent DM response via OpenClaw or OpenAI
                 var presenceSnap2 = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
@@ -1592,7 +2110,7 @@ async function processCommands() {
                 };
                 var dmPersonality = dmPersonalities[AGENT_ID] || { role: 'Team Member', style: 'Collaborative and thoughtful.' };
 
-                var dmPrompt = [
+                var dmPromptParts = [
                     `You are ${AGENT_NAME}, the ${dmPersonality.role} at Pulse (FitWithPulse.ai). ${dmPersonality.style}`,
                     `Status: ${statusContext}`,
                     `Tremaine (founder) sent you a DM. Reply honestly in 2-4 sentences, plain text only.`,
@@ -1603,7 +2121,20 @@ async function processCommands() {
                     `- If the admin is asking you to DO something, tell them you've understood the request and it has been queued as a task.`,
                     `- Focus on: acknowledging the request, giving current status, and asking clarifying questions if needed.`,
                     `- If you don't know something, say so. Don't fabricate.`,
-                ].join('\n');
+                ];
+
+                if (isExplanationRequest) {
+                    dmPromptParts.push(
+                        ``,
+                        `EXPLANATION MODE (HIGH PRIORITY):`,
+                        `- The user is explicitly asking for an explanation of a deliverable/task and North Star alignment.`,
+                        `- Do NOT return a generic status update.`,
+                        `- Answer directly using this structure: Purpose -> North Star Link -> Expected Impact -> Verification Signal.`,
+                        `- If context is incomplete, state what is uncertain and ask exactly one focused follow-up question.`,
+                    );
+                }
+
+                var dmPrompt = dmPromptParts.join('\n');
 
                 var dmAiResponse = '';
                 var useOpenClaw = process.env.USE_OPENCLAW === 'true';
@@ -1660,8 +2191,12 @@ async function processCommands() {
                 if (dmAiResponse) {
                     response = dmAiResponse;
                 } else {
-                    // Fallback: at least give useful status instead of canned text
-                    response = `${statusContext} Send me a task and I'll add it to my queue right away.`;
+                    if (isExplanationRequest) {
+                        response = `I can explain the deliverable's purpose and North Star linkage, but my explanation model is unavailable right now. Please resend this once, and I'll answer in the format: Purpose -> North Star Link -> Expected Impact -> Verification Signal.`;
+                    } else {
+                        // Fallback: at least give useful status instead of canned text
+                        response = `${statusContext} Send me a task and I'll add it to my queue right away.`;
+                    }
                 }
 
                 // ── Safety net: if the AI response promises action, auto-create a task ──
@@ -1731,82 +2266,74 @@ async function processCommands() {
                     }
                 }
 
-                // ══════════════════════════════════════════════
-                // ═══ GROUP CHAT ETIQUETTE — @mention priority, stagger, relevance gate ═══
-                // ══════════════════════════════════════════════
-                var etiquetteNames = { nora: 'Nora', scout: 'Scout', solara: 'Solara', sage: 'Sage' };
-                var mentionedInMsg = Object.entries(etiquetteNames)
-                    .filter(function ([id, name]) {
-                        return new RegExp('@' + name + '\\b', 'i').test(cmd.content);
-                    })
-                    .map(function ([id]) { return id; });
-                var isDirectlyAddressed = mentionedInMsg.includes(AGENT_ID);
-                var someoneElseAddressed = mentionedInMsg.length > 0 && !isDirectlyAddressed;
-                var othersRespondedBefore = [];  // populated during stagger wait
+                // Turn control with @mention priority and no-reply SLA.
+                var contextMentionedAgents = uniqueAgentIds(cmd.context?.mentionedAgents || []);
+                var commandTurnState = normalizeTurnState(
+                    cmd.context?.turnState,
+                    uniqueAgentIds(
+                        [AGENT_ID]
+                            .concat(cmd.context?.otherAgents || [])
+                            .concat(contextMentionedAgents),
+                    ),
+                    cmd.content || '',
+                    contextMentionedAgents,
+                );
 
-                if (isDirectlyAddressed) {
-                    console.log(`   🎯 Etiquette: I'm directly @mentioned — responding immediately`);
-                } else if (someoneElseAddressed) {
-                    // Someone else was @mentioned — this message is NOT for us.
-                    // Default: SKIP. Only respond if the addressed agent calls us in.
-                    var tierDelay = 15000 + Math.random() * 10000;
-                    console.log(`   ⏳ Etiquette: @${mentionedInMsg.map(id => etiquetteNames[id]).join(',')} addressed — waiting ${(tierDelay / 1000).toFixed(1)}s to see if we're needed...`);
-                    await new Promise(function (r) { return setTimeout(r, tierDelay); });
+                var gcMessageRef = db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`);
+                var gcMessageData = null;
 
-                    // After waiting, read what others already said
-                    if (gcChatId && gcMessageId) {
-                        try {
-                            var waitSnap = await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).get();
-                            var waitData = waitSnap.data();
-                            if (waitData?.responses) {
-                                othersRespondedBefore = Object.entries(waitData.responses)
-                                    .filter(function ([id, r]) { return id !== AGENT_ID && r.status === 'completed' && r.content; })
-                                    .map(function ([id, r]) { return { id: id, name: etiquetteNames[id] || id, content: r.content }; });
-                            }
-                        } catch (e) { /* proceed */ }
+                // Prefer the latest stored message state for current turn tracking.
+                try {
+                    var gcSnap = await gcMessageRef.get();
+                    gcMessageData = gcSnap.data();
+                    if (gcMessageData?.turnState) {
+                        commandTurnState = normalizeTurnState(
+                            gcMessageData.turnState,
+                            uniqueAgentIds(
+                                [AGENT_ID]
+                                    .concat(commandTurnState.participants)
+                                    .concat(Object.keys(gcMessageData.responses || {})),
+                            ),
+                            gcMessageData.content || cmd.content || '',
+                        );
                     }
-
-                    // Only respond if the addressed agent explicitly @mentioned us in their response
-                    var othersReferencedMe = othersRespondedBefore.some(function (r) {
-                        return new RegExp('@' + (etiquetteNames[AGENT_ID] || AGENT_NAME) + '\\b', 'i').test(r.content);
-                    });
-
-                    if (!othersReferencedMe) {
-                        console.log(`   🤫 Etiquette: Deferring — message is for @${mentionedInMsg.map(id => etiquetteNames[id]).join(',')} and I wasn't called in`);
-                        try {
-                            await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).update({
-                                [`responses.${AGENT_ID}.content`]: '',
-                                [`responses.${AGENT_ID}.status`]: 'completed',
-                                [`responses.${AGENT_ID}.skipped`]: true,
-                                [`responses.${AGENT_ID}.reason`]: 'not-addressed',
-                                [`responses.${AGENT_ID}.completedAt`]: FieldValue.serverTimestamp(),
-                            });
-                        } catch (e) { /* best effort */ }
-                        processedMessageIds.add(gcMessageId);
-                        response = '[skipped — not addressed]';
-                        break;
-                    } else {
-                        console.log(`   💬 Etiquette: The addressed agent called me in — responding`);
-                    }
-                } else {
-                    // Open brainstorm — no @mention — everyone responds with a light stagger
-                    var openDelay = 3000 + Math.random() * 10000;
-                    console.log(`   ⏳ Etiquette: Open brainstorm — waiting ${(openDelay / 1000).toFixed(1)}s for natural stagger...`);
-                    await new Promise(function (r) { return setTimeout(r, openDelay); });
-
-                    // Read what others said during our wait
-                    if (gcChatId && gcMessageId) {
-                        try {
-                            var openSnap = await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).get();
-                            var openData = openSnap.data();
-                            if (openData?.responses) {
-                                othersRespondedBefore = Object.entries(openData.responses)
-                                    .filter(function ([id, r]) { return id !== AGENT_ID && r.status === 'completed' && r.content; })
-                                    .map(function ([id, r]) { return { id: id, name: etiquetteNames[id] || id, content: r.content }; });
-                            }
-                        } catch (e) { /* proceed */ }
-                    }
+                } catch (e) {
+                    gcMessageData = { responses: {} };
                 }
+
+                var turnCheck = await ensureMyTurn({
+                    gcMessageRef: gcMessageRef,
+                    messageData: gcMessageData || { responses: {} },
+                    turnState: commandTurnState,
+                    responses: gcMessageData?.responses || {},
+                    targetAgent: AGENT_ID,
+                    messageContent: cmd.content || '',
+                });
+
+                if (!turnCheck.allowed) {
+                    console.log(`   ⏭️ Not my turn yet for ${gcMessageId}; skipping this command cycle`);
+                    response = '[skipped — turn queue]';
+                    break;
+                }
+
+                var previousResponses = [];
+                if (gcMessageData?.responses) {
+                    previousResponses = Object.entries(gcMessageData.responses)
+                        .filter(function ([id, r]) { return id !== AGENT_ID && r.status === 'completed' && r.content; })
+                        .map(function ([id, r]) { return { id: id, name: AGENT_DISPLAY_NAMES[id] || id, content: r.content }; });
+                }
+                var othersRespondedBefore = previousResponses;
+                var mentionedInMsg = uniqueAgentIds(
+                    contextMentionedAgents.concat(
+                        parseMentionedAgents(cmd.content || '', commandTurnState.participants || []),
+                    ),
+                );
+                var someoneElseAddressed = mentionedInMsg.some(function (id) { return id && id !== AGENT_ID; });
+                var etiquetteNames = AGENT_DISPLAY_NAMES;
+
+                gcMessageData = turnCheck.messageData || gcMessageData;
+                commandTurnState = turnCheck.turnState || commandTurnState;
+                otherAgents = uniqueAgentIds((otherAgents || []).concat(commandTurnState.participants || []));
 
                 // Agent personality profiles for natural, distinct responses
                 var agentPersonalities = {
@@ -1829,6 +2356,11 @@ async function processCommands() {
                         role: 'Health Intelligence Researcher',
                         style: 'Warm, evidence-driven, and rigorous. You synthesize field intel into actionable briefs — citing sources, separating signal from hype.',
                         strengths: 'health trends, exercise science, clinical research, sports psychology, wellness tech, competitor analysis, market intelligence',
+                    },
+                    antigravity: {
+                        role: 'Strategy & Architecture Lead',
+                        style: 'High-level systems thinking, architecture-first planning, and precision execution for long-cycle initiatives.',
+                        strengths: 'systems architecture, cross-functional planning, execution sequencing, risk management, critical thinking',
                     },
                 };
                 var personality = agentPersonalities[AGENT_ID] || {
@@ -1875,6 +2407,29 @@ async function processCommands() {
                 }
 
                 if (useOpenClaw || process.env.OPENAI_API_KEY) {
+                    var compactPreviewChars = Math.max(
+                        220,
+                        Math.min(720, Math.floor(GROUP_CHAT_USER_PROMPT_BUDGET_CHARS * 0.35)),
+                    );
+                    var rawMessageLength = String(msgContent || '').length;
+                    var compactUserMessage = buildGroupUserPrompt(msgContent, GROUP_CHAT_USER_PROMPT_BUDGET_CHARS);
+                    var compactMessagePreview = buildGroupUserPrompt(msgContent, compactPreviewChars);
+                    var compactThread = buildCompactThreadContext(othersRespondedBefore, GROUP_CHAT_CONTEXT_BUDGET_CHARS);
+                    var addressedNames = mentionedInMsg
+                        .map(function (id) {
+                            return etiquetteNames[id] || AGENT_DISPLAY_NAMES[id] || id;
+                        })
+                        .filter(Boolean);
+
+                    var llmUserPrompt = [
+                        'Latest message to respond to:',
+                        compactUserMessage || '[empty message]',
+                    ].join('\n');
+
+                    if (cmd.context?.followUpDepth > 0 && cmd.context?.replyTo) {
+                        llmUserPrompt += `\n\nThread context: ${cmd.context.replyTo} asked you to continue this thread.`;
+                    }
+
                     var chatPrompt;
 
                     if (isExecMode) {
@@ -1882,7 +2437,8 @@ async function processCommands() {
                         chatPrompt = [
                             `You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai). ${personality.style}`,
                             `Strengths: ${personality.strengths}`,
-                            `Round Table with: ${otherAgents.join(', ')}. Tremaine (founder) said: "${msgContent}"`,
+                            `Round Table with: ${otherAgents.join(', ')}.`,
+                            `Latest founder message preview: "${compactMessagePreview || '[empty]'}"`,
                             ``,
                             `⚡ EXECUTION MODE — Tremaine has ended the planning phase. The brainstorm is OVER.`,
                             `RULES:`,
@@ -1900,18 +2456,21 @@ async function processCommands() {
                     } else {
                         // BRAINSTORM PROMPT — Tree of Thought pattern
                         // The key insight: agents MUST tag each other, build on ideas, and create threads
-                        var othersInRoom = otherAgents.filter(a => a.toLowerCase() !== AGENT_NAME.toLowerCase());
+                        var othersInRoom = otherAgents.filter(a => a.toLowerCase() !== AGENT_ID.toLowerCase());
                         var replyToAgent = cmd.context?.replyTo || null;
                         var isFollowUp = cmd.context?.followUpDepth > 0;
+                        var displayNamesInRoom = othersInRoom.map(function (id) {
+                            return AGENT_DISPLAY_NAMES[id] || id;
+                        });
 
                         chatPrompt = [
                             `You are ${AGENT_NAME}, the ${personality.role} at Pulse (FitWithPulse.ai). ${personality.style}`,
                             `Your strengths: ${personality.strengths}`,
                             ``,
-                            `You're at the Round Table with: ${otherAgents.join(', ')}. Tremaine (founder) is facilitating.`,
+                            `You're at the Round Table with: ${displayNamesInRoom.join(', ')}. Tremaine (founder) is facilitating.`,
                             isFollowUp && replyToAgent
                                 ? `${replyToAgent} just spoke and tagged you. This is a THREAD — build directly on what they said.`
-                                : `Tremaine said: "${msgContent}"`,
+                                : `Latest founder message preview: "${compactMessagePreview || '[empty]'}"`,
                             ``,
                             `─── TREE OF THOUGHT RULES ───`,
                             `You are in a brainstorming session. This is where the best ideas come from — agents riffing off each other.`,
@@ -1938,19 +2497,23 @@ async function processCommands() {
                         ].join('\n');
                     }
 
-                    // ── Etiquette: inject others' responses so we can build on them ──
-                    // Include up to 5 prior responses for rich tree-of-thought context
-                    var recentResponses = othersRespondedBefore.slice(-5);
-                    if (recentResponses.length > 0) {
-                        var contextBlock = '\n─── What others have said so far ───\n';
-                        for (var responder of recentResponses) {
-                            contextBlock += `@${responder.name}: "${responder.content}"\n\n`;
-                        }
-                        contextBlock += '─── Your turn: Build on what\'s been said, challenge an idea, or open a new thread. REFERENCE specific things they said. ───\n';
-                        chatPrompt += contextBlock;
+                    if (compactThread.block) {
+                        chatPrompt += `\n\n${compactThread.block}\n`;
+                        chatPrompt += `\n--- Your turn: Build on what has been said, challenge an idea, or open a new thread. Reference concrete details from the context above. ---\n`;
                     }
-                    if (someoneElseAddressed) {
-                        chatPrompt += `\nNote: This message was directed at @${mentionedInMsg.map(id => etiquetteNames[id]).join(', @')}. You were called in because they referenced you. Keep your response focused on what they asked you specifically.\n`;
+                    if (someoneElseAddressed && addressedNames.length > 0) {
+                        chatPrompt += `\nNote: This message was directed at @${addressedNames.join(', @')}. Keep your response focused on what they asked you specifically.\n`;
+                        llmUserPrompt += `\n\nFocus: the thread referenced @${addressedNames.join(', @')}. Keep your answer specific to that ask.`;
+                    }
+
+                    chatPrompt = clampPromptText(chatPrompt, GROUP_CHAT_SYSTEM_PROMPT_BUDGET_CHARS);
+                    llmUserPrompt = clampPromptText(llmUserPrompt, GROUP_CHAT_USER_PROMPT_BUDGET_CHARS + 220);
+                    var openClawPrompt = `${chatPrompt}\n\n${llmUserPrompt}`;
+
+                    if (compactThread.omittedCount > 0 || rawMessageLength > GROUP_CHAT_USER_PROMPT_BUDGET_CHARS) {
+                        console.log(
+                            `   🗜️ Group-chat prompt compacted (msg=${rawMessageLength} chars, included=${compactThread.includedCount}, omitted=${compactThread.omittedCount})`,
+                        );
                     }
 
                     // Helper: detect if a response looks like an error
@@ -1967,8 +2530,26 @@ async function processCommands() {
                             /timed out/i,
                             /SIGTERM/i,
                             /exit code/i,
+                            /context overflow/i,
+                            /prompt too large/i,
+                            /context length exceeded/i,
+                            /max(?:imum)? context/i,
+                            /token limit/i,
                         ];
                         return errorPatterns.some(function (p) { return p.test(text); });
+                    };
+                    var overflowPattern = /context overflow|prompt too large|context length exceeded|max(?:imum)? context|token limit/i;
+                    var retryShrinkLevel = 0;
+                    var compactPromptsForRetry = function (reason) {
+                        retryShrinkLevel += 1;
+                        var systemRatio = retryShrinkLevel === 1 ? 0.65 : 0.45;
+                        var userRatio = retryShrinkLevel === 1 ? 0.7 : 0.5;
+                        var nextSystemBudget = Math.max(1800, Math.floor(GROUP_CHAT_SYSTEM_PROMPT_BUDGET_CHARS * systemRatio));
+                        var nextUserBudget = Math.max(500, Math.floor(GROUP_CHAT_USER_PROMPT_BUDGET_CHARS * userRatio));
+                        chatPrompt = clampPromptText(chatPrompt, nextSystemBudget);
+                        llmUserPrompt = clampPromptText(llmUserPrompt, nextUserBudget);
+                        openClawPrompt = `${chatPrompt}\n\n${llmUserPrompt}`;
+                        console.log(`   🗜️ Retrying with tighter prompt budgets (${reason})`);
                     };
 
                     var MAX_RETRIES = 3;
@@ -1986,7 +2567,7 @@ async function processCommands() {
                                         model: boostModel,
                                         messages: [
                                             { role: 'system', content: chatPrompt },
-                                            { role: 'user', content: cmd.content }
+                                            { role: 'user', content: llmUserPrompt },
                                         ],
                                         temperature: isBoosted ? 0.6 : 0.8,
                                         max_tokens: boostMaxTokens,
@@ -2001,7 +2582,7 @@ async function processCommands() {
                                     'agent',
                                     '--local',
                                     '--agent', isBoosted ? getAgentIdForTier('heavy') : OPENCLAW_AGENT_ID,
-                                    '--message', chatPrompt,
+                                    '--message', openClawPrompt,
                                     '--timeout', isBoosted ? '60' : '30',
                                 ];
 
@@ -2036,6 +2617,9 @@ async function processCommands() {
                             if (gcResponse && looksLikeError(gcResponse)) {
                                 console.error(`   ⚠️ Attempt ${attempt}/${MAX_RETRIES}: Got error-like response: "${gcResponse.substring(0, 100)}..."`);
                                 lastError = `Error-like response: ${gcResponse.substring(0, 150)}`;
+                                if (overflowPattern.test(gcResponse) && attempt < MAX_RETRIES) {
+                                    compactPromptsForRetry('overflow response');
+                                }
                                 gcResponse = '';
                                 if (attempt < MAX_RETRIES) {
                                     console.log(`   🔄 Retrying in 3s...`);
@@ -2048,6 +2632,9 @@ async function processCommands() {
                         } catch (err) {
                             console.error(`   ⚠️ Attempt ${attempt}/${MAX_RETRIES} failed for ${AGENT_NAME}:`, err.message);
                             lastError = err.message;
+                            if (overflowPattern.test(err.message || '') && attempt < MAX_RETRIES) {
+                                compactPromptsForRetry('overflow error');
+                            }
                             gcResponse = '';
                             if (attempt < MAX_RETRIES) {
                                 console.log(`   🔄 Retrying in 3s...`);
@@ -2171,17 +2758,20 @@ async function processCommands() {
                         // ALSO: organically trigger follow-ups even without explicit @mentions
                         // This is the engine of the tree-of-thought pattern.
                         var currentDepth = cmd.context?.followUpDepth || 0;
-                        var knownAgents = {
-                            nora: 'Nora',
-                            scout: 'Scout',
-                            solara: 'Solara',
-                            sage: 'Sage',
-                        };
+                        var knownAgents = AGENT_DISPLAY_NAMES;
+                        var followUpCandidates = uniqueAgentIds((commandTurnState.participants || [AGENT_ID]).filter(function (id) {
+                            return id !== AGENT_ID;
+                        }));
                         var mentionedAgentIds = [];
-                        for (var [agentIdKey, agentDisplayName] of Object.entries(knownAgents)) {
-                            if (agentIdKey === AGENT_ID) continue;
-                            var mentionRegex = new RegExp(`@${agentDisplayName}\\b`, 'i');
-                            if (mentionRegex.test(gcResponse)) {
+                        var escapeRegExp = function (value) {
+                            return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        };
+                        for (var agentIdKey in knownAgents) {
+                            if (!Object.prototype.hasOwnProperty.call(knownAgents, agentIdKey)) continue;
+                            if (agentIdKey === AGENT_ID || followUpCandidates.indexOf(agentIdKey) === -1) continue;
+                            var escapedAgentName = escapeRegExp(knownAgents[agentIdKey]);
+                            var mentionRegex = new RegExp(`@${escapedAgentName}\\b`, 'i');
+                            if (mentionRegex.test(gcResponse || '')) {
                                 mentionedAgentIds.push(agentIdKey);
                             }
                         }
@@ -2197,9 +2787,11 @@ async function processCommands() {
                                 scout: ['data', 'research', 'trend', 'insight', 'analytics', 'user', 'market', 'competitor', 'growth', 'metrics'],
                                 solara: ['brand', 'voice', 'narrative', 'messaging', 'identity', 'values', 'positioning', 'content', 'story', 'community'],
                                 sage: ['health', 'wellness', 'science', 'evidence', 'clinical', 'research', 'fitness', 'nutrition', 'exercise', 'intel'],
+                                antigravity: ['architecture', 'system', 'planning', 'execution', 'risk', 'complexity', 'scope', 'tradeoff', 'timeline'],
                             };
                             for (var [agId, keywords] of Object.entries(strengthMap)) {
                                 if (agId === AGENT_ID) continue;
+                                if (followUpCandidates.indexOf(agId) === -1) continue;
                                 agentRelevance[agId] = keywords.filter(k => responseWords.includes(k)).length;
                             }
                             // Pick the most relevant agent, or a random one if no strong match
@@ -2210,10 +2802,12 @@ async function processCommands() {
                                 console.log(`   🌿 Organic follow-up: ${AGENT_NAME}'s response touches ${knownAgents[sortedByRelevance[0][0]]}'s expertise → triggering thread`);
                             } else if (currentDepth < 2) {
                                 // At early depths, always keep the conversation going
-                                var otherIds = Object.keys(knownAgents).filter(id => id !== AGENT_ID);
-                                var randomPick = otherIds[Math.floor(Math.random() * otherIds.length)];
-                                mentionedAgentIds.push(randomPick);
-                                console.log(`   🎲 Organic follow-up: random pick → @${knownAgents[randomPick]} to keep the thread alive (depth ${currentDepth})`);
+                                var otherIds = followUpCandidates;
+                                if (otherIds.length > 0) {
+                                    var randomPick = otherIds[Math.floor(Math.random() * otherIds.length)];
+                                    mentionedAgentIds.push(randomPick);
+                                    console.log(`   🎲 Organic follow-up: random pick → @${knownAgents[randomPick]} to keep the thread alive (depth ${currentDepth})`);
+                                }
                             }
                         }
 
@@ -2245,6 +2839,10 @@ async function processCommands() {
                             if (!adminCutIn) {
                                 console.log(`   ▶️ No admin message — continuing tree-of-thought chain`);
                                 for (var mentionedId of mentionedAgentIds) {
+                                    var normalizedMentioned = uniqueAgentIds([mentionedId]).filter(Boolean);
+                                    if (normalizedMentioned.length === 0) continue;
+                                    var threadTarget = normalizedMentioned[0];
+                                    var threadTargetName = knownAgents[threadTarget] || threadTarget;
                                     var followUpRef = await db.collection(`agent-group-chats/${gcChatId}/messages`).add({
                                         from: AGENT_ID,
                                         fromName: AGENT_NAME,
@@ -2264,7 +2862,7 @@ async function processCommands() {
 
                                     await db.collection('agent-commands').add({
                                         from: AGENT_ID,
-                                        to: mentionedId,
+                                        to: threadTarget,
                                         type: 'group-chat',
                                         content: gcResponse,
                                         status: 'pending',
@@ -2272,13 +2870,16 @@ async function processCommands() {
                                         groupChatId: gcChatId,
                                         messageId: followUpRef.id,
                                         context: {
-                                            otherAgents: [AGENT_NAME, ...otherAgents.filter(a => a !== knownAgents[mentionedId])],
+                                            otherAgents: [AGENT_ID],
+                                            mentionedAgents: [threadTarget],
                                             replyTo: AGENT_NAME,
+                                            turnState: buildTurnStateFromMessage([threadTarget], gcResponse),
+                                            turnSlaMs: ROUND_TABLE_TURN_SLA_MS,
                                             followUpDepth: currentDepth + 1,
                                         },
                                     });
 
-                                    console.log(`   📨 Triggered @${knownAgents[mentionedId]} to respond (msg: ${followUpRef.id}, depth: ${currentDepth + 1})`);
+                                    console.log(`   📨 Triggered @${threadTargetName} to respond (msg: ${followUpRef.id}, depth: ${currentDepth + 1})`);
                                 }
                             }
                         }
@@ -2502,6 +3103,77 @@ async function requestHumanIntervention(question, opts = {}) {
     }
 }
 
+function toMillis(ts) {
+    if (!ts) return 0;
+    if (typeof ts?.toDate === 'function') {
+        try { return ts.toDate().getTime(); } catch (_) { return 0; }
+    }
+    if (ts instanceof Date) return ts.getTime();
+    var parsed = new Date(ts).getTime();
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeTaskLoopKey(taskName) {
+    if (!taskName) return '';
+    var key = String(taskName)
+        .toLowerCase()
+        .replace(/^\s*\[correction\]\s*/g, '')
+        .replace(/\([^)]*\)/g, ' ') // strip variant notes like "(ritual variant A)"
+        .replace(/["'`]/g, '')
+        .replace(/\b(task|completed|steps|produced|artifacts|verifiable|with|and|the|a|an)\b/g, ' ')
+        .replace(/[^a-z0-9:\s-]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    // Keep first 8 terms to compare "base intent" rather than retry decorations.
+    return key.split(' ').filter(Boolean).slice(0, 8).join(' ');
+}
+
+function findRecentNeedsReviewMatch(taskName, historyRows) {
+    if (!taskName || !Array.isArray(historyRows) || historyRows.length === 0) return null;
+    var targetKey = normalizeTaskLoopKey(taskName);
+    if (!targetKey) return null;
+    return historyRows.find((row) => normalizeTaskLoopKey(row.taskName) === targetKey) || null;
+}
+
+async function getRecentNeedsReviewHistory() {
+    try {
+        var cutoff = Date.now() - NO_ARTIFACT_LOOP_WINDOW_MS;
+        var snap = await db.collection(PRESENCE_COLLECTION)
+            .doc(AGENT_ID)
+            .collection(HISTORY_SUBCOLLECTION)
+            .orderBy('completedAt', 'desc')
+            .limit(NO_ARTIFACT_LOOP_HISTORY_LIMIT)
+            .get();
+
+        return snap.docs
+            .map((d) => d.data())
+            .filter((row) => row?.status === 'needs-review' && toMillis(row.completedAt) >= cutoff);
+    } catch (err) {
+        console.warn(`⚠️  Could not load recent needs-review history: ${err.message}`);
+        return [];
+    }
+}
+
+async function suppressLikelyRetryLoopTask(taskId, taskData, matchedHistory) {
+    var recentLabel = matchedHistory?.taskName || 'recent needs-review attempt';
+    var reviewReason = `Likely retry loop suppressed. Similar task recently ended as needs-review (no verifiable artifacts): "${recentLabel}".`;
+    await db.collection(KANBAN_COLLECTION).doc(taskId).update({
+        status: 'needs-review',
+        runnerBlocked: true,
+        reviewReason: reviewReason.slice(0, 900),
+        loopSuppressedAt: FieldValue.serverTimestamp(),
+        loopMatchedHistoryTaskId: matchedHistory?.taskId || '',
+        updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    await sendProactiveMessage(
+        `🛑 Paused a likely retry loop for "${taskData.name}".\n\n` +
+        `A very similar task just ended as needs-review with no verifiable artifacts, so I marked this retry as needs-review instead of running it again.\n\n` +
+        `If you want me to force another attempt, set \`allowLoopRetry=true\` on the task card and I will run it.`,
+        'needs-review'
+    );
+}
+
 /* ─── Kanban Integration ──────────────────────────────── */
 
 async function fetchNextTask() {
@@ -2527,17 +3199,36 @@ async function fetchNextTask() {
         .get();
 
     if (!todoSnap.empty) {
-        const doc = todoSnap.docs.find((d) => !d.data().runnerBlocked);
-        if (!doc) return null;
-        await db.collection(KANBAN_COLLECTION).doc(doc.id).update({
-            status: 'in-progress',
-            assignee: AGENT_NAME,  // normalize assignee to canonical name
-            runnerBlocked: FieldValue.delete(),
-            runnerFailureAt: FieldValue.delete(),
-            runnerFailureMessage: FieldValue.delete(),
-            updatedAt: FieldValue.serverTimestamp(),
-        });
-        return { id: doc.id, ...doc.data() };
+        const recentNeedsReviewHistory = await getRecentNeedsReviewHistory();
+        for (const doc of todoSnap.docs) {
+            const data = doc.data();
+            if (data.runnerBlocked) continue;
+
+            const allowLoopRetry = data.allowLoopRetry === true;
+            const loopMatch = allowLoopRetry
+                ? null
+                : findRecentNeedsReviewMatch(data.name, recentNeedsReviewHistory);
+
+            if (loopMatch) {
+                console.log(`🛑 Loop guard: suppressing likely duplicate retry "${data.name}" (matched recent needs-review task "${loopMatch.taskName}")`);
+                try {
+                    await suppressLikelyRetryLoopTask(doc.id, data, loopMatch);
+                } catch (err) {
+                    console.warn(`⚠️  Failed to suppress retry-loop task ${doc.id}: ${err.message}`);
+                }
+                continue;
+            }
+
+            await db.collection(KANBAN_COLLECTION).doc(doc.id).update({
+                status: 'in-progress',
+                assignee: AGENT_NAME,  // normalize assignee to canonical name
+                runnerBlocked: FieldValue.delete(),
+                runnerFailureAt: FieldValue.delete(),
+                runnerFailureMessage: FieldValue.delete(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+            return { id: doc.id, ...data };
+        }
     }
 
     return null;
@@ -2992,6 +3683,11 @@ Notes: ${task.notes || 'None'}`;
  * Get the current git status (changed files) in the project directory.
  */
 function parseGitStatusPath(line) {
+    const normalizeLegacySageDeliverablePath = (raw) => {
+        const trimmed = String(raw || '').trim().replace(/^\.\/+/, '');
+        return trimmed.replace(/^docs\/agents\/sage\/deliverables(?=$|\/)/, 'docs/sage/deliverables');
+    };
+
     const entry = (line || '').trim();
     if (!entry) return '';
 
@@ -3011,7 +3707,15 @@ function parseGitStatusPath(line) {
         pathValue = pathValue.slice(1, -1);
     }
 
-    return pathValue.replace(/^\.\/+/, '');
+    return normalizeLegacySageDeliverablePath(pathValue);
+}
+
+function getChangedFilesFromSteps(steps) {
+    const files = (steps || [])
+        .flatMap((s) => s.filesChanged || [])
+        .map(parseGitStatusPath)
+        .filter(Boolean);
+    return [...new Set(files)];
 }
 
 function getGitChanges() {
@@ -3179,6 +3883,9 @@ ${smokeOutput}`.substring(0, 2000);
                         `=== WORK OUTPUT RULES ===`,
                         `All deliverables (research, analysis, docs, code) MUST be saved as files in the project repo.`,
                         `Research and analysis → save as .md files in the appropriate directory (e.g., docs/research/, docs/deliverables/).`,
+                        `For lead/prospect/partnership claims, cite canonical IDs from ${LEAD_SOURCE_OF_TRUTH_REL_PATH} as [SOT: LEAD-####, EVID-####].`,
+                        `If a lead claim is not present in the source-of-truth file, mark it Unverified and do not present it as fact.`,
+                        `Run a final source-of-truth cross-check before marking lead/prospect deliverables complete.`,
                         `After completing meaningful work, commit and push your changes to the repo with a descriptive commit message.`,
                         `This ensures all work is trackable and accessible from the artifacts/deliverables views.`,
                         `=== END WORK OUTPUT RULES ===`,
@@ -4021,6 +4728,35 @@ async function run() {
                     });
                     await new Promise(r => setTimeout(r, 5_000));
                     continue;
+                }
+
+                // ─── Lead source-of-truth gate ──────────────────
+                const sourceTruthGate = validateLeadSourceOfTruthGate(task, steps);
+                if (sourceTruthGate.required && !sourceTruthGate.passed) {
+                    console.log(`\n⚠️  SOURCE-OF-TRUTH GATE FAILED — ${sourceTruthGate.reason}`);
+                    await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
+                    await db.collection(KANBAN_COLLECTION).doc(task.id).update({
+                        status: 'needs-review',
+                        reviewReason: `Lead source-of-truth gate failed: ${sourceTruthGate.reason}`,
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+                    await sendProactiveMessage(
+                        `⚠️ Task "${task.name}" failed the lead source-of-truth gate.\n\n` +
+                        `${sourceTruthGate.reason}\n\n` +
+                        `Use ${LEAD_SOURCE_OF_TRUTH_REL_PATH} and add citations as [SOT: LEAD-####, EVID-####], then resubmit.`,
+                        'needs-review'
+                    );
+                    await setStatus('idle', {
+                        currentTask: '',
+                        currentTaskId: '',
+                        notes: `⚠️ Needs review (source-of-truth gate): ${task.name}`,
+                        taskProgress: 0,
+                    });
+                    await new Promise(r => setTimeout(r, 5_000));
+                    continue;
+                }
+                if (sourceTruthGate.required && sourceTruthGate.passed) {
+                    console.log(`\n✅ SOURCE-OF-TRUTH GATE PASSED — ${sourceTruthGate.reason}`);
                 }
 
                 console.log(hasIssues
