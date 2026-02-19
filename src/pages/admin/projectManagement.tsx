@@ -3,7 +3,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { kanbanService } from '../../api/firebase/kanban/service';
-import { KanbanTask, KanbanLane, KanbanColor } from '../../api/firebase/kanban/types';
+import { KanbanTask, KanbanLane, KanbanColor, normalizeKanbanTaskStatus } from '../../api/firebase/kanban/types';
 import { Plus, Edit, Trash2, Calendar, User, Tag, GripVertical, Clock, Filter, CheckSquare, Square, X, ListOrdered } from 'lucide-react';
 import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
@@ -1835,7 +1835,8 @@ const LaneColumn: React.FC<LaneColumnProps> = ({
     'done': []
   };
   tasks.forEach((task) => {
-    groupedByStatus[task.status].push(task);
+    const status = normalizeKanbanTaskStatus(task.status);
+    groupedByStatus[status].push(task);
   });
 
   return (
