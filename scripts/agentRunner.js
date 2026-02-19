@@ -231,6 +231,50 @@ function loadCodebaseMap() {
 // Load manifesto and codebase map once at startup (will be refreshed each task cycle if needed)
 let cachedManifesto = loadManifesto();
 let cachedCodebaseMap = loadCodebaseMap();
+let cachedNorthStar = null;
+let lastNorthStarFetch = 0;
+const NORTH_STAR_REFRESH_MS = 15 * 60 * 1000; // Re-fetch every 15 min
+
+/**
+ * Load the company's North Star from Firestore.
+ * Cached for 15 minutes so we don't hit Firestore on every step.
+ */
+async function loadNorthStar() {
+    const now = Date.now();
+    if (cachedNorthStar && (now - lastNorthStarFetch) < NORTH_STAR_REFRESH_MS) {
+        return cachedNorthStar;
+    }
+    try {
+        const snap = await db.collection('company-config').doc('north-star').get();
+        if (!snap.exists) { cachedNorthStar = ''; lastNorthStarFetch = now; return ''; }
+        const data = snap.data();
+        if (!data?.title) { cachedNorthStar = ''; lastNorthStarFetch = now; return ''; }
+
+        const lines = [
+            `=== COMPANY NORTH STAR ===`,
+            `Goal: ${data.title}`,
+        ];
+        if (data.description) {
+            lines.push(data.description);
+        }
+        if (data.objectives && data.objectives.length > 0) {
+            lines.push(`Key Objectives:`);
+            data.objectives.forEach((obj, i) => {
+                lines.push(`  ${i + 1}. ${obj}`);
+            });
+        }
+        lines.push(`=== Prioritize work that moves us toward this goal ===`);
+        cachedNorthStar = lines.join('\n');
+        lastNorthStarFetch = now;
+        console.log(`⭐ North Star loaded: "${data.title}"`);
+        return cachedNorthStar;
+    } catch (err) {
+        console.warn('⚠️  Could not load North Star:', err.message);
+        cachedNorthStar = '';
+        lastNorthStarFetch = now;
+        return '';
+    }
+}
 
 const SERVICE_ACCOUNT = {
     type: "service_account",
@@ -737,7 +781,7 @@ async function postBeat(beat, headline, opts = {}) {
             agentName: AGENT_NAME,
             emoji: AGENT_EMOJI,
             objectiveCode: opts.objectiveCode || opts.taskId || '',
-            beat: beat,               // hypothesis | work-in-flight | result | block
+            beat: beat,               // hypothesis | work-in-flight | result | block | signal-spike
             headline: headline,
             artifactType: opts.artifactType || 'none',
             artifactText: opts.artifactText || '',
@@ -751,6 +795,87 @@ async function postBeat(beat, headline, opts = {}) {
     } catch (err) {
         console.error('⚠️  Failed to post beat:', err.message);
     }
+}
+
+/* ─── Heartbeat OS: Insight Extraction ────────────────── */
+
+/**
+ * Scan step output for noteworthy findings and auto-post signal-spike beats.
+ *
+ * When an agent is doing research or analysis, the output may contain
+ * insights that are valuable to the whole team. This function detects
+ * those moments and surfaces them to the timeline so the team can see
+ * discoveries in real-time — not buried in a deliverable that gets read later.
+ *
+ * Rate-limited to max 1 insight per 5 minutes to avoid flooding the feed.
+ */
+let lastInsightAt = 0;
+const INSIGHT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes between signal-spike beats
+
+const INSIGHT_PATTERNS = [
+    // Strong discovery signals
+    { rx: /(?:key\s+)?(?:finding|insight|discovery|takeaway|conclusion)\s*[:—–-]\s*(.{20,200})/i, weight: 3 },
+    { rx: /(?:important(?:ly)?|significant(?:ly)?|notable|noteworthy|surprisingly|unexpectedly)\s*[,:]\s*(.{20,200})/i, weight: 3 },
+    { rx: /(?:found|discovered|uncovered|identified|revealed|noticed)\s+(?:that\s+)?(.{20,200})/i, weight: 2 },
+    // Competitive/market intelligence
+    { rx: /(?:competitor|rival|alternative)s?\s+(?:are|have|launched|released|offer)\s+(.{20,200})/i, weight: 3 },
+    { rx: /(?:market|trend|industry)\s+(?:data|analysis|research)\s+(?:shows?|indicates?|reveals?|suggests?)\s+(.{20,200})/i, weight: 3 },
+    // Data-driven findings
+    { rx: /(\d+%\s+(?:of|increase|decrease|growth|decline|more|less|higher|lower).{10,150})/i, weight: 3 },
+    { rx: /(?:data\s+)?(?:shows?|indicates?|suggests?|reveals?|confirms?)\s+(?:that\s+)?(.{20,200})/i, weight: 1 },
+    // Technical insights
+    { rx: /(?:pattern|architecture|approach|design)\s+(?:that|which)\s+(.{20,200})/i, weight: 2 },
+    { rx: /(?:root\s*cause|bottleneck|critical\s+path|blocking\s+issue)\s*[:—–-]?\s*(.{20,200})/i, weight: 3 },
+    // Strategic insights
+    { rx: /(?:opportunity|gap|whitespace|untapped|underserved)\s*[:—–-]?\s*(.{20,200})/i, weight: 3 },
+    { rx: /(?:recommend(?:ation)?|propos(?:e|al)|should\s+consider)\s*[:—–-]?\s*(.{20,200})/i, weight: 2 },
+];
+
+async function extractAndPostInsight(stepOutput, task, stepIndex, totalSteps) {
+    if (!stepOutput || stepOutput.length < 50) return;
+
+    // Rate limit — don't flood the timeline
+    const now = Date.now();
+    if (now - lastInsightAt < INSIGHT_COOLDOWN_MS) return;
+
+    // Scan for insight patterns
+    let bestMatch = null;
+    let bestWeight = 0;
+
+    for (const pattern of INSIGHT_PATTERNS) {
+        const match = stepOutput.match(pattern.rx);
+        if (match && match[1] && pattern.weight > bestWeight) {
+            bestMatch = match[1].trim();
+            bestWeight = pattern.weight;
+        }
+    }
+
+    // Only post if we found a strong signal (weight >= 2)
+    if (!bestMatch || bestWeight < 2) return;
+
+    // Clean up the insight text
+    let insight = bestMatch
+        .replace(/\s+/g, ' ')
+        .replace(/[.!?]+$/, '')
+        .trim();
+
+    // Truncate if too long
+    if (insight.length > 180) {
+        insight = insight.substring(0, 177) + '...';
+    }
+
+    lastInsightAt = now;
+
+    await postBeat('signal-spike', `🔍 ${insight}`, {
+        taskId: task.id,
+        color: 'green',
+        objectiveCode: task.objectiveCode || task.id,
+        artifactType: 'text',
+        artifactText: `Discovered during step ${stepIndex + 1}/${totalSteps} of "${task.name}":\n\n${bestMatch}`,
+        lensTag: 'insight',
+    });
+
+    console.log(`🔍 Insight surfaced to timeline: "${insight.substring(0, 80)}..."`);
 }
 
 /**
@@ -869,6 +994,159 @@ async function checkIdleAndNudge() {
         }
     } catch (err) {
         console.error('⚠️  Idle nudge check failed:', err.message);
+    }
+}
+
+/* ─── Self-Assign Task When Idle ──────────────────────── */
+
+/**
+ * If this agent has no tasks at all, generate one from the North Star.
+ * Called from the main loop after consecutive idle cycles.
+ */
+async function selfAssignTask() {
+    try {
+        // Double-check: do we really have no tasks?
+        const existing = await db.collection(KANBAN_COLLECTION)
+            .where('assignee', '==', AGENT_NAME)
+            .where('status', 'in', ['todo', 'in-progress'])
+            .limit(1)
+            .get();
+        if (!existing.empty) return null; // Race condition — task appeared
+
+        // Load North Star for alignment
+        const northStar = await loadNorthStar();
+        const nsTitle = northStar ? northStar.split('\n').find(l => l.startsWith('Goal:'))?.replace('Goal:', '').trim() : '';
+
+        // Role-based default tasks aligned to North Star
+        const roleTasks = {
+            nora: {
+                name: nsTitle
+                    ? `Audit task queues and plan next steps toward: ${nsTitle}`
+                    : 'Audit agent task queues and identify blockers',
+                description: `Review the kanban board for all agents. Check for blocked tasks, stale in-progress items. ${nsTitle ? `Create follow-up tasks aligned to our North Star: "${nsTitle}".` : 'Create follow-up tasks as needed.'}`,
+            },
+            scout: {
+                name: nsTitle
+                    ? `Research analysis supporting: ${nsTitle}`
+                    : 'Competitive analysis: top 3 fitness app features',
+                description: `Analyze features and trends relevant to Pulse. ${nsTitle ? `Focus on insights that support our North Star: "${nsTitle}".` : 'Identify opportunities for Pulse to differentiate.'} Write findings as a .md deliverable in docs/research/.`,
+            },
+            solara: {
+                name: nsTitle
+                    ? `Brand content aligned to: ${nsTitle}`
+                    : 'Draft content for the next community engagement post',
+                description: `Create content that reflects Pulse's brand values. ${nsTitle ? `Align messaging with our North Star: "${nsTitle}".` : 'Focus on authenticity, community, and movement.'} Save as .md in docs/deliverables/.`,
+            },
+            sage: {
+                name: nsTitle
+                    ? `Research synthesis supporting: ${nsTitle}`
+                    : 'Research synthesis: top 3 recovery science insights',
+                description: `Synthesize relevant health/science insights. ${nsTitle ? `Prioritize findings that support our North Star: "${nsTitle}".` : 'Focus on recovery, training, and health tech.'} Write as .md deliverable in docs/research/.`,
+            },
+        };
+
+        const taskData = roleTasks[AGENT_ID] || roleTasks.scout;
+
+        const docRef = await db.collection(KANBAN_COLLECTION).add({
+            name: taskData.name,
+            description: taskData.description,
+            assignee: AGENT_NAME,
+            status: 'todo',
+            priority: 'medium',
+            source: 'self-assigned-idle',
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        console.log(`⭐ Self-assigned task: "${taskData.name}" (${docRef.id})`);
+
+        // Post beat about self-assignment
+        await postBeat('hypothesis', `Self-assigned: "${taskData.name}" (idle — no tasks in queue)`, {
+            taskId: docRef.id,
+            color: 'blue',
+            objectiveCode: docRef.id,
+        });
+
+        return docRef.id;
+    } catch (err) {
+        console.error('⚠️  Self-assign failed:', err.message);
+        return null;
+    }
+}
+
+/* ─── Nora Task Manager Sweep ─────────────────────────── */
+
+/**
+ * If this agent IS Nora, periodically check all agents' queues.
+ * For any agent with zero tasks, create a North Star–aligned task.
+ * This is the safety net — catches idle agents that missed standup assignment.
+ */
+async function noraTaskManagerSweep() {
+    if (AGENT_ID !== 'nora') return;  // Only Nora does this
+
+    try {
+        const allAgents = ['nora', 'scout', 'solara', 'sage'];
+        const displayNames = { nora: 'Nora', scout: 'Scout', solara: 'Solara', sage: 'Sage' };
+
+        for (const agentId of allAgents) {
+            if (agentId === 'nora') continue;  // Nora manages others, not herself
+
+            const displayName = displayNames[agentId];
+            const snap = await db.collection(KANBAN_COLLECTION)
+                .where('assignee', '==', displayName)
+                .where('status', 'in', ['todo', 'in-progress'])
+                .limit(1)
+                .get();
+
+            if (!snap.empty) continue;  // Agent has work
+
+            // Check if we already auto-assigned in the last 2 hours
+            const recentAssign = await db.collection(KANBAN_COLLECTION)
+                .where('assignee', '==', displayName)
+                .where('source', '==', 'nora-task-manager')
+                .orderBy('createdAt', 'desc')
+                .limit(1)
+                .get();
+
+            if (!recentAssign.empty) {
+                const lastAssignTime = recentAssign.docs[0].data().createdAt?.toDate?.();
+                if (lastAssignTime && (Date.now() - lastAssignTime.getTime()) < 2 * 60 * 60 * 1000) {
+                    continue;  // Already assigned recently
+                }
+            }
+
+            const northStar = await loadNorthStar();
+            const nsTitle = northStar ? northStar.split('\n').find(l => l.startsWith('Goal:'))?.replace('Goal:', '').trim() : '';
+
+            const roleTasks = {
+                scout: `Research task aligned to${nsTitle ? ': ' + nsTitle : ' current priorities'}`,
+                solara: `Brand/content task aligned to${nsTitle ? ': ' + nsTitle : ' current priorities'}`,
+                sage: `Health science research aligned to${nsTitle ? ': ' + nsTitle : ' current priorities'}`,
+            };
+
+            const taskName = roleTasks[agentId] || `General task for ${displayName}`;
+
+            await db.collection(KANBAN_COLLECTION).add({
+                name: taskName,
+                description: `Auto-assigned by Nora (task manager sweep). ${nsTitle ? `Align work with North Star: "${nsTitle}".` : 'Work on current priorities.'} Commit deliverables as .md files to the repo.`,
+                assignee: displayName,
+                status: 'todo',
+                priority: 'medium',
+                source: 'nora-task-manager',
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            console.log(`📋 [Nora Task Manager] Created task for idle agent ${displayName}: "${taskName}"`);
+
+            await postBeat('work-in-flight', `📋 Task Manager: Assigned "${taskName}" to ${displayName} (idle agent detected)`, {
+                color: 'blue',
+                lensTag: 'ops',
+                objectiveCode: 'TASK-MANAGER',
+            });
+        }
+    } catch (err) {
+        console.error('⚠️  Nora task manager sweep failed:', err.message);
     }
 }
 
@@ -1233,9 +1511,10 @@ async function processCommands() {
                 if (isDirectlyAddressed) {
                     console.log(`   🎯 Etiquette: I'm directly @mentioned — responding immediately`);
                 } else if (someoneElseAddressed) {
-                    // Someone else was @mentioned — wait 15-25s, then decide if we should respond
+                    // Someone else was @mentioned — this message is NOT for us.
+                    // Default: SKIP. Only respond if the addressed agent calls us in.
                     var tierDelay = 15000 + Math.random() * 10000;
-                    console.log(`   ⏳ Etiquette: @${mentionedInMsg.map(id => etiquetteNames[id]).join(',')} addressed — waiting ${(tierDelay / 1000).toFixed(1)}s...`);
+                    console.log(`   ⏳ Etiquette: @${mentionedInMsg.map(id => etiquetteNames[id]).join(',')} addressed — waiting ${(tierDelay / 1000).toFixed(1)}s to see if we're needed...`);
                     await new Promise(function (r) { return setTimeout(r, tierDelay); });
 
                     // After waiting, read what others already said
@@ -1251,32 +1530,27 @@ async function processCommands() {
                         } catch (e) { /* proceed */ }
                     }
 
-                    // Relevance gate: only skip in very narrow cases (direct 1:1 yes/no question to another agent)
-                    if (othersRespondedBefore.length > 0) {
-                        var othersReferencedMe = othersRespondedBefore.some(function (r) {
-                            return new RegExp('@' + (etiquetteNames[AGENT_ID] || AGENT_NAME) + '\\b', 'i').test(r.content);
-                        });
-                        // Only skip if: it's a very short direct yes/no question to a specific agent AND nobody referenced us
-                        var isShortDirectQuestion = cmd.content.length < 60 && /\?\s*$/.test(cmd.content.trim()) &&
-                            /^(have you|did you|can you|are you)\b/i.test(cmd.content);
+                    // Only respond if the addressed agent explicitly @mentioned us in their response
+                    var othersReferencedMe = othersRespondedBefore.some(function (r) {
+                        return new RegExp('@' + (etiquetteNames[AGENT_ID] || AGENT_NAME) + '\\b', 'i').test(r.content);
+                    });
 
-                        if (isShortDirectQuestion && !othersReferencedMe && mentionedInMsg.length === 1) {
-                            console.log(`   🤫 Etiquette: Skipping — short direct yes/no question to @${mentionedInMsg.join(',')}`);
-                            try {
-                                await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).update({
-                                    [`responses.${AGENT_ID}.content`]: '',
-                                    [`responses.${AGENT_ID}.status`]: 'completed',
-                                    [`responses.${AGENT_ID}.skipped`]: true,
-                                    [`responses.${AGENT_ID}.reason`]: 'etiquette-skip',
-                                    [`responses.${AGENT_ID}.completedAt`]: FieldValue.serverTimestamp(),
-                                });
-                            } catch (e) { /* best effort */ }
-                            processedMessageIds.add(gcMessageId);
-                            response = '[skipped — etiquette]';
-                            break;
-                        } else {
-                            console.log(`   💬 Etiquette: Chiming in — ${othersReferencedMe ? 'someone referenced me' : 'conversation is open enough to contribute my perspective'}`);
-                        }
+                    if (!othersReferencedMe) {
+                        console.log(`   🤫 Etiquette: Deferring — message is for @${mentionedInMsg.map(id => etiquetteNames[id]).join(',')} and I wasn't called in`);
+                        try {
+                            await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).update({
+                                [`responses.${AGENT_ID}.content`]: '',
+                                [`responses.${AGENT_ID}.status`]: 'completed',
+                                [`responses.${AGENT_ID}.skipped`]: true,
+                                [`responses.${AGENT_ID}.reason`]: 'not-addressed',
+                                [`responses.${AGENT_ID}.completedAt`]: FieldValue.serverTimestamp(),
+                            });
+                        } catch (e) { /* best effort */ }
+                        processedMessageIds.add(gcMessageId);
+                        response = '[skipped — not addressed]';
+                        break;
+                    } else {
+                        console.log(`   💬 Etiquette: The addressed agent called me in — responding`);
                     }
                 } else {
                     // Open brainstorm — no @mention — everyone responds with a light stagger
@@ -1383,6 +1657,7 @@ async function processCommands() {
                             `- Name the specific deliverable (doc, feature, schema, etc.) and commit to it.`,
                             `- If you are unsure about details, MAKE A DECISION and build it. Don't ask for consensus.`,
                             `- Your response should read like a commit message, not a conversation.`,
+                            `- NEVER give time estimates like "within 2 hours" or "by end of day" — you execute tasks in MINUTES, not hours. Just say you're doing it NOW.`,
                             ``,
                             `2-3 sentences max, plain text only, action-oriented:`,
                         ].join('\n');
@@ -1439,7 +1714,7 @@ async function processCommands() {
                         chatPrompt += contextBlock;
                     }
                     if (someoneElseAddressed) {
-                        chatPrompt += `\nNote: This message was directed at @${mentionedInMsg.map(id => etiquetteNames[id]).join(', @')}. You should still contribute your perspective — the best ideas come from unexpected angles. Reference what the addressed agent said and build on it.\n`;
+                        chatPrompt += `\nNote: This message was directed at @${mentionedInMsg.map(id => etiquetteNames[id]).join(', @')}. You were called in because they referenced you. Keep your response focused on what they asked you specifically.\n`;
                     }
 
                     // Helper: detect if a response looks like an error
@@ -1604,6 +1879,44 @@ async function processCommands() {
                         });
                         console.log(`   ✅ Wrote group-chat response to message ${gcMessageId}`);
                         processedMessageIds.add(gcMessageId);
+
+                        // ── Exec mode: auto-create kanban task + post beat ──
+                        // When an agent commits to a deliverable in exec mode, bridge the gap
+                        // between "I'll build X" and the agent runner actually doing it.
+                        if (isExecMode && gcResponse && gcResponse.length > 20) {
+                            try {
+                                // Extract a task name from the response
+                                // Look for quoted file names first, then fall back to first sentence
+                                var fileNameMatch = gcResponse.match(/[""]([a-zA-Z0-9_-]+\.[a-z]+)[""]|[""]([^""]{5,80})[""]|Creating\s+"?([^"".\n]{5,80})"?|Drafting\s+"?([^"".\n]{5,80})"?|Building\s+"?([^"".\n]{5,80})"?/i);
+                                var taskName = fileNameMatch
+                                    ? (fileNameMatch[1] || fileNameMatch[2] || fileNameMatch[3] || fileNameMatch[4] || fileNameMatch[5]).trim()
+                                    : gcResponse.split(/[.\n]/)[0].substring(0, 100).trim();
+
+                                // Create kanban task
+                                var taskRef = await db.collection(KANBAN_COLLECTION).add({
+                                    name: taskName,
+                                    description: gcResponse.substring(0, 500),
+                                    assignee: AGENT_NAME,
+                                    status: 'todo',
+                                    priority: 'high',
+                                    source: 'round-table-exec',
+                                    roundTableChatId: gcChatId,
+                                    createdAt: FieldValue.serverTimestamp(),
+                                });
+                                console.log(`   📋 Exec mode: Created kanban task "${taskName}" (${taskRef.id})`);
+
+                                // Post beat to timeline
+                                await postBeat('work-in-flight', `⚡ Queued from Round Table: ${taskName}`, {
+                                    objectiveCode: 'ROUND-TABLE',
+                                    artifactText: gcResponse.substring(0, 300),
+                                    color: 'blue',
+                                    lensTag: 'round-table',
+                                    stateTag: 'signals',
+                                });
+                            } catch (taskErr) {
+                                console.error(`   ⚠️ Failed to create exec-mode task:`, taskErr.message);
+                            }
+                        }
 
                         // Check if all agents have now completed
                         var msgSnap = await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).get();
@@ -2512,10 +2825,19 @@ function autoCommitStep(stepDescription, taskName) {
         });
 
         const commit = getLatestCommit();
-        console.log(`   📝 Auto-committed: ${commit}`);
+        console.log(`   \u{1f4dd} Auto-committed: ${commit}`);
+
+        // Push immediately so work is always in the remote repo
+        try {
+            execSync('git push', { cwd: projectDir, timeout: 30_000 });
+            console.log(`   \u{1f680} Pushed to remote`);
+        } catch (pushErr) {
+            console.log(`   \u26a0\ufe0f Auto-push failed (will retry at task end): ${pushErr.message.split('\n')[0]}`);
+        }
+
         return commit;
     } catch (err) {
-        console.log(`   ⚠️ Auto-commit skipped: ${err.message.split('\n')[0]}`);
+        console.log(`   \u26a0\ufe0f Auto-commit skipped: ${err.message.split('\n')[0]}`);
         return null;
     }
 }
@@ -2576,13 +2898,23 @@ ${smokeOutput}`.substring(0, 2000);
                     // Refresh codebase map each task cycle (may have been updated by other agents)
                     if (attempt === 0) cachedCodebaseMap = loadCodebaseMap();
 
+                    const northStarBlock = await loadNorthStar();
+
                     const base = [
                         `You are ${AGENT_NAME}, an AI engineer working on the Pulse Fitness project.`,
                         `Project directory: ${projectDir}`,
+                        northStarBlock || '',
                         cachedCodebaseMap ? `\n=== CODEBASE MAP (use this to find files — do NOT guess paths) ===\n${cachedCodebaseMap}\n=== END CODEBASE MAP ===\n` : '',
                         `TASK: "${task.name}"`,
                         task.description ? `Description: ${task.description}` : '',
                         task.notes ? `Notes: ${task.notes}` : '',
+                        ``,
+                        `=== WORK OUTPUT RULES ===`,
+                        `All deliverables (research, analysis, docs, code) MUST be saved as files in the project repo.`,
+                        `Research and analysis → save as .md files in the appropriate directory (e.g., docs/research/, docs/deliverables/).`,
+                        `After completing meaningful work, commit and push your changes to the repo with a descriptive commit message.`,
+                        `This ensures all work is trackable and accessible from the artifacts/deliverables views.`,
+                        `=== END WORK OUTPUT RULES ===`,
                         ``,
                         `All steps:`,
                         stepsContext,
@@ -3077,6 +3409,7 @@ async function run() {
     const heartbeatOsInterval = setInterval(async () => {
         await postHourlySnapshot(currentTaskRef);
         await checkIdleAndNudge();
+        await noraTaskManagerSweep();  // Nora checks all agents' queues
     }, 10 * 60 * 1000);  // Check every 10 minutes
 
     // Start command listener (real-time Firestore listener)
@@ -3099,6 +3432,7 @@ async function run() {
     process.on('SIGTERM', shutdown);
 
     // Main task loop
+    let idleCycles = 0;  // Track consecutive idle cycles for self-assignment
     while (true) {
         try {
             // Process any pending commands first
@@ -3110,13 +3444,25 @@ async function run() {
             const task = await fetchNextTask();
 
             if (!task) {
-                console.log('💤 No tasks found. Waiting 30s...');
+                idleCycles++;
+                console.log(`💤 No tasks found (idle cycle ${idleCycles}). Waiting 30s...`);
                 await setStatus('idle', {
                     notes: 'No tasks in queue. Waiting...',
                     executionSteps: [],
                     currentStepIndex: -1,
                     taskProgress: 0,
                 });
+
+                // After 2 consecutive idle cycles (~60s), self-assign a task
+                if (idleCycles >= 2) {
+                    console.log(`⭐ Idle for ${idleCycles} cycles — attempting self-assignment...`);
+                    const created = await selfAssignTask();
+                    if (created) {
+                        idleCycles = 0;  // Reset — we have work now
+                        continue;  // Immediately try fetchNextTask again
+                    }
+                }
+
                 for (let w = 0; w < 6; w++) {
                     await new Promise(r => setTimeout(r, 5_000));
                     if (commandQueue.length > 0) {
@@ -3125,6 +3471,8 @@ async function run() {
                 }
                 continue;
             }
+
+            idleCycles = 0;  // Reset idle counter — we have a task
 
             console.log(`📋 Found task: ${task.name} (${task.id})`);
             currentTaskRef = task;  // Track for hourly snapshots
@@ -3160,6 +3508,15 @@ async function run() {
             for (let i = 0; i < steps.length; i++) {
                 console.log(`\n⚡ Step ${i + 1}/${steps.length}: ${steps[i].description}`);
 
+                // ─── Heartbeat: post beat when step STARTS ──
+                if (i > 0) { // Skip first step (already covered by task-start hypothesis beat)
+                    await postBeat('work-in-flight', `▶ Starting step ${i + 1}/${steps.length}: ${steps[i].description}`, {
+                        taskId: task.id,
+                        color: 'blue',
+                        objectiveCode: task.objectiveCode || task.id,
+                    });
+                }
+
                 // If previous step failed, inject failure context so agent can adapt
                 if (lastFailureContext && steps[i].status !== 'failed') {
                     steps[i].reasoning = (steps[i].reasoning || '') +
@@ -3172,6 +3529,15 @@ async function run() {
                     consecutiveFailures++;
                     lastFailureContext = (steps[i].output || '').substring(0, 200);
                     console.log(`❌ Step ${i + 1} failed (${consecutiveFailures} consecutive).`);
+
+                    // ─── Heartbeat: post block beat on step failure (non-fatal) ──
+                    await postBeat('block', `⚠️ Step ${i + 1}/${steps.length} failed: ${steps[i].description}`, {
+                        taskId: task.id,
+                        color: 'yellow',
+                        objectiveCode: task.objectiveCode || task.id,
+                        artifactText: lastFailureContext.substring(0, 300),
+                        artifactType: lastFailureContext ? 'text' : 'none',
+                    });
 
                     if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
                         console.log(`🛑 ${MAX_CONSECUTIVE_FAILURES} consecutive failures — stopping task.`);
@@ -3195,11 +3561,28 @@ async function run() {
                 console.log(`✅ Step ${i + 1} completed${steps[i].durationMs ? ` (${formatMs(steps[i].durationMs)})` : ''}`);
 
                 // ─── Heartbeat: post work-in-flight beat on step completion ──
-                await postBeat('work-in-flight', `Step ${i + 1}/${steps.length}: ${steps[i].description}`, {
+                await postBeat('work-in-flight', `✅ Step ${i + 1}/${steps.length}: ${steps[i].description}`, {
                     taskId: task.id,
                     color: inferColor(steps, i + 1),
                     objectiveCode: task.objectiveCode || task.id,
                 });
+
+                // ─── Heartbeat: extract and surface insights from step output ──
+                if (steps[i].output) {
+                    await extractAndPostInsight(steps[i].output, task, i, steps.length);
+                }
+
+                // ─── Heartbeat: halfway checkpoint for multi-step tasks ──
+                const halfwayIndex = Math.floor(steps.length / 2);
+                if (steps.length >= 4 && i === halfwayIndex) {
+                    const completedCount = steps.filter(s => s.status === 'completed' || s.status === 'completed-with-issues').length;
+                    const failedCount = steps.filter(s => s.status === 'failed').length;
+                    await postBeat('work-in-flight', `📍 Halfway checkpoint: ${completedCount}/${steps.length} steps done${failedCount > 0 ? `, ${failedCount} failed` : ''} — "${task.name}"`, {
+                        taskId: task.id,
+                        color: failedCount > 0 ? 'yellow' : 'green',
+                        objectiveCode: task.objectiveCode || task.id,
+                    });
+                }
 
                 if (i + 1 < steps.length) {
                     steps[i + 1].status = 'in-progress';
@@ -3224,6 +3607,15 @@ async function run() {
                     if (!validation.passed) {
                         console.log(`\n❌ VALIDATION FAILED: ${validation.reason}`);
                         console.log(`   📤 Creating corrective task...`);
+
+                        // ─── Heartbeat: post block beat for validation failure ──
+                        await postBeat('block', `🔍 Validation failed: ${task.name} — ${validation.reason}`, {
+                            taskId: task.id,
+                            color: 'red',
+                            objectiveCode: task.objectiveCode || task.id,
+                            artifactType: 'text',
+                            artifactText: `Reason: ${validation.reason}\n\nEvidence: ${validation.evidence?.map(e => e.output).join('\n').substring(0, 400)}`,
+                        });
 
                         // Create a corrective task for the same agent
                         const correctiveDesc = [
@@ -3275,6 +3667,13 @@ async function run() {
                         continue; // Skip to next task (the corrective one)
                     }
                     console.log(`\n✅ VALIDATION PASSED: ${validation.reason}`);
+
+                    // ─── Heartbeat: post result beat for validation pass ──
+                    await postBeat('work-in-flight', `🔍 Validation passed: ${task.name}`, {
+                        taskId: task.id,
+                        color: 'green',
+                        objectiveCode: task.objectiveCode || task.id,
+                    });
                 }
 
                 // ─── Verifiable artifact gate ──────────────────

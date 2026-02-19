@@ -14,6 +14,5 @@ fi
 export USE_OPENCLAW=true
 export AGENT_ID=sage
 export AGENT_NAME="Sage"
-export AGENT_EMOJI="🧬"
 
 exec node scripts/agentRunner.js

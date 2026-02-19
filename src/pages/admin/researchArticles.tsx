@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import {
@@ -14,7 +14,8 @@ import {
     Timestamp,
     serverTimestamp
 } from 'firebase/firestore';
-import { db } from '../../api/firebase/config';
+import { db, storage } from '../../api/firebase/config';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
     FileText,
     Plus,
@@ -31,13 +32,22 @@ import {
     ArrowLeft,
     Send,
     Image as ImageIcon,
+    Upload,
     Bold,
     Italic,
     Quote,
     List,
     Heading1,
     Heading2,
-    Link as LinkIcon
+    Link as LinkIcon,
+    LayoutGrid,
+    MessageSquareQuote,
+    BarChart3,
+    Sparkles,
+    ChevronDown,
+    ChevronUp,
+    Zap,
+    Trash
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -146,24 +156,41 @@ interface ToolbarProps {
 }
 
 const EditorToolbar: React.FC<ToolbarProps> = ({ onAction }) => {
-    const buttons = [
+    const basicButtons = [
         { icon: <Heading1 className="w-4 h-4" />, action: 'h1', title: 'Heading 1' },
         { icon: <Heading2 className="w-4 h-4" />, action: 'h2', title: 'Heading 2' },
         { icon: <Bold className="w-4 h-4" />, action: 'bold', title: 'Bold' },
         { icon: <Italic className="w-4 h-4" />, action: 'italic', title: 'Italic' },
-        { icon: <Quote className="w-4 h-4" />, action: 'quote', title: 'Quote' },
+        { icon: <Quote className="w-4 h-4" />, action: 'quote', title: 'Pull Quote' },
         { icon: <List className="w-4 h-4" />, action: 'list', title: 'Bullet List' },
         { icon: <LinkIcon className="w-4 h-4" />, action: 'link', title: 'Link' },
     ];
 
+    const blockButtons = [
+        { icon: <LayoutGrid className="w-4 h-4" />, action: 'blocks', title: 'Definition Blocks' },
+        { icon: <MessageSquareQuote className="w-4 h-4" />, action: 'callout', title: 'Callout Box' },
+        { icon: <BarChart3 className="w-4 h-4" />, action: 'stat', title: 'Stat Highlight' },
+    ];
+
     return (
         <div className="flex items-center gap-1 p-2 bg-stone-100 border-b border-stone-200 rounded-t-lg">
-            {buttons.map((btn) => (
+            {basicButtons.map((btn) => (
                 <button
                     key={btn.action}
                     onClick={() => onAction(btn.action)}
                     title={btn.title}
                     className="p-2 text-stone-500 hover:text-stone-900 hover:bg-stone-200 rounded transition-colors"
+                >
+                    {btn.icon}
+                </button>
+            ))}
+            <div className="w-px h-6 bg-stone-300 mx-1" />
+            {blockButtons.map((btn) => (
+                <button
+                    key={btn.action}
+                    onClick={() => onAction(btn.action)}
+                    title={btn.title}
+                    className="p-2 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded transition-colors"
                 >
                     {btn.icon}
                 </button>
@@ -194,6 +221,58 @@ const ResearchArticlesAdmin: React.FC = () => {
         featured: false,
     });
 
+    // Visual enhancements state
+    const [pullQuotes, setPullQuotes] = useState<{ text: string; afterParagraph: number }[]>([]);
+    const [defBlocks, setDefBlocks] = useState<{ term: string; def: string }[]>([]);
+    const [showEnhancements, setShowEnhancements] = useState(false);
+    const [newQuoteText, setNewQuoteText] = useState('');
+    const [newDefTerm, setNewDefTerm] = useState('');
+    const [newDefText, setNewDefText] = useState('');
+    const [autoSuggestions, setAutoSuggestions] = useState<{ type: string; text: string; context: string }[]>([]);
+
+    // Image upload state
+    const [uploadingImage, setUploadingImage] = useState(false);
+
+    // Author profiles
+    const [authorProfiles, setAuthorProfiles] = useState<{ id: string; name: string; title: string }[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            showMessage('error', 'Please select an image file');
+            return;
+        }
+
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            showMessage('error', 'Image must be under 5MB');
+            return;
+        }
+
+        setUploadingImage(true);
+        try {
+            const fileName = `research-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+            const storageRef = ref(storage, `research/${fileName}`);
+            await uploadBytes(storageRef, file, {
+                contentType: file.type,
+            });
+            const downloadURL = await getDownloadURL(storageRef);
+            setFormData(prev => ({ ...prev, featuredImage: downloadURL }));
+            showMessage('success', 'Image uploaded!');
+        } catch (error) {
+            console.error('Error uploading image:', error);
+            showMessage('error', 'Failed to upload image');
+        } finally {
+            setUploadingImage(false);
+            // Reset file input so same file can be re-selected
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
     // ─── Load Articles ─────────────────────────────────────────────
     const loadArticles = useCallback(async () => {
         setLoading(true);
@@ -219,6 +298,24 @@ const ResearchArticlesAdmin: React.FC = () => {
     useEffect(() => {
         loadArticles();
     }, [loadArticles]);
+
+    // Load author profiles for dropdown
+    useEffect(() => {
+        const loadAuthors = async () => {
+            try {
+                const snapshot = await getDocs(collection(db, 'authorProfiles'));
+                const profiles = snapshot.docs.map(d => ({
+                    id: d.id,
+                    name: d.data().name || d.id,
+                    title: d.data().title || '',
+                }));
+                setAuthorProfiles(profiles);
+            } catch (e) {
+                console.error('Error loading author profiles:', e);
+            }
+        };
+        loadAuthors();
+    }, []);
 
     // ─── Message Handler ───────────────────────────────────────────
     const showMessage = (type: 'success' | 'error', text: string) => {
@@ -441,6 +538,24 @@ const ResearchArticlesAdmin: React.FC = () => {
                 newText = text.substring(0, start) + `[${selectedText}](url)` + text.substring(end);
                 cursorOffset = 1;
                 break;
+            case 'blocks': {
+                const blockSnippet = `\n\n:::blocks\nTerm 1: Definition goes here\nTerm 2: Definition goes here\n:::\n\n`;
+                newText = text.substring(0, start) + blockSnippet + text.substring(end);
+                cursorOffset = blockSnippet.indexOf('Term 1');
+                break;
+            }
+            case 'callout': {
+                const calloutSnippet = `\n\n:::callout\n${selectedText || 'Your callout text here'}\n:::\n\n`;
+                newText = text.substring(0, start) + calloutSnippet + text.substring(end);
+                cursorOffset = calloutSnippet.indexOf(selectedText || 'Your');
+                break;
+            }
+            case 'stat': {
+                const statSnippet = `\n\n:::stat\n85%\nOf users experienced this result\n:::\n\n`;
+                newText = text.substring(0, start) + statSnippet + text.substring(end);
+                cursorOffset = statSnippet.indexOf('85%');
+                break;
+            }
             default:
                 return;
         }
@@ -452,6 +567,138 @@ const ResearchArticlesAdmin: React.FC = () => {
             textarea.focus();
             textarea.setSelectionRange(start + cursorOffset, end + cursorOffset);
         }, 0);
+    };
+
+    // ─── Auto-Enhance: scan content for visual opportunities ────────
+    const handleAutoEnhance = () => {
+        const content = formData.content;
+        const suggestions: { type: string; text: string; context: string }[] = [];
+        const paragraphs = content.split('\n\n').filter(p => p.trim());
+
+        paragraphs.forEach((para, idx) => {
+            // Skip existing blocks, headers, quotes
+            if (para.startsWith('#') || para.startsWith('>') || para.startsWith(':::') || para.startsWith('-')) return;
+
+            // Detect potential stat sentences (numbers/percentages)
+            const statMatch = para.match(/(\d+[%+]?\s*(?:percent|of|times|faster|slower|more|less|increase|decrease|people|users))/i);
+            if (statMatch) {
+                suggestions.push({
+                    type: 'stat',
+                    text: statMatch[1],
+                    context: para.substring(0, 80) + '...'
+                });
+            }
+
+            // Detect short punchy sentences that could be pull quotes (under 120 chars, strong language)
+            if (para.length < 120 && para.length > 30 && !para.includes('\n')) {
+                const punchWords = ['not', 'never', 'always', 'every', 'everything', 'nothing', 'only', 'most', 'real', 'truth', 'key', 'critical', 'important', 'essential'];
+                const hasImpact = punchWords.some(w => para.toLowerCase().includes(w));
+                if (hasImpact) {
+                    suggestions.push({
+                        type: 'quote',
+                        text: para,
+                        context: `Paragraph ${idx + 1}`
+                    });
+                }
+            }
+
+            // Detect definition-like patterns ("X is Y" or "X: Y" at start)
+            const defMatch = para.match(/^([A-Z][a-z]+(?:\s[A-Z]?[a-z]+)?)\s+(?:is|are|means|refers to)\s+/i);
+            if (defMatch) {
+                suggestions.push({
+                    type: 'definition',
+                    text: defMatch[1],
+                    context: para.substring(0, 80) + '...'
+                });
+            }
+
+            // Detect comparison/contrast patterns ("Unlike X, Y")
+            if (para.match(/^(Unlike|While|Whereas|Instead of|Rather than|Compared to)/i) && para.length < 150) {
+                suggestions.push({
+                    type: 'callout',
+                    text: para,
+                    context: `Paragraph ${idx + 1}`
+                });
+            }
+        });
+
+        setAutoSuggestions(suggestions);
+        if (suggestions.length === 0) {
+            showMessage('success', 'Content looks great! No additional visual enhancements detected.');
+        } else {
+            showMessage('success', `Found ${suggestions.length} enhancement opportunities!`);
+        }
+    };
+
+    // Apply a suggestion to the content
+    const applySuggestion = (suggestion: { type: string; text: string; context: string }) => {
+        let newContent = formData.content;
+
+        switch (suggestion.type) {
+            case 'quote': {
+                // Wrap the matching text as a blockquote
+                newContent = newContent.replace(suggestion.text, `> ${suggestion.text}`);
+                break;
+            }
+            case 'callout': {
+                newContent = newContent.replace(suggestion.text, `:::callout\n${suggestion.text}\n:::`);
+                break;
+            }
+            case 'stat': {
+                // Find the paragraph containing this stat and add a stat block after it
+                const paras = newContent.split('\n\n');
+                const matchIdx = paras.findIndex(p => p.includes(suggestion.text));
+                if (matchIdx >= 0) {
+                    const numMatch = suggestion.text.match(/(\d+[%+]?)/);
+                    const statVal = numMatch ? numMatch[1] : suggestion.text;
+                    const label = suggestion.text.replace(statVal, '').trim();
+                    paras.splice(matchIdx + 1, 0, `:::stat\n${statVal}\n${label || 'Key metric from this section'}\n:::`);
+                    newContent = paras.join('\n\n');
+                }
+                break;
+            }
+            case 'definition': {
+                // Add to the defBlocks list for the user to manage
+                const para = formData.content.split('\n\n').find(p => p.includes(suggestion.text));
+                if (para) {
+                    const colonIdx = para.indexOf(' is ');
+                    const def = colonIdx > -1 ? para.substring(colonIdx + 4).replace(/\.$/, '') : '';
+                    setDefBlocks(prev => [...prev, { term: suggestion.text, def: def.substring(0, 120) }]);
+                }
+                break;
+            }
+        }
+
+        setFormData(prev => ({ ...prev, content: newContent }));
+        setAutoSuggestions(prev => prev.filter(s => s !== suggestion));
+        showMessage('success', `Applied ${suggestion.type} enhancement!`);
+    };
+
+    // Build definition blocks markdown and inject at cursor or end
+    const injectDefBlocks = () => {
+        if (defBlocks.length === 0) return;
+        const blockMd = '\n\n:::blocks\n' + defBlocks.map(d => `${d.term}: ${d.def}`).join('\n') + '\n:::\n\n';
+        const textarea = document.getElementById('content-editor') as HTMLTextAreaElement;
+        const pos = textarea ? textarea.selectionStart : formData.content.length;
+        const text = formData.content;
+        setFormData(prev => ({
+            ...prev,
+            content: text.substring(0, pos) + blockMd + text.substring(pos)
+        }));
+        setDefBlocks([]);
+        showMessage('success', 'Definition blocks injected into content!');
+    };
+
+    // Build pull quotes and inject into content
+    const injectPullQuotes = () => {
+        if (pullQuotes.length === 0) return;
+        let text = formData.content;
+        // Insert quotes as blockquotes at the end of the content
+        const quotesMd = pullQuotes.map(q => `\n\n> ${q.text}`).join('');
+        text += quotesMd;
+        setFormData(prev => ({ ...prev, content: text }));
+        setPullQuotes([]);
+        showMessage('success', 'Pull quotes added to content!');
     };
 
     // ─── Render ────────────────────────────────────────────────────
@@ -476,13 +723,22 @@ const ResearchArticlesAdmin: React.FC = () => {
                                 </div>
                             </div>
 
-                            <button
-                                onClick={handleNewArticle}
-                                className="flex items-center gap-2 px-4 py-2.5 bg-stone-900 text-white rounded-lg hover:bg-stone-800 transition-colors font-medium text-sm"
-                            >
-                                <Plus className="w-4 h-4" />
-                                New Article
-                            </button>
+                            <div className="flex items-center gap-3">
+                                <Link
+                                    href="/admin/authorProfiles"
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-white text-stone-700 border border-stone-300 rounded-lg hover:bg-stone-50 transition-colors font-medium text-sm"
+                                >
+                                    <Edit2 className="w-4 h-4" />
+                                    Author Profiles
+                                </Link>
+                                <button
+                                    onClick={handleNewArticle}
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-stone-900 text-white rounded-lg hover:bg-stone-800 transition-colors font-medium text-sm"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    New Article
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </header>
@@ -573,7 +829,7 @@ const ResearchArticlesAdmin: React.FC = () => {
                                                 className="flex items-center gap-2 px-4 py-2 bg-stone-900 text-white rounded-lg hover:bg-stone-800 transition-colors text-sm font-medium disabled:opacity-50"
                                             >
                                                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                                Publish
+                                                {selectedArticle?.status === 'published' ? 'Update' : 'Publish'}
                                             </button>
                                         </div>
                                     </div>
@@ -606,12 +862,21 @@ const ResearchArticlesAdmin: React.FC = () => {
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                             <div>
                                                 <label className="block text-xs font-medium text-stone-500 mb-1.5">Author</label>
-                                                <input
-                                                    type="text"
+                                                <select
                                                     value={formData.author}
                                                     onChange={(e) => setFormData({ ...formData, author: e.target.value })}
-                                                    className="w-full px-3 py-2 rounded-lg border border-stone-200 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400"
-                                                />
+                                                    className="w-full px-3 py-2 rounded-lg border border-stone-200 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 bg-white"
+                                                >
+                                                    {authorProfiles.length > 0 ? (
+                                                        authorProfiles.map((author) => (
+                                                            <option key={author.id} value={author.name}>
+                                                                {author.name}{author.title ? ` — ${author.title}` : ''}
+                                                            </option>
+                                                        ))
+                                                    ) : (
+                                                        <option value={formData.author}>{formData.author}</option>
+                                                    )}
+                                                </select>
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-medium text-stone-500 mb-1.5">Category</label>
@@ -625,15 +890,58 @@ const ResearchArticlesAdmin: React.FC = () => {
                                                     ))}
                                                 </select>
                                             </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-stone-500 mb-1.5">Featured Image URL</label>
-                                                <input
-                                                    type="text"
-                                                    value={formData.featuredImage}
-                                                    onChange={(e) => setFormData({ ...formData, featuredImage: e.target.value })}
-                                                    placeholder="/research-image.png"
-                                                    className="w-full px-3 py-2 rounded-lg border border-stone-200 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400"
-                                                />
+                                            <div className="col-span-2 md:col-span-1">
+                                                <label className="block text-xs font-medium text-stone-500 mb-1.5">Featured Image</label>
+                                                <div className="space-y-2">
+                                                    {/* Upload button */}
+                                                    <input
+                                                        ref={fileInputRef}
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={handleImageUpload}
+                                                        className="hidden"
+                                                        id="featured-image-upload"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => fileInputRef.current?.click()}
+                                                        disabled={uploadingImage}
+                                                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-stone-300 text-stone-500 text-sm hover:border-stone-400 hover:text-stone-700 hover:bg-stone-50 transition-all disabled:opacity-50"
+                                                    >
+                                                        {uploadingImage ? (
+                                                            <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</>
+                                                        ) : (
+                                                            <><Upload className="w-4 h-4" /> Upload Image</>
+                                                        )}
+                                                    </button>
+                                                    {/* URL fallback input */}
+                                                    <input
+                                                        type="text"
+                                                        value={formData.featuredImage}
+                                                        onChange={(e) => setFormData({ ...formData, featuredImage: e.target.value })}
+                                                        placeholder="Or paste image URL..."
+                                                        className="w-full px-3 py-2 rounded-lg border border-stone-200 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400"
+                                                    />
+                                                    {/* Preview thumbnail */}
+                                                    {formData.featuredImage && (
+                                                        <div className="relative w-full h-24 rounded-lg overflow-hidden bg-stone-100 border border-stone-200">
+                                                            <img
+                                                                src={formData.featuredImage}
+                                                                alt="Preview"
+                                                                className="w-full h-full object-cover"
+                                                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFormData({ ...formData, featuredImage: '' })}
+                                                                className="absolute top-1 right-1 p-1 bg-white/80 rounded-full hover:bg-white transition-colors"
+                                                                title="Remove image"
+                                                            >
+                                                                <X className="w-3 h-3 text-stone-600" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="flex items-end">
                                                 <label className="flex items-center gap-2 cursor-pointer">
@@ -676,8 +984,195 @@ const ResearchArticlesAdmin: React.FC = () => {
                                                 />
                                             </div>
                                             <p className="mt-2 text-xs text-stone-400">
-                                                Supports Markdown formatting. Use the toolbar or type directly.
+                                                Supports Markdown. Use toolbar for headers, quotes, lists, and <strong>visual blocks</strong> (amber icons).
                                             </p>
+                                        </div>
+
+                                        {/* ─── Visual Enhancements Panel ─────────────── */}
+                                        <div className="border border-stone-200 rounded-xl overflow-hidden">
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowEnhancements(!showEnhancements)}
+                                                className="w-full flex items-center justify-between px-4 py-3 bg-gradient-to-r from-amber-50 to-stone-50 hover:from-amber-100/60 hover:to-stone-100/60 transition-colors"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <Sparkles className="w-4 h-4 text-amber-500" />
+                                                    <span className="text-sm font-semibold text-stone-800">Visual Enhancements</span>
+                                                    <span className="text-xs text-stone-400">Pull Quotes · Definition Blocks · Auto-Enhance</span>
+                                                </div>
+                                                {showEnhancements ? <ChevronUp className="w-4 h-4 text-stone-400" /> : <ChevronDown className="w-4 h-4 text-stone-400" />}
+                                            </button>
+
+                                            {showEnhancements && (
+                                                <div className="p-4 space-y-6 bg-white border-t border-stone-200">
+                                                    {/* Auto-Enhance */}
+                                                    <div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleAutoEnhance}
+                                                            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-medium hover:from-amber-600 hover:to-orange-600 transition-all shadow-sm"
+                                                        >
+                                                            <Zap className="w-4 h-4" />
+                                                            Auto-Enhance Content
+                                                        </button>
+                                                        <p className="mt-1.5 text-xs text-stone-400">Scans your article for stats, punchy quotes, definitions, and contrasts that could be enhanced visually.</p>
+
+                                                        {/* Auto suggestions */}
+                                                        {autoSuggestions.length > 0 && (
+                                                            <div className="mt-3 space-y-2">
+                                                                <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Suggestions ({autoSuggestions.length})</p>
+                                                                {autoSuggestions.map((s, i) => (
+                                                                    <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200/60">
+                                                                        <div className="flex-shrink-0 mt-0.5">
+                                                                            {s.type === 'quote' && <Quote className="w-4 h-4 text-amber-600" />}
+                                                                            {s.type === 'callout' && <MessageSquareQuote className="w-4 h-4 text-amber-600" />}
+                                                                            {s.type === 'stat' && <BarChart3 className="w-4 h-4 text-amber-600" />}
+                                                                            {s.type === 'definition' && <LayoutGrid className="w-4 h-4 text-amber-600" />}
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className="text-xs font-medium text-amber-800 uppercase">{s.type}</p>
+                                                                            <p className="text-sm text-stone-700 truncate">{s.text}</p>
+                                                                            <p className="text-xs text-stone-400 mt-0.5">{s.context}</p>
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => applySuggestion(s)}
+                                                                            className="flex-shrink-0 px-3 py-1.5 rounded-md bg-amber-500 text-white text-xs font-medium hover:bg-amber-600 transition-colors"
+                                                                        >
+                                                                            Apply
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Pull Quotes */}
+                                                    <div>
+                                                        <p className="text-xs font-semibold text-stone-600 uppercase tracking-wider mb-2">Pull Quotes</p>
+                                                        <p className="text-xs text-stone-400 mb-3">Add standout sentences to render as styled blockquotes with a green accent bar.</p>
+                                                        <div className="space-y-2 mb-3">
+                                                            {pullQuotes.map((q, i) => (
+                                                                <div key={i} className="flex items-start gap-2 p-3 rounded-lg bg-stone-50 border border-stone-200">
+                                                                    <div className="w-1 self-stretch rounded-full bg-[#E0FE10] flex-shrink-0" />
+                                                                    <p className="text-sm text-stone-600 italic flex-1">{q.text}</p>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setPullQuotes(prev => prev.filter((_, idx) => idx !== i))}
+                                                                        className="p-1 text-stone-400 hover:text-red-500 transition-colors flex-shrink-0"
+                                                                    >
+                                                                        <Trash className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={newQuoteText}
+                                                                onChange={(e) => setNewQuoteText(e.target.value)}
+                                                                placeholder="Type a pull quote..."
+                                                                className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter' && newQuoteText.trim()) {
+                                                                        setPullQuotes(prev => [...prev, { text: newQuoteText.trim(), afterParagraph: 0 }]);
+                                                                        setNewQuoteText('');
+                                                                    }
+                                                                }}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (newQuoteText.trim()) {
+                                                                        setPullQuotes(prev => [...prev, { text: newQuoteText.trim(), afterParagraph: 0 }]);
+                                                                        setNewQuoteText('');
+                                                                    }
+                                                                }}
+                                                                className="px-3 py-2 rounded-lg bg-stone-900 text-white text-sm hover:bg-stone-800 transition-colors"
+                                                            >
+                                                                <Plus className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                        {pullQuotes.length > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={injectPullQuotes}
+                                                                className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-600 hover:text-amber-700 transition-colors"
+                                                            >
+                                                                <Zap className="w-3 h-3" /> Inject {pullQuotes.length} quote{pullQuotes.length > 1 ? 's' : ''} into content
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Definition Blocks */}
+                                                    <div>
+                                                        <p className="text-xs font-semibold text-stone-600 uppercase tracking-wider mb-2">Definition Blocks</p>
+                                                        <p className="text-xs text-stone-400 mb-3">Build a grid of term/definition cards. These render as a 2-column card grid in the article.</p>
+                                                        <div className="space-y-2 mb-3">
+                                                            {defBlocks.map((d, i) => (
+                                                                <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-stone-50 border border-stone-200">
+                                                                    <div className="flex-1">
+                                                                        <p className="text-sm font-bold text-stone-900">{d.term}</p>
+                                                                        <p className="text-xs text-stone-500">{d.def}</p>
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setDefBlocks(prev => prev.filter((_, idx) => idx !== i))}
+                                                                        className="p-1 text-stone-400 hover:text-red-500 transition-colors flex-shrink-0"
+                                                                    >
+                                                                        <Trash className="w-3.5 h-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={newDefTerm}
+                                                                onChange={(e) => setNewDefTerm(e.target.value)}
+                                                                placeholder="Term"
+                                                                className="w-28 px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
+                                                            />
+                                                            <input
+                                                                type="text"
+                                                                value={newDefText}
+                                                                onChange={(e) => setNewDefText(e.target.value)}
+                                                                placeholder="Definition"
+                                                                className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
+                                                                onKeyDown={(e) => {
+                                                                    if (e.key === 'Enter' && newDefTerm.trim() && newDefText.trim()) {
+                                                                        setDefBlocks(prev => [...prev, { term: newDefTerm.trim(), def: newDefText.trim() }]);
+                                                                        setNewDefTerm('');
+                                                                        setNewDefText('');
+                                                                    }
+                                                                }}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    if (newDefTerm.trim() && newDefText.trim()) {
+                                                                        setDefBlocks(prev => [...prev, { term: newDefTerm.trim(), def: newDefText.trim() }]);
+                                                                        setNewDefTerm('');
+                                                                        setNewDefText('');
+                                                                    }
+                                                                }}
+                                                                className="px-3 py-2 rounded-lg bg-stone-900 text-white text-sm hover:bg-stone-800 transition-colors"
+                                                            >
+                                                                <Plus className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                        {defBlocks.length > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={injectDefBlocks}
+                                                                className="mt-2 flex items-center gap-1.5 text-xs font-medium text-amber-600 hover:text-amber-700 transition-colors"
+                                                            >
+                                                                <Zap className="w-3 h-3" /> Inject {defBlocks.length} block{defBlocks.length > 1 ? 's' : ''} as grid into content
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

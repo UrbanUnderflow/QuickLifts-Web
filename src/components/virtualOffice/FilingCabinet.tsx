@@ -147,7 +147,23 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
                                         <FileText className="w-4 h-4" />
                                     </div>
                                     <div className="fc-item-info">
-                                        <span className="fc-item-date">{formatDate(minutes.createdAt)}</span>
+                                        <span className="fc-item-date">
+                                            {formatDate(minutes.createdAt)}
+                                            {(minutes as any).isStandup && (
+                                                <span style={{
+                                                    marginLeft: 8,
+                                                    fontSize: 10,
+                                                    fontWeight: 600,
+                                                    padding: '1px 6px',
+                                                    borderRadius: 8,
+                                                    background: 'rgba(99,102,241,0.12)',
+                                                    color: '#a5b4fc',
+                                                    border: '1px solid rgba(99,102,241,0.2)',
+                                                }}>
+                                                    ⚡ Telemetry
+                                                </span>
+                                            )}
+                                        </span>
                                         <span className="fc-item-meta">
                                             {minutes.duration} · {minutes.messageCount} msgs · {minutes.participants.length} agents
                                         </span>

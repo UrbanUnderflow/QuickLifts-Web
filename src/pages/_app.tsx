@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
 import { Provider, useSelector } from 'react-redux';
-import { store, persistor } from '../redux/store'; 
+import { store, persistor } from '../redux/store';
 import { PersistGate } from 'redux-persist/integration/react';
 import '../components/Footer/GlisteningButton.css';
 import '../index.css';
@@ -82,17 +82,17 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
     if (typeof window !== 'undefined') {
       console.log('[App] User Agent:', navigator.userAgent);
       console.log('[App] Current URL:', window.location.href);
-      
+
       // Check for Android-specific issues
       const isAndroid = /Android/i.test(navigator.userAgent);
       if (isAndroid) {
         console.log('[App] Android device detected');
-        
+
         // Add Android-specific error handling
         window.addEventListener('error', (event) => {
           console.error('[App] Android Error:', event.error);
         });
-        
+
         window.addEventListener('unhandledrejection', (event) => {
           console.error('[App] Android Unhandled Rejection:', event.reason);
         });
@@ -100,21 +100,42 @@ const MyApp: React.FC<AppProps> = ({ Component, pageProps }) => {
     }
   }, []);
 
+  // ── SSR-safe OG meta extraction ──────────────────────────────────
+  // PersistGate renders `null` during SSR, blocking all page-level <Head>
+  // from being included in the initial HTML. Crawlers (iMessage, WhatsApp,
+  // Twitter, Slack) only see the server-rendered HTML, so OG tags MUST be
+  // rendered here at the _app level, outside PersistGate.
+  //
+  // Pages that need custom OG tags pass `ogMeta` via getServerSideProps:
+  //   { title, description, image, url, lastUpdated }
+  const ogMeta = (pageProps as any)?.ogMeta as
+    | { title: string; description: string; image: string; url: string }
+    | undefined;
+
+  const ogTitle = ogMeta?.title || DEFAULT_TITLE;
+  const ogDescription = ogMeta?.description || DEFAULT_DESCRIPTION;
+  const ogImage = ogMeta?.image || DEFAULT_OG_IMAGE;
+  const ogUrl = ogMeta?.url || '';
+
   return (
     <>
-      {/* Default OG meta tags – page-level <Head> tags override these */}
+      {/* OG meta tags — rendered at _app level so they survive SSR even
+          when PersistGate blocks page rendering. Page-specific values
+          come from ogMeta in pageProps (set by getServerSideProps). */}
       <Head>
         <meta property="og:site_name" content="Pulse Fitness" />
-        <meta property="og:type" content="website" />
-        <meta property="og:title" content={DEFAULT_TITLE} key="og:title" />
-        <meta property="og:description" content={DEFAULT_DESCRIPTION} key="og:description" />
-        <meta property="og:image" content={DEFAULT_OG_IMAGE} key="og:image" />
+        <meta property="og:type" content={ogMeta ? 'article' : 'website'} />
+        <meta property="og:title" content={ogTitle} key="og:title" />
+        <meta property="og:description" content={ogDescription} key="og:description" />
+        <meta property="og:image" content={ogImage} key="og:image" />
+        <meta property="og:image:secure_url" content={ogImage} />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
+        {ogUrl && <meta property="og:url" content={ogUrl} />}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={DEFAULT_TITLE} key="twitter:title" />
-        <meta name="twitter:description" content={DEFAULT_DESCRIPTION} key="twitter:description" />
-        <meta name="twitter:image" content={DEFAULT_OG_IMAGE} key="twitter:image" />
+        <meta name="twitter:title" content={ogTitle} key="twitter:title" />
+        <meta name="twitter:description" content={ogDescription} key="twitter:description" />
+        <meta name="twitter:image" content={ogImage} key="twitter:image" />
       </Head>
 
       {/* Google Analytics */}

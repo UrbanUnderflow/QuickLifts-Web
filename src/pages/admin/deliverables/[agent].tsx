@@ -27,6 +27,18 @@ type ArtifactCategory =
     | 'analysis'
     | 'config';
 
+type TopLevelTab = 'deliverables' | 'profile';
+
+const TAB_CATEGORIES: Record<TopLevelTab, ArtifactCategory[]> = {
+    deliverables: ['deliverable', 'research', 'integration'],
+    profile: ['persona', 'profile', 'analysis', 'config'],
+};
+
+const TAB_META: Record<TopLevelTab, { label: string; icon: string; description: string }> = {
+    deliverables: { label: 'Deliverables', icon: '📡', description: 'Research output, field work, and testing artifacts' },
+    profile: { label: 'Profile', icon: '🪪', description: 'Persona, identity, presence, and configuration' },
+};
+
 /* ─────────────────── category meta ─────────────────── */
 
 const CATEGORIES: Record<ArtifactCategory, { label: string; icon: string; color: string; gradient: string }> = {
@@ -397,6 +409,7 @@ export default function AgentDeliverablesPage() {
     const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(null);
     const [fileContent, setFileContent] = useState<string>('');
     const [loading, setLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState<TopLevelTab>('deliverables');
     const [activeCategory, setActiveCategory] = useState<ArtifactCategory | 'all'>('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [hoveredCard, setHoveredCard] = useState<string | null>(null);
@@ -474,7 +487,10 @@ export default function AgentDeliverablesPage() {
         return () => { cancelled = true; clearInterval(interval); };
     }, [agentId, meta]);
 
-    const filteredArtifacts = allArtifacts.filter((a) => {
+    const tabCategories = TAB_CATEGORIES[activeTab];
+    const tabArtifacts = allArtifacts.filter((a) => tabCategories.includes(a.category));
+
+    const filteredArtifacts = tabArtifacts.filter((a) => {
         const matchesCategory = activeCategory === 'all' || a.category === activeCategory;
         const matchesSearch =
             searchQuery === '' ||
@@ -543,6 +559,21 @@ export default function AgentDeliverablesPage() {
                         <p className="tagline">{meta.tagline}</p>
                     </div>
 
+                    <div className="top-tabs">
+                        {(Object.keys(TAB_META) as TopLevelTab[]).map((tab) => (
+                            <button
+                                id={`tab-${tab}`}
+                                key={tab}
+                                className={`top-tab ${activeTab === tab ? 'active' : ''}`}
+                                onClick={() => { setActiveTab(tab); setActiveCategory('all'); setSelectedArtifact(null); setFileContent(''); }}
+                            >
+                                <span className="top-tab-icon">{TAB_META[tab].icon}</span>
+                                {TAB_META[tab].label}
+                                <span className="count">{allArtifacts.filter((a) => TAB_CATEGORIES[tab].includes(a.category)).length}</span>
+                            </button>
+                        ))}
+                    </div>
+
                     <div className="search-container">
                         <input
                             id="artifact-search"
@@ -560,10 +591,10 @@ export default function AgentDeliverablesPage() {
                             className={`category-pill ${activeCategory === 'all' ? 'active' : ''}`}
                             onClick={() => setActiveCategory('all')}
                         >
-                            All <span className="count">{allArtifacts.length}</span>
+                            All <span className="count">{tabArtifacts.length}</span>
                         </button>
-                        {(Object.keys(CATEGORIES) as ArtifactCategory[]).map((cat) => {
-                            const count = allArtifacts.filter((a) => a.category === cat).length;
+                        {tabCategories.map((cat) => {
+                            const count = tabArtifacts.filter((a) => a.category === cat).length;
                             if (count === 0) return null;
                             return (
                                 <button
@@ -627,7 +658,7 @@ export default function AgentDeliverablesPage() {
 
                     <div className="sidebar-footer">
                         <span className="footer-text">
-                            {allArtifacts.length} artifacts • {meta.displayName} v1.0
+                            {tabArtifacts.length} artifacts • {TAB_META[activeTab].label}
                         </span>
                     </div>
                 </aside>
@@ -637,15 +668,15 @@ export default function AgentDeliverablesPage() {
                     {!selectedArtifact ? (
                         <div className="welcome-state">
                             <div className="welcome-glow" style={{ background: `radial-gradient(circle at 50% 40%, ${meta.color}18 0%, transparent 60%)` }} />
-                            <span className="welcome-emoji">{meta.emoji}</span>
-                            <h2>{meta.displayName}&apos;s Deliverables</h2>
+                            <span className="welcome-emoji">{activeTab === 'deliverables' ? TAB_META.deliverables.icon : TAB_META.profile.icon}</span>
+                            <h2>{meta.displayName}&apos;s {TAB_META[activeTab].label}</h2>
                             <p>
-                                Click any category below to explore its artifacts,<br />
-                                or select an item from the sidebar.
+                                {TAB_META[activeTab].description}.<br />
+                                Click a category below or select an item from the sidebar.
                             </p>
                             <div className="stats-row">
-                                {(Object.keys(CATEGORIES) as ArtifactCategory[]).map((cat) => {
-                                    const count = allArtifacts.filter((a) => a.category === cat).length;
+                                {tabCategories.map((cat) => {
+                                    const count = tabArtifacts.filter((a) => a.category === cat).length;
                                     return (
                                         <button
                                             key={cat}
@@ -662,7 +693,7 @@ export default function AgentDeliverablesPage() {
                                     );
                                 })}
                             </div>
-                            {meta.creed && meta.creed.length > 0 && (
+                            {activeTab === 'profile' && meta.creed && meta.creed.length > 0 && (
                                 <div className="creed-block">
                                     <h3>Creed</h3>
                                     <ol>
@@ -780,6 +811,29 @@ export default function AgentDeliverablesPage() {
           background: rgba(255,255,255,.06); padding: 3px 6px; border-radius: 4px;
           font-family: 'JetBrains Mono', monospace;
         }
+
+        /* ── Top-level tabs ── */
+        .top-tabs {
+          display: flex; gap: 0; padding: 0 16px;
+          border-bottom: 1px solid rgba(255,255,255,.06);
+        }
+        .top-tab {
+          flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+          padding: 11px 12px; font-size: 12px; font-weight: 600;
+          color: #52525b; background: none; border: none;
+          border-bottom: 2px solid transparent;
+          cursor: pointer; transition: all .25s; font-family: inherit;
+          position: relative;
+        }
+        .top-tab:hover { color: #a1a1aa; }
+        .top-tab.active {
+          color: #e4e4e7;
+          border-bottom-color: #8b5cf6;
+        }
+        .top-tab.active .count {
+          background: rgba(139,92,246,.2); color: #c4b5fd;
+        }
+        .top-tab-icon { font-size: 14px; }
 
         .category-nav {
           display: flex; flex-wrap: wrap; gap: 6px;
