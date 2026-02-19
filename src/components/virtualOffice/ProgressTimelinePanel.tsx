@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState, CSSProperties } from 'react';
 import { formatDistanceToNow, format } from 'date-fns';
+import { useRouter } from 'next/router';
+import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { AgentPresence } from '../../api/firebase/presence/service';
+import { db } from '../../api/firebase/config';
 import { progressTimelineService } from '../../api/firebase/progressTimeline/service';
 import { nudgeLogService } from '../../api/firebase/nudgeLog/service';
 import {
@@ -17,7 +20,7 @@ import {
 import {
   X, Send, ChevronDown, ChevronUp,
   Lightbulb, Rocket, CheckCircle2, AlertTriangle, TrendingUp,
-  Zap, Clock, Link2, MessageCircle, Activity,
+  Zap, Clock, Link2, MessageCircle, Activity, ExternalLink,
 } from 'lucide-react';
 
 /* ── Props ── */
@@ -48,6 +51,25 @@ const avatarColors: Record<string, string> = {
 
 const channelLabels: Record<NudgeChannel, string> = { automation: 'Auto', manual: 'Manual', system: 'System' };
 const lensOptions = ['Delight Hunt', 'Friction Hunt', 'Partnership Leverage', 'Retention Proof', 'Fundraising Story', 'Off-Cycle'];
+const AGENT_ROUTE_ALIASES: Record<string, string> = {
+  branddirector: 'solara',
+  intel: 'sage',
+  research: 'sage',
+};
+const AGENT_ROUTE_IDS = new Set(['antigravity', 'nora', 'scout', 'solara', 'sage']);
+
+const normalizeAgentKey = (value?: string) => (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const resolveAgentRouteId = (agentId?: string, agentName?: string): string | null => {
+  const candidates = [agentId, agentName];
+  for (const candidate of candidates) {
+    const normalized = normalizeAgentKey(candidate);
+    if (!normalized) continue;
+    const canonical = AGENT_ROUTE_ALIASES[normalized] || normalized;
+    if (AGENT_ROUTE_IDS.has(canonical)) return canonical;
+  }
+  return null;
+};
 
 type FeedItem =
   | { id: string; type: 'beat'; createdAt: number; payload: ProgressTimelineEntry }
@@ -192,6 +214,7 @@ const S = {
 
 /* ── Component ── */
 const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, onClose }) => {
+  const router = useRouter();
   const [entries, setEntries] = useState<ProgressTimelineEntry[]>([]);
   const [snapshots, setSnapshots] = useState<HourlySnapshotEntry[]>([]);
   const [nudges, setNudges] = useState<NudgeLogEntry[]>([]);
@@ -258,6 +281,72 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   const getAvatarColor = (id?: string, name?: string) =>
     avatarColors[(id ?? name ?? '').toLowerCase()] || '#6366f1';
 
+  const getResultBeatDestination = (entry: ProgressTimelineEntry): string | null => {
+    if (entry.beat !== 'result') return null;
+
+    const explicitUrl = entry.artifactType === 'url' ? entry.artifactUrl?.trim() : '';
+    if (explicitUrl) return explicitUrl;
+
+    const objectiveCode = entry.objectiveCode?.trim();
+    const agentRouteId = resolveAgentRouteId(entry.agentId, entry.agentName);
+
+    if (objectiveCode) {
+      return `/admin/projectManagement?taskId=${encodeURIComponent(objectiveCode)}`;
+    }
+
+    if (agentRouteId) {
+      return `/admin/deliverables/${agentRouteId}`;
+    }
+
+    return null;
+  };
+
+  const resolveDeliverableDestinationForTask = async (entry: ProgressTimelineEntry): Promise<string | null> => {
+    const taskId = entry.objectiveCode?.trim();
+    if (!taskId) return null;
+
+    try {
+      const deliverablesQuery = query(
+        collection(db, 'agent-deliverables'),
+        where('taskId', '==', taskId),
+        limit(1),
+      );
+      const snap = await getDocs(deliverablesQuery);
+      if (snap.empty) return null;
+
+      const data = snap.docs[0].data() as { filePath?: string; agentId?: string; agentName?: string };
+      const filePath = data.filePath?.trim();
+      const agentRouteId = resolveAgentRouteId(data.agentId, data.agentName) || resolveAgentRouteId(entry.agentId, entry.agentName);
+
+      if (!filePath || !agentRouteId) return null;
+
+      const params = new URLSearchParams({
+        file: filePath,
+        taskRef: taskId,
+        taskId,
+        objectiveCode: taskId,
+      });
+
+      return `/admin/deliverables/${agentRouteId}?${params.toString()}`;
+    } catch {
+      return null;
+    }
+  };
+
+  const openResultBeatDestination = async (entry: ProgressTimelineEntry) => {
+    const explicitUrl = entry.artifactType === 'url' ? entry.artifactUrl?.trim() : '';
+    const resolvedByTask = !explicitUrl ? await resolveDeliverableDestinationForTask(entry) : '';
+    const destination = explicitUrl || resolvedByTask || getResultBeatDestination(entry);
+    if (!destination) return;
+
+    if (/^https?:\/\//i.test(destination)) {
+      window.open(destination, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    router.push(destination);
+  };
+
   /* ── Beat card ── */
   const renderBeatCard = (entry: ProgressTimelineEntry) => {
     const cfg = beatConfig[entry.beat];
@@ -265,12 +354,33 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
     const timeAgo = formatDistanceToNow(entry.createdAt || new Date(), { addSuffix: true });
     const color = getAvatarColor(entry.agentId, entry.agentName);
     const isHovered = hoverCard === `b-${entry.id}`;
+    const resultDestination = getResultBeatDestination(entry);
+    const isResultClickable = Boolean(resultDestination);
 
     return (
       <div key={entry.id}
-        style={{ ...S.card(cc.dot), background: isHovered ? 'rgba(255,255,255,0.02)' : 'transparent', transition: 'background 0.15s' }}
+        style={{
+          ...S.card(cc.dot),
+          background: isHovered ? 'rgba(255,255,255,0.02)' : 'transparent',
+          transition: 'background 0.15s',
+          cursor: isResultClickable ? 'pointer' : 'default',
+        }}
         onMouseEnter={() => setHoverCard(`b-${entry.id}`)}
         onMouseLeave={() => setHoverCard(null)}
+        onClick={isResultClickable ? (e) => {
+          const target = e.target as HTMLElement;
+          if (target.closest('a,button')) return;
+          void openResultBeatDestination(entry);
+        } : undefined}
+        onKeyDown={isResultClickable ? (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            void openResultBeatDestination(entry);
+          }
+        } : undefined}
+        role={isResultClickable ? 'button' : undefined}
+        tabIndex={isResultClickable ? 0 : undefined}
+        aria-label={isResultClickable ? 'Open deliverable' : undefined}
       >
         <div style={S.cardRow}>
           <div style={S.avatar(color)}>
@@ -288,7 +398,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
               <div style={S.artifact}>{entry.artifactText}</div>
             )}
             {entry.artifactType === 'url' && entry.artifactUrl && (
-              <a href={entry.artifactUrl} target="_blank" rel="noreferrer" style={S.artifactLink}>
+              <a href={entry.artifactUrl} target="_blank" rel="noreferrer" style={S.artifactLink} onClick={(e) => e.stopPropagation()}>
                 <Link2 size={13} /> {entry.artifactUrl.replace(/^https?:\/\//, '').slice(0, 50)}
               </a>
             )}
@@ -299,6 +409,12 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
                 <span style={S.confDot(cc.dot)} />
                 {cc.label}
               </span>
+              {isResultClickable && (
+                <span style={S.tag('#1d9bf0', 'rgba(29,155,240,0.12)')}>
+                  <ExternalLink size={11} />
+                  Open deliverable
+                </span>
+              )}
             </div>
           </div>
         </div>

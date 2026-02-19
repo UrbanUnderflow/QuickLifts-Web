@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { kanbanService } from '../../api/firebase/kanban/service';
 import { KanbanTask, KanbanLane, KanbanColor } from '../../api/firebase/kanban/types';
@@ -1893,6 +1894,7 @@ const LaneColumn: React.FC<LaneColumnProps> = ({
 };
 
 const ProjectManagement: React.FC = () => {
+  const router = useRouter();
   const [tasks, setTasks] = useState<KanbanTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1900,6 +1902,7 @@ const ProjectManagement: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<KanbanTask | null>(null);
   const [draggedTask, setDraggedTask] = useState<KanbanTask | null>(null);
   const [taskDetailModalOpen, setTaskDetailModalOpen] = useState(false);
+  const openedTaskFromQueryRef = useRef<string | null>(null);
   
   // Filter states
   const [selectedProject, setSelectedProject] = useState<string>('all');
@@ -1939,6 +1942,22 @@ const ProjectManagement: React.FC = () => {
   useEffect(() => {
     fetchTasks();
   }, [fetchTasks]);
+
+  useEffect(() => {
+    if (!router.isReady || tasks.length === 0) return;
+
+    const rawTaskId = router.query.taskId;
+    const taskId = Array.isArray(rawTaskId) ? rawTaskId[0] : rawTaskId;
+    if (!taskId || openedTaskFromQueryRef.current === taskId) return;
+
+    const targetTask = tasks.find((task) => task.id === taskId || task.objectiveCode === taskId);
+    if (!targetTask) return;
+
+    openedTaskFromQueryRef.current = taskId;
+    setSelectedTask(targetTask);
+    setModalMode('edit');
+    setTaskDetailModalOpen(true);
+  }, [router.isReady, router.query.taskId, tasks]);
 
   // Get unique projects, themes, and assignees from tasks
   const uniqueProjects = React.useMemo(() => {

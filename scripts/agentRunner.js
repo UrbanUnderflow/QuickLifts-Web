@@ -895,6 +895,115 @@ function inferColor(steps, currentIndex) {
 /* ─── Heartbeat OS: Hourly Snapshots ─────────────────── */
 
 let lastSnapshotHour = null;
+let lastNoraGitSyncHour = null;
+
+/**
+ * Nora-only hourly git sync:
+ * 1) pull latest changes
+ * 2) push if local branch is ahead of upstream
+ *
+ * Safety guard:
+ * - Skip while Nora is actively working on a task to avoid interrupting execution.
+ */
+function syncRepoDuringHourlyTelemetry(currentTask, hourIso) {
+    if (AGENT_ID !== 'nora') return;
+
+    const logPrefix = `🔁 [Nora hourly git sync ${hourIso}]`;
+
+    if (currentTask) {
+        console.log(`${logPrefix} skipped (active task: "${currentTask.name || currentTask.id || 'unknown'}").`);
+        return false;
+    }
+
+    const gitDir = path.join(projectDir, '.git');
+    if (!fs.existsSync(gitDir)) {
+        console.warn(`${logPrefix} skipped (no git repo at ${projectDir}).`);
+        return true;
+    }
+
+    const uncommitted = getGitChanges();
+    if (uncommitted.length > 0) {
+        console.warn(`${logPrefix} skipped (working tree has uncommitted changes).`);
+        return false;
+    }
+
+    try {
+        const pullOutput = execSync('git pull --rebase', {
+            cwd: projectDir,
+            encoding: 'utf-8',
+            timeout: 45_000,
+        }).trim();
+        console.log(`${logPrefix} pull: ${pullOutput || 'Already up to date.'}`);
+    } catch (pullErr) {
+        const pullContext = `${(pullErr.stdout || '').toString().trim()} ${(pullErr.stderr || '').toString().trim()}`.trim();
+        console.warn(`${logPrefix} pull failed: ${(pullContext || pullErr.message).split('\n')[0]}`);
+        return false;
+    }
+
+    try {
+        execSync('git rev-parse --abbrev-ref --symbolic-full-name @{u}', {
+            cwd: projectDir,
+            encoding: 'utf-8',
+            timeout: 10_000,
+        });
+    } catch {
+        console.warn(`${logPrefix} push skipped (no upstream configured).`);
+        return true;
+    }
+
+    let ahead = 0;
+    let behind = 0;
+    try {
+        const counts = execSync('git rev-list --left-right --count @{u}...HEAD', {
+            cwd: projectDir,
+            encoding: 'utf-8',
+            timeout: 10_000,
+        }).trim();
+        const [behindRaw, aheadRaw] = counts.split(/\s+/);
+        behind = Number.parseInt(behindRaw, 10) || 0;
+        ahead = Number.parseInt(aheadRaw, 10) || 0;
+    } catch (countErr) {
+        console.warn(`${logPrefix} could not compute ahead/behind: ${countErr.message.split('\n')[0]}`);
+        return false;
+    }
+
+    if (behind > 0) {
+        console.log(`${logPrefix} behind upstream by ${behind} commit(s) after pull.`);
+    }
+
+    if (ahead <= 0) {
+        console.log(`${logPrefix} push skipped (no local commits ahead of upstream).`);
+        return true;
+    }
+
+    try {
+        const pushOutput = execSync('git push', {
+            cwd: projectDir,
+            encoding: 'utf-8',
+            timeout: 45_000,
+        }).trim();
+        console.log(`${logPrefix} push: ${pushOutput || `pushed ${ahead} commit(s).`}`);
+    } catch (pushErr) {
+        const pushContext = `${(pushErr.stdout || '').toString().trim()} ${(pushErr.stderr || '').toString().trim()}`.trim();
+        console.warn(`${logPrefix} push failed: ${(pushContext || pushErr.message).split('\n')[0]}`);
+        return false;
+    }
+
+    return true;
+}
+
+function maybeSyncRepoDuringHourlyTelemetry(currentTask) {
+    if (AGENT_ID !== 'nora') return;
+
+    const now = new Date();
+    const hourIso = now.toISOString().replace(/:\d{2}\.\d{3}Z$/, ':00:00Z');
+    if (hourIso === lastNoraGitSyncHour) return;
+
+    const synced = syncRepoDuringHourlyTelemetry(currentTask, hourIso);
+    if (synced) {
+        lastNoraGitSyncHour = hourIso;
+    }
+}
 
 /**
  * Post an hourly snapshot of this agent's current state.
@@ -924,6 +1033,7 @@ async function postHourlySnapshot(currentTask) {
     } catch (err) {
         console.error('⚠️  Failed to post hourly snapshot:', err.message);
     }
+
 }
 
 /* ─── Heartbeat OS: Idle Detection & Nudge ───────────── */
@@ -3408,6 +3518,7 @@ async function run() {
     let currentTaskRef = null;  // Tracks what we're working on for snapshots
     const heartbeatOsInterval = setInterval(async () => {
         await postHourlySnapshot(currentTaskRef);
+        maybeSyncRepoDuringHourlyTelemetry(currentTaskRef);
         await checkIdleAndNudge();
         await noraTaskManagerSweep();  // Nora checks all agents' queues
     }, 10 * 60 * 1000);  // Check every 10 minutes
@@ -3711,13 +3822,30 @@ async function run() {
                 await markTaskDone(task.id);
 
                 // Record deliverables to Firestore for the PulseCommand tray
-                await recordDeliverables(task, steps);
+                const deliverables = await recordDeliverables(task, steps);
+                const primaryDeliverable = deliverables.find(d => d && typeof d.filePath === 'string' && d.filePath.trim().length > 0);
+                const deepLinkTaskRef = (task.id || task.objectiveCode || '').trim();
+                let resultArtifactUrl = '';
+
+                if (primaryDeliverable) {
+                    const query = new URLSearchParams({ file: primaryDeliverable.filePath });
+                    if (deepLinkTaskRef) {
+                        query.set('taskRef', deepLinkTaskRef);
+                        query.set('taskId', deepLinkTaskRef);
+                    }
+                    resultArtifactUrl = `/admin/deliverables/${AGENT_ID}?${query.toString()}`;
+                } else if (deepLinkTaskRef) {
+                    resultArtifactUrl = `/admin/projectManagement?taskId=${encodeURIComponent(deepLinkTaskRef)}`;
+                }
 
                 // ─── Heartbeat: post result beat on task completion ──
                 await postBeat('result', `✅ Completed: ${task.name}`, {
                     taskId: task.id,
                     color: hasIssues ? 'yellow' : 'green',
                     objectiveCode: task.objectiveCode || task.id,
+                    artifactType: resultArtifactUrl ? 'url' : 'none',
+                    artifactUrl: resultArtifactUrl,
+                    artifactText: primaryDeliverable ? (primaryDeliverable.title || primaryDeliverable.filePath || '') : '',
                 });
                 // Update lastWorkBeatAt on the kanban card for idle tracking
                 try {
