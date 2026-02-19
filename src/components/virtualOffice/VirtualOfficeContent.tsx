@@ -104,357 +104,357 @@ const MODEL_PRICE_RULES: Array<{
   match: RegExp;
   pricing: ModelPricing;
 }> = [
-  {
-    match: /^gpt-5\.2-codex(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5.2-codex',
-      label: 'GPT-5.2 Codex',
-      inputPerMillion: 1.75,
-      outputPerMillion: 14.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5.2-codex',
+    {
+      match: /^gpt-5\.2-codex(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5.2-codex',
+        label: 'GPT-5.2 Codex',
+        inputPerMillion: 1.75,
+        outputPerMillion: 14.0,
+        source: 'https://platform.openai.com/docs/models/gpt-5.2-codex',
+      },
     },
-  },
-  {
-    match: /^gpt-5\.1-codex-max(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5.1-codex-max',
-      label: 'GPT-5.1 Codex Max',
-      inputPerMillion: 1.25,
-      outputPerMillion: 10.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5.1-codex-max',
+    {
+      match: /^gpt-5\.1-codex-max(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5.1-codex-max',
+        label: 'GPT-5.1 Codex Max',
+        inputPerMillion: 1.25,
+        outputPerMillion: 10.0,
+        source: 'https://platform.openai.com/docs/models/gpt-5.1-codex-max',
+      },
     },
-  },
-  {
-    match: /^gpt-5\.1-codex-mini(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5.1-codex-mini',
-      label: 'GPT-5.1 Codex Mini',
-      inputPerMillion: 0.25,
-      outputPerMillion: 2.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5.1-codex-mini',
+    {
+      match: /^gpt-5\.1-codex-mini(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5.1-codex-mini',
+        label: 'GPT-5.1 Codex Mini',
+        inputPerMillion: 0.25,
+        outputPerMillion: 2.0,
+        source: 'https://platform.openai.com/docs/models/gpt-5.1-codex-mini',
+      },
     },
-  },
-  {
-    match: /^gpt-5\.1-codex(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5.1-codex',
-      label: 'GPT-5.1 Codex',
-      inputPerMillion: 1.25,
-      outputPerMillion: 10.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5.1-codex',
+    {
+      match: /^gpt-5\.1-codex(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5.1-codex',
+        label: 'GPT-5.1 Codex',
+        inputPerMillion: 1.25,
+        outputPerMillion: 10.0,
+        source: 'https://platform.openai.com/docs/models/gpt-5.1-codex',
+      },
     },
-  },
-  {
-    match: /^gpt-5-codex(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5-codex',
-      label: 'GPT-5 Codex',
-      inputPerMillion: 1.25,
-      outputPerMillion: 10.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5-codex',
+    {
+      match: /^gpt-5-codex(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5-codex',
+        label: 'GPT-5 Codex',
+        inputPerMillion: 1.25,
+        outputPerMillion: 10.0,
+        source: 'https://platform.openai.com/docs/models/gpt-5-codex',
+      },
     },
-  },
-  {
-    match: /^o3-mini(?:[\.-]|$)/,
-    pricing: {
-      model: 'o3-mini',
-      label: 'o3-mini',
-      inputPerMillion: 1.10,
-      outputPerMillion: 4.40,
-      source: 'https://platform.openai.com/docs/models/o3-mini',
+    {
+      match: /^o3-mini(?:[\.-]|$)/,
+      pricing: {
+        model: 'o3-mini',
+        label: 'o3-mini',
+        inputPerMillion: 1.10,
+        outputPerMillion: 4.40,
+        source: 'https://platform.openai.com/docs/models/o3-mini',
+      },
     },
-  },
-  {
-    match: /^o4-mini(?:[\.-]|$)/,
-    pricing: {
-      model: 'o4-mini',
-      label: 'o4-mini',
-      inputPerMillion: 1.1,
-      outputPerMillion: 4.4,
-      source: 'https://platform.openai.com/docs/models/o4-mini',
+    {
+      match: /^o4-mini(?:[\.-]|$)/,
+      pricing: {
+        model: 'o4-mini',
+        label: 'o4-mini',
+        inputPerMillion: 1.1,
+        outputPerMillion: 4.4,
+        source: 'https://platform.openai.com/docs/models/o4-mini',
+      },
     },
-  },
-  {
-    match: /^o3-deep-research(?:[\.-]|$)/,
-    pricing: {
-      model: 'o3-deep-research',
-      label: 'o3 Deep Research',
-      inputPerMillion: 10.0,
-      outputPerMillion: 40.0,
-      source: 'https://platform.openai.com/docs/models/o3-deep-research',
+    {
+      match: /^o3-deep-research(?:[\.-]|$)/,
+      pricing: {
+        model: 'o3-deep-research',
+        label: 'o3 Deep Research',
+        inputPerMillion: 10.0,
+        outputPerMillion: 40.0,
+        source: 'https://platform.openai.com/docs/models/o3-deep-research',
+      },
     },
-  },
-  {
-    match: /^o4-mini-deep-research(?:[\.-]|$)/,
-    pricing: {
-      model: 'o4-mini-deep-research',
-      label: 'o4-mini Deep Research',
-      inputPerMillion: 2.0,
-      outputPerMillion: 8.0,
-      source: 'https://platform.openai.com/docs/models/o4-mini-deep-research',
+    {
+      match: /^o4-mini-deep-research(?:[\.-]|$)/,
+      pricing: {
+        model: 'o4-mini-deep-research',
+        label: 'o4-mini Deep Research',
+        inputPerMillion: 2.0,
+        outputPerMillion: 8.0,
+        source: 'https://platform.openai.com/docs/models/o4-mini-deep-research',
+      },
     },
-  },
-  {
-    match: /^o3(?:[\.-]|$)/,
-    pricing: {
-      model: 'o3',
-      label: 'o3',
-      inputPerMillion: 2.0,
-      outputPerMillion: 8.0,
-      source: 'https://platform.openai.com/docs/models/o3',
+    {
+      match: /^o3(?:[\.-]|$)/,
+      pricing: {
+        model: 'o3',
+        label: 'o3',
+        inputPerMillion: 2.0,
+        outputPerMillion: 8.0,
+        source: 'https://platform.openai.com/docs/models/o3',
+      },
     },
-  },
-  {
-    match: /^o3-pro(?:[\.-]|$)/,
-    pricing: {
-      model: 'o3-pro',
-      label: 'o3 Pro',
-      inputPerMillion: 20.0,
-      outputPerMillion: 80.0,
-      source: 'https://platform.openai.com/docs/models/o3-pro',
+    {
+      match: /^o3-pro(?:[\.-]|$)/,
+      pricing: {
+        model: 'o3-pro',
+        label: 'o3 Pro',
+        inputPerMillion: 20.0,
+        outputPerMillion: 80.0,
+        source: 'https://platform.openai.com/docs/models/o3-pro',
+      },
     },
-  },
-  {
-    match: /^o1-pro(?:[\.-]|$)/,
-    pricing: {
-      model: 'o1-pro',
-      label: 'o1 Pro',
-      inputPerMillion: 150.0,
-      outputPerMillion: 600.0,
-      source: 'https://platform.openai.com/docs/models/o1-pro',
+    {
+      match: /^o1-pro(?:[\.-]|$)/,
+      pricing: {
+        model: 'o1-pro',
+        label: 'o1 Pro',
+        inputPerMillion: 150.0,
+        outputPerMillion: 600.0,
+        source: 'https://platform.openai.com/docs/models/o1-pro',
+      },
     },
-  },
-  {
-    match: /^o1-mini(?:[\.-]|$)/,
-    pricing: {
-      model: 'o1-mini',
-      label: 'o1-mini',
-      inputPerMillion: 1.1,
-      outputPerMillion: 4.4,
-      source: 'https://platform.openai.com/docs/models/o1-mini',
+    {
+      match: /^o1-mini(?:[\.-]|$)/,
+      pricing: {
+        model: 'o1-mini',
+        label: 'o1-mini',
+        inputPerMillion: 1.1,
+        outputPerMillion: 4.4,
+        source: 'https://platform.openai.com/docs/models/o1-mini',
+      },
     },
-  },
-  {
-    match: /^o1(?:[\.-]|$)/,
-    pricing: {
-      model: 'o1',
-      label: 'o1',
-      inputPerMillion: 15.0,
-      outputPerMillion: 60.0,
-      source: 'https://platform.openai.com/docs/models/o1',
+    {
+      match: /^o1(?:[\.-]|$)/,
+      pricing: {
+        model: 'o1',
+        label: 'o1',
+        inputPerMillion: 15.0,
+        outputPerMillion: 60.0,
+        source: 'https://platform.openai.com/docs/models/o1',
+      },
     },
-  },
-  {
-    match: /^gpt-5\.2-pro(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5.2-pro',
-      label: 'GPT-5.2 Pro',
-      inputPerMillion: 21.0,
-      outputPerMillion: 168.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5.2-pro',
+    {
+      match: /^gpt-5\.2-pro(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5.2-pro',
+        label: 'GPT-5.2 Pro',
+        inputPerMillion: 21.0,
+        outputPerMillion: 168.0,
+        source: 'https://platform.openai.com/docs/models/gpt-5.2-pro',
+      },
     },
-  },
-  {
-    match: /^gpt-5-pro(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5-pro',
-      label: 'GPT-5 Pro',
-      inputPerMillion: 15.0,
-      outputPerMillion: 120.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5-pro',
+    {
+      match: /^gpt-5-pro(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5-pro',
+        label: 'GPT-5 Pro',
+        inputPerMillion: 15.0,
+        outputPerMillion: 120.0,
+        source: 'https://platform.openai.com/docs/models/gpt-5-pro',
+      },
     },
-  },
-  {
-    match: /^gpt-5\.2(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5.2',
-      label: 'GPT-5.2',
-      inputPerMillion: 1.75,
-      outputPerMillion: 14.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5.2',
+    {
+      match: /^gpt-5\.2(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5.2',
+        label: 'GPT-5.2',
+        inputPerMillion: 1.75,
+        outputPerMillion: 14.0,
+        source: 'https://platform.openai.com/docs/models/gpt-5.2',
+      },
     },
-  },
-  {
-    match: /^gpt-5\.2-chat-latest(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5.2-chat-latest',
-      label: 'GPT-5.2 Chat',
-      inputPerMillion: 1.75,
-      outputPerMillion: 14.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5.2-chat-latest',
+    {
+      match: /^gpt-5\.2-chat-latest(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5.2-chat-latest',
+        label: 'GPT-5.2 Chat',
+        inputPerMillion: 1.75,
+        outputPerMillion: 14.0,
+        source: 'https://platform.openai.com/docs/models/gpt-5.2-chat-latest',
+      },
     },
-  },
-  {
-    match: /^gpt-5\.1(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5.1',
-      label: 'GPT-5.1',
-      inputPerMillion: 1.25,
-      outputPerMillion: 10.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5.1',
+    {
+      match: /^gpt-5\.1(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5.1',
+        label: 'GPT-5.1',
+        inputPerMillion: 1.25,
+        outputPerMillion: 10.0,
+        source: 'https://platform.openai.com/docs/models/gpt-5.1',
+      },
     },
-  },
-  {
-    match: /^gpt-5\.1-chat-latest(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5.1-chat-latest',
-      label: 'GPT-5.1 Chat',
-      inputPerMillion: 1.25,
-      outputPerMillion: 10.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5.1-chat-latest',
+    {
+      match: /^gpt-5\.1-chat-latest(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5.1-chat-latest',
+        label: 'GPT-5.1 Chat',
+        inputPerMillion: 1.25,
+        outputPerMillion: 10.0,
+        source: 'https://platform.openai.com/docs/models/gpt-5.1-chat-latest',
+      },
     },
-  },
-  {
-    match: /^gpt-5-mini(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5-mini',
-      label: 'GPT-5 Mini',
-      inputPerMillion: 0.25,
-      outputPerMillion: 2.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5-mini',
+    {
+      match: /^gpt-5-mini(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5-mini',
+        label: 'GPT-5 Mini',
+        inputPerMillion: 0.25,
+        outputPerMillion: 2.0,
+        source: 'https://platform.openai.com/docs/models/gpt-5-mini',
+      },
     },
-  },
-  {
-    match: /^gpt-5-nano(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5-nano',
-      label: 'GPT-5 Nano',
-      inputPerMillion: 0.05,
-      outputPerMillion: 0.4,
-      source: 'https://platform.openai.com/docs/models/gpt-5-nano',
+    {
+      match: /^gpt-5-nano(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5-nano',
+        label: 'GPT-5 Nano',
+        inputPerMillion: 0.05,
+        outputPerMillion: 0.4,
+        source: 'https://platform.openai.com/docs/models/gpt-5-nano',
+      },
     },
-  },
-  {
-    match: /^gpt-5-chat-latest(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-5-chat-latest',
-      label: 'GPT-5 Chat',
-      inputPerMillion: 1.25,
-      outputPerMillion: 10.0,
-      source: 'https://platform.openai.com/docs/models/gpt-5-chat-latest',
+    {
+      match: /^gpt-5-chat-latest(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-5-chat-latest',
+        label: 'GPT-5 Chat',
+        inputPerMillion: 1.25,
+        outputPerMillion: 10.0,
+        source: 'https://platform.openai.com/docs/models/gpt-5-chat-latest',
+      },
     },
-  },
-  {
-    match: /^codex-mini-latest(?:[\.-]|$)/,
-    pricing: {
-      model: 'codex-mini-latest',
-      label: 'Codex Mini Latest',
-      inputPerMillion: 1.5,
-      outputPerMillion: 6.0,
-      source: 'https://platform.openai.com/docs/models/codex-mini-latest',
+    {
+      match: /^codex-mini-latest(?:[\.-]|$)/,
+      pricing: {
+        model: 'codex-mini-latest',
+        label: 'Codex Mini Latest',
+        inputPerMillion: 1.5,
+        outputPerMillion: 6.0,
+        source: 'https://platform.openai.com/docs/models/codex-mini-latest',
+      },
     },
-  },
-  {
-    match: /^gpt-4\.1(?:\.0)?-nano(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-4.1-nano',
-      label: 'GPT-4.1 Nano',
-      inputPerMillion: 0.10,
-      outputPerMillion: 0.40,
-      source: 'https://platform.openai.com/docs/pricing',
+    {
+      match: /^gpt-4\.1(?:\.0)?-nano(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-4.1-nano',
+        label: 'GPT-4.1 Nano',
+        inputPerMillion: 0.10,
+        outputPerMillion: 0.40,
+        source: 'https://platform.openai.com/docs/pricing',
+      },
     },
-  },
-  {
-    match: /^gpt-4\.1-mini(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-4.1-mini',
-      label: 'GPT-4.1 Mini',
-      inputPerMillion: 0.40,
-      outputPerMillion: 1.60,
-      source: 'https://platform.openai.com/docs/pricing',
+    {
+      match: /^gpt-4\.1-mini(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-4.1-mini',
+        label: 'GPT-4.1 Mini',
+        inputPerMillion: 0.40,
+        outputPerMillion: 1.60,
+        source: 'https://platform.openai.com/docs/pricing',
+      },
     },
-  },
-  {
-    match: /^gpt-4\.1(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-4.1',
-      label: 'GPT-4.1',
-      inputPerMillion: 2.00,
-      outputPerMillion: 8.00,
-      source: 'https://platform.openai.com/docs/pricing',
+    {
+      match: /^gpt-4\.1(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-4.1',
+        label: 'GPT-4.1',
+        inputPerMillion: 2.00,
+        outputPerMillion: 8.00,
+        source: 'https://platform.openai.com/docs/pricing',
+      },
     },
-  },
-  {
-    match: /^gpt-4o-2024-05-13(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-4o-2024-05-13',
-      label: 'GPT-4o (legacy snapshot)',
-      inputPerMillion: 5.0,
-      outputPerMillion: 15.0,
-      source: 'https://platform.openai.com/docs/pricing',
+    {
+      match: /^gpt-4o-2024-05-13(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-4o-2024-05-13',
+        label: 'GPT-4o (legacy snapshot)',
+        inputPerMillion: 5.0,
+        outputPerMillion: 15.0,
+        source: 'https://platform.openai.com/docs/pricing',
+      },
     },
-  },
-  {
-    match: /^gpt-4o-mini(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-4o-mini',
-      label: 'GPT-4o Mini',
-      inputPerMillion: 0.15,
-      outputPerMillion: 0.60,
-      source: 'https://platform.openai.com/docs/models/gpt-4o-mini',
+    {
+      match: /^gpt-4o-mini(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-4o-mini',
+        label: 'GPT-4o Mini',
+        inputPerMillion: 0.15,
+        outputPerMillion: 0.60,
+        source: 'https://platform.openai.com/docs/models/gpt-4o-mini',
+      },
     },
-  },
-  {
-    match: /^gpt-4o(?:[\.-]|$)/,
-    pricing: {
-      model: 'gpt-4o',
-      label: 'GPT-4o',
-      inputPerMillion: 2.50,
-      outputPerMillion: 10.0,
-      source: 'https://platform.openai.com/docs/models/gpt-4o',
+    {
+      match: /^gpt-4o(?:[\.-]|$)/,
+      pricing: {
+        model: 'gpt-4o',
+        label: 'GPT-4o',
+        inputPerMillion: 2.50,
+        outputPerMillion: 10.0,
+        source: 'https://platform.openai.com/docs/models/gpt-4o',
+      },
     },
-  },
-  {
-    match: /^claude-opus-4(?:\.1|[.-]|$)/,
-    pricing: {
-      model: 'claude-opus-4',
-      label: 'Claude Opus 4',
-      inputPerMillion: 15.0,
-      outputPerMillion: 75.0,
-      source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+    {
+      match: /^claude-opus-4(?:\.1|[.-]|$)/,
+      pricing: {
+        model: 'claude-opus-4',
+        label: 'Claude Opus 4',
+        inputPerMillion: 15.0,
+        outputPerMillion: 75.0,
+        source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+      },
     },
-  },
-  {
-    match: /^claude-sonnet-4(?:[\.-]|$)/,
-    pricing: {
-      model: 'claude-sonnet-4',
-      label: 'Claude Sonnet 4',
-      inputPerMillion: 3.0,
-      outputPerMillion: 15.0,
-      source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+    {
+      match: /^claude-sonnet-4(?:[\.-]|$)/,
+      pricing: {
+        model: 'claude-sonnet-4',
+        label: 'Claude Sonnet 4',
+        inputPerMillion: 3.0,
+        outputPerMillion: 15.0,
+        source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+      },
     },
-  },
-  {
-    match: /^(?:claude-3[.-]7-sonnet|claude-sonnet-3\.7)(?:[\.-]|$)/,
-    pricing: {
-      model: 'claude-sonnet-3.7',
-      label: 'Claude Sonnet 3.7',
-      inputPerMillion: 3.0,
-      outputPerMillion: 15.0,
-      source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+    {
+      match: /^(?:claude-3[.-]7-sonnet|claude-sonnet-3\.7)(?:[\.-]|$)/,
+      pricing: {
+        model: 'claude-sonnet-3.7',
+        label: 'Claude Sonnet 3.7',
+        inputPerMillion: 3.0,
+        outputPerMillion: 15.0,
+        source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+      },
     },
-  },
-  {
-    match: /^(?:claude-3[.-]5-sonnet|claude-sonnet-3\.5)(?:[\.-]|$)/,
-    pricing: {
-      model: 'claude-sonnet-3.5',
-      label: 'Claude Sonnet 3.5',
-      inputPerMillion: 3.0,
-      outputPerMillion: 15.0,
-      source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+    {
+      match: /^(?:claude-3[.-]5-sonnet|claude-sonnet-3\.5)(?:[\.-]|$)/,
+      pricing: {
+        model: 'claude-sonnet-3.5',
+        label: 'Claude Sonnet 3.5',
+        inputPerMillion: 3.0,
+        outputPerMillion: 15.0,
+        source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+      },
     },
-  },
-  {
-    match: /^claude-haiku-3\.5(?:[\.-]|$)/,
-    pricing: {
-      model: 'claude-haiku-3.5',
-      label: 'Claude Haiku 3.5',
-      inputPerMillion: 0.80,
-      outputPerMillion: 4.0,
-      source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+    {
+      match: /^claude-haiku-3\.5(?:[\.-]|$)/,
+      pricing: {
+        model: 'claude-haiku-3.5',
+        label: 'Claude Haiku 3.5',
+        inputPerMillion: 0.80,
+        outputPerMillion: 4.0,
+        source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+      },
     },
-  },
-];
+  ];
 
 const TOKEN_BREAKDOWN_UNKNOWN_MODEL = 'unknown-model';
 
@@ -562,7 +562,7 @@ const sumTokenTotals = (usage: Record<string, TokenUsageBucket>): {
   }), { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 });
 };
 
-const calculateTokenCostRows = (usageByModel: Record<string, TokenUsageBucket>): { 
+const calculateTokenCostRows = (usageByModel: Record<string, TokenUsageBucket>): {
   rows: TokenCostBreakdownRow[];
   totals: TokenUsageBucket & { estimatedUSD: number };
 } => {
@@ -2277,8 +2277,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
                 const daily = agent.tokenUsageDaily;
                 const today = new Date().toISOString().split('T')[0];
                 const todayUsage = daily?.[today];
-                const hasAny = (session?.totalTokens ?? 0) > 0 || (cumulative?.totalTokens ?? 0) > 0 || (todayUsage?.totalTokens ?? 0) > 0;
-                if (!hasAny) return null;
+                const hasAny = true; // Always show token usage for all agents
                 return (
                   <div style={{
                     margin: '8px 0', padding: '8px 10px',
