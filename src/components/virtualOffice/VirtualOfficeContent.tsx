@@ -1733,12 +1733,14 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const status = STATUS_CONFIG[agent.status as keyof typeof STATUS_CONFIG] || DEFAULT_STATUS;
   const sessionDuration = formatDuration(agent.sessionStartedAt);
   const hasSteps = agent.executionSteps && agent.executionSteps.length > 0;
   const installProgress = agent.installProgress || null;
   const [powerLoading, setPowerLoading] = useState(false);
-  const isOnline = agent.status !== 'offline';
+  const isRunnerEnabled = agent.runnerEnabled !== false;
+  const isOnline = agent.status !== 'offline' && isRunnerEnabled;
+  const effectiveStatus = isRunnerEnabled ? agent.status : 'offline';
+  const status = STATUS_CONFIG[effectiveStatus as keyof typeof STATUS_CONFIG] || DEFAULT_STATUS;
 
   const handlePowerToggle = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1747,7 +1749,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
     try {
       if (isOnline) {
         // Stop: disable runner in presence, stop process, and send stop command
-        await presenceService.setRunnerEnabled(agent.id, false);
+        await presenceService.setRunnerEnabled(agent.id, false, 'admin-console');
         await presenceService.setOffline(agent.id);
         await presenceService.sendCommand(agent.id, 'command', 'stop');
         const stopResp = await fetch('/api/agent/control', {
@@ -1768,7 +1770,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
         if (!startResp.ok) {
           throw new Error(`Agent control start failed: ${startResp.status}`);
         }
-        await presenceService.setRunnerEnabled(agent.id, true);
+        await presenceService.setRunnerEnabled(agent.id, true, 'admin-console');
         await presenceService.setIdle(agent.id, 'Starting up...');
       }
     } catch (err) {
@@ -1995,8 +1997,8 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
 
             {/* Monitor */}
             <div className="agent-monitor" style={{ boxShadow: `0 0 20px ${status.monitorGlow}` }}>
-              <div className="monitor-screen" style={{ background: agent.status === 'working' ? '#0c1222' : '#0a0a0a' }}>
-                {agent.status === 'working' && (
+                <div className="monitor-screen" style={{ background: effectiveStatus === 'working' ? '#0c1222' : '#0a0a0a' }}>
+                {effectiveStatus === 'working' && (
                   <>
                     <div className="code-line l1" />
                     <div className="code-line l2" />
@@ -2014,7 +2016,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
         )}
 
         {/* Character — always visible */}
-        <div className={`office-character ${agent.status} ${isWalkingCoffee ? 'walking' : ''
+        <div className={`office-character ${effectiveStatus} ${isWalkingCoffee ? 'walking' : ''
           } ${coffeePhase === 'pouring' ? 'pouring-coffee' : ''
           } ${isTransitioning ? 'walking' : ''
           }`}>
@@ -2027,7 +2029,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
         </div>
 
         {/* Needs-help indicator — pulsing SOS above desk */}
-        {agent.status === 'needs-help' && (
+        {effectiveStatus === 'needs-help' && (
           <div style={{
             position: 'absolute',
             top: -28,
@@ -2042,7 +2044,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
 
         {/* Nameplate + role + progress */}
         <div className="agent-nameplate">
-          <span className={`status-dot ${agent.status}`} />
+              <span className={`status-dot ${effectiveStatus}`} />
           <div className="nameplate-text">
             <span className="agent-name">{agent.displayName}</span>
             {(agent.role || AGENT_ROLES[agent.id]) && (
@@ -2105,7 +2107,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
             )}
 
             {/* Current task */}
-            {agent.currentTask && agent.status === 'working' && (
+            {agent.currentTask && effectiveStatus === 'working' && (
               <div className="detail-task">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500">Current Task</p>
                 <p className="text-xs text-zinc-100 mt-0.5 font-medium">{agent.currentTask}</p>
@@ -2113,7 +2115,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
             )}
 
             {/* Install progress telemetry */}
-            {installProgress && agent.status === 'working' && (
+            {installProgress && effectiveStatus === 'working' && (
               <div className="detail-install">
                 <div className="install-header">
                   <div className="install-title">
@@ -2150,7 +2152,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
             )}
 
             {/* Live Execution Steps Checklist */}
-            {hasSteps && agent.status === 'working' && (
+            {hasSteps && effectiveStatus === 'working' && (
               <ExecutionStepsPanel
                 steps={agent.executionSteps}
                 currentStepIndex={agent.currentStepIndex}
