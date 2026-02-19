@@ -1492,7 +1492,7 @@ async function processCommands() {
                 var startRequested = commandTokens.includes('start') || commandTokens.includes('resume');
 
                 if (stopRequested) {
-                    await setRunnerEnabled(false);
+                    await setRunnerEnabled(false, cmd.from || 'command');
                     await setStatus('offline', {
                         notes: `Paused by command: "${pContent}"`,
                         executionSteps: [],
@@ -1517,7 +1517,7 @@ async function processCommands() {
                         break;
                     }
 
-                    await setRunnerEnabled(true);
+                    await setRunnerEnabled(true, cmd.from || 'command');
                     await setStatus('idle', {
                         notes: `Resumed by command: "${pContent}"`,
                         executionSteps: [],
