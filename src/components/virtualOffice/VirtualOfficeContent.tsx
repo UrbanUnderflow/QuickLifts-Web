@@ -1705,6 +1705,13 @@ interface AgentDeskProps {
   transitionDelay?: number;
   isAtTable?: boolean;
   onPositionChange?: (id: string, x: number, y: number) => void;
+  onTokenBreakdown?: (
+    event: React.MouseEvent | React.KeyboardEvent,
+    title: string,
+    scope: string,
+    byModel?: Record<string, unknown>,
+    fallback?: TokenUsageBucket | null
+  ) => void;
 }
 
 const AgentDeskSprite: React.FC<AgentDeskProps> = ({
@@ -1714,6 +1721,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   transitionDelay = 0,
   isAtTable = false,
   onPositionChange,
+  onTokenBreakdown,
 }) => {
   const [hovered, setHovered] = useState(false);
   const hoverTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -2285,14 +2293,14 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
                         className="token-breakdown-trigger"
                         role="button"
                         tabIndex={0}
-                        onClick={(event) => triggerTokenBreakdown(
+                        onClick={(event) => onTokenBreakdown?.(
                           event,
                           `${agent.displayName} token usage`,
                           'Session',
                           agent.tokenUsageByModel,
                           session,
                         )}
-                        onKeyDown={(event) => triggerTokenBreakdown(
+                        onKeyDown={(event) => onTokenBreakdown?.(
                           event,
                           `${agent.displayName} token usage`,
                           'Session',
@@ -2317,14 +2325,14 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
                         className="token-breakdown-trigger"
                         role="button"
                         tabIndex={0}
-                        onClick={(event) => triggerTokenBreakdown(
+                        onClick={(event) => onTokenBreakdown?.(
                           event,
                           `${agent.displayName} token usage`,
                           'Today',
                           agent.tokenUsageDailyByModel?.[today],
                           todayUsage,
                         )}
-                        onKeyDown={(event) => triggerTokenBreakdown(
+                        onKeyDown={(event) => onTokenBreakdown?.(
                           event,
                           `${agent.displayName} token usage`,
                           'Today',
@@ -2349,14 +2357,14 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
                         className="token-breakdown-trigger"
                         role="button"
                         tabIndex={0}
-                        onClick={(event) => triggerTokenBreakdown(
+                        onClick={(event) => onTokenBreakdown?.(
                           event,
                           `${agent.displayName} token usage`,
                           'Current Task',
                           agent.tokenUsageTaskByModel,
                           task,
                         )}
-                        onKeyDown={(event) => triggerTokenBreakdown(
+                        onKeyDown={(event) => onTokenBreakdown?.(
                           event,
                           `${agent.displayName} token usage`,
                           'Current Task',
@@ -3580,6 +3588,7 @@ const VirtualOfficeContent: React.FC = () => {
                         }
                       }));
                     }}
+                    onTokenBreakdown={triggerTokenBreakdown}
                   />
                 </React.Fragment>
               );
