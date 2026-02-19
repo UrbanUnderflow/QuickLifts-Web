@@ -38,6 +38,8 @@ export interface AgentPresence {
   emoji?: string;
   status: AgentStatus;
   runnerEnabled?: boolean;
+  runnerEnabledBy?: string;
+  runnerEnabledAt?: Date;
 
   // Task context
   currentTask?: string;        // Human-readable task name
@@ -412,7 +414,43 @@ export const presenceService = {
    */
   async setRunnerEnabled(agentId: string, enabled: boolean): Promise<void> {
     const docRef = doc(db, COLLECTION, agentId);
-    await updateDoc(docRef, { runnerEnabled: enabled });
+    const actor = 'admin';
+    await setDoc(
+      docRef,
+      {
+        runnerEnabled: enabled,
+        runnerEnabledBy: actor,
+        runnerEnabledAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    const hourIso = new Date().toISOString().replace(/:\d{2}\.\d{3}Z$/, ':00:00Z');
+    const displayName = normalizeAgentDisplay(agentId);
+    await addDoc(collection(db, 'progress-snapshots'), {
+      hourIso,
+      agentId,
+      agentName: displayName,
+      objectiveCode: 'runner-control',
+      beatCompleted: null,
+      color: enabled ? 'green' : 'yellow',
+      stateTag: 'signals',
+      note: `${displayName} runner ${enabled ? 'enabled' : 'disabled'} by ${actor}`,
+      createdAt: serverTimestamp(),
+    });
+  },
+
+  /**
+   * Toggle whether this runner is allowed to process tasks.
+   */
+  async setOffline(agentId: string) {
+    const docRef = doc(db, COLLECTION, agentId);
+    await updateDoc(docRef, {
+      status: 'offline',
+      executionSteps: [],
+      currentStepIndex: -1,
+      lastUpdate: serverTimestamp(),
+    });
   },
 
   /**
