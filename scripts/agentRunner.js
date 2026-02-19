@@ -98,6 +98,8 @@ const ENABLE_TASK_VALIDATION = process.env.ENABLE_TASK_VALIDATION !== 'false'; /
 /* ─── Token Usage Tracking ─────────────────────────────── */
 var sessionTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
 var taskTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
+var sessionTokensByModel = {};
+var taskTokensByModel = {};
 // If OpenClaw is enabled, we'll sync the actual configured model from OpenClaw at runtime.
 var currentModel = process.env.USE_OPENCLAW === 'true' ? 'openclaw' : 'gpt-4o';
 var currentModelProvider = '';
@@ -118,11 +120,30 @@ function estimateTokens(promptText, outputText) {
     };
 }
 
+function sanitizeModelField(model) {
+    var safe = String(model || 'unknown').trim().toLowerCase();
+    if (!safe) return 'unknown';
+    safe = safe.replace(/^openai\//, '').replace(/^anthropic\//, '');
+    safe = safe.replace(/[^a-z0-9._-]+/g, '_').replace(/_+/g, '_');
+    return safe || 'unknown';
+}
+
+function toNumber(value) {
+    var n = Number(value);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
 function trackTokenUsage(usage, model) {
     if (!usage) return;
-    var prompt = usage.prompt_tokens || 0;
-    var completion = usage.completion_tokens || 0;
+    var prompt = toNumber(usage.prompt_tokens);
+    var completion = toNumber(usage.completion_tokens);
     var total = usage.total_tokens || (prompt + completion);
+    var safeModel = sanitizeModelField(model || 'unknown');
+    var currentModelRecord = sessionTokensByModel[safeModel] || { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
+    var currentTaskRecord = taskTokensByModel[safeModel] || { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
+
+    if (!model) model = safeModel;
+    if (model === 'unknown') model = safeModel;
 
     // Session counters (in-memory, reset on restart)
     sessionTokens.promptTokens += prompt;
@@ -136,6 +157,18 @@ function trackTokenUsage(usage, model) {
     taskTokens.totalTokens += total;
     taskTokens.callCount += 1;
 
+    currentModelRecord.promptTokens += prompt;
+    currentModelRecord.completionTokens += completion;
+    currentModelRecord.totalTokens += total;
+    currentModelRecord.callCount += 1;
+    sessionTokensByModel[safeModel] = currentModelRecord;
+
+    currentTaskRecord.promptTokens += prompt;
+    currentTaskRecord.completionTokens += completion;
+    currentTaskRecord.totalTokens += total;
+    currentTaskRecord.callCount += 1;
+    taskTokensByModel[safeModel] = currentTaskRecord;
+
     if (model) currentModel = model;
 
     var isEstimate = usage.estimated ? ' (est)' : '';
@@ -148,6 +181,8 @@ function trackTokenUsage(usage, model) {
         db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).set({
             tokenUsage: { ...sessionTokens },
             tokenUsageTask: { ...taskTokens },
+            tokenUsageByModel: sessionTokensByModel,
+            tokenUsageTaskByModel: taskTokensByModel,
             tokenUsageCumulative: {
                 promptTokens: FieldValue.increment(prompt),
                 completionTokens: FieldValue.increment(completion),
@@ -160,6 +195,14 @@ function trackTokenUsage(usage, model) {
                 totalTokens: FieldValue.increment(total),
                 callCount: FieldValue.increment(1),
             },
+            [`tokenUsageCumulativeByModel.${safeModel}.promptTokens`]: FieldValue.increment(prompt),
+            [`tokenUsageCumulativeByModel.${safeModel}.completionTokens`]: FieldValue.increment(completion),
+            [`tokenUsageCumulativeByModel.${safeModel}.totalTokens`]: FieldValue.increment(total),
+            [`tokenUsageCumulativeByModel.${safeModel}.callCount`]: FieldValue.increment(1),
+            [`tokenUsageDailyByModel.${today}.${safeModel}.promptTokens`]: FieldValue.increment(prompt),
+            [`tokenUsageDailyByModel.${today}.${safeModel}.completionTokens`]: FieldValue.increment(completion),
+            [`tokenUsageDailyByModel.${today}.${safeModel}.totalTokens`]: FieldValue.increment(total),
+            [`tokenUsageDailyByModel.${today}.${safeModel}.callCount`]: FieldValue.increment(1),
             lastTokenUpdate: FieldValue.serverTimestamp(),
         }, { merge: true }).catch(() => { }); // Swallow errors — non-critical
     } catch { /* non-critical */ }
@@ -167,6 +210,7 @@ function trackTokenUsage(usage, model) {
 
 function resetTaskTokens() {
     taskTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
+    taskTokensByModel = {};
 }
 
 /* ─── Agent Manifesto (shared institutional knowledge) ── */

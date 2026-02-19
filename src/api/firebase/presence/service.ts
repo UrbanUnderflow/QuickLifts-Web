@@ -75,6 +75,30 @@ export interface AgentPresence {
     totalTokens: number;
     callCount: number;
   };
+  tokenUsageByModel?: Record<string, {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    callCount: number;
+  }>;
+  tokenUsageTaskByModel?: Record<string, {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    callCount: number;
+  }>;
+  tokenUsageCumulativeByModel?: Record<string, {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    callCount: number;
+  }>;
+  tokenUsageDailyByModel?: Record<string, Record<string, {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    callCount: number;
+  }>>;
   tokenUsageCumulative?: {
     promptTokens: number;
     completionTokens: number;
@@ -466,6 +490,10 @@ export const presenceService = {
           openClawAgentId: data.openClawAgentId || undefined,
           tokenUsage: data.tokenUsage || undefined,
           tokenUsageTask: data.tokenUsageTask || undefined,
+          tokenUsageByModel: data.tokenUsageByModel || undefined,
+          tokenUsageTaskByModel: data.tokenUsageTaskByModel || undefined,
+          tokenUsageCumulativeByModel: data.tokenUsageCumulativeByModel || undefined,
+          tokenUsageDailyByModel: data.tokenUsageDailyByModel || undefined,
           tokenUsageCumulative: data.tokenUsageCumulative || undefined,
           tokenUsageDaily: data.tokenUsageDaily || undefined,
           lastUpdate: data.lastUpdate?.toDate?.() || undefined,

@@ -60,6 +60,460 @@ const formatMs = (ms?: number) => {
   return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`;
 };
 
+type TokenUsageBucket = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  callCount: number;
+};
+
+type ModelPricing = {
+  model: string;
+  label: string;
+  inputPerMillion: number;
+  outputPerMillion: number;
+  source: string;
+};
+
+type TokenCostBreakdownRow = TokenUsageBucket & {
+  model: string;
+  cost: {
+    inputPerMillion: number;
+    outputPerMillion: number;
+    estimatedUSD: number | null;
+    source: string | null;
+    label: string;
+    hasPricing: boolean;
+  };
+};
+
+type TokenBreakdownModalState = {
+  isOpen: boolean;
+  title: string;
+  scope: string;
+  sourceModelTotals: Record<string, TokenUsageBucket>;
+};
+
+const PRICING_SOURCE_URLS = {
+  openai: 'https://platform.openai.com/docs/pricing/',
+  anthropic: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+};
+
+const MODEL_PRICE_RULES: Array<{
+  match: RegExp;
+  pricing: ModelPricing;
+}> = [
+  {
+    match: /^gpt-5\.2-codex(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5.2-codex',
+      label: 'GPT-5.2 Codex',
+      inputPerMillion: 1.75,
+      outputPerMillion: 14.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5.2-codex',
+    },
+  },
+  {
+    match: /^gpt-5\.1-codex-max(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5.1-codex-max',
+      label: 'GPT-5.1 Codex Max',
+      inputPerMillion: 1.25,
+      outputPerMillion: 10.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5.2-codex',
+    },
+  },
+  {
+    match: /^gpt-5\.1-codex-mini(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5.1-codex-mini',
+      label: 'GPT-5.1 Codex Mini',
+      inputPerMillion: 0.25,
+      outputPerMillion: 2.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5.1-codex-mini',
+    },
+  },
+  {
+    match: /^gpt-5(?:\.1)?-codex(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5-codex',
+      label: 'GPT-5 Codex',
+      inputPerMillion: 1.25,
+      outputPerMillion: 10.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5-codex',
+    },
+  },
+  {
+    match: /^o3-mini(?:[\.-]|$)/,
+    pricing: {
+      model: 'o3-mini',
+      label: 'o3-mini',
+      inputPerMillion: 1.10,
+      outputPerMillion: 4.40,
+      source: 'https://platform.openai.com/docs/models/o3-mini',
+    },
+  },
+  {
+    match: /^o4-mini(?:[\.-]|$)/,
+    pricing: {
+      model: 'o4-mini',
+      label: 'o4-mini',
+      inputPerMillion: 4.0,
+      outputPerMillion: 16.0,
+      source: 'https://platform.openai.com/docs/pricing',
+    },
+  },
+  {
+    match: /^gpt-5\.2(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5.2',
+      label: 'GPT-5.2',
+      inputPerMillion: 1.75,
+      outputPerMillion: 14.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5',
+    },
+  },
+  {
+    match: /^gpt-5\.2-chat-latest(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5.2-chat-latest',
+      label: 'GPT-5.2 Chat',
+      inputPerMillion: 1.75,
+      outputPerMillion: 14.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5',
+    },
+  },
+  {
+    match: /^gpt-5\.1(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5.1',
+      label: 'GPT-5.1',
+      inputPerMillion: 1.25,
+      outputPerMillion: 10.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5',
+    },
+  },
+  {
+    match: /^gpt-5\.1-chat-latest(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5.1-chat-latest',
+      label: 'GPT-5.1 Chat',
+      inputPerMillion: 1.25,
+      outputPerMillion: 10.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5',
+    },
+  },
+  {
+    match: /^gpt-5-mini(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5-mini',
+      label: 'GPT-5 Mini',
+      inputPerMillion: 0.25,
+      outputPerMillion: 2.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5',
+    },
+  },
+  {
+    match: /^gpt-5-nano(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5-nano',
+      label: 'GPT-5 Nano',
+      inputPerMillion: 0.05,
+      outputPerMillion: 0.4,
+      source: 'https://platform.openai.com/docs/models/gpt-5',
+    },
+  },
+  {
+    match: /^gpt-5-pro(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5-pro',
+      label: 'GPT-5 Pro',
+      inputPerMillion: 15.0,
+      outputPerMillion: 120.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5',
+    },
+  },
+  {
+    match: /^gpt-5\.chat-latest(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5-chat-latest',
+      label: 'GPT-5 Chat',
+      inputPerMillion: 1.25,
+      outputPerMillion: 10.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5',
+    },
+  },
+  {
+    match: /^gpt-5(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-5',
+      label: 'GPT-5',
+      inputPerMillion: 1.25,
+      outputPerMillion: 10.0,
+      source: 'https://platform.openai.com/docs/models/gpt-5',
+    },
+  },
+  {
+    match: /^gpt-4\.1-nano(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-4.1-nano',
+      label: 'GPT-4.1 Nano',
+      inputPerMillion: 0.10,
+      outputPerMillion: 0.40,
+      source: 'https://platform.openai.com/docs/pricing',
+    },
+  },
+  {
+    match: /^gpt-4\.1-mini(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-4.1-mini',
+      label: 'GPT-4.1 Mini',
+      inputPerMillion: 0.40,
+      outputPerMillion: 1.60,
+      source: 'https://platform.openai.com/docs/pricing',
+    },
+  },
+  {
+    match: /^gpt-4\.1(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-4.1',
+      label: 'GPT-4.1',
+      inputPerMillion: 2.00,
+      outputPerMillion: 8.00,
+      source: 'https://platform.openai.com/docs/pricing',
+    },
+  },
+  {
+    match: /^gpt-4o-mini(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-4o-mini',
+      label: 'GPT-4o Mini',
+      inputPerMillion: 0.15,
+      outputPerMillion: 0.60,
+      source: 'https://platform.openai.com/docs/models/gpt-4o-mini',
+    },
+  },
+  {
+    match: /^gpt-4o(?:[\.-]|$)/,
+    pricing: {
+      model: 'gpt-4o',
+      label: 'GPT-4o',
+      inputPerMillion: 2.50,
+      outputPerMillion: 10.0,
+      source: 'https://platform.openai.com/docs/models/gpt-4o',
+    },
+  },
+  {
+    match: /^claude-opus-4(?:\.1|[.-]|$)/,
+    pricing: {
+      model: 'claude-opus-4',
+      label: 'Claude Opus 4',
+      inputPerMillion: 15.0,
+      outputPerMillion: 75.0,
+      source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+    },
+  },
+  {
+    match: /^claude-sonnet-4(?:[\.-]|$)/,
+    pricing: {
+      model: 'claude-sonnet-4',
+      label: 'Claude Sonnet 4',
+      inputPerMillion: 3.0,
+      outputPerMillion: 15.0,
+      source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+    },
+  },
+  {
+    match: /^(?:claude-3[.-]7-sonnet|claude-sonnet-3\.7)(?:[\.-]|$)/,
+    pricing: {
+      model: 'claude-sonnet-3.7',
+      label: 'Claude Sonnet 3.7',
+      inputPerMillion: 3.0,
+      outputPerMillion: 15.0,
+      source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+    },
+  },
+  {
+    match: /^(?:claude-3[.-]5-sonnet|claude-sonnet-3\.5)(?:[\.-]|$)/,
+    pricing: {
+      model: 'claude-sonnet-3.5',
+      label: 'Claude Sonnet 3.5',
+      inputPerMillion: 3.0,
+      outputPerMillion: 15.0,
+      source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+    },
+  },
+  {
+    match: /^claude-haiku-3\.5(?:[\.-]|$)/,
+    pricing: {
+      model: 'claude-haiku-3.5',
+      label: 'Claude Haiku 3.5',
+      inputPerMillion: 0.80,
+      outputPerMillion: 4.0,
+      source: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
+    },
+  },
+];
+
+const TOKEN_BREAKDOWN_UNKNOWN_MODEL = 'unknown-model';
+
+const toSafeNumber = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+};
+
+const normalizeModelKey = (rawModel: string): string => {
+  if (!rawModel) return TOKEN_BREAKDOWN_UNKNOWN_MODEL;
+  return String(rawModel)
+    .toLowerCase()
+    .trim()
+    .replace(/^openai\//, '')
+    .replace(/^anthropic\//, '')
+    .replace(/:.*$/, '')
+    .replace(/@.*$/, '')
+    .replace(/_+/g, '-')
+    .replace(/[^a-z0-9.-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/-$/g, '');
+};
+
+const getModelPricing = (rawModel: string): ModelPricing | null => {
+  const normalized = normalizeModelKey(rawModel);
+  if (!normalized || normalized === TOKEN_BREAKDOWN_UNKNOWN_MODEL) return null;
+  const rule = MODEL_PRICE_RULES.find((entry) => entry.match.test(normalized));
+  return rule ? rule.pricing : null;
+};
+
+const sanitizeModelUsageMap = (raw: Record<string, unknown> | undefined): Record<string, TokenUsageBucket> => {
+  if (!raw || typeof raw !== 'object') return {};
+  const output: Record<string, TokenUsageBucket> = {};
+
+  Object.entries(raw).forEach(([model, entry]) => {
+    const normalizedModel = normalizeModelKey(model);
+    if (!normalizedModel || normalizedModel === TOKEN_BREAKDOWN_UNKNOWN_MODEL) return;
+    if (!entry || typeof entry !== 'object') return;
+    const record = entry as Record<string, unknown>;
+    const promptTokens = toSafeNumber(record.promptTokens);
+    const completionTokens = toSafeNumber(record.completionTokens);
+    const totalTokens = toSafeNumber(record.totalTokens || (promptTokens + completionTokens));
+    const callCount = toSafeNumber(record.callCount);
+
+    const hasData = promptTokens > 0 || completionTokens > 0 || callCount > 0 || totalTokens > 0;
+    if (!hasData) return;
+
+    const existing = output[normalizedModel] || { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
+    existing.promptTokens += promptTokens;
+    existing.completionTokens += completionTokens;
+    existing.totalTokens += totalTokens;
+    existing.callCount += callCount;
+    output[normalizedModel] = existing;
+  });
+
+  return output;
+};
+
+const mergeTokenUsageMaps = (maps: Array<Record<string, TokenUsageBucket> | undefined>): Record<string, TokenUsageBucket> => {
+  const merged: Record<string, TokenUsageBucket> = {};
+  maps.forEach((rawMap) => {
+    const safeMap = sanitizeModelUsageMap(rawMap);
+    Object.entries(safeMap).forEach(([model, usage]) => {
+      const existing = merged[model] || { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
+      existing.promptTokens += usage.promptTokens;
+      existing.completionTokens += usage.completionTokens;
+      existing.totalTokens += usage.totalTokens;
+      existing.callCount += usage.callCount;
+      merged[model] = existing;
+    });
+  });
+
+  return merged;
+};
+
+const buildModelUsageOrFallback = (
+  raw: Record<string, unknown> | undefined,
+  fallback?: TokenUsageBucket | null,
+): Record<string, TokenUsageBucket> => {
+  const mapped = sanitizeModelUsageMap(raw);
+  if (Object.keys(mapped).length > 0) return mapped;
+
+  const safeFallback = {
+    promptTokens: toSafeNumber(fallback?.promptTokens),
+    completionTokens: toSafeNumber(fallback?.completionTokens),
+    totalTokens: toSafeNumber(fallback?.totalTokens),
+    callCount: toSafeNumber(fallback?.callCount),
+  };
+
+  if (safeFallback.promptTokens + safeFallback.completionTokens + safeFallback.totalTokens + safeFallback.callCount === 0) return {};
+  return { [TOKEN_BREAKDOWN_UNKNOWN_MODEL]: safeFallback };
+};
+
+const sumTokenTotals = (usage: Record<string, TokenUsageBucket>): {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  callCount: number;
+} => {
+  return Object.values(usage).reduce((sum, usageRow) => ({
+    promptTokens: sum.promptTokens + usageRow.promptTokens,
+    completionTokens: sum.completionTokens + usageRow.completionTokens,
+    totalTokens: sum.totalTokens + usageRow.totalTokens,
+    callCount: sum.callCount + usageRow.callCount,
+  }), { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 });
+};
+
+const calculateTokenCostRows = (usageByModel: Record<string, TokenUsageBucket>): {
+  rows: TokenCostBreakdownRow[];
+  totals: TokenUsageBucket & { estimatedUSD: number };
+} => {
+  const rows: TokenCostBreakdownRow[] = Object.entries(sanitizeModelUsageMap(usageByModel)).map(([model, usage]) => {
+    const pricing = getModelPricing(model);
+    const estimatedUSD = pricing
+      ? (usage.promptTokens / 1_000_000) * pricing.inputPerMillion
+      + (usage.completionTokens / 1_000_000) * pricing.outputPerMillion
+      : null;
+
+    return {
+      ...usage,
+      model,
+      cost: {
+        inputPerMillion: pricing?.inputPerMillion ?? 0,
+        outputPerMillion: pricing?.outputPerMillion ?? 0,
+        estimatedUSD,
+        source: pricing?.source ?? null,
+        label: pricing?.label ?? model,
+        hasPricing: !!pricing,
+      },
+    };
+  });
+
+  rows.sort((a, b) => (b.cost.estimatedUSD || 0) - (a.cost.estimatedUSD || 0));
+
+  const totals = sumTokenTotals(usageByModel);
+  const knownCostRows = rows.filter((row) => row.cost.hasPricing);
+  const estimatedUSD = knownCostRows.reduce((sum, row) => sum + (row.cost.estimatedUSD ?? 0), 0);
+
+  return {
+    rows,
+    totals: { ...totals, estimatedUSD },
+  };
+};
+
+const formatTokensCompact = (value: number) => {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}k`;
+  return `${value.toLocaleString()}`;
+};
+
+const formatCost = (value: number | null) => {
+  if (value === null) return '—';
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6,
+  }).format(value);
+};
+
 /* ─── Desk positions for the office floor plan ────────── */
 
 const DESK_POSITIONS = [
@@ -1727,10 +2181,31 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
                     {/* Main metrics row */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginBottom: '6px' }}>
                       {/* Session total */}
-                      <div style={{
-                        background: 'rgba(34, 197, 94, 0.1)', borderRadius: '4px', padding: '4px 6px',
-                        border: '1px solid rgba(34, 197, 94, 0.2)',
-                      }}>
+                      <div
+                        className="token-breakdown-trigger"
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => triggerTokenBreakdown(
+                          event,
+                          `${agent.displayName} token usage`,
+                          'Session',
+                          agent.tokenUsageByModel,
+                          session,
+                        )}
+                        onKeyDown={(event) => triggerTokenBreakdown(
+                          event,
+                          `${agent.displayName} token usage`,
+                          'Session',
+                          agent.tokenUsageByModel,
+                          session,
+                        )}
+                        title="Click to open model-level token breakdown + estimated cost"
+                        style={{
+                          borderRadius: '4px', padding: '4px 6px',
+                          border: '1px solid rgba(34, 197, 94, 0.2)',
+                          background: 'rgba(34, 197, 94, 0.1)',
+                        }}
+                      >
                         <div style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Session</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}>
                           {(session?.totalTokens ?? 0).toLocaleString()}
@@ -1738,10 +2213,31 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
                       </div>
 
                       {/* Today */}
-                      <div style={{
-                        background: 'rgba(245, 158, 11, 0.1)', borderRadius: '4px', padding: '4px 6px',
-                        border: '1px solid rgba(245, 158, 11, 0.2)',
-                      }}>
+                      <div
+                        className="token-breakdown-trigger"
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => triggerTokenBreakdown(
+                          event,
+                          `${agent.displayName} token usage`,
+                          'Today',
+                          agent.tokenUsageDailyByModel?.[today],
+                          todayUsage,
+                        )}
+                        onKeyDown={(event) => triggerTokenBreakdown(
+                          event,
+                          `${agent.displayName} token usage`,
+                          'Today',
+                          agent.tokenUsageDailyByModel?.[today],
+                          todayUsage,
+                        )}
+                        title="Click to open model-level token breakdown + estimated cost"
+                        style={{
+                          borderRadius: '4px', padding: '4px 6px',
+                          border: '1px solid rgba(245, 158, 11, 0.2)',
+                          background: 'rgba(245, 158, 11, 0.1)',
+                        }}
+                      >
                         <div style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Today</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: '#fbbf24', fontVariantNumeric: 'tabular-nums' }}>
                           {(todayUsage?.totalTokens ?? 0).toLocaleString()}
@@ -1749,10 +2245,31 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
                       </div>
 
                       {/* Current Task */}
-                      <div style={{
-                        background: 'rgba(6, 182, 212, 0.1)', borderRadius: '4px', padding: '4px 6px',
-                        border: '1px solid rgba(6, 182, 212, 0.2)',
-                      }}>
+                      <div
+                        className="token-breakdown-trigger"
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => triggerTokenBreakdown(
+                          event,
+                          `${agent.displayName} token usage`,
+                          'Current Task',
+                          agent.tokenUsageTaskByModel,
+                          task,
+                        )}
+                        onKeyDown={(event) => triggerTokenBreakdown(
+                          event,
+                          `${agent.displayName} token usage`,
+                          'Current Task',
+                          agent.tokenUsageTaskByModel,
+                          task,
+                        )}
+                        title="Click to open model-level token breakdown + estimated cost"
+                        style={{
+                          borderRadius: '4px', padding: '4px 6px',
+                          border: '1px solid rgba(6, 182, 212, 0.2)',
+                          background: 'rgba(6, 182, 212, 0.1)',
+                        }}
+                      >
                         <div style={{ fontSize: '8px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>This Task</div>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: '#22d3ee', fontVariantNumeric: 'tabular-nums' }}>
                           {(task?.totalTokens ?? 0).toLocaleString()}
@@ -1916,6 +2433,12 @@ const VirtualOfficeContent: React.FC = () => {
   const [showManifesto, setShowManifesto] = useState(false);
   const [manifestoContent, setManifestoContent] = useState<string | null>(null);
   const [manifestoLoading, setManifestoLoading] = useState(false);
+  const [tokenBreakdownModal, setTokenBreakdownModal] = useState<TokenBreakdownModalState>({
+    isOpen: false,
+    title: '',
+    scope: '',
+    sourceModelTotals: {},
+  });
 
   // ── Telemetry check detection state ──
   const [activeStandup, setActiveStandup] = useState<GroupChat | null>(null);
@@ -1984,65 +2507,73 @@ const VirtualOfficeContent: React.FC = () => {
     const agents = ['nora', 'scout', 'solara', 'sage'];
 
     try {
-      // Phase 1: Nora acknowledges the task
-      setRestartToast({ message: '📋 Nora received the restart task...', type: 'info' });
-      await new Promise(r => setTimeout(r, 1500));
+      setRestartToast({ message: '⏳ Hard restarting all agents...', type: 'info' });
 
-      // Phase 2: Stop all agents → they go offline
-      setRestartToast({ message: '⏳ Shutting down agents...', type: 'info' });
-
-      await Promise.allSettled(
-        agents.map(agentId =>
-          fetch('/api/agent/control', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ agentId, action: 'stop' }),
-          })
-        )
-      );
-
-      // Set all agents to offline in Firestore (visual: agents go dark)
-      const offlineBatch = writeBatch(db);
+      // Immediately reflect restart in progress.
+      const restartingBatch = writeBatch(db);
       agents.forEach(agentId => {
-        offlineBatch.update(doc(db, 'agent-presence', agentId), {
+        restartingBatch.set(doc(db, 'agent-presence', agentId), {
           status: 'offline',
           notes: 'Restarting...',
           lastUpdate: serverTimestamp(),
-        });
+        }, { merge: true });
       });
-      await offlineBatch.commit();
+      await restartingBatch.commit();
 
-      // Phase 3: Brief dark period (agents visually offline)
-      setRestartToast({ message: '🔌 Agents offline — restarting...', type: 'info' });
-      await new Promise(r => setTimeout(r, 3000));
-
-      // Phase 4: Start all agents back up
-      const startResults = await Promise.allSettled(
-        agents.map(agentId =>
-          fetch('/api/agent/control', {
+      // Real restart path: force service restart and verify each agent is back online.
+      const restartResults = await Promise.allSettled(
+        agents.map(async (agentId) => {
+          const res = await fetch('/api/agent/control', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ agentId, action: 'start' }),
-          }).then(r => r.json())
-        )
+            body: JSON.stringify({ agentId, action: 'restart' }),
+          });
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok || !payload?.success) {
+            throw new Error(payload?.error || `HTTP ${res.status}`);
+          }
+          return { agentId, payload };
+        })
       );
-      console.log('[Restart] Start results:', startResults);
 
-      // Phase 5: Set agents to idle (they'll update their own status once runners are live)
-      const onlineBatch = writeBatch(db);
-      agents.forEach(agentId => {
-        onlineBatch.update(doc(db, 'agent-presence', agentId), {
-          status: 'idle',
-          notes: 'Restarted — warming up',
-          lastUpdate: serverTimestamp(),
-        });
+      const succeeded = restartResults.flatMap((result) => (
+        result.status === 'fulfilled' ? [result.value] : []
+      ));
+      const failed = restartResults.flatMap((result, index) => {
+        if (result.status === 'fulfilled') return [];
+        return [{
+          agentId: agents[index],
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        }];
       });
-      await onlineBatch.commit();
 
-      // Success!
-      setRestartResult('success');
-      setRestartToast({ message: '✅ All agents restarted successfully!', type: 'success' });
-      setTimeout(() => { setRestartResult(null); setRestartToast(null); }, 5000);
+      const statusBatch = writeBatch(db);
+      succeeded.forEach(({ agentId, payload }) => {
+        const pidNote = payload?.afterPid ? ` (pid ${payload.afterPid})` : '';
+        statusBatch.set(doc(db, 'agent-presence', agentId), {
+          status: 'idle',
+          notes: `Restarted${pidNote} — warming up`,
+          lastUpdate: serverTimestamp(),
+        }, { merge: true });
+      });
+      failed.forEach(({ agentId, error }) => {
+        statusBatch.set(doc(db, 'agent-presence', agentId), {
+          status: 'offline',
+          notes: `Restart failed: ${String(error).slice(0, 120)}`,
+          lastUpdate: serverTimestamp(),
+        }, { merge: true });
+      });
+      await statusBatch.commit();
+
+      if (failed.length > 0) {
+        const failedIds = failed.map((f) => f.agentId).join(', ');
+        setRestartResult('error');
+        setRestartToast({ message: `⚠️ Restarted ${succeeded.length}/${agents.length}. Failed: ${failedIds}`, type: 'error' });
+      } else {
+        setRestartResult('success');
+        setRestartToast({ message: '✅ All agents restarted successfully!', type: 'success' });
+      }
+      setTimeout(() => { setRestartResult(null); setRestartToast(null); }, 7000);
     } catch (err) {
       console.error('Failed to restart agents:', err);
       setRestartResult('error');
@@ -2068,6 +2599,44 @@ const VirtualOfficeContent: React.FC = () => {
       }
     }
   }, [manifestoContent]);
+
+  const openTokenBreakdown = useCallback((
+    title: string,
+    scope: string,
+    byModel: Record<string, unknown> | undefined,
+    fallback?: TokenUsageBucket | null,
+  ) => {
+    const sourceModelTotals = buildModelUsageOrFallback(byModel, fallback);
+    if (Object.keys(sourceModelTotals).length === 0) return;
+    setTokenBreakdownModal({
+      isOpen: true,
+      title,
+      scope,
+      sourceModelTotals,
+    });
+  }, []);
+
+  const triggerTokenBreakdown = useCallback((
+    event: React.MouseEvent | React.KeyboardEvent,
+    title: string,
+    scope: string,
+    byModel: Record<string, unknown> | undefined,
+    fallback?: TokenUsageBucket | null,
+  ) => {
+    const keyboardActivation = 'key' in event && (event.key === 'Enter' || event.key === ' ');
+    if (keyboardActivation) event.preventDefault();
+    openTokenBreakdown(title, scope, byModel, fallback);
+  }, [openTokenBreakdown]);
+
+  const closeTokenBreakdown = useCallback(() => {
+    setTokenBreakdownModal((prev) => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const tokenBreakdownRows = useMemo(() => (
+    tokenBreakdownModal.isOpen
+      ? calculateTokenCostRows(tokenBreakdownModal.sourceModelTotals)
+      : null
+  ), [tokenBreakdownModal]);
 
   // Expose setChatAgent for AgentDeskSprite (avoids prop drilling through sprite component)
   useEffect(() => {
@@ -2542,7 +3111,7 @@ const VirtualOfficeContent: React.FC = () => {
               id="restart-agents-btn"
               onClick={handleRestartAgents}
               disabled={restartingAgents}
-              title="Send restart command to Nora → restarts all agents on the Mac Mini"
+              title="Force-restart all agent services on the Mac Mini and verify they came back online"
               className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border transition-all ${restartResult === 'success'
                 ? 'border-emerald-500/50 text-emerald-300 bg-emerald-900/30'
                 : restartResult === 'error'
@@ -2613,6 +3182,31 @@ const VirtualOfficeContent: React.FC = () => {
             }, 0);
             const cumulativeTotal = allAgents.reduce((sum, a) => sum + (a.tokenUsageCumulative?.totalTokens ?? 0), 0);
             const sessionTotal = allAgents.reduce((sum, a) => sum + (a.tokenUsage?.totalTokens ?? 0), 0);
+            const todayByModel = mergeTokenUsageMaps(
+              allAgents.map((a) => a.tokenUsageDailyByModel?.[today]),
+            );
+            const cumulativeByModel = mergeTokenUsageMaps(
+              allAgents.map((a) => a.tokenUsageCumulativeByModel),
+            );
+            const sessionByModel = mergeTokenUsageMaps(
+              allAgents.map((a) => a.tokenUsageByModel),
+            );
+
+            const useToday = todayTotal > 0;
+            const useCumulative = !useToday && cumulativeTotal > 0;
+            const scopeModelTotals = buildModelUsageOrFallback(
+              useToday ? todayByModel : useCumulative ? cumulativeByModel : sessionByModel,
+              {
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: useToday ? todayTotal : useCumulative ? cumulativeTotal : sessionTotal,
+                callCount: useToday
+                  ? allAgents.reduce((sum, a) => sum + ((a.tokenUsageDaily?.[today]?.callCount ?? 0)), 0)
+                  : useCumulative
+                    ? allAgents.reduce((sum, a) => sum + (a.tokenUsageCumulative?.callCount ?? 0), 0)
+                    : allAgents.reduce((sum, a) => sum + (a.tokenUsage?.callCount ?? 0), 0),
+              },
+            );
             // Pick the best available number
             const displayTotal = todayTotal > 0 ? todayTotal : cumulativeTotal > 0 ? cumulativeTotal : sessionTotal;
             const label = todayTotal > 0 ? 'Today' : cumulativeTotal > 0 ? 'Total' : 'Session';
@@ -2622,7 +3216,19 @@ const VirtualOfficeContent: React.FC = () => {
               sessionTotal > 0 ? `Session: ${sessionTotal.toLocaleString()}` : null,
             ].filter(Boolean).join(' • ');
             return (
-              <div className="stat-chip" title={tooltipParts || 'No token data available'}>
+              <div
+                className="stat-chip token-breakdown-trigger"
+                title={`${tooltipParts || 'No token data available'} • click to open model-level breakdown`}
+                onClick={() => openTokenBreakdown('All agents token usage', label, scopeModelTotals)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openTokenBreakdown('All agents token usage', label, scopeModelTotals);
+                  }
+                }}
+              >
                 <Zap className="w-4 h-4 text-amber-400" />
                 <div>
                   <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Tokens {label}</p>
@@ -2974,6 +3580,98 @@ const VirtualOfficeContent: React.FC = () => {
           document.body
         )}
 
+        {/* Token Cost Breakdown Modal */}
+        {tokenBreakdownRows && tokenBreakdownModal.isOpen && ReactDOM.createPortal(
+          <div
+            className="token-breakdown-overlay"
+            onClick={closeTokenBreakdown}
+            onMouseDown={e => e.stopPropagation()}
+          >
+            <div className="token-breakdown-modal" onClick={e => e.stopPropagation()}>
+              <div className="token-breakdown-modal-header">
+                <div>
+                  <h2 className="token-breakdown-modal-title">{tokenBreakdownModal.title}</h2>
+                  <p className="token-breakdown-modal-subtitle">
+                    {tokenBreakdownModal.scope}
+                  </p>
+                </div>
+                <button className="token-breakdown-modal-close" onClick={closeTokenBreakdown}>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="token-breakdown-modal-body">
+                <div className="token-breakdown-summary">
+                  <div className="token-breakdown-summary-row">
+                    <span>Estimated cost:</span>
+                    <strong>{formatCost(tokenBreakdownRows.totals.estimatedUSD)}</strong>
+                  </div>
+                  <div className="token-breakdown-summary-row">
+                    <span>Total tokens:</span>
+                    <strong>{formatTokensCompact(tokenBreakdownRows.totals.totalTokens)}</strong>
+                  </div>
+                  <div className="token-breakdown-summary-row">
+                    <span>Input / Output / Calls:</span>
+                    <strong>
+                      {formatTokensCompact(tokenBreakdownRows.totals.promptTokens)} /
+                      {' '}
+                      {formatTokensCompact(tokenBreakdownRows.totals.completionTokens)}
+                      {' '}
+                      / {tokenBreakdownRows.totals.callCount}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="token-breakdown-table">
+                  <div className="token-breakdown-table-head">
+                    <span>Model</span>
+                    <span>In / Out / Calls</span>
+                    <span>Estimated Cost (USD)</span>
+                  </div>
+
+                  {tokenBreakdownRows.rows.map((row) => (
+                    <div
+                      key={row.model}
+                      className={`token-breakdown-row ${row.cost.hasPricing ? '' : 'token-breakdown-row-unpriced'}`}
+                    >
+                      <div className="token-breakdown-model">
+                        <strong>{row.cost.label}</strong>
+                        <span className="token-breakdown-model-id">{row.model}</span>
+                        {row.cost.hasPricing ? null : (
+                          <span className="token-breakdown-unpriced-note">No price mapping available in this build yet</span>
+                        )}
+                      </div>
+                      <div className="token-breakdown-metrics">
+                        {formatTokensCompact(row.promptTokens)}
+                        {' '}
+                        /
+                        {' '}
+                        {formatTokensCompact(row.completionTokens)}
+                        {' '}
+                        / {row.callCount}
+                      </div>
+                      <div className="token-breakdown-cost">
+                        {row.cost.hasPricing && row.cost.source ? (
+                          <a href={row.cost.source} target="_blank" rel="noreferrer">
+                            {formatCost(row.cost.estimatedUSD)} (source)
+                          </a>
+                        ) : (
+                          <span>{formatCost(row.cost.estimatedUSD)}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="token-breakdown-footnote">
+                  Pricing data is from official providers: <a href={PRICING_SOURCE_URLS.openai} target="_blank" rel="noreferrer">OpenAI</a> and <a href={PRICING_SOURCE_URLS.anthropic} target="_blank" rel="noreferrer">Anthropic</a>.
+                </p>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
         {/* Agent Chat Modal */}
         {chatAgent !== null && (
           <AgentChatModal
@@ -3027,6 +3725,15 @@ const VirtualOfficeContent: React.FC = () => {
           border-radius: 12px;
           padding: 10px 16px;
           backdrop-filter: blur(8px);
+        }
+        .stat-chip.token-breakdown-trigger {
+          cursor: pointer;
+          transition: transform 0.15s ease, border-color 0.15s ease;
+        }
+        .stat-chip.token-breakdown-trigger:hover {
+          transform: translateY(-1px);
+          border-color: rgba(203,213,225,0.5);
+          background: rgba(17,20,23,0.95);
         }
         .progress-chip {
           border-color: rgba(59,130,246,0.2);
