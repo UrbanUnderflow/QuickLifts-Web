@@ -27,6 +27,21 @@ const splitLines = (value) => value.replace(/\r\n/g, '\n').split('\n');
 const toCommitText = (commitMsgPath, value) =>
   fs.writeFileSync(commitMsgPath, value.endsWith('\n') ? value : `${value}\n`);
 
+const normalizeSubject = (subject, agentName) => {
+  const trimmed = subject.trim();
+  if (!trimmed) return subject;
+
+  const hasPrefixTag = /^\[[^\]]+\]\s+/.test(trimmed);
+  if (hasPrefixTag) {
+    return subject;
+  }
+
+  const withoutPrefixTag = trimmed.replace(/^\[(?:agent:\s*)?[^\]]+\]\s*/i, '');
+  const withoutSuffixTag = withoutPrefixTag.replace(/\s*\[(?:agent:\s*)?[^\]]+\]\s*$/i, '');
+  const baseSubject = withoutSuffixTag.trim() || trimmed;
+  return `[${agentName}] ${baseSubject}`;
+};
+
 const main = () => {
   const commitMsgPath = process.argv[2];
   if (!commitMsgPath || !fs.existsSync(commitMsgPath)) {
@@ -49,9 +64,8 @@ const main = () => {
     return;
   }
 
-  const hasTag = /\[agent:\s*[^\]]+\]/i.test(nonCommentLines[0] || '');
-  if (!hasTag && nonCommentLines[0].trim()) {
-    nonCommentLines[0] = `${nonCommentLines[0].trimEnd()} [agent: ${agentName}]`;
+  if (nonCommentLines[0].trim()) {
+    nonCommentLines[0] = normalizeSubject(nonCommentLines[0], agentName);
   }
 
   const hasTrailer = nonCommentLines.some((line) => /^\s*Agent:\s*.+$/i.test(line));
