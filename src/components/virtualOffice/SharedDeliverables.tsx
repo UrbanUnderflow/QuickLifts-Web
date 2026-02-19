@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom';
 import { useRouter } from 'next/router';
 import { X, Package, ExternalLink, FileText, ChevronRight, RefreshCw } from 'lucide-react';
 import { MarkdownRenderer } from '../MarkdownRenderer';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db } from '../../api/firebase/config';
 
 /* ─── types ─── */
 interface Deliverable {
@@ -10,6 +12,7 @@ interface Deliverable {
   title: string;
   description: string;
   filename: string;
+  filePath: string;
   emoji: string;
   tags: string[];
   status: string;
@@ -23,15 +26,22 @@ interface AgentInfo {
   displayName: string;
   emoji: string;
   color: string;
-  deliverableDir: string;
 }
 
 const AGENTS: AgentInfo[] = [
-  { id: 'sage', displayName: 'Sage', emoji: '🧬', color: '#34d399', deliverableDir: 'docs/sage/deliverables' },
-  { id: 'nora', displayName: 'Nora', emoji: '⚡', color: '#22c55e', deliverableDir: 'docs/agents/nora/deliverables' },
-  { id: 'scout', displayName: 'Scout', emoji: '🕵️', color: '#f59e0b', deliverableDir: 'docs/agents/scout/deliverables' },
-  { id: 'solara', displayName: 'Solara', emoji: '❤️‍🔥', color: '#f43f5e', deliverableDir: 'docs/agents/solara/deliverables' },
+  { id: 'sage', displayName: 'Sage', emoji: '🧬', color: '#34d399' },
+  { id: 'nora', displayName: 'Nora', emoji: '⚡', color: '#22c55e' },
+  { id: 'scout', displayName: 'Scout', emoji: '🕵️', color: '#f59e0b' },
+  { id: 'solara', displayName: 'Solara', emoji: '❤️‍🔥', color: '#f43f5e' },
 ];
+
+const ARTIFACT_EMOJI: Record<string, string> = {
+  code: '💻',
+  document: '📄',
+  test: '🧪',
+  config: '⚙️',
+  research: '🔬',
+};
 
 /* ─── component ─── */
 interface SharedDeliverablesProps {
@@ -51,41 +61,37 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
     setLoading(true);
     const all: Deliverable[] = [];
 
-    await Promise.all(
-      AGENTS.map(async (agent) => {
-        try {
-          const res = await fetch(`/api/read-file?path=${encodeURIComponent(`${agent.deliverableDir}/manifest.json`)}`);
-          if (!res.ok) return;
-          const data = await res.json();
-          const manifest = JSON.parse(data.content);
-          if (!manifest.deliverables?.length) return;
+    try {
+      // Query Firestore agent-deliverables collection
+      const q = query(
+        collection(db, 'agent-deliverables'),
+        orderBy('createdAt', 'desc'),
+        limit(200),
+      );
+      const snap = await getDocs(q);
 
-          for (const d of manifest.deliverables) {
-            all.push({
-              id: `${agent.id}-${d.id}`,
-              title: d.title,
-              description: d.description,
-              filename: d.filename,
-              emoji: d.emoji || '📄',
-              tags: d.tags || [],
-              status: d.status || 'complete',
-              completedAt: d.completedAt,
-              taskRef: d.taskRef,
-              agentId: agent.id,
-            });
-          }
-        } catch {
-          /* agent has no deliverables yet */
-        }
-      }),
-    );
+      for (const docSnap of snap.docs) {
+        const data = docSnap.data();
+        const filePath = data.filePath || '';
+        const basename = filePath.split('/').pop() || data.title || 'untitled';
 
-    // Sort by completedAt descending (newest first)
-    all.sort((a, b) => {
-      if (a.completedAt && b.completedAt) return b.completedAt.localeCompare(a.completedAt);
-      if (a.completedAt) return -1;
-      return 1;
-    });
+        all.push({
+          id: docSnap.id,
+          title: data.title || basename,
+          description: data.description || `Task: ${data.taskName || 'Unknown'}`,
+          filename: basename,
+          filePath,
+          emoji: ARTIFACT_EMOJI[data.artifactType] || '📄',
+          tags: data.tags || [data.artifactType || 'document'].filter(Boolean),
+          status: data.status || 'pending',
+          completedAt: data.createdAt?.toDate?.()?.toISOString?.() || undefined,
+          taskRef: data.taskName || data.taskId || undefined,
+          agentId: data.agentId || 'unknown',
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load deliverables from Firestore:', err);
+    }
 
     setDeliverables(all);
     setLoading(false);
