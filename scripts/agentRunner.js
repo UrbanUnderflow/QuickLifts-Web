@@ -95,6 +95,10 @@ const MAX_STEP_REWRITE_ATTEMPTS = 1; // Rewrite-from-different-angle attempts on
 const MAX_CONSECUTIVE_FAILURES = 2; // Stop task after this many steps fail in a row
 const VALIDATION_MODEL = process.env.VALIDATION_MODEL || 'gpt-4o-mini'; // Cheap model for post-task validation
 const ENABLE_TASK_VALIDATION = process.env.ENABLE_TASK_VALIDATION !== 'false'; // Disable with ENABLE_TASK_VALIDATION=false
+const ENABLE_SOUL_EVOLUTION = process.env.ENABLE_SOUL_EVOLUTION !== 'false'; // Soul self-improvement loop — disable with ENABLE_SOUL_EVOLUTION=false
+const SOUL_EVOLUTION_MODEL = process.env.SOUL_EVOLUTION_MODEL || 'gpt-4o-mini'; // Cheap model for post-task reflection
+const MAX_SOUL_LEARNINGS = parseInt(process.env.MAX_SOUL_LEARNINGS || '10', 10); // Max evolved learnings before rotating oldest out
+const SOUL_EVOLUTION_MIN_COMPLEXITY = parseInt(process.env.SOUL_EVOLUTION_MIN_COMPLEXITY || '2', 10); // Min task complexity to trigger reflection
 const NO_ARTIFACT_LOOP_WINDOW_MS = parseInt(process.env.NO_ARTIFACT_LOOP_WINDOW_MS || String(45 * 60 * 1000), 10); // Look back 45m for repeat no-artifact loops
 const NO_ARTIFACT_LOOP_HISTORY_LIMIT = parseInt(process.env.NO_ARTIFACT_LOOP_HISTORY_LIMIT || '40', 10);
 const GROUP_CHAT_SYSTEM_PROMPT_BUDGET_CHARS = parseInt(process.env.GROUP_CHAT_SYSTEM_PROMPT_BUDGET_CHARS || '5600', 10);
@@ -279,8 +283,9 @@ function loadSoul() {
             const beliefsSection = content.match(/## My Beliefs[\s\S]*?(?=## What I Refuse|$)/)?.[0] || '';
             const antiPatternsSection = content.match(/## What I Refuse To Do[\s\S]*?(?=## My Productive Flaw|$)/)?.[0] || '';
             const flawSection = content.match(/## My Productive Flaw[\s\S]*?(?=## How I Think|$)/)?.[0] || '';
-            const thinkingSection = content.match(/## How I Think[\s\S]*$/)?.[0] || '';
-            console.log(`🧬 Soul loaded for ${AGENT_ID} (${content.length} chars)`);
+            const thinkingSection = content.match(/## How I Think[\s\S]*?(?=## Evolved Learnings|$)/)?.[0] || '';
+            const evolvedSection = content.match(/## Evolved Learnings[\s\S]*$/)?.[0] || '';
+            console.log(`🧬 Soul loaded for ${AGENT_ID} (${content.length} chars${evolvedSection ? ', has evolved learnings' : ''})`);
             return {
                 full: content,
                 identity: identitySection.trim(),
@@ -288,6 +293,7 @@ function loadSoul() {
                 antiPatterns: antiPatternsSection.trim(),
                 flaw: flawSection.trim(),
                 thinking: thinkingSection.trim(),
+                evolved: evolvedSection.trim(),
             };
         } else {
             console.log(`🧬 No soul file found at ${soulPath} — using fallback identity`);
@@ -296,6 +302,180 @@ function loadSoul() {
         console.log(`🧬 Could not load soul: ${err.message}`);
     }
     return null;
+}
+
+/**
+ * Append a new evolved learning to the agent's soul file.
+ * Maintains a capped `## Evolved Learnings` section at the bottom of the soul.
+ * Oldest entries rotate out when the cap is reached.
+ */
+function appendSoulLearning(learning) {
+    const soulPath = path.join(projectDir, 'docs', 'agents', AGENT_ID, 'soul.md');
+    try {
+        if (!fs.existsSync(soulPath)) {
+            console.log(`🧬 Cannot append learning — no soul file at ${soulPath}`);
+            return false;
+        }
+        let content = fs.readFileSync(soulPath, 'utf-8');
+        const date = new Date().toISOString().split('T')[0];
+        const entry = `- **[${date}]** ${learning}`;
+
+        // Check if Evolved Learnings section exists
+        const evolvedHeader = '## Evolved Learnings';
+        if (content.includes(evolvedHeader)) {
+            // Extract existing entries
+            const sectionMatch = content.match(/## Evolved Learnings\n\n([\s\S]*?)$/);
+            if (sectionMatch) {
+                const existingBlock = sectionMatch[1].trim();
+                const existingEntries = existingBlock
+                    .split('\n')
+                    .filter(l => l.startsWith('- '));
+
+                // Add new entry
+                existingEntries.push(entry);
+
+                // Rotate oldest if over cap
+                while (existingEntries.length > MAX_SOUL_LEARNINGS) {
+                    existingEntries.shift();
+                }
+
+                // Replace the section
+                const newSection = `${evolvedHeader}\n\n${existingEntries.join('\n')}\n`;
+                content = content.replace(
+                    /## Evolved Learnings\n\n[\s\S]*$/,
+                    newSection
+                );
+            }
+        } else {
+            // Create the section at the bottom
+            content = content.trimEnd() + `\n\n${evolvedHeader}\n\n${entry}\n`;
+        }
+
+        fs.writeFileSync(soulPath, content, 'utf-8');
+        console.log(`🧬 Soul evolved: ${learning.substring(0, 80)}...`);
+
+        // Refresh the cached soul so the next step picks up the change
+        cachedSoul = loadSoul();
+        return true;
+    } catch (err) {
+        console.log(`🧬 Could not evolve soul: ${err.message}`);
+        return false;
+    }
+}
+
+/**
+ * Post-task soul reflection: uses AI to generate an experiential learning
+ * from the task outcome, then appends it to the soul file.
+ * Only runs for tasks with complexity >= SOUL_EVOLUTION_MIN_COMPLEXITY.
+ */
+async function proposeSoulEvolution(task, steps, outcome) {
+    if (!ENABLE_SOUL_EVOLUTION) return;
+    if (!process.env.OPENAI_API_KEY) return;
+
+    const complexity = task.complexity || 3;
+    if (complexity < SOUL_EVOLUTION_MIN_COMPLEXITY) {
+        console.log(`🧬 Skipping soul evolution for low-complexity task (${complexity})`);
+        return;
+    }
+
+    // Load current soul to give the AI context about existing learnings
+    const currentSoul = cachedSoul;
+    const existingBeliefs = currentSoul?.beliefs || '';
+    const existingLearnings = currentSoul?.full?.match(/## Evolved Learnings\n\n([\s\S]*?)$/)?.[1] || '';
+
+    // Build a compact summary of what happened
+    const stepSummary = steps
+        .filter(s => s.status === 'completed' || s.status === 'completed-with-issues' || s.status === 'failed')
+        .map((s, i) => `${i + 1}. [${s.status}] ${s.description}${s.output ? ` → ${s.output.substring(0, 100)}` : ''}`)
+        .join('\n')
+        .substring(0, 1200);
+
+    const reflectionPrompt = [
+        `You are ${AGENT_NAME}, reflecting on a task you just ${outcome === 'success' ? 'completed' : 'failed'}.`,
+        ``,
+        `## Your current beliefs:`,
+        existingBeliefs.substring(0, 600),
+        ``,
+        existingLearnings ? `## Your recent evolved learnings (avoid duplicating these):\n${existingLearnings.substring(0, 400)}` : '',
+        ``,
+        `## Task: "${task.name}"`,
+        task.description ? `Description: ${task.description}` : '',
+        `Outcome: ${outcome}`,
+        `Complexity: ${complexity}/5`,
+        ``,
+        `## What happened:`,
+        stepSummary,
+        ``,
+        `## Instructions:`,
+        `Generate EXACTLY ONE experiential learning from this task.`,
+        `The learning MUST follow this format:`,
+        `"I've learned that [specific insight] because [the experience that taught it]."`,
+        ``,
+        `Rules:`,
+        `- The learning must be SPECIFIC to what happened in this task, not generic wisdom`,
+        `- It must be something that would change how you approach FUTURE similar tasks`,
+        `- It must NOT duplicate any of your existing beliefs or evolved learnings listed above`,
+        `- If ${outcome === 'failure' ? 'the task failed' : 'something unexpected happened'}, the learning should capture what went wrong and how to avoid it`,
+        `- If the task went smoothly, the learning should capture a technique or pattern that worked well`,
+        `- Keep it to 1-2 sentences maximum`,
+        `- Do NOT include any preamble, explanation, or formatting. Just the single learning sentence.`,
+        `- If this task was too routine to learn anything new, respond with exactly: NO_LEARNING`,
+    ].filter(Boolean).join('\n');
+
+    try {
+        const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+            },
+            body: JSON.stringify({
+                model: SOUL_EVOLUTION_MODEL,
+                messages: [{ role: 'user', content: reflectionPrompt }],
+                temperature: 0.7,
+                max_tokens: 150,
+            }),
+        });
+
+        const data = await resp.json();
+        trackTokenUsage(data.usage, SOUL_EVOLUTION_MODEL);
+        const learning = data.choices?.[0]?.message?.content?.trim() || '';
+
+        if (!learning || learning === 'NO_LEARNING' || learning.length < 20) {
+            console.log(`🧬 Soul reflection: no new learning from this task`);
+            return;
+        }
+
+        // Append to soul file
+        const success = appendSoulLearning(learning);
+
+        // Track in Firestore for UI visibility
+        if (success) {
+            try {
+                await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).update({
+                    soulEvolutions: FieldValue.increment(1),
+                    lastSoulEvolution: new Date(),
+                    lastSoulLearning: learning.substring(0, 500),
+                });
+            } catch { /* non-critical */ }
+
+            // Auto-commit the evolved soul
+            try {
+                execSync(`git add "${path.join('docs', 'agents', AGENT_ID, 'soul.md')}"`, {
+                    cwd: projectDir,
+                    timeout: 10_000,
+                });
+                execSync(`git commit -m "[${AGENT_ID}] 🧬 soul evolved: ${learning.substring(0, 60).replace(/"/g, '\\"')}"`, {
+                    cwd: projectDir,
+                    encoding: 'utf-8',
+                    timeout: 10_000,
+                });
+                console.log(`🧬 Soul evolution committed to git`);
+            } catch { /* may have no changes or git locked */ }
+        }
+    } catch (err) {
+        console.log(`🧬 Soul reflection failed: ${err.message}`);
+    }
 }
 
 /* ─── Codebase Map (structural navigation for agents) ── */
@@ -3965,7 +4145,7 @@ ${smokeOutput}`.substring(0, 2000);
                     const base = [];
 
                     if (cachedSoul) {
-                        // Full soul injection — identity, beliefs, anti-patterns, flaw, thinking
+                        // Full soul injection — identity, beliefs, anti-patterns, flaw, thinking, evolved learnings
                         base.push(
                             `=== YOUR IDENTITY (this is who you are — read this first) ===`,
                             cachedSoul.identity || '',
@@ -3973,6 +4153,7 @@ ${smokeOutput}`.substring(0, 2000);
                             cachedSoul.antiPatterns || '',
                             cachedSoul.flaw || '',
                             cachedSoul.thinking || '',
+                            cachedSoul.evolved || '',
                             `=== END IDENTITY ===`,
                             ``,
                         );
@@ -4874,6 +5055,9 @@ async function run() {
                 await saveTaskHistory(task.name, task.id, steps, finalStatus, taskStartTime);
                 await markTaskDone(task.id);
 
+                // ─── Soul Evolution: reflect on what we learned ──
+                await proposeSoulEvolution(task, steps, hasIssues ? 'completed-with-issues' : 'success');
+
                 // Record deliverables to Firestore for the PulseCommand tray
                 const deliverables = await recordDeliverables(task, steps);
                 const primaryDeliverable = deliverables.find(d => d && typeof d.filePath === 'string' && d.filePath.trim().length > 0);
@@ -4989,6 +5173,10 @@ async function run() {
 
                 // Proactively report failure to the chat
                 await markTaskFailed(task.id, failedStep?.output || 'Unknown error');
+
+                // ─── Soul Evolution: learn from failure ──
+                await proposeSoulEvolution(task, steps, 'failure');
+
                 await sendProactiveMessage(
                     `❌ Task failed: "${task.name}"\n\n` +
                     `Failed at step ${failedIndex + 1}/${steps.length}: ${failedStep?.description}\n` +
