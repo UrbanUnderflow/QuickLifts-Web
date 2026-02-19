@@ -84,6 +84,7 @@ type TokenCostBreakdownRow = TokenUsageBucket & {
     source: string | null;
     label: string;
     hasPricing: boolean;
+    estimatedFromTotal?: boolean;
   };
 };
 
@@ -561,15 +562,18 @@ const sumTokenTotals = (usage: Record<string, TokenUsageBucket>): {
   }), { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 });
 };
 
-const calculateTokenCostRows = (usageByModel: Record<string, TokenUsageBucket>): {
+const calculateTokenCostRows = (usageByModel: Record<string, TokenUsageBucket>): { 
   rows: TokenCostBreakdownRow[];
   totals: TokenUsageBucket & { estimatedUSD: number };
 } => {
   const rows: TokenCostBreakdownRow[] = Object.entries(sanitizeModelUsageMap(usageByModel)).map(([model, usage]) => {
     const pricing = getModelPricing(model);
+    const hasPromptOutputBreakdown = usage.promptTokens > 0 || usage.completionTokens > 0;
+    const estimatePromptTokens = hasPromptOutputBreakdown ? usage.promptTokens : usage.totalTokens;
+    const estimateCompletionTokens = hasPromptOutputBreakdown ? usage.completionTokens : 0;
     const estimatedUSD = pricing
-      ? (usage.promptTokens / 1_000_000) * pricing.inputPerMillion
-      + (usage.completionTokens / 1_000_000) * pricing.outputPerMillion
+      ? (estimatePromptTokens / 1_000_000) * pricing.inputPerMillion
+      + (estimateCompletionTokens / 1_000_000) * pricing.outputPerMillion
       : null;
 
     return {
@@ -582,6 +586,7 @@ const calculateTokenCostRows = (usageByModel: Record<string, TokenUsageBucket>):
         source: pricing?.source ?? null,
         label: pricing?.label ?? model,
         hasPricing: !!pricing,
+        estimatedFromTotal: !!(pricing && !hasPromptOutputBreakdown && usage.totalTokens > 0),
       },
     };
   });
@@ -3755,6 +3760,9 @@ const VirtualOfficeContent: React.FC = () => {
                         <span className="token-breakdown-model-id">{row.model}</span>
                         {row.cost.hasPricing ? null : (
                           <span className="token-breakdown-unpriced-note">No price mapping available in this build yet</span>
+                        )}
+                        {row.cost.estimatedFromTotal && (
+                          <span className="token-breakdown-unpriced-note">Prompt/completion breakdown unavailable; estimated from total tokens</span>
                         )}
                       </div>
                       <div className="token-breakdown-metrics">
