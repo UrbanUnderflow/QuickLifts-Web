@@ -1,9 +1,9 @@
 #!/bin/zsh
 set -euo pipefail
 
-cd /Users/tremainegrant/Documents/GitHub/QuickLifts-Web
+cd /Users/noraclawdbot/Documents/GitHub/QuickLifts-Web
 
-PATH="/opt/homebrew/bin:$PATH"
+PATH="/Users/noraclawdbot/.local/node-v22.22.0-darwin-arm64/bin:$PATH"
 
 if [ -f ".env.local" ]; then
   set -a
