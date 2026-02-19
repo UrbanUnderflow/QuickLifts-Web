@@ -26,6 +26,29 @@ This document analyzes partnership prospects across fitness, wellness, and weara
 - **Data Accessibility**: High - collaboration-friendly tech stack.
 - **Potential Differentiators**: Cutting-edge wearable tech innovations.
 
+## Prioritization Criteria
+
+### Scoring Rubric
+- **Fit (0-10)**: Evaluates how well the prospect aligns with Pulse's mission.
+  - 0-3: Little or no alignment
+  - 4-6: Moderate alignment with potential
+  - 7-10: Strong alignment, directly supports Pulse's goals
+
+- **Access (0-10)**: Assesses the ease of engaging and collaborating with the prospect.
+  - 0-3: Difficult to engage or high barriers
+  - 4-6: Some challenges, but feasible
+  - 7-10: Easy to engage, well-positioned for collaboration
+
+### Prioritized Prospects
+
+| Prospect | Category | Fit Score | Access Score | Total Score |
+|----------|----------|-----------|--------------|-------------|
+| FitWell  | Fitness  | 9         | 7            | 16          |
+| HealthSync | Wellness | 6       | 8            | 14          |
+| WearTech | Wearables | 8       | 9            | 17          |
+
+Top prospects are FitWell and WearTech, which demonstrate the highest combination of fit and access.
+
 ## Recommendations
 - Prioritize engagements with high audience overlap and strategic fit.
 - Address data integration challenges early to streamline partnership implementations.
