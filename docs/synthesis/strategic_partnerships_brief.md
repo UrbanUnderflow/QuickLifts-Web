@@ -23,8 +23,10 @@ This brief provides a synthesis of insights and findings to guide Pulse Fitness 
 
 ## Recommendations
 - **Engagement**: Target immediate dialogues with FitWell and WearTech to capitalize on aligned goals and tech compatibilities.
+- **Proof Gate**: Pulse only partners with proof-backed products—require partners to share measurable outcomes before co-creating.
 - **Co-Marketing**: Explore co-marketing campaigns with HealthSync that leverage wellness narratives.
 - **Resource Allocation**: Prioritize tech support for smooth integration and address blockers early.
+- **Guardrail Reminder**: No proof = no motion; no motion = no new wiring—partners enter build only after verifiable evidence lands in `/workspace`.
 
 ## Next Steps
 - Finalize partnership propositions and reach out to top targets.

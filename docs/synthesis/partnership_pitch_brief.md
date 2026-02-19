@@ -19,6 +19,7 @@ This brief synthesizes key insights from Pulse Fitness's data and brand position
 4. **Partnership Criteria**
    - Alignment with wellness-focused narratives and technologies is crucial.
    - Ease of tech integration ensures seamless collaboration.
+   - **Evidence-first stance:** Pulse only partners with proof-backed products; prospects must show measurable outcomes before we wire anything new.
 
 ## Prioritized Recommendations
 - **Develop Co-Creation Initiatives**: Engage partners in developing gamified content that aligns with wellness goals.
