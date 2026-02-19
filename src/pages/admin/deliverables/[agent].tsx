@@ -509,19 +509,35 @@ export default function AgentDeliverablesPage() {
         return matchesCategory && matchesSearch;
     });
 
-    const loadFile = useCallback(async (artifact: Artifact) => {
-        setSelectedArtifact(artifact);
-        setLoading(true);
-        const c = await fetchFileContent(artifact.path);
-        setFileContent(c);
-        setLoading(false);
-    }, []);
+  const loadFile = useCallback(async (artifact: Artifact) => {
+    setSelectedArtifact(artifact);
+    setLoading(true);
+    const c = await fetchFileContent(artifact.path);
+    setFileContent(c);
+    setLoading(false);
+  }, []);
 
-    useEffect(() => {
-        if (!router.isReady || allArtifacts.length === 0) return;
+  const buildDeepLinkedArtifact = (fileQuery: string, taskRef: string): Artifact => {
+    const normalizedFile = fileQuery.trim();
+    const fileName = normalizedFile.split('/').pop() || normalizedFile;
+    return {
+      id: `deep-link-${normalizedFile.toLowerCase()}`,
+      title: taskRef || fileName,
+      category: 'deliverable',
+      path: normalizedFile,
+      description: taskRef ? `Deliverable linked from task ${taskRef}.` : 'Deliverable linked from shareable artifact URL.',
+      tags: ['deliverable'],
+      emoji: '📄',
+      status: 'pending-recovery',
+      taskRef: taskRef || undefined,
+    };
+  };
 
-        const artifactQuery = getQueryValue(router.query.artifact);
-        const fileQuery = getQueryValue(router.query.file);
+  useEffect(() => {
+    if (!router.isReady || allArtifacts.length === 0) return;
+
+    const artifactQuery = getQueryValue(router.query.artifact);
+    const fileQuery = getQueryValue(router.query.file);
         const taskQuery = getQueryValue(
             (router.query.taskRef as string | string[] | undefined)
             || (router.query.taskId as string | string[] | undefined)
@@ -540,13 +556,25 @@ export default function AgentDeliverablesPage() {
             target = allArtifacts.find((artifact) => artifact.id.toLowerCase() === artifactQuery.toLowerCase());
         }
 
-        if (!target && fileQuery) {
-            const targetFile = fileQuery.toLowerCase();
-            target = allArtifacts.find((artifact) => {
-                const pathLower = artifact.path.toLowerCase();
-                return pathLower === targetFile || pathLower.endsWith(`/${targetFile}`);
-            });
+    if (!target && fileQuery) {
+      const targetFile = fileQuery.toLowerCase();
+      target = allArtifacts.find((artifact) => {
+        const pathLower = artifact.path.toLowerCase();
+        return pathLower === targetFile || pathLower.endsWith(`/${targetFile}`);
+      });
+
+      if (!target) {
+        const syntheticArtifact = buildDeepLinkedArtifact(fileQuery, taskQuery);
+        const existingSynthetic = allArtifacts.find((artifact) =>
+          artifact.id === syntheticArtifact.id || artifact.path.toLowerCase() === syntheticArtifact.path.toLowerCase(),
+        );
+        if (!existingSynthetic) {
+          setAllArtifacts((prev) => [...prev, syntheticArtifact]);
+          return;
         }
+        target = existingSynthetic;
+      }
+    }
 
         if (!target && taskQuery) {
             const targetTask = normalize(taskQuery);

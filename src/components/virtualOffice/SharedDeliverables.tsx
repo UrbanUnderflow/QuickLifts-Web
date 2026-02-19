@@ -44,6 +44,19 @@ const ARTIFACT_EMOJI: Record<string, string> = {
   research: '🔬',
 };
 
+const AGENT_ROUTE_ALIASES: Record<string, string> = {
+  scouts: 'scout',
+};
+
+const normalizeAgentKey = (value?: string) => (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const resolveAgentRouteId = (agentId?: string): string | null => {
+  const normalized = normalizeAgentKey(agentId);
+  if (!normalized) return null;
+  const canonical = AGENT_ROUTE_ALIASES[normalized] || normalized;
+  return AGENTS.some((agent) => agent.id === canonical) ? canonical : null;
+};
+
 /* ─── component ─── */
 interface SharedDeliverablesProps {
   onClose: () => void;
@@ -102,9 +115,14 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
 
   const filtered = filterAgent === 'all'
     ? deliverables
-    : deliverables.filter((d) => d.agentId === filterAgent);
+    : deliverables.filter((d) => (resolveAgentRouteId(d.agentId) || d.agentId) === filterAgent);
 
-  const getAgent = (id: string) => AGENTS.find((a) => a.id === id) || AGENTS[0];
+  const getAgent = (id: string) => AGENTS.find((a) => a.id === (resolveAgentRouteId(id) || id)) || AGENTS[0];
+
+  const getAgentRouteFromId = (agentId: string) => {
+    const routeId = resolveAgentRouteId(agentId) || normalizeAgentKey(agentId);
+    return AGENTS.find((agent) => agent.id === routeId) || AGENTS[0];
+  };
 
   const handleExpand = async (d: Deliverable) => {
     if (expandedId === d.id) {
@@ -140,14 +158,22 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
     setFileLoading(false);
   };
 
-  const navigateToAgent = (agentId: string) => {
+  const navigateToAgent = (agentId: string, filePath?: string, taskRef?: string) => {
+    const agent = getAgentRouteFromId(agentId);
+    const params = new URLSearchParams();
+    if (filePath?.trim()) params.set('file', filePath.trim());
+    if (taskRef?.trim()) {
+      params.set('taskRef', taskRef.trim());
+      params.set('taskId', taskRef.trim());
+      params.set('objectiveCode', taskRef.trim());
+    }
     onClose();
-    router.push(`/admin/deliverables/${agentId}`);
+    router.push(`/admin/deliverables/${agent.id}${params.toString() ? `?${params.toString()}` : ''}`);
   };
 
   const agentCounts = AGENTS.map((a) => ({
     ...a,
-    count: deliverables.filter((d) => d.agentId === a.id).length,
+    count: deliverables.filter((d) => (resolveAgentRouteId(d.agentId) || normalizeAgentKey(d.agentId)) === a.id).length,
   }));
 
   const panel = (
@@ -248,7 +274,7 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
                   <div className="sd-item-actions">
                     <button
                       className="sd-nav-btn"
-                      onClick={(e) => { e.stopPropagation(); navigateToAgent(d.agentId); }}
+                      onClick={(e) => { e.stopPropagation(); navigateToAgent(d.agentId, d.filePath, d.taskRef); }}
                       title={`Open ${agent.displayName}'s deliverables page`}
                     >
                       <ExternalLink className="w-3 h-3" />
@@ -286,7 +312,7 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
                     </div>
                     <button
                       className="sd-open-page-btn"
-                      onClick={() => navigateToAgent(d.agentId)}
+                      onClick={() => navigateToAgent(d.agentId, d.filePath, d.taskRef)}
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
                       Open {agent.displayName}&apos;s full deliverables page

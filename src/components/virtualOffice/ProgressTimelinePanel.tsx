@@ -55,6 +55,7 @@ const AGENT_ROUTE_ALIASES: Record<string, string> = {
   branddirector: 'solara',
   intel: 'sage',
   research: 'sage',
+  scouts: 'scout',
 };
 const AGENT_ROUTE_IDS = new Set(['antigravity', 'nora', 'scout', 'solara', 'sage']);
 
@@ -305,32 +306,40 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
     const taskId = entry.objectiveCode?.trim();
     if (!taskId) return null;
 
-    try {
-      const deliverablesQuery = query(
-        collection(db, 'agent-deliverables'),
-        where('taskId', '==', taskId),
-        limit(1),
-      );
-      const snap = await getDocs(deliverablesQuery);
-      if (snap.empty) return null;
+    const findByTaskField = async (field: string): Promise<{ filePath?: string; agentId?: string; agentName?: string } | null> => {
+      try {
+        const deliverablesQuery = query(
+          collection(db, 'agent-deliverables'),
+          where(field, '==', taskId),
+          limit(1),
+        );
+        const snap = await getDocs(deliverablesQuery);
+        if (snap.empty) return null;
+        return snap.docs[0].data() as { filePath?: string; agentId?: string; agentName?: string };
+      } catch {
+        return null;
+      }
+    };
 
-      const data = snap.docs[0].data() as { filePath?: string; agentId?: string; agentName?: string };
-      const filePath = data.filePath?.trim();
-      const agentRouteId = resolveAgentRouteId(data.agentId, data.agentName) || resolveAgentRouteId(entry.agentId, entry.agentName);
+    const data = await findByTaskField('taskId')
+      .then((match) => match || findByTaskField('taskRef'))
+      .then((match) => match || findByTaskField('objectiveCode'))
+      .then((match) => match || findByTaskField('taskName'));
 
-      if (!filePath || !agentRouteId) return null;
+    if (!data) return null;
 
-      const params = new URLSearchParams({
-        file: filePath,
-        taskRef: taskId,
-        taskId,
-        objectiveCode: taskId,
-      });
+    const filePath = data.filePath?.trim();
+    const agentRouteId = resolveAgentRouteId(data.agentId, data.agentName) || resolveAgentRouteId(entry.agentId, entry.agentName);
+    if (!agentRouteId) return null;
 
-      return `/admin/deliverables/${agentRouteId}?${params.toString()}`;
-    } catch {
-      return null;
-    }
+    const params = new URLSearchParams({
+      taskRef: taskId,
+      taskId,
+      objectiveCode: taskId,
+    });
+    if (filePath) params.set('file', filePath);
+
+    return `/admin/deliverables/${agentRouteId}?${params.toString()}`;
   };
 
   const openResultBeatDestination = async (entry: ProgressTimelineEntry) => {

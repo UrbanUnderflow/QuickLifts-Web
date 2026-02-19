@@ -1,5 +1,53 @@
 export type KanbanLane = 'signals' | 'meanings';
 export type KanbanColor = 'blue' | 'green' | 'yellow' | 'red';
+export type KanbanTaskStatus = 'todo' | 'in-progress' | 'done';
+
+const statusAliases: Record<string, KanbanTaskStatus> = {
+  'todo': 'todo',
+  'to-do': 'todo',
+  'open': 'todo',
+  'pending': 'todo',
+  'backlog': 'todo',
+  'in-progress': 'in-progress',
+  'in_progress': 'in-progress',
+  'inprogress': 'in-progress',
+  'doing': 'in-progress',
+  'active': 'in-progress',
+  'done': 'done',
+  'complete': 'done',
+  'completed': 'done',
+  'closed': 'done',
+  'resolved': 'done'
+};
+
+const laneAliases: Record<string, KanbanLane> = {
+  'signals': 'signals',
+  'signal': 'signals',
+  'meanings': 'meanings',
+  'meaning': 'meanings'
+};
+
+const colorAliases: Record<string, KanbanColor> = {
+  'blue': 'blue',
+  'green': 'green',
+  'yellow': 'yellow',
+  'red': 'red'
+};
+
+export function normalizeKanbanTaskStatus(status: unknown): KanbanTaskStatus {
+  if (typeof status !== 'string') return 'todo';
+  return statusAliases[status.trim().toLowerCase()] || 'todo';
+}
+
+export function normalizeKanbanLane(lane: unknown): KanbanLane {
+  if (typeof lane !== 'string') return 'signals';
+  return laneAliases[lane.trim().toLowerCase()] || 'signals';
+}
+
+export function normalizeKanbanColor(color: unknown): KanbanColor {
+  if (typeof color !== 'string') return 'blue';
+  return colorAliases[color.trim().toLowerCase()] || 'blue';
+}
 
 export interface Subtask {
   id: string;
@@ -15,7 +63,7 @@ export interface KanbanTaskData {
   project: string;
   theme: string;
   assignee: string;
-  status: 'todo' | 'in-progress' | 'done';
+  status: KanbanTaskStatus;
   lane: KanbanLane;
   color: KanbanColor;
   objectiveCode: string;
@@ -37,7 +85,7 @@ export class KanbanTask {
   project: string;
   theme: string;
   assignee: string;
-  status: 'todo' | 'in-progress' | 'done';
+  status: KanbanTaskStatus;
   lane: KanbanLane;
   color: KanbanColor;
   objectiveCode: string;
@@ -58,9 +106,9 @@ export class KanbanTask {
     this.project = data.project || '';
     this.theme = data.theme || '';
     this.assignee = data.assignee || '';
-    this.status = data.status || 'todo';
-    this.lane = data.lane || 'signals';
-    this.color = data.color || 'blue';
+    this.status = normalizeKanbanTaskStatus(data.status);
+    this.lane = normalizeKanbanLane(data.lane);
+    this.color = normalizeKanbanColor(data.color);
     this.objectiveCode = data.objectiveCode || '';
     this.actOne = data.actOne || '';
     this.actTwo = data.actTwo || '';
