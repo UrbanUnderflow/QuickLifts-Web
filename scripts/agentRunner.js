@@ -1402,6 +1402,10 @@ async function processCommands() {
 
     const cmd = commandQueue.shift();
     const cmdRef = db.collection(COMMANDS_COLLECTION).doc(cmd.id);
+    const createdAtRaw = cmd.createdAt;
+    const createdAt = createdAtRaw && typeof createdAtRaw.toDate === 'function'
+      ? createdAtRaw.toDate()
+      : (createdAtRaw ? new Date(createdAtRaw) : null);
 
     try {
         // Mark as in-progress
@@ -1497,6 +1501,22 @@ async function processCommands() {
                     var stopMsg = 'Acknowledged. Runner disabled and moved offline.';
                     response = response ? response + "\n" + stopMsg : stopMsg;
                 } else if (startRequested) {
+                    var shouldSkipStart = false;
+                    if (createdAt) {
+                        var presenceSnap = await db.collection(PRESENCE_COLLECTION).doc(AGENT_ID).get();
+                        var presenceData = presenceSnap.data() || {};
+                        var runnerEnabledAt = presenceData.runnerEnabledAt?.toDate?.() || (presenceData.runnerEnabledAt ? new Date(presenceData.runnerEnabledAt) : null);
+                        if (presenceData.runnerEnabled === false && runnerEnabledAt && runnerEnabledAt.getTime() > createdAt.getTime()) {
+                            shouldSkipStart = true;
+                        }
+                    }
+
+                    if (shouldSkipStart) {
+                        var staleStartMsg = `Ignoring start command older than latest runner control state (${cmd.id}).`;
+                        response = response ? response + "\n" + staleStartMsg : staleStartMsg;
+                        break;
+                    }
+
                     await setRunnerEnabled(true);
                     await setStatus('idle', {
                         notes: `Resumed by command: "${pContent}"`,
