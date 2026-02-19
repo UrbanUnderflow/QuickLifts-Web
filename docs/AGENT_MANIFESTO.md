@@ -182,6 +182,7 @@ Before marking any task complete:
 - **[2026-02-19] Sage** — Step "Execute: Create brief on potential health partnerships for strategic alignment" still had issues after 2 retries. Output signals: \berror\b. Last output: "⚠️ API provider returned a billing error — your API key has run out of credits or has an insufficient balance. Check you..."
 - **[2026-02-19] Sage** — Step "Review and validate: Create brief on potential health partnerships for strategic alignment" still had issues after 2 retries. Output signals: \berror\b. Last output: "⚠️ API provider returned a billing error — your API key has run out of credits or has an insufficient balance. Check you..."
 - **[2026-02-19] Sage** — Step "Research and plan: Draft brief on high-impact health sector partnership opportunities" still had issues after 2 retries. Output signals: \berror\b. Last output: "⚠️ API provider returned a billing error — your API key has run out of credits or has an insufficient balance. Check you..."
+- **[2026-02-19] Sage** — Step "Execute: Draft brief on high-impact health sector partnership opportunities" still had issues after 2 retries. Output signals: \berror\b. Last output: "⚠️ API provider returned a billing error — your API key has run out of credits or has an insufficient balance. Check you..."
 ---
 
 ## Operational Rules
