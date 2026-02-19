@@ -12,7 +12,7 @@ import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
   ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
   History, ChevronRight, MessageSquare, Archive, X, ListOrdered, Activity, AlertTriangle,
-  BookOpen, ToggleLeft, ToggleRight, Power, Calendar, Package, Play
+  BookOpen, ToggleLeft, ToggleRight, Power, Calendar, Package, Play, UserPlus
 } from 'lucide-react';
 import { RoundTable } from './RoundTable';
 import { GroupChatModal } from './GroupChatModal';
@@ -22,6 +22,7 @@ import { SharedDeliverables } from './SharedDeliverables';
 import { AgentChatModal } from './AgentChatModal';
 import { InterventionAlert } from './InterventionAlert';
 import ProgressTimelinePanel from './ProgressTimelinePanel';
+import { AddAgentModal, LockInBanner, type AgentDraft } from './AddAgentModal';
 import { StandupConfigPanel } from './StandupConfigPanel';
 import { NorthStarPanel } from './NorthStarPanel';
 import { groupChatService } from '../../api/firebase/groupChat/service';
@@ -1997,7 +1998,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
 
             {/* Monitor */}
             <div className="agent-monitor" style={{ boxShadow: `0 0 20px ${status.monitorGlow}` }}>
-                <div className="monitor-screen" style={{ background: effectiveStatus === 'working' ? '#0c1222' : '#0a0a0a' }}>
+              <div className="monitor-screen" style={{ background: effectiveStatus === 'working' ? '#0c1222' : '#0a0a0a' }}>
                 {effectiveStatus === 'working' && (
                   <>
                     <div className="code-line l1" />
@@ -2044,7 +2045,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
 
         {/* Nameplate + role + progress */}
         <div className="agent-nameplate">
-              <span className={`status-dot ${effectiveStatus}`} />
+          <span className={`status-dot ${effectiveStatus}`} />
           <div className="nameplate-text">
             <span className="agent-name">{agent.displayName}</span>
             {(agent.role || AGENT_ROLES[agent.id]) && (
@@ -2556,6 +2557,10 @@ const VirtualOfficeContent: React.FC = () => {
   const [showManifesto, setShowManifesto] = useState(false);
   const [manifestoContent, setManifestoContent] = useState<string | null>(null);
   const [manifestoLoading, setManifestoLoading] = useState(false);
+  const [showAddAgent, setShowAddAgent] = useState(false);
+  const [onboardingDraft, setOnboardingDraft] = useState<AgentDraft | null>(null);
+  const [lockingIn, setLockingIn] = useState(false);
+  const [onboardingMessages, setOnboardingMessages] = useState<any[]>([]);
   const [tokenBreakdownModal, setTokenBreakdownModal] = useState<TokenBreakdownModalState>({
     isOpen: false,
     title: '',
@@ -2768,6 +2773,145 @@ const VirtualOfficeContent: React.FC = () => {
     (window as any).__openAgentChat = (agent: AgentPresence) => setChatAgent(agent);
     return () => { delete (window as any).__openAgentChat; };
   }, []);
+
+  // Handle onboarding brainstorm start — opens group chat with seeded prompt
+  const handleStartOnboardingBrainstorm = useCallback(async (
+    chatId: string,
+    participants: string[],
+    agentMeta: AgentDraft
+  ) => {
+    setShowAddAgent(false);
+    setOnboardingDraft(agentMeta);
+    setGroupChatId(chatId);
+    setCollabStartTime(new Date());
+    setIsCollaborating(true);
+
+    // Animate agents to table
+    const tablePositions = getAllTablePositions(participants);
+    const updatedPositions = { ...agentPositions };
+    participants.forEach((agentId, index) => {
+      updatedPositions[agentId] = {
+        state: 'transitioning-to-table' as AgentPositionState,
+        position: tablePositions[agentId],
+        deskPosition: updatedPositions[agentId]?.deskPosition || getDeskPosition(index),
+        transitionDelay: getStaggerDelay(index),
+      };
+    });
+    setAgentPositions(updatedPositions);
+
+    const lastAgentDelay = getStaggerDelay(participants.length - 1);
+    setTimeout(() => {
+      const finalPositions = { ...updatedPositions };
+      participants.forEach(agentId => {
+        finalPositions[agentId].state = 'table';
+        finalPositions[agentId].transitionDelay = 0;
+      });
+      setAgentPositions(finalPositions);
+      setShowGroupChatModal(true);
+    }, lastAgentDelay + 2000);
+  }, [agentPositions]);
+
+  // Handle lock-in: extract soul from chat, call API, create task for Nora
+  const handleLockIn = useCallback(async () => {
+    if (!onboardingDraft || !groupChatId) return;
+    setLockingIn(true);
+
+    try {
+      // First, try to extract soul from the conversation
+      const extractRes = await fetch('/api/agent/onboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'extract-soul',
+          agentId: onboardingDraft.id,
+          displayName: onboardingDraft.name,
+          messages: onboardingMessages.map(m => ({
+            from: m.from,
+            content: m.content,
+            responses: m.responses,
+          })),
+        }),
+      });
+      const extractData = await extractRes.json();
+
+      if (!extractData.success) {
+        alert(extractData.error || 'Could not extract soul from the conversation. Keep brainstorming!');
+        setLockingIn(false);
+        return;
+      }
+
+      // Confirm with the user
+      const confirmed = window.confirm(
+        `Soul proposed by ${extractData.proposedBy}. Lock it in and start automated setup?\n\n` +
+        `Preview (first 200 chars):\n${extractData.soulContent.substring(0, 200)}...`
+      );
+      if (!confirmed) { setLockingIn(false); return; }
+
+      // Lock in — create all infrastructure
+      const lockRes = await fetch('/api/agent/onboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'lock-in',
+          agentId: onboardingDraft.id,
+          displayName: onboardingDraft.name,
+          emoji: onboardingDraft.emoji,
+          soul: extractData.soulContent,
+        }),
+      });
+      const lockData = await lockRes.json();
+
+      if (!lockData.success) {
+        alert(`Lock-in failed: ${lockData.error}`);
+        setLockingIn(false);
+        return;
+      }
+
+      // Create a kanban task for Nora to finish the wiring
+      if (lockData.taskForNora) {
+        const taskData = lockData.taskForNora;
+        await addDoc(collection(db, 'kanban-tasks'), {
+          name: taskData.name,
+          description: taskData.description,
+          assignedTo: taskData.assignedTo,
+          priority: taskData.priority,
+          complexity: taskData.complexity,
+          status: 'pending',
+          project: 'Agent Infrastructure',
+          createdAt: serverTimestamp(),
+          createdBy: 'admin',
+        });
+      }
+
+      // Announce in group chat
+      const participants = agents.filter(a => a.id !== 'antigravity').map(a => a.id);
+      await groupChatService.broadcastMessage(
+        groupChatId,
+        `🔒 **SOUL LOCKED IN** for ${onboardingDraft.emoji} ${onboardingDraft.name}!\n\n` +
+        `Infrastructure created:\n${lockData.results.join('\n')}\n\n` +
+        `A task has been created for Nora to finish wiring ${onboardingDraft.name} into the system. ` +
+        `Welcome to the team! 🎉`,
+        participants
+      );
+
+      setOnboardingDraft(null);
+      alert(`${onboardingDraft.emoji} ${onboardingDraft.name} locked in! Nora will finish the setup.`);
+    } catch (err: any) {
+      console.error('Lock-in failed:', err);
+      alert(`Lock-in error: ${err.message}`);
+    } finally {
+      setLockingIn(false);
+    }
+  }, [onboardingDraft, groupChatId, onboardingMessages, agents]);
+
+  // Track messages for lock-in extraction
+  useEffect(() => {
+    if (!groupChatId || !onboardingDraft) return;
+    const unsubscribe = groupChatService.listenToMessages(groupChatId, (msgs) => {
+      setOnboardingMessages(msgs);
+    });
+    return () => unsubscribe();
+  }, [groupChatId, onboardingDraft]);
 
   useEffect(() => {
     const unsubscribe = presenceService.listen((next) => {
@@ -3552,6 +3696,12 @@ const VirtualOfficeContent: React.FC = () => {
               <span>Deliverables</span>
             </div>
 
+            {/* Add Agent Button */}
+            <div className="add-agent-floor-btn" onClick={() => setShowAddAgent(true)}>
+              <UserPlus className="w-4 h-4" />
+              <span>Add Agent</span>
+            </div>
+
             {allAgents.length === 0 && (
               <div className="empty-office">
                 <div className="empty-icon">🏢</div>
@@ -3618,10 +3768,32 @@ const VirtualOfficeContent: React.FC = () => {
 
         {/* Group Chat Modal */}
         {showGroupChatModal && groupChatId && (
-          <GroupChatModal
-            chatId={groupChatId}
-            participants={allAgents.filter(a => a.id !== 'antigravity').map(a => a.id)}
-            onClose={endCollaboration}
+          <>
+            {onboardingDraft && (
+              <LockInBanner
+                agentDraft={onboardingDraft}
+                onLockIn={handleLockIn}
+                locking={lockingIn}
+              />
+            )}
+            <GroupChatModal
+              chatId={groupChatId}
+              participants={allAgents.filter(a => a.id !== 'antigravity').map(a => a.id)}
+              onClose={(msgs) => {
+                if (onboardingDraft) {
+                  setOnboardingDraft(null);
+                }
+                endCollaboration(msgs);
+              }}
+            />
+          </>
+        )}
+
+        {/* Add Agent Modal */}
+        {showAddAgent && (
+          <AddAgentModal
+            onClose={() => setShowAddAgent(false)}
+            onStartBrainstorm={handleStartOnboardingBrainstorm}
           />
         )}
 
@@ -4291,6 +4463,354 @@ const VirtualOfficeContent: React.FC = () => {
           border-color: rgba(99,102,241,0.3);
           transform: translateY(-1px);
           box-shadow: 0 4px 16px rgba(99,102,241,0.1);
+        }
+
+        /* ─── Add Agent Floor Button ─── */
+        .add-agent-floor-btn {
+          position: absolute;
+          bottom: 16px;
+          right: 310px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 14px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(16,185,129,0.08));
+          border: 1px solid rgba(34,197,94,0.15);
+          color: #4ade80;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          z-index: 10;
+          backdrop-filter: blur(8px);
+        }
+        .add-agent-floor-btn:hover {
+          background: linear-gradient(135deg, rgba(34,197,94,0.22), rgba(16,185,129,0.16));
+          border-color: rgba(34,197,94,0.35);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(34,197,94,0.15);
+        }
+
+        /* ─── Add Agent Modal ─── */
+        .add-agent-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 10000;
+          background: rgba(0,0,0,0.65);
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          animation: fadeIn 0.15s ease;
+        }
+        .add-agent-modal {
+          width: 520px;
+          max-width: 95vw;
+          max-height: 90vh;
+          background: #111318;
+          border: 1px solid rgba(63,63,70,0.4);
+          border-radius: 16px;
+          box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03) inset;
+          overflow-y: auto;
+          animation: slideUp 0.2s ease;
+        }
+        .add-agent-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 20px 24px;
+          border-bottom: 1px solid rgba(63,63,70,0.3);
+        }
+        .add-agent-icon {
+          width: 40px;
+          height: 40px;
+          border-radius: 12px;
+          background: linear-gradient(135deg, rgba(34,197,94,0.2), rgba(16,185,129,0.1));
+          border: 1px solid rgba(34,197,94,0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #4ade80;
+        }
+        .add-agent-title {
+          font-size: 18px;
+          font-weight: 700;
+          color: #e7e9ea;
+          margin: 0;
+        }
+        .add-agent-subtitle {
+          font-size: 12px;
+          color: #6b7280;
+          margin: 2px 0 0 0;
+        }
+        .add-agent-close {
+          background: none;
+          border: none;
+          color: #6b7280;
+          cursor: pointer;
+          padding: 8px;
+          border-radius: 8px;
+          transition: all 0.15s;
+        }
+        .add-agent-close:hover {
+          background: rgba(255,255,255,0.06);
+          color: #e7e9ea;
+        }
+        .add-agent-body {
+          padding: 24px;
+        }
+        .add-agent-field {
+          margin-bottom: 20px;
+        }
+        .add-agent-label {
+          display: block;
+          font-size: 12px;
+          font-weight: 600;
+          color: #a1a1aa;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          margin-bottom: 8px;
+        }
+        .add-agent-input {
+          width: 100%;
+          padding: 12px 16px;
+          border-radius: 10px;
+          border: 1px solid rgba(63,63,70,0.4);
+          background: rgba(255,255,255,0.04);
+          color: #e7e9ea;
+          font-size: 16px;
+          font-weight: 500;
+          outline: none;
+          transition: all 0.2s;
+        }
+        .add-agent-input:focus {
+          border-color: rgba(34,197,94,0.5);
+          box-shadow: 0 0 0 3px rgba(34,197,94,0.1);
+        }
+        .add-agent-input::placeholder {
+          color: #3f3f46;
+        }
+        .add-agent-id-preview {
+          display: inline-block;
+          margin-top: 6px;
+          font-size: 11px;
+          color: #6b7280;
+        }
+        .add-agent-id-preview code {
+          padding: 2px 6px;
+          border-radius: 4px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(63,63,70,0.3);
+          color: #a78bfa;
+          font-family: monospace;
+          font-size: 11px;
+        }
+        .add-agent-emoji-grid {
+          display: grid;
+          grid-template-columns: repeat(8, 1fr);
+          gap: 6px;
+        }
+        .add-agent-emoji-btn {
+          width: 100%;
+          aspect-ratio: 1;
+          border: 1px solid rgba(63,63,70,0.3);
+          background: rgba(255,255,255,0.03);
+          border-radius: 8px;
+          font-size: 20px;
+          cursor: pointer;
+          transition: all 0.15s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .add-agent-emoji-btn:hover {
+          background: rgba(255,255,255,0.08);
+          border-color: rgba(63,63,70,0.5);
+          transform: scale(1.1);
+        }
+        .add-agent-emoji-btn.selected {
+          background: rgba(34,197,94,0.15);
+          border-color: rgba(34,197,94,0.5);
+          box-shadow: 0 0 12px rgba(34,197,94,0.2);
+          transform: scale(1.1);
+        }
+        .add-agent-device-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .add-agent-device {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 14px 16px;
+          border-radius: 10px;
+          border: 1px solid rgba(63,63,70,0.3);
+          background: rgba(255,255,255,0.03);
+          cursor: pointer;
+          transition: all 0.15s;
+          text-align: left;
+          width: 100%;
+        }
+        .add-agent-device:hover {
+          background: rgba(255,255,255,0.06);
+          border-color: rgba(63,63,70,0.5);
+        }
+        .add-agent-device.selected {
+          background: rgba(59,130,246,0.08);
+          border-color: rgba(59,130,246,0.35);
+        }
+        .add-agent-device-icon {
+          font-size: 20px;
+        }
+        .add-agent-device-name {
+          font-size: 14px;
+          font-weight: 600;
+          color: #e7e9ea;
+        }
+        .add-agent-device-desc {
+          font-size: 11px;
+          color: #6b7280;
+          margin-top: 2px;
+        }
+        .add-agent-error {
+          padding: 10px 14px;
+          border-radius: 8px;
+          background: rgba(239,68,68,0.1);
+          border: 1px solid rgba(239,68,68,0.25);
+          color: #fca5a5;
+          font-size: 12px;
+          font-weight: 500;
+          margin-bottom: 16px;
+        }
+        .add-agent-workflow {
+          padding: 14px 16px;
+          border-radius: 10px;
+          background: rgba(99,102,241,0.06);
+          border: 1px solid rgba(99,102,241,0.15);
+          margin-bottom: 20px;
+        }
+        .add-agent-workflow-title {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11px;
+          font-weight: 600;
+          color: #818cf8;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          margin-bottom: 10px;
+        }
+        .add-agent-workflow-steps {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .add-agent-wf-step {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          font-size: 12px;
+          color: #9ca3af;
+          line-height: 1.5;
+        }
+        .add-agent-wf-num {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: rgba(99,102,241,0.15);
+          border: 1px solid rgba(99,102,241,0.3);
+          color: #818cf8;
+          font-size: 10px;
+          font-weight: 700;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .add-agent-submit {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 14px;
+          border-radius: 12px;
+          border: none;
+          background: linear-gradient(135deg, #22c55e, #16a34a);
+          color: white;
+          font-size: 15px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s;
+          box-shadow: 0 4px 16px rgba(34,197,94,0.3);
+        }
+        .add-agent-submit:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 24px rgba(34,197,94,0.4);
+        }
+
+        /* ─── Lock-In Banner ─── */
+        .lockin-banner {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          z-index: 10001;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 24px;
+          background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(217,119,6,0.08));
+          border-bottom: 1px solid rgba(245,158,11,0.25);
+          backdrop-filter: blur(16px);
+          animation: slideDown 0.3s ease;
+        }
+        .lockin-banner-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        .lockin-emoji {
+          font-size: 24px;
+        }
+        .lockin-title {
+          font-size: 14px;
+          font-weight: 700;
+          color: #fbbf24;
+        }
+        .lockin-desc {
+          font-size: 11px;
+          color: #9ca3af;
+          margin-top: 2px;
+        }
+        .lockin-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 20px;
+          border-radius: 10px;
+          border: 1px solid rgba(245,158,11,0.4);
+          background: linear-gradient(135deg, #f59e0b, #d97706);
+          color: white;
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s;
+          box-shadow: 0 4px 16px rgba(245,158,11,0.3);
+        }
+        .lockin-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 24px rgba(245,158,11,0.4);
+        }
+        .lockin-btn:disabled {
+          opacity: 0.7;
+          cursor: wait;
+        }
+        @keyframes slideDown {
+          from { transform: translateY(-100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
         }
 
         .floor-grid {
