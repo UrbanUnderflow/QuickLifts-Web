@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 
 import {
   getTemplatesForBrand,
+  getTemplateById,
   BrandChallengeTemplate,
 } from "../../lib/brandChallengeTemplates";
 
@@ -112,6 +113,28 @@ export default function ChallengeCreatePage() {
     undefined
   );
 
+  // Form state that will eventually be wired into the real challenge
+  // creation mutation. For now this lets us prove that choosing a
+  // template applies presets but still allows manual overrides.
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [durationDays, setDurationDays] = useState<number | "">("");
+  const [sessionsPerWeek, setSessionsPerWeek] = useState<number | "">("");
+  const [visualStyleKey, setVisualStyleKey] = useState("");
+
+  // When a template is selected, apply its presets into the form fields.
+  useEffect(() => {
+    if (!selectedTemplateId) return;
+    const template = getTemplateById(selectedTemplateId);
+    if (!template) return;
+
+    setTitle((prev) => (prev ? prev : template.name));
+    setDescription((prev) => (prev ? prev : template.description));
+    setDurationDays((prev) => (prev ? prev : template.defaultDurationDays));
+    setSessionsPerWeek((prev) => (prev ? prev : template.targetSessionsPerWeek));
+    setVisualStyleKey((prev) => (prev ? prev : template.visualStyleKey));
+  }, [selectedTemplateId]);
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-6">
       <header className="mb-4">
@@ -122,7 +145,8 @@ export default function ChallengeCreatePage() {
           This page will host the full challenge creation flow. For now,
           when a <code>brandType</code> is provided in the URL
           (e.g., <code>?brandType=gymshark</code>), you’ll see the
-          configured templates for that brand.
+          configured templates for that brand and can apply their presets
+          into the draft challenge fields.
         </p>
       </header>
 
@@ -138,6 +162,95 @@ export default function ChallengeCreatePage() {
           onChange={setSelectedTemplateId}
         />
       )}
+
+      <section className="mt-8 rounded-md border border-gray-200 bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-gray-900">
+          Draft challenge details
+        </h2>
+        <p className="mt-1 text-xs text-gray-600">
+          Selecting a brand template will prefill these fields, but you can
+          still edit anything before saving.
+        </p>
+
+        <div className="mt-4 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-700">
+              Title
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="e.g. 30-Day Strength Streak"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700">
+              Description
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="Describe what members will actually do together in this block."
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-medium text-gray-700">
+                Duration (days)
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={durationDays}
+                onChange={(e) =>
+                  setDurationDays(e.target.value ? Number(e.target.value) : "")
+                }
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700">
+                Target sessions per week
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={sessionsPerWeek}
+                onChange={(e) =>
+                  setSessionsPerWeek(
+                    e.target.value ? Number(e.target.value) : ""
+                  )
+                }
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700">
+              Visual style key (for design system)
+            </label>
+            <input
+              type="text"
+              value={visualStyleKey}
+              onChange={(e) => setVisualStyleKey(e.target.value)}
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              placeholder="e.g. gymshark-strength-dark-neon"
+            />
+            <p className="mt-1 text-[11px] text-gray-500">
+              This will eventually map to a design token / theme variant so
+              brand campaigns carry a consistent visual treatment.
+            </p>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
