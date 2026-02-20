@@ -133,9 +133,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (result.status === 'started') {
             return res.status(200).json({
                 success: true,
-                message: 'Mission kickoff launched',
+                message: 'Mission strategy roundtable started',
                 pid: child.pid,
-                note: 'Tasks are being created. Check the Activity Feed and Kanban board in ~10 seconds.',
+                note: 'Agents are moving to the round table for planning. Tasks are assigned after the strategy round.',
             });
         } else if (result.status === 'crashed') {
             return res.status(500).json({
