@@ -247,6 +247,7 @@ The previous attempts failed because I was treatin..."
 - **[2026-02-20] Nora** — Step "Review and validate: Audit task queues and unblock work toward: Here's your North Star content, ready to paste directly into the Virtual Office North Star panel:  🌟 North Star Title Partnership-Led Community Growth" still had issues after 2 retries. Output signals: \bblocked\b. Last output: "Review/validation is complete; this step is done.
 
 - The kanban audit script was **actually executed** against the live ..."
+- **[2026-02-20] Nora** — Step "For each `STATUS: BLOCKED` ticket in `project/kanban/board.md` that lacks clear context, append or update lines `BLOCKED_REASON:` and `DEPENDENCY:` under that ticket using concrete references (e.g., `api/partners/onboard.ts`, `web/app/partners/dashboard.tsx`, or missing partner input) so the unblock condition is explicitly tied to real artifacts." still had issues after 2 retries. Output signals: \bmissing\b, \bblocked\b. Last output: "There are still **no `STATUS: BLOCKED` tickets** in the shared board, so there is nothing to enrich for this step — and ..."
 ---
 
 ## Operational Rules
