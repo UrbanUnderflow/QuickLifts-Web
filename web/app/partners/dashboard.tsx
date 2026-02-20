@@ -7,6 +7,12 @@ import { db } from "../../../src/api/firebase/config";
 import type { PartnerType, PartnerFirestoreData } from "../../../src/types/Partner";
 import { PartnerModel } from "../../../src/types/Partner";
 
+interface PartnerPlaybookSummary {
+  type: PartnerType;
+  label: string;
+  steps: { id: string; label: string; route: string }[];
+}
+
 interface PartnerRow {
   id: string;
   name: string;
@@ -14,6 +20,7 @@ interface PartnerRow {
   onboardingStage: string;
   invitedAt: Date;
   firstRoundCreatedAt: Date | null;
+  playbook: PartnerPlaybookSummary | null;
 }
 
 function computeTimeToFirstRoundDays(row: PartnerRow): number | null {
@@ -55,8 +62,12 @@ export default function PartnerOnboardingDashboardPage() {
         if (!isMounted) return;
 
         const rows: PartnerRow[] = snapshot.docs.map((docSnap) => {
-          const raw = docSnap.data() as PartnerFirestoreData;
+          const raw = docSnap.data() as PartnerFirestoreData & {
+            playbook?: PartnerPlaybookSummary;
+          };
           const model = new PartnerModel(docSnap.id, raw);
+
+          const playbook = raw.playbook ?? null;
 
           return {
             id: model.id,
@@ -68,6 +79,7 @@ export default function PartnerOnboardingDashboardPage() {
             onboardingStage: model.onboardingStage,
             invitedAt: model.invitedAt,
             firstRoundCreatedAt: model.firstRoundCreatedAt ?? null,
+            playbook,
           };
         });
 
@@ -214,6 +226,9 @@ export default function PartnerOnboardingDashboardPage() {
                   <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
                     Time to First Round (days)
                   </th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
+                    Playbook
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -226,6 +241,8 @@ export default function PartnerOnboardingDashboardPage() {
                     row.timeToFirstRoundDays != null
                       ? row.timeToFirstRoundDays.toFixed(1)
                       : "—";
+
+                  const playbookPrimaryRoute = row.playbook?.steps[0]?.route ?? null;
 
                   return (
                     <tr key={row.id} className="hover:bg-gray-50">
@@ -246,6 +263,25 @@ export default function PartnerOnboardingDashboardPage() {
                       </td>
                       <td className="px-3 py-2 border-b text-right">
                         {timeLabel}
+                      </td>
+                      <td className="px-3 py-2 border-b text-sm">
+                        {row.playbook ? (
+                          <div className="flex flex-col gap-1">
+                            <span className="font-medium text-gray-800">
+                              {row.playbook.label}
+                            </span>
+                            {playbookPrimaryRoute && (
+                              <a
+                                href={playbookPrimaryRoute}
+                                className="text-xs text-blue-600 hover:underline"
+                              >
+                                Open playbook
+                              </a>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-xs">No playbook</span>
+                        )}
                       </td>
                     </tr>
                   );
