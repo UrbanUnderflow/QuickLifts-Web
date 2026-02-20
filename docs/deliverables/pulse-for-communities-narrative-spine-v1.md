@@ -21,6 +21,28 @@ Every "Pulse x Community" story points back to this shared metric spine:
 
 These three metrics are the non-negotiable spine for Brands, Gyms, and Run Clubs. The scenes and surfaces change by ICP, but every playbook and partner pitch should be able to answer the same ruthless question: **How does this move inactivity gaps, ritual weeks, and creator-led participation in a way that Pulse can measure?**
 
+### ICP Metric Applications
+
+For each metric, here is what it means in the context of Brands, Gyms, and Run Clubs.
+
+#### 1. Inactivity Gap Rate (>3 days)
+
+- **Brands** – An inactivity gap is any 4+ day stretch where a follower or customer who has opted into a brand’s Pulse-powered challenge doesn’t log a check-in, content interaction, or challenge action tied to the brand campaign.
+- **Gyms** – An inactivity gap is any 4+ day stretch where a member doesn’t complete a Pulse-tracked workout, class check-in, or gym-run challenge touchpoint during an active training block.
+- **Run Clubs** – An inactivity gap is any 4+ day stretch where a runner in a Pulse-linked club doesn’t log a run, attend a group session, or mark progress inside the current club challenge.
+
+#### 2. Community Ritual Weeks
+
+- **Brands** – A ritual week is any week where the brand community hits at least 3 Pulse-tracked activations, such as live streams, challenge check-ins, or coordinated content drops that prompt shared action.
+- **Gyms** – A ritual week is any week where the gym hits at least 3 distinct community touchpoints in Pulse — for example, a programmed lift day, a coached class, and a shared finisher or mini-challenge.
+- **Run Clubs** – A ritual week is any week where the club records at least 3 shared run-related rituals, such as group runs, structured speed sessions, or synced at-home runs logged into a common challenge.
+
+#### 3. Creator-Led Participation Rate
+
+- **Brands** – Creator-led participation is the share of the brand’s reachable audience that joins at least one Pulse challenge or block facilitated by brand-affiliated creators or athletes.
+- **Gyms** – Creator-led participation is the share of members who join at least one coach- or staff-led Pulse block, class series, or seasonal challenge during the measurement window.
+- **Run Clubs** – Creator-led participation is the share of club runners who enroll in at least one captain- or coach-led Pulse challenge or training cycle rather than just following along informally.
+
 ---
 
 ## ICP-Specific Narratives (To Be Completed)
