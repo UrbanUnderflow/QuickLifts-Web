@@ -1,6 +1,6 @@
-# Pulse x Community — Artifact Outline, Ownership & Acceptance (Steps 1–3/5)
+# Pulse x Community — Artifact Outline, Ownership & Acceptance (Steps 1–4/5)
 
-This page lists every required artifact for the Pulse x Community strategy, with a 1–2 sentence description of its purpose, where it will be used (decks, outreach, one-pagers), who owns it, and what “done” looks like.
+This page lists every required artifact for the Pulse x Community strategy, with a 1–2 sentence description of its purpose, where it will be used (decks, outreach, one-pagers), who owns it, what “done” looks like, and the ICP-specific examples/metrics each document must include.
 
 ---
 
@@ -36,6 +36,11 @@ This page lists every required artifact for the Pulse x Community strategy, with
 - Each KPI has a plain-language description that a smart, non-technical partner can understand without seeing the database schema.
 - Provides at least one example baseline or target range per KPI (even if labeled as illustrative) to make the numbers feel real rather than theoretical.
 
+**ICP-Specific Expectations:**
+- For **Brands:** Surfaces KPIs that brand teams actually care about (e.g., repeat challenge participation, UGC volume around specific drops, creator activation and retention) and marks which ones will appear in the Brands ICP doc.
+- For **Gyms & Studios:** Calls out metrics like block fill rate, block completion rate, member return across blocks, hybrid (IRL + remote) check-in consistency, and identifies which are critical for the Gyms/Studios ICP doc.
+- For **Run Clubs:** Highlights metrics such as route/meetup attendance over a season, progression from casual runs to race blocks, streak weeks sustained during a training cycle, and flags which will be emphasized in the Run Clubs ICP doc.
+
 ---
 
 ## 3. Partner-Fit Rubric (Pulse-fit Community Partners)
@@ -52,6 +57,11 @@ This page lists every required artifact for the Pulse x Community strategy, with
 - Defines 3–5 rubric dimensions that are explicitly behavioral (e.g., challenge cadence, creator activity, return participation, clarity of community home), with short descriptions for each.
 - Includes separate, concrete example signals for Brands, Gyms/Studios, and Run Clubs under the same rubric, so screening can be done consistently across ICPs.
 - Avoids jargon and internal shorthand; a new team member should be able to apply the rubric to a prospect after reading it once.
+
+**ICP-Specific Expectations:**
+- For **Brands:** Examples include ambassador or creator programs with recurring drops, history of challenge-based campaigns, active community channels where members share workouts/recipes/race recaps, and a clear “home” for the community (Discord, IG Close Friends, app, etc.).
+- For **Gyms & Studios:** Examples include recurring training blocks with named themes, coaches running ongoing check-ins or accountability threads, evidence of members returning for multiple blocks, and clear cross-channel communication (in-person, group chat, email).
+- For **Run Clubs:** Examples include seasonal training calendars, consistent weekly route schedules, race-focused blocks (e.g., “spring 5K to fall half”), visible culture of streaks or consistency (e.g., “Monday crew” attendance), and a defined space where club communication lives.
 
 ---
 
@@ -70,6 +80,16 @@ This page lists every required artifact for the Pulse x Community strategy, with
 - Explicitly ties brand outcomes (e.g., repeat participation, content volume, challenge return rates) to 2–3 KPIs from the shared KPI spec.
 - Reads like a conversation with a senior brand/community lead who respects their audience’s intelligence — no hypey, condescending marketing language.
 
+**ICP-Specific Expectations (Brands):**
+- **Concrete Examples:**
+  - Ambassador or creator-led drops that run as time-bound Pulse challenges (e.g., “14-day reset” tied to a product launch) with clear join/finish counts.
+  - UGC moments where members share screenshots, recap posts, or progress GIFs generated from Pulse, tied back to a brand campaign.
+  - Brand-owned “seasons” (e.g., summer strength, winter recovery) where Pulse challenges structure the arc of content and participation.
+- **Required Metrics to Show:**
+  - Challenge join, finish, and return rates for at least one brand-like scenario.
+  - Creator activation and retention (e.g., % of seeded creators who actually run a challenge, and how many run again).
+  - UGC volume or share rate around a challenge or drop (even if initially described qualitatively with placeholders).
+
 ---
 
 ## 5. ICP-Specific Document — Gyms & Studios
@@ -87,6 +107,16 @@ This page lists every required artifact for the Pulse x Community strategy, with
 - References at least 2–3 KPIs that matter to gyms (e.g., block completion rate, member return rate across blocks, check-in consistency, streak weeks) with clear ties to the story.
 - Uses language that sounds like coaches and owners actually talk about their people and programming, not like SaaS sales copy.
 
+**ICP-Specific Expectations (Gyms & Studios):**
+- **Concrete Examples:**
+  - A coach-led 8–12 week block (e.g., “Strong Summer” or “Off-Season Strength”) run through Pulse with clear enrollment, weekly structure, and retention over the block.
+  - A check-in rhythm (e.g., weekly progress reviews, mid-block surveys, or “how did this week feel?” prompts) that lives inside Pulse instead of scattered DMs.
+  - A hybrid participation story where in-person class check-ins and Pulse-based homework sessions both count toward streaks and completion.
+- **Required Metrics to Show:**
+  - Block fill rate and completion rate for at least one example block.
+  - Member return rate from one block to the next (e.g., % of members who sign up for back-to-back blocks).
+  - Check-in consistency and/or streak weeks across a block, with at least one concrete pattern (e.g., “members with 4+ streak weeks are X% more likely to re-up”).
+
 ---
 
 ## 6. ICP-Specific Document — Run Clubs
@@ -103,3 +133,13 @@ This page lists every required artifact for the Pulse x Community strategy, with
 - Includes at least one season-based example (e.g., a spring 5K block into a fall half marathon), one route/meetup example, and one streak or consistency mechanic, all grounded in real club behavior.
 - Ties run-club activity to 2–3 KPIs from the shared spec (e.g., route attendance over a season, progression from casual runs to race blocks, streak weeks across a training cycle).
 - Feels like something a run club captain would actually forward to their co-leads without embarrassment — clear, specific, and respectful of how much unpaid work they already do.
+
+**ICP-Specific Expectations (Run Clubs):**
+- **Concrete Examples:**
+  - A seasonal training arc (e.g., “Spring Base → Summer Speed → Fall Marathon”) mapped as sequential Pulse blocks, with runners carrying their history forward.
+  - A weekly route pattern (e.g., Tuesday tempo on the river, Saturday long run with rotating routes) tracked in Pulse so leaders can see who actually shows up.
+  - A streak or accountability mechanic (e.g., “4-week consistency streak” or “no-zero-week season”) that’s visible to both runners and captains.
+- **Required Metrics to Show:**
+  - Route/meetup attendance per week across a season, with at least one example trend (e.g., early-season vs mid-season vs late-season).
+  - Progression metrics such as % of casual attendees who enroll in a structured race block, or completion rates for those race blocks.
+  - Streak-week or consistency metrics across a cycle (e.g., how many runners hit 3+ weeks of consecutive attendance) and how that correlates with retention into the next season.
