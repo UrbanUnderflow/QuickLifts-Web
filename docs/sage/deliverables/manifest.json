@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-02-20T20:35:00Z",
+  "lastUpdated": "2026-02-20T20:45:00Z",
   "deliverables": [
     {
       "id": "peptide-research-brief",
@@ -67,7 +67,7 @@
         "icp"
       ],
       "emoji": "📋",
-      "completedAt": "2026-02-20T19:54:00Z",
+        "completedAt": "2026-02-20T19:54:00Z",
       "taskRef": "Pulse-fit Community Partners A-list Step 1/5 — Define criteria by ICP",
       "status": "complete"
     },
@@ -106,20 +106,20 @@
       "status": "complete"
     },
     {
-      "id": "pulse-x-community-task-plan-outline",
-      "title": "Pulse x Community Task Plan — Artifact Outline",
-      "filename": "pulse-x-community-task-plan-outline.md",
+      "id": "pulse-fit-community-partner-fit-tiering",
+      "title": "Pulse-fit Community Partner Fit Tiering",
+      "filename": "pulse-fit-community-partner-fit-tiering.md",
       "category": "research-output",
-      "description": "One-page outline of the Pulse x Community narrative and ICP strategy artifacts, with purpose and usage for each document.",
+      "description": "Assigns Flagship-ready vs Future-fit (Hypothesis) tiers to shortlisted partners by ICP, with explicit disconfirming signals and risks.",
       "tags": [
         "partnerships",
         "community",
-        "narrative",
+        "fit-tiering",
         "icp"
       ],
-      "emoji": "🧩",
-      "completedAt": "2026-02-20T20:35:00Z",
-      "taskRef": "Pulse x Community Task Breakdown Step 1/5 — Artifact outline",
+      "emoji": "🎯",
+      "completedAt": "2026-02-20T20:45:00Z",
+      "taskRef": "Pulse-fit Community Partners A-list Step 4/5 — Fit tier tagging",
       "status": "complete"
     }
   ]
