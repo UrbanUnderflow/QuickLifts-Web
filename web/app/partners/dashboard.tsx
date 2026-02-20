@@ -1,8 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import { getPartnerRetention, PartnerRetentionPoint } from "./api/partnerRetention";
+import TimeSeriesChart, {
+  TimeSeriesPoint,
+} from "../../components/charts/TimeSeriesChart";
 
 // TODO: Replace with real partner identity source once the partner auth/context
 // layer is finalized for the web app.
