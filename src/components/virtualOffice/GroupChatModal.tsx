@@ -390,8 +390,10 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
     return sum + Object.values(msg.responses).filter(r => r.status === 'completed').length;
   }, 0);
 
-  // Compute which agents are currently typing (pending or processing)
+  // Compute which agents are currently typing (pending or processing — NOT timed-out)
   const typingAgents: { id: string; name: string; emoji: string; color: string }[] = [];
+  // Also compute agents whose response timed out this session (for a subtle hint)
+  const timedOutAgents: { id: string; name: string; emoji: string }[] = [];
   messages.forEach(msg => {
     Object.entries(msg.responses).forEach(([agentId, response]) => {
       if (response.status === 'pending' || response.status === 'processing') {
@@ -401,6 +403,14 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
             name: agentNames[agentId] || agentId,
             emoji: AGENT_EMOJIS[agentId] || '🤖',
             color: AGENT_COLORS[agentId] || AGENT_COLORS.default,
+          });
+        }
+      } else if (response.status === 'timed-out') {
+        if (!timedOutAgents.find(a => a.id === agentId)) {
+          timedOutAgents.push({
+            id: agentId,
+            name: agentNames[agentId] || agentId,
+            emoji: AGENT_EMOJIS[agentId] || '🤖',
           });
         }
       }
@@ -539,6 +549,18 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
             </div>
           </div>
         )}
+
+        {/* ── Timed-out agent hint (runner was offline or turn-queue blocked) ── */}
+        {timedOutAgents.length > 0 && typingAgents.length === 0 && (
+          <div className="rt-timeout-bar">
+            <span className="rt-timeout-icon">⚡</span>
+            <span className="rt-timeout-text">
+              {timedOutAgents.map(a => a.name).join(', ')}
+              {' didn\'t respond in time'}
+            </span>
+          </div>
+        )}
+
 
         {/* ── Mention dropdown ── */}
         {showMentions && mentionSuggestions.length > 0 && (
@@ -1313,6 +1335,29 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
         @keyframes rtDotBounce {
           0%, 60%, 100% { transform: translateY(0); opacity: 0.3; }
           30% { transform: translateY(-3px); opacity: 1; }
+        }
+
+        /* ── Timed-out bar (agent runner was offline or turn-queue expired) ── */
+        .rt-timeout-bar {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 5px 18px;
+          border-top: 1px solid rgba(255, 179, 0, 0.08);
+          background: rgba(255, 179, 0, 0.03);
+          animation: rtTypingFadeIn 0.3s ease-out;
+        }
+
+        .rt-timeout-icon {
+          font-size: 11px;
+          opacity: 0.6;
+        }
+
+        .rt-timeout-text {
+          font-size: 11px;
+          color: #a16207;
+          font-weight: 500;
+          opacity: 0.85;
         }
 
         /* ── Attachment UI ── */
