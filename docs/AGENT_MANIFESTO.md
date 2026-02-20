@@ -255,6 +255,9 @@ The previous attempts failed because I was treatin..."
 
 **What I built for..."
 - **[2026-02-20] Nora** — Step "For each `STATUS: BLOCKED` ticket in `project/kanban/board.md` that lacks clear context, append or update `BLOCKED_REASON:` and `DEPENDENCY:` lines referencing specific artifacts (e.g., `api/partners/onboard.ts`, `web/app/partners/dashboard.tsx`, `config/partnerPlaybook.json`, or missing partner input)." still had issues after 2 retries. Output signals: \bblocked\b. Last output: "For this step, the only honest outcome is: there are **no** `STATUS: BLOCKED` tickets in the canonical board, so there i..."
+- **[2026-02-20] Nora** — Step "Verify that `project/kanban/board.md` now contains: (a) explicit `BLOCKED_REASON` and `DEPENDENCY` entries for all blocked tickets, (b) a `## Partnership-Led Community Growth` section with at least 3 North-Star-aligned tickets referencing concrete artifacts, and (c) no `STATUS: IN_PROGRESS` tickets older than 14 days without either being moved to backlog or annotated with a deferral reason." still had issues after 2 retries. Output signals: \bmissing\b, \bblocked\b. Last output: "Step 5 is complete; the canonical board satisfies all three conditions.
+
+Here’s the verification in the exact terms of t..."
 ---
 
 ## Operational Rules
