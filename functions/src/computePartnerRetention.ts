@@ -36,16 +36,25 @@ export const computePartnerRetention = functions.pubsub
   .schedule("0 4 * * *") // run daily at 04:00 UTC
   .timeZone("UTC")
   .onRun(async () => {
+    const now = new Date();
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const since = new Date(now.getTime() - THIRTY_DAYS_MS);
+
     const userSnapshots = await db.collection("users").get();
 
     type CohortKey = string; // `${partnerId}_${cohortMonth}`
 
-    const cohortTotals: Record<CohortKey, {
-      partnerId: string;
-      partnerType: PartnerSource["type"];
-      cohortMonth: string;
-      totalUsers: number;
-    }> = {};
+    const cohorts: Record<
+      CohortKey,
+      {
+        partnerId: string;
+        partnerType: PartnerSource["type"];
+        cohortMonth: string;
+        totalUsers: number;
+        userIds: Set<string>;
+        activeUsers30d: number;
+      }
+    > = {};
 
     userSnapshots.forEach((docSnap) => {
       const data = docSnap.data() as any;
@@ -75,33 +84,71 @@ export const computePartnerRetention = functions.pubsub
       const cohortMonth = formatCohortMonth(createdAt);
       const key: CohortKey = `${partner.partnerId}_${cohortMonth}`;
 
-      if (!cohortTotals[key]) {
-        cohortTotals[key] = {
+      if (!cohorts[key]) {
+        cohorts[key] = {
           partnerId: partner.partnerId,
           partnerType: partner.type,
           cohortMonth,
           totalUsers: 0,
+          userIds: new Set<string>(),
+          activeUsers30d: 0,
         };
       }
 
-      cohortTotals[key].totalUsers += 1;
+      cohorts[key].totalUsers += 1;
+      cohorts[key].userIds.add(docSnap.id);
     });
 
-    // For now, log the computed totals. Step 3/4 will augment this with
-    // activeUsers30d and write PartnerRetentionDoc entries.
-    const summary: PartnerRetentionDoc[] = Object.values(cohortTotals).map((c) => ({
-      partnerId: c.partnerId,
-      partnerType: c.partnerType,
-      cohortMonth: c.cohortMonth,
-      totalUsers: c.totalUsers,
-      activeUsers30d: 0,
-      retentionRate: 0,
-    }));
+    // ---- Step 3: join with recent activity to compute activeUsers30d ----
+    //
+    // For now, we assume a generic `sessions` collection where each document
+    // has at least:
+    //   - userId: string
+    //   - lastActiveAt: Timestamp | number | ISO string
+    //
+    // If your project uses a different collection name (e.g. `activityLogs`),
+    // this query should be updated accordingly.
 
-    console.log("[computePartnerRetention] Computed cohort totals", {
+    const activeUserIds = new Set<string>();
+
+    try {
+      const sessionsRef = db.collection("sessions");
+      const querySnap = await sessionsRef
+        .where("lastActiveAt", ">=", admin.firestore.Timestamp.fromDate(since))
+        .get();
+
+      querySnap.forEach((sessionDoc) => {
+        const sdata = sessionDoc.data() as any;
+        const uid: string | undefined = sdata.userId || sdata.uid;
+        if (typeof uid === "string" && uid.trim()) {
+          activeUserIds.add(uid.trim());
+        }
+      });
+    } catch (err) {
+      console.warn("[computePartnerRetention] Failed to query recent sessions; falling back to 0 active users.", err);
+    }
+
+    // Count active users per cohort and compute retentionRate stub
+    const summary: PartnerRetentionDoc[] = Object.values(cohorts).map((c) => {
+      const activeCount = Array.from(c.userIds).filter((uid) => activeUserIds.has(uid)).length;
+      const retentionRate = c.totalUsers > 0 ? activeCount / c.totalUsers : 0;
+
+      return {
+        partnerId: c.partnerId,
+        partnerType: c.partnerType,
+        cohortMonth: c.cohortMonth,
+        totalUsers: c.totalUsers,
+        activeUsers30d: activeCount,
+        retentionRate,
+      };
+    });
+
+    console.log("[computePartnerRetention] Computed cohort retention", {
       cohortCount: summary.length,
       examples: summary.slice(0, 5),
     });
 
+    // Step 4 will persist these PartnerRetentionDoc entries into the
+    // `partnerRetention` collection.
     return null;
   });
