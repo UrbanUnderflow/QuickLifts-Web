@@ -336,3 +336,81 @@ This order makes sure we understand the culture and rituals first, then quantify
 
 - **Partner qualification checklist**  
   Insights from all three ICP briefs should inform a unified partner qualification checklist that sales and Nora can use to quickly triage inbound and outbound opportunities against our partnership strategy.
+
+---
+
+## 5. Playbook Acceptance Criteria by ICP
+
+### 5.1 Brands Playbook – Definition of Done
+
+A **Brands playbook** is considered complete when:
+
+- **ICP brief**  
+  - A 2–3 page Brands ICP brief exists, is reviewed by **Nora**, and clearly defines in-bounds vs. out-of-bounds partner profiles and partnership archetypes.  
+  - Partnerships and sales can use it to make a go/no-go call on a prospective brand with minimal additional clarification.
+
+- **Behavior metrics snapshot**  
+  - A 1–2 page metrics snapshot is produced by **Scout**, using the shared metrics canon, and includes 4–6 brand-relevant engagement metrics with plain-language interpretations.  
+  - At least one existing or hypothetical campaign narrative can be backed by these metrics without hand-waving.
+
+- **Hero community narrative**  
+  - A one-page creator + brand + user story, written by **Solara** and vetted by **Sage**, is available in both long-form and modular snippet form for decks and one-pagers.  
+  - Partnerships can drop these snippets into a pitch and have them feel specific to Pulse, not generic “influencer marketing” language.
+
+- **Language & claims guardrails**  
+  - A Brands guardrail doc exists with red/green language examples for key claim categories and is aligned with the global red/green framework.  
+  - Creators, sales, and Solara can draft co-branded supplement/recovery copy that passes Sage’s review without major rewrites.
+
+When all four are live and used together, a partnerships lead can: qualify a brand, show proof of value, tell a coherent story, and stay within safe health/claims boundaries.
+
+### 5.2 Gyms & Studios Playbook – Definition of Done
+
+A **Gyms & Studios playbook** is considered complete when:
+
+- **ICP brief**  
+  - A 2–3 page brief clearly describes target gym/studio types, member profiles, and Pulse integration patterns, and is approved by **Nora**.  
+  - B2B owners can read it and immediately see which gyms in their pipeline are a strong fit.
+
+- **Behavior metrics snapshot**  
+  - A retention-focused metrics sheet is produced by **Scout**, showing 4–6 metrics tied to visit frequency, streaks, and challenge/program engagement.  
+  - At least one example scenario connects these metrics to outcomes gym owners care about (e.g., membership retention, session utilization).
+
+- **Hero community narrative**  
+  - A one-page narrative follows a representative gym from episodic classes to a Pulse-supported ecosystem, with supporting snippets tailored for sales and CSM onboarding.  
+  - CSMs can use this story to explain the Pulse value proposition to gym staff without needing live coaching from Nora.
+
+- **Language & claims guardrails**  
+  - A gym-specific guardrail doc and a short checklist exist to guide how we talk about results, injury risk, and coach expertise in co-branded programs.  
+  - Co-marketing materials can be reviewed against this checklist and either pass or get precise edits from **Sage**, with minimal ambiguity.
+
+When all four are live and used together, a gym-focused partner owner can: identify good-fit gyms, show expected impact on retention and engagement, paint a clear future-state story, and keep messaging aligned with safety and brand standards.
+
+### 5.3 Run Clubs & Endurance Communities Playbook – Definition of Done
+
+A **Run Clubs & Endurance Communities playbook** is considered complete when:
+
+- **ICP brief**  
+  - A 2–3 page brief defines ideal run club attributes and core rituals, and is approved by **Nora** and a community/partnership owner.  
+  - Community leads can see their club (or not) in the description and understand how Pulse fits into their existing structures.
+
+- **Behavior metrics snapshot**  
+  - An endurance-specific metrics snapshot from **Scout** highlights 4–6 metrics that track training block adherence, long run consistency, and community challenge engagement.  
+  - The snapshot is annotated so run leaders can map metrics to their calendar (e.g., pre-race vs. post-race periods).
+
+- **Hero community narrative**  
+  - A race-season hero narrative, with modular snippets and optional simple visuals (e.g., block timeline), exists and is vetted by **Sage** for realism and claims.  
+  - Partnership and community owners can use it to explain to run leaders what “a Pulse season” looks like for their club.
+
+- **Language & claims guardrails**  
+  - A run-specific guardrail addendum exists that covers performance, injury, and recovery claims, and integrates cleanly with the global red/green framework.  
+  - Co-branded run programming (challenges, race prep plans) can be written and approved without conflicting interpretations of what’s safe to promise.
+
+When all four are live and used together, a run-club partnership lead can: target aligned clubs, demonstrate how Pulse strengthens consistency and community identity over a season, tell a story that feels true to runners, and keep performance/injury language within an acceptable risk envelope.
+
+---
+
+When **all three ICP playbooks** meet their definitions of done, Pulse has:
+
+- A coherent, narrative- and metrics-backed partnership system across Brands, Gyms, and Run Clubs.  
+- Clear ownership (Sage, Scout, Nora, Solara, CSMs/partnership owners) for both creating and using these materials.  
+- A repeatable path from strategy → partner targeting → proof of value → story → safe language that ladders up to activating and engaging fitness communities of creators, brands, and corporations.
