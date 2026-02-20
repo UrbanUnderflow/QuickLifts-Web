@@ -103,6 +103,43 @@ When in doubt, we:
 - Swap **clinical or guarantee language** for **behavior + feeling language** (e.g., "helps them notice when they’re overcooked" instead of "prevents overtraining").
 - Anchor any story in **what people do and how they feel**, not in what Pulse supposedly cures or clears.
 
+## Example Partner-Safe Narrative Lines by ICP
+
+Each line below combines the behavior-only promise, at least one core metric, and green-listed language. These are templates, not scripts — partners can adjust details while staying inside the rails.
+
+### Brands (supplements, wearables, recovery tools)
+
+1. **Behavior focus: shortening gaps & readiness**  
+   "Pulse sits next to your product and catches the wobbles — when an athlete disappears for more than a few days, it nudges them back toward their plan and the small recovery rituals that help them feel ready to train again, instead of waiting until they’re cooked and bailing on their season."
+
+2. **Behavior focus: weekly rituals around the product**  
+   "Rather than promising instant results, Pulse helps your community stack three simple rituals around your product each week — a training touch, a recovery touch, and a readiness check-in — so they keep showing up long enough to actually feel the difference."
+
+3. **Behavior focus: noticing patterns with the product in the loop**  
+   "We don’t diagnose or clear anyone to play — we help them notice the patterns around their training, recovery tools, and ‘how cooked vs ready’ they feel, so they can make better decisions with their body and, when needed, their care team."
+
+### Gyms & Training Facilities
+
+1. **Behavior focus: >3-day gaps in attendance/training**  
+   "Pulse quietly holds the plan between sessions — when someone at your gym drifts past three days without checking in, it catches that wobble early and pulls them back in before ‘I missed a week’ turns into ‘I guess I’ll start again next month.’"
+
+2. **Behavior focus: 3+ rituals/week in the gym lane**  
+   "Instead of chasing perfect streaks, Pulse helps your members string together three small wins a week — two lifts and a walk, or a class plus a short recovery block — so they find a cadence that fits around work and family and actually stick with it."
+
+3. **Behavior focus: readiness behaviors around hard sessions**  
+   "We don’t tell members they’re safe to play; we help them build readiness habits around your hardest days — cool-downs, easy days, sleep-friendly choices — and check in with how their body feels so they show up ready more often and know when to dial it down."
+
+### Run Clubs & Endurance Communities
+
+1. **Behavior focus: closing gaps between runs**  
+   "Pulse watches for those gaps between runs — when someone slips past a few days with no movement, it shows up as a gentle pull back into the plan, turning ‘I ghosted the club for a week’ into ‘I missed a couple days but made it back for the Saturday run.’"
+
+2. **Behavior focus: 3+ rituals/week in the running lane**  
+   "For your runners, a win week might be one long run, one easy shakeout, and one simple recovery ritual. Pulse helps them protect those three touchpoints so they keep showing up, even when work, weather, or life gets in the way."
+
+3. **Behavior focus: feeling cooked vs ready**  
+   "We never clear an athlete to race — instead, Pulse helps them check in on how cooked vs ready they feel, see the patterns between their sleep, recovery days, and hard sessions, and decide with their own body when to push and when to back off."
+
 ## Where This Spine Should Be Used
 
 This spine is a **source document**, not a public artifact. It should be referenced whenever we are:
