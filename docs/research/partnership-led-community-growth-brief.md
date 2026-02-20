@@ -8,8 +8,46 @@
 
 **Purpose:** Set context for why partnership-led community growth is the right North Star for Pulse.
 
+### 1.1 Representative Platforms (Partnership- and Community-Led)
+
+Below is an initial list of 10 platforms that rely heavily on partnerships and communities. Later steps will analyze these in more depth.
+
+1. **Strava** — Social fitness network built around clubs, segments, and challenges.
+   - URL: https://www.strava.com
+
+2. **Nike Run Club (NRC) / Nike Training Club (NTC)** — Brand-led training ecosystems with creator coaches, run clubs, and in-app programs.
+   - URL: https://www.nike.com/nrc-app
+
+3. **Adidas Runners** — Global run-club ecosystem with city captains, in-person runs, and training cycles.
+   - URL: https://www.adidas.com/adidasrunners
+
+4. **Peloton** — Connected fitness platform where instructors and member communities drive recurring challenges, programs, and social engagement.
+   - URL: https://www.onepeloton.com
+
+5. **ClassPass** — Aggregator of gym/studio partners; growth and retention are driven by the breadth and quality of community gyms and classes.
+   - URL: https://classpass.com
+
+6. **Mindbody** — Platform powering thousands of gyms/studios, with partnerships at the studio level and ecosystem plays via integrations.
+   - URL: https://www.mindbodyonline.com
+
+7. **Whoop** — Wearable + subscription platform with a strong creator and team-based community (teams, leaderboards, and partner collabs).
+   - URL: https://www.whoop.com
+
+8. **Oura** — Readiness and sleep wearable; heavily amplified through wellness creator partnerships and habit-focused challenges.
+   - URL: https://ouraring.com
+
+9. **Zwift** — Virtual cycling and running platform with clubs, events, and brand/event partnerships (teams, races, training plans).
+   - URL: https://www.zwift.com
+
+10. **Garmin + Garmin Connect** — Wearable ecosystem with clubs, challenges, and integrations with run clubs and event organizers.
+    - URL: https://connect.garmin.com
+
+These examples span creator-first ecosystems, gym/studio platforms, run-club networks, and wearable/data-centric platforms — all of which lean on partnerships and communities to drive growth.
+
+### 1.2 Macro Trends (to be expanded)
+
 Outline:
-- Macro trends in fitness/wellness platforms (shift from pure B2C apps to ecosystem plays).
+- Shift from pure B2C apps to ecosystem plays (platforms as infrastructure for communities).
 - Growth of creator-led fitness and community-first brands.
 - Role of partnerships (brands, gyms, run clubs) in distribution, trust, and retention.
 - High-level taxonomy of relevant platform types:
