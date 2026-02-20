@@ -13,7 +13,7 @@ import { Camera, Eye, EyeOff, Loader2, CheckCircle, AlertTriangle } from 'lucide
 
 const SignUpPage: React.FC = () => {
   const router = useRouter();
-  const { type, coach, redirect, invite } = router.query; // Get the type, coach, redirect, and invite attribution parameters
+  const { type, coach, redirect, invite, partnerType, partnerId } = router.query; // Get the type, coach, redirect, invite, and partner attribution parameters
   
   const [formData, setFormData] = useState({
     email: '',
@@ -218,7 +218,7 @@ const SignUpPage: React.FC = () => {
       }
       
       // Create Firestore user document
-      const userData = {
+      const userData: any = {
         id: firebaseUser.uid,
         email: formData.email,
         username: uname,
@@ -247,6 +247,18 @@ const SignUpPage: React.FC = () => {
         createdAt: new Date(),
         updatedAt: new Date()
       };
+
+      // Optional partner attribution from query params
+      if (
+        typeof partnerType === 'string' &&
+        typeof partnerId === 'string' &&
+        ['brand', 'gym', 'runClub'].includes(partnerType)
+      ) {
+        userData.partnerSource = {
+          type: partnerType as 'brand' | 'gym' | 'runClub',
+          partnerId: partnerId,
+        };
+      }
       
       // Create User instance and save to Firestore
       const user = new User(firebaseUser.uid, userData);
