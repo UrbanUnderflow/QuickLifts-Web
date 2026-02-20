@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-02-16T19:50:00Z",
+  "lastUpdated": "2026-02-20T00:00:00Z",
   "deliverables": [
     {
       "id": "peptide-research-brief",
@@ -35,6 +35,23 @@
       "emoji": "📄",
       "completedAt": "2026-02-10T00:00:00Z",
       "taskRef": "Sage Task #5 — Propose an outline segment for the whitepaper",
+      "status": "complete"
+    },
+    {
+      "id": "health-narrative-spine-audience-purpose",
+      "title": "Pulse Health Narrative Spine — Audience & Purpose",
+      "filename": "health-narrative-spine-audience-purpose.md",
+      "category": "research-output",
+      "description": "Defines who the Pulse Health Narrative Spine is for, what it is meant to do, and where it should be referenced across decks, playbooks, and partner communications.",
+      "tags": [
+        "narrative",
+        "health-promise",
+        "brand-safety",
+        "partnerships"
+      ],
+      "emoji": "📡",
+      "completedAt": "2026-02-20T00:00:00Z",
+      "taskRef": "Health Narrative Spine Step 1/6 — Clarify audience and purpose",
       "status": "complete"
     }
   ]
