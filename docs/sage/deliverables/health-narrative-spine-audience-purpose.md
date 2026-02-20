@@ -36,6 +36,73 @@ These are the three behavior patterns Pulse cares about most. They’re written 
 3. **Readiness behaviors and feeling ready to train again**  
    We focus on the behaviors and self-checks that signal someone is ready (or not quite ready) to train again — things like sleep consistency, basic recovery rituals, and “how cooked vs ready” they report feeling. Pulse helps people build habits that support readiness (cool-downs, easy days, sleep-friendly choices) and catch early signs that they’re overcooked or on the verge of bailing, without ever telling them they are safe to play or cleared for activity. We measure and reflect back their own readiness signals so they can make better decisions with their body and, when needed, with their care team.
 
+## Red/Green Language Rails
+
+This is the shared vocabulary list for behavior-safe health narratives. **Green** phrases are what we actively lean on; **Red** phrases are what we avoid across all brands, gyms, and run clubs.
+
+### Green: Approved Verbs & Phrases (Behavior & Readiness)
+
+These phrases keep us anchored in behavior, self-reported readiness, and human stories:
+
+- **Show up / keep showing up**  
+  - "help more athletes show up for their plan"
+- **Stick with / stay with / keep going on**  
+  - "support people in sticking with their key rituals"
+- **Catch wobbles early**  
+  - "catch motivation wobbles before they turn into a month off"
+- **Shorten gaps / close >3-day gaps**  
+  - "shorten those >3-day gaps when life gets loud"
+- **Build / protect / support rituals**  
+  - "help them build simple recovery rituals they can actually keep"
+- **Feel more ready / feel ready to train again**  
+  - "help runners feel more ready to train again after hard efforts"
+- **Notice patterns / notice when things start to slide**  
+  - "make it easier to notice when their plan is starting to slide"
+- **Nudge / pull back in / bring back into the plan**  
+  - "gently nudge people back into the plan after a few off days"
+- **Find a sustainable cadence**  
+  - "find a cadence that fits around work, family, and life"
+- **Take the next small step / take the next right step**  
+  - "focus on the next small step instead of a perfect streak"
+- **Back off / dial it down when overcooked**  
+  - "help athletes see when they’re cooked and need to dial it down"
+- **Check in with their body / check in on how they’re feeling**  
+  - "build a habit of checking in on how their body feels before they go hard"
+- **Hold the plan / hold the container**  
+  - "hold the plan for them when their week gets chaotic"
+- **Make better decisions with their body**  
+  - "support better decisions with their body and their care team"
+
+### Red: Banned or High-Risk Claims (Clinical, Guarantees, or Overreach)
+
+These phrases drift into diagnosis, treatment, cure, or false certainty. We avoid them in all partner materials unless explicitly cleared by legal/medical review:
+
+- **Diagnose / identify conditions**  
+  - "diagnose overtraining", "identify heart issues early"
+- **Treat / heal / fix**  
+  - "treat back pain", "heal injuries", "fix their sleep problems"
+- **Cure / reverse / eliminate**  
+  - "cure burnout", "reverse chronic fatigue", "eliminate anxiety"
+- **Rebalance / optimize hormones**  
+  - "rebalance hormones", "optimize testosterone/cortisol"
+- **Safe to play / cleared to train / cleared to return**  
+  - "clear athletes to play", "tell them when it’s safe to push again"
+- **Injury-proof / bulletproof / guarantee no injury**  
+  - "injury-proof their season", "guarantee they won’t get hurt"
+- **Guarantee outcomes**  
+  - "guaranteed results", "ensure PRs", "make sure they never miss"
+- **Medical replacements**  
+  - "replace their physio", "replace their doctor", "replace medical clearance"
+- **Clinical-sounding metrics without backing**  
+  - "normalize HRV", "correct sleep architecture", "fix nervous system issues"
+- **Mental health treatment claims**  
+  - "treat depression", "cure anxiety", "fix burnout"
+
+When in doubt, we:
+
+- Swap **clinical or guarantee language** for **behavior + feeling language** (e.g., "helps them notice when they’re overcooked" instead of "prevents overtraining").
+- Anchor any story in **what people do and how they feel**, not in what Pulse supposedly cures or clears.
+
 ## Where This Spine Should Be Used
 
 This spine is a **source document**, not a public artifact. It should be referenced whenever we are:
