@@ -23,18 +23,26 @@ function computeTimeToFirstRoundDays(row: PartnerRow): number | null {
   return msDiff / (1000 * 60 * 60 * 24);
 }
 
+const TYPE_FILTER_OPTIONS: { label: string; value: PartnerType | "all" }[] = [
+  { label: "All Types", value: "all" },
+  { label: "Brands", value: "brand" },
+  { label: "Gyms", value: "gym" },
+  { label: "Run Clubs", value: "runClub" },
+];
+
 /**
  * Partner Onboarding Dashboard
  *
  * Admin-only view of partner onboarding across brands, gyms, and run clubs.
  * This client component is responsible for loading partner data from
  * Firestore and rendering a basic onboarding table. Subsequent steps will
- * add filters and charts on top of the loaded `partners` state.
+ * add charts on top of the loaded `partners` state.
  */
 export default function PartnerOnboardingDashboardPage() {
   const [partners, setPartners] = useState<PartnerRow[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<PartnerType | "all">("all");
 
   useEffect(() => {
     let isMounted = true;
@@ -83,13 +91,21 @@ export default function PartnerOnboardingDashboardPage() {
     };
   }, []);
 
+  const filteredPartners = useMemo(
+    () =>
+      typeFilter === "all"
+        ? partners
+        : partners.filter((p) => p.type === typeFilter),
+    [partners, typeFilter]
+  );
+
   const partnersWithTime = useMemo(
     () =>
-      partners.map((p) => ({
+      filteredPartners.map((p) => ({
         ...p,
         timeToFirstRoundDays: computeTimeToFirstRoundDays(p),
       })),
-    [partners]
+    [filteredPartners]
   );
 
   return (
@@ -103,7 +119,34 @@ export default function PartnerOnboardingDashboardPage() {
         </p>
       </header>
 
-      <section className="border rounded-lg bg-white shadow-sm p-4">
+      <section className="border rounded-lg bg-white shadow-sm p-4 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="text-sm text-gray-700">
+            <p>
+              Loaded <span className="font-semibold">{partners.length}</span> partners
+              from Firestore.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 text-sm">
+            <label htmlFor="type-filter" className="text-gray-700 font-medium">
+              Filter by type:
+            </label>
+            <select
+              id="type-filter"
+              className="border border-gray-300 rounded px-2 py-1 text-sm bg-white"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as PartnerType | "all")}
+            >
+              {TYPE_FILTER_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         {isLoading && (
           <p className="text-sm text-gray-600">Loading partner data…</p>
         )}
@@ -114,81 +157,72 @@ export default function PartnerOnboardingDashboardPage() {
 
         {!isLoading && !error && partnersWithTime.length === 0 && (
           <p className="text-sm text-gray-600">
-            No partners found yet. Once partners are onboarded via the
-            /api/partners/onboard endpoint, they will appear here.
+            No partners found for the selected type. Once partners are onboarded via
+            the /api/partners/onboard endpoint, they will appear here.
           </p>
         )}
 
         {!isLoading && !error && partnersWithTime.length > 0 && (
-          <div className="space-y-4">
-            <div className="text-sm text-gray-700">
-              <p>
-                Loaded <span className="font-semibold">{partnersWithTime.length}</span>{" "}
-                partners from Firestore.
-              </p>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-full border border-gray-200 text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
-                      Partner
-                    </th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
-                      Type
-                    </th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
-                      Onboarding Stage
-                    </th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
-                      Invited At
-                    </th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
-                      First Round Created At
-                    </th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
-                      Time to First Round (days)
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {partnersWithTime.map((row) => {
-                    const invitedLabel = row.invitedAt.toLocaleString();
-                    const firstRoundLabel = row.firstRoundCreatedAt
-                      ? row.firstRoundCreatedAt.toLocaleString()
+          <div className="overflow-x-auto">
+            <table className="min-w-full border border-gray-200 text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
+                    Partner
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
+                    Type
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
+                    Onboarding Stage
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
+                    Invited At
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
+                    First Round Created At
+                  </th>
+                  <th className="px-3 py-2 text-left font-medium text-gray-700 border-b">
+                    Time to First Round (days)
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {partnersWithTime.map((row) => {
+                  const invitedLabel = row.invitedAt.toLocaleString();
+                  const firstRoundLabel = row.firstRoundCreatedAt
+                    ? row.firstRoundCreatedAt.toLocaleString()
+                    : "—";
+                  const timeLabel =
+                    row.timeToFirstRoundDays != null
+                      ? row.timeToFirstRoundDays.toFixed(1)
                       : "—";
-                    const timeLabel =
-                      row.timeToFirstRoundDays != null
-                        ? row.timeToFirstRoundDays.toFixed(1)
-                        : "—";
 
-                    return (
-                      <tr key={row.id} className="hover:bg-gray-50">
-                        <td className="px-3 py-2 border-b font-medium text-gray-900">
-                          {row.name}
-                        </td>
-                        <td className="px-3 py-2 border-b capitalize">
-                          {row.type}
-                        </td>
-                        <td className="px-3 py-2 border-b">
-                          {row.onboardingStage}
-                        </td>
-                        <td className="px-3 py-2 border-b whitespace-nowrap">
-                          {invitedLabel}
-                        </td>
-                        <td className="px-3 py-2 border-b whitespace-nowrap">
-                          {firstRoundLabel}
-                        </td>
-                        <td className="px-3 py-2 border-b text-right">
-                          {timeLabel}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                  return (
+                    <tr key={row.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 border-b font-medium text-gray-900">
+                        {row.name}
+                      </td>
+                      <td className="px-3 py-2 border-b capitalize">
+                        {row.type}
+                      </td>
+                      <td className="px-3 py-2 border-b">
+                        {row.onboardingStage}
+                      </td>
+                      <td className="px-3 py-2 border-b whitespace-nowrap">
+                        {invitedLabel}
+                      </td>
+                      <td className="px-3 py-2 border-b whitespace-nowrap">
+                        {firstRoundLabel}
+                      </td>
+                      <td className="px-3 py-2 border-b text-right">
+                        {timeLabel}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </section>
