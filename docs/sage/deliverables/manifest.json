@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-02-20T20:30:00Z",
+  "lastUpdated": "2026-02-20T20:35:00Z",
   "deliverables": [
     {
       "id": "peptide-research-brief",
@@ -103,6 +103,23 @@
       "emoji": "📊",
       "completedAt": "2026-02-20T20:30:00Z",
       "taskRef": "Pulse-fit Community Partners A-list Step 3/5 — Behavioral signal capture",
+      "status": "complete"
+    },
+    {
+      "id": "pulse-x-community-task-plan-outline",
+      "title": "Pulse x Community Task Plan — Artifact Outline",
+      "filename": "pulse-x-community-task-plan-outline.md",
+      "category": "research-output",
+      "description": "One-page outline of the Pulse x Community narrative and ICP strategy artifacts, with purpose and usage for each document.",
+      "tags": [
+        "partnerships",
+        "community",
+        "narrative",
+        "icp"
+      ],
+      "emoji": "🧩",
+      "completedAt": "2026-02-20T20:35:00Z",
+      "taskRef": "Pulse x Community Task Breakdown Step 1/5 — Artifact outline",
       "status": "complete"
     }
   ]
