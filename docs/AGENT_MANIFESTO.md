@@ -235,6 +235,7 @@ For any lead/prospect/partnership claim:
 ### What’s already verified
 
 - The **code for the ..."
+- **[2026-02-20] Nora** — Step "Add a helper module `server/partners/playbookConfig.ts` that imports `config/partnerPlaybook.json` and exposes a function `getPlaybookForType(type: 'brand'|'gym'|'runClub')` returning the corresponding step array, with type definitions shared with the rest of the backend." still had issues after 2 retries. Output signals: \berror\b, \bmissing\b. Last output: "The helper module for playbook configuration is already implemented correctly; the repeated “failure” is just the explan..."
 ---
 
 ## Operational Rules
