@@ -9725,3 +9725,61 @@ OBJECTIVE_CODE:
 CREATED_AT: 2025-07-18
 UPDATED_AT: 2026-02-11
 NOTES: 
+
+## Partnership-Led Community Growth
+
+### Harden partner onboarding API for time-to-first-round telemetry [BOARD-local-NS-API]
+
+STATUS: todo
+PROJECT: Partnership-Led Community Growth
+THEME: Partnerships
+ASSIGNEE: Nora ⚡️
+LANE: meanings
+COLOR: green
+OBJECTIVE_CODE: NS-PARTNERSHIP-PIPELINE
+NORTH_STAR: Partnership-Led Community Growth
+CREATED_AT: 2026-02-20
+UPDATED_AT: 2026-02-20
+NOTES: Ensure src/pages/api/partners/onboard.ts reliably sets invitedAt and firstRoundCreatedAt and logs partner type so time-to-first-round can be measured per brand, gym, and runClub.
+
+### Make partner dashboard the single pane of glass for time-to-first-round [BOARD-local-NS-DASHBOARD]
+
+STATUS: todo
+PROJECT: Partnership-Led Community Growth
+THEME: Metrics
+ASSIGNEE: Nora ⚡️
+LANE: meanings
+COLOR: yellow
+OBJECTIVE_CODE: NS-PARTNERSHIP-DASHBOARD
+NORTH_STAR: Partnership-Led Community Growth
+CREATED_AT: 2026-02-20
+UPDATED_AT: 2026-02-20
+NOTES: Evolve web/app/partners/dashboard.tsx so partnership ops can see per-partner time-to-first-round, lane averages (brand/gym/runClub), and a clear "unblock next" list tied to the North Star.
+
+### Codify partner playbooks as versioned config for all three lanes [BOARD-local-NS-PLAYBOOK]
+
+STATUS: todo
+PROJECT: Partnership-Led Community Growth
+THEME: Foundations
+ASSIGNEE: Nora ⚡️
+LANE: meanings
+COLOR: blue
+OBJECTIVE_CODE: NS-PARTNERSHIP-PLAYBOOK
+NORTH_STAR: Partnership-Led Community Growth
+CREATED_AT: 2026-02-20
+UPDATED_AT: 2026-02-20
+NOTES: Treat config/partnerPlaybook.json and server/partners/playbookConfig.ts as the canonical partner onboarding playbook registry for brands, gyms, and run clubs; add fields needed for measurement against the Pulse-for-Communities narrative spine.
+
+### Ship a branded surface for high-signal partner campaigns [BOARD-local-NS-CAMPAIGN-BANNER]
+
+STATUS: todo
+PROJECT: Partnership-Led Community Growth
+THEME: Brand
+ASSIGNEE: Nora ⚡️
+LANE: signals
+COLOR: red
+OBJECTIVE_CODE: NS-PARTNERSHIP-CAMPAIGN
+NORTH_STAR: Partnership-Led Community Growth
+CREATED_AT: 2026-02-20
+UPDATED_AT: 2026-02-20
+NOTES: Design and implement web/components/BrandCampaignBanner.tsx to showcase co-branded challenges and campaigns sourced from tier-1 partners, wired to the partner playbook and dashboard telemetry.
