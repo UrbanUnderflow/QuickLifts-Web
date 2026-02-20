@@ -58,13 +58,31 @@ Example outputs:
 
         if (useOpenClaw) {
             try {
-                const { execSync } = require('child_process');
+                const { spawnSync } = require('child_process');
                 const clawPrompt = `${systemPrompt}\n\n${userPrompt}`;
-                const escaped = clawPrompt.replace(/'/g, "'\\''");
-                const result = execSync(
-                    `openclaw chat send '${escaped}' --agent main --json 2>/dev/null`,
-                    { encoding: 'utf8', timeout: 45_000 }
-                ).trim();
+                const spawnResult = spawnSync(
+                    process.env.OPENCLAW_BIN || 'openclaw',
+                    [
+                        '--no-color',
+                        'agent',
+                        '--local',
+                        '--agent',
+                        process.env.OPENCLAW_AGENT_ID || 'main',
+                        '--message',
+                        clawPrompt,
+                        '--timeout',
+                        '45',
+                    ],
+                    { encoding: 'utf8', timeout: 60_000, maxBuffer: 5 * 1024 * 1024, cwd: process.cwd(), env: process.env }
+                );
+
+                if (spawnResult.error) {
+                    throw spawnResult.error;
+                }
+                if (spawnResult.status !== 0) {
+                    throw new Error((spawnResult.stderr || spawnResult.stdout || '').trim() || `openclaw exit ${spawnResult.status}`);
+                }
+                const result = String(spawnResult.stdout || '').trim();
 
                 if (result) {
                     try {

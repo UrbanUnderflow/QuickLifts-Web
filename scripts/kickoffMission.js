@@ -23,7 +23,7 @@
 
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-const { execSync } = require('child_process');
+const { spawnSync } = require('child_process');
 
 /* ─── Config ─────────────────────────────────────────── */
 
@@ -113,11 +113,30 @@ async function loadProposedObjectives() {
 async function callGPT(systemPrompt, userPrompt, maxTokens = 2000) {
     if (USE_OPENCLAW) {
         const clawPrompt = `${systemPrompt}\n\n${userPrompt}`;
-        const escaped = clawPrompt.replace(/'/g, "'\\''");
-        const result = execSync(
-            `${OPENCLAW_BIN} chat send '${escaped}' --agent ${OPENCLAW_AGENT_ID} --json 2>/dev/null`,
-            { encoding: 'utf8', timeout: 120_000, maxBuffer: 10 * 1024 * 1024 }
-        ).trim();
+        const spawnResult = spawnSync(
+            OPENCLAW_BIN,
+            [
+                '--no-color',
+                'agent',
+                '--local',
+                '--agent',
+                OPENCLAW_AGENT_ID,
+                '--message',
+                clawPrompt,
+                '--timeout',
+                '90',
+            ],
+            { encoding: 'utf8', timeout: 120_000, maxBuffer: 10 * 1024 * 1024, cwd: process.cwd(), env: process.env }
+        );
+
+        if (spawnResult.error) {
+            throw new Error(`OpenClaw mission planning failed to start: ${spawnResult.error.message}`);
+        }
+        if (spawnResult.status !== 0) {
+            const detail = (spawnResult.stderr || spawnResult.stdout || '').trim();
+            throw new Error(`OpenClaw mission planning failed (exit ${spawnResult.status}): ${detail.substring(0, 500)}`);
+        }
+        const result = String(spawnResult.stdout || '').trim();
 
         let content = result;
         try {

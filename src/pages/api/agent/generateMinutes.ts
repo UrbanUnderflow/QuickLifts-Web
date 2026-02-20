@@ -127,13 +127,31 @@ Generate comprehensive, high-signal meeting minutes. Every section must directly
         // Prefer OpenClaw when enabled so API-key billing is never used accidentally.
         if (useOpenClaw) {
             try {
-                const { execSync } = require('child_process');
+                const { spawnSync } = require('child_process');
                 const clawPrompt = `${systemPrompt}\n\n${userPrompt}`;
-                const escaped = clawPrompt.replace(/'/g, "'\\''");
-                const result = execSync(
-                    `openclaw chat send '${escaped}' --agent main --json 2>/dev/null`,
-                    { encoding: 'utf8', timeout: 60_000 }
-                ).trim();
+                const spawnResult = spawnSync(
+                    process.env.OPENCLAW_BIN || 'openclaw',
+                    [
+                        '--no-color',
+                        'agent',
+                        '--local',
+                        '--agent',
+                        process.env.OPENCLAW_AGENT_ID || 'main',
+                        '--message',
+                        clawPrompt,
+                        '--timeout',
+                        '90',
+                    ],
+                    { encoding: 'utf8', timeout: 120_000, maxBuffer: 10 * 1024 * 1024, cwd: process.cwd(), env: process.env }
+                );
+
+                if (spawnResult.error) {
+                    throw spawnResult.error;
+                }
+                if (spawnResult.status !== 0) {
+                    throw new Error((spawnResult.stderr || spawnResult.stdout || '').trim() || `openclaw exit ${spawnResult.status}`);
+                }
+                const result = String(spawnResult.stdout || '').trim();
 
                 // Try to parse the response
                 try {
