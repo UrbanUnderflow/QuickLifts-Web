@@ -41,3 +41,19 @@ Short gaps of a few days are normal and often followed by a return; long gaps of
 ### 5. Behavior-First, Not Outcome-First, Narratives
 
 Digital health regulators and the underlying science both reinforce that behavior-support tools should talk about **what people do** (sessions, gaps, rituals, readiness check-ins), not about clinical endpoints they don’t directly measure. Partners who lean into behavior-first stories—"our members are holding three rituals a week," "fewer people disappearing for a month"—are more credible and sustainable than those promising injury-proofing or hormone fixes. Pulse’s role is to give those partners clean, behavior-level receipts they can safely build narratives around.
+
+## Recommendations for Pulse Partnerships
+
+- **Anchor around three weekly rituals per lane.** Work with partners to define lane-specific weekly templates (e.g., two lifts + one run, one long run + two recovery blocks) and make "weeks hitting 3+ rituals" the north-star engagement metric, not daily streaks.
+- **Design community-visible behaviors, not just content drops.** Encourage brands, gyms, and run clubs to frame Pulse rounds as shared rituals ("Tuesday crew run", "Saturday lift"), with attendance and consistency visible to the community, rather than one-way content or workouts people do in isolation.
+- **Use gap-aware nudges in the partner’s voice.** When a partner-sourced user hits a >3-day gap, surface that as a relationship moment for the partner—coach check-ins, run leader notes, or gym announcements—so the nudge feels like care from the community, not generic app churn prevention.
+- **Weave readiness and recovery into the culture.** Encourage partners to pair hard efforts with simple readiness and recovery prompts (e.g., "rate how cooked vs ready you feel," "what’s one small recovery ritual tonight?") and celebrate scaled days as legitimate wins, reinforcing a sustainable training identity.
+- **Let human leaders front the story while Pulse holds the rails.** In partner programs and challenges, position coaches, creators, and run leaders as the primary guides; Pulse quietly tracks behaviors, highlights wobbles, and powers dashboards and receipts that those leaders can share back with their communities.
+
+## Risks & Guardrails
+
+- **Avoid clinical and clearance claims.** Do not allow partner or Pulse copy to state or imply that the app or any program "diagnoses," "treats," "cures," "prevents" injury or disease, or "clears" someone to play; readiness scores and behavior trends are support tools, not medical decisions.
+- **Be honest about recovery effects.** Recovery rituals and partner products can support feeling more ready and sticking with the plan, but evidence for many interventions is modest; avoid language like "fixes sleep," "rebalance hormones," or "cures burnout" and center behavior support instead.
+- **Keep retention metrics framed as behavior, not health outcomes.** When sharing 30-day or cohort retention stats with partners, explicitly describe them as "how consistently people are showing up" rather than as proxies for VO2max, injury rates, or long-term health risk.
+- **Respect the limits of self-guided recovery.** Make it clear that Pulse and partners support daily recovery choices and load management but do not replace physios, doctors, or mental health professionals; encourage users to seek care when pain, fatigue, or mood issues persist.
+- **Watch for inequity and overreach in challenge design.** Very aggressive frequency or volume targets can unintentionally favor already-fit members and encourage overreaching in others; use Pulse data (gaps, readiness, adherence patterns) to co-design challenges with ramps, deloads, and multiple "ways to win" so more members can participate safely.
