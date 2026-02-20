@@ -97,7 +97,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             detached: true,
             stdio: ['ignore', 'pipe', 'pipe'],
             cwd: process.cwd(),
-            env: { ...process.env },
+            env: {
+                ...process.env,
+                // Mission kickoff should use OpenClaw OAuth by default.
+                USE_OPENCLAW: process.env.USE_OPENCLAW ?? 'true',
+            },
         });
 
         let stderr = '';
