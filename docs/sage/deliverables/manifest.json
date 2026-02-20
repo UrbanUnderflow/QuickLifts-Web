@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-02-20T20:45:00Z",
+  "lastUpdated": "2026-02-20T21:00:00Z",
   "deliverables": [
     {
       "id": "peptide-research-brief",
@@ -67,7 +67,7 @@
         "icp"
       ],
       "emoji": "📋",
-        "completedAt": "2026-02-20T19:54:00Z",
+      "completedAt": "2026-02-20T19:54:00Z",
       "taskRef": "Pulse-fit Community Partners A-list Step 1/5 — Define criteria by ICP",
       "status": "complete"
     },
@@ -120,6 +120,23 @@
       "emoji": "🎯",
       "completedAt": "2026-02-20T20:45:00Z",
       "taskRef": "Pulse-fit Community Partners A-list Step 4/5 — Fit tier tagging",
+      "status": "complete"
+    },
+    {
+      "id": "pulse-fit-community-partners-a-list",
+      "title": "Pulse-fit Community Partners A-list",
+      "filename": "pulse-fit-community-partners-a-list.md",
+      "category": "research-output",
+      "description": "Final A-list by ICP (Brands, Gyms/Studios, Run Clubs) with structured partner profiles: ecosystem summary, behavioral signals (Unverified), channels, fit tier, and Pulse fit sentence.",
+      "tags": [
+        "partnerships",
+        "community",
+        "a-list",
+        "icp"
+      ],
+      "emoji": "⭐",
+      "completedAt": "2026-02-20T21:00:00Z",
+      "taskRef": "Pulse-fit Community Partners A-list Step 5/5 — Compile structured A-list",
       "status": "complete"
     }
   ]
