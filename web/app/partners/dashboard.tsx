@@ -22,6 +22,14 @@ export default function PartnerDashboardPage() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const latestRetention = useMemo(() => {
+    if (!retentionSeries || retentionSeries.length === 0) return null;
+    return retentionSeries[retentionSeries.length - 1];
+  }, [retentionSeries]);
+
+  const latestPercent = latestRetention ? latestRetention.retentionRate * 100 : null;
+  const isAboveThreshold = latestPercent !== null && latestPercent >= 40;
+
   useEffect(() => {
     let isMounted = true;
 
@@ -91,16 +99,42 @@ export default function PartnerDashboardPage() {
           </p>
         )}
 
-        {/* Placeholder container for the upcoming 30-day trend chart and summary. */}
         {!isLoading && !error && retentionSeries.length > 0 && (
-          <div className="mt-4">
-            {/*
-              Step 3 will render the actual TimeSeriesChart here and add a
-              numeric summary with threshold highlighting.
-            */}
-            <pre className="text-xs bg-gray-50 border rounded p-2 overflow-x-auto">
-              {JSON.stringify(retentionSeries, null, 2)}
-            </pre>
+          <div className="mt-4 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+              <div className="flex-1">
+                <TimeSeriesChart
+                  data={retentionSeries.map<TimeSeriesPoint>((point) => ({
+                    label: point.date,
+                    value: point.retentionRate,
+                  }))}
+                  height={140}
+                />
+              </div>
+
+              <div className="w-full md:w-48 border rounded-lg p-3 bg-gray-50">
+                <p className="text-xs font-medium text-gray-600 mb-1">
+                  Current 30-day retention
+                </p>
+                {latestPercent !== null ? (
+                  <p
+                    className={
+                      "text-2xl font-semibold " +
+                      (isAboveThreshold ? "text-green-600" : "text-red-600")
+                    }
+                  >
+                    {latestPercent.toFixed(0)}%
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-500">Not enough data yet.</p>
+                )}
+                <p className="mt-1 text-[11px] text-gray-600">
+                  Target: 
+                  <span className="font-semibold"> 40% monthly retention</span> for
+                  users sourced through your partnership.
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </section>
