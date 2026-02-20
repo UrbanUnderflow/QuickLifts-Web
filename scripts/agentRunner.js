@@ -1933,7 +1933,9 @@ async function checkIdleAndNudge() {
 
 /**
  * If this agent has no tasks at all, generate one from the North Star.
- * Called from the main loop after consecutive idle cycles.
+ * In mission-active mode: uses GPT to identify the least-progressed objective
+ * and generates a concrete, targeted task.
+ * In idle mode: falls back to role-based defaults.
  */
 async function selfAssignTask() {
     try {
@@ -1945,40 +1947,143 @@ async function selfAssignTask() {
             .get();
         if (!existing.empty) return null; // Race condition — task appeared
 
-        // Load North Star for alignment
-        const northStar = await loadNorthStar();
-        const nsTitle = northStar ? northStar.split('\n').find(l => l.startsWith('Goal:'))?.replace('Goal:', '').trim() : '';
+        // Check if mission is active — if so, use smarter North Star-aware self-assignment
+        let missionActive = false;
+        let missionObjective = '';
+        try {
+            const missionSnap = await db.doc('company-config/mission-status').get();
+            const missionData = missionSnap.exists ? missionSnap.data() : null;
+            missionActive = missionData?.status === 'active';
+            missionObjective = missionData?.agentObjectives?.[AGENT_ID] || '';
+        } catch (_) { }
 
-        // Role-based default tasks aligned to North Star
+        // Load North Star
+        const nsSnap = await db.collection('company-config').doc('north-star').get();
+        const ns = nsSnap.exists ? nsSnap.data() : null;
+        const nsTitle = ns?.title || '';
+        const nsObjectives = ns?.objectives || [];
+
+        // ── MISSION MODE: GPT-powered self-assignment ──
+        if (missionActive && nsTitle && process.env.OPENAI_API_KEY) {
+            try {
+                // Find what's already been done toward this agent's objective
+                const recentDone = await db.collection(KANBAN_COLLECTION)
+                    .where('assignee', '==', AGENT_NAME)
+                    .where('status', 'in', ['done', 'needs-review'])
+                    .orderBy('updatedAt', 'desc')
+                    .limit(8)
+                    .get();
+                const recentDoneTasks = recentDone.docs.map(d => d.data().name).join(', ');
+
+                // Find all recent tasks across all agents to avoid duplication
+                const allRecentInProgress = await db.collection(KANBAN_COLLECTION)
+                    .where('status', 'in', ['todo', 'in-progress'])
+                    .orderBy('createdAt', 'desc')
+                    .limit(20)
+                    .get();
+                const inProgressNames = allRecentInProgress.docs.map(d => `${d.data().assignee}: ${d.data().name}`).join('\n');
+
+                const agentStrengths = {
+                    nora: 'engineering, code, deployment, Firestore, APIs, infrastructure',
+                    scout: 'data analysis, research, metrics, user insights, competitive analysis',
+                    solara: 'brand voice, content, messaging, community, marketing copy',
+                    sage: 'health science, fitness research, wellness content, clinical evidence',
+                };
+
+                const systemPrompt = [
+                    `You are ${AGENT_NAME} at Pulse (FitWithPulse.ai).`,
+                    `Your expertise: ${agentStrengths[AGENT_ID] || 'general'}`,
+                    ``,
+                    `NORTH STAR: ${nsTitle}`,
+                    ns?.description ? `Context: ${ns.description.substring(0, 300)}` : '',
+                    nsObjectives.length > 0 ? `Objectives:\n${nsObjectives.map((o, i) => `  ${i + 1}. ${o}`).join('\n')}` : '',
+                    missionObjective ? `\nYOUR CLAIMED OBJECTIVE: ${missionObjective}` : '',
+                    ``,
+                    `WORK ALREADY DONE (do NOT repeat these):`,
+                    recentDoneTasks || 'Nothing yet',
+                    ``,
+                    `CURRENTLY IN PROGRESS BY ALL AGENTS (do NOT duplicate):`,
+                    inProgressNames || 'Nothing',
+                    ``,
+                    `TASK: Generate ONE new concrete task for yourself that directly advances your objective.`,
+                    `Requirements:`,
+                    `- Name a specific file path, Firestore collection, API endpoint, or UI component`,
+                    `- The task must produce a verifiable artifact (code file, config, .md in docs/)`,
+                    `- Do NOT create planning docs or analysis docs — create REAL things`,
+                    `- Match your strengths: ${agentStrengths[AGENT_ID] || 'general work'}`,
+                ].filter(Boolean).join('\n');
+
+                const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                    },
+                    body: JSON.stringify({
+                        model: 'gpt-4o-mini',
+                        messages: [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: 'Generate the next task. Return JSON: { "name": "...", "description": "...", "priority": "high|medium|low", "complexity": 1-5, "direct_impact": "..." }' },
+                        ],
+                        temperature: 0.3,
+                        max_tokens: 500,
+                        response_format: { type: 'json_object' },
+                    }),
+                });
+                const data = await resp.json();
+                const taskResult = JSON.parse(data.choices?.[0]?.message?.content || '{}');
+
+                if (taskResult.name && taskResult.name.length > 5) {
+                    const docRef = await db.collection(KANBAN_COLLECTION).add({
+                        name: taskResult.name,
+                        description: `${taskResult.description || ''}\n\n**North Star Impact:** ${taskResult.direct_impact || ''}`,
+                        assignee: AGENT_NAME,
+                        status: 'todo',
+                        priority: taskResult.priority || 'high',
+                        complexity: taskResult.complexity || 3,
+                        source: 'self-assigned-mission',
+                        northStarObjective: missionObjective || nsTitle,
+                        northStarDirectImpact: taskResult.direct_impact || '',
+                        missionGenerated: true,
+                        createdAt: FieldValue.serverTimestamp(),
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+
+                    console.log(`🎯 Mission self-assigned: "${taskResult.name}" (${docRef.id})`);
+                    await postBeat('hypothesis', `🎯 Self-assigned: "${taskResult.name}" (mission mode)`, {
+                        taskId: docRef.id,
+                        color: 'green',
+                        objectiveCode: docRef.id,
+                        lensTag: 'mission',
+                    });
+                    return docRef.id;
+                }
+            } catch (gptErr) {
+                console.warn('⚠️  GPT self-assignment failed, falling back to defaults:', gptErr.message);
+            }
+        }
+
+        // ── IDLE MODE: Role-based defaults ──
         const roleTasks = {
             nora: {
-                name: nsTitle
-                    ? `Audit task queues and plan next steps toward: ${nsTitle}`
-                    : 'Audit agent task queues and identify blockers',
-                description: `Review the kanban board for all agents. Check for blocked tasks, stale in-progress items. ${nsTitle ? `Create follow-up tasks aligned to our North Star: "${nsTitle}".` : 'Create follow-up tasks as needed.'}`,
+                name: nsTitle ? `Audit task queues and unblock work toward: ${nsTitle}` : 'Audit agent task queues and identify blockers',
+                description: `Review the kanban board for all agents. Check for blocked tasks, stale in-progress items. ${nsTitle ? `Create follow-up tasks aligned to North Star: "${nsTitle}".` : 'Create follow-up tasks as needed.'}`,
             },
             scout: {
-                name: nsTitle
-                    ? `Research analysis supporting: ${nsTitle}`
-                    : 'Competitive analysis: top 3 fitness app features',
-                description: `Analyze features and trends relevant to Pulse. ${nsTitle ? `Focus on insights that support our North Star: "${nsTitle}".` : 'Identify opportunities for Pulse to differentiate.'} Write findings as a .md deliverable in docs/research/.`,
+                name: nsTitle ? `Research: competitive insights for ${nsTitle}` : 'Competitive analysis: top 3 fitness app features',
+                description: `Research and analyze market trends relevant to Pulse. ${nsTitle ? `Focus on insights that support: "${nsTitle}".` : ''} Save findings as .md in docs/research/.`,
             },
             solara: {
-                name: nsTitle
-                    ? `Brand content aligned to: ${nsTitle}`
-                    : 'Draft content for the next community engagement post',
-                description: `Create content that reflects Pulse's brand values. ${nsTitle ? `Align messaging with our North Star: "${nsTitle}".` : 'Focus on authenticity, community, and movement.'} Save as .md in docs/deliverables/.`,
+                name: nsTitle ? `Content: brand messaging aligned to ${nsTitle}` : 'Draft community engagement content',
+                description: `Create brand content aligned to Pulse values. ${nsTitle ? `Align messaging with: "${nsTitle}".` : ''} Save as .md in docs/deliverables/.`,
             },
             sage: {
-                name: nsTitle
-                    ? `Research synthesis supporting: ${nsTitle}`
-                    : 'Research synthesis: top 3 recovery science insights',
-                description: `Synthesize relevant health/science insights. ${nsTitle ? `Prioritize findings that support our North Star: "${nsTitle}".` : 'Focus on recovery, training, and health tech.'} Write as .md deliverable in docs/research/.`,
+                name: nsTitle ? `Health science synthesis for ${nsTitle}` : 'Research synthesis: recovery science insights',
+                description: `Synthesize health/science insights relevant to Pulse. ${nsTitle ? `Support objective: "${nsTitle}".` : ''} Save as .md in docs/research/.`,
             },
         };
 
         const taskData = roleTasks[AGENT_ID] || roleTasks.scout;
-
         const docRef = await db.collection(KANBAN_COLLECTION).add({
             name: taskData.name,
             description: taskData.description,
@@ -1991,17 +2096,71 @@ async function selfAssignTask() {
         });
 
         console.log(`⭐ Self-assigned task: "${taskData.name}" (${docRef.id})`);
-
-        // Post beat about self-assignment
         await postBeat('hypothesis', `Self-assigned: "${taskData.name}" (idle — no tasks in queue)`, {
-            taskId: docRef.id,
-            color: 'blue',
-            objectiveCode: docRef.id,
+            taskId: docRef.id, color: 'blue', objectiveCode: docRef.id,
         });
-
         return docRef.id;
     } catch (err) {
         console.error('⚠️  Self-assign failed:', err.message);
+        return null;
+    }
+}
+
+/* ─── Agent Objective Proposals ──────────────────────── */
+
+/**
+ * Allow agents to propose a new North Star objective during work.
+ * The proposal appears in the Mission Control UI for admin approval.
+ * Auto-approves after 24h if not acted on.
+ *
+ * @param {string} title - Brief objective title
+ * @param {string} reason - Why this matters for the North Star
+ * @param {object} opts - Additional context
+ */
+async function proposeObjective(title, reason, opts = {}) {
+    if (!title || title.length < 5) return null;
+    try {
+        const autoApproveAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h from now
+
+        const ref = await db.collection('northstar-proposed-objectives').add({
+            title,
+            reason: (reason || '').substring(0, 500),
+            proposedBy: AGENT_ID,
+            proposedByName: AGENT_NAME,
+            proposedByEmoji: AGENT_EMOJI,
+            status: 'proposed',      // proposed → approved | rejected | auto-approved
+            autoApproveAt,
+            taskContext: opts.taskId ? { taskId: opts.taskId, taskName: opts.taskName || '' } : null,
+            evidence: opts.evidence || '',
+            proposedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        console.log(`💡 Proposed objective: "${title}" (${ref.id})`);
+
+        // Post a beat so it shows up in the Activity Feed
+        await postBeat('signal-spike', `💡 ${AGENT_NAME} proposed new objective: "${title}"`, {
+            color: 'blue',
+            lensTag: 'mission',
+            objectiveCode: 'PROPOSED-OBJECTIVE',
+            artifactText: reason,
+        });
+
+        // Notify admin via proactive message
+        await db.collection('agent-commands').add({
+            from: AGENT_ID,
+            to: 'admin',
+            type: 'chat',
+            content: `💡 I discovered something worth adding to our North Star.\n\n**Proposed Objective:** ${title}\n**Reason:** ${reason}\n\nThis will auto-approve in 24 hours if you don't review it. You can approve or reject it in Mission Control.`,
+            metadata: { proactiveType: 'suggestion', proposedObjectiveId: ref.id },
+            status: 'completed',
+            createdAt: FieldValue.serverTimestamp(),
+            completedAt: FieldValue.serverTimestamp(),
+        });
+
+        return ref.id;
+    } catch (err) {
+        console.warn('⚠️  proposeObjective failed:', err.message);
         return null;
     }
 }
@@ -2035,7 +2194,7 @@ async function noraTaskManagerSweep() {
             // Check if we already auto-assigned in the last 2 hours
             const recentAssign = await db.collection(KANBAN_COLLECTION)
                 .where('assignee', '==', displayName)
-                .where('source', '==', 'nora-task-manager')
+                .where('source', 'in', ['nora-task-manager', 'mission-kickoff'])
                 .orderBy('createdAt', 'desc')
                 .limit(1)
                 .get();
@@ -3980,9 +4139,28 @@ async function decomposeTask(task) {
     }
 
     const thinkingStyle = cachedSoul?.thinking || '';
-    var decomposePrompt = `You are ${AGENT_NAME}, a task decomposition specialist. Break down tasks into 3-6 granular executable steps.
-Each step should be a clear, specific action — not generic like "Analyze" or "Implement".
-${thinkingStyle ? `\nYour thinking approach:\n${thinkingStyle}\nApply this thinking pattern when structuring the steps.\n` : ''}
+    // Load North Star for grounding the decomposition
+    let nsDecomposeBlock = '';
+    try {
+        const nsSnap = await db.collection('company-config').doc('north-star').get();
+        const ns = nsSnap.exists ? nsSnap.data() : null;
+        if (ns?.title) {
+            nsDecomposeBlock = `\nCompany North Star: ${ns.title}\n${ns.description ? ns.description.substring(0, 200) : ''}\n`;
+        }
+    } catch (_) { }
+
+    var decomposePrompt = `You are ${AGENT_NAME}, a task decomposition specialist.
+${nsDecomposeBlock}
+Your job: break this task into 3-6 CONCRETE, VERIFIABLE execution steps.
+
+RULES (follow strictly):
+1. Every step must describe what REAL ARTIFACT is created/modified: name the file path, function, Firestore collection, or UI component. No vague steps.
+2. Steps like "Analyze requirements", "Plan the approach", or "Document findings" are FORBIDDEN unless the task is explicitly a research task.
+3. If the whole task is just "write a plan/strategy doc" — the steps must still end with a real implementation step, not more planning.
+4. The FINAL step must verify the artifact exists: e.g., "Verify src/components/Foo.tsx exists and exports correctly" or "Confirm Firestore document /users/test contains field X".
+5. Each step's reasoning must explain how it moves toward the North Star.
+
+${thinkingStyle ? `Your thinking approach:\n${thinkingStyle}\n` : ''}
 Return JSON only: { "steps": [{ "description": "...", "reasoning": "..." }] }
 
 Task: ${task.name}
@@ -5150,6 +5328,155 @@ async function run() {
             const finalStatus = hasIssues ? 'completed-with-issues' : 'completed';
 
             if (allPassed) {
+                // ─── North Star Alignment Gate ───────────────────
+                // After every task: evaluate what was actually delivered and
+                // whether it meaningfully moves us toward the North Star.
+                // This runs even without USE_OPENCLAW — it uses OPENAI_API_KEY directly.
+                const northStarAlignmentGate = async (task, steps) => {
+                    if (!process.env.OPENAI_API_KEY) return null;
+                    try {
+                        // Collect what the agent actually did
+                        const stepSummary = steps.map((s, i) =>
+                            `Step ${i + 1}: ${s.description}\nOutput: ${(s.output || '').substring(0, 300)}\nFiles changed: ${(s.filesChanged || []).join(', ') || 'none'}`
+                        ).join('\n\n');
+
+                        // Load current North Star for grounding
+                        const nsSnap = await db.collection('company-config').doc('north-star').get();
+                        const ns = nsSnap.exists ? nsSnap.data() : null;
+                        const nsBlock = ns
+                            ? `North Star: ${ns.title}\n${ns.description || ''}\nObjectives:\n${(ns.objectives || []).map((o, i) => `  ${i + 1}. ${o}`).join('\n')}`
+                            : 'North Star: Not set — evaluate against general product progress.';
+
+                        const systemPrompt = [
+                            `You are a ruthless product validator for Pulse (FitWithPulse.ai).`,
+                            `Your job is to cut through "work theater" — tasks that look productive but deliver no real value.`,
+                            ``,
+                            `${nsBlock}`,
+                            ``,
+                            `EVALUATE this completed agent task. Be harsh and honest.`,
+                            ``,
+                            `TASK: "${task.name}"`,
+                            `TASK DESCRIPTION: ${(task.description || '').substring(0, 400)}`,
+                            ``,
+                            `WHAT THE AGENT DID:`,
+                            stepSummary,
+                            ``,
+                            `Answer these questions in your JSON response:`,
+                            `1. concreteDeliverable (string): What SPECIFICALLY was produced? (e.g., "Created src/components/Foo.tsx with X feature", "Updated Firestore rule at path Y", "Wrote docs/plan.md") — NOT a vague summary.`,
+                            `2. isRealWork (boolean): Did this produce something a user or the codebase can actually USE? (code, config, feature, schema, test = true; planning doc, task breakdown, strategy doc = false)`,
+                            `3. northStarAlignment (number 1-10): How directly does THIS deliverable move the product toward the North Star? (1 = no connection, 10 = directly addresses a core objective)`,
+                            `4. alignmentReason (string): 1 sentence explaining the alignment score. Be specific.`,
+                            `5. missingDeliverable (string|null): If isRealWork is false — what SHOULD have been built instead? null if isRealWork is true.`,
+                            `6. verdict (string): "approved" | "low-impact" | "no-deliverable"`,
+                            `   - approved: isRealWork=true AND northStarAlignment >= 5`,
+                            `   - low-impact: isRealWork=true BUT northStarAlignment < 5`,
+                            `   - no-deliverable: isRealWork=false (agent produced only planning docs)`,
+                        ].join('\n');
+
+                        const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                            },
+                            body: JSON.stringify({
+                                model: 'gpt-4o-mini',
+                                messages: [
+                                    { role: 'system', content: systemPrompt },
+                                    { role: 'user', content: 'Evaluate the task and return a JSON object with the fields described. JSON only, no markdown.' },
+                                ],
+                                temperature: 0.2,
+                                max_tokens: 500,
+                                response_format: { type: 'json_object' },
+                            }),
+                        });
+                        const data = await resp.json();
+                        const raw = data.choices?.[0]?.message?.content || '{}';
+                        const result = JSON.parse(raw);
+                        console.log(`\n🎯 NORTH STAR GATE: verdict=${result.verdict}, score=${result.northStarAlignment}/10`);
+                        console.log(`   Deliverable: ${result.concreteDeliverable}`);
+                        console.log(`   Alignment: ${result.alignmentReason}`);
+                        return result;
+                    } catch (err) {
+                        console.warn('⚠️  North Star gate skipped:', err.message);
+                        return null;
+                    }
+                };
+
+                const nsGate = await northStarAlignmentGate(task, steps);
+
+                if (nsGate) {
+                    const score = nsGate.northStarAlignment || 0;
+                    const verdict = nsGate.verdict || 'approved';
+                    const scoreEmoji = score >= 8 ? '🌟' : score >= 5 ? '✅' : score >= 3 ? '⚠️' : '🚫';
+
+                    // Post the alignment beat — always visible in the Activity Feed
+                    await postBeat('result', `${scoreEmoji} North Star check [${score}/10]: ${task.name}`, {
+                        taskId: task.id,
+                        color: score >= 7 ? 'green' : score >= 4 ? 'yellow' : 'red',
+                        objectiveCode: task.objectiveCode || task.id,
+                        artifactType: 'text',
+                        artifactText: [
+                            `📦 Delivered: ${nsGate.concreteDeliverable || 'unknown'}`,
+                            `🎯 North Star alignment [${score}/10]: ${nsGate.alignmentReason || '-'}`,
+                            nsGate.missingDeliverable ? `⚡ Should have built: ${nsGate.missingDeliverable}` : null,
+                        ].filter(Boolean).join('\n'),
+                        lensTag: 'north-star-gate',
+                        stateTag: verdict === 'approved' ? 'signals' : 'blockers',
+                    });
+
+                    // Save alignment data to the kanban card for tracking
+                    try {
+                        await db.collection(KANBAN_COLLECTION).doc(task.id).update({
+                            northStarScore: score,
+                            northStarVerdict: verdict,
+                            northStarDeliverable: nsGate.concreteDeliverable || '',
+                            northStarAlignmentReason: nsGate.alignmentReason || '',
+                            northStarCheckedAt: FieldValue.serverTimestamp(),
+                        });
+                    } catch (_) { /* non-critical */ }
+
+                    if (verdict === 'no-deliverable') {
+                        // Task produced only planning docs — reject it
+                        console.log(`\n🚫 NORTH STAR GATE: Task produced no real deliverable. Flagging for review.`);
+                        await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
+                        await db.collection(KANBAN_COLLECTION).doc(task.id).update({
+                            status: 'needs-review',
+                            reviewReason: `North Star Gate: Task produced no real deliverable. ${nsGate.missingDeliverable ? `Should have built: ${nsGate.missingDeliverable}` : 'Only planning/documentation was produced.'}`,
+                            updatedAt: FieldValue.serverTimestamp(),
+                        });
+                        await sendProactiveMessage(
+                            `🚫 North Star Gate REJECTED "${task.name}"\n\n` +
+                            `Only planning/documentation was produced — no real code, feature, or user-facing change.\n\n` +
+                            `📦 What was made: ${nsGate.concreteDeliverable}\n` +
+                            `⚡ What should have been built: ${nsGate.missingDeliverable || 'A concrete implementation'}\n\n` +
+                            `Task flagged as needs-review. Please rephrase or re-assign with a specific artifact requirement.`,
+                            'needs-review'
+                        );
+                        await setStatus('idle', {
+                            currentTask: '',
+                            currentTaskId: '',
+                            notes: `🚫 North Star gate: no deliverable — ${task.name}`,
+                            taskProgress: 0,
+                        });
+                        await new Promise(r => setTimeout(r, 5_000));
+                        continue;
+                    }
+
+                    if (verdict === 'low-impact' && score < 3) {
+                        // Very low alignment — flag but don't block (add review note)
+                        console.log(`\n⚠️  NORTH STAR GATE: Low alignment score (${score}/10). Flagging but allowing completion.`);
+                        await sendProactiveMessage(
+                            `⚡ Low North Star Alignment [${score}/10]: "${task.name}"\n\n` +
+                            `${nsGate.alignmentReason}\n\n` +
+                            `Work is done but the connection to our North Star is weak. ` +
+                            `Future tasks should prioritize higher-impact work.`,
+                            'warning'
+                        );
+                    }
+                }
+
+
                 // ─── Post-task validation gate ──────────────────
                 // Independent AI auditor verifies the work was actually completed
                 const useOpenClaw = process.env.USE_OPENCLAW === 'true';

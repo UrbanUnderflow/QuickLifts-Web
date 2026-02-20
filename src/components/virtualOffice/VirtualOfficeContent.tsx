@@ -2696,6 +2696,121 @@ const LiveClock: React.FC = () => {
   );
 };
 
+/* ─── Mission Button ────────────────────────────────────── */
+
+const MissionButton: React.FC = () => {
+  const [status, setStatus] = React.useState<'idle' | 'active' | 'paused'>('idle');
+  const [launching, setLaunching] = React.useState(false);
+
+  // Live-subscribe to mission status
+  React.useEffect(() => {
+    const unsub = onSnapshot(
+      doc(db, 'company-config', 'mission-status'),
+      (snap) => {
+        if (snap.exists()) setStatus((snap.data()?.status as any) || 'idle');
+        else setStatus('idle');
+      }
+    );
+    return unsub;
+  }, []);
+
+  const handleLaunch = async () => {
+    if (launching) return;
+    setLaunching(true);
+    try {
+      const res = await fetch('/api/agent/kickoff-mission', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: status === 'paused' }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        alert((d.error || 'Launch failed') + (d.details ? '\n\nDetails: ' + d.details : ''));
+      }
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setLaunching(false);
+    }
+  };
+
+  const isActive = status === 'active';
+  const isPaused = status === 'paused';
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {/* Main launch / status button */}
+      <div
+        onClick={isActive ? undefined : handleLaunch}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '6px 12px', borderRadius: 8, cursor: isActive ? 'default' : 'pointer',
+          background: isActive
+            ? 'rgba(34,197,94,0.12)'
+            : isPaused
+              ? 'rgba(251,191,36,0.12)'
+              : 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.2))',
+          border: `1px solid ${isActive ? 'rgba(34,197,94,0.3)' : isPaused ? 'rgba(251,191,36,0.3)' : 'rgba(99,102,241,0.35)'}`,
+          color: isActive ? '#4ade80' : isPaused ? '#fbbf24' : '#a5b4fc',
+          fontSize: 12, fontWeight: 600,
+          transition: 'all 0.2s',
+          whiteSpace: 'nowrap' as const,
+          userSelect: 'none' as const,
+        }}
+        title={isActive ? 'Mission is running' : isPaused ? 'Click to resume mission' : 'Click to launch autonomous mission'}
+      >
+        {/* Status indicator */}
+        {isActive ? (
+          <span style={{
+            width: 7, height: 7, borderRadius: '50%',
+            background: '#22c55e',
+            display: 'inline-block',
+            boxShadow: '0 0 6px #22c55e',
+            animation: 'missionPulse 2s ease-in-out infinite',
+            flexShrink: 0,
+          }} />
+        ) : launching ? (
+          <Loader2 className="w-3 h-3" style={{ animation: 'spin 1s linear infinite' }} />
+        ) : (
+          <span style={{ fontSize: 13 }}>🚀</span>
+        )}
+        <span>
+          {launching ? 'Launching...' : isActive ? 'Mission Active' : isPaused ? 'Resume Mission' : 'Start Mission'}
+        </span>
+      </div>
+
+      {/* Full dashboard link */}
+      <a
+        href="/admin/missionControl"
+        target="_blank"
+        rel="noreferrer"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 3,
+          padding: '6px 8px', borderRadius: 8,
+          background: 'rgba(255,255,255,0.04)',
+          border: '1px solid rgba(255,255,255,0.08)',
+          color: '#71717a', fontSize: 11, fontWeight: 500,
+          textDecoration: 'none',
+          whiteSpace: 'nowrap' as const,
+          transition: 'all 0.15s',
+        }}
+        title="Open Mission Control dashboard"
+        onMouseEnter={e => { e.currentTarget.style.color = '#a1a1aa'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)'; }}
+        onMouseLeave={e => { e.currentTarget.style.color = '#71717a'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+      >
+        Mission Control →
+      </a>
+
+      <style>{`
+        @keyframes missionPulse {
+          0%, 100% { opacity: 1; box-shadow: 0 0 6px #22c55e; }
+          50% { opacity: 0.5; box-shadow: 0 0 12px #22c55e; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
 /* ─── Main Virtual Office ─────────────────────────────── */
 
 const VirtualOfficeContent: React.FC = () => {
@@ -3817,8 +3932,9 @@ const VirtualOfficeContent: React.FC = () => {
               <span>North Star</span>
             </div>
 
-            {/* Manual Standup Trigger */}
-            <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10 }}>
+            {/* Top-left action bar: Telemetry + Mission */}
+            <div style={{ position: 'absolute', top: 16, left: 16, zIndex: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* Run Telemetry Check */}
               <div
                 className="standup-trigger-btn"
                 onClick={() => {
@@ -3862,6 +3978,9 @@ const VirtualOfficeContent: React.FC = () => {
                           'Run Telemetry Check'}
                 </span>
               </div>
+
+              {/* Start Mission — sits right next to telemetry */}
+              <MissionButton />
             </div>
 
             {/* Shared Deliverables Button */}
