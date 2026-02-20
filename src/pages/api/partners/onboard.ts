@@ -4,7 +4,7 @@ import { db } from '../../../api/firebase/config';
 import type { PartnerType, PartnerFirestoreData } from '../../../types/Partner';
 import { PartnerModel } from '../../../types/Partner';
 
-// Basic runtime validation helpers for this handler (step 2/3)
+// Basic runtime validation helpers for this handler (steps 2–4)
 const ALLOWED_TYPES: PartnerType[] = ['brand', 'gym', 'runClub'];
 
 function isValidPartnerType(value: any): value is PartnerType {
@@ -29,6 +29,72 @@ interface OnboardPartnerRequestBody {
   firstRoundCreated?: boolean;
 }
 
+interface ValidationResult<T> {
+  valid: boolean;
+  value?: T;
+  errors?: { field: string; message: string }[];
+}
+
+function validateOnboardBody(body: any): ValidationResult<OnboardPartnerRequestBody> {
+  const errors: { field: string; message: string }[] = [];
+
+  const type = body?.type;
+  const contactEmail = body?.contactEmail;
+  const onboardingStage = body?.onboardingStage;
+  const id = body?.id;
+  const firstRoundCreated = body?.firstRoundCreated;
+
+  if (!isValidPartnerType(type)) {
+    errors.push({
+      field: 'type',
+      message: `Invalid partner type. Expected one of: ${ALLOWED_TYPES.join(', ')}.`,
+    });
+  }
+
+  if (!isValidEmail(contactEmail)) {
+    errors.push({
+      field: 'contactEmail',
+      message: 'Invalid contactEmail. Must be a valid email address.',
+    });
+  }
+
+  if (onboardingStage != null && typeof onboardingStage !== 'string') {
+    errors.push({
+      field: 'onboardingStage',
+      message: 'onboardingStage, if provided, must be a string.',
+    });
+  }
+
+  if (id != null && typeof id !== 'string') {
+    errors.push({
+      field: 'id',
+      message: 'id, if provided, must be a string.',
+    });
+  }
+
+  if (firstRoundCreated != null && typeof firstRoundCreated !== 'boolean') {
+    errors.push({
+      field: 'firstRoundCreated',
+      message: 'firstRoundCreated, if provided, must be a boolean.',
+    });
+  }
+
+  if (errors.length > 0) {
+    return { valid: false, errors };
+  }
+
+  return {
+    valid: true,
+    value: {
+      id,
+      type,
+      contactEmail,
+      onboardingStage,
+      firstRoundCreated,
+    },
+  };
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -38,16 +104,18 @@ export default async function handler(
   }
 
   try {
-    const { id, type, contactEmail, onboardingStage, firstRoundCreated }: OnboardPartnerRequestBody = req.body || {};
+    const validation = validateOnboardBody(req.body);
 
-    // Basic input validation
-    if (!isValidPartnerType(type)) {
-      return res.status(400).json({ error: 'Invalid partner type. Expected one of: brand, gym, runClub.' });
+    if (!validation.valid || !validation.value) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid request body',
+        details: validation.errors,
+      });
     }
 
-    if (!isValidEmail(contactEmail)) {
-      return res.status(400).json({ error: 'Invalid contactEmail. Must be a valid email address.' });
-    }
+    const { id, type, contactEmail, onboardingStage, firstRoundCreated } =
+      validation.value;
 
     const normalizedEmail = contactEmail.trim().toLowerCase();
 
@@ -67,7 +135,8 @@ export default async function handler(
       const existingData = existingSnap.data() as PartnerFirestoreData;
 
       // Preserve existing invitedAt; do not overwrite on updates
-      updatePayload.onboardingStage = onboardingStage || existingData.onboardingStage || 'invited';
+      updatePayload.onboardingStage =
+        onboardingStage || existingData.onboardingStage || 'invited';
 
       // Only set firstRoundCreatedAt when flag is true AND it hasn't been set before
       if (firstRoundCreated && !existingData.firstRoundCreatedAt) {
