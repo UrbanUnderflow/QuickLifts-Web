@@ -111,3 +111,6 @@ exports.sendTestReflectionNotification = require("./dailyReflectionNotifications
 exports.onLeadMassageJobCreated = onLeadMassageJobCreated;
 exports.onLeadMassageItemJobCreated = onLeadMassageItemJobCreated;
 exports.onGenerateWriteForLeadMassage = onGenerateWriteForLeadMassage;
+
+// Export user affiliate triggers
+exports.onUserCreateGymAffiliate = require('./userAffiliateTriggers').onUserCreateGymAffiliate;
