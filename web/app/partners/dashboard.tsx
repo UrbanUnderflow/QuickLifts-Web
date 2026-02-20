@@ -6,6 +6,7 @@ import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../../src/api/firebase/config";
 import type { PartnerType, PartnerFirestoreData } from "../../../src/types/Partner";
 import { PartnerModel } from "../../../src/types/Partner";
+import { GymKpiPanel } from "../../components/partners/GymKpiPanel";
 
 interface PartnerPlaybookSummary {
   type: PartnerType;
@@ -43,6 +44,10 @@ const TYPE_FILTER_OPTIONS: { label: string; value: PartnerType | "all" }[] = [
  * Admin-only view of partner onboarding across brands, gyms, and run clubs.
  * This client component is responsible for loading partner data from
  * Firestore and rendering onboarding tables + simple lane-level metrics.
+ *
+ * It also includes a gym-specific KPI panel which can be wired to a
+ * real partner context (current user) once that is available; for now,
+ * it is rendered behind a TODO placeholder.
  */
 export default function PartnerOnboardingDashboardPage() {
   const [partners, setPartners] = useState<PartnerRow[]>([]);
@@ -159,6 +164,22 @@ export default function PartnerOnboardingDashboardPage() {
           quickly each partner becomes active on Pulse.
         </p>
       </header>
+
+      {/* Gym-specific activation KPIs */}
+      <section className="border rounded-lg bg-white shadow-sm p-4 space-y-3">
+        <header>
+          <h2 className="text-lg font-semibold">Gym Activation Snapshot</h2>
+          <p className="mt-1 text-xs text-gray-600 max-w-xl">
+            This panel surfaces gym affiliate activation metrics (rounds created and
+            unique participants) for a specific gym. Once the partner dashboard is
+            wired to an authenticated gym operator, this section should receive the
+            current user's ID and display their gym's KPIs.
+          </p>
+        </header>
+
+        {/* TODO: Replace hardcoded userId with real partner context (e.g., from auth). */}
+        <GymKpiPanel userId={"__REPLACE_WITH_CURRENT_USER_ID__"} />
+      </section>
 
       <section className="border rounded-lg bg-white shadow-sm p-4 space-y-4">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
