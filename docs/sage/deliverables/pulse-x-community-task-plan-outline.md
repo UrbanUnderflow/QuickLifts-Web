@@ -1,6 +1,6 @@
-# Pulse x Community — Artifact Outline (Step 1/5)
+# Pulse x Community — Artifact Outline & Ownership (Steps 1–2/5)
 
-This page lists every required artifact for the Pulse x Community strategy, with a 1–2 sentence description of its purpose and where it will be used (decks, outreach, one-pagers).
+This page lists every required artifact for the Pulse x Community strategy, with a 1–2 sentence description of its purpose, where it will be used (decks, outreach, one-pagers), and who owns it.
 
 ---
 
@@ -10,6 +10,10 @@ This page lists every required artifact for the Pulse x Community strategy, with
 
 **Primary Uses:** Opening narrative in partnership decks, the "Why Pulse x Community" paragraph in outbound outreach, and the lead paragraph on community-partnership one-pagers or landing sections.
 
+**Ownership:**
+- **Primary DRI:** Solara — responsible for drafting, iterating, and maintaining the core narrative paragraph and supporting framing.
+- **Secondary (as-needed):** Nora for alignment with product roadmap and partnership priorities; Scout for sanity-checking that examples and framing are anchored in real community behaviors.
+
 ---
 
 ## 2. Pulse x Community KPI Specification
@@ -17,6 +21,10 @@ This page lists every required artifact for the Pulse x Community strategy, with
 **Purpose:** Specify the small set of KPIs that prove Pulse is working for a partner’s community (e.g., challenge join/finish/return rates, creator activation, streak weeks), with clear metric definitions and example baselines.
 
 **Primary Uses:** Metrics/ROI slides in partnership decks, internal measurement docs, and follow-up one-pagers or emails that translate the narrative into concrete numbers for decision-makers.
+
+**Ownership:**
+- **Primary DRI:** Nora — responsible for selecting the KPIs, defining each metric precisely, and tying them back to the product’s data model.
+- **Secondary (as-needed):** Scout for data-access feasibility and example baselines; Solara for making sure metric names and descriptions stay in Pulse voice and are legible to non-technical partners.
 
 ---
 
@@ -26,6 +34,10 @@ This page lists every required artifact for the Pulse x Community strategy, with
 
 **Primary Uses:** Internal screening and prioritization of prospect lists, a single-slide "who we partner with" section in decks, and language for outreach that signals Pulse’s selectivity and values around community quality.
 
+**Ownership:**
+- **Primary DRI:** Scout — responsible for defining the rubric criteria, scoring bands, and example signals across Brands, Gyms/Studios, and Run Clubs.
+- **Secondary (as-needed):** Solara for making sure rubric language reflects Pulse’s values and doesn’t read like a generic scoring matrix; Nora for checking that criteria line up with partnership strategy and risk tolerances.
+
 ---
 
 ## 4. ICP-Specific Document — Brands
@@ -33,6 +45,10 @@ This page lists every required artifact for the Pulse x Community strategy, with
 **Purpose:** Translate the core narrative and KPIs into a brands-specific story that shows how Pulse powers creator-led drops, challenges, and UGC that make the brand’s community feel alive rather than like sponsored wallpaper.
 
 **Primary Uses:** Brand-track partnership decks, brand-focused one-pagers, and outbound/inbound outreach templates targeted at marketing and community leads at consumer brands.
+
+**Ownership:**
+- **Primary DRI:** Solara — responsible for drafting the brands narrative, selecting examples, and threading KPIs in language that feels native to brand/creator teams.
+- **Secondary (as-needed):** Nora for validating feasibility of proposed brand integrations; Scout for ensuring that any behavioral examples and metrics tie back to the partner-fit rubric and KPI spec.
 
 ---
 
@@ -42,6 +58,10 @@ This page lists every required artifact for the Pulse x Community strategy, with
 
 **Primary Uses:** Gym/studio partnership decks, owner/head-coach one-pagers, and outreach emails or DMs that speak directly to filled blocks, return rates, and keeping high-intent members engaged.
 
+**Ownership:**
+- **Primary DRI:** Solara — responsible for drafting the gyms/studios narrative, anchoring it in the realities of coaches, blocks, and check-ins.
+- **Secondary (as-needed):** Nora for confirming that the flows and features referenced match current or near-term product; Scout for mapping gym-specific behaviors back to the KPI spec and partner-fit rubric.
+
 ---
 
 ## 6. ICP-Specific Document — Run Clubs
@@ -49,3 +69,7 @@ This page lists every required artifact for the Pulse x Community strategy, with
 **Purpose:** Translate the core narrative and KPIs into a run clubs story that focuses on seasons, routes, races, and streak weeks — how Pulse captures the rhythm of a club and keeps runners showing up and coming back.
 
 **Primary Uses:** Run club partnership decks, route/season-focused one-pagers, and outreach to club leaders and captains who care about participation consistency, progression into race blocks, and visible club health over time.
+
+**Ownership:**
+- **Primary DRI:** Solara — responsible for drafting the run club narrative and weaving in seasons, routes, races, and streak weeks as concrete story beats.
+- **Secondary (as-needed):** Nora for making sure the product surfaces for run clubs are accurately represented; Scout for connecting run-club examples and metrics to the shared KPI spec and partner-fit rubric.
