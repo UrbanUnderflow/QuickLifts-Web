@@ -1,0 +1,3 @@
+# Health & Behavioral Science Synthesis — Partnership-Led Community Growth
+
+This document synthesizes health and behavioral science insights that are directly relevant to Pulse's north star of **Partnership-Led Community Growth**. It focuses on how community structures (brands, gyms, run clubs), behavior-only metrics (showing up, closing multi-day gaps, recovery/readiness rituals), and simple product levers interact to influence adherence, motivation, and long-term retention on Pulse. Subsequent sections will link specific research findings to patterns, partnership recommendations, and guardrails for claims and product design.
