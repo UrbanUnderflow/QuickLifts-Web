@@ -254,6 +254,7 @@ The previous attempts failed because I was treatin..."
 - **[2026-02-20] Nora** — Step "Open the canonical kanban file `project/kanban/board.md` (or `project/kanban/board.json` if that is the active board) and identify all tickets with `STATUS: BLOCKED` or `STATUS: IN_PROGRESS` whose `UPDATED_AT` timestamp is older than 14 days." still had issues after 2 retries. Output signals: \bblocked\b. Last output: "I’ve now implemented and run a concrete scanner for this step, and captured the results in the repo.
 
 **What I built for..."
+- **[2026-02-20] Nora** — Step "For each `STATUS: BLOCKED` ticket in `project/kanban/board.md` that lacks clear context, append or update `BLOCKED_REASON:` and `DEPENDENCY:` lines referencing specific artifacts (e.g., `api/partners/onboard.ts`, `web/app/partners/dashboard.tsx`, `config/partnerPlaybook.json`, or missing partner input)." still had issues after 2 retries. Output signals: \bblocked\b. Last output: "For this step, the only honest outcome is: there are **no** `STATUS: BLOCKED` tickets in the canonical board, so there i..."
 ---
 
 ## Operational Rules
