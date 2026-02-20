@@ -53,8 +53,8 @@ let AGENTS = ['nora', 'scout', 'solara', 'sage'];
 let MODERATOR = 'nora';
 let MAX_DURATION_MS = 10 * 60 * 1000;   // Hard 10-minute cap (telemetry checks are fast)
 const MIN_DURATION_MS = 3 * 60 * 1000;    // Minimum 3 minutes — check continues with brainstorming if under this
-const ROUND_WAIT_MS = 3 * 60 * 1000;      // Wait up to 3 min for agents to respond per round
-const POLL_INTERVAL_MS = 10_000;           // Check for responses every 10s
+const ROUND_WAIT_MS = 2 * 60 * 1000;      // Wait up to 2 min per round (turn SLA is 30s, so 4 agents = 2 min max)
+const POLL_INTERVAL_MS = 4_000;            // Check for responses every 4s — faster detection = less dead air
 const MAX_ROUNDS = 5;                       // Up to 5 rounds: 3 core + 2 brainstorm bonus
 
 const KANBAN_COLLECTION = 'kanbanTasks';
@@ -408,7 +408,7 @@ async function waitForResponses(chatId, messageId, agents, timeoutMs) {
         const responses = data.responses || {};
         const allDone = agents.every(agentId => {
             const resp = responses[agentId];
-            return resp && (resp.status === 'completed' || resp.status === 'failed');
+            return resp && (resp.status === 'completed' || resp.status === 'failed' || resp.status === 'timed-out');
         });
 
         if (allDone) return true;
@@ -425,6 +425,44 @@ async function waitForResponses(chatId, messageId, agents, timeoutMs) {
     }
 
     return false;
+}
+
+/**
+ * After a round times out, sweep any responses still stuck in 'pending' or 'processing'
+ * and mark them as 'timed-out' so the UI typing indicator clears automatically.
+ *
+ * @param {string} chatId  - The group chat document ID
+ * @param {string} messageId - The round message document ID
+ * @param {string[]} agents - Full agent list for the round
+ */
+async function clearStaleResponses(chatId, messageId, agents) {
+    try {
+        const msgSnap = await db.doc(`agent-group-chats/${chatId}/messages/${messageId}`).get();
+        if (!msgSnap.exists) return;
+
+        const data = msgSnap.data();
+        const responses = data?.responses || {};
+        const updates = {};
+        const stale = [];
+
+        agents.forEach(agentId => {
+            const r = responses[agentId];
+            if (!r) return;
+            if (r.status === 'pending' || r.status === 'processing') {
+                updates[`responses.${agentId}.status`] = 'timed-out';
+                updates[`responses.${agentId}.timedOutAt`] = FieldValue.serverTimestamp();
+                updates[`responses.${agentId}.content`] = r.content || '(no response within timeout window)';
+                stale.push(agentId);
+            }
+        });
+
+        if (Object.keys(updates).length > 0) {
+            await db.doc(`agent-group-chats/${chatId}/messages/${messageId}`).update(updates);
+            console.log(`   🧹 Cleared stale responses for: ${stale.join(', ')}`);
+        }
+    } catch (err) {
+        console.warn('⚠️  Could not clear stale responses:', err.message);
+    }
 }
 
 /**
@@ -884,6 +922,7 @@ async function runStandup() {
             });
         } else {
             console.log(`   ⚠️  Some agents did not respond in time — moving on`);
+            await clearStaleResponses(chatId, messageId, AGENTS);
         }
 
         roundsCompleted++;
@@ -924,6 +963,7 @@ async function runStandup() {
                 });
             } else {
                 console.log(`   ⚠️  Some agents timed out on brainstorm — moving on`);
+                await clearStaleResponses(chatId, bMsgId, AGENTS);
             }
 
             roundsCompleted++;

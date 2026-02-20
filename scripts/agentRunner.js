@@ -86,7 +86,7 @@ function getAgentIdForTier(tier) {
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
 const OPENCLAW_MODEL_SYNC_MS = parseInt(process.env.OPENCLAW_MODEL_SYNC_MS || '60000', 10); // Keep presence model accurate after OpenClaw config changes
-const MAX_FOLLOW_UP_DEPTH = parseInt(process.env.MAX_FOLLOW_UP_DEPTH || '2', 10); // Keep brainstorm threads bounded
+const MAX_FOLLOW_UP_DEPTH = parseInt(process.env.MAX_FOLLOW_UP_DEPTH || '5', 10); // 5 back-and-forths max keeps conversation alive
 const MAX_FOLLOW_UP_DEPTH_EXEC = parseInt(process.env.MAX_FOLLOW_UP_DEPTH_EXEC || '1', 10); // Execution mode should converge quickly
 const ENABLE_ORGANIC_FOLLOW_UPS = process.env.ENABLE_ORGANIC_FOLLOW_UPS === 'true'; // Off by default; only explicit @mentions continue threads
 const MAX_SELF_CORRECTION_RETRIES = 2; // Retry attempts when step output contains failure signals
@@ -616,7 +616,7 @@ var _forceRecoveryReason = '';
 
 const ROUND_TABLE_PRIORITY = ['nora', 'solara', 'sage', 'scout', 'antigravity'];
 const ROUND_TABLE_COORDINATOR = 'nora';
-const ROUND_TABLE_TURN_SLA_MS = 90_000;
+const ROUND_TABLE_TURN_SLA_MS = 30_000; // 30s per turn — keeps conversation snappy
 const AGENT_DISPLAY_NAMES = {
     nora: 'Nora',
     scout: 'Scout',
@@ -2755,19 +2755,20 @@ async function processCommands() {
                         );
                         chatPrompt = execPromptParts.join('\n');
                     } else {
-                        // BRAINSTORM PROMPT — Tree of Thought pattern
-                        // The key insight: agents MUST tag each other, build on ideas, and create threads
-                        var othersInRoom = otherAgents.filter(a => a.toLowerCase() !== AGENT_ID.toLowerCase());
+                        // BRAINSTORM PROMPT — fast, reactive, @mention-mandatory back-and-forth
+                        var othersInRoom = otherAgents.filter(function (a) { return a.toLowerCase() !== AGENT_ID.toLowerCase(); });
                         var replyToAgent = cmd.context?.replyTo || null;
-                        var isFollowUp = cmd.context?.followUpDepth > 0;
+                        var isFollowUp = (cmd.context?.followUpDepth || 0) > 0;
                         var displayNamesInRoom = othersInRoom.map(function (id) {
                             return AGENT_DISPLAY_NAMES[id] || id;
                         });
+                        // Pick a default "must tag" target if not replying to someone
+                        var defaultTagTarget = displayNamesInRoom.length > 0 ? displayNamesInRoom[Math.floor(Math.random() * displayNamesInRoom.length)] : null;
 
                         var brainstormParts = [];
                         if (gcSoulBlock) {
                             brainstormParts.push(
-                                `=== YOUR IDENTITY (this is who you are — let this shape how you think and respond) ===`,
+                                `=== YOUR IDENTITY ===`,
                                 gcSoulBlock,
                                 `=== END IDENTITY ===`,
                                 ``,
@@ -2779,34 +2780,27 @@ async function processCommands() {
                         brainstormParts.push(
                             `Your strengths: ${personality.strengths}`,
                             ``,
-                            `You're at the Round Table with: ${displayNamesInRoom.join(', ')}. Tremaine (founder) is facilitating.`,
+                            `You're in a LIVE round-table chat with: ${displayNamesInRoom.join(', ')}.`,
                             isFollowUp && replyToAgent
-                                ? `${replyToAgent} just spoke and tagged you. This is a THREAD — build directly on what they said.`
-                                : `Latest founder message preview: "${compactMessagePreview || '[empty]'}"`,
+                                ? `${replyToAgent} just tagged you directly. Respond to them specifically — pick up exactly where they left off.`
+                                : `Latest message from Tremaine (founder): "${compactMessagePreview || '[empty]'}"`,
                             ``,
-                            `─── TREE OF THOUGHT RULES ───`,
-                            `You are in a brainstorming session. This is where the best ideas come from — agents riffing off each other.`,
+                            `══ LIVE CONVERSATION RULES (follow these exactly) ══`,
                             ``,
-                            `COLLABORATE WITH INTENT:`,
-                            `• @mention another agent only when you need that specific person's input.`,
-                            `• If you already have enough context to answer, do NOT tag someone just to continue the thread.`,
-                            `• Examples: "@Scout, have you seen data on this?" or "Building on @Nora's point about architecture..." or "@Solara, how does this fit the brand?"`,
+                            `1. SHORT & PUNCHY — 2-4 sentences MAXIMUM. This is a fast back-and-forth, not a report.`,
+                            `2. @MENTION IS MANDATORY — You MUST @mention at least one other agent by name (e.g. @Nora, @Scout, @Solara, @Sage). No exceptions. Pick the person whose expertise is most relevant to your thought.`,
+                            `3. ASK A DIRECT QUESTION — End your message by asking that person something specific. Not rhetorical — a real question they need to answer.`,
+                            `4. BUILD OR CHALLENGE — Either extend an idea from the thread OR push back with a concern. Never just agree and move on.`,
+                            `5. NO HEDGING — Skip phrases like "I think perhaps" or "it might be worth considering". Talk like you're texting a colleague.`,
+                            `6. NO TASK QUEUING — Don't say you'll build something or queue a task. Just talk.`,
                             ``,
-                            `THINK OUT LOUD:`,
-                            `• Show your reasoning process, not just conclusions.`,
-                            `• Use phrases like: "I'm thinking...", "What if...", "The pattern I see is...", "My concern is..."`,
-                            `• Connect ideas: "That connects to...", "Building on that...", "Flipping that around..."`,
-                            ``,
-                            `RULES:`,
-                            `• Do NOT offer to build, execute, or queue tasks. This is THINKING time.`,
-                            `• Do NOT just agree — add a new angle, challenge, or question.`,
-                            `• Do NOT repeat what others already said — build on it or push it further.`,
-                            `• Be conversational, warm, and real. This is colleagues brainstorming, not a formal report.`,
-                            `• End with one concrete line: "Next step: <owner> will <action>".`,
+                            defaultTagTarget && !isFollowUp
+                                ? `You MUST include "@${defaultTagTarget}" in your response.`
+                                : `You MUST @mention the person who tagged you in your response.`,
                             ``,
                             isBoosted
-                                ? `Tremaine asked you to THINK DEEPLY. Be thorough, analytical, and explore multiple angles. ${boostSentences}, plain text only:`
-                                : `${boostSentences}, plain text only, conversational and real:`,
+                                ? `Tremaine asked for deeper thinking. Go 4-6 sentences, be analytical — but still tag someone and ask a real question:`
+                                : `2-4 sentences, plain text, fast and real:`,
                         );
                         chatPrompt = brainstormParts.join('\n');
                     }
@@ -2883,8 +2877,9 @@ async function processCommands() {
                                             { role: 'system', content: chatPrompt },
                                             { role: 'user', content: llmUserPrompt },
                                         ],
-                                        temperature: isBoosted ? 0.6 : 0.8,
-                                        max_tokens: boostMaxTokens,
+                                        temperature: isBoosted ? 0.65 : 0.85,
+                                        // Increase tokens so agents can write a real response with @mention + question
+                                        max_tokens: isBoosted ? 900 : 420,
                                     }),
                                 });
                                 var gcData = await gcResp.json();
@@ -3115,12 +3110,8 @@ async function processCommands() {
                             }
                         }
 
-                        var responseHasQuestion = /\?/.test(gcResponse || '');
-                        var responseHasClosureSignal = /\b(decision|recommend(?:ation)?|next step|owner|action)\b/i.test(gcResponse || '');
-                        if (mentionedAgentIds.length > 0 && responseHasClosureSignal && !responseHasQuestion) {
-                            console.log(`   ✅ ${AGENT_NAME} response looks conclusive — not extending follow-up chain`);
-                            mentionedAgentIds = [];
-                        }
+                        // Note: we intentionally do NOT suppress follow-ups based on closure signals.
+                        // Agents should always reply when tagged, even if they signal a next step.
 
                         // Optional organic follow-up mode (off by default)
                         if (ENABLE_ORGANIC_FOLLOW_UPS && mentionedAgentIds.length === 0 && currentDepth < 3 && gcResponse.length > 100) {
@@ -3150,9 +3141,8 @@ async function processCommands() {
 
                         var effectiveMaxDepth = isExecMode ? MAX_FOLLOW_UP_DEPTH_EXEC : MAX_FOLLOW_UP_DEPTH;
                         if (mentionedAgentIds.length > 0 && gcChatId && currentDepth < effectiveMaxDepth) {
-                            console.log(`   💬 ${AGENT_NAME} → ${mentionedAgentIds.map(id => '@' + knownAgents[id]).join(', ')} (depth ${currentDepth}/${effectiveMaxDepth}${isExecMode ? ' EXEC' : ''}) — pausing 10s to let admin cut in...`);
-
-                            await new Promise(resolve => setTimeout(resolve, 10_000));
+                            // Brief pause (2s) to let admin cut in before the chain continues
+                            await new Promise(resolve => setTimeout(resolve, 2_000));
 
                             var adminCutIn = false;
                             try {
@@ -3164,7 +3154,8 @@ async function processCommands() {
                                 if (!recentMsgs.empty) {
                                     var latestAdminMsg = recentMsgs.docs[0].data();
                                     var latestTime = latestAdminMsg.createdAt?.toDate?.()?.getTime() || 0;
-                                    if (latestTime > Date.now() - 15_000) {
+                                    // 5s window — tighter than before so we don't delay fast threads
+                                    if (latestTime > Date.now() - 5_000) {
                                         adminCutIn = true;
                                         console.log(`   ✋ Admin sent a new message — pausing follow-up chain`);
                                     }
@@ -4741,6 +4732,96 @@ ${smokeOutput}`.substring(0, 2000);
     }
 }
 
+/* ─── Stale Response Watchdog ─────────────────────────── */
+
+const STALE_RESPONSE_TIMEOUT_MS = parseInt(process.env.STALE_RESPONSE_TIMEOUT_MS || String(8 * 60 * 1000), 10); // 8 min default
+const STALE_RESPONSE_SWEEP_MS = parseInt(process.env.STALE_RESPONSE_SWEEP_MS || String(5 * 60 * 1000), 10); // Sweep every 5 min
+
+/**
+ * Sweep recent group-chat messages and mark any of THIS AGENT's responses that
+ * have been stuck in 'pending' or 'processing' for longer than STALE_RESPONSE_TIMEOUT_MS.
+ *
+ * This is the self-healing counterpart to dailyStandup.js's clearStaleResponses().
+ * It runs on startup (catching restarts mid-standup) and periodically thereafter.
+ *
+ * Safe to call concurrently — uses a per-invocation flag to avoid overlapping sweeps.
+ */
+var _sweepInProgress = false;
+async function sweepStaleGroupChatResponses() {
+    if (_sweepInProgress) return;
+    _sweepInProgress = true;
+    try {
+        // Look at group chats active in the last 2 hours
+        const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
+        const chatsSnap = await db.collection('agent-group-chats')
+            .where('status', '==', 'active')
+            .where('lastMessageAt', '>=', cutoff)
+            .orderBy('lastMessageAt', 'desc')
+            .limit(10)
+            .get();
+
+        if (chatsSnap.empty) return;
+
+        var staleChatIds = [];
+        for (const chatDoc of chatsSnap.docs) {
+            const chatId = chatDoc.id;
+
+            // Check the most recent messages in this chat
+            const msgsSnap = await db.collection(`agent-group-chats/${chatId}/messages`)
+                .orderBy('createdAt', 'desc')
+                .limit(5)
+                .get();
+
+            if (msgsSnap.empty) continue;
+
+            for (const msgDoc of msgsSnap.docs) {
+                const msgData = msgDoc.data();
+                const responses = msgData?.responses || {};
+                const myResponse = responses[AGENT_ID];
+
+                if (!myResponse) continue;
+                if (myResponse.status !== 'pending' && myResponse.status !== 'processing') continue;
+
+                // Calculate how long we've been stuck
+                var startedAt = myResponse.startedAt;
+                var stuckSinceMs;
+                if (startedAt) {
+                    var startedDate = typeof startedAt.toDate === 'function' ? startedAt.toDate() : new Date(startedAt);
+                    stuckSinceMs = Date.now() - startedDate.getTime();
+                } else {
+                    var createdAt = msgData.createdAt;
+                    var createdDate = typeof createdAt?.toDate === 'function' ? createdAt.toDate() : new Date(createdAt || 0);
+                    stuckSinceMs = Date.now() - createdDate.getTime();
+                }
+
+                if (stuckSinceMs < STALE_RESPONSE_TIMEOUT_MS) continue;
+
+                // This response is stale — mark it timed-out
+                try {
+                    await db.doc(`agent-group-chats/${chatId}/messages/${msgDoc.id}`).update({
+                        [`responses.${AGENT_ID}.status`]: 'timed-out',
+                        [`responses.${AGENT_ID}.timedOutAt`]: FieldValue.serverTimestamp(),
+                        [`responses.${AGENT_ID}.content`]: myResponse.content || '(agent runner was restarted or timed out)',
+                        [`responses.${AGENT_ID}.timedOutReason`]: `Stuck for ${Math.round(stuckSinceMs / 60000)}m — cleared by watchdog`,
+                    });
+                    staleChatIds.push(`${chatId}/${msgDoc.id}`);
+                    console.log(`🧹 Watchdog: Cleared stale ${myResponse.status} response for ${AGENT_ID} on message ${msgDoc.id} (stuck ${Math.round(stuckSinceMs / 60000)}m)`);
+                } catch (e) {
+                    console.warn(`⚠️ Watchdog: Failed to clear stale response on ${msgDoc.id}:`, e.message);
+                }
+            }
+        }
+
+        if (staleChatIds.length === 0) {
+            console.log(`🧹 Watchdog: No stale group-chat responses found`);
+        }
+    } catch (err) {
+        console.warn('⚠️ Watchdog sweep failed:', err.message);
+    } finally {
+        _sweepInProgress = false;
+    }
+}
+
 /* ─── Main Loop ───────────────────────────────────────── */
 
 async function run() {
@@ -4764,8 +4845,15 @@ async function run() {
         taskProgress: 0,
     });
 
+    // On startup: clear any responses this agent left stuck from a previous session
+    console.log('🧹 Running startup stale-response sweep...');
+    await sweepStaleGroupChatResponses();
+
     // Start heartbeat
     const heartbeatInterval = setInterval(heartbeat, HEARTBEAT_MS);
+
+    // Periodic stale-response watchdog — clears typing indicators if runner was offline
+    const staleResponseWatchdog = setInterval(sweepStaleGroupChatResponses, STALE_RESPONSE_SWEEP_MS);
 
     // Start Heartbeat OS hourly snapshot + idle nudge check (every 10 minutes)
     let currentTaskRef = null;  // Tracks what we're working on for snapshots
@@ -4784,6 +4872,7 @@ async function run() {
         console.log('\n👋 Shutting down...');
         clearInterval(heartbeatInterval);
         clearInterval(heartbeatOsInterval);
+        clearInterval(staleResponseWatchdog);
         unsubCommands();
         await setStatus('offline', {
             notes: 'Agent shut down gracefully',
