@@ -1,0 +1,3 @@
+# Partnership-Led Community Growth
+
+Pulse’s next phase isn’t about buying attention — it’s about partnering with the brands, gyms, and run clubs whose communities are already alive and giving them a real digital home. Partnership-Led Community Growth means Pulse grows when we help those communities grow: we give their creators a challenge layer to run seasons and rituals, we make it easy for their members to show up together instead of training alone, and we measure the health of that shared movement in a way both sides can point to and trust.

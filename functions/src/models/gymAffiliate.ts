@@ -34,4 +34,23 @@ export interface GymAffiliate {
    * valid gymAffiliateId reference.
    */
   memberSignupCount: number;
+
+  /**
+   * Total number of rounds created by this gym affiliate.
+   * Incremented when a new round associated with this gym is created.
+   */
+  roundsCreated?: number;
+
+  /**
+   * Count of unique users who have joined any round associated with this gym.
+   * This should count each user at most once per gym affiliate.
+   */
+  uniqueParticipants?: number;
+
+  /**
+   * Optional list of user IDs that have been counted toward uniqueParticipants.
+   * This allows us to keep uniqueParticipants accurate when users join
+   * multiple rounds for the same gym.
+   */
+  uniqueParticipantUserIds?: string[];
 }
