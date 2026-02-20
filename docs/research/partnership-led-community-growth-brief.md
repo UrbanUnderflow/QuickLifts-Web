@@ -144,17 +144,93 @@ Outline (to be filled with citations in later steps):
 
 **Purpose:** Catalog the specific mechanics competitors use to grow and retain communities via partnerships.
 
-Outline:
-- Mechanic list (with examples):
-  - Co-branded challenges and seasons.
-  - Creator-led programs and cohorts.
-  - Affiliate / ambassador gyms.
-  - Run club activations and race build-ups.
-  - Data-driven rituals (streaks, leaderboards, readiness/score challenges).
-- For each mechanic:
-  - Which competitor(s) use it.
-  - How it’s positioned (brand story, messaging).
-  - Any measurable signals (participation, retention, NPS, public metrics) where available.
+This section is scoped to tactics that are relevant to Pulse’s three partnership lanes: **brands**, **gyms**, and **run clubs**.
+
+### 4.1 Co-branded Challenges and Seasons
+
+**Mechanic:** Multi-week challenges or seasonal campaigns co-branded with partners (brands, gyms, events), often framed around distance, frequency, or specific training goals.
+
+- **Strava**
+  - Runs recurring monthly challenges (e.g., run/cycle X km, climb Y meters) often sponsored by brands. Participants earn digital badges and sometimes partner rewards.
+  - These challenges act as always-on re-engagement loops and are easy for partners to promote through their own channels.
+  - **Signal:** Strava has publicly reported tens of millions of participants across challenges in various years [Unverified — needs precise citation].
+
+- **Nike Run Club / Adidas Runners**
+  - Use seasonal training plans (e.g., marathon build-ups) and co-branded race campaigns with event organizers.
+  - Co-branded runs and digital campaigns tie shoe/apparel launches to shared training arcs.
+
+**Relevance for Pulse:** Rounds can function as co-branded “seasons” for gyms and run clubs, with clear start/end dates and shared goals.
+
+### 4.2 Creator-Led Programs and Cohorts
+
+**Mechanic:** Programs where individual creators/instructors lead structured cohorts, amplifying both the platform and their own brand.
+
+- **Peloton**
+  - Star instructors run named programs and series (e.g., multi-week strength or ride programs) that members follow together.
+  - Instructors function as internal creators; their personalities and programming drive ongoing engagement.
+
+- **Nike Training Club / NRC Coaches**
+  - Coaches lead programs and appear in app content, often tied to broader campaigns (e.g., "Run Your First 5K", "Marathon Ready").
+
+- **Whoop / Oura Creators**
+  - External creators use wearables as props in habit/performance experiments, effectively running informal cohorts around sleep, strain, or recovery.
+
+**Relevance for Pulse:** Pulse’s rounds primitive is a direct fit for creator-led cohorts where coaches at partner gyms or run club captains lead structured blocks.
+
+### 4.3 Affiliate / Ambassador Gyms and Studio Networks
+
+**Mechanic:** Platforms grow by onboarding many gyms/studios as affiliates, turning them into distribution and community nodes.
+
+- **ClassPass**
+  - Aggregates thousands of studios/gyms; each partner contributes classes and local community.
+  - Community ownership is local (the studio), while ClassPass provides discovery, credits, and habit loops via variety.
+
+- **Mindbody**
+  - Provides infra for studios/gyms (scheduling, CRM, payments) plus a consumer app. The gym is the primary community; Mindbody is the backbone.
+
+**Relevance for Pulse:** Gym affiliates can be treated as community nodes where Pulse rounds run locally, with KPIs (rounds created, unique participants) measuring how embedded Pulse is in daily gym life.
+
+### 4.4 Run Club Activations and Race Build-Ups
+
+**Mechanic:** Regular group runs and season-long training cycles that build toward races or events, often branded or co-sponsored.
+
+- **Adidas Runners / Nike Run Club city chapters**
+  - Weekly runs, pace groups, and race build-ups with captains leading training.
+  - Co-branded events with races, retail, or other partners create offline anchors for digital communities.
+
+- **Zwift / Garmin Connect**
+  - Virtual events (Zwift races, group rides/runs) and community challenges around key races.
+
+**Relevance for Pulse:** Run clubs are one of Pulse’s three explicit lanes; these patterns suggest that rounds should map cleanly to training cycles and race seasons, both digital and IRL.
+
+### 4.5 Data-Driven Rituals (Streaks, Leaderboards, Scores)
+
+**Mechanic:** Use of metrics and game-like feedback (streaks, leaderboards, readiness scores) to build daily/weekly rituals.
+
+- **Strava**
+  - Segments, KOM/QOM, and club leaderboards create ongoing competition and social proof.
+  - Monthly challenges and badges encourage consistent activity.
+
+- **Whoop / Oura / Garmin**
+  - Recovery/readiness scores, HRV, and sleep metrics are turned into narratives ("today is a green day"; "your recovery is low, back off").
+  - Some platforms run community challenges around scores (sleep streaks, recovery challenges).
+
+- **Peloton**
+  - Leaderboards and streak counters (e.g., weekly streaks) drive return behavior.
+
+**Relevance for Pulse:** Data from partners (wearables, gyms, run clubs) can feed into Pulse’s rounds as adherence and progression signals, with streaks and leaderboards anchored to partner communities.
+
+### 4.6 Activation Kits and Onboarding Playbooks
+
+**Mechanic:** Providing partners with packaged assets and flows (landing pages, copy, templates, dashboards) so they can quickly spin up effective activations.
+
+- **Mindbody / ClassPass**
+  - Provide studios/gyms with tooling, guidance, and playbooks for improving attendance and retention (marketing emails, best practice guides).
+
+- **Brand creator programs** (e.g., influencer affiliate programs around fitness brands)
+  - Offer creators templates, link tracking, and campaign briefs so activations are consistent and measurable.
+
+**Relevance for Pulse:** Directly maps to Pulse’s goal of a repeatable partnership playbook and dashboard; community tactics are only scalable if partners can self-serve.
 
 ---
 
