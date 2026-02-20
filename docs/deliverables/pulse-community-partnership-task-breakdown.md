@@ -7,6 +7,7 @@
 
 #### Detailed Scope (Step 2)
 - **Reference Artifact:** `docs/deliverables/pulse-for-communities-narrative-spine-v1.md` is the canonical spec this ticket maintains and evolves.
+- **Primary Owner:** Nora (spec + enforcement), with Solara as narrative co-owner and Scout as downstream consumer.
 - **Purpose:** Create and maintain the master narrative and metric spine that every ICP playbook, partner A-list, and pitch artifact must plug into. This is the upstream source of truth; no downstream ticket can redefine metrics or core story.
 
 #### Required Sections
@@ -79,6 +80,17 @@
   - Any material change to the core one-liner, global metrics, or partner-fit rubric must be reflected in `pulse-for-communities-narrative-spine-v1.md` (or its next version) **before** updating ICP playbooks or partner lists.
   - When this ticket ships an updated spine version, downstream tickets should log a "spine version" they are aligned to (e.g., "Aligned to Pulse for Communities spine v1.1").
 
+#### Completion Checklist
+- [ ] Core one-liner written, reviewed, and stored in `pulse-for-communities-narrative-spine-v1.md`.
+- [ ] Expanded narrative drafted and reviewed for ICP-agnostic language.
+- [ ] Three global behavior metrics fully defined (definition + measurement + directional movement).
+- [ ] ICP metric application bullets added for Brands, Gyms, Run Clubs.
+- [ ] One vignette per ICP drafted and aligned with the metrics.
+- [ ] Partner-fit rubric finalized and documented with clear criteria.
+- [ ] Plug-in requirements section written for Solara and Scout.
+- [ ] Status/ownership block added with current version and owners.
+- [ ] Version tag recorded and communicated to owners of TICKET 2–7.
+
 ---
 
 ### TICKET 2 — ICP Playbook: Community-First Brands
@@ -87,6 +99,9 @@
 #### Detailed Scope (Step 3 – Brands ICP Playbook)
 - **Reference Spine:** Must align to `pulse-for-communities-narrative-spine-v1.md` (record the version this playbook uses).
 - **Primary Owner:** Solara (with Nora as spine/metrics reviewer).
+- **Dependencies:**
+  - Depends on TICKET 1 for the core one-liner, global metrics, partner-fit rubric, and ICP metric definitions for brands.
+  - May not redefine metrics; must apply the definitions from TICKET 1.
 
 #### Hero Community Example (Brands)
 - **Working Hero:** A training or supplement brand running a 6-week "Stronger Together" season where each sponsored athlete owns a Pulse block (e.g., at-home, gym-based, recovery-focused).
@@ -128,6 +143,16 @@ Each concept must include:
 - Expected behaviors logged in Pulse.
 - Which of the three metrics it is optimized to move and how that will be reported back to partners.
 
+#### Completion Checklist
+- [ ] Spine version recorded (e.g., "Aligned to Pulse for Communities spine v1.x").
+- [ ] Brands-specific restatement of the core one-liner added to the playbook.
+- [ ] Hero community example fully written and aligned with TICKET 1 metrics.
+- [ ] At least 3 brand concepts documented with clear entry points and flows.
+- [ ] Each concept explicitly mapped to inactivity gaps, ritual weeks, and/or creator-led participation.
+- [ ] Metric definitions for brands reused verbatim from TICKET 1.
+- [ ] Partner-fit checklist for brands section added (derived from the rubric in TICKET 1).
+- [ ] Draft reviewed by Nora for metric alignment and by Scout for partner-relevance.
+
 ---
 
 ### TICKET 3 — ICP Playbook: Gyms & Studios
@@ -136,6 +161,9 @@ Each concept must include:
 #### Detailed Scope (Step 3 – Gyms & Studios ICP Playbook)
 - **Reference Spine:** Must align to `pulse-for-communities-narrative-spine-v1.md` (record the version this playbook uses).
 - **Primary Owner:** Solara (with Nora as spine/metrics reviewer).
+- **Dependencies:**
+  - Depends on TICKET 1 for the core one-liner, global metrics, partner-fit rubric, and ICP metric definitions for gyms.
+  - Must use the shared definitions for inactivity gaps, ritual weeks, and creator-led participation; may not introduce new core metrics.
 
 #### Hero Community Example (Gyms & Studios)
 - **Working Hero:** A strength gym running an 8-week squat cycle, where members join a shared Pulse block (e.g., via QR code at the rig) that tracks coached sessions and at-home accessories.
@@ -178,6 +206,16 @@ Each concept must include:
 - The specific member behaviors logged in Pulse.
 - The target movement in inactivity gaps, ritual weeks, and creator-led participation, described in narrative form (no hard numbers required yet).
 
+#### Completion Checklist
+- [ ] Spine version recorded for the Gyms & Studios playbook.
+- [ ] Gym-specific restatement of the core one-liner added.
+- [ ] Hero gym example fully written and aligned with TICKET 1 definitions.
+- [ ] At least 3 gym concepts documented with flows and touchpoints.
+- [ ] Each concept mapped to one or more shared metrics with clear narrative intent.
+- [ ] Metric definitions for gyms reused verbatim from TICKET 1.
+- [ ] Gym partner-fit checklist added (derived from the rubric in TICKET 1).
+- [ ] Draft reviewed by Nora and validated against at least one real or hypothetical gym scenario.
+
 ---
 
 ### TICKET 4 — ICP Playbook: Run Clubs & Movement Crews
@@ -186,6 +224,9 @@ Each concept must include:
 #### Detailed Scope (Step 3 – Run Clubs ICP Playbook)
 - **Reference Spine:** Must align to `pulse-for-communities-narrative-spine-v1.md` (record the version this playbook uses).
 - **Primary Owner:** Solara (with Nora as spine/metrics reviewer).
+- **Dependencies:**
+  - Depends on TICKET 1 for the core one-liner, global metrics, partner-fit rubric, and ICP metric definitions for run clubs.
+  - Must use the shared inactivity gap, ritual week, and creator-led participation definitions for run clubs.
 
 #### Hero Community Example (Run Clubs & Crews)
 - **Working Hero:** A city run club running a "Six Weeks to First 10K" block where captains map out three key runs per week in Pulse (easy social, tempo, progressive long run), and runners log both solo and group runs into the same challenge.
@@ -228,6 +269,16 @@ Each concept must include:
 - The specific runner behaviors recorded in Pulse.
 - The intended impact on inactivity gaps, ritual weeks, and creator-led participation, stated clearly enough that Scout can later translate into outreach copy and hypotheses for specific partners.
 
+#### Completion Checklist
+- [ ] Spine version recorded for the Run Clubs playbook.
+- [ ] Run-club-specific restatement of the core one-liner added.
+- [ ] Hero run club example fully written and aligned with TICKET 1.
+- [ ] At least 3 run club concepts documented with clear run structures and communications.
+- [ ] Each concept mapped to one or more shared metrics with narrative expectations.
+- [ ] Metric definitions for run clubs reused verbatim from TICKET 1.
+- [ ] Run club partner-fit checklist added (derived from the rubric in TICKET 1).
+- [ ] Draft reviewed by Nora and pressure-tested against at least one real or hypothetical club.
+
 ---
 
 ### TICKET 5 — Partner A-List: Community-First Brands Lane
@@ -237,6 +288,9 @@ Each concept must include:
 - **Reference Spine & Playbook:** Must align to `pulse-for-communities-narrative-spine-v1.md` and the Brands ICP playbook (TICKET 2), recording the spine version.
 - **Primary Owner:** Scout (with Nora as fit/rubric enforcer and Solara for narrative alignment).
 - **Output Artifact:** `docs/deliverables/partners/pulse-brand-lane-a-list.md` (or equivalent agreed path), containing 10–15 candidate entries.
+- **Dependencies:**
+  - Depends on TICKET 1 for the core metrics and partner-fit rubric.
+  - Depends on TICKET 2 for brand-specific plays and language.
 
 #### Selection Criteria (Applied to Each Brand Prospect)
 Use the partner-fit rubric from the spine and make it concrete for brands:
@@ -262,11 +316,19 @@ Each entry must include at minimum:
 - **Hero Play Alignment:** which concept(s) from the Brands playbook (TICKET 2) this brand is a natural fit for.
 
 #### Tagging Requirement: Why It Fits the Spine
-- Every brand must be tagged with a short
-  "Why this fits the Pulse spine" note that:
+- Every brand must be tagged with a short "Why this fits the Pulse spine" note that:
   - Names at least one behavior metric we can realistically move.
   - Names at least one concrete ritual or challenge concept that would run on Pulse.
   - Avoids ungrounded claims; if the necessary evidence is not in `lead-source-of-truth.md`, mark the claim as **Unverified**.
+
+#### Completion Checklist
+- [ ] Spine version and Brands playbook version recorded at the top of the A-list doc.
+- [ ] 10–15 brand candidates identified following the selection criteria.
+- [ ] For each candidate, SOT checked and status set (Unverified vs. [SOT: LEAD-####, EVID-####]).
+- [ ] For each candidate, fit summary and spine tagging bullets written.
+- [ ] For each candidate, at least one Brands playbook concept mapped.
+- [ ] All entries include a "Why this fits the Pulse spine" note.
+- [ ] List reviewed by Nora for rubric compliance and by Solara for narrative coherence.
 
 ---
 
@@ -277,6 +339,9 @@ Each entry must include at minimum:
 - **Reference Spine & Playbook:** Must align to `pulse-for-communities-narrative-spine-v1.md` and the Gyms & Studios ICP playbook (TICKET 3), recording the spine version.
 - **Primary Owner:** Scout (with Nora as fit/rubric enforcer and Solara for narrative alignment).
 - **Output Artifact:** `docs/deliverables/partners/pulse-gym-studio-lane-a-list.md` (or equivalent agreed path), containing 10–15 candidate entries.
+- **Dependencies:**
+  - Depends on TICKET 1 for metrics and partner-fit rubric.
+  - Depends on TICKET 3 for gym-specific plays and language.
 
 #### Selection Criteria (Applied to Each Gym/Studio Prospect)
 1. **Existing Community Strength & Rhythm**
@@ -304,6 +369,15 @@ Each gym/studio entry must include:
   - Names a specific training cycle or challenge concept that would run on Pulse.
   - Marks any unverified assumptions as **Unverified** pending evidence in the lead source-of-truth doc.
 
+#### Completion Checklist
+- [ ] Spine version and Gyms playbook version recorded in the A-list doc.
+- [ ] 10–15 gym/studio candidates identified following the criteria.
+- [ ] For each candidate, SOT checked and status set appropriately.
+- [ ] For each candidate, fit summary and spine tagging bullets added.
+- [ ] For each candidate, a matching Gyms playbook concept identified.
+- [ ] Each entry includes a clear "Why this fits the Pulse spine" note.
+- [ ] List reviewed by Nora and cross-checked against the gyms partner-fit rubric.
+
 ---
 
 ### TICKET 7 — Partner A-List: Run Clubs & Movement Crews Lane
@@ -313,6 +387,9 @@ Each gym/studio entry must include:
 - **Reference Spine & Playbook:** Must align to `pulse-for-communities-narrative-spine-v1.md` and the Run Clubs ICP playbook (TICKET 4), recording the spine version.
 - **Primary Owner:** Scout (with Nora as fit/rubric enforcer and Solara for narrative alignment).
 - **Output Artifact:** `docs/deliverables/partners/pulse-run-club-lane-a-list.md` (or equivalent agreed path), containing 10–15 candidate entries.
+- **Dependencies:**
+  - Depends on TICKET 1 for metrics and partner-fit rubric.
+  - Depends on TICKET 4 for run-club-specific plays and language.
 
 #### Selection Criteria (Applied to Each Run Club / Crew Prospect)
 1. **Community Density & Meetups**
@@ -337,7 +414,16 @@ Each run club/crew entry must include:
 #### Tagging Requirement: Why It Fits the Spine
 - Each run club/crew must have a compact spine-fit tag that:
   - Identifies the easiest behavior metric win (e.g., turning existing weekly runs into ritual weeks).
-  - Names the starting challenge or season (e.g., “Six Weeks to First 10K” or a consistency block).
+  - Names the starting challenge or season (e.g., "Six Weeks to First 10K" or a consistency block).
   - Marks any data not backed by `docs/partnership/lead-source-of-truth.md` as **Unverified**.
+
+#### Completion Checklist
+- [ ] Spine version and Run Clubs playbook version recorded in the A-list doc.
+- [ ] 10–15 run club/crew candidates identified following the criteria.
+- [ ] For each candidate, SOT checked and status set appropriately.
+- [ ] For each candidate, fit summary and spine tagging bullets written.
+- [ ] For each candidate, a matching Run Clubs playbook concept identified.
+- [ ] Each entry includes a precise "Why this fits the Pulse spine" note.
+- [ ] List reviewed by Nora and validated against the run-club partner-fit rubric.
 
 ---
