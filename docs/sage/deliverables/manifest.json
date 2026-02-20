@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-02-20T00:00:00Z",
+  "lastUpdated": "2026-02-20T19:54:00Z",
   "deliverables": [
     {
       "id": "peptide-research-brief",
@@ -52,6 +52,23 @@
       "emoji": "📡",
       "completedAt": "2026-02-20T00:00:00Z",
       "taskRef": "Health Narrative Spine Step 1/6 — Clarify audience and purpose",
+      "status": "complete"
+    },
+    {
+      "id": "pulse-fit-community-partner-criteria",
+      "title": "Pulse-fit Community Partner Criteria",
+      "filename": "pulse-fit-community-partner-criteria.md",
+      "category": "research-output",
+      "description": "Defines explicit Pulse-fit criteria and disqualifiers for Brands, Gyms/Studios, and Run Clubs, including creator activity, challenge behavior, and community location clarity.",
+      "tags": [
+        "partnerships",
+        "community",
+        "criteria",
+        "icp"
+      ],
+      "emoji": "📋",
+      "completedAt": "2026-02-20T19:54:00Z",
+      "taskRef": "Pulse-fit Community Partners A-list Step 1/5 — Define criteria by ICP",
       "status": "complete"
     }
   ]

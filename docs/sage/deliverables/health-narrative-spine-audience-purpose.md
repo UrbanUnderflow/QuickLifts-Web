@@ -23,6 +23,19 @@ The Health Narrative Spine does four things:
 
 Pulse exists to help people show up for the behaviors that keep them moving — hitting their key training and recovery rituals, closing >3-day gaps, and noticing when their readiness is starting to wobble — so they feel more ready to train again, more often. We track and support behavior and self-reported readiness, but we do not diagnose conditions, treat injuries, cure illnesses, provide medical clearance, or replace healthcare professionals. Any language we use with partners should anchor on behavior change and readiness signals, not on clinical promises or guarantees.
 
+## The Three Core Behavior Metrics
+
+These are the three behavior patterns Pulse cares about most. They’re written in human language so they can travel across brands, gyms, and run clubs without turning into clinical claims.
+
+1. **Fewer >3-day gaps between key actions**  
+   We watch for stretches where someone falls more than three days behind on the behaviors that matter to them (training, recovery, or readiness check-ins). Longer gaps are often where motivation wobbles, life gets loud, or small aches turn into “I’ll start again next month.” Pulse’s job is to help people notice those gaps early and shorten them — turning "I disappeared for a week" into "I missed a couple days, then got pulled back in."
+
+2. **More weeks hitting 3+ lane-specific rituals**  
+   Instead of promising perfect streaks, we count how many weeks a person hits at least three key rituals in the lane they care about (strength, running, general movement, or recovery). A “win” week might look like: two lifts and one walk, or one long run plus two recovery sessions. The point is not volume for its own sake — it’s building a steady cadence of small, repeatable actions that feel doable even when life is busy.
+
+3. **Readiness behaviors and feeling ready to train again**  
+   We focus on the behaviors and self-checks that signal someone is ready (or not quite ready) to train again — things like sleep consistency, basic recovery rituals, and “how cooked vs ready” they report feeling. Pulse helps people build habits that support readiness (cool-downs, easy days, sleep-friendly choices) and catch early signs that they’re overcooked or on the verge of bailing, without ever telling them they are safe to play or cleared for activity. We measure and reflect back their own readiness signals so they can make better decisions with their body and, when needed, with their care team.
+
 ## Where This Spine Should Be Used
 
 This spine is a **source document**, not a public artifact. It should be referenced whenever we are:
