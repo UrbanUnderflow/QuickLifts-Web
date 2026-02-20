@@ -35,8 +35,7 @@ const TYPE_FILTER_OPTIONS: { label: string; value: PartnerType | "all" }[] = [
  *
  * Admin-only view of partner onboarding across brands, gyms, and run clubs.
  * This client component is responsible for loading partner data from
- * Firestore and rendering a basic onboarding table. Subsequent steps will
- * add charts on top of the loaded `partners` state.
+ * Firestore and rendering onboarding tables + simple lane-level metrics.
  */
 export default function PartnerOnboardingDashboardPage() {
   const [partners, setPartners] = useState<PartnerRow[]>([]);
@@ -108,9 +107,39 @@ export default function PartnerOnboardingDashboardPage() {
     [filteredPartners]
   );
 
+  const laneAverages = useMemo(() => {
+    const lanes: { type: PartnerType; label: string }[] = [
+      { type: "brand", label: "Brands" },
+      { type: "gym", label: "Gyms" },
+      { type: "runClub", label: "Run Clubs" },
+    ];
+
+    return lanes.map((lane) => {
+      const lanePartners = partners
+        .filter((p) => p.type === lane.type)
+        .map((p) => computeTimeToFirstRoundDays(p))
+        .filter((d): d is number => d != null);
+
+      if (lanePartners.length === 0) {
+        return { ...lane, avgDays: null };
+      }
+
+      const sum = lanePartners.reduce((acc, d) => acc + d, 0);
+      return { ...lane, avgDays: sum / lanePartners.length };
+    });
+  }, [partners]);
+
+  const maxAvg = useMemo(() => {
+    const vals = laneAverages
+      .map((lane) => lane.avgDays)
+      .filter((v): v is number => v != null && !isNaN(v));
+    if (vals.length === 0) return 0;
+    return Math.max(...vals);
+  }, [laneAverages]);
+
   return (
-    <main className="p-6">
-      <header className="mb-6">
+    <main className="p-6 space-y-6">
+      <header className="mb-2">
         <h1 className="text-2xl font-semibold">Partner Onboarding Dashboard</h1>
         <p className="mt-1 text-sm text-gray-600 max-w-2xl">
           Admin-only view of partner onboarding across brands, gyms, and run clubs.
@@ -223,6 +252,62 @@ export default function PartnerOnboardingDashboardPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+      </section>
+
+      <section className="border rounded-lg bg-white shadow-sm p-4 space-y-4">
+        <header>
+          <h2 className="text-lg font-semibold">Average Time to First Round by Lane</h2>
+          <p className="mt-1 text-xs text-gray-600 max-w-xl">
+            This view aggregates partners that have created at least one round and
+            shows the average number of days from initial invite to the first
+            Pulse-powered round for each lane.
+          </p>
+        </header>
+
+        {laneAverages.every((lane) => lane.avgDays == null) ? (
+          <p className="text-sm text-gray-600">
+            No time-to-first-round data yet. Once partners reach their first
+            Pulse round, lane-level averages will appear here.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {laneAverages.map((lane) => {
+              if (lane.avgDays == null || maxAvg === 0) {
+                return (
+                  <div key={lane.type} className="flex items-center gap-3 text-sm">
+                    <div className="w-24 text-gray-700 font-medium">
+                      {lane.label}
+                    </div>
+                    <div className="flex-1 h-3 bg-gray-100 rounded-full" />
+                    <div className="w-20 text-right text-gray-500 text-xs">
+                      —
+                    </div>
+                  </div>
+                );
+              }
+
+              const widthPercent = Math.max(
+                4,
+                Math.min(100, (lane.avgDays / maxAvg) * 100)
+              );
+
+              return (
+                <div key={lane.type} className="flex items-center gap-3 text-sm">
+                  <div className="w-24 text-gray-700 font-medium">{lane.label}</div>
+                  <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-3 bg-blue-500 rounded-full"
+                      style={{ width: `${widthPercent}%` }}
+                    />
+                  </div>
+                  <div className="w-20 text-right text-gray-700 text-xs">
+                    {lane.avgDays.toFixed(1)} d
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>

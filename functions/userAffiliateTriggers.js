@@ -14,9 +14,11 @@ const db = admin.firestore();
  * Trigger: Firestore document creation in `users/{userId}`.
  *
  * Behavior:
- * - If the new user document contains a `gymAffiliateId` field (string doc ID of `gymAffiliates`),
+ * - If the new user document already contains a `gymAffiliateId` field (string doc ID of `gymAffiliates`),
  *   increment `memberSignupCount` on that gym affiliate using a Firestore atomic increment.
- * - If `gymAffiliateId` is missing or the referenced document does not exist, no-op and log.
+ * - Otherwise, if the user has a `gymInviteCode` field, resolve it to a `gymAffiliates` doc by inviteCode,
+ *   write back `gymAffiliateId` onto the user, and then increment `memberSignupCount`.
+ * - If neither field exists or the referenced/lookup document does not exist, no-op and log.
  */
 exports.onUserCreateGymAffiliate = functions.firestore
   .document('users/{userId}')
@@ -24,14 +26,54 @@ exports.onUserCreateGymAffiliate = functions.firestore
     const userData = snap.data() || {};
     const { userId } = context.params;
 
-    const gymAffiliateId = userData.gymAffiliateId;
+    let gymAffiliateId = userData.gymAffiliateId;
+    const gymInviteCode = userData.gymInviteCode;
+
+    // First, try to resolve from gymInviteCode if gymAffiliateId is missing
+    if (!gymAffiliateId && gymInviteCode) {
+      console.log('[onUserCreateGymAffiliate] Resolving gymInviteCode for new user.', {
+        userId,
+        gymInviteCode,
+      });
+
+      try {
+        const affiliatesRef = db.collection('gymAffiliates');
+        const snapshot = await affiliatesRef.where('inviteCode', '==', gymInviteCode).limit(1).get();
+
+        if (snapshot.empty) {
+          console.warn('[onUserCreateGymAffiliate] No gymAffiliates match for inviteCode; skipping.', {
+            userId,
+            gymInviteCode,
+          });
+        } else {
+          const affiliateDoc = snapshot.docs[0];
+          gymAffiliateId = affiliateDoc.id;
+
+          console.log('[onUserCreateGymAffiliate] Resolved inviteCode to gymAffiliateId. Updating user.', {
+            userId,
+            gymInviteCode,
+            gymAffiliateId,
+          });
+
+          // Attach the resolved gymAffiliateId back to the user document for future reads.
+          await snap.ref.update({ gymAffiliateId });
+        }
+      } catch (error) {
+        console.error('[onUserCreateGymAffiliate] Error resolving gymInviteCode to affiliate:', {
+          userId,
+          gymInviteCode,
+          error,
+        });
+        // Do not throw; we still want user creation to succeed.
+      }
+    }
 
     if (!gymAffiliateId) {
-      console.log('[onUserCreateGymAffiliate] No gymAffiliateId on new user; skipping increment.', { userId });
+      console.log('[onUserCreateGymAffiliate] No gymAffiliateId on new user after resolution; skipping increment.', { userId });
       return null;
     }
 
-    console.log('[onUserCreateGymAffiliate] New user with gym affiliate detected.', {
+    console.log('[onUserCreateGymAffiliate] New user with gym affiliate detected. Incrementing.', {
       userId,
       gymAffiliateId,
     });
