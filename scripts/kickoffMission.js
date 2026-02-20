@@ -62,6 +62,8 @@ const USE_OPENCLAW = process.env.USE_OPENCLAW !== 'false';
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || 'main';
 const ALLOW_DIRECT_OPENAI = Boolean(process.env.OPENAI_API_KEY) && !USE_OPENCLAW;
+const MISSION_PLANNING_WINDOW_MS = parseInt(process.env.MISSION_PLANNING_WINDOW_MS || '90000', 10);
+const MISSION_PLANNING_POLL_MS = parseInt(process.env.MISSION_PLANNING_POLL_MS || '4000', 10);
 
 /* ─── Helpers ─────────────────────────────────────────── */
 
@@ -108,6 +110,10 @@ async function loadProposedObjectives() {
         .limit(10)
         .get();
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 async function callGPT(systemPrompt, userPrompt, maxTokens = 2000) {
@@ -199,11 +205,14 @@ async function callGPT(systemPrompt, userPrompt, maxTokens = 2000) {
 
 /* ─── Phase 1: Mission Plan Generation ───────────────── */
 
-async function generateMissionPlan(northStar, queues, proposedObjectives) {
+async function generateMissionPlan(northStar, queues, proposedObjectives, planningTranscript) {
     const objectives = northStar.objectives || [];
     const proposedBlock = proposedObjectives.length > 0
         ? `\nApproved Agent-Proposed Objectives (treat these with equal priority to the main objectives):\n${proposedObjectives.map((o, i) => `  ${i + 1}. [${o.proposedBy}] ${o.title}: ${o.reason || ''}`).join('\n')}`
         : '';
+    const planningBlock = planningTranscript
+        ? `\nROUND-TABLE STRATEGY TRANSCRIPT (use this to drive assignment choices):\n${planningTranscript}`
+        : '\nROUND-TABLE STRATEGY TRANSCRIPT:\n(no responses captured — infer best assignments from North Star + queues)';
 
     const queueBlock = AGENTS.map(a => {
         const q = queues[a.id] || [];
@@ -223,6 +232,7 @@ async function generateMissionPlan(northStar, queues, proposedObjectives) {
         ``,
         `CURRENT AGENT QUEUES:`,
         queueBlock,
+        planningBlock,
         ``,
         `RULES:`,
         `1. Assign each agent exactly ONE objective they will OWN this mission.`,
@@ -231,6 +241,7 @@ async function generateMissionPlan(northStar, queues, proposedObjectives) {
         `4. Each task must have a direct_impact explaining exactly how it moves the North Star.`,
         `5. Complexity 1-5: 1=trivial, 3=moderate, 5=massive.`,
         `6. For agents that already have tasks, create tasks that COMPLEMENT (not duplicate) existing work.`,
+        `7. Reflect at least one concrete idea from each agent's strategy response when possible.`,
     ].filter(Boolean).join('\n');
 
     const result = await callGPT(systemPrompt, `Generate the mission plan. Return JSON with shape:
@@ -292,50 +303,54 @@ async function createMissionTasks(plan, missionId) {
     return created;
 }
 
-/* ─── Phase 3: Kickoff Group Chat ────────────────────── */
+/* ─── Phase 3: Strategy Roundtable Kickoff ───────────── */
 
-async function postMissionGroupChat(northStar, plan, missionId) {
+async function startMissionPlanningChat(northStar, missionId) {
+    const now = FieldValue.serverTimestamp();
+    const participants = AGENTS.map(a => a.id);
     const chatRef = await db.collection('agent-group-chats').add({
-        title: `🚀 Mission Kickoff: ${northStar.title}`,
+        participants,
+        createdBy: 'admin',
+        createdAt: now,
+        lastMessageAt: now,
+        status: 'active',
+        metadata: {
+            messageCount: 1,
+            sessionDuration: 0,
+        },
+        title: `🚀 Mission Strategy: ${northStar.title}`,
         initiatedBy: 'system',
         missionId,
         phase: 'mission-kickoff',
         context: {
             northStarTitle: northStar.title,
-            missionSummary: plan.mission_summary,
             meetingPhase: 'strategy',
+            missionPhase: 'planning',
         },
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
+        updatedAt: now,
         isActive: true,
     });
 
-    // Build the kickoff message
-    const agentClaims = (plan.agents || []).map(a =>
-        `**${a.agentName}** owns: *${a.claimedObjective}*\n${(a.tasks || []).map(t => `  → ${t.name}`).join('\n')}`
-    ).join('\n\n');
-
     const kickoffContent = [
-        `🚀 **MISSION BRIEFING: ${northStar.title}**`,
+        `🚀 **MISSION STRATEGY ROUNDTABLE: ${northStar.title}**`,
         ``,
-        northStar.description ? `**Context:** ${northStar.description.substring(0, 300)}` : '',
+        northStar.description ? `**Context:** ${northStar.description.substring(0, 350)}` : '',
         ``,
-        `**Objective Claims:**`,
-        agentClaims,
+        `Round 1 (strategy only — no task execution yet):`,
+        `1. State which objective you believe you should own and why.`,
+        `2. Challenge one risky assumption in this North Star.`,
+        `3. @mention one teammate and ask a concrete strategic question.`,
         ``,
-        `**Mission Summary:** ${plan.mission_summary}`,
-        ``,
-        `Your tasks have been created in the Kanban. Agent runners will pick them up immediately.`,
-        `As you work, use proposeObjective() to add new objectives you discover. Autonomous mode is NOW ACTIVE.`,
+        `Do NOT create or execute tasks yet. Planning velocity first, assignment second.`,
+        `Mission Control will convert this strategy thread into task assignments after the roundtable.`,
     ].filter(Boolean).join('\n');
 
-    // Post initial message addressed to all agents
     const responses = {};
     for (const agent of AGENTS) {
         responses[agent.id] = { content: '', status: 'pending' };
     }
 
-    await db.collection(`agent-group-chats/${chatRef.id}/messages`).add({
+    const messageRef = await db.collection(`agent-group-chats/${chatRef.id}/messages`).add({
         from: 'system',
         fromName: 'Mission Control',
         content: kickoffContent,
@@ -343,41 +358,182 @@ async function postMissionGroupChat(northStar, plan, missionId) {
         allCompleted: false,
         isKickoff: true,
         missionId,
-        createdAt: FieldValue.serverTimestamp(),
-        broadcastedAt: FieldValue.serverTimestamp(),
+        createdAt: now,
+        broadcastedAt: now,
         context: {
             meetingPhase: 'strategy',
             isStrategyPhase: true,
+            missionPhase: 'planning',
         },
     });
 
-    // Also dispatch individual commands to each agent
+    const batch = db.batch();
     for (const agent of AGENTS) {
-        await db.collection('agent-commands').add({
+        const cmdRef = db.collection('agent-commands').doc();
+        batch.set(cmdRef, {
             from: 'system',
             to: agent.id,
             type: 'group-chat',
             content: kickoffContent,
             status: 'pending',
             groupChatId: chatRef.id,
+            messageId: messageRef.id,
             context: {
                 meetingPhase: 'strategy',
                 isStrategyPhase: true,
+                missionPhase: 'planning',
                 otherAgents: AGENTS.filter(a => a.id !== agent.id).map(a => a.id),
             },
-            createdAt: FieldValue.serverTimestamp(),
+            createdAt: now,
         });
     }
+    batch.update(db.doc(`agent-group-chats/${chatRef.id}`), {
+        lastMessageAt: now,
+    });
+    await batch.commit();
 
-    console.log(`💬 Mission kickoff group chat created: ${chatRef.id}`);
-    return chatRef.id;
+    console.log(`💬 Mission strategy group chat created: ${chatRef.id} (message ${messageRef.id})`);
+    return { chatId: chatRef.id, messageId: messageRef.id, kickoffContent };
 }
 
-/* ─── Phase 4: Activate Mission Status ───────────────── */
+async function waitForMissionPlanningResponses(chatId, messageId, kickoffContent) {
+    const messageRef = db.doc(`agent-group-chats/${chatId}/messages/${messageId}`);
+    const deadline = Date.now() + MISSION_PLANNING_WINDOW_MS;
+    let messageData = null;
+
+    while (Date.now() < deadline) {
+        const snap = await messageRef.get();
+        if (snap.exists) {
+            messageData = snap.data() || {};
+            const responses = messageData.responses || {};
+            const completedCount = AGENTS.filter(agent => {
+                const status = responses[agent.id]?.status;
+                return status === 'completed' || status === 'failed' || status === 'timed-out';
+            }).length;
+            const allCompleted = messageData.allCompleted === true || completedCount >= AGENTS.length;
+            if (allCompleted) break;
+        }
+        await sleep(MISSION_PLANNING_POLL_MS);
+    }
+
+    const responses = messageData?.responses || {};
+    const transcriptLines = [`Mission Control: ${kickoffContent}`];
+    for (const agent of AGENTS) {
+        const responseText = String(responses[agent.id]?.content || '').trim();
+        if (!responseText) continue;
+        transcriptLines.push(`${agent.name}: ${responseText}`);
+    }
+
+    const respondedCount = AGENTS.filter(agent => String(responses[agent.id]?.content || '').trim().length > 0).length;
+    return {
+        transcript: transcriptLines.join('\n\n'),
+        respondedCount,
+    };
+}
+
+async function postMissionExecutionHandoff(chatId, northStar, plan, createdTasks, missionId) {
+    const now = FieldValue.serverTimestamp();
+    const agentClaims = (plan.agents || []).map(a =>
+        `**${a.agentName}** owns: *${a.claimedObjective}*\n${(a.tasks || []).map(t => `  → ${t.name}`).join('\n')}`
+    ).join('\n\n');
+    const createdByAgent = AGENTS.map(agent => {
+        const count = createdTasks.filter(t => t.agent === agent.name).length;
+        return `${agent.name}: ${count} task${count === 1 ? '' : 's'}`;
+    }).join(' • ');
+
+    const handoffContent = [
+        `⚡ **MISSION EXECUTION HANDOFF: ${northStar.title}**`,
+        ``,
+        `Strategy round complete. Assignments are now live in Kanban.`,
+        ``,
+        `**Objective Ownership + Tasks**`,
+        agentClaims,
+        ``,
+        `**Mission Summary:** ${plan.mission_summary}`,
+        `**Tasks Created:** ${createdTasks.length} total (${createdByAgent})`,
+        ``,
+        `Execution mode is now active. Build immediately; keep cross-agent updates concise and concrete.`,
+    ].filter(Boolean).join('\n');
+
+    await db.doc(`agent-group-chats/${chatId}`).set({
+        phase: 'mission-execution',
+        updatedAt: now,
+        context: {
+            northStarTitle: northStar.title,
+            meetingPhase: 'action',
+            missionPhase: 'execution',
+            missionSummary: plan.mission_summary,
+        },
+    }, { merge: true });
+
+    const responses = {};
+    for (const agent of AGENTS) {
+        responses[agent.id] = { content: '', status: 'pending' };
+    }
+
+    const handoffRef = await db.collection(`agent-group-chats/${chatId}/messages`).add({
+        from: 'system',
+        fromName: 'Mission Control',
+        content: handoffContent,
+        responses,
+        allCompleted: false,
+        missionId,
+        isExecutionHandoff: true,
+        createdAt: now,
+        broadcastedAt: now,
+        context: {
+            meetingPhase: 'action',
+            missionPhase: 'execution',
+        },
+    });
+
+    const batch = db.batch();
+    for (const agent of AGENTS) {
+        const cmdRef = db.collection('agent-commands').doc();
+        batch.set(cmdRef, {
+            from: 'system',
+            to: agent.id,
+            type: 'group-chat',
+            content: handoffContent,
+            status: 'pending',
+            groupChatId: chatId,
+            messageId: handoffRef.id,
+            context: {
+                meetingPhase: 'action',
+                missionPhase: 'execution',
+                otherAgents: AGENTS.filter(a => a.id !== agent.id).map(a => a.id),
+            },
+            createdAt: now,
+        });
+    }
+    batch.update(db.doc(`agent-group-chats/${chatId}`), {
+        lastMessageAt: now,
+    });
+    await batch.commit();
+}
+
+/* ─── Phase 4: Mission Status ─────────────────────────── */
+
+async function setMissionPlanningStatus(northStar, missionId, chatId) {
+    await db.doc(MISSION_DOC).set({
+        status: 'active',
+        missionPhase: 'planning',
+        missionId,
+        northStarTitle: northStar.title,
+        missionSummary: 'Mission strategy roundtable is live. Agents are planning before task assignment.',
+        kickoffChatId: chatId,
+        taskCount: 0,
+        createdTaskIds: [],
+        startedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+    console.log(`🎯 Mission status set to PLANNING (${missionId})`);
+}
 
 async function activateMission(northStar, plan, chatId, taskIds, missionId) {
     await db.doc(MISSION_DOC).set({
         status: 'active',
+        missionPhase: 'execution',
         missionId,
         northStarTitle: northStar.title,
         missionSummary: plan.mission_summary,
@@ -387,11 +543,10 @@ async function activateMission(northStar, plan, chatId, taskIds, missionId) {
         ),
         taskCount: taskIds.length,
         createdTaskIds: taskIds.map(t => t.id),
-        startedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-    });
+    }, { merge: true });
 
-    console.log(`🎯 Mission status set to ACTIVE (${missionId})`);
+    console.log(`🎯 Mission status set to EXECUTION (${missionId})`);
 }
 
 /* ─── Main ────────────────────────────────────────────── */
@@ -405,6 +560,10 @@ async function main() {
         process.exit(1);
     }
 
+    let missionId = null;
+    let chatId = null;
+    let northStar = null;
+
     try {
         // Check if a mission is already active
         if (!FORCE_MODE) {
@@ -416,12 +575,12 @@ async function main() {
         }
 
         // Generate unique mission ID
-        const missionId = `mission-${Date.now()}`;
+        missionId = `mission-${Date.now()}`;
         console.log(`\n📋 Mission ID: ${missionId}`);
 
         // Step 1: Load North Star
         console.log('\n⭐ Loading North Star...');
-        const northStar = await loadNorthStar();
+        northStar = await loadNorthStar();
         console.log(`   Title: ${northStar.title}`);
         console.log(`   Objectives: ${(northStar.objectives || []).length}`);
 
@@ -438,9 +597,35 @@ async function main() {
             console.log(`\n💡 ${proposedObjectives.length} approved agent-proposed objectives included`);
         }
 
-        // Step 4: Generate mission plan
+        // Step 4: Start strategy roundtable first (no task assignment yet)
+        console.log('\n💬 Starting mission strategy roundtable...');
+        const planningSession = await startMissionPlanningChat(northStar, missionId);
+        chatId = planningSession.chatId;
+        await setMissionPlanningStatus(northStar, missionId, chatId);
+        await postTimeline(
+            'system', 'Mission Control', '🧠',
+            'work-in-flight',
+            `Mission planning started: ${northStar.title}`,
+            {
+                objectiveCode: 'MISSION',
+                color: 'blue',
+                lensTag: 'mission',
+                artifactText: 'Agents moved to the round table for strategy-first planning.',
+            }
+        );
+
+        // Step 5: Let the strategy conversation happen and capture it
+        console.log(`\n🪑 Waiting for strategy responses (${Math.round(MISSION_PLANNING_WINDOW_MS / 1000)}s window)...`);
+        const planningResults = await waitForMissionPlanningResponses(
+            planningSession.chatId,
+            planningSession.messageId,
+            planningSession.kickoffContent,
+        );
+        console.log(`   Captured strategy responses from ${planningResults.respondedCount}/${AGENTS.length} agents`);
+
+        // Step 6: Generate mission plan from North Star + strategy transcript
         console.log(`\n🧠 Generating mission plan with ${USE_OPENCLAW ? `OpenClaw (${OPENCLAW_AGENT_ID})` : 'GPT-4o'}...`);
-        const plan = await generateMissionPlan(northStar, queues, proposedObjectives);
+        const plan = await generateMissionPlan(northStar, queues, proposedObjectives, planningResults.transcript);
         console.log(`\n📋 Mission Summary: ${plan.mission_summary?.substring(0, 150)}...`);
         for (const agent of plan.agents || []) {
             console.log(`\n   ${agent.agentName} → "${agent.claimedObjective}"`);
@@ -449,19 +634,19 @@ async function main() {
             }
         }
 
-        // Step 5: Create tasks
+        // Step 7: Create tasks only AFTER planning roundtable completes
         console.log('\n✏️  Creating tasks in Firestore...');
         const createdTasks = await createMissionTasks(plan, missionId);
 
-        // Step 6: Post kickoff group chat
-        console.log('\n💬 Posting mission kickoff group chat...');
-        const chatId = await postMissionGroupChat(northStar, plan, missionId);
+        // Step 8: Post execution handoff back to the roundtable
+        console.log('\n📣 Posting mission execution handoff...');
+        await postMissionExecutionHandoff(chatId, northStar, plan, createdTasks, missionId);
 
-        // Step 7: Activate mission
+        // Step 9: Activate mission execution status
         console.log('\n🎯 Activating mission...');
         await activateMission(northStar, plan, chatId, createdTasks, missionId);
 
-        // Step 8: Post timeline beat
+        // Step 10: Post timeline beat
         await postTimeline(
             'system', 'Mission Control', '🚀',
             'result',
@@ -484,8 +669,40 @@ async function main() {
 
         process.exit(0);
     } catch (err) {
-        console.error('\n❌ Mission kickoff failed:', err.message);
-        console.error(err.stack);
+        const errMsg = err?.message || String(err);
+        console.error('\n❌ Mission kickoff failed:', errMsg);
+        if (err?.stack) console.error(err.stack);
+
+        // Surface failure in mission status so UI doesn't silently reset with no context.
+        if (missionId) {
+            try {
+                await db.doc(MISSION_DOC).set({
+                    status: 'idle',
+                    missionPhase: 'idle',
+                    missionId,
+                    lastError: errMsg.substring(0, 800),
+                    updatedAt: FieldValue.serverTimestamp(),
+                }, { merge: true });
+            } catch (statusErr) {
+                console.error('❌ Could not persist mission failure state:', statusErr?.message || statusErr);
+            }
+        }
+        if (chatId) {
+            try {
+                await db.doc(`agent-group-chats/${chatId}`).set({
+                    phase: 'mission-error',
+                    updatedAt: FieldValue.serverTimestamp(),
+                    context: {
+                        meetingPhase: 'strategy',
+                        missionPhase: 'error',
+                        error: errMsg.substring(0, 300),
+                    },
+                }, { merge: true });
+            } catch (chatErr) {
+                console.error('❌ Could not annotate mission chat failure:', chatErr?.message || chatErr);
+            }
+        }
+
         process.exit(1);
     }
 }

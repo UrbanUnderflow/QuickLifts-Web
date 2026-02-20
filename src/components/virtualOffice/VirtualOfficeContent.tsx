@@ -2698,9 +2698,16 @@ const LiveClock: React.FC = () => {
 
 /* ─── Mission Button ────────────────────────────────────── */
 
-const MissionButton: React.FC = () => {
+type OfficeToastPayload = { message: string; type: 'info' | 'success' | 'error' };
+
+interface MissionButtonProps {
+  onToast?: (payload: OfficeToastPayload) => void;
+}
+
+const MissionButton: React.FC<MissionButtonProps> = ({ onToast }) => {
   const [status, setStatus] = React.useState<'idle' | 'active' | 'paused'>('idle');
   const [launching, setLaunching] = React.useState(false);
+  const [launchResult, setLaunchResult] = React.useState<'success' | 'error' | null>(null);
 
   // Live-subscribe to mission status
   React.useEffect(() => {
@@ -2717,18 +2724,32 @@ const MissionButton: React.FC = () => {
   const handleLaunch = async () => {
     if (launching) return;
     setLaunching(true);
+    setLaunchResult(null);
+    onToast?.({ message: '🚀 Starting mission strategy roundtable...', type: 'info' });
     try {
       const res = await fetch('/api/agent/kickoff-mission', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ force: status === 'paused' }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const d = await res.json();
-        alert((d.error || 'Launch failed') + (d.details ? '\n\nDetails: ' + d.details : ''));
+        const message = (data.error || 'Launch failed') + (data.details ? ` — ${data.details}` : '');
+        setLaunchResult('error');
+        onToast?.({ message: `❌ ${message}`, type: 'error' });
+        setTimeout(() => setLaunchResult(null), 5000);
+        return;
       }
+      setLaunchResult('success');
+      onToast?.({
+        message: `✅ ${data.note || data.message || 'Mission launch accepted.'}`,
+        type: 'success',
+      });
+      setTimeout(() => setLaunchResult(null), 5000);
     } catch (e: any) {
-      alert(e.message);
+      setLaunchResult('error');
+      onToast?.({ message: `❌ ${e.message || 'Mission launch failed'}`, type: 'error' });
+      setTimeout(() => setLaunchResult(null), 5000);
     } finally {
       setLaunching(false);
     }
@@ -2749,9 +2770,29 @@ const MissionButton: React.FC = () => {
             ? 'rgba(34,197,94,0.12)'
             : isPaused
               ? 'rgba(251,191,36,0.12)'
+              : launchResult === 'success'
+                ? 'rgba(34,197,94,0.25)'
+                : launchResult === 'error'
+                  ? 'rgba(239,68,68,0.2)'
               : 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.2))',
-          border: `1px solid ${isActive ? 'rgba(34,197,94,0.3)' : isPaused ? 'rgba(251,191,36,0.3)' : 'rgba(99,102,241,0.35)'}`,
-          color: isActive ? '#4ade80' : isPaused ? '#fbbf24' : '#a5b4fc',
+          border: `1px solid ${isActive
+            ? 'rgba(34,197,94,0.3)'
+            : isPaused
+              ? 'rgba(251,191,36,0.3)'
+              : launchResult === 'success'
+                ? 'rgba(34,197,94,0.45)'
+                : launchResult === 'error'
+                  ? 'rgba(239,68,68,0.4)'
+                  : 'rgba(99,102,241,0.35)'}`,
+          color: isActive
+            ? '#4ade80'
+            : isPaused
+              ? '#fbbf24'
+              : launchResult === 'success'
+                ? '#86efac'
+                : launchResult === 'error'
+                  ? '#fca5a5'
+                  : '#a5b4fc',
           fontSize: 12, fontWeight: 600,
           transition: 'all 0.2s',
           whiteSpace: 'nowrap' as const,
@@ -2771,11 +2812,25 @@ const MissionButton: React.FC = () => {
           }} />
         ) : launching ? (
           <Loader2 className="w-3 h-3" style={{ animation: 'spin 1s linear infinite' }} />
+        ) : launchResult === 'success' ? (
+          <CheckCircle2 className="w-3 h-3" />
+        ) : launchResult === 'error' ? (
+          <XCircle className="w-3 h-3" />
         ) : (
           <span style={{ fontSize: 13 }}>🚀</span>
         )}
         <span>
-          {launching ? 'Launching...' : isActive ? 'Mission Active' : isPaused ? 'Resume Mission' : 'Start Mission'}
+          {launching
+            ? 'Launching...'
+            : isActive
+              ? 'Mission Active'
+              : launchResult === 'success'
+                ? 'Kickoff Started'
+                : launchResult === 'error'
+                  ? 'Failed — Retry?'
+                  : isPaused
+                    ? 'Resume Mission'
+                    : 'Start Mission'}
         </span>
       </div>
 
@@ -2860,6 +2915,8 @@ const VirtualOfficeContent: React.FC = () => {
   // ── Telemetry check detection state ──
   const [activeStandup, setActiveStandup] = useState<GroupChat | null>(null);
   const [isStandupObserving, setIsStandupObserving] = useState(false);
+  const [activeMissionSession, setActiveMissionSession] = useState<GroupChat | null>(null);
+  const [isMissionObserving, setIsMissionObserving] = useState(false);
 
   // ── Queued telemetry check (waits for active collaboration to finish) ──
   const queuedStandupRef = useRef<GroupChat | null>(null);
@@ -3495,39 +3552,103 @@ const VirtualOfficeContent: React.FC = () => {
     setMinutesPreviewData(null);
   }, []);
 
-  // ── Telemetry session listener ──
-  // Watches for active group chats with standupMeta (automated telemetry checks)
-  // Use refs to avoid re-subscribing on every agentPositions/activeStandup change
+  // ── Active Roundtable listener (Telemetry + Mission strategy) ──
+  // Use refs to avoid re-subscribing on every state change.
   const activeStandupRef = useRef(activeStandup);
   activeStandupRef.current = activeStandup;
+  const activeMissionSessionRef = useRef(activeMissionSession);
+  activeMissionSessionRef.current = activeMissionSession;
   const agentPositionsRef = useRef(agentPositions);
   agentPositionsRef.current = agentPositions;
   const isCollaboratingRef = useRef(isCollaborating);
   isCollaboratingRef.current = isCollaborating;
 
   useEffect(() => {
-    const standupQuery = query(
+    const activeChatsQuery = query(
       collection(db, 'agent-group-chats'),
       where('status', '==', 'active'),
     );
 
-    const unsubStandup = onSnapshot(standupQuery, (snapshot) => {
-      // Find the first active session that has standupMeta
+    const transitionAgentsToTable = () => {
+      const agentIds = allAgents.filter(a => a.id !== 'antigravity').map(a => a.id);
+      const tablePositions = getAllTablePositions(agentIds);
+      const currentPositions = agentPositionsRef.current;
+      const updatedPositions = { ...currentPositions };
+      agentIds.forEach((agentId, index) => {
+        updatedPositions[agentId] = {
+          state: 'transitioning-to-table',
+          position: tablePositions[agentId],
+          deskPosition: currentPositions[agentId]?.deskPosition || getDeskPosition(index),
+          transitionDelay: getStaggerDelay(index),
+        };
+      });
+      setAgentPositions(updatedPositions);
+
+      const lastAgentDelay = getStaggerDelay(agentIds.length - 1);
+      setTimeout(() => {
+        setAgentPositions(prev => {
+          const final = { ...prev };
+          agentIds.forEach(agentId => {
+            if (final[agentId]) {
+              final[agentId] = { ...final[agentId], state: 'table', transitionDelay: 0 };
+            }
+          });
+          return final;
+        });
+      }, lastAgentDelay + 2000);
+    };
+
+    const transitionAgentsToDesks = () => {
+      const agentIds = allAgents.filter(a => a.id !== 'antigravity').map(a => a.id);
+      const currentPositions = agentPositionsRef.current;
+      const updatedPositions = { ...currentPositions };
+      agentIds.forEach((agentId, i) => {
+        const originalIndex = allAgents.findIndex(a => a.id === agentId);
+        updatedPositions[agentId] = {
+          state: 'transitioning-to-desk',
+          position: getDeskPosition(originalIndex),
+          deskPosition: getDeskPosition(originalIndex),
+          transitionDelay: getExitStaggerDelay(i, agentIds.length),
+        };
+      });
+      setAgentPositions(updatedPositions);
+
+      const lastExitDelay = getExitStaggerDelay(0, agentIds.length);
+      setTimeout(() => {
+        setAgentPositions(prev => {
+          const final = { ...prev };
+          agentIds.forEach(agentId => {
+            if (final[agentId]) {
+              final[agentId] = { ...final[agentId], state: 'desk', transitionDelay: 0 };
+            }
+          });
+          return final;
+        });
+        setIsCollaborating(false);
+        setGroupChatId(null);
+        setCollabStartTime(null);
+      }, lastExitDelay + 2000);
+    };
+
+    const unsubscribe = onSnapshot(activeChatsQuery, (snapshot) => {
       const standupDoc = snapshot.docs.find(doc => {
-        const data = doc.data();
+        const data = doc.data() as any;
         return data.standupMeta != null;
       });
 
+      const missionPlanningDoc = snapshot.docs.find(doc => {
+        const data = doc.data() as any;
+        return data.phase === 'mission-kickoff' || data?.context?.missionPhase === 'planning';
+      });
+
+      // 1) Telemetry check handling (takes precedence)
       if (standupDoc) {
         const data = standupDoc.data() as Omit<GroupChat, 'id'>;
         const standup: GroupChat = { id: standupDoc.id, ...data };
 
-        // Only trigger if this is a NEW standup (not already tracking)
         if (!activeStandupRef.current || activeStandupRef.current.id !== standup.id) {
-          // ── QUEUE if a non-standup collaboration is active ──
           const isManualCollabActive = isCollaboratingRef.current && !activeStandupRef.current;
           if (isManualCollabActive) {
-            // Don't interrupt — queue it and let the user finish
             queuedStandupRef.current = standup;
             setHasQueuedStandup(true);
             setTriggeringStandup(false);
@@ -3535,91 +3656,63 @@ const VirtualOfficeContent: React.FC = () => {
             return;
           }
 
-          // ── ACTIVATE the telemetry check now ──
           console.log('[Telemetry] Activating check:', standup.id);
           queuedStandupRef.current = null;
           setHasQueuedStandup(false);
           setActiveStandup(standup);
+          setIsMissionObserving(false);
           setGroupChatId(standup.id!);
           setIsCollaborating(true);
           setCollabStartTime(new Date());
-          setTriggeringStandup(false); // Clear manual trigger waiting state
-          setStandupTriggerResult('success'); // Show success briefly
-
-          // Animate agents to table (without opening modal)
-          const agentIds = allAgents.filter(a => a.id !== 'antigravity').map(a => a.id);
-          const tablePositions = getAllTablePositions(agentIds);
-          const currentPositions = agentPositionsRef.current;
-          const updatedPositions = { ...currentPositions };
-          agentIds.forEach((agentId, index) => {
-            updatedPositions[agentId] = {
-              state: 'transitioning-to-table',
-              position: tablePositions[agentId],
-              deskPosition: currentPositions[agentId]?.deskPosition || getDeskPosition(index),
-              transitionDelay: getStaggerDelay(index),
-            };
-          });
-          setAgentPositions(updatedPositions);
-
-          // Mark as "at table" after animation
-          const lastAgentDelay = getStaggerDelay(agentIds.length - 1);
-          setTimeout(() => {
-            setAgentPositions(prev => {
-              const final = { ...prev };
-              agentIds.forEach(agentId => {
-                if (final[agentId]) {
-                  final[agentId] = { ...final[agentId], state: 'table', transitionDelay: 0 };
-                }
-              });
-              return final;
-            });
-          }, lastAgentDelay + 2000);
+          setTriggeringStandup(false);
+          setStandupTriggerResult('success');
+          transitionAgentsToTable();
         }
       } else if (activeStandupRef.current) {
-        // Telemetry check ended — animate agents back to desks
         console.log('[Telemetry] Check ended — animating agents back to desks');
         setActiveStandup(null);
         setIsStandupObserving(false);
         setShowGroupChatModal(false);
+        transitionAgentsToDesks();
+      }
 
-        const agentIds = allAgents.filter(a => a.id !== 'antigravity').map(a => a.id);
-        const currentPositions = agentPositionsRef.current;
-        const updatedPositions = { ...currentPositions };
-        agentIds.forEach((agentId, i) => {
-          const originalIndex = allAgents.findIndex(a => a.id === agentId);
-          updatedPositions[agentId] = {
-            state: 'transitioning-to-desk',
-            position: getDeskPosition(originalIndex),
-            deskPosition: getDeskPosition(originalIndex),
-            transitionDelay: getExitStaggerDelay(i, agentIds.length),
-          };
-        });
-        setAgentPositions(updatedPositions);
+      // 2) Mission strategy roundtable handling (only when no standup is active)
+      if (!standupDoc) {
+        if (missionPlanningDoc) {
+          const data = missionPlanningDoc.data() as Omit<GroupChat, 'id'>;
+          const missionSession: GroupChat = { id: missionPlanningDoc.id, ...data };
 
-        const lastExitDelay = getExitStaggerDelay(0, agentIds.length);
-        setTimeout(() => {
-          setAgentPositions(prev => {
-            const final = { ...prev };
-            agentIds.forEach(agentId => {
-              if (final[agentId]) {
-                final[agentId] = { ...final[agentId], state: 'desk', transitionDelay: 0 };
-              }
+          if (!activeMissionSessionRef.current || activeMissionSessionRef.current.id !== missionSession.id) {
+            console.log('[Mission] Strategy roundtable active:', missionSession.id);
+            setActiveMissionSession(missionSession);
+            setIsStandupObserving(false);
+            setGroupChatId(missionSession.id!);
+            setIsCollaborating(true);
+            setCollabStartTime(new Date());
+            setIsMissionObserving(false);
+            setRestartToast({
+              message: '🚀 Mission strategy roundtable is live — agents moving to the table.',
+              type: 'success',
             });
-            return final;
-          });
-          setIsCollaborating(false);
-          setGroupChatId(null);
-          setCollabStartTime(null);
-        }, lastExitDelay + 2000);
+            setTimeout(() => setRestartToast(null), 5000);
+            transitionAgentsToTable();
+          }
+        } else if (activeMissionSessionRef.current) {
+          console.log('[Mission] Strategy roundtable ended — animating agents back to desks');
+          setActiveMissionSession(null);
+          setIsMissionObserving(false);
+          setShowGroupChatModal(false);
+          transitionAgentsToDesks();
+        }
       }
     });
 
-    return () => unsubStandup();
+    return () => unsubscribe();
   }, [allAgents]);
 
   // Update table click handler
   const handleTableClick = useCallback(() => {
-    // During an automated standup: click opens/closes the observer view
+    // During an automated telemetry check: click opens/closes the observer view
     if (activeStandup) {
       if (isStandupObserving) {
         setShowGroupChatModal(false);
@@ -3631,13 +3724,25 @@ const VirtualOfficeContent: React.FC = () => {
       return;
     }
 
-    // Manual collaboration toggle (no standup active)
+    // During mission planning: click opens/closes mission observer view
+    if (activeMissionSession) {
+      if (isMissionObserving) {
+        setShowGroupChatModal(false);
+        setIsMissionObserving(false);
+      } else {
+        setShowGroupChatModal(true);
+        setIsMissionObserving(true);
+      }
+      return;
+    }
+
+    // Manual collaboration toggle (no automated session active)
     if (isCollaborating) {
       endCollaboration();
     } else {
       startCollaboration();
     }
-  }, [isCollaborating, startCollaboration, endCollaboration, activeStandup, isStandupObserving]);
+  }, [isCollaborating, startCollaboration, endCollaboration, activeStandup, isStandupObserving, activeMissionSession, isMissionObserving]);
 
   return (
     <div className="voffice-root">
@@ -3881,6 +3986,34 @@ const VirtualOfficeContent: React.FC = () => {
               </div>
             )}
 
+            {/* Mission planning badge */}
+            {!activeStandup && activeMissionSession && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '47%',
+                  transform: 'translateX(-50%)',
+                  zIndex: 10,
+                  background: 'linear-gradient(135deg, #16a34a, #15803d)',
+                  color: '#ecfdf5',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  letterSpacing: '0.4px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                  cursor: 'pointer',
+                  animation: 'tablePulse 2s ease-in-out infinite',
+                  whiteSpace: 'nowrap',
+                }}
+                onClick={handleTableClick}
+              >
+                🧠 Mission Strategy Roundtable
+                {!isMissionObserving && <span style={{ marginLeft: 6, opacity: 0.85 }}>• Click to observe</span>}
+              </div>
+            )}
+
             {/* Queued standup indicator */}
             {hasQueuedStandup && !activeStandup && (
               <div
@@ -3980,7 +4113,12 @@ const VirtualOfficeContent: React.FC = () => {
               </div>
 
               {/* Start Mission — sits right next to telemetry */}
-              <MissionButton />
+              <MissionButton
+                onToast={(payload) => {
+                  setRestartToast(payload);
+                  setTimeout(() => setRestartToast(null), payload.type === 'error' ? 9000 : 6000);
+                }}
+              />
             </div>
 
             {/* Shared Deliverables Button */}
@@ -4075,6 +4213,12 @@ const VirtualOfficeContent: React.FC = () => {
               onClose={(msgs) => {
                 if (onboardingDraft) {
                   setOnboardingDraft(null);
+                }
+                if (activeStandup || activeMissionSession) {
+                  setShowGroupChatModal(false);
+                  setIsStandupObserving(false);
+                  setIsMissionObserving(false);
+                  return;
                 }
                 endCollaboration(msgs);
               }}
