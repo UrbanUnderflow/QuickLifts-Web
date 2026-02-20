@@ -86,9 +86,10 @@ function getAgentIdForTier(tier) {
 const OPENCLAW_SMOKE_TEST = process.env.OPENCLAW_SMOKE_TEST === 'true';
 const OPENCLAW_SMOKE_CMD = process.env.OPENCLAW_SMOKE_CMD || 'status --json';
 const OPENCLAW_MODEL_SYNC_MS = parseInt(process.env.OPENCLAW_MODEL_SYNC_MS || '60000', 10); // Keep presence model accurate after OpenClaw config changes
-const MAX_FOLLOW_UP_DEPTH = parseInt(process.env.MAX_FOLLOW_UP_DEPTH || '5', 10); // 5 back-and-forths max keeps conversation alive
+const MAX_FOLLOW_UP_DEPTH = parseInt(process.env.MAX_FOLLOW_UP_DEPTH || '7', 10); // Deeper back-and-forth keeps strategy chats alive
 const MAX_FOLLOW_UP_DEPTH_EXEC = parseInt(process.env.MAX_FOLLOW_UP_DEPTH_EXEC || '1', 10); // Execution mode should converge quickly
 const ENABLE_ORGANIC_FOLLOW_UPS = process.env.ENABLE_ORGANIC_FOLLOW_UPS === 'true'; // Off by default; only explicit @mentions continue threads
+const FORCE_STRATEGY_CONTINUATION = process.env.FORCE_STRATEGY_CONTINUATION !== 'false'; // Strategy rounds should keep chaining even when mentions are missed
 const MAX_SELF_CORRECTION_RETRIES = 2; // Retry attempts when step output contains failure signals
 const STEP_INACTIVITY_TIMEOUT_MS = parseInt(process.env.STEP_INACTIVITY_TIMEOUT_MS || '300000', 10); // Kill step if no stdout/stderr activity for 5m
 const MAX_STEP_REWRITE_ATTEMPTS = 1; // Rewrite-from-different-angle attempts on crash/timeout
@@ -2687,10 +2688,17 @@ async function processCommands() {
                 // ── Execution mode: detect [TASK], [COMMAND], or "stop planning" directives ──
                 var msgContent = cmd.content || '';
                 var EXEC_RX = /\[(TASK|COMMAND)\]|stop\s+planning|start\s+building|start\s+executing|queue\s+(up\s+)?(your|the)\s+tasks?|no\s+more\s+planning|enough\s+planning|stop\s+talking|go\s+build|do\s+work|start\s+working/i;
+                var meetingPhase = String(cmd.context?.meetingPhase || '').toLowerCase();
+                var isStrategyPhase = meetingPhase === 'strategy' || meetingPhase === 'brainstorm' || meetingPhase === 'planning';
+                var isActionPhase = meetingPhase === 'action' || meetingPhase === 'execution';
                 var isExecMode = EXEC_RX.test(msgContent);
                 var currentDepth = cmd.context?.followUpDepth || 0;
                 // Only auto-trigger exec mode at very high depth — let the tree of thought breathe
-                if (currentDepth >= 5) isExecMode = true;
+                if (!isStrategyPhase && currentDepth >= 5) isExecMode = true;
+                if (isStrategyPhase && isExecMode) {
+                    console.log(`   🧠 STRATEGY PHASE LOCK: ignoring execution trigger until action phase`);
+                    isExecMode = false;
+                }
                 if (isExecMode) {
                     console.log(`   ⚡ EXEC MODE: agent will respond with action items, not discussion`);
                 }
@@ -2781,18 +2789,25 @@ async function processCommands() {
                             `Your strengths: ${personality.strengths}`,
                             ``,
                             `You're in a LIVE round-table chat with: ${displayNamesInRoom.join(', ')}.`,
+                            isStrategyPhase
+                                ? `Meeting phase: STRATEGY. Prioritize planning, tradeoffs, and cross-agent ideation before execution.`
+                                : `Meeting phase: OPEN DISCUSSION.`,
                             isFollowUp && replyToAgent
                                 ? `${replyToAgent} just tagged you directly. Respond to them specifically — pick up exactly where they left off.`
                                 : `Latest message from Tremaine (founder): "${compactMessagePreview || '[empty]'}"`,
                             ``,
                             `══ LIVE CONVERSATION RULES (follow these exactly) ══`,
                             ``,
-                            `1. SHORT & PUNCHY — 2-4 sentences MAXIMUM. This is a fast back-and-forth, not a report.`,
+                            isStrategyPhase
+                                ? `1. SHORT & PUNCHY — 3-5 sentences MAXIMUM. This is rapid strategy planning, not a report.`
+                                : `1. SHORT & PUNCHY — 2-4 sentences MAXIMUM. This is a fast back-and-forth, not a report.`,
                             `2. @MENTION IS MANDATORY — You MUST @mention at least one other agent by name (e.g. @Nora, @Scout, @Solara, @Sage). No exceptions. Pick the person whose expertise is most relevant to your thought.`,
                             `3. ASK A DIRECT QUESTION — End your message by asking that person something specific. Not rhetorical — a real question they need to answer.`,
                             `4. BUILD OR CHALLENGE — Either extend an idea from the thread OR push back with a concern. Never just agree and move on.`,
                             `5. NO HEDGING — Skip phrases like "I think perhaps" or "it might be worth considering". Talk like you're texting a colleague.`,
-                            `6. NO TASK QUEUING — Don't say you'll build something or queue a task. Just talk.`,
+                            isStrategyPhase
+                                ? `6. NO TASK EXECUTION — Don't say you'll build or queue work yet. Stay in strategy mode.`
+                                : `6. NO TASK QUEUING — Don't say you'll build something or queue a task. Just talk.`,
                             ``,
                             defaultTagTarget && !isFollowUp
                                 ? `You MUST include "@${defaultTagTarget}" in your response.`
@@ -2800,7 +2815,7 @@ async function processCommands() {
                             ``,
                             isBoosted
                                 ? `Tremaine asked for deeper thinking. Go 4-6 sentences, be analytical — but still tag someone and ask a real question:`
-                                : `2-4 sentences, plain text, fast and real:`,
+                                : (isStrategyPhase ? `3-5 sentences, strategy-first, plain text:` : `2-4 sentences, plain text, fast and real:`),
                         );
                         chatPrompt = brainstormParts.join('\n');
                     }
@@ -2990,6 +3005,26 @@ async function processCommands() {
                     }
                 }
 
+                if (isStrategyPhase) {
+                    var strategyCandidates = uniqueAgentIds((commandTurnState.participants || []).concat(otherAgents || []).filter(function (id) {
+                        return id && id !== AGENT_ID;
+                    }));
+                    var escapeMentionText = function (value) {
+                        return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    };
+                    var hasStrategyMention = strategyCandidates.some(function (id) {
+                        var name = AGENT_DISPLAY_NAMES[id] || id;
+                        var rx = new RegExp(`@${escapeMentionText(name)}\\b`, 'i');
+                        return rx.test(gcResponse || '');
+                    });
+                    if (!hasStrategyMention && strategyCandidates.length > 0) {
+                        var forcedId = strategyCandidates[Math.floor(Math.random() * strategyCandidates.length)];
+                        var forcedName = AGENT_DISPLAY_NAMES[forcedId] || forcedId;
+                        gcResponse = `${String(gcResponse || '').trim()} @${forcedName}, what decision do you recommend here?`.trim();
+                        console.log(`   🧠 Strategy phase: injected @${forcedName} to keep brainstorm velocity`);
+                    }
+                }
+
                 response = gcResponse;
 
                 // Write our response back to the group chat message document
@@ -3113,8 +3148,13 @@ async function processCommands() {
                         // Note: we intentionally do NOT suppress follow-ups based on closure signals.
                         // Agents should always reply when tagged, even if they signal a next step.
 
-                        // Optional organic follow-up mode (off by default)
-                        if (ENABLE_ORGANIC_FOLLOW_UPS && mentionedAgentIds.length === 0 && currentDepth < 3 && gcResponse.length > 100) {
+                        // Organic follow-up mode:
+                        // - Optional by env toggle for normal chats
+                        // - Forced during strategy phase so brainstorming doesn't collapse after one turn
+                        var shouldUseOrganicFollowUps = ENABLE_ORGANIC_FOLLOW_UPS || (isStrategyPhase && FORCE_STRATEGY_CONTINUATION);
+                        var organicDepthLimit = isStrategyPhase ? 5 : 3;
+                        var organicMinLength = isStrategyPhase ? 40 : 100;
+                        if (shouldUseOrganicFollowUps && mentionedAgentIds.length === 0 && currentDepth < organicDepthLimit && gcResponse.length > organicMinLength) {
                             // Determine which agent would best continue this thread based on content
                             var responseWords = gcResponse.toLowerCase();
                             var agentRelevance = {};
@@ -3136,10 +3176,17 @@ async function processCommands() {
                             if (sortedByRelevance.length > 0 && sortedByRelevance[0][1] > 0) {
                                 mentionedAgentIds.push(sortedByRelevance[0][0]);
                                 console.log(`   🌿 Organic follow-up enabled: ${AGENT_NAME}'s response touches ${knownAgents[sortedByRelevance[0][0]]}'s expertise`);
+                            } else if (isStrategyPhase && followUpCandidates.length > 0) {
+                                var fallbackTarget = followUpCandidates[Math.floor(Math.random() * followUpCandidates.length)];
+                                mentionedAgentIds.push(fallbackTarget);
+                                console.log(`   🧠 Strategy continuation: routing follow-up to @${knownAgents[fallbackTarget] || fallbackTarget}`);
                             }
                         }
+                        mentionedAgentIds = uniqueAgentIds(mentionedAgentIds);
 
-                        var effectiveMaxDepth = isExecMode ? MAX_FOLLOW_UP_DEPTH_EXEC : MAX_FOLLOW_UP_DEPTH;
+                        var effectiveMaxDepth = isExecMode
+                            ? MAX_FOLLOW_UP_DEPTH_EXEC
+                            : (isStrategyPhase ? Math.max(MAX_FOLLOW_UP_DEPTH, 7) : MAX_FOLLOW_UP_DEPTH);
                         if (mentionedAgentIds.length > 0 && gcChatId && currentDepth < effectiveMaxDepth) {
                             // Brief pause (2s) to let admin cut in before the chain continues
                             await new Promise(resolve => setTimeout(resolve, 2_000));
@@ -3152,10 +3199,12 @@ async function processCommands() {
                                     .limit(1)
                                     .get();
                                 if (!recentMsgs.empty) {
-                                    var latestAdminMsg = recentMsgs.docs[0].data();
+                                    var latestAdminDoc = recentMsgs.docs[0];
+                                    var latestAdminMsg = latestAdminDoc.data();
                                     var latestTime = latestAdminMsg.createdAt?.toDate?.()?.getTime() || 0;
-                                    // 5s window — tighter than before so we don't delay fast threads
-                                    if (latestTime > Date.now() - 5_000) {
+                                    var currentMessageTime = msgData?.createdAt?.toDate?.()?.getTime?.() || 0;
+                                    // Only treat as a cut-in when it's a NEWER admin message than the one we're processing.
+                                    if (latestAdminDoc.id !== gcMessageId && latestTime > currentMessageTime) {
                                         adminCutIn = true;
                                         console.log(`   ✋ Admin sent a new message — pausing follow-up chain`);
                                     }
@@ -3166,6 +3215,9 @@ async function processCommands() {
 
                             if (!adminCutIn) {
                                 console.log(`   ▶️ No admin message — continuing tree-of-thought chain`);
+                                var followUpPhase = isExecMode
+                                    ? 'execution'
+                                    : (isStrategyPhase ? 'strategy' : (isActionPhase ? 'action' : (cmd.context?.meetingPhase || 'brainstorm')));
                                 for (var mentionedId of mentionedAgentIds) {
                                     var normalizedMentioned = uniqueAgentIds([mentionedId]).filter(Boolean);
                                     if (normalizedMentioned.length === 0) continue;
@@ -3186,6 +3238,7 @@ async function processCommands() {
                                         allCompleted: false,
                                         isFollowUp: true,
                                         threadDepth: currentDepth + 1,
+                                        meetingPhase: followUpPhase,
                                     });
 
                                     await db.collection('agent-commands').add({
@@ -3204,6 +3257,7 @@ async function processCommands() {
                                             turnState: buildTurnStateFromMessage([threadTarget], gcResponse),
                                             turnSlaMs: ROUND_TABLE_TURN_SLA_MS,
                                             followUpDepth: currentDepth + 1,
+                                            meetingPhase: followUpPhase,
                                         },
                                     });
 
