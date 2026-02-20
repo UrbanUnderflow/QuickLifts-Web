@@ -65,6 +65,7 @@
         "npm:jspdf@4",
         "npm:lodash.debounce@^4.0.8",
         "npm:lucide-react@0.460",
+        "npm:marked@^17.0.2",
         "npm:mixpanel-browser@^2.64.0",
         "npm:netlify-plugin-inline-functions-env@^1.0.9",
         "npm:next-mdx-remote@5",
