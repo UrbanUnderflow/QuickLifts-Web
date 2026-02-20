@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../api/firebase/config';
 import type { PartnerType, PartnerFirestoreData } from '../../../types/Partner';
 import { PartnerModel } from '../../../types/Partner';
+import { getPlaybookForType } from '../../../server/partners/playbookConfig';
 
 // Basic runtime validation helpers for this handler (steps 2–4)
 const ALLOWED_TYPES: PartnerType[] = ['brand', 'gym', 'runClub'];
@@ -138,11 +139,24 @@ export default async function handler(
       updatePayload.onboardingStage =
         onboardingStage || existingData.onboardingStage || 'invited';
 
+      // Preserve existing playbook if present; do not overwrite on updates
+      if (existingData && (existingData as any).playbook) {
+        updatePayload.playbook = (existingData as any).playbook;
+      }
+
       // Only set firstRoundCreatedAt when flag is true AND it hasn't been set before
       if (firstRoundCreated && !existingData.firstRoundCreatedAt) {
         updatePayload.firstRoundCreatedAt = serverTimestamp();
       }
     } else {
+      // New partner: attach playbook template based on type
+      const playbook = getPlaybookForType(type);
+      updatePayload.playbook = {
+        type: playbook.type,
+        label: playbook.label,
+        steps: playbook.steps,
+      };
+
       // New partner: set invitedAt using serverTimestamp so we can measure time-to-active accurately
       updatePayload.onboardingStage = onboardingStage || 'invited';
       updatePayload.invitedAt = serverTimestamp();
@@ -170,6 +184,8 @@ export default async function handler(
         onboardingStage: model.onboardingStage,
         invitedAt: model.invitedAt,
         firstRoundCreatedAt: model.firstRoundCreatedAt ?? null,
+        // Expose playbook snapshot as part of the response when present
+        playbook: (finalData as any).playbook ?? null,
       },
     });
   } catch (error) {
