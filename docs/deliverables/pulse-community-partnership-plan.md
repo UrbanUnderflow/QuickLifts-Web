@@ -52,3 +52,112 @@ These are the concrete outputs this strategy work must produce. Later steps in t
 7. **Tracker-Ready Task Breakdown**
    - A final structured breakdown (sections for objectives, workstreams, tickets, owners, and acceptance criteria) that can be pasted directly into the team’s project tracker.
    - This is the organizing artifact that ensures the narrative, ICP docs, and partner A-list move from concept to completed work with clear ownership.
+
+---
+
+## 3. Core Workstreams – Scope & Success Criteria
+
+### 3.1 Workstream A – Shared "Pulse x Community" Narrative Spine
+
+**Scope**
+- Synthesize a single, coherent narrative that explains:
+  - What Pulse is in the context of community-led movement.
+  - Why community challenges and creator-led ecosystems are the wedge for Pulse.
+  - How Pulse differs from ad platforms, generic influencer networks, or basic challenge apps.
+- Translate this narrative into:
+  - A 1–2 page written narrative (internal master version).
+  - A slide-ready outline that can be adapted into custom partner decks.
+- Ensure the narrative can flex across the three primary ICPs (Brands, Gyms, Run Clubs) without rewriting from scratch.
+- Integrate only behaviorally-grounded claims and proof points that can be traced back to real Pulse usage or clearly labeled as hypotheses.
+
+**Out of Scope**
+- Detailed ICP-specific strategy (handled in Workstream B).
+- Prospect-specific pitch customization or full pitch decks for individual partners.
+
+**Success Criteria**
+- Narrative spine doc is:
+  - **Cohesive:** Tells a clear story from problem → Pulse insight → product → community → partnership opportunity.
+  - **Modular:** Structured so sections can be lifted into ICP docs and partner decks without heavy editing.
+  - **Evidence-aware:** All concrete claims about behavior or performance are either:
+    - backed by documented evidence (metrics, behavioral patterns), or
+    - explicitly labeled as "Hypothesis" / "Unverified".
+- Partnerships + product leads can:
+  - Use the narrative to explain Pulse to a new partner in <5 minutes without additional context.
+  - Identify where to plug in ICP-specific details without breaking the story.
+- At least one dry-run usage:
+  - Narrative spine successfully used to draft a section of a real or mock partner deck, with no major structural gaps identified.
+
+---
+
+### 3.2 Workstream B – ICP-Specific Community Strategy Docs (Brands, Gyms, Run Clubs)
+
+**Scope**
+- Produce three distinct but harmonized strategy docs, one per ICP:
+  - **Brands (consumer fitness/wellness).**
+  - **Gyms/Studios.**
+  - **Run Clubs.**
+- For each ICP, define:
+  - Core jobs-to-be-done and pain points around community, engagement, and measurement.
+  - How Pulse fits into their existing ecosystem (tools, communities, channels).
+  - Recommended activation types (challenges, content cycles, co-branded series, seasonal campaigns) with examples.
+  - Example partner journey(s) from first conversation → pilot → scaled program.
+  - Behavioral proof points and patterns that are safe to reference.
+  - Guardrails and red flags (what we *won't* promise or do for this ICP).
+- Ensure all three docs:
+  - Reuse the shared narrative language where appropriate.
+  - Are formatted consistently so they can live side-by-side in the tracker and be skimmed quickly.
+
+**Out of Scope**
+- Negotiation-specific terms (pricing, rev share percentages, contract templates).
+- Detailed legal or compliance review for each ICP.
+
+**Success Criteria**
+- Each ICP doc:
+  - Clearly articulates a **specific value proposition** for that ICP (not generic "brand awareness").
+  - Includes at least **2–3 concrete activation examples** tailored to that ICP.
+  - Maps **Pulse capabilities → ICP outcomes** in a way that a partnerships lead can lift into emails or decks.
+  - Explicitly flags any claims that are hypotheses or require further data before external use.
+- Across all three docs:
+  - No contradictions in how Pulse is positioned at the core narrative level.
+  - Shared concepts (e.g., challenges, creators, measurement) use consistent language.
+  - Docs are short enough to be skimmable (target 3–5 pages per ICP including examples/appendix).
+- At least one partnerships or product stakeholder can:
+  - Use an ICP doc to outline a real outreach plan for a target in that ICP without needing additional strategic clarification.
+
+---
+
+### 3.3 Workstream C – Curated A-List of Pulse-Fit Community Partners (with Behavioral Notes)
+
+**Scope**
+- Compile a focused, prioritized list of high-fit community partners across:
+  - Brands (supplements, apparel, wellness, recovery, etc.).
+  - Gyms/Studios.
+  - Run Clubs and related movement collectives.
+- For each prospect, capture:
+  - Segment (Brand/Gym/Run Club).
+  - Why they are a fit for Pulse (audience, mission, product, community behavior).
+  - Known or observable community behaviors:
+    - Creator activity (consistency, platform presence).
+    - Challenge or campaign history (if any).
+    - Primary platforms and formats (IG, TikTok, Strava, in-person events, etc.).
+  - Risk and alignment notes (mission, regulatory considerations, any obvious red flags).
+  - Lead sourcing and evidence references using the `docs/partnership/lead-source-of-truth.md` ledger.
+- Structure the A-list in a format that:
+  - Can be filtered or segmented by ICP.
+  - Can be extended as new leads are identified.
+
+**Out of Scope**
+- Conducting actual outreach or logging CRM activity (this is input to, not execution of, sales efforts).
+- Making unverified claims about interest, intent, or performance.
+
+**Success Criteria**
+- A-list contains:
+  - At least **10 qualified prospects** across the three ICPs, with balance aligned to current quarter focus.
+  - For each prospect, a clear, concise **"why Pulse"** rationale.
+  - Behavioral notes that are **descriptive, not speculative**, and tied to observable signals.
+- Lead data hygiene:
+  - All leads and evidence are cross-checked against `docs/partnership/lead-source-of-truth.md` before marking the A-list as complete.
+  - Any prospect without a corresponding SOT entry is explicitly labeled **"Unverified"** and not presented as having expressed interest or existing partnership status.
+- Partnerships team can:
+  - Use the A-list to choose 3–5 initial outreach targets per ICP without needing to re-research basics.
+  - Understand, from the notes alone, what type of activation might resonate with each prospect (e.g., challenge series, co-branded program, content-led partnership).
