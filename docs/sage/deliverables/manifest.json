@@ -1,7 +1,43 @@
 {
   "version": 1,
-  "lastUpdated": "2026-02-16T19:50:00Z",
+  "lastUpdated": "2026-02-20T21:05:00Z",
   "deliverables": [
+    {
+      "id": "pulse-x-community-task-plan-outline",
+      "title": "Pulse x Community Task Plan — Artifact Outline",
+      "filename": "pulse-x-community-task-plan-outline.md",
+      "category": "research-output",
+      "description": "Living outline of the Pulse x Community narrative and ICP strategy artifacts, with purpose, ownership, acceptance criteria, and ICP expectations.",
+      "tags": [
+        "partnerships",
+        "community",
+        "narrative",
+        "icp"
+      ],
+      "emoji": "🧩",
+      "completedAt": "2026-02-20T20:40:00Z",
+      "taskRef": "Pulse x Community Task Breakdown Steps 1–4/5 — Outline, ownership, and acceptance",
+      "status": "complete"
+    },
+    {
+      "id": "pulse-x-community-task-plan",
+      "title": "Pulse x Community Task Plan — Execution Checklist",
+      "filename": "pulse-x-community-task-plan.md",
+      "category": "research-output",
+      "description": "Executable checklist for the Pulse x Community narrative and ICP documents, including artifacts, owners, acceptance criteria, and ICP-specific examples/metrics.",
+      "tags": [
+        "partnerships",
+        "community",
+        "narrative",
+        "icp",
+        "task-plan"
+      ],
+      "emoji": "✅",
+      "completedAt": "2026-02-20T20:45:00Z",
+      "taskRef": "Pulse x Community Task Breakdown Step 5/5 — Compile task plan checklist",
+      "status": "complete"
+    },
+
     {
       "id": "peptide-research-brief",
       "title": "Peptide Research Brief",
@@ -35,6 +71,108 @@
       "emoji": "📄",
       "completedAt": "2026-02-10T00:00:00Z",
       "taskRef": "Sage Task #5 — Propose an outline segment for the whitepaper",
+      "status": "complete"
+    },
+    {
+      "id": "health-narrative-spine-audience-purpose",
+      "title": "Pulse Health Narrative Spine — Audience & Purpose",
+      "filename": "health-narrative-spine-audience-purpose.md",
+      "category": "research-output",
+      "description": "Defines who the Pulse Health Narrative Spine is for, what it is meant to do, and where it should be referenced across decks, playbooks, and partner communications.",
+      "tags": [
+        "narrative",
+        "health-promise",
+        "brand-safety",
+        "partnerships"
+      ],
+      "emoji": "📡",
+      "completedAt": "2026-02-20T00:00:00Z",
+      "taskRef": "Health Narrative Spine Step 1/6 — Clarify audience and purpose",
+      "status": "complete"
+    },
+    {
+      "id": "pulse-fit-community-partner-criteria",
+      "title": "Pulse-fit Community Partner Criteria",
+      "filename": "pulse-fit-community-partner-criteria.md",
+      "category": "research-output",
+      "description": "Defines explicit Pulse-fit criteria and disqualifiers for Brands, Gyms/Studios, and Run Clubs, including creator activity, challenge behavior, and community location clarity.",
+      "tags": [
+        "partnerships",
+        "community",
+        "criteria",
+        "icp"
+      ],
+      "emoji": "📋",
+      "completedAt": "2026-02-20T19:54:00Z",
+      "taskRef": "Pulse-fit Community Partners A-list Step 1/5 — Define criteria by ICP",
+      "status": "complete"
+    },
+    {
+      "id": "pulse-fit-community-partner-candidate-pool",
+      "title": "Pulse-fit Community Partner Candidate Pool",
+      "filename": "pulse-fit-community-partner-candidate-pool.md",
+      "category": "research-output",
+      "description": "Broad candidate pool for Brands, Gyms/Studios, and Run Clubs with first-pass screening against Pulse-fit behavioral criteria.",
+      "tags": [
+        "partnerships",
+        "community",
+        "candidate-pool",
+        "icp"
+      ],
+      "emoji": "🧭",
+      "completedAt": "2026-02-20T20:10:00Z",
+      "taskRef": "Pulse-fit Community Partners A-list Step 2/5 — Assemble and screen candidate pool",
+      "status": "complete"
+    },
+    {
+      "id": "pulse-fit-community-partner-behavioral-signals",
+      "title": "Pulse-fit Community Partner Behavioral Signals",
+      "filename": "pulse-fit-community-partner-behavioral-signals.md",
+      "category": "research-output",
+      "description": "Shortlisted brands, gyms/studios, and run clubs with concrete (currently unverified) behavioral signals on creators, challenge cadence, and community channels.",
+      "tags": [
+        "partnerships",
+        "community",
+        "behavioral-signals",
+        "icp"
+      ],
+      "emoji": "📊",
+      "completedAt": "2026-02-20T20:30:00Z",
+      "taskRef": "Pulse-fit Community Partners A-list Step 3/5 — Behavioral signal capture",
+      "status": "complete"
+    },
+    {
+      "id": "pulse-fit-community-partner-fit-tiering",
+      "title": "Pulse-fit Community Partner Fit Tiering",
+      "filename": "pulse-fit-community-partner-fit-tiering.md",
+      "category": "research-output",
+      "description": "Assigns Flagship-ready vs Future-fit (Hypothesis) tiers to shortlisted partners by ICP, with explicit disconfirming signals and risks.",
+      "tags": [
+        "partnerships",
+        "community",
+        "fit-tiering",
+        "icp"
+      ],
+      "emoji": "🎯",
+      "completedAt": "2026-02-20T20:45:00Z",
+      "taskRef": "Pulse-fit Community Partners A-list Step 4/5 — Fit tier tagging",
+      "status": "complete"
+    },
+    {
+      "id": "pulse-fit-community-partners-a-list",
+      "title": "Pulse-fit Community Partners A-list",
+      "filename": "pulse-fit-community-partners-a-list.md",
+      "category": "research-output",
+      "description": "Final A-list by ICP (Brands, Gyms/Studios, Run Clubs) with structured partner profiles: ecosystem summary, behavioral signals (Unverified), channels, fit tier, and Pulse fit sentence.",
+      "tags": [
+        "partnerships",
+        "community",
+        "a-list",
+        "icp"
+      ],
+      "emoji": "⭐",
+      "completedAt": "2026-02-20T21:00:00Z",
+      "taskRef": "Pulse-fit Community Partners A-list Step 5/5 — Compile structured A-list",
       "status": "complete"
     }
   ]
