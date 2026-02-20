@@ -139,6 +139,81 @@ This section summarizes, at a high level, how selected platforms structure and o
 
 ## Community Growth Tactics
 
+This section catalogs concrete mechanics used by selected platforms to grow and retain communities via partnerships. Metrics and impact claims are **Unverified** until backed by primary sources.
 
+### Co-Branded Challenges and Seasons
+
+**Mechanic:** Multi-week challenges or seasonal campaigns co-branded with partners (brands, gyms, events), framed around distance, frequency, or specific training goals.
+
+- **Strava**
+  - Runs recurring monthly challenges (e.g., run/cycle X km, climb Y meters), often sponsored by brands. Participants earn digital badges and sometimes partner rewards.
+  - Challenges are easy to join and promote, giving partners a turnkey way to create global or club-level activations.
+
+- **Nike Run Club / Adidas Runners**
+  - Use seasonal training plans and race build-ups (e.g., marathon prep cycles) that are sometimes linked to co-branded races or retail events.
+  - Co-branded runs and campaigns tie product stories (shoes, apparel) to shared training arcs.
+
+### Creator-Led Programs and Cohorts
+
+**Mechanic:** Programs where creators/coaches lead structured cohorts through multi-week training blocks.
+
+- **Peloton**
+  - Instructors run named series (e.g., beginner programs, strength blocks) that members follow together.
+  - Instructor personalities and programming act as gravity wells; members cluster around specific instructors and series.
+
+- **Nike Training Club / NRC Coaches**
+  - Coaches appear both in-app and at IRL events, leading programs tied to campaign narratives (e.g., “first 5K”, “marathon ready”).
+
+- **Whoop / Oura Creators**
+  - External creators use wearable data as the backbone of habit and performance experiments (sleep challenges, recovery blocks).
+
+### Affiliate / Ambassador Gyms and Studio Networks
+
+**Mechanic:** Platforms onboard gyms/studios as partners or affiliates, turning them into distribution and community nodes.
+
+- **ClassPass**
+  - Aggregates partner studios and gyms; the partner network is the product.
+  - Incentives: incremental demand, marketing reach, and backfill of under-utilized capacity.
+
+- **Mindbody**
+  - Provides infra (scheduling, payments, CRM) plus consumer discovery via its marketplace.
+  - Gyms remain the primary locus of community; Mindbody strengthens and systematizes their operations.
+
+### Run Club Activations and Race Build-Ups
+
+**Mechanic:** Weekly runs and season-long training cycles leading up to races or events, often with brand or event co-sponsorship.
+
+- **Adidas Runners / Nike Run Club city chapters**
+  - Captains organize weekly runs and structured training cycles toward races.
+  - IRL events (shakeout runs, race-day meetups) sit on top of a digital backbone (apps, IG, Strava clubs).
+
+- **Zwift / Garmin**
+  - Host virtual events (races, group rides/runs) and challenges around key race periods.
+
+### Data-Driven Rituals (Streaks, Leaderboards, Scores)
+
+**Mechanic:** Metrics and feedback loops (streaks, leaderboards, readiness scores) used to create daily/weekly rituals.
+
+- **Strava**
+  - Segments, KOM/QOM, and club leaderboards encourage ongoing competition and progress tracking.
+  - Badges and streak-style challenges reinforce consistency.
+
+- **Whoop / Oura / Garmin**
+  - Recovery/readiness scores and sleep metrics are presented as narratives (“green day vs red day”), driving behavior adjustments.
+
+- **Peloton**
+  - Leaderboards and streak counters drive short-term engagement and ongoing return behavior.
+
+### Activation Kits and Onboarding Playbooks
+
+**Mechanic:** Providing partners with playbooks, templates, and tools that make it easy to launch effective community activations.
+
+- **Mindbody / ClassPass**
+  - Offer partners best-practice guides, marketing tools, and pre-built flows for promotions and retention campaigns.
+
+- **Brand creator programs**
+  - Many fitness/wellness brands provide influencers with campaign briefs, asset packs, and tracking links so they can run semi-standardized activations.
+
+These tactics collectively show that partnership-led growth is rarely just about logo placement; it depends on giving partners simple, proven mechanics that turn their existing community into measurable engagement.
 
 ## Implications for Pulse
