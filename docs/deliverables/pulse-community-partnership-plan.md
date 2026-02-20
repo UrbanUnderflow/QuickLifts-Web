@@ -484,3 +484,34 @@ These are the concrete outputs this strategy work must produce. Later steps in t
   - **Cross-Cutting Checks (Subtasks):**
     - `Subtask: Nora – final SOT audit across the entire A-list; no prospect marked as interested/active partner unless explicitly supported by SOT.`
     - `Subtask: Sage – final review of top-tier prospects to ensure no hidden brand or regulatory misalignment before outreach.`
+
+---
+
+## 6. Overall Acceptance Criteria
+
+This plan is considered complete and ready to drive execution when:
+
+1. **Narrative Spine (Workstream A)**
+   - Tickets A1–A4 are completed.
+   - Narrative doc and slide outline exist in the repo, with all claims either SOT-backed or labeled as hypotheses.
+   - At least one mock partner scenario has been run using the spine with documented feedback and adjustments.
+
+2. **ICP Strategy Docs (Workstream B)**
+   - Tickets B1–B5 are completed.
+   - Three ICP docs (Brands, Gyms/Studios, Run Clubs) are saved, skimmable, and structurally aligned.
+   - Each doc includes 2–3 activation examples and clearly distinguished evidence vs. hypothesis claims.
+   - Sage and Nora have completed their subtasks on safety and SOT alignment across all three docs.
+
+3. **Partner A-List (Workstream C)**
+   - Tickets C1–C5 are completed.
+   - A-list exists in its agreed format with at least 10 qualified prospects across ICPs.
+   - Every prospect has either valid SOT references or is explicitly tagged Unverified.
+   - Prioritization summary for top 3–5 targets per ICP is documented and ready for partnerships to act on.
+
+4. **Tracker-Ready Packaging**
+   - All tickets (A1–A4, B1–B5, C1–C5) are represented in the project tracker with owners and cross-cutting subtasks.
+   - This document’s sections map cleanly to tracker objects (epics/workstreams, tasks, subtasks) without needing structural changes.
+
+5. **Safety & Evidence Compliance**
+   - No external-facing artifact derived from this plan contains unlabelled, unsupported claims about behavior, performance, or partnerships.
+   - Sage and Nora have signed off (explicitly, in comments or tracker) on the narrative spine, ICP docs, and A-list from a safety and evidence perspective.
