@@ -49,6 +49,28 @@ For each metric, here is what it means in the context of Brands, Gyms, and Run C
 - **Gyms** – Creator-led participation is the share of members who join at least one coach- or staff-led Pulse block, class series, or seasonal challenge during the measurement window.
 - **Run Clubs** – Creator-led participation is the share of club runners who enroll in at least one captain- or coach-led Pulse challenge or training cycle rather than just following along informally.
 
+### 3.4 Narrative Vignettes (One Scene per ICP)
+
+These scenes are the human translation of the metrics — the sentences a partner could repeat back after a first meeting.
+
+#### Brands – Campaign Season with Athlete-Led Blocks
+
+A training brand announces a **6-week "Stronger Together" season** across email and Instagram. Instead of one generic challenge link, each sponsored athlete owns a block inside Pulse: a low-equipment at-home track, a gym-based version, and a recovery-focused option. Followers join from the channels they already check, land in the block that matches their reality, and start logging three small actions a week. 
+
+In Pulse, you can see inactivity gaps closing as athletes and their followers nudge each other back after missed days, ritual weeks stacking up around coordinated "check-in Fridays" and livestream Q&As, and creator-led participation rising as more followers move from just liking posts to joining at least one athlete-led block each season.
+
+#### Gyms – Coaches Turning a Training Cycle into One Shared Story
+
+A strength gym is rolling into a new **8-week squat cycle**. Instead of hoping members remember the whiteboard notes, every coach points to the same Pulse block at the end of class: scan the QR code at the rig, tap into the “8-Week Squat Crew,” and log your three touchpoints each week — two coached sessions and one simple at-home accessory piece.
+
+Members see fewer 5–7 day dead zones between sessions because a missed class now comes with a Pulse prompt to do the accessory work anyway. Ritual weeks show up as a pattern: Monday heavy day, Thursday volume, Saturday optional community finisher. Creator-led participation climbs as more members join at least one coach-led block instead of bouncing between random classes with no through-line.
+
+#### Run Clubs – Wunna-Style Race-Ready Cohorts
+
+A city run club announces **“Six Weeks to First 10K”** at the end of a Saturday long run. Captains map out three key runs per week in Pulse — an easy social run, a tempo session, and a progressive long run — and drop the join link into the club chat. Runners log their solo miles into the same block that tracks Tuesday tempos and weekend routes, watching their names move through shared checkpoints.
+
+By week three, the club leader can see inactivity gaps shrink as captains DM the few runners who haven’t logged a run in four days. Ritual weeks are obvious in the dashboard: three or more shared run touchpoints almost every week. Creator-led participation shows up as captains and pace leaders each owning a lane in Pulse, turning what used to be “show up if you remember” into a race-ready cohort that has already been training together before bib pickup.
+
 ---
 
 ## 4. Partner-Fit Rubric (Applied Across All ICPs)
@@ -117,8 +139,7 @@ For each partner list and outreach artifact, Scout must:
 
 ## 6. Status
 
-- **Version:** v1 of the Pulse for Communities spine and KPI + partner-fit spec.  
+- **Version:** v1 of the Pulse for Communities narrative spine, KPI spec, partner-fit rubric, and ICP scenes.  
 - **Owners:** Nora (spec + enforcement), Solara (ICP playbooks), Scout (partner research and lists).  
 - **Next Actions:**
-  - Fill in ICP-specific narrative vignettes in Section 3 for Brands, Gyms, and Run Clubs (storytelling around the existing metric definitions).  
-  - Wire this spec into partner discovery and pitch templates so every new opportunity is evaluated through the same spine.
+  - Wire this spec and the ICP scenes into partner discovery, pitch templates, and ICP playbooks so every new opportunity is evaluated and told through the same spine.
