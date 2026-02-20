@@ -26,3 +26,23 @@ For creators, Pulse is where their audience becomes a cohort: followers join the
 
 - **Measured Community Health for Both Sides**  
   Partnerships on Pulse come with shared numbers that actually matter to both teams: how many of your people joined, how many finished, how many rolled straight into the next block. That makes it easy to prove the value of co-branded challenges and renew the ones that truly moved your community.
+
+## Sample Partner Lines
+
+- **For a Gymshark-style brand**  
+  "Pulse lets your athletes turn every Gymshark drop into a 30-day strength season your community can actually finish together, with challenge joins, streak weeks, and next-block carryover you can see in the numbers."
+
+- **For a creator-led gym**  
+  "With Pulse, your 6 a.m. crew doesn’t just high-five and disappear — they move through 8-week blocks together, checking in on a shared challenge that connects every class and coach into one story your members can feel."
+
+- **For a run club**  
+  "Pulse turns your Tuesday tempos and Saturday long runs into a race-ready season: captains host the block, runners join with a tap, and every week your club can see who’s still in the story and who needs a nudge."
+
+- **For a recovery- and wellness-focused brand**  
+  "Instead of another ‘reset’ email, Pulse gives you a 21-day recovery challenge that your community moves through together — with light rituals, shared streaks, and ambassadors guiding the pace instead of shouting from the sidelines."
+
+- **For a studio or franchise network**  
+  "Pulse gives your studios a shared challenge calendar, so a member in Brooklyn and a member in Austin feel like they’re in the same block — same theme, same rituals, local coaches leading the way under one community story."
+
+- **For a supplement or performance brand**  
+  "On Pulse, your product launches sit inside co-branded challenges: athletes host the block, your brand shows up in the rituals around it, and the metrics tell you exactly how many people didn’t just see the campaign — they trained through it."
