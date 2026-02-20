@@ -233,8 +233,111 @@ Each concept must include:
 ### TICKET 5 — Partner A-List: Community-First Brands Lane
 **Goal:** Curate an A-list of 10–15 Pulse-fit community-first brand partners, each tagged with why they fit the shared narrative spine.
 
+#### Detailed Scope (Step 4 – Brand Lane Partner A-List)
+- **Reference Spine & Playbook:** Must align to `pulse-for-communities-narrative-spine-v1.md` and the Brands ICP playbook (TICKET 2), recording the spine version.
+- **Primary Owner:** Scout (with Nora as fit/rubric enforcer and Solara for narrative alignment).
+- **Output Artifact:** `docs/deliverables/partners/pulse-brand-lane-a-list.md` (or equivalent agreed path), containing 10–15 candidate entries.
+
+#### Selection Criteria (Applied to Each Brand Prospect)
+Use the partner-fit rubric from the spine and make it concrete for brands:
+1. **Existing Community Strength**
+   - Evidence of dense, recurring engagement (e.g., past challenges, active social, loyalty programs) that Pulse can structure into blocks.
+2. **Creator Presence / Athlete Spine**
+   - The brand has sponsored athletes, creators, or ambassadors who already lead training content.
+3. **Alignment with Behavior Metrics**
+   - Clear opportunities to move inactivity gaps, ritual weeks, and creator-led participation using Pulse.
+4. **Channel Surface Area**
+   - Owned channels where Pulse CTAs can be embedded (email, app, social, communities).
+5. **Sage / Brand Research Alignment**
+   - No red-flag claims or regulatory gray areas; passes Sage’s research bar.
+
+Each brand in the A-list must list which criteria it satisfies (and which are weak/unknown).
+
+#### Target Structure per A-List Entry
+Each entry must include at minimum:
+- **Brand Name + Status** (e.g., Unverified unless present in `docs/partnership/lead-source-of-truth.md`, with proper [SOT: LEAD-####, EVID-####] tags when applicable).
+- **ICP Lane:** Brands.
+- **Fit Summary:** 1–2 bullets tying the brand to the partner-fit rubric.
+- **Spine Tagging:** 1–2 bullets explicitly stating how this brand maps to the three behavior metrics (gaps, ritual weeks, creator-led participation).
+- **Hero Play Alignment:** which concept(s) from the Brands playbook (TICKET 2) this brand is a natural fit for.
+
+#### Tagging Requirement: Why It Fits the Spine
+- Every brand must be tagged with a short
+  "Why this fits the Pulse spine" note that:
+  - Names at least one behavior metric we can realistically move.
+  - Names at least one concrete ritual or challenge concept that would run on Pulse.
+  - Avoids ungrounded claims; if the necessary evidence is not in `lead-source-of-truth.md`, mark the claim as **Unverified**.
+
+---
+
 ### TICKET 6 — Partner A-List: Gyms & Studios Lane
 **Goal:** Curate an A-list of 10–15 Pulse-fit gym and studio partners, each tagged with why they fit the shared narrative spine.
 
+#### Detailed Scope (Step 4 – Gyms & Studios Lane Partner A-List)
+- **Reference Spine & Playbook:** Must align to `pulse-for-communities-narrative-spine-v1.md` and the Gyms & Studios ICP playbook (TICKET 3), recording the spine version.
+- **Primary Owner:** Scout (with Nora as fit/rubric enforcer and Solara for narrative alignment).
+- **Output Artifact:** `docs/deliverables/partners/pulse-gym-studio-lane-a-list.md` (or equivalent agreed path), containing 10–15 candidate entries.
+
+#### Selection Criteria (Applied to Each Gym/Studio Prospect)
+1. **Existing Community Strength & Rhythm**
+   - Clear member base with recurring class schedules, events, or programs.
+2. **Coach / Staff Spine**
+   - Recognizable coaches or staff who can lead Pulse blocks and challenges.
+3. **Alignment with Behavior Metrics**
+   - Potential to reduce gaps between visits, increase ritual weeks through class patterns, and raise coach-led participation.
+4. **Operational Readiness & Surfaces**
+   - Systems where Pulse CTAs can be integrated (check-in processes, apps, email, signage).
+5. **Sage / Brand Alignment**
+   - Training philosophy and marketing are aligned with Pulse and pass Sage’s bar.
+
+#### Target Structure per A-List Entry
+Each gym/studio entry must include:
+- **Name + Status** (Unverified vs. SOT-linked with [SOT: LEAD-####, EVID-####]).
+- **ICP Lane:** Gyms & Studios.
+- **Fit Summary:** 1–2 bullets against the rubric above.
+- **Spine Tagging:** clear mapping to inactivity gaps, ritual weeks, and creator-led participation for that gym.
+- **Hero Play Alignment:** which Gyms play concepts (TICKET 3) this partner fits (e.g., squat cycle companion, onboarding block, seasonal consistency challenge).
+
+#### Tagging Requirement: Why It Fits the Spine
+- Each gym/studio must carry a spine-fit tag that:
+  - Names which behavior metric(s) Pulse can most credibly move first.
+  - Names a specific training cycle or challenge concept that would run on Pulse.
+  - Marks any unverified assumptions as **Unverified** pending evidence in the lead source-of-truth doc.
+
+---
+
 ### TICKET 7 — Partner A-List: Run Clubs & Movement Crews Lane
 **Goal:** Curate an A-list of 10–15 Pulse-fit run club and movement crew partners, each tagged with why they fit the shared narrative spine.
+
+#### Detailed Scope (Step 4 – Run Clubs & Crews Lane Partner A-List)
+- **Reference Spine & Playbook:** Must align to `pulse-for-communities-narrative-spine-v1.md` and the Run Clubs ICP playbook (TICKET 4), recording the spine version.
+- **Primary Owner:** Scout (with Nora as fit/rubric enforcer and Solara for narrative alignment).
+- **Output Artifact:** `docs/deliverables/partners/pulse-run-club-lane-a-list.md` (or equivalent agreed path), containing 10–15 candidate entries.
+
+#### Selection Criteria (Applied to Each Run Club / Crew Prospect)
+1. **Community Density & Meetups**
+   - Existing group runs, events, or race seasons with consistent attendance.
+2. **Captain / Leader Structure**
+   - Captains, pace leaders, or coaches who already organize routes, paces, and training.
+3. **Alignment with Behavior Metrics**
+   - Clear opportunity to track and move gaps between runs, increase ritual weeks around regular meetups, and scale captain-led participation.
+4. **Hybrid Potential (IRL + Digital)**
+   - Active digital channels (WhatsApp, Discord, IG) that can host Pulse CTAs and updates.
+5. **Sage / Brand Alignment**
+   - Community norms and any affiliated products/events align with Pulse principles.
+
+#### Target Structure per A-List Entry
+Each run club/crew entry must include:
+- **Name + Status** (Unverified vs. SOT-linked with [SOT: LEAD-####, EVID-####]).
+- **ICP Lane:** Run Clubs & Movement Crews.
+- **Fit Summary:** 1–2 bullets against the rubric above.
+- **Spine Tagging:** narrative of how Pulse can improve inactivity gaps, ritual weeks, and captain-led participation.
+- **Hero Play Alignment:** which Run Club concepts (TICKET 4) fit best (race-prep cohort, off-season consistency, virtual+IRL hybrid).
+
+#### Tagging Requirement: Why It Fits the Spine
+- Each run club/crew must have a compact spine-fit tag that:
+  - Identifies the easiest behavior metric win (e.g., turning existing weekly runs into ritual weeks).
+  - Names the starting challenge or season (e.g., “Six Weeks to First 10K” or a consistency block).
+  - Marks any data not backed by `docs/partnership/lead-source-of-truth.md` as **Unverified**.
+
+---
