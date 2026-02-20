@@ -161,3 +161,200 @@ These are the concrete outputs this strategy work must produce. Later steps in t
 - Partnerships team can:
   - Use the A-list to choose 3–5 initial outreach targets per ICP without needing to re-research basics.
   - Understand, from the notes alone, what type of activation might resonate with each prospect (e.g., challenge series, co-branded program, content-led partnership).
+
+---
+
+## 4. Workstream Tickets – Inputs, Outputs, Dependencies
+
+### 4.1 Workstream A – Narrative Spine Tickets
+
+**Ticket A1 – Extract existing narrative fragments from current materials**  
+- **Goal:** Inventory and synthesize existing Pulse narrative fragments so we start from reality, not a blank page.
+- **Inputs:**
+  - Existing pitch decks, landing page copy, PulseCheck materials, investor memos (if available).
+  - Any prior partnership outreach emails or one-pagers.
+- **Outputs:**
+  - Short internal note (1–2 pages or equivalent bullets) capturing:
+    - Current problem framing, solution framing, and differentiation claims.
+    - Phrases or metaphors that already resonate.
+    - Contradictions or inconsistencies we need to resolve.
+- **Dependencies:**
+  - Access to current decks/docs; light sync with whoever owns current pitch materials (to avoid missing key pieces).
+
+**Ticket A2 – Draft v1 "Pulse x Community" written narrative (1–2 pages)**  
+- **Goal:** Produce the first full written pass of the narrative spine.
+- **Inputs:**
+  - Output from Ticket A1.
+  - Strategy objectives (Section 1 of this doc).
+  - Workstream A scope + success criteria.
+- **Outputs:**
+  - 1–2 page narrative doc that walks from:
+    - Problem → Insight → Product → Community behavior → Partnership opportunity.
+  - Inline notes marking:
+    - Behaviorally grounded claims vs. hypotheses.
+- **Dependencies:**
+  - Ticket A1 complete.
+
+**Ticket A3 – Convert narrative into slide-ready outline**  
+- **Goal:** Translate the written narrative into a modular outline suitable for decks.
+- **Inputs:**
+  - Approved or near-final v1 narrative from Ticket A2.
+- **Outputs:**
+  - Bullet-point outline with suggested slide groupings (e.g., 1–2 slides per major beat).
+  - Callouts for where ICP-specific content will plug in.
+- **Dependencies:**
+  - Ticket A2 complete (at least v1.1 after internal comments).
+
+**Ticket A4 – Narrative validation via mock partner use-case**  
+- **Goal:** Test whether the narrative actually works in a quasi-real scenario.
+- **Inputs:**
+  - Narrative doc (A2) and outline (A3).
+  - A chosen sample ICP (e.g., a hypothetical or anonymized Brand partner).
+- **Outputs:**
+  - Short usage report: what flowed, what felt forced, what was missing.
+  - Specific edits or annotations to fold back into the narrative and outline.
+- **Dependencies:**
+  - Tickets A2 and A3 complete.
+
+---
+
+### 4.2 Workstream B – ICP Strategy Doc Tickets
+
+**Ticket B1 – Define common ICP doc structure and shared sections**  
+- **Goal:** Create a standard template so all ICP docs feel like siblings, not independent essays.
+- **Inputs:**
+  - Workstream B scope + success criteria.
+  - Narrative spine (A2) and outline (A3).
+- **Outputs:**
+  - ICP strategy template with sections like:
+    - ICP overview & JTBD.
+    - Pulse positioning for this ICP.
+    - Recommended activations & examples.
+    - Example partner journey.
+    - Behavioral proof points.
+    - Guardrails & red flags.
+  - Notes on which sections are identical/shared vs. ICP-specific.
+- **Dependencies:**
+  - Ticket A2 complete (enough to anchor language).
+
+**Ticket B2 – Draft Brands ICP community strategy doc (v1)**  
+- **Goal:** Produce a full v1 Brands-focused strategy using the common template.
+- **Inputs:**
+  - ICP template from B1.
+  - Narrative spine from A2/A3.
+  - Any existing brand conversations/notes (if available).
+- **Outputs:**
+  - 3–5 page Brands strategy doc (including examples/appendix) with:
+    - Specific value prop for Brands.
+    - 2–3 concrete activation examples.
+    - Clearly labeled behavioral proof points vs. hypotheses.
+- **Dependencies:**
+  - Ticket B1 complete.
+
+**Ticket B3 – Draft Gyms/Studios ICP community strategy doc (v1)**  
+- **Goal:** Translate the shared narrative into a gyms/studios-specific strategy.
+- **Inputs:**
+  - ICP template from B1.
+  - Narrative spine from A2/A3.
+  - Any existing notes on gym/studio pilots or interest (if available).
+- **Outputs:**
+  - 3–5 page Gyms/Studios strategy doc with:
+    - Clear JTBD for gym operators.
+    - 2–3 activation formats that map cleanly to in-person programming.
+    - Behavioral examples (where available) or clearly labeled hypotheses.
+- **Dependencies:**
+  - Ticket B1 complete.
+
+**Ticket B4 – Draft Run Clubs ICP community strategy doc (v1)**  
+- **Goal:** Build the run club/community collective angle.
+- **Inputs:**
+  - ICP template from B1.
+  - Narrative spine from A2/A3.
+  - Any existing data or anecdotes from WunnaRun / run-related features.
+- **Outputs:**
+  - 3–5 page Run Clubs strategy doc with:
+    - How Pulse supports training blocks, seasonal campaigns, and leader/pacer roles.
+    - 2–3 example challenge/activation formats.
+- **Dependencies:**
+  - Ticket B1 complete.
+
+**Ticket B5 – Cross-ICP consistency and compression pass**  
+- **Goal:** Ensure all three ICP docs are aligned, non-contradictory, and skimmable.
+- **Inputs:**
+  - Drafts from B2, B3, B4.
+- **Outputs:**
+  - Edited versions of all three docs with:
+    - Consistent terminology and shared sections.
+    - Trimmed/reorganized content to hit the 3–5 page skimmable target.
+    - Any cross-cutting notes on shared proof points or activation patterns.
+- **Dependencies:**
+  - Tickets B2, B3, B4 complete (v1 drafts).
+
+---
+
+### 4.3 Workstream C – Partner A-List Tickets
+
+**Ticket C1 – Define A-list schema and SOT linkage rules**  
+- **Goal:** Decide the exact fields and SOT linkage patterns for the A-list so it’s maintainable and compliant with lead evidence rules.
+- **Inputs:**
+  - Workstream C scope + success criteria.
+  - `docs/partnership/lead-source-of-truth.md` and the lead SOT workflow doc.
+- **Outputs:**
+  - A-list schema definition (e.g., markdown table columns or spreadsheet columns), including:
+    - Prospect name, segment (Brand/Gym/Run Club).
+    - Why-fit rationale.
+    - Behavioral notes.
+    - Risk/alignment notes.
+    - SOT references (e.g., [SOT: LEAD-####, EVID-####]) and Unverified flag.
+  - Rules for when and how to create/update SOT entries.
+- **Dependencies:**
+  - None, beyond access to SOT docs.
+
+**Ticket C2 – Research and populate initial Brand ICP A-list slice**  
+- **Goal:** Build the Brands segment of the A-list.
+- **Inputs:**
+  - A-list schema from C1.
+  - Existing lead/prospect notes, market intel, and any prior outbound experiments.
+  - Lead SOT file for evidence IDs.
+- **Outputs:**
+  - Populated entries for Brand prospects, each with:
+    - Segment = Brand.
+    - Why-fit rationale.
+    - Behavioral notes (platforms, community behavior) grounded in observable signals.
+    - SOT references or explicit Unverified labels.
+- **Dependencies:**
+  - Ticket C1 complete.
+
+**Ticket C3 – Research and populate Gyms/Studios ICP A-list slice**  
+- **Goal:** Build the Gyms/Studios segment of the A-list.
+- **Inputs:**
+  - A-list schema from C1.
+  - Any existing leads from corporatePartners admin page / other sources (if available).
+  - Lead SOT file for evidence IDs.
+- **Outputs:**
+  - Populated entries for Gym/Studio prospects with all required fields and SOT/Unverified labeling.
+- **Dependencies:**
+  - Ticket C1 complete.
+
+**Ticket C4 – Research and populate Run Clubs ICP A-list slice**  
+- **Goal:** Build the Run Clubs segment of the A-list.
+- **Inputs:**
+  - A-list schema from C1.
+  - Signals from run-related features (e.g., WunnaRun) and external market research.
+  - Lead SOT file for evidence IDs.
+- **Outputs:**
+  - Populated entries for Run Club prospects with why-fit, behavioral notes, risk notes, and SOT/Unverified status.
+- **Dependencies:**
+  - Ticket C1 complete.
+
+**Ticket C5 – A-list QA, deduping, and prioritization**  
+- **Goal:** Clean and prioritize the combined A-list so it’s usable for immediate outreach.
+- **Inputs:**
+  - A-list entries from C2, C3, C4.
+  - Lead SOT file for final cross-check.
+- **Outputs:**
+  - Deduped, prioritized A-list (e.g., tiers or priority scores) across all ICPs.
+  - Confirmed SOT references for each prospect; any remaining gaps marked Unverified.
+  - Short summary of top 3–5 targets per ICP and why they’re first-wave candidates.
+- **Dependencies:**
+  - Tickets C2, C3, C4 complete.
