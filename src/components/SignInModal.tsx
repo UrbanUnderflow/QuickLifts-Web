@@ -111,6 +111,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [username, setUsername] = useState("");
+  const [inviteCode, setInviteCode] = useState(""); // Optional gym invite code for affiliate tracking
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [isSignUp, setIsSignUp] = useState(false);
   const [signUpStep, setSignUpStep] = useState<SignUpStep>("initial");
@@ -649,6 +650,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
       isProfileStep: signUpStep === "profile",
       signUpStepType: typeof signUpStep,
       currentEmail: email,
+      inviteCode: inviteCode || null,
       hasPassword: !!password,
       passwordLength: password.length,
       currentUser: auth.currentUser?.email,
@@ -2208,6 +2210,21 @@ const SignInModal: React.FC<SignInModalProps> = ({
             <div className="text-red-400 text-sm mt-2">{errors.email}</div>
           )}
         </div>
+
+        {isSignUp && (
+          <div>
+            <label className="block text-sm font-medium text-zinc-300 mb-2 font-['HK Grotesk']">
+              Gym invite code <span className="text-zinc-500 text-xs">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value.trim())}
+              className="w-full bg-zinc-800 border border-zinc-600 rounded-lg p-3 text-white placeholder-zinc-400 focus:outline-none focus:border-[#E0FE10] focus:ring-1 focus:ring-[#E0FE10] transition-colors"
+              placeholder="Enter your gym's invite code if you have one"
+            />
+          </div>
+        )}
 
         {!isSignUp && (
           <div>
