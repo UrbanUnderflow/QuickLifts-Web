@@ -1,3 +1,4 @@
+import { Timestamp } from 'firebase/firestore';
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../utils/formatDate';
 
 export type PartnerType = 'brand' | 'gym' | 'runClub';
@@ -16,8 +17,8 @@ export interface PartnerFirestoreData {
   type: PartnerType;
   contactEmail: string;
   onboardingStage: string;
-  invitedAt: number | string | Date | firebase.firestore.Timestamp | null;
-  firstRoundCreatedAt?: number | string | Date | firebase.firestore.Timestamp | null;
+  invitedAt: number | string | Date | Timestamp | null;
+  firstRoundCreatedAt?: number | string | Date | Timestamp | null;
 }
 
 export class PartnerModel implements Partner {
