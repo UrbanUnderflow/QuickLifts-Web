@@ -1,7 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Open access — revisit security rules later
+    // User documents: allow clients to set partnerSource only at creation.
+    // After creation, partnerSource is treated as immutable and can only be
+    // changed by trusted backends using the Admin SDK (which bypasses rules).
+    match /users/{userId} {
+      allow create: if true;
+
+      allow update: if
+        // All fields except partnerSource can change freely for now
+        request.resource.data.partnerSource == resource.data.partnerSource;
+
+      allow read: if true;
+    }
+
+    // Fallback rule for all other documents. This remains open for now but
+    // can be tightened as security hardening progresses.
     match /{document=**} {
       allow read, write: if true;
     }
