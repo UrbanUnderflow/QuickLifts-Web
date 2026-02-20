@@ -3017,6 +3017,32 @@ async function processCommands() {
                         console.log(`   ✅ Wrote group-chat response to message ${gcMessageId}`);
                         processedMessageIds.add(gcMessageId);
 
+                        // Immediately rotate turn queue once the active agent has completed.
+                        // Without this, later agents can stall behind the first turn holder.
+                        try {
+                            var postWriteSnap = await db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`).get();
+                            var postWriteData = postWriteSnap.data() || {};
+                            var postWriteTurnState = normalizeTurnState(
+                                postWriteData.turnState,
+                                postWriteData.participants || Object.keys(postWriteData.responses || {}),
+                                postWriteData.content || cmd.content || '',
+                                postWriteData.context?.mentionedAgents || [],
+                            );
+                            var postWriteResponses = postWriteData.responses || {};
+                            if (
+                                postWriteTurnState.currentTurnAgent &&
+                                hasAgentResponded(postWriteResponses, postWriteTurnState.currentTurnAgent)
+                            ) {
+                                await advanceTurnState(
+                                    db.doc(`agent-group-chats/${gcChatId}/messages/${gcMessageId}`),
+                                    postWriteData,
+                                    postWriteTurnState,
+                                );
+                            }
+                        } catch (turnErr) {
+                            console.warn('⚠️ Could not advance group-chat turn state after response:', turnErr.message);
+                        }
+
                         // ── Exec mode: auto-create kanban task + post beat ──
                         // When an agent commits to a deliverable in exec mode, bridge the gap
                         // between "I'll build X" and the agent runner actually doing it.
