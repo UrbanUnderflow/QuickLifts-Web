@@ -19,3 +19,25 @@ This document synthesizes health and behavioral science insights that are direct
 - **Creator-led and coach-led programs increase engagement when they feel personalized and credible.** Digital fitness trials and market data show higher completion and engagement rates when programs are fronted by a **trusted coach or creator with perceived expertise**, and when communication emphasizes behavior and readiness rather than guaranteed outcomes or body transformations. Overclaiming clinical effects erodes trust and can trigger regulatory scrutiny. [Napolitano et al. 2013, Journal of Medical Internet Research](https://doi.org/10.2196/jmir.2522)
 
 - **Behavior-only feedback loops are safer and still powerful.** Regulatory guidance (e.g., FDA and EMA digital health frameworks) distinguishes between apps that **track and support healthy behaviors** and those that claim to diagnose, treat, or cure conditions. Behavior-support tools that focus on activity, sleep, and recovery rituals can avoid medical device classification if they explicitly avoid diagnostic or treatment claims, while still meaningfully improving health-related quality of life in trials. [FDA Digital Health Policy Navigator](https://www.fda.gov/medical-devices/digital-health-center-excellence/digital-health-policy-navigator)
+
+## Patterns Relevant to Partnership-Led Community Growth
+
+### 1. The 3+ Rituals/Week Threshold
+
+Across studies, adherence curves tend to bend upward once people consistently hit **3 or more planned sessions per week**, especially when those sessions are scheduled and socially anchored. For Pulse, this means community partners (brands, gyms, run clubs) are most effective when they help users protect three recurring rituals in their week: e.g., two strength touches and one run, or one long run plus two recovery blocks. The goal is not volume for its own sake, but reaching and sustaining that behavioral threshold where habits become self-sustaining.
+
+### 2. Community as a Retention Engine, Not Just a Funnel
+
+Group-based contexts consistently outperform solo efforts on adherence, largely because identity and belonging (“I’m one of these people”) become part of the behavior. Gyms and run clubs already supply that social fabric; Pulse’s job is to give those communities a **shared digital surface** where showing up is visible, trackable, and lightly reinforced. Brands and creators plug into this by framing rounds and challenges as ways to show up for the group, not just consume content or log workouts alone.
+
+### 3. Multi-Day Gaps as Early-Warning Signals
+
+Behavioral data and health-program retention analyses converge on the idea that **short breaks are recoverable, long gaps are risky**. A user disappearing for 2–3 days is normal fluctuation; a 7–10 day gap is often the start of full dropout. For partnership-led growth, this suggests we should design partner touchpoints around catching and closing >3-day gaps: creators, gyms, and run clubs can use Pulse nudges as a pretext to check in (“we missed you Saturday”) before the relationship quietly dissolves.
+
+### 4. Readiness & Recovery as Behavior Levers, Not Diagnoses
+
+Perceived readiness and basic recovery behaviors (sleep, cooldowns, easy days) heavily shape whether people feel able to show up, but the science is clear that **self-report and simple rituals do not equal clinical assessment**. That makes readiness a powerful behavioral lever for Pulse and its partners: run clubs and gyms can use readiness check-ins to help members decide between hard and easy days, and brands can position products as part of a recovery ritual. The language, however, has to stay firmly in “feel more ready” and “support your recovery choices,” not “clear you to play” or “fix injuries.”
+
+### 5. Credible Human Guides Beat Abstract Programs
+
+Programs fronted by a trusted human—coach, creator, or community leader—tend to drive higher engagement and completion than anonymous, app-only prescriptions. The research points to **perceived expertise + relational trust** as the key ingredients. For Pulse, partnership-led growth works best when the technology fades into the background and the user feels like they’re following *their* coach, *their* run leader, or *their* gym’s rhythm, with Pulse quietly holding the plan, measuring behaviors, and surfacing timely prompts.
