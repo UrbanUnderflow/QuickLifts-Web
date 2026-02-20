@@ -868,7 +868,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
           try {
             // Create the Firebase Auth user
             const { user } = await createUserWithEmailAndPassword(auth, email, password);
-            console.log('[SignInModal] Auth User created successfully:', { uid: user.uid, email: user.email });
+            console.log('[SignInModal] Auth User created successfully:', { uid: user.uid, email: user.email, inviteCode: inviteCode || null });
 
             if (user) {
               if (!user.email) {
@@ -885,7 +885,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
                 subscriptionType: SubscriptionType.unsubscribed, // Default for new user
                 registrationComplete: false, // Explicitly false initially
                 createdAt: new Date(), // Add createdAt
-                updatedAt: new Date()  // Add updatedAt
+                updatedAt: new Date(),  // Add updatedAt
+                // If a gym inviteCode was provided, persist it so backend can resolve it
+                ...(inviteCode ? { gymInviteCode: inviteCode } : {})
                 // Other fields will be default/null
               });
 
