@@ -3,6 +3,42 @@
   "lastUpdated": "2026-02-20T21:00:00Z",
   "deliverables": [
     {
+      "id": "pulse-x-community-task-plan-outline",
+      "title": "Pulse x Community Task Plan — Artifact Outline",
+      "filename": "pulse-x-community-task-plan-outline.md",
+      "category": "research-output",
+      "description": "Living outline of the Pulse x Community narrative and ICP strategy artifacts, with purpose, ownership, acceptance criteria, and ICP expectations.",
+      "tags": [
+        "partnerships",
+        "community",
+        "narrative",
+        "icp"
+      ],
+      "emoji": "🧩",
+      "completedAt": "2026-02-20T20:40:00Z",
+      "taskRef": "Pulse x Community Task Breakdown Steps 1–4/5 — Outline, ownership, and acceptance",
+      "status": "complete"
+    },
+    {
+      "id": "pulse-x-community-task-plan",
+      "title": "Pulse x Community Task Plan — Execution Checklist",
+      "filename": "pulse-x-community-task-plan.md",
+      "category": "research-output",
+      "description": "Executable checklist for the Pulse x Community narrative and ICP documents, including artifacts, owners, acceptance criteria, and ICP-specific examples/metrics.",
+      "tags": [
+        "partnerships",
+        "community",
+        "narrative",
+        "icp",
+        "task-plan"
+      ],
+      "emoji": "✅",
+      "completedAt": "2026-02-20T20:45:00Z",
+      "taskRef": "Pulse x Community Task Breakdown Step 5/5 — Compile task plan checklist",
+      "status": "complete"
+    },
+
+    {
       "id": "peptide-research-brief",
       "title": "Peptide Research Brief",
       "filename": "peptide-research-brief.md",
