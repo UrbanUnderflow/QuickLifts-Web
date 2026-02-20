@@ -41,3 +41,19 @@ Perceived readiness and basic recovery behaviors (sleep, cooldowns, easy days) h
 ### 5. Credible Human Guides Beat Abstract Programs
 
 Programs fronted by a trusted human—coach, creator, or community leader—tend to drive higher engagement and completion than anonymous, app-only prescriptions. The research points to **perceived expertise + relational trust** as the key ingredients. For Pulse, partnership-led growth works best when the technology fades into the background and the user feels like they’re following *their* coach, *their* run leader, or *their* gym’s rhythm, with Pulse quietly holding the plan, measuring behaviors, and surfacing timely prompts.
+
+## Recommendations for Pulse Partnerships
+
+- **Design for three anchored rituals per week, not daily perfection.** Co-create with partners around concrete weekly cadences (e.g., "Tuesday lift, Thursday run, Saturday group session" or "two classes + one recovery ritual"). Measure success as weeks hitting 3+ key behaviors in a lane, not unbroken streaks.
+- **Make community-visible behaviors the hero metric.** In partner dashboards and narratives, foreground measures like "members showed up for 3+ rituals/week" and "fewer >3-day gaps" rather than time-in-app or vanity metrics. This keeps product and partnerships anchored in lived behavior, not engagement for its own sake.
+- **Use partners as early-gap catchers.** When Pulse detects a >3-day gap for a partner-sourced user, route gentle prompts through the partner voice (coach DM, gym message, run club announcement) whenever possible. This frames the nudge as community care rather than app nagging.
+- **Integrate readiness check-ins into partner rhythms.** Encourage gyms and run clubs to pair hard efforts with simple readiness/reflection prompts ("how cooked vs ready do you feel?"), and to normalize dialing intensity down when readiness is low. For brands, anchor recovery rituals around products without claiming they determine readiness.
+- **Center human guides; let Pulse be the rail.** In partner-facing materials, describe Pulse as the infrastructure that holds plans, tracks behaviors, and surfaces wobbles, while the coach/creator/gym owns the narrative and relationship. This aligns with the evidence that people follow trusted humans more than abstract programs.
+
+## Risks & Guardrails
+
+- **Avoid clinical or clearance language.** Even when readiness scores and behavior trends look promising, do not claim that Pulse or any partner "clears" someone to train, makes them "safe to play," or "prevents" injury, illness, or overtraining. Those are clinical decisions.
+- **Don’t overstate recovery or product effects.** Recovery rituals and partner products can support feeling more ready and sustaining behaviors, but evidence for many interventions is modest. Avoid language like "fixes sleep," "rebalance hormones," or "cures burnout"; stick to supporting choices and perceived readiness.
+- **Don’t use retention metrics to imply health outcomes.** 40% monthly retention is a behavior metric, not proof of improved VO2max, injury rates, or long-term disease risk. When sharing partnerRetention stats, frame them explicitly as "how consistently people are showing up," not as health guarantees.
+- **Be transparent about what Pulse measures (and what it doesn’t).** Clearly communicate that Pulse tracks behaviors (sessions, gaps, readiness check-ins) and sometimes self-reported feelings, but does not collect diagnostic data or replace clinicians. This protects trust and keeps the product on the right side of digital health regulation.
+- **Watch for equity and overload risks in challenges.** High-frequency or aggressive partner challenges can unintentionally favor already-fit members and encourage overreaching in others. Use readiness and gap data to design challenges that include on-ramps, easy-day options, and explicit permission to scale down without "failing" the group.
