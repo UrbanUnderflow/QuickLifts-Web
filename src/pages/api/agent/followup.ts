@@ -53,10 +53,39 @@ Example outputs:
     const userPrompt = `Here's the recent conversation:\n\n${context}\n\nGenerate a single follow-up question for @${targetName}:`;
 
     try {
-        // Try OpenAI
+        const useOpenClaw = process.env.USE_OPENCLAW === 'true';
+        const allowDirectOpenAI = Boolean(process.env.OPENAI_API_KEY) && !useOpenClaw;
+
+        if (useOpenClaw) {
+            try {
+                const { execSync } = require('child_process');
+                const clawPrompt = `${systemPrompt}\n\n${userPrompt}`;
+                const escaped = clawPrompt.replace(/'/g, "'\\''");
+                const result = execSync(
+                    `openclaw chat send '${escaped}' --agent main --json 2>/dev/null`,
+                    { encoding: 'utf8', timeout: 45_000 }
+                ).trim();
+
+                if (result) {
+                    try {
+                        const parsed = JSON.parse(result);
+                        const followUp = (parsed.response || parsed.output || parsed.result || '').trim();
+                        if (followUp) {
+                            return res.status(200).json({ followUp, from: 'nora', provider: 'openclaw' });
+                        }
+                    } catch {
+                        return res.status(200).json({ followUp: result, from: 'nora', provider: 'openclaw' });
+                    }
+                }
+            } catch (err) {
+                console.error('[followup] OpenClaw generation failed:', err);
+            }
+        }
+
+        // Try OpenAI only when OpenClaw mode is disabled.
         const apiKey = process.env.OPENAI_API_KEY;
 
-        if (apiKey) {
+        if (allowDirectOpenAI && apiKey) {
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: {

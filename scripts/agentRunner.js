@@ -60,6 +60,9 @@ const SNAPSHOT_COLLECTION = 'progress-snapshots';
 const NUDGE_COLLECTION = 'progress-timeline';  // nudge entries live in the same feed
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
 const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || ({ 'nora': 'main', 'scout': 'scout', 'solara': 'solara', 'sage': 'sage' }[AGENT_ID] || 'main');
+const USE_OPENCLAW = process.env.USE_OPENCLAW === 'true';
+// Keep OPENAI_API_KEY available for other apps, but prevent usage-billed calls when OpenClaw is enabled.
+const ALLOW_DIRECT_OPENAI = Boolean(process.env.OPENAI_API_KEY) && !USE_OPENCLAW;
 
 // ── Complexity-based model routing ──
 // Maps complexity scores (1-5) to OpenClaw agent config tiers.
@@ -114,7 +117,7 @@ var taskTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCou
 var sessionTokensByModel = {};
 var taskTokensByModel = {};
 // If OpenClaw is enabled, we'll sync the actual configured model from OpenClaw at runtime.
-var currentModel = process.env.USE_OPENCLAW === 'true' ? 'openclaw' : 'gpt-4o';
+var currentModel = USE_OPENCLAW ? 'openclaw' : 'gpt-4o';
 var currentModelProvider = '';
 var currentModelRaw = '';
 var lastOpenClawModelSyncAt = 0;
@@ -371,7 +374,7 @@ function appendSoulLearning(learning) {
  */
 async function proposeSoulEvolution(task, steps, outcome) {
     if (!ENABLE_SOUL_EVOLUTION) return;
-    if (!process.env.OPENAI_API_KEY) return;
+    if (!ALLOW_DIRECT_OPENAI) return;
 
     const complexity = task.complexity || 3;
     if (complexity < SOUL_EVOLUTION_MIN_COMPLEXITY) {
@@ -999,7 +1002,7 @@ function parseProviderModel(raw) {
 }
 
 async function maybeSyncModelFromOpenClaw(force = false) {
-    if (process.env.USE_OPENCLAW !== 'true') return;
+    if (!USE_OPENCLAW) return;
 
     var now = Date.now();
     if (!force && (now - lastOpenClawModelSyncAt) < OPENCLAW_MODEL_SYNC_MS) return;
@@ -1062,7 +1065,7 @@ async function updatePresence(payload) {
         currentModel: currentModel,
         currentModelRaw: currentModelRaw || null,
         currentModelProvider: currentModelProvider || null,
-        openClawAgentId: process.env.USE_OPENCLAW === 'true' ? OPENCLAW_AGENT_ID : null,
+        openClawAgentId: USE_OPENCLAW ? OPENCLAW_AGENT_ID : null,
         tokenUsage: { ...sessionTokens },
         ...payload,
         lastUpdate: FieldValue.serverTimestamp(),
@@ -1240,8 +1243,8 @@ async function generateSmartTask(rawContent, conversationContext) {
         };
     }
 
-    var useOpenClaw = process.env.USE_OPENCLAW === 'true';
-    if (!process.env.OPENAI_API_KEY && !useOpenClaw) {
+    var useOpenClaw = USE_OPENCLAW;
+    if (!ALLOW_DIRECT_OPENAI && !useOpenClaw) {
         console.log('   🔧 No AI available — using heuristic task cleanup');
         return localCleanup(rawContent, conversationContext);
     }
@@ -1276,20 +1279,7 @@ async function generateSmartTask(rawContent, conversationContext) {
     try {
         var aiOutput = '';
 
-        if (process.env.OPENAI_API_KEY) {
-            var resp = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
-                body: JSON.stringify({
-                    model: 'gpt-4o-mini',
-                    messages: [{ role: 'user', content: taskPrompt }],
-                    temperature: 0.2, max_tokens: 200,
-                }),
-            });
-            var data = await resp.json();
-            trackTokenUsage(data.usage, 'gpt-4o-mini');
-            aiOutput = data.choices?.[0]?.message?.content?.trim() || '';
-        } else if (useOpenClaw) {
+        if (useOpenClaw) {
             var clawResult = await new Promise((resolve, reject) => {
                 var child = spawn(OPENCLAW_BIN, [
                     '--no-color', 'agent', '--local',
@@ -1311,6 +1301,19 @@ async function generateSmartTask(rawContent, conversationContext) {
             // Parse OpenClaw JSON wrapper if present
             try { var parsed = JSON.parse(clawResult); clawResult = parsed.response || parsed.output || clawResult; } catch (_) { }
             aiOutput = clawResult.replace(/^```[\s\S]*?```$/gm, '').trim();
+        } else if (ALLOW_DIRECT_OPENAI) {
+            var resp = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+                body: JSON.stringify({
+                    model: 'gpt-4o-mini',
+                    messages: [{ role: 'user', content: taskPrompt }],
+                    temperature: 0.2, max_tokens: 200,
+                }),
+            });
+            var data = await resp.json();
+            trackTokenUsage(data.usage, 'gpt-4o-mini');
+            aiOutput = data.choices?.[0]?.message?.content?.trim() || '';
         }
 
         // Parse the TITLE: ... DESCRIPTION: ... COMPLEXITY: ... format
@@ -2190,7 +2193,7 @@ async function processCommands() {
         let pContent = cmd.content;
 
         // Smart Auto-detection: If type is 'auto' or 'chat', use AI to infer intent
-        if ((cmd.type === 'auto' || cmd.type === 'chat') && process.env.OPENAI_API_KEY) {
+        if ((cmd.type === 'auto' || cmd.type === 'chat') && ALLOW_DIRECT_OPENAI) {
             console.log(`🧠 Analyzing intent for: "${cmd.content}"`);
             const inference = await analyzeChatIntent(cmd.content, cmd.from);
             if (inference.type !== 'chat') {
@@ -2201,7 +2204,7 @@ async function processCommands() {
             } else {
                 response = inference.response;
             }
-        } else if ((cmd.type === 'auto' || cmd.type === 'chat') && !process.env.OPENAI_API_KEY) {
+        } else if ((cmd.type === 'auto' || cmd.type === 'chat') && !ALLOW_DIRECT_OPENAI) {
             // Fallback heuristic when OpenAI isn't available
             // This now covers BOTH 'auto' AND 'chat' messages — so admin DMs
             // with actionable intent get routed to task creation, not just a chat reply.
@@ -2420,26 +2423,9 @@ async function processCommands() {
                 var dmPrompt = dmPromptParts.join('\n');
 
                 var dmAiResponse = '';
-                var useOpenClaw = process.env.USE_OPENCLAW === 'true';
+                var useOpenClaw = USE_OPENCLAW;
 
-                if (process.env.OPENAI_API_KEY) {
-                    try {
-                        var dmResp = await fetch('https://api.openai.com/v1/chat/completions', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
-                            body: JSON.stringify({
-                                model: 'gpt-4o-mini',
-                                messages: [{ role: 'system', content: dmPrompt }, { role: 'user', content: cmd.content }],
-                                temperature: 0.7, max_tokens: 300,
-                            }),
-                        });
-                        var dmData = await dmResp.json();
-                        trackTokenUsage(dmData.usage, 'gpt-4o-mini');
-                        dmAiResponse = dmData.choices?.[0]?.message?.content || '';
-                    } catch (err) {
-                        console.error('OpenAI DM generation failed:', err.message);
-                    }
-                } else if (useOpenClaw) {
+                if (useOpenClaw) {
                     try {
                         var dmClawResult = await new Promise((resolve, reject) => {
                             var child = spawn(OPENCLAW_BIN, [
@@ -2468,6 +2454,23 @@ async function processCommands() {
                         dmAiResponse = dmAiResponse.replace(/^```[\s\S]*?```$/gm, '').trim();
                     } catch (err) {
                         console.error('OpenClaw DM generation failed:', err.message);
+                    }
+                } else if (ALLOW_DIRECT_OPENAI) {
+                    try {
+                        var dmResp = await fetch('https://api.openai.com/v1/chat/completions', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+                            body: JSON.stringify({
+                                model: 'gpt-4o-mini',
+                                messages: [{ role: 'system', content: dmPrompt }, { role: 'user', content: cmd.content }],
+                                temperature: 0.7, max_tokens: 300,
+                            }),
+                        });
+                        var dmData = await dmResp.json();
+                        trackTokenUsage(dmData.usage, 'gpt-4o-mini');
+                        dmAiResponse = dmData.choices?.[0]?.message?.content || '';
+                    } catch (err) {
+                        console.error('OpenAI DM generation failed:', err.message);
                     }
                 }
 
@@ -2673,7 +2676,7 @@ async function processCommands() {
 
                 // Generate response using openclaw (which has its own AI backend)
                 var gcResponse = '';
-                var useOpenClaw = process.env.USE_OPENCLAW === 'true';
+                var useOpenClaw = USE_OPENCLAW;
 
                 // ── "Think Deeper" boost: detect phrases that request deeper reasoning ──
                 var BOOST_RX = /\b(think\s+(deeper|longer|hard|harder|carefully)|go\s+deep|really\s+think|deep\s+dive|take\s+your\s+time|think\s+about\s+this\s+(carefully|deeply|thoroughly))\b/i;
@@ -2703,7 +2706,7 @@ async function processCommands() {
                     console.log(`   ⚡ EXEC MODE: agent will respond with action items, not discussion`);
                 }
 
-                if (useOpenClaw || process.env.OPENAI_API_KEY) {
+                if (useOpenClaw || ALLOW_DIRECT_OPENAI) {
                     var compactPreviewChars = Math.max(
                         220,
                         Math.min(720, Math.floor(GROUP_CHAT_USER_PROMPT_BUDGET_CHARS * 0.35)),
@@ -2879,28 +2882,7 @@ async function processCommands() {
                     var lastError = '';  // Track last error for diagnostics
                     for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
                         try {
-                            if (process.env.OPENAI_API_KEY) {
-                                var gcResp = await fetch('https://api.openai.com/v1/chat/completions', {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-                                    },
-                                    body: JSON.stringify({
-                                        model: boostModel,
-                                        messages: [
-                                            { role: 'system', content: chatPrompt },
-                                            { role: 'user', content: llmUserPrompt },
-                                        ],
-                                        temperature: isBoosted ? 0.65 : 0.85,
-                                        // Increase tokens so agents can write a real response with @mention + question
-                                        max_tokens: isBoosted ? 900 : 420,
-                                    }),
-                                });
-                                var gcData = await gcResp.json();
-                                trackTokenUsage(gcData.usage, boostModel);
-                                gcResponse = gcData.choices?.[0]?.message?.content || '';
-                            } else if (useOpenClaw) {
+                            if (useOpenClaw) {
                                 var args = [
                                     '--no-color',
                                     'agent',
@@ -2935,6 +2917,27 @@ async function processCommands() {
                                     gcResponse = clawResult;
                                 }
                                 gcResponse = gcResponse.replace(/^```[\s\S]*?```$/gm, '').trim();
+                            } else if (ALLOW_DIRECT_OPENAI) {
+                                var gcResp = await fetch('https://api.openai.com/v1/chat/completions', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                                    },
+                                    body: JSON.stringify({
+                                        model: boostModel,
+                                        messages: [
+                                            { role: 'system', content: chatPrompt },
+                                            { role: 'user', content: llmUserPrompt },
+                                        ],
+                                        temperature: isBoosted ? 0.65 : 0.85,
+                                        // Increase tokens so agents can write a real response with @mention + question
+                                        max_tokens: isBoosted ? 900 : 420,
+                                    }),
+                                });
+                                var gcData = await gcResp.json();
+                                trackTokenUsage(gcData.usage, boostModel);
+                                gcResponse = gcData.choices?.[0]?.message?.content || '';
                             }
 
                             // Check if the response looks like an error
@@ -3620,7 +3623,7 @@ async function fetchNextTask() {
 
 async function validateTaskCompletion(task, steps) {
     const defaultPass = { passed: true, reason: 'Validation skipped (no API key)', evidence: [] };
-    if (!process.env.OPENAI_API_KEY) return defaultPass;
+    if (!ALLOW_DIRECT_OPENAI) return defaultPass;
 
     try {
         // Phase 1: Ask the validator to generate verification commands
@@ -3876,7 +3879,7 @@ CRITICAL SECURITY RULES:
 If unsure whether something is safe to share, DO NOT share it. Instead say:
 "For detailed information on that, I'd recommend reaching out to our team directly at tre@fitwithpulse.ai."`;
 
-    if (process.env.OPENAI_API_KEY) {
+    if (ALLOW_DIRECT_OPENAI) {
         try {
             const systemPrompt = isInternal ? internalSystemPrompt : externalSystemPrompt;
 
@@ -3921,6 +3924,10 @@ If unsure whether something is safe to share, DO NOT share it. Instead say:
  * Analyze chat intent to see if it should be upgraded to a task or command.
  */
 async function analyzeChatIntent(content, senderName) {
+    if (!ALLOW_DIRECT_OPENAI) {
+        return { type: 'chat', content, response: null };
+    }
+
     try {
         const resp = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -3990,7 +3997,7 @@ Description: ${task.description || 'No description'}
 Project: ${task.project || 'Unknown'}
 Notes: ${task.notes || 'None'}`;
 
-    if (process.env.OPENAI_API_KEY) {
+    if (ALLOW_DIRECT_OPENAI) {
         try {
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
@@ -4021,7 +4028,7 @@ Notes: ${task.notes || 'None'}`;
         } catch (err) {
             console.error('AI decomposition failed:', err.message);
         }
-    } else if (process.env.USE_OPENCLAW === 'true') {
+    } else if (USE_OPENCLAW) {
         try {
             var clawResult = await new Promise((resolve, reject) => {
                 var child = spawn(OPENCLAW_BIN, [
@@ -4219,7 +4226,7 @@ async function executeStep(step, task, stepIndex, allSteps) {
     let invokeOpenClaw = null;
 
     try {
-        const useOpenClaw = process.env.USE_OPENCLAW === 'true';
+        const useOpenClaw = USE_OPENCLAW;
 
         // Snapshot git state before the step
         const changesBefore = getGitChanges();
@@ -4697,7 +4704,7 @@ ${smokeOutput}`.substring(0, 2000);
         console.log(`   ❌ Step crashed: ${err.message.substring(0, 120)}`);
 
         // ─── Tier 2: Rewrite & Retry from a different angle ─────
-        if (process.env.USE_OPENCLAW === 'true' && typeof invokeOpenClaw === 'function') {
+        if (USE_OPENCLAW && typeof invokeOpenClaw === 'function') {
             for (let rewriteAttempt = 0; rewriteAttempt < MAX_STEP_REWRITE_ATTEMPTS; rewriteAttempt++) {
                 console.log(`   🔄 Rewrite attempt ${rewriteAttempt + 1}/${MAX_STEP_REWRITE_ATTEMPTS}: Trying a different approach...`);
                 step.status = 'in-progress';
@@ -4770,7 +4777,7 @@ ${smokeOutput}`.substring(0, 2000);
                     );
                 }
             }
-        } else if (process.env.USE_OPENCLAW === 'true') {
+        } else if (USE_OPENCLAW) {
             console.log('   ⚠️ Rewrite skipped: OpenClaw invoker unavailable in recovery path.');
         }
 
@@ -4882,8 +4889,8 @@ async function run() {
     console.log(`\n🤖 Pulse Agent Runner v2 starting...`);
     console.log(`   Agent: ${AGENT_NAME} (${AGENT_ID})`);
     console.log(`   Heartbeat: every ${HEARTBEAT_MS / 1000}s`);
-    console.log(`   OpenClaw: ${process.env.USE_OPENCLAW === 'true' ? 'ENABLED' : 'SIMULATION MODE'}`);
-    if (process.env.USE_OPENCLAW === 'true') {
+    console.log(`   OpenClaw: ${USE_OPENCLAW ? 'ENABLED' : 'SIMULATION MODE'}`);
+    if (USE_OPENCLAW) {
         console.log(`   Smoke test: ${OPENCLAW_SMOKE_TEST ? 'ON' : 'off'}`);
     }
     console.log(`   Messaging: ENABLED`);
@@ -5152,7 +5159,7 @@ async function run() {
             if (allPassed) {
                 // ─── Post-task validation gate ──────────────────
                 // Independent AI auditor verifies the work was actually completed
-                const useOpenClaw = process.env.USE_OPENCLAW === 'true';
+                const useOpenClaw = USE_OPENCLAW;
                 if (ENABLE_TASK_VALIDATION && !hasIssues && useOpenClaw) {
                     console.log(`\n🔍 VALIDATION GATE: Verifying task completion...`);
                     await setStatus('working', {
@@ -5346,7 +5353,7 @@ async function run() {
                 // Proactively report completion to the chat
                 const durationStr = formatMs(Date.now() - taskStartTime.getTime());
                 const stepsCompleted = steps.filter(s => s.status === 'completed' || s.status === 'completed-with-issues').length;
-                const isSimulation = process.env.USE_OPENCLAW !== 'true';
+                const isSimulation = !USE_OPENCLAW;
                 const stepSummary = steps
                     .filter(s => s.status === 'completed')
                     .map((s, i) => `${i + 1}. ${s.description}`)

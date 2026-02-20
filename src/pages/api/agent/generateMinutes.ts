@@ -53,10 +53,42 @@ Guidelines:
 
         const userPrompt = `Here is the Round Table transcript with ${messageCount} messages between ${participantNames.join(', ')}:\n\n${transcript}`;
 
-        // Try OpenAI first, then fall back to a structured extraction
+        const useOpenClaw = process.env.USE_OPENCLAW === 'true';
         const apiKey = process.env.OPENAI_API_KEY;
+        const allowDirectOpenAI = Boolean(apiKey) && !useOpenClaw;
 
-        if (apiKey) {
+        // Prefer OpenClaw when enabled so API-key billing is never used accidentally.
+        if (useOpenClaw) {
+            try {
+                const { execSync } = require('child_process');
+                const clawPrompt = `${systemPrompt}\n\n${userPrompt}`;
+                const escaped = clawPrompt.replace(/'/g, "'\\''");
+                const result = execSync(
+                    `openclaw chat send '${escaped}' --agent main --json 2>/dev/null`,
+                    { encoding: 'utf8', timeout: 60_000 }
+                ).trim();
+
+                // Try to parse the response
+                try {
+                    const parsed = JSON.parse(result);
+                    if (parsed.executiveSummary) {
+                        return res.status(200).json(parsed);
+                    }
+                    // OpenClaw might wrap in a response field
+                    if (parsed.response) {
+                        const inner = JSON.parse(parsed.response.replace(/^```json?\n?/i, '').replace(/\n?```$/i, '').trim());
+                        return res.status(200).json(inner);
+                    }
+                } catch (e) {
+                    console.error('Failed to parse OpenClaw response:', e);
+                }
+            } catch (e) {
+                console.error('OpenClaw minutes generation failed:', e);
+            }
+        }
+
+        // Try direct OpenAI only when OpenClaw mode is disabled.
+        if (allowDirectOpenAI && apiKey) {
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -93,37 +125,6 @@ Guidelines:
                         // Fall through to fallback
                     }
                 }
-            }
-        }
-
-        // Fallback: Try OpenClaw via the agentRunner's approach
-        const useOpenClaw = process.env.USE_OPENCLAW === 'true';
-        if (useOpenClaw) {
-            try {
-                const { execSync } = require('child_process');
-                const clawPrompt = `${systemPrompt}\n\n${userPrompt}`;
-                const escaped = clawPrompt.replace(/'/g, "'\\''");
-                const result = execSync(
-                    `openclaw chat send '${escaped}' --agent main --json 2>/dev/null`,
-                    { encoding: 'utf8', timeout: 60_000 }
-                ).trim();
-
-                // Try to parse the response
-                try {
-                    const parsed = JSON.parse(result);
-                    if (parsed.executiveSummary) {
-                        return res.status(200).json(parsed);
-                    }
-                    // OpenClaw might wrap in a response field
-                    if (parsed.response) {
-                        const inner = JSON.parse(parsed.response.replace(/^```json?\n?/i, '').replace(/\n?```$/i, '').trim());
-                        return res.status(200).json(inner);
-                    }
-                } catch (e) {
-                    console.error('Failed to parse OpenClaw response:', e);
-                }
-            } catch (e) {
-                console.error('OpenClaw minutes generation failed:', e);
             }
         }
 
