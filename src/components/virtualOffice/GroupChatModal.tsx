@@ -59,6 +59,50 @@ const buildCompactionMeta = (label: string, originalText: string, compactedText:
   return `[${label} auto-compacted from ${originalText.length.toLocaleString()} chars / ${countLines(originalText).toLocaleString()} lines]`;
 };
 
+const toEpochMs = (value: any): number => {
+  if (!value) return 0;
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const sortByCreatedAtAsc = (a: GroupChatMessage, b: GroupChatMessage): number => {
+  const aMs = toEpochMs((a as any).createdAt);
+  const bMs = toEpochMs((b as any).createdAt);
+  if (aMs !== bMs) return aMs - bMs;
+  return String(a.id || '').localeCompare(String(b.id || ''));
+};
+
+const mergeMessagesStable = (
+  previous: GroupChatMessage[],
+  incoming: GroupChatMessage[],
+): GroupChatMessage[] => {
+  if (previous.length === 0) {
+    return [...incoming].sort(sortByCreatedAtAsc);
+  }
+
+  const incomingById = new Map<string, GroupChatMessage>();
+  incoming.forEach((msg) => {
+    if (msg.id) incomingById.set(msg.id, msg);
+  });
+
+  // Keep existing visual order stable, but refresh message content from latest snapshot.
+  const mergedInExistingOrder: GroupChatMessage[] = [];
+  previous.forEach((msg) => {
+    if (!msg.id) return;
+    const updated = incomingById.get(msg.id);
+    if (updated) {
+      mergedInExistingOrder.push(updated);
+      incomingById.delete(msg.id);
+    }
+  });
+
+  // Append only truly new messages after the existing list.
+  const newMessages = Array.from(incomingById.values()).sort(sortByCreatedAtAsc);
+  return mergedInExistingOrder.concat(newMessages);
+};
+
 export const GroupChatModal: React.FC<GroupChatModalProps> = ({
   chatId,
   participants,
@@ -99,7 +143,7 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
   // Listen to messages
   useEffect(() => {
     const unsubscribe = groupChatService.listenToMessages(chatId, (newMessages) => {
-      setMessages(newMessages);
+      setMessages((prev) => mergeMessagesStable(prev, newMessages));
     });
     return () => unsubscribe();
   }, [chatId]);
