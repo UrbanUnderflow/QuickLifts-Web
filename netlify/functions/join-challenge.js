@@ -147,6 +147,62 @@ exports.handler = async (event, context) => {
     await db.collection('user-challenge').doc(userChallengeId).set(userRound);
     console.log('✅ User challenge created successfully');
 
+    // --- Gym affiliate KPI instrumentation ---
+    // If the challenge has a gymAffiliateId, update that affiliate's
+    // uniqueParticipants and tracking list so each user is only counted once.
+    if (challenge.gymAffiliateId) {
+      const gymAffiliateId = challenge.gymAffiliateId;
+      const gymAffiliateRef = db.collection('gymAffiliates').doc(gymAffiliateId);
+
+      console.log('📈 Updating gym affiliate KPIs for join:', {
+        gymAffiliateId,
+        userId,
+        challengeId
+      });
+
+      await db.runTransaction(async (tx) => {
+        const affiliateSnap = await tx.get(gymAffiliateRef);
+        if (!affiliateSnap.exists) {
+          console.warn('⚠️ gymAffiliates doc not found for gymAffiliateId; skipping KPI update.', {
+            gymAffiliateId,
+            userId,
+            challengeId
+          });
+          return;
+        }
+
+        const data = affiliateSnap.data() || {};
+        const uniqueIds = Array.isArray(data.uniqueParticipantUserIds)
+          ? data.uniqueParticipantUserIds
+          : [];
+
+        // Only increment uniqueParticipants if this user hasn't been counted yet
+        if (!uniqueIds.includes(userId)) {
+          uniqueIds.push(userId);
+
+          const currentUnique = typeof data.uniqueParticipants === 'number'
+            ? data.uniqueParticipants
+            : 0;
+
+          tx.update(gymAffiliateRef, {
+            uniqueParticipants: currentUnique + 1,
+            uniqueParticipantUserIds: uniqueIds
+          });
+
+          console.log('✅ Incremented uniqueParticipants for gym affiliate.', {
+            gymAffiliateId,
+            userId,
+            newUniqueParticipants: currentUnique + 1
+          });
+        } else {
+          console.log('ℹ️ User already counted as unique participant for this gym affiliate. Skipping increment.', {
+            gymAffiliateId,
+            userId
+          });
+        }
+      });
+    }
+
     return {
       statusCode: 200,
       headers,
