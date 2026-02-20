@@ -1,0 +1,65 @@
+{
+  "brand": {
+    "type": "brand",
+    "label": "Brand Partner Onboarding",
+    "steps": [
+      {
+        "id": "brand-connect-community",
+        "label": "Connect community surface (email, social, or app)",
+        "route": "/partners/brand-playbook#connect-community"
+      },
+      {
+        "id": "brand-launch-first-challenge",
+        "label": "Launch first co-branded Pulse challenge",
+        "route": "/partners/brand-playbook#first-challenge"
+      },
+      {
+        "id": "brand-review-dashboard",
+        "label": "Review engagement and time-to-first-round in dashboard",
+        "route": "/partners/brand-playbook#review-dashboard"
+      }
+    ]
+  },
+  "gym": {
+    "type": "gym",
+    "label": "Gym Partner Onboarding",
+    "steps": [
+      {
+        "id": "gym-connect-member-base",
+        "label": "Connect member roster and primary communication channel",
+        "route": "/partners/gym-playbook#connect-members"
+      },
+      {
+        "id": "gym-launch-first-block",
+        "label": "Launch first gym-wide training block on Pulse",
+        "route": "/partners/gym-playbook#first-block"
+      },
+      {
+        "id": "gym-review-dashboard",
+        "label": "Review gym rounds and member activation in dashboard",
+        "route": "/partners/gym-playbook#review-dashboard"
+      }
+    ]
+  },
+  "runClub": {
+    "type": "runClub",
+    "label": "Run Club Partner Onboarding",
+    "steps": [
+      {
+        "id": "runclub-connect-runners",
+        "label": "Connect run club members and weekly meetups",
+        "route": "/partners/runclub-playbook#connect-runners"
+      },
+      {
+        "id": "runclub-launch-first-round",
+        "label": "Launch first Pulse-hosted run round (e.g., 4-week block)",
+        "route": "/partners/runclub-playbook#first-round"
+      },
+      {
+        "id": "runclub-review-dashboard",
+        "label": "Review participation and time-to-first-round in dashboard",
+        "route": "/partners/runclub-playbook#review-dashboard"
+      }
+    ]
+  }
+}
