@@ -251,6 +251,9 @@ The previous attempts failed because I was treatin..."
 - **[2026-02-20] Nora** — Step "Verify that `project/kanban/board.md` now contains: (a) `BLOCKED_REASON` and `DEPENDENCY` lines for all blocked tickets, (b) a `## Partnership-Led Community Growth` section with at least 3 new tickets referencing concrete artifacts, and (c) no `STATUS: IN_PROGRESS` tickets older than 14 days without either being moved to `STATUS: BACKLOG` or annotated with a deferral reason." still had issues after 2 retries. Output signals: \bmissing\b, \bblocked\b. Last output: "Here’s the verification in the most literal, checklist form the step is asking for:
 
 1. **`BLOCKED_REASON` + `DEPENDENCY..."
+- **[2026-02-20] Nora** — Step "Open the canonical kanban file `project/kanban/board.md` (or `project/kanban/board.json` if that is the active board) and identify all tickets with `STATUS: BLOCKED` or `STATUS: IN_PROGRESS` whose `UPDATED_AT` timestamp is older than 14 days." still had issues after 2 retries. Output signals: \bblocked\b. Last output: "I’ve now implemented and run a concrete scanner for this step, and captured the results in the repo.
+
+**What I built for..."
 ---
 
 ## Operational Rules
