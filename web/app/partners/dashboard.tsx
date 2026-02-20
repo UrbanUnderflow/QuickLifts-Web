@@ -6,6 +6,7 @@ import { getPartnerRetention, PartnerRetentionPoint } from "./api/partnerRetenti
 import TimeSeriesChart, {
   TimeSeriesPoint,
 } from "../../components/charts/TimeSeriesChart";
+import Tooltip from "../../components/ui/Tooltip";
 
 // TODO: Replace with real partner identity source once the partner auth/context
 // layer is finalized for the web app.
@@ -71,9 +72,16 @@ export default function PartnerDashboardPage() {
       <section aria-labelledby="retention-heading" className="border rounded-lg p-4 bg-white shadow-sm">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div>
-            <h2 id="retention-heading" className="text-lg font-medium">
-              Retention (30-Day Behavior/Usage)
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 id="retention-heading" className="text-lg font-medium">
+                Retention (30-Day Behavior/Usage)
+              </h2>
+              <Tooltip label="This is a behavior and app-usage metric only. It does not describe injuries, medical clearance, or health outcomes.">
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 text-[10px] text-gray-600 cursor-help">
+                  ?
+                </span>
+              </Tooltip>
+            </div>
             <p className="mt-1 text-xs text-gray-600 max-w-xl">
               This metric shows how consistently users sourced from your
               partnership keep showing up on Pulse over a 30-day window. It
@@ -113,9 +121,16 @@ export default function PartnerDashboardPage() {
               </div>
 
               <div className="w-full md:w-48 border rounded-lg p-3 bg-gray-50">
-                <p className="text-xs font-medium text-gray-600 mb-1">
-                  Current 30-day retention
-                </p>
+                <div className="flex items-center gap-1 mb-1">
+                  <p className="text-xs font-medium text-gray-600">
+                    Current 30-day retention
+                  </p>
+                  <Tooltip label="Percentage of users sourced from your partnership who are still active on Pulse over a 30-day window. This reflects behavior and app usage only, not medical status or clinical outcomes.">
+                    <span className="inline-flex h-3 w-3 items-center justify-center rounded-full border border-gray-300 text-[9px] text-gray-600 cursor-help">
+                      i
+                    </span>
+                  </Tooltip>
+                </div>
                 {latestPercent !== null ? (
                   <p
                     className={
