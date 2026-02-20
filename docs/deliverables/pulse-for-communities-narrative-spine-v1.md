@@ -1,48 +1,124 @@
 # Pulse for Communities – Narrative Spine v1
 
-## Immutable Core Story: Pulse as the Challenge Layer
+> Working spec for internal use by Nora, Scout, Solara, and the Pulse team. This is the single spine that all ICP playbooks and partner lists must plug into.
+
+## 1. Immutable Core Story: Pulse as the Challenge Layer
 
 Pulse is the engine that turns fragmented fitness audiences into durable communities of practice across brands, gyms, and run clubs. It plugs into the channels those communities already live in — from brand socials and email lists to gym member apps and run club group chats — and orchestrates a shared cadence of challenges, rituals, and seasons that people actually complete together. On Pulse, members don’t just sign up once and drift; they enter time-bound blocks with clear goals, visible progress, and creator- or coach-led accountability that makes “showing up with my people” the default, not the exception.
 
-Under the hood, the story is measured in the same four numbers for every community: how many people join each challenge (challenge join rate), how many finish (completion rate), how many come back for the next block (repeat-challenge rate), and how many creators are actively leading the way (active creators). Pulse is built to move all four at once — by making it easy for creators to launch and run challenges, by surfacing progress and social proof in the channels members already check, and by sequencing blocks so there’s always a clear “next thing” to do together. When a block ends, Pulse routes each community into its next aligned challenge — whether that’s a brand collab series, a gym-wide training block, or a run club cycle — so the question stops being “Will they come back?” and becomes “What’s our next block together?”
-
-### Shared Community Metrics (Referenced Across All ICP Sections)
-
-Every "Pulse x Community" story points back to this shared metric spine:
-
-- **Challenge join rate** – the share of your reachable community that actually joins each new challenge.
-- **Challenge completion rate** – the percentage of participants who cross the finish line for a given block.
-- **Repeat-challenge rate** – how many finishers roll straight into the next Pulse-powered block.
-- **Active creators** – the number of athletes, coaches, or captains who are actively running challenges and showing up in front of the community.
-
-These four numbers travel with us into Brands, Gyms, and Run Clubs — the language and scenes change, but the metric spine stays the same.
+Under the hood, this story collapses into three behavior metrics that travel with us into every ICP: how often members fall into long inactivity gaps, how many weeks actually feel like "community weeks" with shared rituals or challenges, and what share of the community is actively showing up inside creator- or coach-led blocks. If Pulse is doing its job, all three move in the right direction at once — fewer dead zones, more ritual-rich weeks, and a higher share of the community participating in live, social challenges instead of drifting on solo programs.
 
 ---
 
-## ICP-Specific Narratives
+## 2. Shared Community Metrics (Referenced Across All ICP Sections)
 
-### 1. Brands (Nike / Gymshark-style Partners)
+Every "Pulse x Community" story points back to this shared metric spine:
 
-For brands, Pulse is the challenge layer that turns athletes and ambassadors into a living campaign calendar your community can move through together. Your “creators” on Pulse are the faces your audience already trusts — sponsored athletes, product specialists, influencers, store coaches — each running their own time-bound blocks under a shared brand story. Instead of one big hero campaign that spikes and fades, Pulse lets you stack a season of linked challenges: a 4-week strength block led by your training team, a 21-day recovery and mobility sprint with your yoga partners, a race-prep cycle captained by your run athletes.
+1. **Inactivity Gap Rate (>3 days)**  
+   Percentage of active community members who experience any gap of **4 or more consecutive days** with no meaningful Pulse-tracked participation (no check-ins, challenge actions, or logged community touchpoints) during a defined block or season. Pulse’s job is to **drive this rate down** block over block.
 
-On the surface, it looks simple to the community: they tap into a brand challenge from the channels they already follow — your Instagram bio, email, app, or QR in-store — see which athlete is leading it, join with a couple of taps, and start logging actions that fit naturally into their week. Behind the scenes, Pulse keeps the tempo: nudges from the athlete and the brand, visible streaks and finish-line celebrations, and a clear handoff into the next block so they’re never asking “Now what?”
+2. **Community Ritual Weeks**  
+   Percentage of calendar weeks in a given period where the community hits a minimum threshold of shared activity — for example, **3+ distinct community rituals or challenge touchpoints** (check-ins, live sessions, group runs, brand activations) recorded in Pulse. This is how we measure whether a brand, gym, or run club actually feels “alive together” week to week.
 
-For brands, the same shared metrics become brand-first outcomes: challenge join rate turns into campaign participation, completion rate into finished stories you can showcase, repeat-challenge rate into repeat campaign seasons instead of one-offs, and active creators into the number of athletes and ambassadors who are consistently showing up in front of the community. A strong Pulse x Brand season looks like this in a deck: multiple athlete-led challenges under one campaign theme, high join and completion rates you can quote, UGC and social moments concentrated around those finish lines, and a visible lift in how many athletes are not just posting content but actually running the community through experiences.
+3. **Creator-Led Participation Rate**  
+   Share of the reachable community that joins at least one **creator- or coach-led Pulse challenge/block** in a given season. This captures how effectively Pulse turns passive followers or members into active participants inside structured, socially visible journeys.
 
-### 2. Gyms (Creator-Led Gyms with In-House Communities)
+These three metrics are the non-negotiable spine for Brands, Gyms, and Run Clubs. The scenes and surfaces change by ICP, but every playbook and partner pitch should be able to answer the same ruthless question: **How does this move inactivity gaps, ritual weeks, and creator-led participation in a way that Pulse can measure?**
 
-For gyms, Pulse is the layer that turns coaches into creators and your membership into a rolling series of shared training blocks instead of a collection of disconnected class punches. On Pulse, your “creators” are the coaches and staff your members already high-five on the floor — the ones writing the programming, leading the 6 a.m. crew, running the Saturday partner workout. Each of them can own a challenge block that extends the energy of their class into the rest of the week: a 4-week strength cycle with simple at-home accessory work, a daily mobility ritual for your barbell athletes, a gym-wide steps or conditioning streak that threads through every class format.
+---
 
-From a member’s perspective, it feels like the gym finally has one story: they hear about the new block in class, scan a QR code at the front desk or tap a link in your app, and they’re in the same Pulse challenge as their favorite coach and training partners. They see familiar names on the leaderboard, get nudges that sound like their coach instead of a generic app, and check off small, specific actions that line up with the in-person programming — not random extra work. When the block finishes, Pulse rolls them directly into the next one, so the question becomes, “What’s our next block as a gym?” instead of, “Should I try something new on my own?”
+## 3. ICP Metric Applications
 
-For gyms, the shared metrics translate cleanly into gym health: challenge join rate becomes member challenge participation, a leading indicator of how many people are plugged into your community narrative instead of just dropping into classes. Challenge completion rate shows up as more members actually riding out full 4–8 week cycles, which supports class attendance consistency because people have a clear reason to keep showing up. Repeat-challenge rate maps onto retention over blocks — how many members are still in the story with you two or three cycles later. And active creators is simply how many of your coaches are not just coaching hours, but actively running Pulse-backed blocks that keep members connected between classes. A strong Pulse x Gym setup is one where you can point to the calendar and say: every week, there’s at least one live block running, led by a coach, with a visible chunk of the membership moving through it together.
+For each metric, here is what it means in the context of Brands, Gyms, and Run Clubs.
 
-### 3. Run Clubs (e.g., Wunna Run)
+### 3.1 Inactivity Gap Rate (>3 days)
 
-For run clubs, Pulse is the layer that turns captains and route leaders into season designers — so every week feels like part of a shared journey, not just “whoever shows up on Tuesday.” On Pulse, your “creators” are the captains, pace leaders, and organizers who already pick routes, set meetup points, and hold the group together on dark or rainy nights. Each of them can own challenges that map directly onto how runners already think about their year: base-building blocks, speed cycles, race prep phases, off-season streaks.
+- **Brands** – An inactivity gap is any 4+ day stretch where a follower or customer who has opted into a brand’s Pulse-powered challenge doesn’t log a check-in, content interaction, or challenge action tied to the brand campaign.
+- **Gyms** – An inactivity gap is any 4+ day stretch where a member doesn’t complete a Pulse-tracked workout, class check-in, or gym-run challenge touchpoint during an active training block.
+- **Run Clubs** – An inactivity gap is any 4+ day stretch where a runner in a Pulse-linked club doesn’t log a run, attend a group session, or mark progress inside the current club challenge.
 
-To a runner, it looks like this: they see the next club block announced at the end of a group run — “Our 8-week fall race build starts Monday” — scan a QR code or tap a link in the club chat, and land straight in a Pulse challenge that matches the routes and workouts the club is already planning. They log their solo miles into the same block that tracks Tuesday tempos and Saturday long runs, see other club members hitting their checkpoints, and feel that quiet social pressure to keep their streak alive so they’re not the one who fell off before race day.
+### 3.2 Community Ritual Weeks
 
-A Wunna-style example: the club announces a **“Six Weeks to First 10K”** season for new and returning runners. Captains map out three key runs per week — one easy social run, one effort-based session, one progressive long run — and Pulse hosts the block. Runners join from the Wunna Run page, log each run (or approved substitute), and see their names move through the same checkpoints together. By the end of six weeks, you don’t just have a race sign-up list — you have a **race-ready cohort** that has already been showing up together three times a week, with captains using Pulse to call out milestones and gently nudge anyone who’s slipping.
+- **Brands** – A ritual week is any week where the brand community hits at least 3 Pulse-tracked activations, such as live streams, challenge check-ins, or coordinated content drops that prompt shared action.
+- **Gyms** – A ritual week is any week where the gym hits at least 3 distinct community touchpoints in Pulse — for example, a programmed lift day, a coached class, and a shared finisher or mini-challenge.
+- **Run Clubs** – A ritual week is any week where the club records at least 3 shared run-related rituals, such as group runs, structured speed sessions, or synced at-home runs logged into a common challenge.
 
-For run clubs, the metrics land where it matters: challenge join rate becomes the share of your roster that opts into each season or race block, not just lurks in the group chat. Challenge completion rate maps to how many runners stay with the plan through race week instead of fading after the first rainy Tuesday. Repeat-challenge rate tells you how many runners roll from one season into the next — from 5K to 10K, from 10K to half — keeping your club’s story continuous instead of starting from zero every spring. And active creators is how many captains and pace leaders are actually running structured Pulse blocks, not just posting routes — the difference between “we have people who organize runs” and “we have leaders who take the whole club through a season together.”
+### 3.3 Creator-Led Participation Rate
+
+- **Brands** – Creator-led participation is the share of the brand’s reachable audience that joins at least one Pulse challenge or block facilitated by brand-affiliated creators or athletes.
+- **Gyms** – Creator-led participation is the share of members who join at least one coach- or staff-led Pulse block, class series, or seasonal challenge during the measurement window.
+- **Run Clubs** – Creator-led participation is the share of club runners who enroll in at least one captain- or coach-led Pulse challenge or training cycle rather than just following along informally.
+
+---
+
+## 4. Partner-Fit Rubric (Applied Across All ICPs)
+
+To protect the spine and avoid shallow logo swaps, every prospective partner — whether a brand, gym, or run club — should be evaluated against the same core fit criteria. The question is not just "are they big?" but **"can Pulse measurably move inactivity gaps, ritual weeks, and creator-led participation for this community, and will the partner let us prove it?"**
+
+1. **Existing Community Density and Rhythm**  
+   The partner already has a reachable audience that behaves like a community (repeat touchpoints, shared language, recurring events), so adding Pulse challenges can *tighten inactivity gaps* rather than trying to manufacture interest from scratch.
+
+2. **Creator / Coach / Captain Spine**  
+   The partner has identifiable humans — creators, coaches, captains, or staff — who already lead workouts, runs, or routines, giving Pulse a natural set of leaders to drive **creator-led participation rate** instead of relying on purely brand-voice campaigns.
+
+3. **Challenge and Ritual History**  
+   The partner has run past challenges, events, or seasonal campaigns (successfully or not), providing a baseline of rituals that Pulse can structure, sequence, and measure into true **community ritual weeks** rather than introducing an entirely foreign behavior.
+
+4. **Openness to Data and Shared KPIs**  
+   The partner is willing to align on and report against the three shared metrics (inactivity gaps, ritual weeks, creator-led participation), allowing Pulse to plug into their existing dashboards and prove outcome-level impact rather than just vanity engagement.
+
+5. **Surface Area for Distribution (Channels We Can Instrument)**  
+   The partner controls at least one or two channels — email lists, apps, member portals, Discord/WhatsApp groups, social handles — where Pulse calls-to-action and check-ins can be reliably placed, ensuring we can actually *move* and *measure* the three metrics, not just launch a challenge in the void.
+
+6. **Brand and Research Alignment (Sage Gate)**  
+   The partner’s products, claims, and community norms clear Sage’s research bar, so any increase in **creator-led participation** and **ritual weeks** we drive is brand-safe, regulatorily clean, and reinforces Pulse’s positioning as the place for credible, sustainable movement.
+
+Partners that score high on these six dimensions are the ones where Pulse can behave like infrastructure instead of a one-off campaign: they give us dense communities, visible leaders, existing rituals, measurable surfaces, and alignment on data and ethics — the exact conditions needed to move our three behavior metrics in a way that’s undeniable in a pitch or a renewal.
+
+---
+
+## 5. Plug-In Requirements for Scout and Solara
+
+This section is the enforcement layer: how ICP playbooks (Solara) and partner lists (Scout) must reference the spine and metrics.
+
+### 5.1 Solara – ICP Playbooks
+
+For each ICP playbook (Brands, Gyms, Run Clubs), Solara must:
+
+1. **Anchor the Narrative**  
+   Open the playbook with a short restatement of the core story in this doc, explicitly naming Pulse as the challenge layer and referencing the three shared metrics.
+
+2. **Map Plays to Metrics**  
+   For every proposed play (e.g., 6-week strength block for gyms, seasonal run series for clubs, brand x creator collab), include a one-line "metric intent" that specifies which of the three shared metrics it is designed to move and how.
+
+3. **Define ICP-Specific Rituals Using This Spec**  
+   When describing rituals or challenges (e.g., “brand activation week” or “tempo Tuesday”), use the ICP definitions in Section 3 so that when Scout or Nora instrument the flows, they roll up cleanly into inactivity gaps, ritual weeks, and creator-led participation.
+
+4. **Include a Partner-Fit Checklist per Playbook**  
+   Each ICP playbook should include a short checklist derived from Section 4, making it explicit which types of partners within that ICP are high-fit vs. low-fit for that playbook.
+
+### 5.2 Scout – Partner Lists and Outreach Materials
+
+For each partner list and outreach artifact, Scout must:
+
+1. **Tag Every Partner with Fit Signals**  
+   For each prospect, include a short note (1–2 bullets) indicating which partner-fit criteria they clearly satisfy (e.g., strong creator spine + clear ritual history, but weak KPI openness).
+
+2. **Attach Metric Hypotheses**  
+   For each prospect, articulate a simple hypothesis framed in the shared metrics: e.g., "We can cut inactivity gaps by X% for [Brand]’s loyalty community by structuring their existing challenges into Pulse blocks" or "We can increase ritual weeks for [Gym] by layering Pulse challenges onto their existing class cadence."
+
+3. **Filter Out Misaligned Prospects Early**  
+   Do not advance prospects that fundamentally fail the Sage gate or lack any realistic surface area for distribution, even if the logo is attractive — they will not help us move the three metrics in a way we can prove.
+
+4. **Reference This Spec in Pitches**  
+   When assembling pitch decks or one-pagers, tie claims about engagement and retention directly back to the three shared metrics, using the language in this document so that product, ops, and sales are all telling the same story.
+
+---
+
+## 6. Status
+
+- **Version:** v1 of the Pulse for Communities spine and KPI + partner-fit spec.  
+- **Owners:** Nora (spec + enforcement), Solara (ICP playbooks), Scout (partner research and lists).  
+- **Next Actions:**
+  - Fill in ICP-specific narrative vignettes in Section 3 for Brands, Gyms, and Run Clubs (storytelling around the existing metric definitions).  
+  - Wire this spec into partner discovery and pitch templates so every new opportunity is evaluated through the same spine.
