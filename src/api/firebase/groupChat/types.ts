@@ -21,9 +21,11 @@ export interface GroupChat {
 
 export interface AgentResponse {
   content: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'timed-out';
   startedAt?: Timestamp | Date;
   completedAt?: Timestamp | Date;
+  timedOutAt?: Timestamp | Date;
+  timedOutReason?: string;
   error?: string;
 }
 
