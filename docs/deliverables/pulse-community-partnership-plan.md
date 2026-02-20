@@ -358,3 +358,129 @@ These are the concrete outputs this strategy work must produce. Later steps in t
   - Short summary of top 3–5 targets per ICP and why they’re first-wave candidates.
 - **Dependencies:**
   - Tickets C2, C3, C4 complete.
+
+---
+
+## 5. Ticket Owners, Collaborators, and Cross-Cutting Checks
+
+> **Note:** Owners are provisional and reflect default responsibilities:
+> - **Solara:** Narrative, positioning, and story architecture.
+> - **Scout:** Research, pattern-finding, partner A-list, and behavioral notes.
+> - **Nora:** Metrics, evidence, and SOT compliance.
+> - **Sage:** Safety and claims review (behavior-only metrics, regulatory/brand risk).
+> - **Ops/PM:** Task orchestration and tracker hygiene.
+
+### 5.1 Workstream A – Narrative Spine
+
+- **Ticket A1 – Extract existing narrative fragments from current materials**
+  - **Owner:** Solara
+  - **Collaborators:** Scout (to flag pattern gaps and contradictions)
+  - **Cross-Cutting Checks:**
+    - None required for external claims yet (internal inventory only).
+
+- **Ticket A2 – Draft v1 "Pulse x Community" written narrative (1–2 pages)**
+  - **Owner:** Solara
+  - **Collaborators:**
+    - Scout (input on creator/challenge behavior patterns to feature).
+    - Nora (sanity-check on available metrics and evidence readiness).
+  - **Cross-Cutting Checks (Subtasks):**
+    - `Subtask: Nora – confirm which behavioral metrics are currently safe to reference externally (aggregate only, no PII).`
+    - `Subtask: Sage – review narrative for behavior-only claims and ensure no implied medical/health outcomes or noncompliant performance promises.`
+
+- **Ticket A3 – Convert narrative into slide-ready outline**
+  - **Owner:** Solara
+  - **Collaborators:** Ops/PM (to ensure outline slots map cleanly to existing deck templates).
+  - **Cross-Cutting Checks (Subtasks):**
+    - `Subtask: Nora – spot-check that any data callouts in the outline trace back to metrics approved in A2.`
+
+- **Ticket A4 – Narrative validation via mock partner use-case**
+  - **Owner:** Solara
+  - **Collaborators:**
+    - Partnerships lead (human) for realism on objections and flow.
+    - Scout to observe where behavior/market context feels thin.
+  - **Cross-Cutting Checks (Subtasks):**
+    - `Subtask: Sage – quick pass on the mock use-case to ensure no new risky claims were introduced during adaptation.`
+
+### 5.2 Workstream B – ICP Strategy Docs
+
+- **Ticket B1 – Define common ICP doc structure and shared sections**
+  - **Owner:** Solara
+  - **Collaborators:** Ops/PM (alignment with tracker and doc tooling).
+  - **Cross-Cutting Checks:**
+    - None required beyond later document-level reviews.
+
+- **Ticket B2 – Draft Brands ICP community strategy doc (v1)**
+  - **Owner:** Solara
+  - **Collaborators:**
+    - Scout (brand ecosystem patterns, examples of community-led campaigns in the wild).
+    - Nora (available metrics or behavioral aggregates that fit Brands).
+  - **Cross-Cutting Checks (Subtasks):**
+    - `Subtask: Sage – review Brands doc for claims about supplements, recovery products, or wellness outcomes; ensure all are behavior-focused and compliant.`
+    - `Subtask: Nora – validate any quantitative claims and attach SOT references where applicable.`
+
+- **Ticket B3 – Draft Gyms/Studios ICP community strategy doc (v1)**
+  - **Owner:** Solara
+  - **Collaborators:**
+    - Scout (gym/community behavior research, examples of challenge formats).
+    - Partnerships lead (human) for on-the-ground gym/studio realities.
+  - **Cross-Cutting Checks (Subtasks):**
+    - `Subtask: Sage – review for overpromising member retention, injury risk, or health outcomes.`
+    - `Subtask: Nora – confirm that any examples framed as “based on Pulse behavior” have corresponding evidence or are clearly labeled as hypotheses.`
+
+- **Ticket B4 – Draft Run Clubs ICP community strategy doc (v1)**
+  - **Owner:** Solara
+  - **Collaborators:**
+    - Scout (run club ecosystem and challenge/cohort behavior research).
+    - Product owner for WunnaRun / run features (human) for product fit details.
+  - **Cross-Cutting Checks (Subtasks):**
+    - `Subtask: Sage – ensure no implied performance or injury-prevention guarantees for runners.`
+    - `Subtask: Nora – verify any references to run-related engagement patterns or challenge completion rates.`
+
+- **Ticket B5 – Cross-ICP consistency and compression pass**
+  - **Owner:** Solara
+  - **Collaborators:** Ops/PM (ensure docs are structured for tracker + reuse).
+  - **Cross-Cutting Checks (Subtasks):**
+    - `Subtask: Nora – cross-check that any shared proof points are consistently cited and SOT-linked across all three ICP docs.`
+    - `Subtask: Sage – final ICP-level safety pass to ensure no conflicting or creeping claims across segments.`
+
+### 5.3 Workstream C – Partner A-List
+
+- **Ticket C1 – Define A-list schema and SOT linkage rules**
+  - **Owner:** Nora
+  - **Collaborators:** Scout (practical considerations from research side), Ops/PM (schema friendly to tracker/CRM).
+  - **Cross-Cutting Checks (Subtasks):**
+    - `Subtask: Sage – review schema fields to ensure we’re not capturing or inferring sensitive categories that raise compliance concerns.`
+
+- **Ticket C2 – Research and populate initial Brand ICP A-list slice**
+  - **Owner:** Scout
+  - **Collaborators:**
+    - Nora (SOT mapping and evidence IDs).
+    - Partnerships lead (human) for fit/prioritization nudges.
+  - **Cross-Cutting Checks (Subtasks):**
+    - `Subtask: Nora – verify that each Brand entry has correct SOT references or is explicitly tagged Unverified.`
+    - `Subtask: Sage – spot-check a sample of Brand entries for risky categories (e.g., questionable supplements) and flag/remove as needed.`
+
+- **Ticket C3 – Research and populate Gyms/Studios ICP A-list slice**
+  - **Owner:** Scout
+  - **Collaborators:**
+    - Nora (SOT mapping and evidence IDs).
+    - Partnerships lead (human) for relevance by region/type.
+  - **Cross-Cutting Checks (Subtasks):**
+    - `Subtask: Nora – SOT cross-check for all Gym/Studio entries; ensure Unverified tagging where evidence is missing.`
+    - `Subtask: Sage – review for any gyms/studios with reputational or safety red flags (where known).`
+
+- **Ticket C4 – Research and populate Run Clubs ICP A-list slice**
+  - **Owner:** Scout
+  - **Collaborators:**
+    - Nora (SOT mapping and evidence IDs).
+    - Product owner for run features (human) for alignment with product direction.
+  - **Cross-Cutting Checks (Subtasks):**
+    - `Subtask: Nora – ensure any references to performance or training behavior are backed by evidence or clearly labeled as hypotheses.`
+    - `Subtask: Sage – quick pass on Run Club entries for safety/compliance concerns.`
+
+- **Ticket C5 – A-list QA, deduping, and prioritization**
+  - **Owner:** Nora
+  - **Collaborators:** Scout (context on which prospects are strongest behavioral fits), Partnerships lead (human) for outreach sequencing.
+  - **Cross-Cutting Checks (Subtasks):**
+    - `Subtask: Nora – final SOT audit across the entire A-list; no prospect marked as interested/active partner unless explicitly supported by SOT.`
+    - `Subtask: Sage – final review of top-tier prospects to ensure no hidden brand or regulatory misalignment before outreach.`
