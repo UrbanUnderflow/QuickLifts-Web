@@ -274,3 +274,65 @@ Pulse’s next growth phase is powered by partnerships that act as true extensio
   - Description: Turn the run-specific guidance into an addendum that can be attached to partnership docs and creator guidelines for endurance-focused work.  
   - Required inputs: Run clubs guardrail content, global guardrail framework from brands/gyms.  
   - Owner: **Sage** with structural input from **Nora**.
+
+---
+
+## 4. Sequencing & Cross-ICP Dependencies
+
+### 4.1 Recommended Sequencing by ICP
+
+#### Brands Sequencing
+
+1. **Brands ICP Brief (3.1.1)**  
+   Establish who we are building for and what partnership shapes are in-bounds so all downstream work points at the same partner profile.
+2. **Brands Behavior Metrics Snapshot (3.1.3)**  
+   Quantify the value of Pulse for brands early so the narrative and guardrails can anchor to hard numbers that answer "why this matters" for a partnership.
+3. **Brands Hero Community Narrative (3.1.2)**  
+   Layer on a concrete creator + user story that makes the metrics feel human and pitchable in decks and conversations.
+4. **Brands Language & Claims Guardrails (3.1.4)**  
+   Once the story and metrics are stable, tighten the edges on what we can and cannot say, ensuring every pitch and campaign stays inside a defensible health and claims lane.
+
+This order ensures that partner targeting and value proof come before storytelling, and that storytelling is finalized before we lock the language creators and sales will use.
+
+#### Gyms & Studios Sequencing
+
+1. **Gyms & Studios ICP Brief (3.2.1)**  
+   Define the target gym/studio profiles and Pulse integration patterns first so we know which operational realities and member journeys we are solving for.
+2. **Gyms Behavior Metrics Snapshot (3.2.3)**  
+   Pull and frame metrics that speak directly to retention and visit frequency, giving gym owners a quantitative reason to care.
+3. **Gyms Hero Community Narrative (3.2.2)**  
+   Build a story that shows a representative gym moving from episodic classes to a continuous, Pulse-supported ecosystem grounded in the real metrics we can deliver.
+4. **Gyms Language & Claims Guardrails (3.2.4)**  
+   Translate that story into safe, repeatable language patterns for CSMs and gym partners to use in co-branded programs and promotions.
+
+This sequence keeps the focus on solving gym retention problems in a way that can be measured, before crystallizing the story and then constraining language to match both the data and safety posture.
+
+#### Run Clubs & Endurance Communities Sequencing
+
+1. **Run Clubs ICP Brief (3.3.1)**  
+   Start by defining the run club profiles and core rituals so every subsequent artifact centers on the lived experience of endurance communities.
+2. **Run Clubs Behavior Metrics Snapshot (3.3.3)**  
+   Identify and validate endurance-specific metrics that show how Pulse improves training consistency and community cohesion across a season.
+3. **Run Clubs Hero Community Narrative (3.3.2)**  
+   Use the ICP and metrics to craft a race-season narrative that feels true to how runners actually train, connect, and celebrate.
+4. **Run Clubs Language & Claims Guardrails (3.3.4)**  
+   Close with run-specific guardrails so performance and injury-related messaging in co-branded programming stays aspirational but not misleading.
+
+This order makes sure we understand the culture and rituals first, then quantify impact, then tell the story, and finally bound the language.
+
+### 4.2 Cross-ICP Dependencies & Shared Assets
+
+- **Shared health narrative spine**  
+  All ICP briefs and hero narratives should pull from a common health and behavior change spine (how Pulse supports sustainable movement, recovery, and community), maintained by **Sage** and **Solara** so that partners across Brands, Gyms, and Run Clubs hear a coherent story.
+
+- **Global red/green language list**  
+  The language & claims guardrails for each ICP (3.1.4, 3.2.4, 3.3.4) should roll up into a single global red/green language framework that defines universal no-go zones (e.g., disease treatment claims) and green phrases that are safe across categories. Owned by **Sage**, with category-specific extensions per ICP.
+
+- **Metrics definition canon**  
+  Metrics snapshots for all three ICPs rely on a shared, clearly documented set of metric definitions (what counts as a completion, streak, engagement event). **Scout** maintains this canon so numbers are consistent and explainable across partner conversations.
+
+- **Deck and one-pager patterns**  
+  Hero narratives and metrics snapshots should feed into a shared library of deck slides and one-pagers, managed by **Solara**, so that each ICP gets tailored examples built on the same visual and structural backbone.
+
+- **Partner qualification checklist**  
+  Insights from all three ICP briefs should inform a unified partner qualification checklist that sales and Nora can use to quickly triage inbound and outbound opportunities against our partnership strategy.
