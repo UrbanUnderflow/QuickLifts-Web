@@ -1,10 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../api/firebase/config';
 import type { PartnerType, PartnerFirestoreData } from '../../../types/Partner';
 import { PartnerModel } from '../../../types/Partner';
 
-// Basic runtime validation helpers for this handler (step 2)
+// Basic runtime validation helpers for this handler (step 2/3)
 const ALLOWED_TYPES: PartnerType[] = ['brand', 'gym', 'runClub'];
 
 function isValidPartnerType(value: any): value is PartnerType {
@@ -25,6 +25,8 @@ interface OnboardPartnerRequestBody {
   type: PartnerType;
   contactEmail: string;
   onboardingStage?: string;
+  // When true, marks the moment the first Pulse round has been created for this partner
+  firstRoundCreated?: boolean;
 }
 
 export default async function handler(
@@ -36,9 +38,9 @@ export default async function handler(
   }
 
   try {
-    const { id, type, contactEmail, onboardingStage }: OnboardPartnerRequestBody = req.body || {};
+    const { id, type, contactEmail, onboardingStage, firstRoundCreated }: OnboardPartnerRequestBody = req.body || {};
 
-    // Basic input validation for this step
+    // Basic input validation
     if (!isValidPartnerType(type)) {
       return res.status(400).json({ error: 'Invalid partner type. Expected one of: brand, gym, runClub.' });
     }
@@ -55,35 +57,39 @@ export default async function handler(
     const partnerRef = doc(db, 'partners', partnerId);
     const existingSnap = await getDoc(partnerRef);
 
-    let firestoreData: PartnerFirestoreData;
+    const updatePayload: Record<string, any> = {
+      type,
+      contactEmail: normalizedEmail,
+      onboardingStage: onboardingStage || 'invited',
+    };
 
     if (existingSnap.exists()) {
-      // Update existing partner; preserve invitedAt/firstRoundCreatedAt for now
       const existingData = existingSnap.data() as PartnerFirestoreData;
 
-      firestoreData = {
-        ...existingData,
-        type,
-        contactEmail: normalizedEmail,
-        onboardingStage: onboardingStage || existingData.onboardingStage || 'invited',
-      };
+      // Preserve existing invitedAt; do not overwrite on updates
+      updatePayload.onboardingStage = onboardingStage || existingData.onboardingStage || 'invited';
+
+      // Only set firstRoundCreatedAt when flag is true AND it hasn't been set before
+      if (firstRoundCreated && !existingData.firstRoundCreatedAt) {
+        updatePayload.firstRoundCreatedAt = serverTimestamp();
+      }
     } else {
-      // Create new partner document; invitedAt will be refined in step 3
-      const now = new Date();
-      firestoreData = {
-        type,
-        contactEmail: normalizedEmail,
-        onboardingStage: onboardingStage || 'invited',
-        invitedAt: now,
-        firstRoundCreatedAt: null,
-      };
+      // New partner: set invitedAt using serverTimestamp so we can measure time-to-active accurately
+      updatePayload.onboardingStage = onboardingStage || 'invited';
+      updatePayload.invitedAt = serverTimestamp();
+
+      // Optionally allow firstRoundCreatedAt on creation if firstRoundCreated is passed
+      if (firstRoundCreated) {
+        updatePayload.firstRoundCreatedAt = serverTimestamp();
+      }
     }
 
-    // Use model to normalize timestamps for storage consistency
-    const model = new PartnerModel(partnerId, firestoreData);
-    const toSave = model.toDictionary();
+    await setDoc(partnerRef, updatePayload, { merge: true });
 
-    await setDoc(partnerRef, toSave, { merge: true });
+    // Re-read the document so timestamps come back as Firestore Timestamp objects
+    const finalSnap = await getDoc(partnerRef);
+    const finalData = finalSnap.data() as PartnerFirestoreData;
+    const model = new PartnerModel(partnerId, finalData);
 
     return res.status(200).json({
       success: true,
