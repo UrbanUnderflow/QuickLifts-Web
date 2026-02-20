@@ -224,6 +224,7 @@ For any lead/prospect/partnership claim:
 - **[2026-02-19] Nora** — Step "Research and plan: a one-page PulseCheck → AuntEdna → Hampton playbook now: severity buckets mapped" failed even after rewrite. Original error: "Force recovery: Abort the currently stuck step and restart from the correct config path (~/.openclaw". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-19] Nora** — Step "Execute: a one-page PulseCheck → AuntEdna → Hampton playbook now: severity buckets mapped" failed even after rewrite. Original error: "OpenClaw stalled: no activity for 300s". Rewrite error: "invokeOpenClaw is not defined"
 - **[2026-02-19] Nora** — Step "Restart the Sage runner service/process (e.g., `openclaw agents restart sage`) and watch its startup logs until it reports “runner connected/ready.”" failed even after rewrite. Original error: "OpenClaw stalled: no activity for 300s". Rewrite error: "invokeOpenClaw is not defined"
+- **[2026-02-20] Nora** — Step "Draft a one-paragraph core narrative for “Pulse for Communities” that defines Pulse as the engine that activates and sustains fitness communities across Brands, Gyms, and Run Clubs." still had issues after 2 retries. Output signals: \bfailed\b, \bmissing\b, \bexception\b. Last output: "Root cause: the earlier attempts didn’t fail on any shell/tool operation; the narrative was written correctly to the rep..."
 ---
 
 ## Operational Rules
