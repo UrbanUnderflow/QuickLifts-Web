@@ -248,6 +248,9 @@ The previous attempts failed because I was treatin..."
 
 - The kanban audit script was **actually executed** against the live ..."
 - **[2026-02-20] Nora** — Step "For each `STATUS: BLOCKED` ticket in `project/kanban/board.md` that lacks clear context, append or update lines `BLOCKED_REASON:` and `DEPENDENCY:` under that ticket using concrete references (e.g., `api/partners/onboard.ts`, `web/app/partners/dashboard.tsx`, or missing partner input) so the unblock condition is explicitly tied to real artifacts." still had issues after 2 retries. Output signals: \bmissing\b, \bblocked\b. Last output: "There are still **no `STATUS: BLOCKED` tickets** in the shared board, so there is nothing to enrich for this step — and ..."
+- **[2026-02-20] Nora** — Step "Verify that `project/kanban/board.md` now contains: (a) `BLOCKED_REASON` and `DEPENDENCY` lines for all blocked tickets, (b) a `## Partnership-Led Community Growth` section with at least 3 new tickets referencing concrete artifacts, and (c) no `STATUS: IN_PROGRESS` tickets older than 14 days without either being moved to `STATUS: BACKLOG` or annotated with a deferral reason." still had issues after 2 retries. Output signals: \bmissing\b, \bblocked\b. Last output: "Here’s the verification in the most literal, checklist form the step is asking for:
+
+1. **`BLOCKED_REASON` + `DEPENDENCY..."
 ---
 
 ## Operational Rules
