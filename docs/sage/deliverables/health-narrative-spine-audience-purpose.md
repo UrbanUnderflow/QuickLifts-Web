@@ -1,4 +1,6 @@
-# Pulse Health Narrative Spine — Audience & Purpose
+# Pulse Health Narrative Spine
+
+This is Pulse’s internal health story spine: a one-stop reference for how we talk about behavior, readiness, and results across partners without drifting into clinical promises. It is designed to travel cleanly into the three Community Playbooks (brands, gyms, run clubs) so every deck, brief, and email pulls from the same behavior-only promise, metric language, and red/green rails.
 
 ## Who This Spine Is For
 
