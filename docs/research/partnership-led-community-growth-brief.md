@@ -62,13 +62,60 @@ Outline:
 
 **Purpose:** Identify 3–5 most relevant players whose strategies inform or challenge Pulse's partnership-led North Star.
 
-Outline:
-- Shortlist table with:
-  - Platform name
-  - Category (brand / gym platform / run club / wearable / hybrid)
-  - Primary user segment(s)
-  - Community surface(s) (app, IG, Discord, IRL, etc.)
-- 1–2 paragraph profile for each key competitor.
+### 2.1 Strava (Clubs + Challenges as Growth Engine)
+
+- **Category:** Social fitness network / data platform
+- **Partnership surfaces:**
+  - Brand-sponsored challenges (e.g., monthly distance/elevation challenges with prizes or badges).
+  - Club infrastructure used by run clubs, brands, and event organizers.
+- **Community footprint:**
+  - Strava reports over 100 million athletes globally and more than 7 billion activities uploaded as of 2023 [Unverified — to be supported with direct Strava report link in later step].
+- **Why it matters for Pulse:**
+  - Demonstrates that clubs + lightweight challenges can be a primary growth loop when they are easy for partners (clubs, brands) to spin up and promote.
+
+### 2.2 Nike Run Club (NRC) / Nike Training Club (NTC)
+
+- **Category:** Brand-led training + run club ecosystem
+- **Partnership surfaces:**
+  - Local NRC chapters (often co-run with stores, coaches, or partner gyms) that meet regularly for community runs.
+  - Co-branded events and race build-ups where NRC acts as the digital training hub and retail/community partners provide IRL touchpoints.
+- **Community footprint:**
+  - NRC and NTC are positioned as Nike’s primary digital hubs for training content and community challenges, with city-level NRC groups active on IG and in-app events [Unverified].
+- **Why it matters for Pulse:**
+  - Shows how a brand can use run clubs and structured programs to turn product affinity into recurring community rituals.
+
+### 2.3 Peloton (Instructor- and Community-Led Engagement)
+
+- **Category:** Connected fitness platform
+- **Partnership surfaces:**
+  - Star instructors with near-influencer status act as internal creators, leading programs and themed series.
+  - Brand partnerships and artist collaborations (e.g., music series) that turn content into co-branded events.
+- **Community footprint:**
+  - Peloton leans on leaderboards, high-fidelity class production, and instructor communities to create stickiness and habit loops [Unverified].
+- **Why it matters for Pulse:**
+  - Highlights the power of creator-led programming and recurring event cadence (series, programs) as a retention driver.
+
+### 2.4 ClassPass (Gym Network as Distribution Channel)
+
+- **Category:** Aggregator of gyms/studios and classes
+- **Partnership surfaces:**
+  - Thousands of studio/gym partners onboarded via a B2B flow; the consumer product is fundamentally a catalog of partner offerings.
+  - Revenue-share model where ClassPass pays gyms based on attendance/usage (historically credit-based) [Unverified — specific terms vary by market and over time].
+- **Community footprint:**
+  - Community is largely anchored in partner gyms and studios; ClassPass’ value is distribution, discovery, and habit-building through variety.
+- **Why it matters for Pulse:**
+  - Illustrates how aggregating gym partners can become a primary growth lever, but also that the "community" often lives at the gym level, not centrally in the app.
+
+### 2.5 Mindbody (Infrastructure for Community Gyms/Studios)
+
+- **Category:** SaaS platform for gyms/studios
+- **Partnership surfaces:**
+  - Deep integrations with studios/gyms (scheduling, payments, CRM), plus an app that aggregates classes for consumers.
+  - Integration partnerships with other wellness apps and systems (e.g., marketing tools, payments) [Unverified].
+- **Community footprint:**
+  - Community is primarily owned by studios/gyms, with Mindbody acting as infrastructure and a light-weight aggregator.
+- **Why it matters for Pulse:**
+  - Shows the "infra for gyms" lane; Pulse can sit more at the community layer, connecting member behavior across gyms rather than purely selling software to them.
 
 ---
 
@@ -76,7 +123,7 @@ Outline:
 
 **Purpose:** Understand how leading platforms structure and operationalize their partnerships.
 
-Outline:
+Outline (to be filled with citations in later steps):
 - Subsections per competitor (or archetype):
   - **Brand partnerships:**
     - How they recruit and onboard partners.
