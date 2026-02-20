@@ -52,7 +52,9 @@ if (!process.env.SUDO_ASKPASS) {
     }
 }
 const PRESENCE_COLLECTION = 'agent-presence';
-const KANBAN_COLLECTION = 'kanbanTasks';
+// Mission Control and mission kickoff write tasks into `agent-tasks`.
+// Keep env override so older setups can still point runners elsewhere if needed.
+const KANBAN_COLLECTION = process.env.KANBAN_COLLECTION || 'agent-tasks';
 const COMMANDS_COLLECTION = 'agent-commands';
 const HISTORY_SUBCOLLECTION = 'task-history';
 const TIMELINE_COLLECTION = 'progress-timeline';
@@ -1945,10 +1947,13 @@ async function selfAssignTask() {
         // Double-check: do we really have no tasks?
         const existing = await db.collection(KANBAN_COLLECTION)
             .where('assignee', '==', AGENT_NAME)
-            .where('status', 'in', ['todo', 'in-progress'])
-            .limit(1)
+            .limit(40)
             .get();
-        if (!existing.empty) return null; // Race condition — task appeared
+        const hasOpenTask = existing.docs.some((d) => {
+            const status = d.data()?.status;
+            return status === 'todo' || status === 'in-progress';
+        });
+        if (hasOpenTask) return null; // Race condition — task appeared
 
         // Check if mission is active — if so, use smarter North Star-aware self-assignment
         let missionActive = false;
@@ -1972,19 +1977,26 @@ async function selfAssignTask() {
                 // Find what's already been done toward this agent's objective
                 const recentDone = await db.collection(KANBAN_COLLECTION)
                     .where('assignee', '==', AGENT_NAME)
-                    .where('status', 'in', ['done', 'needs-review'])
-                    .orderBy('updatedAt', 'desc')
-                    .limit(8)
+                    .limit(60)
                     .get();
-                const recentDoneTasks = recentDone.docs.map(d => d.data().name).join(', ');
+                const recentDoneTasks = recentDone.docs
+                    .filter((d) => ['done', 'needs-review'].includes(d.data()?.status))
+                    .sort((a, b) => toMillis(b.data()?.updatedAt) - toMillis(a.data()?.updatedAt))
+                    .slice(0, 8)
+                    .map((d) => d.data()?.name)
+                    .filter(Boolean)
+                    .join(', ');
 
                 // Find all recent tasks across all agents to avoid duplication
                 const allRecentInProgress = await db.collection(KANBAN_COLLECTION)
                     .where('status', 'in', ['todo', 'in-progress'])
-                    .orderBy('createdAt', 'desc')
-                    .limit(20)
+                    .limit(80)
                     .get();
-                const inProgressNames = allRecentInProgress.docs.map(d => `${d.data().assignee}: ${d.data().name}`).join('\n');
+                const inProgressNames = allRecentInProgress.docs
+                    .sort((a, b) => toMillis(b.data()?.createdAt) - toMillis(a.data()?.createdAt))
+                    .slice(0, 20)
+                    .map((d) => `${d.data()?.assignee}: ${d.data()?.name}`)
+                    .join('\n');
 
                 const agentStrengths = {
                     nora: 'engineering, code, deployment, Firestore, APIs, infrastructure',
@@ -2188,22 +2200,26 @@ async function noraTaskManagerSweep() {
             const displayName = displayNames[agentId];
             const snap = await db.collection(KANBAN_COLLECTION)
                 .where('assignee', '==', displayName)
-                .where('status', 'in', ['todo', 'in-progress'])
-                .limit(1)
+                .limit(50)
                 .get();
+            const hasOpenTask = snap.docs.some((d) => {
+                const status = d.data()?.status;
+                return status === 'todo' || status === 'in-progress';
+            });
 
-            if (!snap.empty) continue;  // Agent has work
+            if (hasOpenTask) continue;  // Agent has work
 
             // Check if we already auto-assigned in the last 2 hours
             const recentAssign = await db.collection(KANBAN_COLLECTION)
                 .where('assignee', '==', displayName)
-                .where('source', 'in', ['nora-task-manager', 'mission-kickoff'])
-                .orderBy('createdAt', 'desc')
-                .limit(1)
+                .limit(40)
                 .get();
+            const recentAssignDoc = recentAssign.docs
+                .filter((d) => ['nora-task-manager', 'mission-kickoff'].includes(d.data()?.source))
+                .sort((a, b) => toMillis(b.data()?.createdAt) - toMillis(a.data()?.createdAt))[0];
 
-            if (!recentAssign.empty) {
-                const lastAssignTime = recentAssign.docs[0].data().createdAt?.toDate?.();
+            if (recentAssignDoc) {
+                const lastAssignTime = recentAssignDoc.data().createdAt?.toDate?.();
                 if (lastAssignTime && (Date.now() - lastAssignTime.getTime()) < 2 * 60 * 60 * 1000) {
                     continue;  // Already assigned recently
                 }
@@ -3720,31 +3736,29 @@ async function suppressLikelyRetryLoopTask(taskId, taskData, matchedHistory) {
 
 /* ─── Kanban Integration ──────────────────────────────── */
 
-async function fetchNextTask() {
-    const inProgressSnap = await db.collection(KANBAN_COLLECTION)
+async function fetchTaskCandidatesForAgent(limit) {
+    const snap = await db.collection(KANBAN_COLLECTION)
         .where('assignee', 'in', AGENT_NAME_VARIANTS)
-        .where('status', '==', 'in-progress')
-        .orderBy('createdAt', 'asc')
-        .limit(20)
+        .limit(limit)
         .get();
 
-    if (!inProgressSnap.empty) {
-        const doc = inProgressSnap.docs.find((d) => !d.data().runnerBlocked);
-        if (doc) {
-            return { id: doc.id, ...doc.data() };
-        }
+    return snap.docs.sort((a, b) => toMillis(a.data()?.createdAt) - toMillis(b.data()?.createdAt));
+}
+
+async function fetchNextTask() {
+    const candidateDocs = await fetchTaskCandidatesForAgent(100);
+
+    const inProgressDoc = candidateDocs.find((d) => (
+        d.data()?.status === 'in-progress' && !d.data()?.runnerBlocked
+    ));
+    if (inProgressDoc) {
+        return { id: inProgressDoc.id, ...inProgressDoc.data() };
     }
 
-    const todoSnap = await db.collection(KANBAN_COLLECTION)
-        .where('assignee', 'in', AGENT_NAME_VARIANTS)
-        .where('status', '==', 'todo')
-        .orderBy('createdAt', 'asc')
-        .limit(20)
-        .get();
-
-    if (!todoSnap.empty) {
+    const todoDocs = candidateDocs.filter((d) => d.data()?.status === 'todo');
+    if (todoDocs.length > 0) {
         const recentNeedsReviewHistory = await getRecentNeedsReviewHistory();
-        for (const doc of todoSnap.docs) {
+        for (const doc of todoDocs) {
             const data = doc.data();
             if (data.runnerBlocked) continue;
 
@@ -3932,13 +3946,13 @@ async function unblockTasks() {
     try {
         const blockedSnap = await db.collection(KANBAN_COLLECTION)
             .where('assignee', 'in', AGENT_NAME_VARIANTS)
-            .where('runnerBlocked', '==', true)
             .get();
+        const blockedDocs = blockedSnap.docs.filter((d) => d.data()?.runnerBlocked === true);
 
-        if (blockedSnap.empty) return 0;
+        if (blockedDocs.length === 0) return 0;
 
         let count = 0;
-        for (const doc of blockedSnap.docs) {
+        for (const doc of blockedDocs) {
             const data = doc.data();
             // Skip tasks that failed very recently (within 2 minutes) to avoid immediate retry loops
             const failedAt = data.runnerFailureAt?.toDate?.();
@@ -4993,16 +5007,16 @@ async function sweepStaleGroupChatResponses() {
         // Look at group chats active in the last 2 hours
         const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
         const chatsSnap = await db.collection('agent-group-chats')
-            .where('status', '==', 'active')
             .where('lastMessageAt', '>=', cutoff)
             .orderBy('lastMessageAt', 'desc')
             .limit(10)
             .get();
+        const recentActiveChats = chatsSnap.docs.filter((d) => d.data()?.status === 'active');
 
-        if (chatsSnap.empty) return;
+        if (recentActiveChats.length === 0) return;
 
         var staleChatIds = [];
-        for (const chatDoc of chatsSnap.docs) {
+        for (const chatDoc of recentActiveChats) {
             const chatId = chatDoc.id;
 
             // Check the most recent messages in this chat
@@ -5068,6 +5082,7 @@ async function run() {
     console.log(`   Agent: ${AGENT_NAME} (${AGENT_ID})`);
     console.log(`   Heartbeat: every ${HEARTBEAT_MS / 1000}s`);
     console.log(`   OpenClaw: ${USE_OPENCLAW ? 'ENABLED' : 'SIMULATION MODE'}`);
+    console.log(`   Task Queue: ${KANBAN_COLLECTION}`);
     if (USE_OPENCLAW) {
         console.log(`   Smoke test: ${OPENCLAW_SMOKE_TEST ? 'ON' : 'off'}`);
     }
