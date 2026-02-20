@@ -19,6 +19,10 @@ The Health Narrative Spine does four things:
 3. **Sets a red/green language rail.** It lists phrases we actively lean on (green) and phrases we never use (red) so that any partner-safe copy can be sanity-checked quickly without needing a specialist every time.
 4. **Provides ready-made narrative lines by ICP.** It offers plug-and-play example lines tailored to three core ICPs (brands, gyms, run clubs) so Community Playbooks and partner teams can move fast while staying inside our safety lines.
 
+## Pulse’s Behavior-Only Promise
+
+Pulse exists to help people show up for the behaviors that keep them moving — hitting their key training and recovery rituals, closing >3-day gaps, and noticing when their readiness is starting to wobble — so they feel more ready to train again, more often. We track and support behavior and self-reported readiness, but we do not diagnose conditions, treat injuries, cure illnesses, provide medical clearance, or replace healthcare professionals. Any language we use with partners should anchor on behavior change and readiness signals, not on clinical promises or guarantees.
+
 ## Where This Spine Should Be Used
 
 This spine is a **source document**, not a public artifact. It should be referenced whenever we are:
