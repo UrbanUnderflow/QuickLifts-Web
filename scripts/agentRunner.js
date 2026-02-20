@@ -112,6 +112,7 @@ const GROUP_CHAT_USER_PROMPT_BUDGET_CHARS = parseInt(process.env.GROUP_CHAT_USER
 const GROUP_CHAT_CONTEXT_BUDGET_CHARS = parseInt(process.env.GROUP_CHAT_CONTEXT_BUDGET_CHARS || '1600', 10);
 const GROUP_CHAT_RECENT_FULL_COUNT = parseInt(process.env.GROUP_CHAT_RECENT_FULL_COUNT || '2', 10);
 const GROUP_CHAT_RESPONSE_SNIPPET_CHARS = parseInt(process.env.GROUP_CHAT_RESPONSE_SNIPPET_CHARS || '320', 10);
+const ENABLE_MISSION_CHAT_UPDATES = process.env.ENABLE_MISSION_CHAT_UPDATES !== 'false'; // Mission-mode progress updates in Agent Chat
 
 /* ─── Token Usage Tracking ─────────────────────────────── */
 var sessionTokens = { promptTokens: 0, completionTokens: 0, totalTokens: 0, callCount: 0 };
@@ -3564,8 +3565,117 @@ async function sendMessage(toAgent, content, type = 'chat', metadata = {}) {
  * @param {string} content - The message text
  * @param {string} proactiveType - Label for the badge: 'completed', 'failed', 'suggestion', 'update'
  */
-async function sendProactiveMessage(content, proactiveType = 'update') {
-    return sendMessage('admin', content, 'chat', { proactiveType });
+async function sendProactiveMessage(content, proactiveType = 'update', extraMetadata = {}) {
+    return sendMessage('admin', content, 'chat', { proactiveType, ...extraMetadata });
+}
+
+async function loadMissionRuntimeContext(task) {
+    try {
+        const missionSnap = await db.doc('company-config/mission-status').get();
+        if (!missionSnap.exists) return null;
+        const mission = missionSnap.data() || {};
+        if (mission.status !== 'active') return null;
+
+        const source = String(task?.source || '').toLowerCase();
+        const isMissionTask = Boolean(
+            task?.missionId ||
+            source.includes('mission') ||
+            mission?.missionPhase === 'planning' ||
+            mission?.missionPhase === 'execution'
+        );
+        if (!isMissionTask) return null;
+
+        return {
+            missionId: mission.missionId || '',
+            missionPhase: mission.missionPhase || '',
+            northStarTitle: mission.northStarTitle || '',
+            objective: String(task?.northStarObjective || mission?.agentObjectives?.[AGENT_ID] || '').trim(),
+            directImpact: String(task?.northStarDirectImpact || '').trim(),
+        };
+    } catch (err) {
+        console.warn(`⚠️  Could not load mission context for chat update: ${err.message}`);
+        return null;
+    }
+}
+
+function summarizeLines(items, maxItems) {
+    return (items || [])
+        .slice(0, maxItems)
+        .map((item, idx) => `  ${idx + 1}. ${item}`)
+        .join('\n');
+}
+
+async function maybeSendMissionKickoffUpdate(task, steps, missionContext) {
+    if (!ENABLE_MISSION_CHAT_UPDATES || !missionContext) return;
+    const planPreview = summarizeLines((steps || []).map((s) => s.description).filter(Boolean), 3);
+    const isResumed = String(task?.status || '').toLowerCase() === 'in-progress';
+
+    const message = [
+        `🧠 Mission update from ${AGENT_NAME}: ${isResumed ? 'resuming' : 'starting'} "${task.name}".`,
+        missionContext.northStarTitle ? `North Star: ${missionContext.northStarTitle}` : '',
+        missionContext.objective ? `Why this now: it advances "${missionContext.objective}".` : '',
+        missionContext.directImpact ? `Expected impact: ${missionContext.directImpact}` : '',
+        planPreview ? `Current execution plan:\n${planPreview}` : '',
+        `I’ll report back with concrete deliverables and impact.`,
+    ].filter(Boolean).join('\n\n');
+
+    await sendProactiveMessage(message, 'mission-update', {
+        missionId: missionContext.missionId || '',
+        missionPhase: missionContext.missionPhase || '',
+        taskId: task.id || '',
+    });
+}
+
+async function maybeSendMissionCompletionUpdate(task, steps, missionContext, nsGate, durationStr, pushStatus) {
+    if (!ENABLE_MISSION_CHAT_UPDATES || !missionContext) return;
+    const deliverables = getChangedFilesFromSteps(steps || []);
+    const deliverablePreview = summarizeLines(deliverables, 4) || '  (no file-path artifacts captured)';
+    const alignmentScore = Number(nsGate?.northStarAlignment || 0);
+    const alignmentLine = nsGate
+        ? `North Star alignment: ${alignmentScore}/10 — ${nsGate.alignmentReason || 'alignment evaluated.'}`
+        : missionContext.directImpact
+            ? `North Star alignment intent: ${missionContext.directImpact}`
+            : 'North Star alignment: completed a concrete task aligned to current mission objective.';
+    const sourceHint = pushStatus && pushStatus.includes('Auto-push failed')
+        ? 'Push is pending manual follow-up.'
+        : 'Changes are pushed or ready for immediate review.';
+
+    const message = [
+        `✅ Mission update from ${AGENT_NAME}: completed "${task.name}" in ${durationStr || 'this cycle'}.`,
+        missionContext.objective ? `Objective moved: "${missionContext.objective}"` : '',
+        alignmentLine,
+        `What changed:\n${deliverablePreview}`,
+        sourceHint,
+        `Does this direction make sense, or should I pivot the next task?`,
+    ].filter(Boolean).join('\n\n');
+
+    await sendProactiveMessage(message, 'mission-complete', {
+        missionId: missionContext.missionId || '',
+        missionPhase: missionContext.missionPhase || '',
+        taskId: task.id || '',
+        northStarScore: Number.isFinite(alignmentScore) ? alignmentScore : 0,
+    });
+}
+
+async function maybeSendMissionMidpointUpdate(task, missionContext, completedCount, totalSteps, failedCount) {
+    if (!ENABLE_MISSION_CHAT_UPDATES || !missionContext) return;
+    const progressPct = totalSteps > 0 ? Math.round((completedCount / totalSteps) * 100) : 0;
+    const issueNote = failedCount > 0
+        ? `I hit ${failedCount} failed step${failedCount === 1 ? '' : 's'} so far and I’m adapting.`
+        : `Execution is stable so far.`;
+
+    const message = [
+        `📍 Mission check-in from ${AGENT_NAME}: ${progressPct}% through "${task.name}".`,
+        `Progress: ${completedCount}/${totalSteps} steps complete.`,
+        issueNote,
+        `I’m still optimizing for the same objective and will send the full impact summary when done.`,
+    ].join('\n\n');
+
+    await sendProactiveMessage(message, 'mission-update', {
+        missionId: missionContext.missionId || '',
+        missionPhase: missionContext.missionPhase || '',
+        taskId: task.id || '',
+    });
 }
 
 /**
@@ -5206,6 +5316,7 @@ async function run() {
 
             console.log('🧠 Breaking down task into steps...');
             const steps = await decomposeTask(task);
+            const missionContext = await loadMissionRuntimeContext(task);
             console.log(`   → ${steps.length} steps planned`);
 
             const taskStartTime = new Date();
@@ -5223,6 +5334,7 @@ async function run() {
                 color: 'blue',
                 objectiveCode: task.objectiveCode || task.id,
             });
+            await maybeSendMissionKickoffUpdate(task, steps, missionContext);
 
             steps[0].status = 'in-progress';
             steps[0].startedAt = new Date();
@@ -5233,6 +5345,7 @@ async function run() {
             let lastFailureContext = '';
             let pausedByCommand = false;
             let currentStepIndex = 0;
+            let midpointMissionUpdateSent = false;
 
             for (let i = 0; i < steps.length; i++) {
                 currentStepIndex = i;
@@ -5324,6 +5437,10 @@ async function run() {
                         color: failedCount > 0 ? 'yellow' : 'green',
                         objectiveCode: task.objectiveCode || task.id,
                     });
+                    if (!midpointMissionUpdateSent) {
+                        await maybeSendMissionMidpointUpdate(task, missionContext, completedCount, steps.length, failedCount);
+                        midpointMissionUpdateSent = true;
+                    }
                 }
 
                 if (i + 1 < steps.length) {
@@ -5348,6 +5465,7 @@ async function run() {
 
             const hasIssues = steps.some(s => s.status === 'completed-with-issues');
             const finalStatus = hasIssues ? 'completed-with-issues' : 'completed';
+            let nsGate = null;
 
             if (allPassed) {
                 // ─── North Star Alignment Gate ───────────────────
@@ -5425,7 +5543,7 @@ async function run() {
                     }
                 };
 
-                const nsGate = await northStarAlignmentGate(task, steps);
+                nsGate = await northStarAlignmentGate(task, steps);
 
                 if (nsGate) {
                     const score = nsGate.northStarAlignment || 0;
@@ -5702,14 +5820,18 @@ async function run() {
                     .join('\n');
 
                 if (isSimulation) {
-                    await sendProactiveMessage(
-                        `📋 Task plan completed: "${task.name}"\n\n` +
-                        `⚠️ SIMULATION MODE — no actual files were created.\n` +
-                        `Generated a ${stepsCompleted}-step execution plan in ${durationStr}.\n\n` +
-                        `Planned steps:\n${stepSummary}\n\n` +
-                        `To execute for real, run the agent on the Mac Mini with USE_OPENCLAW=true.`,
-                        'completed'
-                    );
+                    if (missionContext) {
+                        await maybeSendMissionCompletionUpdate(task, steps, missionContext, nsGate, durationStr, '');
+                    } else {
+                        await sendProactiveMessage(
+                            `📋 Task plan completed: "${task.name}"\n\n` +
+                            `⚠️ SIMULATION MODE — no actual files were created.\n` +
+                            `Generated a ${stepsCompleted}-step execution plan in ${durationStr}.\n\n` +
+                            `Planned steps:\n${stepSummary}\n\n` +
+                            `To execute for real, run the agent on the Mac Mini with USE_OPENCLAW=true.`,
+                            'completed'
+                        );
+                    }
                 } else {
                     // Collect git commits from all steps
                     const commits = steps
@@ -5736,17 +5858,21 @@ async function run() {
                         }
                     }
 
-                    await sendProactiveMessage(
-                        `✅ Task completed: "${task.name}"\n\n` +
-                        `Finished ${stepsCompleted} steps in ${durationStr}.\n\n` +
-                        `Steps completed:\n${stepSummary}\n\n` +
-                        `📦 Deliverables:\n\n` +
-                        `Files changed:\n${filesList}\n\n` +
-                        (commits ? `Git commits:\n${commits}\n` : '') +
-                        pushStatus +
-                        `\n\nReady for the next task!`,
-                        'completed'
-                    );
+                    if (missionContext) {
+                        await maybeSendMissionCompletionUpdate(task, steps, missionContext, nsGate, durationStr, pushStatus);
+                    } else {
+                        await sendProactiveMessage(
+                            `✅ Task completed: "${task.name}"\n\n` +
+                            `Finished ${stepsCompleted} steps in ${durationStr}.\n\n` +
+                            `Steps completed:\n${stepSummary}\n\n` +
+                            `📦 Deliverables:\n\n` +
+                            `Files changed:\n${filesList}\n\n` +
+                            (commits ? `Git commits:\n${commits}\n` : '') +
+                            pushStatus +
+                            `\n\nReady for the next task!`,
+                            'completed'
+                        );
+                    }
                 }
             } else {
                 await saveTaskHistory(task.name, task.id, steps, 'failed', taskStartTime);
