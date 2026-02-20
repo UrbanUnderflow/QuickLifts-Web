@@ -43,6 +43,30 @@ For each metric, here is what it means in the context of Brands, Gyms, and Run C
 - **Gyms** – Creator-led participation is the share of members who join at least one coach- or staff-led Pulse block, class series, or seasonal challenge during the measurement window.
 - **Run Clubs** – Creator-led participation is the share of club runners who enroll in at least one captain- or coach-led Pulse challenge or training cycle rather than just following along informally.
 
+### Partner-Fit Rubric (Applied Across All ICPs)
+
+To protect the spine and avoid shallow logo swaps, every prospective partner — whether a brand, gym, or run club — should be evaluated against the same core fit criteria. The question is not just "are they big?" but **"can Pulse measurably move inactivity gaps, ritual weeks, and creator-led participation for this community, and will the partner let us prove it?"**
+
+1. **Existing Community Density and Rhythm**  
+   The partner already has a reachable audience that behaves like a community (repeat touchpoints, shared language, recurring events), so adding Pulse challenges can *tighten inactivity gaps* rather than trying to manufacture interest from scratch.
+
+2. **Creator / Coach / Captain Spine**  
+   The partner has identifiable humans — creators, coaches, captains, or staff — who already lead workouts, runs, or routines, giving Pulse a natural set of leaders to drive **creator-led participation rate** instead of relying on purely brand-voice campaigns.
+
+3. **Challenge and Ritual History**  
+   The partner has run past challenges, events, or seasonal campaigns (successfully or not), providing a baseline of rituals that Pulse can structure, sequence, and measure into true **community ritual weeks** rather than introducing an entirely foreign behavior.
+
+4. **Openness to Data and Shared KPIs**  
+   The partner is willing to align on and report against the three shared metrics (inactivity gaps, ritual weeks, creator-led participation), allowing Pulse to plug into their existing dashboards and prove outcome-level impact rather than just vanity engagement.
+
+5. **Surface Area for Distribution (Channels We Can Instrument)**  
+   The partner controls at least one or two channels — email lists, apps, member portals, Discord/WhatsApp groups, social handles — where Pulse calls-to-action and check-ins can be reliably placed, ensuring we can actually *move* and *measure* the three metrics, not just launch a challenge in the void.
+
+6. **Brand and Research Alignment (Sage Gate)**  
+   The partner’s products, claims, and community norms clear Sage’s research bar, so any increase in **creator-led participation** and **ritual weeks** we drive is brand-safe, regulatorily clean, and reinforces Pulse’s positioning as the place for credible, sustainable movement.
+
+Partners that score high on these six dimensions are the ones where Pulse can behave like infrastructure instead of a one-off campaign: they give us dense communities, visible leaders, existing rituals, measurable surfaces, and alignment on data and ethics — the exact conditions needed to move our three behavior metrics in a way that’s undeniable in a pitch or a renewal.
+
 ---
 
 ## ICP-Specific Narratives (To Be Completed)
