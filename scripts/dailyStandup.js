@@ -55,7 +55,7 @@ let MAX_DURATION_MS = 10 * 60 * 1000;   // Hard 10-minute cap (telemetry checks 
 const MIN_DURATION_MS = 3 * 60 * 1000;    // Minimum 3 minutes — check continues with brainstorming if under this
 const ROUND_WAIT_MS = 2 * 60 * 1000;      // Wait up to 2 min per round (turn SLA is 30s, so 4 agents = 2 min max)
 const POLL_INTERVAL_MS = 4_000;            // Check for responses every 4s — faster detection = less dead air
-const MAX_ROUNDS = 5;                       // Up to 5 rounds: 3 core + 2 brainstorm bonus
+const MAX_ROUNDS = 5;                       // Keep meetings short and focused
 
 const KANBAN_COLLECTION = 'kanbanTasks';
 const TIMELINE_COLLECTION = 'progress-timeline';
@@ -283,54 +283,82 @@ async function loadNorthStarRaw() {
 
 /* ─── Telemetry Check Prompts (Heartbeat Protocol) ────── */
 
-function buildTelemetryPrompts(workHistory, northStar) {
+function buildStrategyPrompts(workHistory, northStar) {
     const nsBlock = northStar ? `\n${northStar}\n` : '';
     return [
-        // Round 1: System Health Scan
-        `⚡ **Telemetry Check** — System health scan. Let's be fast and precise.
+        `🧠 **Strategy Round 1 — Opportunity Mapping**
 ${nsBlock}
-**REAL DATA BELOW. Base your status on this data only. Do NOT fabricate work.**
+Use the verified context below as your grounding data:
 
 ${workHistory}
 
-─── INSTRUCTIONS ───
+Rules:
+1. Each agent proposes ONE strategic opportunity that could move the North Star this week.
+2. You MUST @mention another agent and ask a direct question that sharpens the idea.
+3. Build on what's already said or challenge an assumption with a concrete reason.
+4. No task execution yet. This round is for planning and strategy only.
 
-**Round 1 — Status & Health:**
-Each of you:
-1. Report your current status: ACTIVE (working on something), IDLE (no assigned work), or BLOCKED (stuck).
-2. If ACTIVE: Name the exact task from the data above. What % complete? ETA?
-3. If IDLE: Say "I have no assigned Capsules" — Nora will assign work.
-4. If BLOCKED: What's blocking you and what do you need to unblock?
+3-5 sentences each, high velocity.`,
 
-1-2 sentences each. Speed matters.`,
+        `🧩 **Strategy Round 2 — Prioritization & Tradeoffs**
+Take the best ideas from Round 1 and pressure-test them.
 
-        // Round 2: Idle Detection & Work Assignment
-        `**Round 2 — Work Assignment:**
-@Nora — Based on status reports:
-1. Which agents reported IDLE or have no in-progress tasks?
-2. Pull from the backlog/kanban and assign a Capsule to each idle agent.
-3. Verify no agents are duplicating work.
+Rules:
+1. Name one risk or tradeoff in another agent's idea.
+2. Offer a stronger variant, fallback, or simplification.
+3. You MUST @mention a specific agent and ask for a decision or constraint.
+4. Still planning only — no "I'll build this now" language yet.
 
-Other agents: If you need something from another agent, flag it now.
-
-Keep it surgical — 1-2 sentences.`,
-
-        // Round 3: Closing
-        `**Closing — Heartbeat logged.**
-@Nora — Post a summary:
-1. System health status (how many agents active vs idle vs blocked).
-2. Any Capsules assigned during this check.
-3. Flag anything that needs the Orchestrator's attention.
-
-Back to work. Next telemetry check runs automatically. ⚡`,
+3-5 sentences each. Strategy first, then action.`,
     ];
+}
+
+function buildActionPrompts(workHistory) {
+    return [
+        `⚡ **Action Planning Round — Convert Strategy to Commitments**
+Use the brainstorm outcomes and verified context below:
+
+${workHistory}
+
+Each agent:
+1. Commit to ONE concrete action item.
+2. Name a dependency or collaborator using an @mention.
+3. State the first verifiable artifact (doc, PR, spec, dataset, etc.).
+
+2-3 sentences each. Clear, concrete commitments only.`,
+
+        `✅ **Closing Round — Execution Handoff**
+@Nora — summarize:
+1. Final prioritized strategy from the brainstorm.
+2. One committed action per agent.
+3. Any blockers that need Orchestrator intervention.
+
+Back to execution. Next telemetry check runs automatically. ⚡`,
+    ];
+}
+
+function buildRoundPlan(workHistory, northStar) {
+    const strategyRounds = buildStrategyPrompts(workHistory, northStar).map(content => ({
+        phase: 'strategy',
+        content,
+    }));
+    const actionRounds = buildActionPrompts(workHistory).map(content => ({
+        phase: 'action',
+        content,
+    }));
+    return strategyRounds.concat(actionRounds).slice(0, MAX_ROUNDS);
+}
+
+// Backward compatibility for older callers that only expect prompt text.
+function buildTelemetryPrompts(workHistory, northStar) {
+    return buildRoundPlan(workHistory, northStar).map(round => round.content);
 }
 
 /* ─── Brainstorming Bonus Rounds ─────────────────────── */
 
 /**
  * These fire when the standup finishes its core rounds but hasn't
- * hit the 5-minute minimum yet. They encourage tree-of-thought
+ * hit the minimum duration yet. They encourage tree-of-thought
  * style collaboration, @mentions, and creative strategic thinking.
  */
 const BRAINSTORM_PROMPTS = [
@@ -468,7 +496,12 @@ async function clearStaleResponses(chatId, messageId, agents) {
 /**
  * Post a message to the group chat and dispatch commands to all agents.
  */
-async function postMessage(chatId, content, agents) {
+async function postMessage(chatId, content, agents, options = {}) {
+    const phase = options.meetingPhase || 'strategy';
+    const roundNumber = Number.isFinite(options.roundNumber) ? options.roundNumber : null;
+    const roundIndex = Number.isFinite(options.roundIndex) ? options.roundIndex : null;
+    const isBonusRound = options.isBonusRound === true;
+
     // Build response placeholders
     const responses = {};
     agents.forEach(agentId => {
@@ -482,6 +515,10 @@ async function postMessage(chatId, content, agents) {
     const messageRef = await db.collection(`agent-group-chats/${chatId}/messages`).add({
         from: 'admin',
         content: content,
+        meetingPhase: phase,
+        roundNumber,
+        roundIndex,
+        isBonusRound,
         createdAt: FieldValue.serverTimestamp(),
         broadcastedAt: FieldValue.serverTimestamp(),
         responses: responses,
@@ -503,6 +540,10 @@ async function postMessage(chatId, content, agents) {
             messageId: messageRef.id,
             context: {
                 otherAgents: agents.filter(id => id !== agentId),
+                meetingPhase: phase,
+                roundNumber,
+                roundIndex,
+                isBonusRound,
             },
         });
     });
@@ -843,8 +884,6 @@ async function runStandup() {
     console.log(`   Agents: ${AGENTS.join(', ')}`);
     console.log(`   Moderator: ${MODERATOR}`);
     console.log(`   Max duration: ${MAX_DURATION_MS / 60000} minutes`);
-    console.log(`   Rounds: up to ${MAX_ROUNDS}`);
-
     // ── Step 0: Fetch real work history + North Star ──
     console.log('\n📊 Fetching real work history for all agents...');
     const workHistory = await buildWorkHistoryContext();
@@ -858,7 +897,11 @@ async function runStandup() {
         console.log('   ⚠️  No North Star set — agents will brainstorm without a focus anchor\n');
     }
 
-    const prompts = buildTelemetryPrompts(workHistory, northStar);
+    const roundPlan = buildRoundPlan(workHistory, northStar);
+    const strategyRoundsPlanned = roundPlan.filter(r => r.phase === 'strategy').length;
+    const actionRoundsPlanned = roundPlan.filter(r => r.phase === 'action').length;
+    console.log(`   Rounds: up to ${MAX_ROUNDS}`);
+    console.log(`   Phase plan: ${strategyRoundsPlanned} strategy round(s) → ${actionRoundsPlanned} action round(s)`);
 
     const startTime = Date.now();
 
@@ -890,7 +933,7 @@ async function runStandup() {
 
     // 3. Run conversation rounds (core reporting)
     let roundsCompleted = 0;
-    for (let round = 0; round < prompts.length; round++) {
+    for (let round = 0; round < roundPlan.length; round++) {
         const elapsed = Date.now() - startTime;
         const remaining = MAX_DURATION_MS - elapsed;
 
@@ -901,15 +944,22 @@ async function runStandup() {
         }
 
         // Hard time cap — if less than 2 minutes remain and we're past core rounds, skip to closing
-        if (remaining < 2 * 60 * 1000 && round >= prompts.length - 1) {
+        if (remaining < 2 * 60 * 1000 && round >= roundPlan.length - 1) {
             console.log(`\n⏰ Less than 2 minutes remaining — running closing round`);
         }
 
-        const prompt = prompts[round];
+        const roundDef = roundPlan[round];
+        const prompt = roundDef?.content;
+        const phase = roundDef?.phase || 'strategy';
         if (!prompt) break;
 
-        console.log(`\n📢 Round ${round + 1}: "${prompt.substring(0, 60)}..."`);
-        const messageId = await postMessage(chatId, prompt, AGENTS);
+        console.log(`\n📢 Round ${round + 1} [${phase.toUpperCase()}]: "${prompt.substring(0, 60)}..."`);
+        const messageId = await postMessage(chatId, prompt, AGENTS, {
+            meetingPhase: phase,
+            roundIndex: round,
+            roundNumber: round + 1,
+            isBonusRound: false,
+        });
 
         // Wait for responses (with remaining time as upper bound)
         const waitTime = Math.min(ROUND_WAIT_MS, remaining);
@@ -928,7 +978,7 @@ async function runStandup() {
         roundsCompleted++;
 
         // Brief pause between rounds
-        if (round < prompts.length - 1) {
+        if (round < roundPlan.length - 1) {
             await sleep(5_000);
         }
     }
@@ -941,7 +991,7 @@ async function runStandup() {
             BRAINSTORM_PROMPTS.length,
             Math.ceil(timeLeft / (ROUND_WAIT_MS + 10_000))  // Estimate how many rounds we can fit
         );
-        console.log(`\n🧠 Core rounds finished in ${Math.floor(elapsedAfterCore / 60000)} min — under 5-min minimum`);
+        console.log(`\n🧠 Core rounds finished in ${Math.floor(elapsedAfterCore / 60000)} min — under 3-min minimum`);
         console.log(`   Adding ${bonusCount} brainstorming round(s) to fill the time...`);
 
         for (let b = 0; b < bonusCount; b++) {
@@ -950,7 +1000,12 @@ async function runStandup() {
 
             const bPrompt = BRAINSTORM_PROMPTS[b];
             console.log(`\n🧠 Brainstorm ${b + 1}: "${bPrompt.substring(0, 60)}..."`);
-            const bMsgId = await postMessage(chatId, bPrompt, AGENTS);
+            const bMsgId = await postMessage(chatId, bPrompt, AGENTS, {
+                meetingPhase: 'strategy',
+                roundIndex: roundsCompleted,
+                roundNumber: roundsCompleted + 1,
+                isBonusRound: true,
+            });
 
             const remaining = MAX_DURATION_MS - elapsed;
             const bWait = Math.min(ROUND_WAIT_MS, remaining);
