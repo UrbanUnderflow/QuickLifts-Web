@@ -19,3 +19,25 @@ This document synthesizes health and behavioral science to support Pulse's north
 - **Coach- and creator-led digital programs increase engagement when trusted.** Trials of web- and app-based fitness programs report higher adherence when content is delivered by a **recognizable coach or expert figure**, particularly when communication emphasizes practical behaviors and realistic expectations rather than dramatic transformations or cure-like claims. [Napolitano et al. 2013, Journal of Medical Internet Research](https://doi.org/10.2196/jmir.2522)
 
 - **Regulators distinguish behavior-support tools from diagnostic/therapeutic devices.** FDA and EMA guidance draws a line between apps that **track and support healthy behaviors** (activity, sleep, nutrition, stress management) and those that claim to diagnose, treat, or cure disease. Staying on the behavior-support side—without claiming clinical outcomes—allows products to influence health-related quality of life while avoiding medical device classification. [FDA Digital Health Policy Navigator](https://www.fda.gov/medical-devices/digital-health-center-excellence/digital-health-policy-navigator)
+
+## Patterns for Partnership-Led Community Growth
+
+### 1. Community-Driven Adherence
+
+When training is embedded in a recognizable community (CrossFit box, run club, boutique studio), people often keep showing up because they identify as part of that group, not just because they "should" exercise. In these settings, attendance becomes a social ritual (Tuesday track, Saturday long run) that is hard to abandon without feeling a loss of identity and connection. On Pulse, partnership-led growth works best when we amplify those rituals—making it visible that "your people" are showing up—rather than treating communities as mere acquisition channels.
+
+### 2. Creator-Led Accountability
+
+Trusted coaches and creators serve as anchors in the noise: users report following *someone* more than they follow an abstract program. A recognizable human voice checking in, framing the week, and reacting to wobbles ("hey, I saw you missed Saturday, let's scale this week") nudges behavior far more effectively than generic app notifications. For gyms, brands, and run clubs, this means leveraging leaders—head coaches, run captains, marquee creators—as the face of Pulse rounds, with the platform quietly tracking behaviors and surfacing the right prompts at the right time.
+
+### 3. Recovery Rituals vs. Burnout
+
+Micro-recovery behaviors (sleep hygiene, cooldowns, easy days) don’t magically erase fatigue, but they reliably tilt perceived readiness in the right direction and reduce dropout risk when stacked over weeks. The opposite pattern—hard days with no protective rituals—shows up as mounting soreness, poor sleep, and eventually missed sessions and injury. In creator, gym, and run-club contexts, the communities that last tend to normalize scaled efforts and recovery rituals as *part of the culture*, not as optional bolt-ons for the "weak."
+
+### 4. Gap-Sensitive Engagement
+
+Short gaps of a few days are normal and often followed by a return; long gaps of a week or more are where people quietly fall off the map. Communities that treat absence as a relationship event ("we missed you") rather than a data anomaly are better at pulling people back in before they drift away. On Pulse, that translates to gap-aware engagement flows: brands, gyms, and run clubs use the platform to notice >3-day absences and respond with human, context-aware touchpoints instead of letting those users silently churn.
+
+### 5. Behavior-First, Not Outcome-First, Narratives
+
+Digital health regulators and the underlying science both reinforce that behavior-support tools should talk about **what people do** (sessions, gaps, rituals, readiness check-ins), not about clinical endpoints they don’t directly measure. Partners who lean into behavior-first stories—"our members are holding three rituals a week," "fewer people disappearing for a month"—are more credible and sustainable than those promising injury-proofing or hormone fixes. Pulse’s role is to give those partners clean, behavior-level receipts they can safely build narratives around.
