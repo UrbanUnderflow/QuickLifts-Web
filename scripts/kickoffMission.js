@@ -23,6 +23,7 @@
 
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { execSync } = require('child_process');
 
 /* ─── Config ─────────────────────────────────────────── */
 
@@ -56,6 +57,11 @@ const AGENTS = [
 ];
 
 const FORCE_MODE = process.argv.includes('--force');
+// Mission kickoff should default to OpenClaw OAuth unless explicitly disabled.
+const USE_OPENCLAW = process.env.USE_OPENCLAW !== 'false';
+const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
+const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || 'main';
+const ALLOW_DIRECT_OPENAI = Boolean(process.env.OPENAI_API_KEY) && !USE_OPENCLAW;
 
 /* ─── Helpers ─────────────────────────────────────────── */
 
@@ -105,6 +111,43 @@ async function loadProposedObjectives() {
 }
 
 async function callGPT(systemPrompt, userPrompt, maxTokens = 2000) {
+    if (USE_OPENCLAW) {
+        const clawPrompt = `${systemPrompt}\n\n${userPrompt}`;
+        const escaped = clawPrompt.replace(/'/g, "'\\''");
+        const result = execSync(
+            `${OPENCLAW_BIN} chat send '${escaped}' --agent ${OPENCLAW_AGENT_ID} --json 2>/dev/null`,
+            { encoding: 'utf8', timeout: 120_000, maxBuffer: 10 * 1024 * 1024 }
+        ).trim();
+
+        let content = result;
+        try {
+            const wrapped = JSON.parse(result);
+            if (wrapped && typeof wrapped === 'object' && wrapped.mission_summary) {
+                return wrapped;
+            }
+            content = wrapped?.response || wrapped?.output || wrapped?.result || result;
+        } catch {
+            // Keep raw result and parse below.
+        }
+
+        if (content && typeof content === 'object' && content.mission_summary) {
+            return content;
+        }
+
+        const cleaned = String(content || '')
+            .replace(/^```json?\n?/i, '')
+            .replace(/\n?```$/i, '')
+            .trim();
+
+        const jsonCandidateMatch = cleaned.match(/\{[\s\S]*\}$/m);
+        const jsonCandidate = jsonCandidateMatch ? jsonCandidateMatch[0] : cleaned;
+        return JSON.parse(jsonCandidate);
+    }
+
+    if (!ALLOW_DIRECT_OPENAI) {
+        throw new Error('No AI provider available. Enable USE_OPENCLAW or set OPENAI_API_KEY.');
+    }
+
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -122,6 +165,12 @@ async function callGPT(systemPrompt, userPrompt, maxTokens = 2000) {
             response_format: { type: 'json_object' },
         }),
     });
+
+    if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`GPT error: ${errText.substring(0, 300)}`);
+    }
+
     const data = await resp.json();
     if (!data.choices?.[0]?.message?.content) {
         throw new Error(`GPT error: ${JSON.stringify(data).substring(0, 200)}`);
@@ -332,8 +381,8 @@ async function main() {
     console.log('\n🚀 Pulse Mission Kickoff Engine v1.0');
     console.log('─'.repeat(50));
 
-    if (!process.env.OPENAI_API_KEY) {
-        console.error('❌ OPENAI_API_KEY not set. Cannot run mission kickoff.');
+    if (!USE_OPENCLAW && !process.env.OPENAI_API_KEY) {
+        console.error('❌ No AI provider configured. Set USE_OPENCLAW=true or provide OPENAI_API_KEY.');
         process.exit(1);
     }
 
@@ -371,7 +420,7 @@ async function main() {
         }
 
         // Step 4: Generate mission plan
-        console.log('\n🧠 Generating mission plan with GPT-4o...');
+        console.log(`\n🧠 Generating mission plan with ${USE_OPENCLAW ? `OpenClaw (${OPENCLAW_AGENT_ID})` : 'GPT-4o'}...`);
         const plan = await generateMissionPlan(northStar, queues, proposedObjectives);
         console.log(`\n📋 Mission Summary: ${plan.mission_summary?.substring(0, 150)}...`);
         for (const agent of plan.agents || []) {
