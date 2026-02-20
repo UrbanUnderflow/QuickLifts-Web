@@ -1,0 +1,25 @@
+# Partnership-Led Community Growth — Source Notes
+
+This file collects external sources (clinical, behavioral, and market/practitioner) relevant to community-driven fitness, creator-led adherence, and partnership effects. It serves as the raw source shelf behind the higher-level synthesis in `health-science-partnership-led-community-growth.md` and the pattern/recommendation docs for Pulse’s Partnership-Led Community Growth north star.
+
+- **Habit frequency and 3+ sessions/week threshold.** Habit-formation research suggests that moving from 1–2 to **3 or more planned activity sessions per week** is associated with stronger habit formation and better long-term maintenance of physical activity, particularly when sessions are scheduled and tied to cues. [Rhodes & de Bruijn 2013, Health Psychology Review](https://doi.org/10.1080/17437199.2013.766832)
+
+- **Group-based vs. individual exercise interventions.** Meta-analysis shows that interventions including **group support, supervised sessions, or buddy systems** consistently outperform solo, advice-only programs in increasing and sustaining physical activity. [Carron et al. 1996, Journal of Sport & Exercise Psychology](https://doi.org/10.1123/jsep.18.1.1)
+
+- **Dropout risk and long gaps in activity.** Longitudinal data from behavioral interventions highlight that **gaps of 7–10+ days** without activity are strongly associated with dropout, whereas shorter breaks (2–4 days) are common and often followed by resumption. [Mailey et al. 2016, Translational Behavioral Medicine](https://doi.org/10.1007/s13142-015-0365-8)
+
+- **Perceived fatigue/readiness vs. external load.** Work on athlete monitoring indicates that **self-reported soreness, fatigue, and readiness to train** often predict performance and injury risk more accurately than training load metrics alone, supporting subjective readiness check-ins as useful behavior guides. [Windt & Gabbett 2017, British Journal of Sports Medicine](https://doi.org/10.1136/bjsports-2016-096422)
+
+- **Recovery strategies and perceived readiness.** Reviews of recovery modalities (sleep, active recovery, cold water immersion, compression, etc.) suggest that basic recovery rituals and sleep hygiene have small but reliable benefits on perceived recovery and performance, while many commercial tools show modest or inconsistent effects vs. placebo. [Halson 2014, Sports Medicine](https://doi.org/10.1007/s40279-014-0192-7)
+
+- **Social identity and belonging in group fitness communities.** Qualitative and survey-based research on CrossFit and similar communities finds that **social identity (“I’m one of these people”) and belonging** are primary drivers of ongoing participation, often rivaling or exceeding performance goals in importance. [Whiteman-Sandland et al. 2018, Sport in Society](https://doi.org/10.1080/17430437.2017.1409723)
+
+- **Coach-led and creator-led digital programs.** Trials of web- and app-based physical activity interventions report higher adherence and engagement when programs are fronted by a **recognizable coach/expert figure**, especially when messaging emphasizes practical behaviors and realistic expectations. [Napolitano et al. 2013, Journal of Medical Internet Research](https://doi.org/10.2196/jmir.2522)
+
+- **Hybrid gym + digital models and retention.** Industry reports and case studies (e.g., Les Mills On Demand, CrossFit affiliates using digital platforms) indicate that **blending in-person classes with digital tracking and programming** improves member retention vs. purely in-person or purely digital offerings, by keeping the community connected between sessions. [Les Mills Global Consumer Fitness Survey 2021](https://www.lesmills.com/us/fit-business/research-insights/)
+
+- **Run clubs and social running as behavior-change vehicles.** Research on social running groups shows that **run clubs provide structure, social support, and identity** that help novice and recreational runners maintain running habits, even when individual motivation fluctuates. [Ogles & Masters 2003, International Journal of Sport Psychology](https://psycnet.apa.org/record/2003-05422-004)
+
+- **Digital health regulatory guidance on behavior-support vs. medical devices.** Regulatory frameworks (FDA, EMA) draw a distinction between apps that **track or encourage healthy behaviors** (activity, sleep, nutrition) and those that claim to diagnose, treat, or cure disease; the former are often not regulated as medical devices if they avoid clinical claims. [FDA Digital Health Policy Navigator](https://www.fda.gov/medical-devices/digital-health-center-excellence/digital-health-policy-navigator)
+
+- **Market/practitioner insights on community fatigue and challenge design.** Practitioner literature and industry commentary highlight risks of **challenge fatigue**, where frequent high-intensity or restrictive challenges lead to short-term engagement spikes but long-term burnout and attrition, especially if they don’t include scalable options or recovery weeks. [Precision Nutrition Coaching Lessons, Community Management Blogs (e.g., CMX, Feverbee)](https://www.precisionnutrition.com/)
