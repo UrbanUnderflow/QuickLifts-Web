@@ -217,3 +217,25 @@ This section catalogs concrete mechanics used by selected platforms to grow and 
 These tactics collectively show that partnership-led growth is rarely just about logo placement; it depends on giving partners simple, proven mechanics that turn their existing community into measurable engagement.
 
 ## Implications for Pulse
+
+Below are initial hypotheses on how the observed models and tactics support or refine Pulse’s Partnership-Led Community Growth North Star. All references are to earlier sections of this document and should be treated as **Unverified** until primary sources are attached.
+
+- **Run clubs are a high-leverage, under-instrumented lane.**
+  - *Why:* NRC, Adidas Runners, and numerous city-level crews operate robust IRL + digital communities but are forced to stitch together apps (NRC/NTC, Strava, WhatsApp, IG) to run seasons and challenges (see Market Overview, Key Competitors, Community Growth Tactics).
+  - *Implication for Pulse:* Rather than building a generic running tracker, Pulse should position itself as the **rounds + accountability OS for run clubs**—a tool that sits on top of existing channels and makes season planning, adherence tracking, and cross-club experiments easy.
+
+- **Gym partnerships should optimize for depth (activation KPIs), not just breadth (logo count).**
+  - *Why:* ClassPass and Mindbody show that aggregating lots of gyms drives distribution, but the community is still owned locally and infra-oriented platforms don’t deeply instrument participation (see Key Competitors and Partnership Models for ClassPass, Mindbody).
+  - *Implication for Pulse:* Gym affiliate partnerships should be judged and designed around **roundsCreated** and **uniqueParticipants** (per-gym activation), not just signups. This suggests building partner dashboards, playbooks, and experiments that explicitly promise “X% of your membership completed a Pulse round” instead of “you’re listed on our platform.”
+
+- **Local creator-coaches are Pulse’s differentiator vs star-instructor platforms.**
+  - *Why:* Peloton’s success with star instructors and Nike’s use of coaches show that creator-led programs are table stakes; wearables like Whoop/Oura also lean on external creators (see Key Competitors, Community Growth Tactics).
+  - *Implication for Pulse:* Competing at the global content level is a losing game. Pulse’s edge is enabling **local coaches and captains** at partner gyms/run clubs to spin up and manage rounds in minutes, with just enough structure (templates, KPIs) to make them successful.
+
+- **Data rituals should be scoped to partner communities, not just individuals.**
+  - *Why:* Strava segments, Peloton leaderboards, and wearables’ readiness scores create rituals, but they’re usually individual-first with generic social overlays (see Community Growth Tactics: Data-Driven Rituals).
+  - *Implication for Pulse:* Pulse should treat streaks, adherence, and completion metrics as **round + partner scoped primitives** (e.g., “Downtown Strength’s 6-week strength round completion rate”), making every data point a story a gym owner or run-club captain can tell.
+
+- **A partner activation kit is mandatory if partnerships are the growth engine.**
+  - *Why:* Mindbody/ClassPass and brand creator programs rely on playbooks and assets so partners don’t have to invent mechanics from scratch (see Community Growth Tactics: Activation Kits and Onboarding Playbooks).
+  - *Implication for Pulse:* The North Star’s “repeatable partnership playbook” should exist as an actual product surface: co-branded landing pages, round templates per lane (brand, gym, run club), sample comms, and built-in KPI panels. Without this, Pulse risks slow time-to-active and inconsistent partner outcomes.
