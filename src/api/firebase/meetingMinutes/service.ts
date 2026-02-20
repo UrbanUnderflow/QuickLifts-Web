@@ -64,14 +64,23 @@ export class MeetingMinutesService {
         participants: string[],
         duration: string
     ): Promise<Omit<MeetingMinutes, 'id' | 'createdAt'>> {
-        // Build transcript from messages
-        const transcript = this.buildTranscript(messages, participants);
         const messageCount = messages.length;
+
+        // Send raw messages array + duration so the server-side builder (which knows
+        // ALL agent names and preserves full content) produces the transcript.
+        // Also include a client-side fallback transcript in case the server needs it.
+        const fallbackTranscript = this.buildTranscript(messages);
 
         const res = await fetch('/api/agent/generateMinutes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ transcript, participants, messageCount }),
+            body: JSON.stringify({
+                messages,
+                transcript: fallbackTranscript,   // fallback if server can't iterate messages
+                participants,
+                messageCount,
+                duration,
+            }),
         });
 
         if (!res.ok) {
@@ -95,31 +104,33 @@ export class MeetingMinutesService {
     }
 
     /**
-     * Build a readable transcript from messages
+     * Build a faithful transcript from messages — all agents, all messages.
+     * Used as a fallback if the server-side builder can't be reached.
      */
     private buildTranscript(
         messages: Array<{ from: string; content: string; responses: Record<string, { content: string; status: string }> }>,
-        participants: string[]
     ): string {
         const agentNames: Record<string, string> = {
             nora: 'Nora',
             scout: 'Scout',
+            solara: 'Solara',
+            sage: 'Sage',
             admin: 'Tremaine',
         };
+        const toName = (id: string) => agentNames[id.toLowerCase()] || (id.charAt(0).toUpperCase() + id.slice(1));
 
         const lines: string[] = [];
 
         for (const msg of messages) {
-            const sender = agentNames[msg.from] || msg.from;
-            if (msg.from === 'admin') {
-                lines.push(`${sender}: ${msg.content}`);
+            // Include every message (admin AND agent-initiated)
+            if (msg.content?.trim()) {
+                lines.push(`${toName(msg.from)}: ${msg.content.trim()}`);
             }
 
-            // Add agent responses
             if (msg.responses) {
                 for (const [agentId, resp] of Object.entries(msg.responses)) {
-                    if (resp.status === 'completed' && resp.content) {
-                        lines.push(`${agentNames[agentId] || agentId}: ${resp.content}`);
+                    if (resp.status === 'completed' && resp.content?.trim()) {
+                        lines.push(`${toName(agentId)}: ${resp.content.trim()}`);
                     }
                 }
             }
