@@ -26,3 +26,23 @@ Across all three lanes, Pulse keeps communities showing up together by making th
 
 - **Shared, Behavior-First KPIs**  
   We anchor every partnership in behavior metrics like challenge join rate, completion rate, repeat-challenge rate, streak weeks, and active creators. These are numbers partners can take into internal conversations to prove that their community is moving together on Pulse — a clear signal that Partnership-Led Community Growth is working in practice, not just on a slide.
+
+## Sample Partner Copy
+
+**For a tier-one athletic brand**  
+"Turn your next campaign into a season your community can actually train inside of. With Pulse, your athletes and ambassadors host co-branded challenge blocks — from base miles cycles to performance weeks — where your customers see their effort add up alongside the people they follow, not just in a purchase history."
+
+**For a creator-led gym or CrossFit box**  
+"Your members don’t need another app. They need one place where your 6-week strength cycles, Saturday crews, and reset weeks live as shared challenges they can finish together. Pulse gives your coaches a simple way to host those seasons so your community feels connected even when they’re not on the same class block."
+
+**For a multi-location studio or franchise**  
+"You’ve already built the brand and the programming. Pulse helps you turn that into a unified challenge layer across every location — one seasonal story, local leaders, and a clear view of how many members are joining, finishing, and coming back for the next block."
+
+**For a city run club**  
+"Your run club is more than a Strava group and a group text. On Pulse, your weekly runs, race builds, and off-season base miles become a living season your runners can see and stick with — with captains leading rounds, streaks that reward consistency, and a shared record of what your crew actually did together."
+
+**For a brand-affiliated run community**  
+"Instead of sponsoring one-off events, host an entire race build or base season inside Pulse. Your pacers and captains lead the rounds; your brand shows up as the space that holds the plan, the check-ins, and the feeling of crossing the next finish line together."
+
+**For a recovery or wellness brand**  
+"Your products already support the work your community is doing; Pulse turns that support into a rhythm they can feel. Host 7-day recovery resets, 21-day sleep or mobility streaks, and monthly check-in weeks that help people see the difference when they actually follow through."
