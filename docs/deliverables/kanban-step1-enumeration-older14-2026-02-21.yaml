@@ -1,0 +1,9 @@
+auditDate: "2026-02-21"
+cutoffDate: "2026-02-07"
+boardFile: "project/kanban/board.md"
+criteria:
+  status:
+    - BLOCKED
+    - IN_PROGRESS
+  updatedAtOlderThanDays: 14
+matches: []
