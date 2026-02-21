@@ -20,7 +20,7 @@ import {
 import {
   X, Send, ChevronDown, ChevronUp,
   Lightbulb, Rocket, CheckCircle2, AlertTriangle, TrendingUp,
-  Zap, Clock, Link2, MessageCircle, Activity, ExternalLink,
+  Zap, Clock, Link2, MessageCircle, Activity, ExternalLink, Copy,
 } from 'lucide-react';
 
 /* ── Props ── */
@@ -102,6 +102,11 @@ type FeedItem =
   | { id: string; type: 'nudge'; createdAt: number; payload: NudgeLogEntry };
 
 type TabKey = 'feed' | 'snapshots';
+type CopyState = 'idle' | 'copied' | 'error';
+
+const FEED_BEAT_LIMIT = 200;
+const FEED_NUDGE_LIMIT = 80;
+const SNAPSHOT_LIMIT = 40;
 
 /* ── Styles ── */
 const S = {
@@ -142,6 +147,25 @@ const S = {
     display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', fontSize: 13, fontWeight: 600,
     background: open ? 'rgba(255,255,255,0.06)' : 'linear-gradient(135deg, #1d9bf0, #1a8cd8)',
     color: open ? '#6b7280' : 'white', border: 'none', borderRadius: 20, cursor: 'pointer', marginLeft: 'auto', margin: '6px 0 6px auto',
+  }),
+  copyBtn: (state: CopyState): CSSProperties => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '7px 14px',
+    fontSize: 12,
+    fontWeight: 600,
+    background:
+      state === 'copied'
+        ? 'rgba(34,197,94,0.15)'
+        : state === 'error'
+          ? 'rgba(248,113,113,0.15)'
+          : 'rgba(255,255,255,0.04)',
+    color: state === 'copied' ? '#4ade80' : state === 'error' ? '#f87171' : '#9ca3af',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 20,
+    cursor: 'pointer',
+    margin: '6px 8px 6px auto',
   }),
   content: { flex: 1, overflowY: 'auto', overflowX: 'hidden' } as CSSProperties,
   // Card styles
@@ -248,6 +272,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   const [activeTab, setActiveTab] = useState<TabKey>('feed');
   const [composerOpen, setComposerOpen] = useState(false);
   const [hoverCard, setHoverCard] = useState<string | null>(null);
+  const [copyState, setCopyState] = useState<CopyState>('idle');
 
   const feedItems = useMemo<FeedItem[]>(() => {
     const b: FeedItem[] = entries.map((e) => ({ id: `b-${e.id}`, type: 'beat', createdAt: e.createdAt?.getTime?.() || 0, payload: e }));
@@ -272,11 +297,120 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   useEffect(() => { if (!agentId && agents.length > 0) setAgentId(agents[0].id); }, [agents, agentId]);
 
   useEffect(() => {
-    const u1 = progressTimelineService.listen((items) => { setEntries(items); setLoading(false); }, { limit: 200 });
-    const u2 = progressTimelineService.listenSnapshots((items) => setSnapshots(items), { limit: 40 });
-    const u3 = nudgeLogService.listen((items) => setNudges(items), { limit: 80 });
+    const u1 = progressTimelineService.listen((items) => { setEntries(items); setLoading(false); }, { limit: FEED_BEAT_LIMIT });
+    const u2 = progressTimelineService.listenSnapshots((items) => setSnapshots(items), { limit: SNAPSHOT_LIMIT });
+    const u3 = nudgeLogService.listen((items) => setNudges(items), { limit: FEED_NUDGE_LIMIT });
     return () => { u1(); u2(); u3(); };
   }, []);
+
+  const feedTabCountTitle = `Showing ${feedItems.length} items (${entries.length} beats + ${nudges.length} nudges). Limits: ${FEED_BEAT_LIMIT} beats, ${FEED_NUDGE_LIMIT} nudges.`;
+
+  const formatExportTimestamp = (value?: Date): string => {
+    if (!value) return 'unknown-time';
+    try {
+      return format(value, 'yyyy-MM-dd HH:mm:ss');
+    } catch {
+      return 'unknown-time';
+    }
+  };
+
+  const buildFeedExportText = (): string => {
+    const lines: string[] = [
+      'Activity Feed export',
+      `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`,
+      `Loaded items: ${feedItems.length} (beats: ${entries.length}, nudges: ${nudges.length})`,
+      `Configured limits: beats ${FEED_BEAT_LIMIT}, nudges ${FEED_NUDGE_LIMIT}`,
+      '',
+    ];
+
+    feedItems.forEach((item, index) => {
+      if (item.type === 'beat') {
+        const entry = item.payload as ProgressTimelineEntry;
+        lines.push(
+          `[${index + 1}] BEAT ${formatExportTimestamp(entry.createdAt)} | ${entry.agentName || entry.agentId || 'Unknown'} | ${entry.objectiveCode || '-'} | ${entry.beat} | ${entry.headline}`
+        );
+
+        const tags: string[] = [];
+        if (entry.lensTag) tags.push(`lens=${entry.lensTag}`);
+        tags.push(`confidence=${entry.confidenceColor || 'blue'}`);
+        tags.push(`state=${entry.stateTag || 'signals'}`);
+        lines.push(`tags: ${tags.join(', ')}`);
+
+        if (entry.artifactType === 'text' && entry.artifactText) {
+          lines.push(`artifact: ${entry.artifactText}`);
+        }
+        if (entry.artifactType === 'url' && entry.artifactUrl) {
+          lines.push(`artifact_url: ${entry.artifactUrl}`);
+        }
+      } else {
+        const entry = item.payload as NudgeLogEntry;
+        lines.push(
+          `[${index + 1}] NUDGE ${formatExportTimestamp(entry.createdAt)} | ${entry.agentName || entry.agentId || 'Unknown'} | ${entry.objectiveCode || '-'} | ${entry.outcome} | ${entry.message}`
+        );
+        lines.push(
+          `channel: ${entry.channel}${entry.respondedAt ? ` | responded: ${formatExportTimestamp(entry.respondedAt)}` : ''}`
+        );
+      }
+
+      lines.push('');
+    });
+
+    return lines.join('\n').trim();
+  };
+
+  const buildSnapshotsExportText = (): string => {
+    const lines: string[] = [
+      'Activity Snapshots export',
+      `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`,
+      `Loaded snapshots: ${snapshots.length}`,
+      `Configured limit: ${SNAPSHOT_LIMIT}`,
+      '',
+    ];
+
+    snapshots.forEach((snapshot, index) => {
+      lines.push(
+        `[${index + 1}] SNAPSHOT ${formatExportTimestamp(snapshot.createdAt)} | ${snapshot.agentName || snapshot.agentId || 'Unknown'} | ${snapshot.objectiveCode || '-'} | ${snapshot.color} | ${snapshot.stateTag}`
+      );
+      if (snapshot.note) lines.push(`note: ${snapshot.note}`);
+      if (snapshot.beatCompleted) lines.push(`beat_completed: ${snapshot.beatCompleted}`);
+      lines.push('');
+    });
+
+    return lines.join('\n').trim();
+  };
+
+  const copyTextToClipboard = async (text: string): Promise<boolean> => {
+    if (!text) return false;
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        // Fall through to legacy copy path.
+      }
+    }
+
+    if (typeof document === 'undefined') return false;
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'absolute';
+    textarea.style.left = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const copied = document.execCommand('copy');
+    document.body.removeChild(textarea);
+    return copied;
+  };
+
+  const handleCopyTimeline = async () => {
+    const exportText = activeTab === 'feed' ? buildFeedExportText() : buildSnapshotsExportText();
+    const copied = await copyTextToClipboard(exportText);
+    setCopyState(copied ? 'copied' : 'error');
+    setTimeout(() => setCopyState('idle'), 1600);
+  };
 
   const selectedAgent = useMemo(() => agents.find((a) => a.id === agentId), [agents, agentId]);
 
@@ -552,11 +686,19 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
         <div style={S.tabs}>
           <button style={S.tab(activeTab === 'feed')} onClick={() => setActiveTab('feed')}>
             <Activity size={14} /> Feed
-            {feedItems.length > 0 && <span style={S.tabCount}>{feedItems.length}</span>}
+            {feedItems.length > 0 && <span style={S.tabCount} title={feedTabCountTitle}>{feedItems.length}</span>}
           </button>
           <button style={S.tab(activeTab === 'snapshots')} onClick={() => setActiveTab('snapshots')}>
             <Clock size={14} /> Snapshots
             {snapshots.length > 0 && <span style={S.tabCount}>{snapshots.length}</span>}
+          </button>
+          <button
+            style={S.copyBtn(copyState)}
+            onClick={() => { void handleCopyTimeline(); }}
+            title={activeTab === 'feed' ? 'Copy loaded feed items' : 'Copy loaded snapshots'}
+          >
+            <Copy size={13} />
+            {copyState === 'copied' ? 'Copied' : copyState === 'error' ? 'Copy failed' : activeTab === 'feed' ? 'Copy Feed' : 'Copy Snapshots'}
           </button>
           <button style={S.composeToggle(composerOpen)} onClick={() => setComposerOpen(!composerOpen)}>
             <Send size={14} /> Post Beat

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { X, Send, Sparkles, MessageSquare, AtSign, Paperclip, FileText, Loader2, FolderOpen, Code2, ChevronDown, Lightbulb, ListTodo, Terminal, Zap } from 'lucide-react';
+import { X, Send, Sparkles, MessageSquare, AtSign, Paperclip, FileText, Loader2, FolderOpen, Code2, ChevronDown, Lightbulb, ListTodo, Terminal, Zap, Copy } from 'lucide-react';
 import { db } from '../../api/firebase/config';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { groupChatService } from '../../api/firebase/groupChat/service';
@@ -139,6 +139,9 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
   const [fileBrowserMode, setFileBrowserMode] = useState<'search' | 'browse'>('search');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [endConfirmMessage, setEndConfirmMessage] = useState('Are you sure you want to end this chat?');
+  const [copyButtonLabel, setCopyButtonLabel] = useState('Copy chat');
 
   // Listen to messages
   useEffect(() => {
@@ -191,6 +194,21 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  // Prevent accidental tab close/reload while session is active.
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      const message = 'A Round Table chat is active. Are you sure you want to leave?';
+      event.preventDefault();
+      event.returnValue = message;
+      return message;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, []);
 
   const handleSend = async () => {
@@ -407,16 +425,99 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
     }
   };
 
-  const handleClose = () => {
-    const hasActiveResponses = messages.some(msg =>
-      Object.values(msg.responses).some(r => r.status === 'processing')
-    );
-    if (hasActiveResponses) {
-      const confirmed = window.confirm('Some agents are still responding. Close anyway?');
-      if (!confirmed) return;
+  const resolveTimestamp = (value: unknown): Date | null => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    if (typeof value === 'number') return new Date(value);
+    if (typeof value === 'string') {
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? new Date(parsed) : null;
     }
+    if (typeof (value as { toDate?: () => Date }).toDate === 'function') {
+      return (value as { toDate: () => Date }).toDate();
+    }
+    if (typeof (value as { seconds?: number }).seconds === 'number') {
+      return new Date((value as { seconds: number }).seconds * 1000);
+    }
+    return null;
+  };
+
+  const formatTranscriptTime = (value: unknown): string => {
+    const date = resolveTimestamp(value);
+    if (!date) return 'unknown time';
+    return date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
+  const buildTranscript = (): string => {
+    const lines: string[] = [];
+
+    messages.forEach((message) => {
+      const sender = message.from === 'admin' ? 'You' : (agentStatuses[message.from]?.displayName || message.from);
+      lines.push(`[${formatTranscriptTime((message as any).createdAt)}] ${sender}: ${message.content}`);
+
+      Object.entries(message.responses || {}).forEach(([agentId, response]) => {
+        const responder = agentStatuses[agentId]?.displayName || agentId;
+        const statusTag = response.status ? ` [${response.status}]` : '';
+        if (response.content && response.content.trim()) {
+          lines.push(`  ${AGENT_EMOJIS[agentId] || '🤖'} ${responder}: ${response.content}`);
+        } else if (statusTag) {
+          lines.push(`  ${AGENT_EMOJIS[agentId] || '🤖'} ${responder}${statusTag}`);
+        }
+      });
+
+      lines.push('');
+    });
+
+    return lines.join('\n').trim();
+  };
+
+  const copyChatToClipboard = async () => {
+    const transcript = buildTranscript();
+    if (!transcript) return;
+
+    try {
+      await navigator.clipboard.writeText(transcript);
+      setCopyButtonLabel('Copied!');
+      setTimeout(() => setCopyButtonLabel('Copy chat'), 1400);
+      return;
+    } catch {
+      const fallbackTextarea = document.createElement('textarea');
+      fallbackTextarea.value = transcript;
+      fallbackTextarea.setAttribute('readonly', '');
+      fallbackTextarea.style.position = 'absolute';
+      fallbackTextarea.style.left = '-9999px';
+      document.body.appendChild(fallbackTextarea);
+      fallbackTextarea.focus();
+      fallbackTextarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(fallbackTextarea);
+      setCopyButtonLabel('Copied!');
+      setTimeout(() => setCopyButtonLabel('Copy chat'), 1400);
+    }
+  };
+
+  const confirmClose = () => {
+    const hasActiveResponses = messages.some(msg =>
+      Object.values(msg.responses || {}).some(r => r.status === 'processing')
+    );
+    setEndConfirmMessage(
+      hasActiveResponses
+        ? 'Some agents are still responding. End chat anyway?'
+        : 'Are you sure you want to end this round table chat and generate minutes?'
+    );
+    setShowEndConfirm(true);
+  };
+
+  const closeConfirmed = () => {
+    setShowEndConfirm(false);
     onClose(messages);
   };
+
+  const cancelClose = () => setShowEndConfirm(false);
 
   const agentNames: Record<string, string> = {};
   participants.forEach(agentId => {
@@ -486,7 +587,8 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
   };
 
   return ReactDOM.createPortal(
-    <div className="rt-overlay" onClick={handleClose}>
+    <>
+    <div className="rt-overlay" onClick={confirmClose}>
       <div className="rt-modal" onClick={(e) => e.stopPropagation()}>
 
         {/* ── Header ── */}
@@ -529,7 +631,15 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
                 );
               })}
             </div>
-            <button className="rt-close" onClick={handleClose}>
+            <button
+              className="rt-copy-chat"
+              onClick={copyChatToClipboard}
+              title={copyButtonLabel}
+              aria-label="Copy chat transcript"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+            <button className="rt-close" onClick={confirmClose}>
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -897,6 +1007,24 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
           </p>
         </div>
       </div>
+    </div>
+
+      {showEndConfirm && (
+        <div className="rt-confirm-overlay" onClick={cancelClose}>
+          <div className="rt-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="rt-confirm-title">End round table chat?</h3>
+            <p className="rt-confirm-message">{endConfirmMessage}</p>
+            <div className="rt-confirm-actions">
+              <button className="rt-confirm-cancel" onClick={cancelClose}>
+                Continue chat
+              </button>
+              <button className="rt-confirm-end" onClick={closeConfirmed}>
+                End and generate minutes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         /* ═══ OVERLAY ═══ */
@@ -1048,6 +1176,123 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
         .rt-close:hover {
           background: rgba(255, 255, 255, 0.04);
           color: #a1a1aa;
+        }
+
+        .rt-copy-chat {
+          width: 30px;
+          height: 30px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: none;
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 8px;
+          color: #52525b;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+
+        .rt-copy-chat:hover {
+          background: rgba(255, 255, 255, 0.04);
+          color: #a1a1aa;
+        }
+
+        .rt-copy-chat:active {
+          transform: translateY(1px);
+        }
+
+        .rt-confirm-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 10010;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 18px;
+          background: rgba(2, 6, 23, 0.78);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          animation: rtFadeIn 0.2s ease-out;
+        }
+
+        .rt-confirm-modal {
+          width: min(430px, calc(100% - 36px));
+          background: rgba(12, 15, 20, 0.98);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 14px;
+          padding: 16px;
+          box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65);
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .rt-confirm-title {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 700;
+          color: #fafafa;
+        }
+
+        .rt-confirm-message {
+          margin: 0;
+          font-size: 13px;
+          color: #cbd5e1;
+          line-height: 1.45;
+        }
+
+        .rt-confirm-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+          margin-top: 8px;
+        }
+
+        .rt-confirm-cancel,
+        .rt-confirm-end {
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 10px;
+          padding: 8px 12px;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          background: transparent;
+          color: #a1a1aa;
+          transition: all 0.15s;
+        }
+
+        .rt-confirm-cancel:hover {
+          background: rgba(255, 255, 255, 0.06);
+          color: #e4e4e7;
+        }
+
+        .rt-confirm-end {
+          background: linear-gradient(135deg, #7c3aed, #ec4899);
+          border-color: transparent;
+          color: #fafafa;
+        }
+
+        .rt-confirm-end:hover {
+          filter: brightness(1.08);
+          transform: translateY(-1px);
+        }
+
+        .rt-confirm-end:active {
+          transform: translateY(0);
+        }
+
+        @media (max-width: 480px) {
+          .rt-confirm-overlay {
+            padding: 12px;
+          }
+
+          .rt-confirm-modal {
+            width: 100%;
+          }
+
+          .rt-confirm-actions {
+            flex-direction: column-reverse;
+          }
         }
 
         /* ═══ MESSAGES ═══ */
@@ -1556,7 +1801,7 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
           }
         }
       `}</style>
-    </div>,
+    </>,
     document.body
   );
 };
