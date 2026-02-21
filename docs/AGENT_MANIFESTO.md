@@ -304,6 +304,11 @@ List tickets in `project/kanban/board.md` wh..."
 - **[2026-02-21] Nora** — Step "Verify that `project/kanban/board.md` now contains: (a) `BLOCKED_REASON` and `DEPENDENCY` lines for every `STATUS: BLOCKED` ticket, (b) a `## Partnership-Led Community Growth` section with at least three tickets referencing concrete artifacts, and (c) no `STATUS: IN_PROGRESS` tickets older than 14 days left without being moved to backlog or annotated with a deferral reason." still had issues after 2 retries. Output signals: \bmissing\b, \bblocked\b. Last output: "Here’s Step 5’s verification in one terse, file-backed summary, expressed as data rather than prose.
 
 ### Step‑5 conditi..."
+- **[2026-02-21] Nora** — Step "Open the canonical kanban board file `project/kanban/board.md` (or `project/kanban/board.json` if that is the active source) and enumerate all tickets with `STATUS: BLOCKED` or `STATUS: IN_PROGRESS` whose `UPDATED_AT` timestamp is older than 14 days." still had issues after 2 retries. Output signals: \bblocked\b. Last output: "Step 1’s filtered set is empty, and I’ve now encoded it in a simple YAML SOT.
+
+### Step‑1 filter
+
+Tickets in `project/ka..."
 ---
 
 ## Operational Rules
