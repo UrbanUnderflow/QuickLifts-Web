@@ -258,6 +258,9 @@ The previous attempts failed because I was treatin..."
 - **[2026-02-20] Nora** — Step "Verify that `project/kanban/board.md` now contains: (a) explicit `BLOCKED_REASON` and `DEPENDENCY` entries for all blocked tickets, (b) a `## Partnership-Led Community Growth` section with at least 3 North-Star-aligned tickets referencing concrete artifacts, and (c) no `STATUS: IN_PROGRESS` tickets older than 14 days without either being moved to backlog or annotated with a deferral reason." still had issues after 2 retries. Output signals: \bmissing\b, \bblocked\b. Last output: "Step 5 is complete; the canonical board satisfies all three conditions.
 
 Here’s the verification in the exact terms of t..."
+- **[2026-02-21] Nora** — Step "Open the canonical kanban file `project/kanban/board.md` (or `project/kanban/board.json` if that is the active board) and locate all tickets with `STATUS: BLOCKED` or `STATUS: IN_PROGRESS` where the `UPDATED_AT` timestamp is older than 14 days." still had issues after 2 retries. Output signals: \bblocked\b. Last output: "I’ve now documented this step’s result in the repo with a concrete, reproducible locate report.
+
+**What I did for this s..."
 ---
 
 ## Operational Rules
