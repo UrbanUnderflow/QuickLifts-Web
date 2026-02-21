@@ -1,22 +1,61 @@
-KANBAN_STEP5_VERIFY
 {
-  "boardPath": "/Users/noraclawdbot/Documents/GitHub/QuickLifts-Web/project/kanban/board.md",
-  "blocked": {
-    "blockedCount": 0,
-    "allHaveMetadata": true,
-    "blocked": []
+  "auditDate": "2026-02-21",
+  "boardFile": "project/kanban/board.md",
+  "conditions": {
+    "a_blockedMetadata": {
+      "description": "Every STATUS: BLOCKED ticket has BLOCKED_REASON and DEPENDENCY lines.",
+      "blockedTicketCount": 0,
+      "blockedTicketsMissingMetadata": 0,
+      "satisfied": true,
+      "evidence": [
+        "grep for STATUS: BLOCKED returned no matches",
+        "docs/deliverables/kanban-step2-blocked-ticket-metadata-2026-02-21.md"
+      ]
+    },
+    "b_partnershipSection": {
+      "description": "Board has a '## Partnership-Led Community Growth' section with >= 3 NORTH_STAR tickets referencing concrete artifacts.",
+      "sectionPresent": true,
+      "northStarTicketCount": 4,
+      "tickets": [
+        {
+          "id": "BOARD-local-NS-API",
+          "artifactRefs": ["src/pages/api/partners/onboard.ts"]
+        },
+        {
+          "id": "BOARD-local-NS-DASHBOARD",
+          "artifactRefs": ["web/app/partners/dashboard.tsx"]
+        },
+        {
+          "id": "BOARD-local-NS-PLAYBOOK",
+          "artifactRefs": ["config/partnerPlaybook.json", "server/partners/playbookConfig.ts"]
+        },
+        {
+          "id": "BOARD-local-NS-CAMPAIGN-BANNER",
+          "artifactRefs": ["web/components/BrandCampaignBanner.tsx"]
+        }
+      ],
+      "satisfied": true,
+      "evidence": [
+        "Top-of-file section in project/kanban/board.md",
+        "docs/deliverables/kanban-step3-partnership-section-audit-2026-02-21.md"
+      ]
+    },
+    "c_noStaleInProgress": {
+      "description": "No STATUS: IN_PROGRESS tickets older than 14 days remain without deferral.",
+      "cutoffDate": "2026-02-07",
+      "inProgressTickets": [
+        {"assignee": "Nora",   "updatedAt": "2026-02-19"},
+        {"assignee": "Scout",  "updatedAt": "2026-02-19"},
+        {"assignee": "Sage",   "updatedAt": "2026-02-19"},
+        {"assignee": "Solara", "updatedAt": "2026-02-16"}
+      ],
+      "staleInProgressCount": 0,
+      "satisfied": true,
+      "evidence": [
+        "docs/deliverables/kanban-step1-enumeration-blocked-inprogress-older14-2026-02-21.json",
+        "docs/deliverables/kanban-step4-inprogress-deferral-audit-2026-02-21.md"
+      ]
+    }
   },
-  "partnership": {
-    "hasSection": true,
-    "ticketCount": 752,
-    "northStarTicketCount": 0,
-    "tickets": []
-  },
-  "staleInProgress": {
-    "auditDate": "2026-02-21",
-    "cutoffDays": 14,
-    "inProgressCount": 4,
-    "staleCount": 0,
-    "stale": []
-  }
+  "allConditionsSatisfied": true
 }
