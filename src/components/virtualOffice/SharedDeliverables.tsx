@@ -13,6 +13,7 @@ interface Deliverable {
   description: string;
   filename: string;
   filePath: string;
+  changeType?: string;
   emoji: string;
   tags: string[];
   status: string;
@@ -63,6 +64,14 @@ const resolveAgentRouteId = (agentId?: string): string | null => {
 const normalizeDeliverableStatus = (value?: string): string => {
   const normalized = String(value || '').trim().toLowerCase();
   return normalized === '' || normalized === 'pending' ? 'needs-review' : normalized;
+};
+
+const normalizeDeliverableChangeType = (value?: string): string => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'new') return 'new';
+  if (normalized === 'edited' || normalized === 'modified') return 'edited';
+  if (normalized === 'deleted') return 'deleted';
+  return 'edited';
 };
 
 const normalizeText = (value?: string) => String(value || '').toLowerCase();
@@ -196,6 +205,7 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
           filePath,
           emoji: ARTIFACT_EMOJI[data.artifactType] || '📄',
           tags: data.tags || [data.artifactType || 'document'].filter(Boolean),
+          changeType: normalizeDeliverableChangeType(data.changeType),
           status: normalizeDeliverableStatus(data.status),
           reviewReason: data.reviewReason || '',
           completedAt: data.createdAt?.toDate?.()?.toISOString?.() || undefined,
@@ -308,6 +318,17 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
     if (status === 'pending-recovery') return { className: 'pending', label: 'PENDING' };
     if (status === 'complete') return { className: 'complete', label: 'COMPLETE' };
     return { className: 'pending', label: 'PENDING' };
+  };
+
+  const changeTypeBadge = (changeType?: string) => {
+    const normalized = normalizeDeliverableChangeType(changeType);
+    if (normalized === 'new') {
+      return { className: 'new', label: 'NEW' };
+    }
+    if (normalized === 'deleted') {
+      return { className: 'deleted', label: 'DELETED' };
+    }
+    return { className: 'edited', label: 'EDITED' };
   };
 
   const handleApprove = async (deliverableId: string) => {
@@ -455,6 +476,14 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
                         const badge = statusBadge(d.status);
                         return (
                           <span className={`sd-status-badge ${badge.className}`}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
+                      {(() => {
+                        const badge = changeTypeBadge(d.changeType);
+                        return (
+                          <span className={`sd-change-badge ${badge.className}`}>
                             {badge.label}
                           </span>
                         );
@@ -717,6 +746,22 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
         .sd-status-badge {
           font-size: 9px; font-weight: 600; padding: 1px 6px;
           border-radius: 4px; font-family: 'JetBrains Mono', monospace;
+        }
+        .sd-change-badge {
+          font-size: 9px; font-weight: 600; padding: 1px 6px;
+          border-radius: 4px; font-family: 'JetBrains Mono', monospace;
+        }
+        .sd-change-badge.new {
+          background: rgba(34,197,94,0.12); color: #4ade80;
+          border: 1px solid rgba(34,197,94,0.25);
+        }
+        .sd-change-badge.edited {
+          background: rgba(59,130,246,0.12); color: #60a5fa;
+          border: 1px solid rgba(59,130,246,0.25);
+        }
+        .sd-change-badge.deleted {
+          background: rgba(244,63,94,0.1); color: #fda4af;
+          border: 1px solid rgba(244,63,94,0.25);
         }
         .sd-status-badge.pending {
           background: rgba(245,158,11,0.12); color: #f59e0b;

@@ -1544,10 +1544,8 @@ async function saveTaskHistory(taskName, taskId, steps, status, startedAt) {
  * collection so the PulseCommand deliverables tray can display them.
  */
 async function recordDeliverables(task, steps, options = {}) {
-    const allFiles = [...new Set(
-        steps.flatMap(s => s.filesChanged || []).map(parseGitStatusPath).filter(Boolean)
-    )];
-    if (allFiles.length === 0) return [];
+    const fileChanges = getFileChangesFromSteps(steps);
+    if (fileChanges.length === 0) return [];
 
     const status = String(options.status || 'needs-review').trim() || 'needs-review';
     const reviewReason = String(options.reviewReason || '').trim();
@@ -1555,7 +1553,9 @@ async function recordDeliverables(task, steps, options = {}) {
     const deliverables = [];
     const batch = db.batch();
 
-    for (const filePath of allFiles) {
+    for (const item of fileChanges) {
+        const filePath = item.filePath;
+
         // Determine artifact type from file extension
         const ext = (filePath.split('.').pop() || '').toLowerCase();
         let artifactType = 'document';
@@ -1580,6 +1580,7 @@ async function recordDeliverables(task, steps, options = {}) {
             taskName: task.name,
             artifactType,
             filePath: filePath,
+            changeType: item.changeType || 'unknown',
             status,
             reviewReason: reviewReason || undefined,
             createdAt: FieldValue.serverTimestamp(),
@@ -4601,40 +4602,120 @@ Notes: ${task.notes || 'None'}`;
 /**
  * Get the current git status (changed files) in the project directory.
  */
-function parseGitStatusPath(line) {
-    const normalizeLegacySageDeliverablePath = (raw) => {
-        const trimmed = String(raw || '').trim().replace(/^\.\/+/, '');
-        return trimmed.replace(/^docs\/agents\/sage\/deliverables(?=$|\/)/, 'docs/sage/deliverables');
-    };
+function normalizeLegacySageDeliverablePath(raw) {
+    const trimmed = String(raw || '').trim().replace(/^\.\/+/, '');
+    return trimmed.replace(/^docs\/agents\/sage\/deliverables(?=$|\/)/, 'docs/sage/deliverables');
+}
 
+function parseGitStatusEntry(line) {
     const entry = (line || '').trim();
-    if (!entry) return '';
+    if (!entry) return null;
 
-    // Parse `git status --porcelain` entries like:
-    // `M src/file.ts`, `?? docs/file.md`, `R old -> new`.
-    const porcelainMatch = entry.match(/^[ MADRCU?!]{1,2}\s+(.*)$/);
-    let pathValue = porcelainMatch ? porcelainMatch[1].trim() : entry;
+    const porcelainMatch = entry.match(/^([ MADRCU?!]{1,2})\s+(.*)$/);
+    const pathValue = porcelainMatch ? porcelainMatch[2].trim() : entry;
+    const operation = porcelainMatch ? porcelainMatch[1].trim() : '';
 
-    if (pathValue.includes(' -> ')) {
-        pathValue = pathValue.split(' -> ').pop().trim();
+    let next = pathValue;
+    if (next.includes(' -> ')) {
+        next = next.split(' -> ').pop().trim();
     }
 
     if (
-        (pathValue.startsWith('"') && pathValue.endsWith('"')) ||
-        (pathValue.startsWith("'") && pathValue.endsWith("'"))
+        (next.startsWith('"') && next.endsWith('"')) ||
+        (next.startsWith("'") && next.endsWith("'"))
     ) {
-        pathValue = pathValue.slice(1, -1);
+        next = next.slice(1, -1);
     }
 
-    return normalizeLegacySageDeliverablePath(pathValue);
+    return {
+        operation,
+        path: normalizeLegacySageDeliverablePath(next),
+    };
 }
 
-function getChangedFilesFromSteps(steps) {
-    const files = (steps || [])
-        .flatMap((s) => s.filesChanged || [])
-        .map(parseGitStatusPath)
-        .filter(Boolean);
-    return [...new Set(files)];
+function parseGitStatusPath(line) {
+    const parsed = parseGitStatusEntry(line);
+    return parsed ? parsed.path : '';
+}
+
+function inferFileChangeType(op) {
+    const normalized = String(op || '').replace(/\s/g, '').toUpperCase();
+    if (!normalized || normalized === '') return 'unknown';
+    if (normalized === '??' || normalized.startsWith('A')) return 'new';
+    if (normalized.startsWith('M') || normalized.startsWith('R') || normalized.startsWith('C') || normalized.startsWith('U')) {
+        return 'edited';
+    }
+    if (normalized === 'D') return 'deleted';
+    return 'edited';
+}
+
+function sanitizeRecordedFilePath(rawPath) {
+    if (!rawPath) return '';
+    let next = rawPath.trim();
+    if (!next) return '';
+
+    // `git status --porcelain` entries are recorded like `M path/to/file` or `?? docs/file.md`.
+    const porcelainMatch = next.match(/^[ MADRCU?!]{1,2}\s+(.*)$/);
+    if (porcelainMatch) {
+        next = porcelainMatch[1].trim();
+    }
+
+    // Rename entries can appear like `old/path -> new/path`; we want the destination.
+    if (next.includes(' -> ')) {
+        next = next.split(' -> ').pop()?.trim() || next;
+    }
+
+    // Remove wrapping quotes from paths with spaces.
+    if (
+        (next.startsWith('"') && next.endsWith('"')) ||
+        (next.startsWith("'") && next.endsWith("'"))
+    ) {
+        next = next.slice(1, -1);
+    }
+
+    return normalizeLegacySageDeliverablePath(next);
+}
+
+function getFileChangesFromSteps(steps) {
+    const fileMap = new Map();
+    const normalizedChanges = (steps || []).flatMap((step) => {
+        if (Array.isArray(step?.fileChanges) && step.fileChanges.length > 0) {
+            return step.fileChanges.map((entry) => {
+                if (!entry || typeof entry !== 'object') {
+                    const parsed = parseGitStatusEntry(entry);
+                    return {
+                        filePath: parsed ? parsed.path : parseGitStatusPath(entry),
+                        changeType: parsed ? inferFileChangeType(parsed.operation) : 'unknown',
+                    };
+                }
+                return {
+                    filePath: parseGitStatusPath(entry.path || ''),
+                    changeType: itemToChangeType(entry),
+                };
+            });
+        }
+
+        return (step.filesChanged || []).map((entry) => {
+            const parsed = parseGitStatusEntry(entry);
+            return {
+                filePath: parsed ? parsed.path : parseGitStatusPath(entry),
+                changeType: parsed ? inferFileChangeType(parsed.operation) : 'unknown',
+            };
+        });
+    }).filter((entry) => Boolean(entry.filePath));
+
+    for (const entry of normalizedChanges) {
+        const filePath = entry.filePath;
+        const changeType = String(entry.changeType || 'unknown');
+        if (!filePath) continue;
+
+        const existing = fileMap.get(filePath);
+        if (!existing || (existing !== 'new' && changeType === 'new')) {
+            fileMap.set(filePath, changeType);
+        }
+    }
+
+    return Array.from(fileMap.entries()).map(([filePath, changeType]) => ({ filePath, changeType }));
 }
 
 function getGitChanges() {
@@ -4653,6 +4734,48 @@ function getGitChanges() {
     } catch {
         return [];
     }
+}
+
+function getGitStatusEntries() {
+    try {
+        const status = execSync('git status --porcelain', {
+            cwd: projectDir,
+            encoding: 'utf-8',
+            timeout: 10_000,
+        }).trim();
+        if (!status) return [];
+        return status
+            .split('\n')
+            .map(parseGitStatusEntry)
+            .filter((entry) => Boolean(entry && entry.path));
+    } catch {
+        return [];
+    }
+}
+
+function getChangedFilesFromSteps(steps) {
+    return [...new Set(
+        getFileChangesFromSteps(steps).map((item) => item.filePath)
+    )];
+}
+
+function hasVerifiableArtifacts(steps) {
+    const allFiles = getChangedFilesFromSteps(steps);
+    if (allFiles.length === 0) return false;
+
+    const substantiveFiles = allFiles.filter((filePath) => {
+        const basename = (filePath.split('/').pop() || '').toLowerCase();
+        return !META_PATTERNS.some((rx) => rx.test(basename));
+    });
+
+    return substantiveFiles.length > 0;
+}
+
+function itemToChangeType(item) {
+    if (!item || typeof item !== 'object') return 'unknown';
+    return inferFileChangeType(
+        item.changeType || item.operation || item.op || item.status || '',
+    );
 }
 
 /**
@@ -4752,7 +4875,7 @@ async function executeStep(step, task, stepIndex, allSteps) {
         const useOpenClaw = USE_OPENCLAW;
 
         // Snapshot git state before the step
-        const changesBefore = getGitChanges();
+        const changesBefore = getGitStatusEntries();
 
         if (useOpenClaw) {
             if (OPENCLAW_SMOKE_TEST) {
@@ -5185,11 +5308,16 @@ ${smokeOutput}`.substring(0, 2000);
                 }
 
                 // Capture what files changed
-                const changesAfter = getGitChanges();
-                const newChanges = changesAfter.filter(c => !changesBefore.includes(c));
+                const changesAfter = getGitStatusEntries();
+                const beforeSet = new Set(changesBefore.map((entry) => entry.path));
+                const newChanges = changesAfter.filter((entry) => !beforeSet.has(entry.path));
                 if (newChanges.length > 0) {
-                    step.filesChanged = newChanges;
-                    console.log(`   📁 Files changed: ${newChanges.join(', ')}`);
+                    step.fileChanges = newChanges.map((entry) => ({
+                        path: entry.path,
+                        changeType: inferFileChangeType(entry.operation),
+                    }));
+                    step.filesChanged = newChanges.map((entry) => entry.path);
+                    console.log(`   📁 Files changed: ${newChanges.map((entry) => entry.path).join(', ')}`);
                 }
 
                 // Auto-commit the changes
