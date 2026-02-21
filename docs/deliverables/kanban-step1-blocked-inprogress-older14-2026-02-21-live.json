@@ -1,0 +1,12 @@
+{
+  "auditDate": "2026-02-21",
+  "boardFile": "project/kanban/board.md",
+  "cutoffDays": 14,
+  "cutoffDate": "2026-02-07",
+  "criteria": {
+    "status": ["BLOCKED", "IN_PROGRESS", "in-progress"],
+    "updatedAtOlderThanDays": 14
+  },
+  "matchCount": 0,
+  "matches": []
+}
