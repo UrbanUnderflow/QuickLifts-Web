@@ -114,3 +114,14 @@ exports.onGenerateWriteForLeadMassage = onGenerateWriteForLeadMassage;
 
 // Export user affiliate triggers
 exports.onUserCreateGymAffiliate = require('./userAffiliateTriggers').onUserCreateGymAffiliate;
+
+// Export partner retention computation (TS helper in src/computePartnerRetention.ts)
+// NOTE: This assumes a build step or ts-node setup that makes the compiled
+// version available at runtime. If not present yet, this export is a
+// placeholder to be wired once the TypeScript build pipeline is in place.
+try {
+  // eslint-disable-next-line global-require
+  exports.computePartnerRetention = require('./lib/computePartnerRetention').computePartnerRetention;
+} catch (e) {
+  console.warn('[functions/index] computePartnerRetention export skipped (compiled file missing).');
+}

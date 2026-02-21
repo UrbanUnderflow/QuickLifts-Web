@@ -1,6 +1,6 @@
 # Partnership-Led Community Growth
 
-Pulse’s north star is Partnership-Led Community Growth: we grow by helping the most energized, community-driven brands, gyms, and run clubs grow alongside us. Instead of treating partners as distribution channels, we become the digital home where their communities train through real challenge seasons together — so every deal feels like a shared community engine, not just a logo swap.
+Pulse’s north star is Partnership-Led Community Growth: we grow by becoming the digital home for the most energized, community-driven fitness brands and spaces. For partners, that means Pulse isn’t just another app in the stack — it’s the shared challenge layer where their athletes, coaches, and captains host real seasons their people can actually finish together.
 
 ## Core Narrative
 
@@ -13,19 +13,19 @@ Across all three lanes, Pulse keeps communities showing up together by making th
 ## Messaging Pillars
 
 - **Creator-Led Challenges**  
-  Pulse is built around the people your community already shows up for — athletes, coaches, and captains — and gives them a real challenge layer to host seasons instead of one-off posts. When we talk about partnerships, we lead with those humans: Pulse is where their ideas become shared journeys your members can actually join.
+  Pulse is built around the people your community already shows up for — athletes, coaches, and captains — and gives them a real challenge layer to host seasons instead of one-off posts. This is how partnership-led growth starts: by turning the ideas of trusted leaders into shared journeys that more of your community can actually enter.
 
 - **Communities as the Product**  
-  The real value of a partnership on Pulse isn’t a feature list or a logo placement — it’s the experience of training through a story together. Messaging should make it clear that Pulse deepens the community your brand, gym, or run club has already built by turning it into a sequence of shared blocks and rituals.
+  The real value of a Pulse partnership isn’t a feature list or a logo placement — it’s the experience of training through a story together. By turning your existing community into a sequence of shared blocks and rituals, Pulse helps you grow by deepening the thing that already makes your brand, gym, or run club special.
 
 - **Co-Branded Rituals, Not Ads**  
-  Every Pulse partnership is designed to feel like a recurring ritual — a Monday strength crew, a Saturday long run, a reset week — with the partner woven into the experience. Instead of promising "exposure," we talk about co-branded challenges that members look forward to repeating season after season.
+  Every Pulse partnership is designed to feel like a recurring ritual — a Monday strength crew, a Saturday long run, a reset week — with your brand woven into the experience. Instead of chasing impressions, we focus on co-branded seasons that members finish and repeat, so growth comes from people choosing to stay in your world.
 
 - **One Challenge Layer Across Your Existing Channels**  
-  Pulse doesn’t ask partners to rebuild their world somewhere new. We sit on top of the channels they already own — social, email, apps, gym floors, group chats — and give them a single challenge layer that keeps the story consistent across all of those surfaces.
+  Pulse doesn’t ask you to rebuild your world somewhere new. We sit on top of the channels you already own — social, email, apps, gym floors, group chats — and provide a single challenge layer that keeps the story consistent across all of them. That’s how partnerships scale without fragmenting your community.
 
 - **Shared, Behavior-First KPIs**  
-  We anchor every partnership in a small set of behavior metrics: challenge join rate, completion rate, repeat-challenge rate, streak weeks, and active creators. Messaging should show how Pulse moves those numbers and make it easy for partners to repeat the story internally: more of our people joined, more finished, more came back for the next block.
+  We anchor every partnership in a small set of behavior metrics: challenge join rate, completion rate, repeat-challenge rate, streak weeks, and active creators. These numbers show how your community is moving together on Pulse and make it simple to prove that partnership-led community growth is working inside your own reporting lines.
 
 ## Sample Partner Copy
 
