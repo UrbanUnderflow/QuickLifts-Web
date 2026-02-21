@@ -295,6 +295,9 @@ Verify that `project/kanban/board.md` ..."
 ### Step 1 filter
 
 List tickets in `project/kanban/board.md` wh..."
+- **[2026-02-21] Nora** — Step "For each `STATUS: BLOCKED` ticket in `project/kanban/board.md` that lacks explicit context, append `BLOCKED_REASON:` and `DEPENDENCY:` lines that reference concrete artifacts (e.g., `api/partners/onboard.ts`, `web/app/partners/dashboard.tsx`, `config/partnerPlaybook.json`, or partner data files) directly under the ticket block." still had issues after 2 retries. Output signals: \bmissing\b, \bblocked\b. Last output: "For Step 2, the only correct, state‑aligned outcome is:
+
+- There are **no `STATUS: BLOCKED` tickets at all** in `project..."
 ---
 
 ## Operational Rules
