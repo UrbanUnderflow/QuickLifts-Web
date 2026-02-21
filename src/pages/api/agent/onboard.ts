@@ -121,7 +121,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         name: agentId,
                         workspace: openClawWorkspace,
                         agentDir: openClawAgentDir,
-                        model: 'openai/gpt-5.1-codex',
+                        model: 'openai/gpt-5.3-codex',
                         heartbeat: { every: '30m' },
                     });
 

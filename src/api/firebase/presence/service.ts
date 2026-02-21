@@ -2,6 +2,7 @@ import { collection, doc, onSnapshot, serverTimestamp, setDoc, updateDoc, addDoc
 import { db } from '../config';
 
 export type AgentStatus = 'offline' | 'idle' | 'working' | 'needs-help';
+export type ModelUpgradeScope = 'single' | 'all';
 
 /* ─── Granular thought step ────────────────────────────── */
 
@@ -136,6 +137,14 @@ export interface TaskHistoryEntry {
 }
 
 const COLLECTION = 'agent-presence';
+const MODEL_UPGRADE_DEFAULT = 'openai/gpt-5.3-codex';
+const MODEL_UPGRADE_TARGETS = ['nora', 'scout', 'solara', 'sage'] as const;
+const OPENCLAW_PROFILE_IDS: Record<string, string[]> = {
+  nora: ['main', 'main-light', 'main-med'],
+  scout: ['scout', 'scout-light', 'scout-med'],
+  solara: ['solara', 'solara-light', 'solara-med'],
+  sage: ['sage', 'sage-light', 'sage-med'],
+};
 const HISTORY_SUBCOLLECTION = 'task-history';
 const SNAPSHOT_COLLECTION = 'progress-snapshots';
 
@@ -588,6 +597,97 @@ export const presenceService = {
       from: 'admin',
       type,
       content,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+    });
+    return docRef.id;
+  },
+
+  /**
+   * Queue a model-upgrade execution task to Nora.
+   * Nora executes the Mac Mini command sequence and verifies profile updates.
+   */
+  async queueModelUpgrade(opts: {
+    model: string;
+    scope: ModelUpgradeScope;
+    targetAgentId?: string;
+    requestedBy?: string;
+  }): Promise<string> {
+    const normalizedModel = String(opts.model || '').trim() || MODEL_UPGRADE_DEFAULT;
+    const requestedBy = String(opts.requestedBy || 'admin-ui').trim() || 'admin-ui';
+    const scope: ModelUpgradeScope = opts.scope === 'single' ? 'single' : 'all';
+    const targetAgentId = opts.targetAgentId ? String(opts.targetAgentId).trim().toLowerCase() : '';
+
+    const targetAgents = scope === 'single'
+      ? (targetAgentId ? [targetAgentId] : [])
+      : [...MODEL_UPGRADE_TARGETS];
+
+    if (targetAgents.length === 0) {
+      throw new Error('Missing target agent for single-agent model upgrade.');
+    }
+
+    const openClawProfileIds = Array.from(new Set(
+      targetAgents.flatMap((agentId) => OPENCLAW_PROFILE_IDS[agentId] || [agentId])
+    ));
+    const launchServices = targetAgents.map((agentId) => `com.quicklifts.agent.${agentId}`);
+    const nodePatchScript = [
+      `node -e "const fs=require('fs');`,
+      `const p=process.env.HOME+'/.openclaw/openclaw.json';`,
+      `const cfg=JSON.parse(fs.readFileSync(p,'utf8'));`,
+      `const model='${normalizedModel.replace(/'/g, "\\'")}';`,
+      `const ids=${JSON.stringify(openClawProfileIds)};`,
+      `for (const a of (cfg.agents?.list||[])) { if (ids.includes(a.id)) a.model=model; }`,
+      `fs.writeFileSync(p, JSON.stringify(cfg,null,2)+'\\n');`,
+      `console.log('updated', ids.length, 'profiles to', model);"`,
+    ].join('');
+
+    const taskDescription = [
+      `MODEL UPGRADE EXECUTION (Mac Mini)`,
+      ``,
+      `Requested by: ${requestedBy}`,
+      `Scope: ${scope === 'single' ? `single agent (${targetAgents[0]})` : 'all core agents (nora, scout, solara, sage)'}`,
+      `Target model: ${normalizedModel}`,
+      ``,
+      `Target OpenClaw profile IDs:`,
+      ...openClawProfileIds.map((id) => `- ${id}`),
+      ``,
+      `Target launchd services to restart:`,
+      ...launchServices.map((svc) => `- ${svc}`),
+      ``,
+      `Run these steps on the Mac Mini:`,
+      `1) Backup config: cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw.json.bak.$(date +%Y%m%d-%H%M%S)`,
+      `2) Patch model values for target profiles:`,
+      `   ${nodePatchScript}`,
+      `3) Verify model values: openclaw agents list --json`,
+      `4) Restart only impacted services:`,
+      ...launchServices.map((svc) => `   launchctl kickstart -k gui/$(id -u)/${svc}`),
+      `5) Confirm each target agent reports the new currentModel/currentModelRaw in presence.`,
+      ``,
+      `Then post completion status with the exact profiles updated + any failures.`,
+    ].join('\n');
+
+    const commandContent = scope === 'single'
+      ? `Upgrade ${targetAgents[0]} model to ${normalizedModel} on the Mac Mini and restart that runner.`
+      : `Upgrade all core agent models to ${normalizedModel} on the Mac Mini and restart impacted runners.`;
+
+    const colRef = collection(db, 'agent-commands');
+    const docRef = await addDoc(colRef, {
+      to: 'nora',
+      from: 'admin',
+      type: 'task',
+      content: commandContent,
+      metadata: {
+        source: 'model-upgrade-ui',
+        requestedBy,
+        modelUpgrade: {
+          model: normalizedModel,
+          scope,
+          targetAgents,
+          openClawProfileIds,
+          launchServices,
+        },
+        description: taskDescription,
+      },
       status: 'pending',
       createdAt: serverTimestamp(),
     });
