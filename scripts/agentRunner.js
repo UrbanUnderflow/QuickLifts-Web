@@ -1549,7 +1549,7 @@ async function recordDeliverables(task, steps, options = {}) {
     )];
     if (allFiles.length === 0) return [];
 
-    const status = String(options.status || 'pending').trim() || 'pending';
+    const status = String(options.status || 'needs-review').trim() || 'needs-review';
     const reviewReason = String(options.reviewReason || '').trim();
 
     const deliverables = [];
