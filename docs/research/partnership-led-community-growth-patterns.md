@@ -1,23 +1,23 @@
 # Partnership-Led Community Growth — Patterns
 
-This document groups insights from `partnership-led-community-growth-sources.md` into named patterns that describe how partnership structures (brands, gyms, run clubs, creators) shape real human behavior on Pulse. Each pattern is a shorthand lens the team can reuse in playbooks, decks, and product decisions.
+This document turns the raw evidence in `partnership-led-community-growth-sources.md` into named behavior patterns that Pulse can use when designing partnerships with brands, gyms, and run clubs.
 
-## Pattern 1: Community-Driven Adherence
+## Creator-Led Accountability
 
-When movement happens inside a recognizable community—CrossFit boxes, run clubs, studio memberships—attendance is driven as much by **identity and belonging** as by individual willpower. Members keep showing up because they see themselves as "one of these people," and because leaving the routine would mean leaving the group, not just skipping a workout. Sources highlight that group-based support and clear session rhythms (e.g., Tuesday track, Saturday long run) improve adherence and reduce dropout compared to solo programs or app-only prescriptions.
+When a recognizable human leads the experience—a coach, creator, or run leader—people are more likely to stick with a program through the mid-program slump. Trials of web and app-based interventions show higher adherence when a **named coach or expert** frames the journey and sets realistic expectations ([Source: Napolitano et al. 2013](./partnership-led-community-growth-sources.md)). On Pulse, this pattern argues that serious partner rounds should always have a visible human host whose weekly messages and reflections give the plan a face.
 
-## Pattern 2: Creator-Led Accountability
+## Community-Driven Adherence
 
-Digital programs led by a trusted human—coach, creator, or head trainer—see higher engagement and completion rates than anonymous, generic programs. People follow *someone* rather than a faceless app: they respond to check-ins, weekly framing messages, and personalized nudges from a recognizable figure whose expertise they trust. In practice, this means creator-led or coach-led rounds can act as behavioral anchors, especially when messaging emphasizes realistic behaviors (3+ rituals/week, readiness-aware scaling) instead of dramatic transformations.
+Members of gyms, run clubs, and brand communities don’t just attend for the workout; they show up because **being part of the group is part of who they are**. Research on group-based interventions and CrossFit-style communities shows that social identity ("I’m one of these people") and group support predict ongoing participation more strongly than solo programs ([Sources: Carron et al. 1996; Whiteman-Sandland et al. 2018](./partnership-led-community-growth-sources.md)). For Pulse, this pattern means rounds should mirror each community’s rituals and language so that logging behaviors in the app feels like an extension of showing up in person.
 
-## Pattern 3: Hybrid Gym + Digital Communities
+## Hybrid Gym + Digital Loop
 
-Hybrid models that blend **in-person experiences** with **digital tracking and programming** tend to retain members better than either mode alone. Members attend classes or group runs for the energy and connection, then use digital tools between sessions to hold the plan, log behavior, and stay loosely connected to the community. For Pulse, this pattern suggests that the strongest partnerships will likely be with gyms and run clubs that already have a live community spine and want a digital layer to extend that identity across the week.
+Gyms and studios that blend **in-person classes with digital tracking and programming** tend to retain members better than those offering only one mode ([Source: Les Mills Global Consumer Fitness Survey 2021](./partnership-led-community-growth-sources.md)). Members come for the live energy but rely on digital tools to hold the plan and keep a loose thread of accountability between sessions. Pulse can act as that digital loop—mapping class schedules, blocks, and events into ongoing rounds so that brands, gyms, and clubs stay present in members’ weeks even when they’re not physically together.
 
-## Pattern 4: Recovery Rituals as Culture, Not Add-Ons
+## Run-Club Ritual Stickiness
 
-Simple recovery behaviors—sleep hygiene, cooldowns, easy days, light mobility—exert small but reliable effects on perceived readiness and reduce long-term risk of burnout when practiced consistently. Communities that treat recovery as part of the culture ("we scale smart," "rest is part of training") keep members more resilient and more willing to show up again. In contrast, cultures that only glorify maximal effort tend to see cycles of overreach, injury, and dropout. Partners that normalize recovery rituals inside their challenges and programming help Pulse users maintain sustainable engagement.
+Run clubs provide structure (track nights, long runs), social support, and an identity as "a runner" that helps people maintain habits through motivation dips ([Source: Ogles & Masters 2003](./partnership-led-community-growth-sources.md)). The stickiness comes less from any single workout and more from the **repeated rituals** of meeting at the same time, in the same place, with the same people. On Pulse, this pattern suggests that run-club rounds should treat those recurring sessions as anchor rituals and show runners their attendance and gap patterns in the context of the club, not just as isolated workouts.
 
-## Pattern 5: Gap-Sensitive Engagement
+## Recovery Culture vs. Burnout Cycles
 
-Short breaks of a few days are normal and often followed by a return; extended gaps of 7–10+ days are where users silently fall away. Communities that notice absence and respond in a human way ("we missed you at Saturday’s run") are better at pulling people back in before they detach fully. This pattern underpins the value of multi-day gap detection on Pulse: partners who treat gaps as relationship events, not just churn signals, can use timely, empathetic touchpoints to rescue otherwise-lost members and sustain cohort health.
+Programs and communities that glorify only maximal effort—"no days off," constant high-intensity challenges—tend to generate short-term spikes followed by fatigue, injury, or quiet dropout. Evidence on recovery strategies and practitioner commentary on challenge fatigue both point toward a different path: communities that normalize **basic recovery rituals, sleep, and deload periods** keep people more resilient and willing to return ([Sources: Halson 2014; Precision Nutrition & community management blogs](./partnership-led-community-growth-sources.md)). For Pulse partnerships, this pattern argues for designing rounds where recovery behaviors are visible, expected, and celebrated—not treated as optional extras.
