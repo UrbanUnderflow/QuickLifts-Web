@@ -71,7 +71,7 @@ const ALLOW_DIRECT_OPENAI = Boolean(process.env.OPENAI_API_KEY) && !USE_OPENCLAW
 // Each agent has 3 configs: <id>-light, <id>-med, <id> (base = heaviest)
 //   light → gpt-4o-mini / claude-haiku-3.5  (trivial: config tweaks, parsing, simple edits)
 //   med   → gpt-4o / claude-sonnet-4.0      (standard: typical feature work, bug fixes)
-//   heavy → gpt-5.1-codex / claude-sonnet-4.5 (complex: architecture, multi-file refactors)
+//   heavy → gpt-5.3-codex / claude-sonnet-4.5 (complex: architecture, multi-file refactors)
 const MODEL_TIERS = {
     light: `${OPENCLAW_AGENT_ID}-light`,   // cheapest — trivial edits, config tweaks
     med: `${OPENCLAW_AGENT_ID}-med`,     // mid-range — standard dev work

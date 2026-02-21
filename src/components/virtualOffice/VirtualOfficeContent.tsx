@@ -100,6 +100,7 @@ const PRICING_SOURCE_URLS = {
   openai: 'https://platform.openai.com/docs/pricing/',
   anthropic: 'https://docs.anthropic.com/en/docs/about-claude/models-overview',
 };
+const DEFAULT_MODEL_UPGRADE_TARGET = 'openai/gpt-5.3-codex';
 
 const MODEL_PRICE_RULES: Array<{
   match: RegExp;
@@ -1738,6 +1739,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   const hasSteps = agent.executionSteps && agent.executionSteps.length > 0;
   const installProgress = agent.installProgress || null;
   const [powerLoading, setPowerLoading] = useState(false);
+  const [queueingModelUpgrade, setQueueingModelUpgrade] = useState(false);
   const isRunnerEnabled = agent.runnerEnabled !== false;
   const isOnline = agent.status !== 'offline' && isRunnerEnabled;
   const effectiveStatus = isRunnerEnabled ? agent.status : 'offline';
@@ -1780,6 +1782,39 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
       setPowerLoading(false);
     }
   }, [agent.id, isOnline, powerLoading]);
+
+  const handleQueueSingleModelUpgrade = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (queueingModelUpgrade || agent.id === 'antigravity') return;
+
+    const defaultModel = (agent.currentModelRaw || agent.currentModel || DEFAULT_MODEL_UPGRADE_TARGET).trim() || DEFAULT_MODEL_UPGRADE_TARGET;
+    const input = window.prompt(`Enter model for ${agent.displayName}:`, defaultModel);
+    if (input === null) return;
+    const model = input.trim();
+    if (!model) return;
+
+    const confirmed = window.confirm(
+      `Queue model upgrade for ${agent.displayName} to "${model}"?\n\n` +
+      `Nora will run the Mac Mini upgrade command and restart the impacted runner.`
+    );
+    if (!confirmed) return;
+
+    setQueueingModelUpgrade(true);
+    try {
+      await presenceService.queueModelUpgrade({
+        model,
+        scope: 'single',
+        targetAgentId: agent.id,
+        requestedBy: 'virtual-office-hover',
+      });
+      alert(`Queued model upgrade for ${agent.displayName} to ${model}. Nora will execute this on the Mac Mini.`);
+    } catch (err: any) {
+      console.error('Failed to queue model upgrade:', err);
+      alert(`Failed to queue model upgrade: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setQueueingModelUpgrade(false);
+    }
+  }, [agent.currentModel, agent.currentModelRaw, agent.displayName, agent.id, queueingModelUpgrade]);
 
   // ─── Drag state ─────────────────────────────
   const [isDragging, setIsDragging] = useState(false);
@@ -2429,6 +2464,36 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
               })()}
             </div>
 
+            {/* Direct model upgrade trigger */}
+            {agent.id !== 'antigravity' && (
+              <button
+                onClick={handleQueueSingleModelUpgrade}
+                disabled={queueingModelUpgrade}
+                title="Queue a model upgrade task for Nora to run on the Mac Mini"
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  margin: '6px 0 8px',
+                  padding: '7px 10px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(59, 130, 246, 0.35)',
+                  background: 'rgba(59, 130, 246, 0.12)',
+                  color: '#93c5fd',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  letterSpacing: '0.02em',
+                  cursor: queueingModelUpgrade ? 'wait' : 'pointer',
+                  opacity: queueingModelUpgrade ? 0.8 : 1,
+                }}
+              >
+                {queueingModelUpgrade ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                {queueingModelUpgrade ? 'Queueing upgrade...' : 'Upgrade model via Nora'}
+              </button>
+            )}
+
             {/* Task History */}
             <TaskHistoryPanel agentId={agent.id} agentName={agent.displayName} emoji={agent.emoji} />
 
@@ -2972,6 +3037,8 @@ const VirtualOfficeContent: React.FC = () => {
   const [restartingAgents, setRestartingAgents] = useState(false);
   const [restartResult, setRestartResult] = useState<'success' | 'error' | null>(null);
   const [restartToast, setRestartToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null);
+  const [queueingModelUpgrade, setQueueingModelUpgrade] = useState(false);
+  const [modelUpgradeResult, setModelUpgradeResult] = useState<'success' | 'error' | null>(null);
 
   const handleRestartAgents = useCallback(async () => {
     if (restartingAgents) return;
@@ -3057,6 +3124,45 @@ const VirtualOfficeContent: React.FC = () => {
       setRestartingAgents(false);
     }
   }, [restartingAgents]);
+
+  const handleQueueModelUpgradeAll = useCallback(async () => {
+    if (queueingModelUpgrade) return;
+
+    const input = window.prompt(
+      'Model ID to apply across Nora, Scout, Solara, and Sage:',
+      DEFAULT_MODEL_UPGRADE_TARGET
+    );
+    if (input === null) return;
+    const model = input.trim();
+    if (!model) return;
+
+    const confirmed = window.confirm(
+      `Queue model upgrade for all core agents to "${model}"?\n\n` +
+      'Nora will run the Mac Mini command sequence and restart impacted runners.'
+    );
+    if (!confirmed) return;
+
+    setQueueingModelUpgrade(true);
+    setModelUpgradeResult(null);
+
+    try {
+      await presenceService.queueModelUpgrade({
+        model,
+        scope: 'all',
+        requestedBy: 'virtual-office-control-center',
+      });
+      setModelUpgradeResult('success');
+      setRestartToast({ message: `✅ Queued model upgrade to ${model} via Nora on Mac Mini.`, type: 'success' });
+      setTimeout(() => { setModelUpgradeResult(null); setRestartToast(null); }, 7000);
+    } catch (err: any) {
+      console.error('Failed to queue model upgrade:', err);
+      setModelUpgradeResult('error');
+      setRestartToast({ message: `❌ Failed to queue model upgrade: ${err?.message || 'Unknown error'}`, type: 'error' });
+      setTimeout(() => { setModelUpgradeResult(null); setRestartToast(null); }, 7000);
+    } finally {
+      setQueueingModelUpgrade(false);
+    }
+  }, [queueingModelUpgrade]);
 
   const handleOpenManifesto = useCallback(async () => {
     setShowManifesto(true);
@@ -3798,6 +3904,35 @@ const VirtualOfficeContent: React.FC = () => {
                   : restartResult === 'error'
                     ? 'Failed'
                     : 'Restart Agents'}
+            </button>
+            <button
+              id="upgrade-model-btn"
+              onClick={handleQueueModelUpgradeAll}
+              disabled={queueingModelUpgrade}
+              title="Queue a model upgrade task for Nora to execute on the Mac Mini"
+              className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border transition-all ${modelUpgradeResult === 'success'
+                ? 'border-emerald-500/50 text-emerald-300 bg-emerald-900/30'
+                : modelUpgradeResult === 'error'
+                  ? 'border-red-500/50 text-red-300 bg-red-900/30'
+                  : 'border-sky-500/30 text-sky-300 hover:bg-sky-900/30 hover:border-sky-400/50'
+                }`}
+            >
+              {queueingModelUpgrade ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : modelUpgradeResult === 'success' ? (
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              ) : modelUpgradeResult === 'error' ? (
+                <XCircle className="w-3.5 h-3.5" />
+              ) : (
+                <Zap className="w-3.5 h-3.5" />
+              )}
+              {queueingModelUpgrade
+                ? 'Queueing...'
+                : modelUpgradeResult === 'success'
+                  ? 'Queued'
+                  : modelUpgradeResult === 'error'
+                    ? 'Failed'
+                    : 'Upgrade Model'}
             </button>
           </div>
         </div>

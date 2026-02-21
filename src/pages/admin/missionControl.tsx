@@ -6,6 +6,7 @@ import {
     AlertTriangle, Loader2, Activity, Brain,
 } from 'lucide-react';
 import { db } from '../../api/firebase/config';
+import { presenceService } from '../../api/firebase/presence/service';
 import {
     doc, getDoc, collection, query, where, onSnapshot,
     limit, updateDoc, serverTimestamp, Timestamp
@@ -62,6 +63,7 @@ const AGENTS = [
     { id: 'solara', name: 'Solara', emoji: '☀️', color: '#f59e0b' },
     { id: 'sage', name: 'Sage', emoji: '🌿', color: '#22c55e' },
 ];
+const DEFAULT_MODEL_UPGRADE_TARGET = 'openai/gpt-5.3-codex';
 
 /* ─── Utils ─────────────────────────────────────────── */
 
@@ -187,6 +189,14 @@ const S: Record<string, CSSProperties> = {
         transition: 'all .2s',
         flexShrink: 0,
     },
+    modelUpgradeBtn: {
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        padding: '10px 14px', borderRadius: 10,
+        border: '1px solid rgba(59,130,246,0.3)',
+        background: 'rgba(59,130,246,0.12)',
+        color: '#93c5fd', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+        transition: 'all .15s',
+    },
     // Grid
     grid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 },
     // Agent card
@@ -285,6 +295,8 @@ export default function MissionControlPage() {
     const [agentTasks, setAgentTasks] = useState<Record<string, AgentTask[]>>({});
     const [launching, setLaunching] = useState(false);
     const [pausing, setPausing] = useState(false);
+    const [queueingModelUpgrade, setQueueingModelUpgrade] = useState(false);
+    const [modelUpgradeResult, setModelUpgradeResult] = useState<'success' | 'error' | null>(null);
     const [loadingObjectiveId, setLoadingObjectiveId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [tick, setTick] = useState(0);
@@ -399,6 +411,43 @@ export default function MissionControlPage() {
             setPausing(false);
         }
     }, []);
+
+    const handleQueueModelUpgrade = useCallback(async () => {
+        if (queueingModelUpgrade) return;
+        const input = window.prompt(
+            'Model ID to apply across Nora, Scout, Solara, and Sage:',
+            DEFAULT_MODEL_UPGRADE_TARGET
+        );
+        if (input === null) return;
+        const model = input.trim();
+        if (!model) return;
+
+        const confirmed = window.confirm(
+            `Queue model upgrade for all core agents to "${model}"?\n\n` +
+            'Nora will run the Mac Mini command sequence and restart impacted services.'
+        );
+        if (!confirmed) return;
+
+        setQueueingModelUpgrade(true);
+        setModelUpgradeResult(null);
+        setError(null);
+
+        try {
+            await presenceService.queueModelUpgrade({
+                model,
+                scope: 'all',
+                requestedBy: 'mission-control',
+            });
+            setModelUpgradeResult('success');
+            setTimeout(() => setModelUpgradeResult(null), 7000);
+        } catch (e: any) {
+            setModelUpgradeResult('error');
+            setError(e?.message || 'Failed to queue model upgrade');
+            setTimeout(() => setModelUpgradeResult(null), 7000);
+        } finally {
+            setQueueingModelUpgrade(false);
+        }
+    }, [queueingModelUpgrade]);
 
     const handleObjectiveAction = useCallback(async (id: string, action: 'approved' | 'rejected') => {
         setLoadingObjectiveId(id);
@@ -536,6 +585,45 @@ export default function MissionControlPage() {
                                         Relaunch with fresh plan
                                     </button>
                                 )}
+                                <button
+                                    onClick={handleQueueModelUpgrade}
+                                    disabled={queueingModelUpgrade}
+                                    title="Queue a model upgrade task for Nora to execute on the Mac Mini"
+                                    style={{
+                                        ...S.modelUpgradeBtn,
+                                        ...(modelUpgradeResult === 'success'
+                                            ? {
+                                                border: '1px solid rgba(34,197,94,0.35)',
+                                                background: 'rgba(34,197,94,0.14)',
+                                                color: '#4ade80',
+                                            }
+                                            : modelUpgradeResult === 'error'
+                                                ? {
+                                                    border: '1px solid rgba(239,68,68,0.35)',
+                                                    background: 'rgba(239,68,68,0.14)',
+                                                    color: '#f87171',
+                                                }
+                                                : {}),
+                                        opacity: queueingModelUpgrade ? 0.8 : 1,
+                                    }}
+                                >
+                                    {queueingModelUpgrade
+                                        ? <Loader2 size={14} className="spin" />
+                                        : modelUpgradeResult === 'success'
+                                            ? <CheckCircle2 size={14} />
+                                            : modelUpgradeResult === 'error'
+                                                ? <XCircle size={14} />
+                                                : <Zap size={14} />
+                                    }
+                                    {queueingModelUpgrade
+                                        ? 'Queueing model upgrade...'
+                                        : modelUpgradeResult === 'success'
+                                            ? 'Model upgrade queued'
+                                            : modelUpgradeResult === 'error'
+                                                ? 'Model upgrade failed'
+                                                : 'Upgrade agent models'
+                                    }
+                                </button>
                             </div>
                         </div>
 
