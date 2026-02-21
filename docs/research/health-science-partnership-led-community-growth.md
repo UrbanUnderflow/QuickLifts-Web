@@ -45,3 +45,37 @@ Communities that glorify only maximal effort tend to produce short bursts of int
 ### Pattern 5: Gap-Sensitive, Human-Centered Engagement
 
 Behavior data make it clear that **long gaps are where people slip away**, but the way communities respond to those gaps determines whether members return. Automated, shaming messages when someone misses a week can accelerate disengagement; warm, specific outreach from a coach, creator, or leader can turn the gap into a re-entry moment. Pulse’s gap detection features are most powerful when they trigger human, empathetic engagement in each partner lane—brand community managers, gym coaches, and run leaders reaching out with "we missed you" rather than "you’re behind."
+
+## Recommendations for Pulse Partnerships
+
+- **Design around three anchor rituals per week.** Use the 3+ sessions/week evidence as a design constraint: for brands, gyms, and run clubs, structure rounds around three core behaviors (e.g., a main session, a lighter/recovery touchpoint, and a readiness check-in) instead of sprawling task lists. This makes it easier for partners to tell a simple weekly story and for users to build habits.
+
+- **Require human hosts for meaningful rounds.** Make Creator-Led Accountability a default: every major partner activation (brand campaign, gym block, club season) should have a named coach, creator, or captain whose messages are visible inside Pulse. The app provides structure and receipts; the human host provides context, motivation, and relational accountability.
+
+- **Mirror live rituals inside Pulse.** For gyms and run clubs, translate existing schedules and rituals (class times, run nights, seasonal builds) into recurring rounds. For brands, use Pulse to extend in-person events into ongoing loops instead of one-off spikes. This applies the Hybrid Live + Digital Spines pattern so partners remain present in members’ weeks between live touchpoints.
+
+- **Make recovery behaviors first-class citizens.** Encourage partners in all lanes to program recovery rituals—sleep goals, easy days, mobility, deload weeks—directly into their rounds, and surface those completions in dashboards alongside training volume. This operationalizes the Recovery Rituals vs. Burnout Cycles pattern and helps partners avoid over-programming intensity.
+
+- **Treat gap alerts as prompts for human care.** Configure Pulse’s gap detection so that >3-day and >7-day gaps trigger suggested scripts and tasks for human leaders rather than only automated pushes. This brings the Gap-Sensitive, Human-Centered Engagement pattern to life and keeps outreach aligned with the evidence that tone matters as much as timing.
+
+## Risks & Guardrails
+
+- **Risk: Slipping into clinical or outcome guarantees.**
+  - **Example:** A brand or gym markets a round as "injury-proof," "hormone-balancing," or "return-to-play clearance" based solely on logged behaviors in Pulse.
+  - **Guardrail:** Enforce behavior-only framing across product and partner copy—show up, shorten gaps, build rituals, notice readiness. Review high-visibility language against digital health guidance and internal red/green rails before launch.
+
+- **Risk: Over-programming intensity, under-programming recovery.**
+  - **Example:** Back-to-back high-load rounds across brands, gyms, and clubs create constant pressure and rising fatigue, especially for members with limited capacity.
+  - **Guardrail:** Build seasonal planning and deload expectations into partner playbooks. Use metrics that reward sustainable engagement (3-ritual weeks, completion of recovery tasks, fewer long gaps) rather than only total volume or streak duration.
+
+- **Risk: Treating gaps as failure instead of context.**
+  - **Example:** A runner who misses two weeks due to illness receives a shaming "you’re falling behind" notification from a co-branded round.
+  - **Guardrail:** Position gaps as relationship signals; route alerts to human leaders with templates that normalize pauses and offer small restart steps. Avoid competitive or comparative language in default copy.
+
+- **Risk: Flattening distinct partner cultures into generic campaigns.**
+  - **Example:** A CrossFit box, spin studio, and trail run club are all given the same 30-day shred template that doesn’t reflect their identities or rituals.
+  - **Guardrail:** Use the shared patterns as a spine but require localization: partner-specific ritual names, imagery, and narrative framing for any marquee round, so each community sees itself in the experience.
+
+- **Risk: Over-reliance on the app without human anchors.**
+  - **Example:** A partnership launches with robust features and data, but no visible coaches, creators, or captains; users experiment briefly and then drift.
+  - **Guardrail:** Treat human fronting as a gating criterion for high-stakes activations. Pulse should highlight the presence and messages of real people at the center of each partner experience, with the app acting as infrastructure rather than the main character.
