@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useRouter } from 'next/router';
-import { X, Package, ExternalLink, FileText, ChevronRight, RefreshCw, MessageSquare, Check, XCircle } from 'lucide-react';
+import { X, Package, ExternalLink, FileText, ChevronRight, RefreshCw, Check, XCircle } from 'lucide-react';
 import { MarkdownRenderer } from '../MarkdownRenderer';
 import { collection, query, orderBy, limit, getDocs, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
@@ -63,6 +63,68 @@ const resolveAgentRouteId = (agentId?: string): string | null => {
 const normalizeDeliverableStatus = (value?: string): string => {
   const normalized = String(value || '').trim().toLowerCase();
   return normalized === '' || normalized === 'pending' ? 'needs-review' : normalized;
+};
+
+const normalizeText = (value?: string) => String(value || '').toLowerCase();
+
+const deriveMovementSignals = (d: Deliverable) => {
+  const text = normalizeText([d.title, d.description, d.reviewReason, d.filePath, ...(d.tags || [])].join(' '));
+
+  const signals: string[] = [];
+  let score = 0;
+
+  if (d.reviewReason && d.reviewReason.trim()) {
+    score += 2;
+    signals.push('Reviewer added a rationale for impact.');
+  } else {
+    signals.push('No reviewer rationale attached yet.');
+  }
+
+  const highImpactTerms = [
+    'north star',
+    'customer',
+    'activation',
+    'conversion',
+    'retention',
+    'partnership',
+    'run',
+    'community',
+    'revenue',
+    'churn',
+    'engagement',
+    'onboarding',
+    'dashboard',
+    'campaign',
+    'api',
+    'automation',
+    'security',
+    'bug',
+    'error',
+  ];
+
+  const matched = highImpactTerms.filter((term) => text.includes(term));
+  score += Math.min(3, matched.length);
+  signals.push(...matched.slice(0, 3).map((term) => `Contains likely impact signal: ${term}`));
+
+  if (d.filePath.includes('src/') || d.filePath.includes('web/') || d.filePath.includes('functions/')) {
+    score += 1;
+    signals.push('Touches product code or runtime surfaces.');
+  } else if (d.filePath.includes('docs/')) {
+    score += 0;
+    signals.push('Documentation-only artifact; confirm downstream execution impact before approval.');
+  }
+
+  const clampedScore = Math.min(5, Math.max(1, score));
+  const impactLabel = clampedScore >= 4 ? 'High' : clampedScore >= 3 ? 'Medium' : 'Low';
+  const impactToneClass = clampedScore >= 4 ? 'high' : clampedScore >= 3 ? 'medium' : 'low';
+
+  return {
+    score: clampedScore,
+    impactLabel,
+    impactToneClass,
+    signals: Array.from(new Set(signals)).slice(0, 4),
+    rationale: d.reviewReason || 'No rationale supplied yet. Ask for a concise movement rationale before approving.',
+  };
 };
 
 const sanitizeRecordedFilePath = (rawPath?: string): string => {
@@ -204,34 +266,6 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
     }
     onClose();
     router.push(`/admin/deliverables/${agent.id}${params.toString() ? `?${params.toString()}` : ''}`);
-  };
-
-  const navigateToExplainChat = (deliverable: Deliverable) => {
-    const routeAgentId = resolveAgentRouteId(deliverable.agentId);
-    const normalizedFilePath = sanitizeRecordedFilePath(deliverable.filePath);
-    const taskRef = deliverable.taskRef?.trim();
-    const title = deliverable.title || deliverable.filename || 'this deliverable';
-
-    const prefillMessage = [
-      `Please explain the purpose of "${title}" and how it gets us to the North Star.`,
-      normalizedFilePath ? `Deliverable file: ${normalizedFilePath}` : '',
-      taskRef ? `Task context: ${taskRef}` : '',
-      '',
-      'Please include:',
-      '1) why this deliverable matters right now,',
-      '2) what impact it should create, and',
-      '3) what signal will confirm it is moving us toward the North Star.',
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    const params = new URLSearchParams();
-    if (routeAgentId) params.set('agent', routeAgentId);
-    params.set('prefill', prefillMessage);
-    params.set('type', 'question');
-
-    onClose();
-    router.push(`/admin/agentChat?${params.toString()}`);
   };
 
   const agentCounts = AGENTS.map((a) => ({
@@ -446,6 +480,32 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
 
                 {isExpanded && (
                   <div className="sd-item-body">
+                    {(() => {
+                      const movement = deriveMovementSignals(d);
+                      return (
+                        <details className="sd-movement-section">
+                          <summary className="sd-movement-summary">
+                            <span>Movement assessment</span>
+                            <span className={`sd-movement-badge ${movement.impactToneClass}`}>
+                              {movement.impactLabel} ({movement.score}/5)
+                            </span>
+                          </summary>
+                          <div className="sd-movement-content">
+                            <div className="sd-movement-rationale">
+                              <strong>Why this matters:</strong>
+                              <p>{movement.rationale}</p>
+                            </div>
+                            {movement.signals.length > 0 && (
+                              <ul className="sd-movement-signals">
+                                {movement.signals.map((signal) => (
+                                  <li key={signal}>{signal}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </details>
+                      );
+                    })()}
                     {isNeedsReview(d.status) && d.reviewReason && (
                       <div className="sd-review-note">
                         <strong>Review reason:</strong>
@@ -493,13 +553,6 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
                         </button>
                       </div>
                     )}
-                    <button
-                      className="sd-explain-btn"
-                      onClick={() => navigateToExplainChat(d)}
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      Ask for Explanation
-                    </button>
                     <button
                       className="sd-open-page-btn"
                       onClick={() => navigateToAgent(d.agentId, d.filePath, d.taskRef)}
@@ -776,6 +829,87 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
           from { opacity: 0; }
           to { opacity: 1; }
         }
+        .sd-movement-section {
+          margin-top: 10px;
+          border: 1px solid rgba(16,185,129,0.18);
+          border-radius: 8px;
+          background: rgba(16,185,129,0.08);
+          overflow: hidden;
+        }
+        .sd-movement-summary {
+          list-style: none;
+          cursor: pointer;
+          padding: 8px 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          font-size: 10px;
+          color: #6ee7b7;
+          font-weight: 700;
+          font-family: inherit;
+          letter-spacing: 0.03em;
+        }
+        .sd-movement-summary::-webkit-details-marker { display: none; }
+        .sd-movement-summary::after {
+          content: '▸';
+          color: #7dd3fc;
+          transition: transform 0.2s;
+        }
+        .sd-movement-section[open] .sd-movement-summary::after {
+          transform: rotate(90deg);
+        }
+        .sd-movement-content {
+          padding: 10px;
+          border-top: 1px solid rgba(16,185,129,0.14);
+          background: rgba(17, 24, 39, 0.55);
+          display: grid;
+          gap: 8px;
+        }
+        .sd-movement-rationale {
+          color: #d1fae5;
+          font-size: 11px;
+          line-height: 1.45;
+        }
+        .sd-movement-rationale strong {
+          color: #6ee7b7;
+          font-size: 10px;
+          display: block;
+          margin-bottom: 4px;
+          letter-spacing: 0.02em;
+        }
+        .sd-movement-rationale p { margin: 0; }
+        .sd-movement-signals {
+          margin: 0;
+          padding-left: 14px;
+          font-size: 10px;
+          color: #99f6e4;
+          display: grid;
+          gap: 4px;
+          line-height: 1.4;
+        }
+        .sd-movement-badge {
+          border-radius: 999px;
+          font-size: 9px;
+          padding: 2px 8px;
+          border: 1px solid transparent;
+          flex-shrink: 0;
+        }
+        .sd-movement-badge.high {
+          background: rgba(16, 185, 129, 0.14);
+          color: #86efac;
+          border-color: rgba(16, 185, 129, 0.35);
+        }
+        .sd-movement-badge.medium {
+          background: rgba(250, 204, 21, 0.14);
+          color: #fde047;
+          border-color: rgba(250, 204, 21, 0.35);
+        }
+        .sd-movement-badge.low {
+          background: rgba(248, 113, 113, 0.14);
+          color: #fca5a5;
+          border-color: rgba(248, 113, 113, 0.35);
+        }
         .sd-tags {
           display: flex; flex-wrap: wrap; gap: 4px;
           padding: 10px 0 8px;
@@ -831,20 +965,6 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
           background: rgba(99,102,241,0.12);
           border-color: rgba(99,102,241,0.3);
           box-shadow: 0 0 16px rgba(99,102,241,0.08);
-        }
-        .sd-explain-btn {
-          display: flex; align-items: center; justify-content: center; gap: 6px;
-          width: 100%; padding: 8px; margin-top: 10px;
-          border-radius: 8px;
-          border: 1px solid rgba(245,158,11,0.25);
-          background: rgba(245,158,11,0.08);
-          color: #fbbf24; font-size: 11px; font-weight: 600;
-          cursor: pointer; transition: all 0.2s; font-family: inherit;
-        }
-        .sd-explain-btn:hover {
-          background: rgba(245,158,11,0.16);
-          border-color: rgba(245,158,11,0.4);
-          box-shadow: 0 0 16px rgba(245,158,11,0.12);
         }
       `}</style>
     </div>
