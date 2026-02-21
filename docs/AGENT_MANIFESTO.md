@@ -282,6 +282,11 @@ Verify that `project/kanban/board.md` ..."
 
 ### (a) `BLOCKED_REASON` and `DEPEN..."
 - **[2026-02-21] Nora** — Step "Open the canonical kanban board file `project/kanban/board.md` (or `project/kanban/board.json` if that is the active source) and enumerate all tickets with `STATUS: BLOCKED` or `STATUS: IN_PROGRESS` whose `UPDATED_AT` timestamp is older than 14 days." still had issues after 2 retries. Output signals: \bblocked\b. Last output: "Here’s a fresh, explicit enumeration using only what’s in `project/kanban/board.md`, with the filter applied step‑by‑ste..."
+- **[2026-02-21] Nora** — Step "For each `STATUS: BLOCKED` ticket in `project/kanban/board.md` that lacks specific context, append `BLOCKED_REASON:` and `DEPENDENCY:` lines that explicitly reference concrete artifacts (e.g., `api/partners/onboard.ts`, `web/app/partners/dashboard.tsx`, `config/partnerPlaybook.json`, or external partner docs)." still had issues after 2 retries. Output signals: \bblocked\b. Last output: "Step 2 is effectively a no-op on the current board, and I’ve documented that explicitly.
+
+### What I did for Step 2
+
+**G..."
 ---
 
 ## Operational Rules
