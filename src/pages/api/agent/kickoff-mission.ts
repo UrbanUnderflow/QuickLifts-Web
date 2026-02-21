@@ -1,7 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { spawn } from 'child_process';
+import { exec } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { promisify } from 'util';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -43,6 +45,7 @@ function getDb() {
 }
 
 const RUNNER_AGENT_IDS = ['nora', 'scout', 'solara', 'sage'];
+const execAsync = promisify(exec);
 
 async function setRunnersEnabled(db: ReturnType<typeof getFirestore>, enabled: boolean, reason: string) {
     const now = new Date();
@@ -75,6 +78,34 @@ async function setRunnersEnabled(db: ReturnType<typeof getFirestore>, enabled: b
     );
 }
 
+async function setRunnerServicesState(action: 'start' | 'stop') {
+    const uid = process.getuid?.() ?? 501;
+    const commands = RUNNER_AGENT_IDS.map((agentId) => {
+        const plistPath = `${process.env.HOME}/Library/LaunchAgents/com.quicklifts.agent.${agentId}.plist`;
+        if (action === 'start') {
+            return `launchctl bootstrap gui/${uid} "${plistPath}"`;
+        }
+        return `launchctl bootout gui/${uid} "${plistPath}"`;
+    });
+
+    await Promise.all(commands.map(async (command) => {
+        try {
+            await execAsync(command);
+        } catch (err: any) {
+            const msg = String(err?.stderr || err?.message || '');
+            if (
+                msg.includes('already bootstrapped') ||
+                msg.includes('No such process') ||
+                msg.includes('Could not find specified service') ||
+                msg.includes('Could not find service')
+            ) {
+                return;
+            }
+            throw err;
+        }
+    }));
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     const db = getDb();
     const missionRef = db.doc('company-config/mission-status');
@@ -96,8 +127,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (req.method === 'DELETE') {
         try {
             const snap = await missionRef.get();
-            if (!snap.exists || snap.data()?.status !== 'active') {
-                return res.status(200).json({ message: 'No active mission to pause.' });
+            if (!snap.exists) {
+                await missionRef.set({
+                    status: 'paused',
+                    pausedAt: new Date(),
+                    updatedAt: new Date(),
+                }, { merge: true });
+                await setRunnersEnabled(db, false, 'mission-paused');
+                await setRunnerServicesState('stop');
+                return res.status(200).json({ success: true, message: 'Mission pause enforced.' });
+            }
+            if (snap.data()?.status !== 'active') {
+                // Idempotent enforcement path: mission may already be paused, but we still
+                // need to push runner/presence shutdown state in case it drifted.
+                await setRunnersEnabled(db, false, 'mission-paused');
+                await setRunnerServicesState('stop');
+                return res.status(200).json({ success: true, message: 'Mission already paused — runner shutdown re-enforced.' });
             }
             await missionRef.update({
                 status: 'paused',
@@ -105,6 +150,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 updatedAt: new Date(),
             });
             await setRunnersEnabled(db, false, 'mission-paused');
+            await setRunnerServicesState('stop');
             return res.status(200).json({ success: true, message: 'Mission paused.' });
         } catch (err: any) {
             return res.status(500).json({ error: err.message });
@@ -129,6 +175,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
         // Ensure all runners are explicitly re-enabled before mission kickoff.
         await setRunnersEnabled(db, true, 'mission-start');
+        await setRunnerServicesState('start');
 
         const child = spawn('node', args, {
             detached: true,
