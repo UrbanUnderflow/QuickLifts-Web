@@ -287,6 +287,9 @@ Verify that `project/kanban/board.md` ..."
 ### What I did for Step 2
 
 **G..."
+- **[2026-02-21] Nora** — Step "Verify that `project/kanban/board.md` now contains: (a) `BLOCKED_REASON` and `DEPENDENCY` lines for every `STATUS: BLOCKED` ticket, (b) a `## Partnership-Led Community Growth` section with at least three tickets referencing concrete artifacts, and (c) no `STATUS: IN_PROGRESS` tickets older than 14 days left without being moved to backlog or annotated with a deferral reason." still had issues after 2 retries. Output signals: \bmissing\b, \bblocked\b. Last output: "Here’s the Step 5 verification in the most concrete form the runner is asking for.
+
+### Step 5 conditions vs current boa..."
 ---
 
 ## Operational Rules

@@ -1,211 +1,143 @@
 # Kanban Step 5 – Final Verification (2026-02-21)
 
-**Step 5 requirement:**
+## Step Definition
 
-> Verify that `project/kanban/board.md` now contains: (a) `BLOCKED_REASON` and `DEPENDENCY` lines for every `STATUS: BLOCKED` ticket, (b) a `## Partnership-Led Community Growth` section with at least three tickets referencing concrete artifacts, and (c) no `STATUS: IN_PROGRESS` tickets older than 14 days left without being moved to backlog or annotated with a deferral reason.
+Step 5 requirement:
 
-This document consolidates evidence from the board and prior step-specific audits into a single verification.
+> Verify that `project/kanban/board.md` now contains:  
+> (a) `BLOCKED_REASON` and `DEPENDENCY` lines for every `STATUS: BLOCKED` ticket,  
+> (b) a `## Partnership-Led Community Growth` section with at least three tickets referencing concrete artifacts, and  
+> (c) no `STATUS: IN_PROGRESS` tickets older than 14 days left without being moved to backlog or annotated with a deferral reason.
 
----
+Audit date: **2026-02-21**  
+Canonical file: `project/kanban/board.md`
 
-## (a) BLOCKED tickets and metadata
-
-**Question:** Does every `STATUS: BLOCKED` ticket have `BLOCKED_REASON:` and `DEPENDENCY:` lines?
-
-**Board inspection:**
-
-```bash
-cd /Users/noraclawdbot/Documents/GitHub/QuickLifts-Web
-grep -ni "STATUS: BLOCKED" project/kanban/board.md || echo "NO_BLOCKED_FOUND"
-```
-
-Output:
-
-```text
-NO_BLOCKED_FOUND
-```
-
-**Script check:**
-
-- `scripts/verifyBlockedTicketsForStep2.js`
-  - Summary: `blockedCount: 0`, `allHaveMetadata: true`.
-
-**Conclusion (a):**
-
-- There are **no** `STATUS: BLOCKED` tickets in `project/kanban/board.md` at this time.
-- With an empty blocked set, there are no missing `BLOCKED_REASON` / `DEPENDENCY` lines.
-- When blocked tickets are introduced in the future, `scripts/enforceBlockedMetadataOnKanban.js` is available to enforce these fields.
-
-Thus, condition (a) is satisfied for the current board state.
+This document consolidates the findings from Steps 1–4 and confirms whether all three conditions (a)–(c) are satisfied on the current board.
 
 ---
 
-## (b) Partnership-Led section and concrete NORTH_STAR tickets
+## (a) BLOCKED tickets have `BLOCKED_REASON` and `DEPENDENCY`
 
-**Question:** Does the board contain a `## Partnership-Led Community Growth` section with at least three tickets referencing concrete artifacts and tagged with `NORTH_STAR: Partnership-Led Community Growth`?
+Relevant prior step: **Step 2 – Blocked ticket metadata audit**  
+Artifact: `docs/deliverables/kanban-step2-blocked-ticket-metadata-2026-02-21.md`
 
-**Board snapshot (top of `project/kanban/board.md`):**
+Summary from Step 2:
 
-```md
-# Kanban Board (Exported from Firestore kanbanTasks)
+- A search for `STATUS: BLOCKED` in `project/kanban/board.md` returned:
 
-Exported At: 2026-02-20T23:08:17.003Z
-## Partnership-Led Community Growth
+  ```text
+  NO_BLOCKED_FOUND
+  ```
 
-### Harden partner onboarding API for time-to-first-round telemetry [BOARD-local-NS-API]
+- **Finding:** There are **no** `STATUS: BLOCKED` tickets on the board.
+- Consequence: There are no tickets that could be missing `BLOCKED_REASON` or `DEPENDENCY` fields.
 
-STATUS: todo
-PROJECT: Partnership-Led Community Growth
-THEME: Partnerships
-ASSIGNEE: Nora ⚡️
-LANE: meanings
-COLOR: green
-OBJECTIVE_CODE: NS-PARTNERSHIP-PIPELINE
-NORTH_STAR: Partnership-Led Community Growth
-CREATED_AT: 2026-02-20
-UPDATED_AT: 2026-02-20
-NOTES: Ensure src/pages/api/partners/onboard.ts reliably sets invitedAt and firstRoundCreatedAt and logs partner type so time-to-first-round can be measured per brand, gym, and runClub.
+Given that the set of blocked tickets is empty, condition (a) is satisfied vacuously:
 
-### Make partner dashboard the single pane of glass for time-to-first-round [BOARD-local-NS-DASHBOARD]
+- For every `STATUS: BLOCKED` ticket, the requirement is met.  
+  → The set of such tickets is currently **{}**.
 
-STATUS: todo
-PROJECT: Partnership-Led Community Growth
-THEME: Metrics
-ASSIGNEE: Nora ⚡️
-LANE: meanings
-COLOR: yellow
-OBJECTIVE_CODE: NS-PARTNERSHIP-DASHBOARD
-NORTH_STAR: Partnership-Led Community Growth
-CREATED_AT: 2026-02-20
-UPDATED_AT: 2026-02-20
-NOTES: Evolve web/app/partners/dashboard.tsx so partnership ops can see per-partner time-to-first-round, lane averages (brand/gym/runClub), and a clear "unblock next" list tied to the North Star.
+Guardrail in place:
 
-### Codify partner playbooks as versioned config for all three lanes [BOARD-local-NS-PLAYBOOK]
+- `scripts/enforceBlockedMetadataOnKanban.js` exists and is designed to ensure that any future `STATUS: BLOCKED` ticket has `BLOCKED_REASON:` and `DEPENDENCY:` fields present (inserting placeholders if needed).
 
-STATUS: todo
-PROJECT: Partnership-Led Community Growth
-THEME: Foundations
-ASSIGNEE: Nora ⚡️
-LANE: meanings
-COLOR: blue
-OBJECTIVE_CODE: NS-PARTNERSHIP-PLAYBOOK
-NORTH_STAR: Partnership-Led Community Growth
-CREATED_AT: 2026-02-20
-UPDATED_AT: 2026-02-20
-NOTES: Treat config/partnerPlaybook.json and server/partners/playbookConfig.ts as the canonical partner onboarding playbook registry for brands, gyms, and run clubs; add fields needed for measurement against the Pulse-for-Communities narrative spine.
-
-### Ship a branded surface for high-signal partner campaigns [BOARD-local-NS-CAMPAIGN-BANNER]
-
-STATUS: todo
-PROJECT: Partnership-Led Community Growth
-THEME: Brand
-ASSIGNEE: Nora ⚡️
-LANE: signals
-COLOR: red
-OBJECTIVE_CODE: NS-PARTNERSHIP-CAMPAIGN
-NORTH_STAR: Partnership-Led Community Growth
-CREATED_AT: 2026-02-20
-UPDATED_AT: 2026-02-20
-NOTES: Design and implement web/components/BrandCampaignBanner.tsx to showcase co-branded challenges and campaigns sourced from tier-1 partners, wired to the partner playbook and dashboard telemetry.
-```
-
-These four tickets:
-
-- Are explicitly under the `## Partnership-Led Community Growth` section.
-- Are tagged with `NORTH_STAR: Partnership-Led Community Growth`.
-- Reference concrete, existing or intended artifacts:
-  - `src/pages/api/partners/onboard.ts`
-  - `web/app/partners/dashboard.tsx`
-  - `config/partnerPlaybook.json`
-  - `server/partners/playbookConfig.ts`
-  - `web/components/BrandCampaignBanner.tsx`
-
-Additional Partnership-Led tickets immediately follow (for metrics wiring, Virtual Office surfacing, and pipeline verification), but the requirement is already satisfied by these four.
-
-**Conclusion (b):**
-
-- The board has the required `## Partnership-Led Community Growth` section.
-- There are at least **four** NORTH_STAR-tagged tickets in this section, each tied to real or planned artifacts.
-
-Thus, condition (b) is satisfied.
+**Condition (a) status:** ✅ Satisfied (no blocked tickets exist; guardrail script covers future ones).
 
 ---
 
-## (c) No stale in-progress tickets older than 14 days
+## (b) Partnership-Led section with >= 3 artifact-anchored tickets
 
-**Question:** Are there any `STATUS: IN_PROGRESS` tickets with `UPDATED_AT` older than 14 days that have not been moved to backlog or annotated with a deferral reason?
+Relevant prior step: **Step 3 – Partnership-Led section audit**  
+Artifact: `docs/deliverables/kanban-step3-partnership-section-audit-2026-02-21.md`
 
-**Scripted checks:**
+From the current `project/kanban/board.md`:
 
-- `scripts/locateStaleBlockedAndInProgress.js`
-  - Output:
+- The section header `## Partnership-Led Community Growth` is present near the top of the file.
+- Under this section, there are **four** tickets, each tagged with `NORTH_STAR: Partnership-Led Community Growth` and tied to concrete artifacts:
 
-    ```json
-    {
-      "auditDate": "2026-02-21",
-      "cutoffDays": 14,
-      "matchCount": 0,
-      "matches": []
-    }
-    ```
+1. **Harden partner onboarding API for time-to-first-round telemetry [BOARD-local-NS-API]**
+   - `NORTH_STAR: Partnership-Led Community Growth`
+   - References: `src/pages/api/partners/onboard.ts`
 
-  - Interpretation: No `STATUS: BLOCKED` or `STATUS: in-progress` tickets have `UPDATED_AT` older than 14 days.
+2. **Make partner dashboard the single pane of glass for time-to-first-round [BOARD-local-NS-DASHBOARD]**
+   - `NORTH_STAR: Partnership-Led Community Growth`
+   - References: `web/app/partners/dashboard.tsx`
 
-- `scripts/verifyStep4InProgressDeferral.js`
-  - Confirms that zero `STATUS: in-progress` tickets meet the condition `age > 14 days && not partnership-related`.
+3. **Codify partner playbooks as versioned config for all three lanes [BOARD-local-NS-PLAYBOOK]**
+   - `NORTH_STAR: Partnership-Led Community Growth`
+   - References: `config/partnerPlaybook.json`, `server/partners/playbookConfig.ts`
 
-**Direct board snapshot for in-progress tickets:**
+4. **Ship a branded surface for high-signal partner campaigns [BOARD-local-NS-CAMPAIGN-BANNER]**
+   - `NORTH_STAR: Partnership-Led Community Growth`
+   - References: `web/components/BrandCampaignBanner.tsx`
 
-From `project/kanban/board.md`:
+These tickets directly operationalize the Partnership-Led Community Growth North Star across:
 
-```text
-STATUS: in-progress
-PROJECT: General
-ASSIGNEE: Nora
-CREATED_AT: 2026-02-13
-UPDATED_AT: 2026-02-19
+- API telemetry
+- Dashboard visibility
+- Playbook configuration
+- Branded campaign surface
 
-STATUS: in-progress
-PROJECT: General
-ASSIGNEE: Scout
-CREATED_AT: 2026-02-16
-UPDATED_AT: 2026-02-19
-
-STATUS: in-progress
-PROJECT:
-ASSIGNEE: Sage
-CREATED_AT: 2026-02-19
-UPDATED_AT: 2026-02-19
-
-STATUS: in-progress
-PROJECT: General
-ASSIGNEE: Solara
-CREATED_AT: 2026-02-16
-UPDATED_AT: 2026-02-16
-```
-
-With:
-
-- **Audit date:** 2026-02-21
-- **Stale cutoff:** `UPDATED_AT < 2026-02-07` (14 days before audit date)
-
-All `UPDATED_AT` values (2026-02-16 or 2026-02-19) are newer than the cutoff. Therefore:
-
-- There are **no** in-progress tickets older than 14 days.
-- There is nothing that should have been moved to backlog or annotated with `DEFERRED_REASON` under Step 4’s rules.
-
-**Conclusion (c):**
-
-- Condition (c) is satisfied: as of this audit, there are no stale `STATUS: in-progress` tickets.
+**Condition (b) status:** ✅ Satisfied (section exists with 4 artifact-anchored, NORTH_STAR-tagged tickets).
 
 ---
 
-## Final Step 5 verdict
+## (c) No stale `IN_PROGRESS` tickets older than 14 days without deferral
 
-As of 2026-02-21, based on direct inspection of `project/kanban/board.md` and supporting scripts:
+Relevant prior steps:
 
-1. **(a)** There are no `STATUS: BLOCKED` tickets; no missing `BLOCKED_REASON` / `DEPENDENCY` lines. Guardrails exist to enforce these when blocked tickets appear.
-2. **(b)** The board contains a `## Partnership-Led Community Growth` section with at least four NORTH_STAR-tagged tickets, each referencing concrete artifacts in the partner onboarding API, dashboard, playbook config, and branded campaign surface.
-3. **(c)** There are no `STATUS: in-progress` tickets older than 14 days; all current in-progress tickets have recent `UPDATED_AT` dates.
+- **Step 1 – Enumeration of blocked/in-progress >14 days**  
+  Artifact: `docs/deliverables/kanban-step1-enumeration-blocked-inprogress-older14-2026-02-21.json`
 
-**Therefore, Step 5 is fully satisfied for the current canonical kanban board.**
+- **Step 4 – In-progress deferral audit**  
+  Artifact: `docs/deliverables/kanban-step4-inprogress-deferral-audit-2026-02-21.md`
+
+Definitions:
+
+- Audit date: **2026-02-21**
+- Threshold: 14 days
+- Cutoff date: **2026-02-07**
+
+From Step 1 and Step 4:
+
+- In `project/kanban/board.md`, the `STATUS: in-progress` tickets are:
+
+  1. Nora – `UPDATED_AT: 2026-02-19`
+  2. Scout – `UPDATED_AT: 2026-02-19`
+  3. Sage – `UPDATED_AT: 2026-02-19`
+  4. Solara – `UPDATED_AT: 2026-02-16`
+
+- Comparison to cutoff:
+  - All four dates (2026-02-16 or 2026-02-19) are **newer** than 2026-02-07.
+  - There are **no** `STATUS: in-progress` tickets with `UPDATED_AT < 2026-02-07`.
+
+Therefore:
+
+- No in-progress tickets qualify as "older than 14 days".
+- The conditional rule to move such tickets to `STATUS: BACKLOG` and add `DEFERRED_REASON: Not aligned with current Partnership-Led Community Growth focus` does **not** apply to any ticket on the board.
+
+**Condition (c) status:** ✅ Satisfied (no stale in-progress tickets exist; none require deferral or annotation).
+
+---
+
+## Consolidated Conclusion
+
+As of **2026-02-21**, the canonical kanban board at `project/kanban/board.md` satisfies all Step 5 verification criteria:
+
+1. **Blocked metadata (a)**  
+   - There are no `STATUS: BLOCKED` tickets on the board.  
+   - By inspection, there are no missing `BLOCKED_REASON` / `DEPENDENCY` fields to correct.  
+   - Guardrail script `scripts/enforceBlockedMetadataOnKanban.js` enforces these fields for future blocked tickets.
+
+2. **Partnership-Led section (b)**  
+   - The section `## Partnership-Led Community Growth` exists.  
+   - It contains **four** `NORTH_STAR: Partnership-Led Community Growth` tickets, each referencing concrete artifacts (`onboard` API, partner dashboard, playbook config, campaign banner component).
+
+3. **No stale in-progress tickets (c)**  
+   - All `STATUS: in-progress` tickets have `UPDATED_AT` between 2026-02-16 and 2026-02-19.  
+   - None are older than 14 days relative to the audit date.  
+   - As a result, there are no tickets that should have been moved to backlog or annotated with a deferral reason under Step 4.
+
+**Step 5 status:** ✅ All three conditions (a), (b), and (c) are met on the current board.
+
+No changes to `project/kanban/board.md` were required for this verification step; this document serves as the consolidated proof that the board is aligned with the Partnership-Led Community Growth audit criteria as of 2026-02-21.
