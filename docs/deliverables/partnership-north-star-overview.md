@@ -1,0 +1,7 @@
+# Partnership-Led Community Growth
+
+Pulse’s north star is Partnership-Led Community Growth: we become the fitness platform that the most energized, community-driven brands and spaces choose as their digital home. That means we don’t just rent attention from ads — we earn trust from partners whose communities already show up for each other and give them a real place to keep that energy alive.
+
+When an athletic brand, creator-led gym, or run club plugs into Pulse, they’re not plugging into yet another feed. They’re stepping into a shared challenge layer where their people can move through blocks, seasons, and rituals together: 6–8 week strength cycles, 21-day recovery resets, base miles seasons, race builds. Pulse holds the story of those seasons end to end — who joined, who stayed, who came back for the next chapter.
+
+Being the digital home for these communities means Pulse shows up where they already are, then quietly becomes the backbone of how they train together. Captains, coaches, and ambassadors host the challenges; members check in, see each other’s streaks, and feel the culture their brand or space has built. Partnership-Led Community Growth is the simple promise behind all of this: when our partners’ communities get stronger and more connected on Pulse, Pulse grows with them.

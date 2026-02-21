@@ -148,7 +148,19 @@ export const computePartnerRetention = functions.pubsub
       examples: summary.slice(0, 5),
     });
 
-    // Step 4 will persist these PartnerRetentionDoc entries into the
-    // `partnerRetention` collection.
+    // Persist aggregates into `partnerRetention` as upserts.
+    const batch = db.batch();
+    summary.forEach((doc) => {
+      const docId = `${doc.partnerId}_${doc.cohortMonth}`;
+      const ref = db.collection("partnerRetention").doc(docId);
+      batch.set(ref, doc, { merge: true });
+    });
+
+    await batch.commit();
+
+    console.log("[computePartnerRetention] Wrote partnerRetention aggregates", {
+      written: summary.length,
+    });
+
     return null;
   });

@@ -1,0 +1,42 @@
+KANBAN_STEP4_VERIFY_IN_PROGRESS
+{
+  "boardPath": "/Users/noraclawdbot/Documents/GitHub/QuickLifts-Web/project/kanban/board.md",
+  "auditDate": "2026-02-21",
+  "cutoffDays": 14,
+  "inProgressCount": 4,
+  "needingDeferralCount": 0,
+  "inProgress": [
+    {
+      "updatedAt": "2026-02-19",
+      "ageDays": 2,
+      "isOlderThanCutoff": false,
+      "touchesPartnership": false,
+      "needsDeferral": false,
+      "preview": "STATUS: in-progress PROJECT: General THEME:  ASSIGNEE: Nora LANE:  COLOR:  OBJECTIVE_CODE:  CREATED_AT: 2026-02-13 UPDATED_AT: 2026-02-19 NOTES: "
+    },
+    {
+      "updatedAt": "2026-02-19",
+      "ageDays": 2,
+      "isOlderThanCutoff": false,
+      "touchesPartnership": false,
+      "needsDeferral": false,
+      "preview": "STATUS: in-progress PROJECT: General THEME:  ASSIGNEE: Scout LANE:  COLOR:  OBJECTIVE_CODE:  CREATED_AT: 2026-02-16 UPDATED_AT: 2026-02-19 NOTES: "
+    },
+    {
+      "updatedAt": "2026-02-19",
+      "ageDays": 2,
+      "isOlderThanCutoff": false,
+      "touchesPartnership": false,
+      "needsDeferral": false,
+      "preview": "STATUS: in-progress PROJECT:  THEME:  ASSIGNEE: Sage LANE:  COLOR:  OBJECTIVE_CODE:  CREATED_AT: 2026-02-19 UPDATED_AT: 2026-02-19 NOTES: "
+    },
+    {
+      "updatedAt": "2026-02-16",
+      "ageDays": 5,
+      "isOlderThanCutoff": false,
+      "touchesPartnership": false,
+      "needsDeferral": false,
+      "preview": "STATUS: in-progress PROJECT: General THEME:  ASSIGNEE: Solara LANE:  COLOR:  OBJECTIVE_CODE:  CREATED_AT: 2026-02-16 UPDATED_AT: 2026-02-16 NOTES: "
+    }
+  ]
+}
