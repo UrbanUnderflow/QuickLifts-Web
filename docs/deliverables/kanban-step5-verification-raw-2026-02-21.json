@@ -1,0 +1,22 @@
+KANBAN_STEP5_VERIFY
+{
+  "boardPath": "/Users/noraclawdbot/Documents/GitHub/QuickLifts-Web/project/kanban/board.md",
+  "blocked": {
+    "blockedCount": 0,
+    "allHaveMetadata": true,
+    "blocked": []
+  },
+  "partnership": {
+    "hasSection": true,
+    "ticketCount": 752,
+    "northStarTicketCount": 0,
+    "tickets": []
+  },
+  "staleInProgress": {
+    "auditDate": "2026-02-21",
+    "cutoffDays": 14,
+    "inProgressCount": 4,
+    "staleCount": 0,
+    "stale": []
+  }
+}
