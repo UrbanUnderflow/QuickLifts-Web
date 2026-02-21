@@ -63,7 +63,51 @@ const AGENTS = [
     { id: 'solara', name: 'Solara', emoji: '☀️', color: '#f59e0b' },
     { id: 'sage', name: 'Sage', emoji: '🌿', color: '#22c55e' },
 ];
+type ModelUpgradeOption = {
+    value: string;
+    label: string;
+};
+
 const DEFAULT_MODEL_UPGRADE_TARGET = 'openai/gpt-5.3-codex';
+const MODEL_UPGRADE_OPTIONS: ModelUpgradeOption[] = [
+    { value: 'openai/gpt-5.3-codex', label: 'OpenAI: gpt-5.3-codex' },
+    { value: 'openai/gpt-5.2-codex', label: 'OpenAI: gpt-5.2-codex' },
+    { value: 'openai/gpt-5.1-codex-max', label: 'OpenAI: gpt-5.1-codex-max' },
+    { value: 'openai/gpt-5.1-codex-mini', label: 'OpenAI: gpt-5.1-codex-mini' },
+    { value: 'openai/gpt-5.1-codex', label: 'OpenAI: gpt-5.1-codex' },
+    { value: 'openai/gpt-5-codex', label: 'OpenAI: gpt-5-codex' },
+    { value: 'openai/o3-mini', label: 'OpenAI: o3-mini' },
+    { value: 'openai/o4-mini', label: 'OpenAI: o4-mini' },
+    { value: 'openai/o3-deep-research', label: 'OpenAI: o3-deep-research' },
+    { value: 'openai/o4-mini-deep-research', label: 'OpenAI: o4-mini-deep-research' },
+    { value: 'openai/o3', label: 'OpenAI: o3' },
+    { value: 'openai/o3-pro', label: 'OpenAI: o3-pro' },
+    { value: 'openai/o1-pro', label: 'OpenAI: o1-pro' },
+    { value: 'openai/o1-mini', label: 'OpenAI: o1-mini' },
+    { value: 'openai/o1', label: 'OpenAI: o1' },
+    { value: 'openai/gpt-5.2-pro', label: 'OpenAI: gpt-5.2-pro' },
+    { value: 'openai/gpt-5-pro', label: 'OpenAI: gpt-5-pro' },
+    { value: 'openai/gpt-5.2', label: 'OpenAI: gpt-5.2' },
+    { value: 'openai/gpt-5.2-chat-latest', label: 'OpenAI: gpt-5.2-chat-latest' },
+    { value: 'openai/gpt-5.1', label: 'OpenAI: gpt-5.1' },
+    { value: 'openai/gpt-5.1-chat-latest', label: 'OpenAI: gpt-5.1-chat-latest' },
+    { value: 'openai/gpt-5-mini', label: 'OpenAI: gpt-5-mini' },
+    { value: 'openai/gpt-5-nano', label: 'OpenAI: gpt-5-nano' },
+    { value: 'openai/gpt-5-chat-latest', label: 'OpenAI: gpt-5-chat-latest' },
+    { value: 'openai/codex-mini-latest', label: 'OpenAI: codex-mini-latest' },
+    { value: 'openai/gpt-4.1-nano', label: 'OpenAI: gpt-4.1-nano' },
+    { value: 'openai/gpt-4.1-mini', label: 'OpenAI: gpt-4.1-mini' },
+    { value: 'openai/gpt-4.1', label: 'OpenAI: gpt-4.1' },
+    { value: 'openai/gpt-4o-2024-05-13', label: 'OpenAI: gpt-4o-2024-05-13' },
+    { value: 'openai/gpt-4o-mini', label: 'OpenAI: gpt-4o-mini' },
+    { value: 'openai/gpt-4o', label: 'OpenAI: gpt-4o' },
+    { value: 'anthropic/claude-opus-4', label: 'Anthropic: claude-opus-4' },
+    { value: 'anthropic/claude-opus-4.1', label: 'Anthropic: claude-opus-4.1' },
+    { value: 'anthropic/claude-sonnet-4', label: 'Anthropic: claude-sonnet-4' },
+    { value: 'anthropic/claude-sonnet-3.7', label: 'Anthropic: claude-sonnet-3.7' },
+    { value: 'anthropic/claude-sonnet-3.5', label: 'Anthropic: claude-sonnet-3.5' },
+    { value: 'anthropic/claude-haiku-3.5', label: 'Anthropic: claude-haiku-3.5' },
+].sort((a, b) => a.label.localeCompare(b.label));
 
 /* ─── Utils ─────────────────────────────────────────── */
 
@@ -300,6 +344,11 @@ export default function MissionControlPage() {
     const [loadingObjectiveId, setLoadingObjectiveId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [tick, setTick] = useState(0);
+    const [allModelUpgradeTarget, setAllModelUpgradeTarget] = useState(() => {
+        return MODEL_UPGRADE_OPTIONS.some((option) => option.value === DEFAULT_MODEL_UPGRADE_TARGET)
+            ? DEFAULT_MODEL_UPGRADE_TARGET
+            : MODEL_UPGRADE_OPTIONS[0]?.value || '';
+    });
 
     // Tick every 30s for countdown refresh
     useEffect(() => {
@@ -414,12 +463,7 @@ export default function MissionControlPage() {
 
     const handleQueueModelUpgrade = useCallback(async () => {
         if (queueingModelUpgrade) return;
-        const input = window.prompt(
-            'Model ID to apply across Nora, Scout, Solara, and Sage:',
-            DEFAULT_MODEL_UPGRADE_TARGET
-        );
-        if (input === null) return;
-        const model = input.trim();
+        const model = allModelUpgradeTarget.trim();
         if (!model) return;
 
         const confirmed = window.confirm(
@@ -447,7 +491,7 @@ export default function MissionControlPage() {
         } finally {
             setQueueingModelUpgrade(false);
         }
-    }, [queueingModelUpgrade]);
+    }, [allModelUpgradeTarget, queueingModelUpgrade]);
 
     const handleObjectiveAction = useCallback(async (id: string, action: 'approved' | 'rejected') => {
         setLoadingObjectiveId(id);
@@ -585,45 +629,70 @@ export default function MissionControlPage() {
                                         Relaunch with fresh plan
                                     </button>
                                 )}
-                                <button
-                                    onClick={handleQueueModelUpgrade}
-                                    disabled={queueingModelUpgrade}
-                                    title="Queue a model upgrade task for Nora to execute on the Mac Mini"
-                                    style={{
-                                        ...S.modelUpgradeBtn,
-                                        ...(modelUpgradeResult === 'success'
-                                            ? {
-                                                border: '1px solid rgba(34,197,94,0.35)',
-                                                background: 'rgba(34,197,94,0.14)',
-                                                color: '#4ade80',
-                                            }
-                                            : modelUpgradeResult === 'error'
+                                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                    <select
+                                        value={allModelUpgradeTarget}
+                                        onChange={(e) => setAllModelUpgradeTarget(e.target.value)}
+                                        disabled={queueingModelUpgrade}
+                                        title="Select model for upgrading Nora, Scout, Solara, and Sage"
+                                        style={{
+                                            height: 38,
+                                            minWidth: 250,
+                                            borderRadius: 10,
+                                            border: '1px solid rgba(59,130,246,0.3)',
+                                            background: 'rgba(59,130,246,0.12)',
+                                            color: '#93c5fd',
+                                            fontSize: 12,
+                                            fontWeight: 600,
+                                            padding: '0 10px',
+                                        }}
+                                    >
+                                        {MODEL_UPGRADE_OPTIONS.map((option) => (
+                                            <option key={option.value} value={option.value}>
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        onClick={handleQueueModelUpgrade}
+                                        disabled={queueingModelUpgrade}
+                                        title="Queue a model upgrade task for Nora to execute on the Mac Mini"
+                                        style={{
+                                            ...S.modelUpgradeBtn,
+                                            ...(modelUpgradeResult === 'success'
                                                 ? {
-                                                    border: '1px solid rgba(239,68,68,0.35)',
-                                                    background: 'rgba(239,68,68,0.14)',
-                                                    color: '#f87171',
+                                                    border: '1px solid rgba(34,197,94,0.35)',
+                                                    background: 'rgba(34,197,94,0.14)',
+                                                    color: '#4ade80',
                                                 }
-                                                : {}),
-                                        opacity: queueingModelUpgrade ? 0.8 : 1,
-                                    }}
-                                >
-                                    {queueingModelUpgrade
-                                        ? <Loader2 size={14} className="spin" />
-                                        : modelUpgradeResult === 'success'
-                                            ? <CheckCircle2 size={14} />
-                                            : modelUpgradeResult === 'error'
-                                                ? <XCircle size={14} />
-                                                : <Zap size={14} />
-                                    }
-                                    {queueingModelUpgrade
-                                        ? 'Queueing model upgrade...'
-                                        : modelUpgradeResult === 'success'
-                                            ? 'Model upgrade queued'
-                                            : modelUpgradeResult === 'error'
-                                                ? 'Model upgrade failed'
-                                                : 'Upgrade agent models'
-                                    }
-                                </button>
+                                                : modelUpgradeResult === 'error'
+                                                    ? {
+                                                        border: '1px solid rgba(239,68,68,0.35)',
+                                                        background: 'rgba(239,68,68,0.14)',
+                                                        color: '#f87171',
+                                                    }
+                                                    : {}),
+                                            opacity: queueingModelUpgrade ? 0.8 : 1,
+                                        }}
+                                    >
+                                        {queueingModelUpgrade
+                                            ? <Loader2 size={14} className="spin" />
+                                            : modelUpgradeResult === 'success'
+                                                ? <CheckCircle2 size={14} />
+                                                : modelUpgradeResult === 'error'
+                                                    ? <XCircle size={14} />
+                                                    : <Zap size={14} />
+                                        }
+                                        {queueingModelUpgrade
+                                            ? 'Queueing model upgrade...'
+                                            : modelUpgradeResult === 'success'
+                                                ? 'Model upgrade queued'
+                                                : modelUpgradeResult === 'error'
+                                                    ? 'Model upgrade failed'
+                                                    : 'Upgrade agent models'
+                                        }
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
