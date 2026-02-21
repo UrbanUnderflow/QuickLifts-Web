@@ -59,6 +59,20 @@ CREATED_AT: 2026-02-20
 UPDATED_AT: 2026-02-20
 NOTES: Design and implement web/components/BrandCampaignBanner.tsx to showcase co-branded challenges and campaigns sourced from tier-1 partners, wired to the partner playbook and dashboard telemetry.
 
+### Surface Partnership-Led lane in Virtual Office project management view [BOARD-local-NS-VO-PANEL]
+
+STATUS: todo
+PROJECT: Partnership-Led Community Growth
+THEME: Virtual Office
+ASSIGNEE: Nora ⚡️
+LANE: meanings
+COLOR: purple
+OBJECTIVE_CODE: NS-PARTNERSHIP-VO-PANEL
+NORTH_STAR: Partnership-Led Community Growth
+CREATED_AT: 2026-02-21
+UPDATED_AT: 2026-02-21
+NOTES: Wire src/pages/admin/projectManagement.tsx and src/components/virtualOffice/VirtualOfficeContent.tsx so the Partnership-Led Community Growth lane and its NORTH_STAR tickets are surfaced as a dedicated column/panel in the Virtual Office.
+
 
 ### Partnership metrics: wire time-to-first-round into kanban & metrics [HmL98nuhQ64dpc3oa8Me]
 
