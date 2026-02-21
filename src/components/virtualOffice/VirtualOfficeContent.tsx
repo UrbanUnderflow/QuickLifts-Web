@@ -102,6 +102,11 @@ const PRICING_SOURCE_URLS = {
 };
 const DEFAULT_MODEL_UPGRADE_TARGET = 'openai/gpt-5.3-codex';
 
+type ModelUpgradeOption = {
+  value: string;
+  label: string;
+};
+
 const MODEL_PRICE_RULES: Array<{
   match: RegExp;
   pricing: ModelPricing;
@@ -459,6 +464,79 @@ const MODEL_PRICE_RULES: Array<{
   ];
 
 const TOKEN_BREAKDOWN_UNKNOWN_MODEL = 'unknown-model';
+
+const normalizeUpgradeModelValue = (rawModel?: string): string => {
+  if (!rawModel) return '';
+
+  const raw = String(rawModel).trim().toLowerCase().replace(/^model=/, '');
+  if (!raw) return '';
+
+  if (raw.includes('/')) {
+    const [provider, ...modelParts] = raw.split('/');
+    if (provider === 'openai' || provider === 'anthropic') {
+      return `${provider}/${modelParts.join('/')}`;
+    }
+    return raw;
+  }
+
+  if (raw.includes(':')) {
+    const [provider, ...modelParts] = raw.split(':');
+    if (provider === 'openai' || provider === 'anthropic') {
+      const parsedModel = modelParts.join(':').trim().replace(/^\/+/, '');
+      if (parsedModel) return `${provider}/${parsedModel}`;
+    }
+  }
+
+  const isAnthropicModel = /claude|sonnet|haiku|opus/.test(raw);
+  const provider = isAnthropicModel ? 'anthropic' : 'openai';
+  return `${provider}/${raw}`;
+};
+
+const normalizeUpgradeModelLabel = (value: string): string => {
+  const trimmed = String(value || '').trim().toLowerCase();
+  if (!trimmed) return 'Select model';
+
+  if (trimmed.includes('/')) {
+    const [provider, ...modelParts] = trimmed.split('/');
+    const providerLabel = provider === 'anthropic' ? 'Anthropic' : provider === 'openai' ? 'OpenAI' : provider || 'Model';
+    const model = modelParts.join('/') || value;
+    return `${providerLabel}: ${model}`;
+  }
+
+  return `Model: ${trimmed}`;
+};
+
+const buildModelUpgradeOptions = (agents: AgentPresence[]): ModelUpgradeOption[] => {
+  const optionMap = new Map<string, string>();
+
+  const addOption = (value: string, label: string) => {
+    const normalizedValue = normalizeUpgradeModelValue(value);
+    if (!normalizedValue || optionMap.has(normalizedValue)) return;
+    optionMap.set(normalizedValue, label);
+  };
+
+  MODEL_PRICE_RULES.forEach((entry) => {
+    const isAnthropic = /claude|sonnet|haiku|opus/.test(entry.pricing.model.toLowerCase());
+    const provider = isAnthropic ? 'anthropic' : 'openai';
+    addOption(
+      `${provider}/${entry.pricing.model}`,
+      normalizeUpgradeModelLabel(`${provider}/${entry.pricing.model}`)
+    );
+  });
+
+  addOption(DEFAULT_MODEL_UPGRADE_TARGET, normalizeUpgradeModelLabel(DEFAULT_MODEL_UPGRADE_TARGET));
+
+  agents.forEach((agent) => {
+    addOption(
+      agent.currentModelRaw || agent.currentModel || '',
+      normalizeUpgradeModelLabel(agent.currentModelRaw || agent.currentModel || '')
+    );
+  });
+
+  return Array.from(optionMap.entries())
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+};
 
 const toSafeNumber = (value: unknown): number => {
   const n = Number(value);
@@ -1712,6 +1790,7 @@ interface AgentDeskProps {
   isTransitioning?: boolean;
   transitionDelay?: number;
   isAtTable?: boolean;
+  modelUpgradeOptions: ModelUpgradeOption[];
   onPositionChange?: (id: string, x: number, y: number) => void;
   onTokenBreakdown?: (
     event: React.MouseEvent | React.KeyboardEvent,
@@ -1728,6 +1807,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   isTransitioning = false,
   transitionDelay = 0,
   isAtTable = false,
+  modelUpgradeOptions,
   onPositionChange,
   onTokenBreakdown,
 }) => {
@@ -1740,10 +1820,21 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
   const installProgress = agent.installProgress || null;
   const [powerLoading, setPowerLoading] = useState(false);
   const [queueingModelUpgrade, setQueueingModelUpgrade] = useState(false);
+  const [singleModelUpgradeTarget, setSingleModelUpgradeTarget] = useState(() => normalizeUpgradeModelValue(
+    agent.currentModelRaw || agent.currentModel || DEFAULT_MODEL_UPGRADE_TARGET
+  ));
   const isRunnerEnabled = agent.runnerEnabled !== false;
   const isOnline = agent.status !== 'offline' && isRunnerEnabled;
   const effectiveStatus = isRunnerEnabled ? agent.status : 'offline';
   const status = STATUS_CONFIG[effectiveStatus as keyof typeof STATUS_CONFIG] || DEFAULT_STATUS;
+
+  useEffect(() => {
+    const activeModel = normalizeUpgradeModelValue(agent.currentModelRaw || agent.currentModel || DEFAULT_MODEL_UPGRADE_TARGET);
+    const defaultedModel = modelUpgradeOptions.some((option) => option.value === activeModel)
+      ? activeModel
+      : modelUpgradeOptions[0]?.value || DEFAULT_MODEL_UPGRADE_TARGET;
+    setSingleModelUpgradeTarget((current) => (current === defaultedModel ? current : defaultedModel));
+  }, [agent.currentModelRaw, agent.currentModel, modelUpgradeOptions]);
 
   const handlePowerToggle = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1787,10 +1878,7 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
     e.stopPropagation();
     if (queueingModelUpgrade || agent.id === 'antigravity') return;
 
-    const defaultModel = (agent.currentModelRaw || agent.currentModel || DEFAULT_MODEL_UPGRADE_TARGET).trim() || DEFAULT_MODEL_UPGRADE_TARGET;
-    const input = window.prompt(`Enter model for ${agent.displayName}:`, defaultModel);
-    if (input === null) return;
-    const model = input.trim();
+    const model = singleModelUpgradeTarget.trim();
     if (!model) return;
 
     const confirmed = window.confirm(
@@ -1814,7 +1902,11 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
     } finally {
       setQueueingModelUpgrade(false);
     }
-  }, [agent.currentModel, agent.currentModelRaw, agent.displayName, agent.id, queueingModelUpgrade]);
+  }, [agent.displayName, agent.id, queueingModelUpgrade, singleModelUpgradeTarget]);
+
+  const handleSingleModelUpgradeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSingleModelUpgradeTarget(e.target.value);
+  }, []);
 
   // ─── Drag state ─────────────────────────────
   const [isDragging, setIsDragging] = useState(false);
@@ -2466,32 +2558,57 @@ const AgentDeskSprite: React.FC<AgentDeskProps> = ({
 
             {/* Direct model upgrade trigger */}
             {agent.id !== 'antigravity' && (
-              <button
-                onClick={handleQueueSingleModelUpgrade}
-                disabled={queueingModelUpgrade}
-                title="Queue a model upgrade task for Nora to run on the Mac Mini"
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  margin: '6px 0 8px',
-                  padding: '7px 10px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(59, 130, 246, 0.35)',
-                  background: 'rgba(59, 130, 246, 0.12)',
-                  color: '#93c5fd',
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  letterSpacing: '0.02em',
-                  cursor: queueingModelUpgrade ? 'wait' : 'pointer',
-                  opacity: queueingModelUpgrade ? 0.8 : 1,
-                }}
-              >
-                {queueingModelUpgrade ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-                {queueingModelUpgrade ? 'Queueing upgrade...' : 'Upgrade model via Nora'}
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', margin: '6px 0 8px' }}>
+                <select
+                  value={singleModelUpgradeTarget}
+                  onChange={handleSingleModelUpgradeChange}
+                  disabled={queueingModelUpgrade}
+                  title="Select model to queue for this agent"
+                  style={{
+                    width: '100%',
+                    height: '30px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(59, 130, 246, 0.35)',
+                    background: 'rgba(59, 130, 246, 0.12)',
+                    color: '#93c5fd',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    padding: '0 8px',
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  {modelUpgradeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleQueueSingleModelUpgrade}
+                  disabled={queueingModelUpgrade}
+                  title="Queue a model upgrade task for Nora to run on the Mac Mini"
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    padding: '7px 10px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(59, 130, 246, 0.35)',
+                    background: 'rgba(59, 130, 246, 0.12)',
+                    color: '#93c5fd',
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    letterSpacing: '0.02em',
+                    cursor: queueingModelUpgrade ? 'wait' : 'pointer',
+                    opacity: queueingModelUpgrade ? 0.8 : 1,
+                  }}
+                >
+                  {queueingModelUpgrade ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                  {queueingModelUpgrade ? 'Queueing upgrade...' : 'Upgrade model via Nora'}
+                </button>
+              </div>
             )}
 
             {/* Task History */}
@@ -3039,6 +3156,7 @@ const VirtualOfficeContent: React.FC = () => {
   const [restartToast, setRestartToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null);
   const [queueingModelUpgrade, setQueueingModelUpgrade] = useState(false);
   const [modelUpgradeResult, setModelUpgradeResult] = useState<'success' | 'error' | null>(null);
+  const [allModelUpgradeTarget, setAllModelUpgradeTarget] = useState(DEFAULT_MODEL_UPGRADE_TARGET);
 
   const handleRestartAgents = useCallback(async () => {
     if (restartingAgents) return;
@@ -3128,12 +3246,7 @@ const VirtualOfficeContent: React.FC = () => {
   const handleQueueModelUpgradeAll = useCallback(async () => {
     if (queueingModelUpgrade) return;
 
-    const input = window.prompt(
-      'Model ID to apply across Nora, Scout, Solara, and Sage:',
-      DEFAULT_MODEL_UPGRADE_TARGET
-    );
-    if (input === null) return;
-    const model = input.trim();
+    const model = allModelUpgradeTarget.trim();
     if (!model) return;
 
     const confirmed = window.confirm(
@@ -3162,7 +3275,7 @@ const VirtualOfficeContent: React.FC = () => {
     } finally {
       setQueueingModelUpgrade(false);
     }
-  }, [queueingModelUpgrade]);
+  }, [allModelUpgradeTarget, queueingModelUpgrade]);
 
   const handleOpenManifesto = useCallback(async () => {
     setShowManifesto(true);
@@ -3451,6 +3564,18 @@ const VirtualOfficeContent: React.FC = () => {
       return a.displayName.localeCompare(b.displayName);
     });
   }, [agents]);
+
+  const modelUpgradeOptions = useMemo(
+    () => buildModelUpgradeOptions(allAgents),
+    [allAgents]
+  );
+
+  useEffect(() => {
+    if (modelUpgradeOptions.length === 0) return;
+    if (!modelUpgradeOptions.some((option) => option.value === allModelUpgradeTarget)) {
+      setAllModelUpgradeTarget(modelUpgradeOptions[0].value);
+    }
+  }, [allModelUpgradeTarget, modelUpgradeOptions]);
 
   const workingCount = useMemo(() => allAgents.filter((a) => a.status === 'working').length, [allAgents]);
   const idleCount = useMemo(() => allAgents.filter((a) => a.status === 'idle').length, [allAgents]);
@@ -3905,35 +4030,53 @@ const VirtualOfficeContent: React.FC = () => {
                     ? 'Failed'
                     : 'Restart Agents'}
             </button>
-            <button
-              id="upgrade-model-btn"
-              onClick={handleQueueModelUpgradeAll}
-              disabled={queueingModelUpgrade}
-              title="Queue a model upgrade task for Nora to execute on the Mac Mini"
-              className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border transition-all ${modelUpgradeResult === 'success'
-                ? 'border-emerald-500/50 text-emerald-300 bg-emerald-900/30'
-                : modelUpgradeResult === 'error'
-                  ? 'border-red-500/50 text-red-300 bg-red-900/30'
-                  : 'border-sky-500/30 text-sky-300 hover:bg-sky-900/30 hover:border-sky-400/50'
-                }`}
-            >
-              {queueingModelUpgrade ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : modelUpgradeResult === 'success' ? (
-                <CheckCircle2 className="w-3.5 h-3.5" />
-              ) : modelUpgradeResult === 'error' ? (
-                <XCircle className="w-3.5 h-3.5" />
-              ) : (
-                <Zap className="w-3.5 h-3.5" />
-              )}
-              {queueingModelUpgrade
-                ? 'Queueing...'
-                : modelUpgradeResult === 'success'
-                  ? 'Queued'
+            <div className="flex items-center gap-2">
+              <select
+                value={allModelUpgradeTarget}
+                onChange={(e) => setAllModelUpgradeTarget(e.target.value)}
+                disabled={queueingModelUpgrade}
+                title="Select model for upgrading Nora, Scout, Solara, and Sage"
+                className="text-xs h-8 px-2 rounded-lg border border-sky-500/30 bg-sky-900/25 text-sky-200"
+                style={{
+                  minWidth: '220px',
+                }}
+              >
+                {modelUpgradeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                id="upgrade-model-btn"
+                onClick={handleQueueModelUpgradeAll}
+                disabled={queueingModelUpgrade}
+                title="Queue a model upgrade task for Nora to execute on the Mac Mini"
+                className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg border transition-all ${modelUpgradeResult === 'success'
+                  ? 'border-emerald-500/50 text-emerald-300 bg-emerald-900/30'
                   : modelUpgradeResult === 'error'
-                    ? 'Failed'
-                    : 'Upgrade Model'}
-            </button>
+                    ? 'border-red-500/50 text-red-300 bg-red-900/30'
+                    : 'border-sky-500/30 text-sky-300 hover:bg-sky-900/30 hover:border-sky-400/50'
+                  }`}
+              >
+                {queueingModelUpgrade ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : modelUpgradeResult === 'success' ? (
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                ) : modelUpgradeResult === 'error' ? (
+                  <XCircle className="w-3.5 h-3.5" />
+                ) : (
+                  <Zap className="w-3.5 h-3.5" />
+                )}
+                {queueingModelUpgrade
+                  ? 'Queueing...'
+                  : modelUpgradeResult === 'success'
+                    ? 'Queued'
+                    : modelUpgradeResult === 'error'
+                      ? 'Failed'
+                      : 'Upgrade Model'}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -4314,6 +4457,7 @@ const VirtualOfficeContent: React.FC = () => {
                     isTransitioning={posInfo.state.includes('transitioning')}
                     transitionDelay={posInfo.transitionDelay}
                     isAtTable={posInfo.state === 'table'}
+                    modelUpgradeOptions={modelUpgradeOptions}
                     onPositionChange={(id, x, y) => {
                       setAgentPositions(prev => ({
                         ...prev,
