@@ -272,6 +272,11 @@ Here’s the verification in the exact terms of t..."
 ### What Step 5 requires
 
 Verify that `project/kanban/board.md` ..."
+- **[2026-02-21] Nora** — Step "Open the canonical kanban board file `project/kanban/board.md` (or `project/kanban/board.json` if that is the active source) and list all tickets with `STATUS: BLOCKED` or `STATUS: IN_PROGRESS` where the `UPDATED_AT` timestamp is older than 14 days." still had issues after 2 retries. Output signals: \bblocked\b. Last output: "Here’s the definitive answer for this step, in the simplest possible form.
+
+**Criteria**
+
+- `STATUS: BLOCKED` **or** `ST..."
 ---
 
 ## Operational Rules
