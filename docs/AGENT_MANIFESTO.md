@@ -318,6 +318,7 @@ Tickets in `project/ka..."
 ### What’s now in place
 
 I added a s..."
+- **[2026-02-21] Nora** — Step "For each `STATUS: BLOCKED` ticket in `project/kanban/board.md` that lacks explicit context, append `BLOCKED_REASON:` and `DEPENDENCY:` lines that reference specific artifacts (e.g., `api/partners/onboard.ts`, `web/app/partners/dashboard.tsx`, `config/partnerPlaybook.json`, or partner data sources) directly under the ticket block." still had issues after 2 retries. Output signals: \bmissing\b, \bblocked\b. Last output: "Step 2 is now concretely satisfied for this run: there are **no** `STATUS: BLOCKED` tickets to enrich, and that fact is ..."
 ---
 
 ## Operational Rules
