@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useRouter } from 'next/router';
-import { X, Package, ExternalLink, FileText, ChevronRight, RefreshCw, MessageSquare } from 'lucide-react';
+import { X, Package, ExternalLink, FileText, ChevronRight, RefreshCw, MessageSquare, Check, XCircle } from 'lucide-react';
 import { MarkdownRenderer } from '../MarkdownRenderer';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 
 /* ─── types ─── */
@@ -16,10 +16,13 @@ interface Deliverable {
   emoji: string;
   tags: string[];
   status: string;
+  reviewReason?: string;
   completedAt?: string;
   taskRef?: string;
   agentId: string;
 }
+
+type DeliverableStatusFilter = 'all' | 'needs-review' | 'approved' | 'work';
 
 interface AgentInfo {
   id: string;
@@ -95,6 +98,7 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterAgent, setFilterAgent] = useState<string | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<DeliverableStatusFilter>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
   const [fileLoading, setFileLoading] = useState(false);
@@ -126,6 +130,7 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
           emoji: ARTIFACT_EMOJI[data.artifactType] || '📄',
           tags: data.tags || [data.artifactType || 'document'].filter(Boolean),
           status: data.status || 'pending',
+          reviewReason: data.reviewReason || '',
           completedAt: data.createdAt?.toDate?.()?.toISOString?.() || undefined,
           taskRef: data.taskName || data.taskId || undefined,
           agentId: data.agentId || 'unknown',
@@ -140,10 +145,6 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
   };
 
   useEffect(() => { loadAll(); }, []);
-
-  const filtered = filterAgent === 'all'
-    ? deliverables
-    : deliverables.filter((d) => (resolveAgentRouteId(d.agentId) || d.agentId) === filterAgent);
 
   const getAgent = (id: string) => AGENTS.find((a) => a.id === (resolveAgentRouteId(id) || id)) || AGENTS[0];
 
@@ -233,6 +234,72 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
     count: deliverables.filter((d) => (resolveAgentRouteId(d.agentId) || normalizeAgentKey(d.agentId)) === a.id).length,
   }));
 
+  const statusCounts = {
+    all: deliverables.length,
+    needsReview: deliverables.filter((d) => (d.status || 'pending') === 'needs-review').length,
+    approved: deliverables.filter((d) => (d.status || 'pending') === 'approved').length,
+    work: deliverables.filter((d) => {
+      const status = (d.status || 'pending');
+      return status !== 'needs-review' && status !== 'approved';
+    }).length,
+  };
+
+  const isNeedsReview = (status?: string) => (status || 'pending') === 'needs-review';
+  const isApproved = (status?: string) => (status || 'pending') === 'approved';
+
+  const filtered = deliverables
+    .filter((d) => {
+      if (filterAgent === 'all') return true;
+      return (resolveAgentRouteId(d.agentId) || d.agentId) === filterAgent;
+    })
+    .filter((d) => {
+      if (statusFilter === 'all') return true;
+      if (statusFilter === 'needs-review') return isNeedsReview(d.status);
+      if (statusFilter === 'approved') return isApproved(d.status);
+      return !isNeedsReview(d.status) && !isApproved(d.status);
+    });
+
+  const statusBadge = (status?: string) => {
+    if (isNeedsReview(status)) {
+      return { className: 'needs-review', label: 'NEEDS REVIEW' };
+    }
+    if (isApproved(status)) {
+      return { className: 'approved', label: 'APPROVED' };
+    }
+    if (status === 'pending-recovery') return { className: 'pending', label: 'PENDING' };
+    if (status === 'complete') return { className: 'complete', label: 'COMPLETE' };
+    return { className: 'pending', label: 'PENDING' };
+  };
+
+  const handleApprove = async (deliverableId: string) => {
+    try {
+      await updateDoc(doc(db, 'agent-deliverables', deliverableId), {
+        status: 'approved',
+        reviewedAt: serverTimestamp(),
+      });
+      setDeliverables((current) => current.map((item) => item.id === deliverableId ? { ...item, status: 'approved' } : item));
+    } catch (err) {
+      console.error('Failed to approve deliverable:', err);
+    }
+  };
+
+  const handleDeny = async (deliverable: Deliverable) => {
+    const title = deliverable.title || deliverable.filename || 'this deliverable';
+    const confirmed = window.confirm(`Delete ${title}? This will remove it from Shared Deliverables.`);
+    if (!confirmed) return;
+
+    try {
+      await deleteDoc(doc(db, 'agent-deliverables', deliverable.id));
+      setDeliverables((current) => current.filter((item) => item.id !== deliverable.id));
+      if (expandedId === deliverable.id) {
+        setExpandedId(null);
+        setFileContent('');
+      }
+    } catch (err) {
+      console.error('Failed to delete deliverable:', err);
+    }
+  };
+
   const panel = (
     <div className="sd-overlay" onClick={onClose}>
       <div className="sd-panel" onClick={(e) => e.stopPropagation()}>
@@ -244,8 +311,8 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
             </div>
             <div>
               <h2 className="sd-title">Shared Deliverables</h2>
-              <p className="sd-subtitle">
-                {deliverables.length} deliverable{deliverables.length !== 1 ? 's' : ''} across {agentCounts.filter((a) => a.count > 0).length} agent{agentCounts.filter((a) => a.count > 0).length !== 1 ? 's' : ''}
+            <p className="sd-subtitle">
+                {statusCounts.all} deliverable{statusCounts.all !== 1 ? 's' : ''} across {agentCounts.filter((a) => a.count > 0).length} agent{agentCounts.filter((a) => a.count > 0).length !== 1 ? 's' : ''}
               </p>
             </div>
           </div>
@@ -279,6 +346,34 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
               <span className="sd-pill-count">{a.count}</span>
             </button>
           ))}
+        </div>
+
+        {/* Status filter pills */}
+        <div className="sd-filters">
+          <button
+            className={`sd-filter-pill ${statusFilter === 'all' ? 'active' : ''}`}
+            onClick={() => setStatusFilter('all')}
+          >
+            All <span className="sd-pill-count">{statusCounts.all}</span>
+          </button>
+          <button
+            className={`sd-filter-pill ${statusFilter === 'needs-review' ? 'active' : ''}`}
+            onClick={() => setStatusFilter('needs-review')}
+          >
+            Needs Review <span className="sd-pill-count">{statusCounts.needsReview}</span>
+          </button>
+          <button
+            className={`sd-filter-pill ${statusFilter === 'approved' ? 'active' : ''}`}
+            onClick={() => setStatusFilter('approved')}
+          >
+            Approved <span className="sd-pill-count">{statusCounts.approved}</span>
+          </button>
+          <button
+            className={`sd-filter-pill ${statusFilter === 'work' ? 'active' : ''}`}
+            onClick={() => setStatusFilter('work')}
+          >
+            Work <span className="sd-pill-count">{statusCounts.work}</span>
+          </button>
         </div>
 
         {/* Content */}
@@ -317,12 +412,14 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
                       >
                         {agent.emoji} {agent.displayName}
                       </span>
-                      {d.status === 'pending-recovery' && (
-                        <span className="sd-status-badge pending">⏳ pending</span>
-                      )}
-                      {d.status === 'complete' && (
-                        <span className="sd-status-badge complete">✓ complete</span>
-                      )}
+                      {(() => {
+                        const badge = statusBadge(d.status);
+                        return (
+                          <span className={`sd-status-badge ${badge.className}`}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
                       {d.completedAt && (
                         <span className="sd-date">{new Date(d.completedAt).toLocaleDateString()}</span>
                       )}
@@ -344,6 +441,12 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
 
                 {isExpanded && (
                   <div className="sd-item-body">
+                    {isNeedsReview(d.status) && d.reviewReason && (
+                      <div className="sd-review-note">
+                        <strong>Review reason:</strong>
+                        <span>{d.reviewReason}</span>
+                      </div>
+                    )}
                     {d.tags.length > 0 && (
                       <div className="sd-tags">
                         {d.tags.map((t) => (
@@ -367,6 +470,24 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
                         </div>
                       )}
                     </div>
+                    {isNeedsReview(d.status) && (
+                      <div className="sd-review-actions">
+                        <button
+                          className="sd-approve-btn"
+                          onClick={() => handleApprove(d.id)}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          Keep
+                        </button>
+                        <button
+                          className="sd-deny-btn"
+                          onClick={() => handleDeny(d)}
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
                     <button
                       className="sd-explain-btn"
                       onClick={() => navigateToExplainChat(d)}
@@ -547,9 +668,76 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
           background: rgba(34,197,94,0.1); color: #22c55e;
           border: 1px solid rgba(34,197,94,0.2);
         }
+        .sd-status-badge.needs-review {
+          background: rgba(249,115,22,0.12); color: #fb923c;
+          border: 1px solid rgba(249,115,22,0.2);
+        }
+        .sd-status-badge.approved {
+          background: rgba(16,185,129,0.12); color: #34d399;
+          border: 1px solid rgba(16,185,129,0.2);
+        }
         .sd-date {
           font-size: 10px; color: #52525b;
           font-family: 'JetBrains Mono', monospace;
+        }
+        .sd-review-note {
+          margin: 10px 0 0;
+          padding: 8px 10px;
+          border: 1px solid rgba(251,146,60,0.2);
+          border-radius: 8px;
+          background: rgba(251,146,60,0.06);
+          color: #fdba74;
+          font-size: 11px;
+          line-height: 1.4;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .sd-review-note strong {
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          color: #f59e0b;
+        }
+        .sd-review-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 10px;
+        }
+        .sd-approve-btn,
+        .sd-deny-btn {
+          flex: 1;
+          border-radius: 8px;
+          border: 1px solid transparent;
+          padding: 8px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 11px;
+          font-weight: 600;
+          font-family: inherit;
+        }
+        .sd-approve-btn {
+          color: #34d399;
+          border-color: rgba(16,185,129,0.3);
+          background: rgba(16,185,129,0.08);
+        }
+        .sd-approve-btn:hover {
+          background: rgba(16,185,129,0.16);
+          border-color: rgba(16,185,129,0.45);
+        }
+        .sd-deny-btn {
+          color: #fda4af;
+          border-color: rgba(248,113,113,0.3);
+          background: rgba(248,113,113,0.08);
+        }
+        .sd-deny-btn:hover {
+          background: rgba(248,113,113,0.16);
+          border-color: rgba(248,113,113,0.45);
         }
         .sd-item-actions {
           display: flex; align-items: center; gap: 4px;

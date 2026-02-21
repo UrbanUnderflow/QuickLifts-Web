@@ -1543,11 +1543,14 @@ async function saveTaskHistory(taskName, taskId, steps, status, startedAt) {
  * Record deliverables produced by a task into the `agent-deliverables` Firestore
  * collection so the PulseCommand deliverables tray can display them.
  */
-async function recordDeliverables(task, steps) {
+async function recordDeliverables(task, steps, options = {}) {
     const allFiles = [...new Set(
         steps.flatMap(s => s.filesChanged || []).map(parseGitStatusPath).filter(Boolean)
     )];
     if (allFiles.length === 0) return [];
+
+    const status = String(options.status || 'pending').trim() || 'pending';
+    const reviewReason = String(options.reviewReason || '').trim();
 
     const deliverables = [];
     const batch = db.batch();
@@ -1577,7 +1580,8 @@ async function recordDeliverables(task, steps) {
             taskName: task.name,
             artifactType,
             filePath: filePath,
-            status: 'pending',
+            status,
+            reviewReason: reviewReason || undefined,
             createdAt: FieldValue.serverTimestamp(),
         };
         batch.set(ref, deliverable);
@@ -1592,6 +1596,15 @@ async function recordDeliverables(task, steps) {
     }
 
     return deliverables;
+}
+
+async function recordNeedsReviewDeliverables(task, steps, reviewReason) {
+    const normalizedReason = String(reviewReason || '').trim();
+    if (!normalizedReason) return [];
+    return recordDeliverables(task, steps, {
+        status: 'needs-review',
+        reviewReason: normalizedReason,
+    });
 }
 
 /**
@@ -1750,6 +1763,16 @@ function validateLeadSourceOfTruthGate(task, steps) {
 /* ─── Heartbeat OS: Beat Posting ──────────────────────── */
 
 const BEAT_STEP_OUTPUT_MIN_CHARS = parseInt(process.env.BEAT_STEP_OUTPUT_MIN_CHARS || '80', 10);
+const BEAT_DEDUP_WINDOW_MS = Math.max(10_000, parseInt(process.env.BEAT_DEDUP_WINDOW_MS || '45000', 10));
+
+const beatDedupWindow = new Map();
+
+function normalizeBeatText(text) {
+    return String(text || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
 
 function hasSubstantialText(text, minChars = BEAT_STEP_OUTPUT_MIN_CHARS) {
     const normalized = String(text || '').replace(/\s+/g, ' ').trim();
@@ -1774,6 +1797,18 @@ function shouldEmitBeat(beat, headline, opts = {}) {
     if (!opts._isValidatedResult) {
         console.log(`⚠️  Beat validity gate blocked: ${beat} beat without validation flag: ${headline}`);
         return false;
+    }
+
+    const dedupeKey = `agent:${AGENT_ID}|${beat}|${normalizeBeatText(headline)}|${String(opts.taskId || opts.objectiveCode || '')}`;
+    const now = Date.now();
+    const lastSeen = beatDedupWindow.get(dedupeKey) || 0;
+    if (now - lastSeen < BEAT_DEDUP_WINDOW_MS) {
+        console.log(`⚠️  Beat validity gate blocked: duplicate ${beat} beat for ${headline}`);
+        return false;
+    }
+    beatDedupWindow.set(dedupeKey, now);
+    for (const [key, seenAt] of Array.from(beatDedupWindow.entries())) {
+        if (now - seenAt > BEAT_DEDUP_WINDOW_MS * 2) beatDedupWindow.delete(key);
     }
 
     return true;
@@ -5839,13 +5874,15 @@ async function run() {
 
                     if (verdict === 'no-deliverable') {
                         // Task produced only planning docs — reject it
+                        const reviewReason = `North Star Gate: Task produced no real deliverable. ${nsGate.missingDeliverable ? `Should have built: ${nsGate.missingDeliverable}` : 'Only planning/documentation was produced.'}`;
                         console.log(`\n🚫 NORTH STAR GATE: Task produced no real deliverable. Flagging for review.`);
                         await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
                         await db.collection(KANBAN_COLLECTION).doc(task.id).update({
                             status: 'needs-review',
-                            reviewReason: `North Star Gate: Task produced no real deliverable. ${nsGate.missingDeliverable ? `Should have built: ${nsGate.missingDeliverable}` : 'Only planning/documentation was produced.'}`,
+                            reviewReason,
                             updatedAt: FieldValue.serverTimestamp(),
                         });
+                        await recordNeedsReviewDeliverables(task, steps, reviewReason);
                         await sendProactiveMessage(
                             `🚫 North Star Gate REJECTED "${task.name}"\n\n` +
                             `Only planning/documentation was produced — no real code, feature, or user-facing change.\n\n` +
@@ -5964,19 +6001,21 @@ async function run() {
                 // ─── Verifiable artifact gate ──────────────────
                 // Tasks that produce no real file changes get flagged
                 const hasArtifacts = hasVerifiableArtifacts(steps);
-                if (!hasArtifacts && !hasIssues) {
-                    console.log(`\n⚠️  NO VERIFIABLE ARTIFACTS — task produced no substantive file changes`);
-                    await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
-                    await db.collection(KANBAN_COLLECTION).doc(task.id).update({
-                        status: 'needs-review',
-                        reviewReason: 'Task completed all steps but produced no verifiable file artifacts (code, config, tests). Only meta-documents were generated.',
-                        updatedAt: FieldValue.serverTimestamp(),
-                    });
-                    await sendProactiveMessage(
-                        `⚠️ Task "${task.name}" completed all steps but produced NO verifiable artifacts.\n\n` +
-                        `No new code, configs, or tests were created — only documentation/summaries.\n` +
-                        `Task has been flagged as needs-review instead of done.\n\n` +
-                        `Please review and either approve or reassign with clearer deliverable requirements.`,
+                    if (!hasArtifacts && !hasIssues) {
+                        const reviewReason = 'Task completed all steps but produced no verifiable file artifacts (code, config, tests). Only meta-documents were generated.';
+                        console.log(`\n⚠️  NO VERIFIABLE ARTIFACTS — task produced no substantive file changes`);
+                        await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
+                        await db.collection(KANBAN_COLLECTION).doc(task.id).update({
+                            status: 'needs-review',
+                            reviewReason,
+                            updatedAt: FieldValue.serverTimestamp(),
+                        });
+                        await recordNeedsReviewDeliverables(task, steps, reviewReason);
+                        await sendProactiveMessage(
+                            `⚠️ Task "${task.name}" completed all steps but produced NO verifiable artifacts.\n\n` +
+                            `No new code, configs, or tests were created — only documentation/summaries.\n` +
+                            `Task has been flagged as needs-review instead of done.\n\n` +
+                            `Please review and either approve or reassign with clearer deliverable requirements.`,
                         'needs-review'
                     );
                     await setStatus('idle', {
@@ -5992,13 +6031,15 @@ async function run() {
                 // ─── Lead source-of-truth gate ──────────────────
                 const sourceTruthGate = validateLeadSourceOfTruthGate(task, steps);
                 if (sourceTruthGate.required && !sourceTruthGate.passed) {
+                    const reviewReason = `Lead source-of-truth gate failed: ${sourceTruthGate.reason}`;
                     console.log(`\n⚠️  SOURCE-OF-TRUTH GATE FAILED — ${sourceTruthGate.reason}`);
                     await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
                     await db.collection(KANBAN_COLLECTION).doc(task.id).update({
                         status: 'needs-review',
-                        reviewReason: `Lead source-of-truth gate failed: ${sourceTruthGate.reason}`,
+                        reviewReason,
                         updatedAt: FieldValue.serverTimestamp(),
                     });
+                    await recordNeedsReviewDeliverables(task, steps, reviewReason);
                     await sendProactiveMessage(
                         `⚠️ Task "${task.name}" failed the lead source-of-truth gate.\n\n` +
                         `${sourceTruthGate.reason}\n\n` +
@@ -6161,6 +6202,33 @@ async function run() {
                     `Error: ${failedStep?.output || 'Unknown error'}\n\n` +
                     `This task has been blocked from auto-retry to prevent loops.\n` +
                     `Would you like me to retry this task or skip it?`,
+                    'failed'
+                );
+            }
+
+            currentTaskRef = null;  // Reset for hourly snapshots
+            await new Promise(r => setTimeout(r, 5_000));
+
+        } catch (err) {
+            console.error('❌ Error in main loop:', err.message);
+            await setStatus('idle', { notes: `Error: ${err.message}` });
+            await new Promise(r => setTimeout(r, 10_000));
+        }
+    }
+}
+
+function formatMs(ms) {
+    if (!ms) return '';
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
+}
+
+run().catch((err) => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+});
+task or skip it?`,
                     'failed'
                 );
             }
