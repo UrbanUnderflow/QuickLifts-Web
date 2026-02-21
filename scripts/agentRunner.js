@@ -1749,6 +1749,36 @@ function validateLeadSourceOfTruthGate(task, steps) {
 
 /* ─── Heartbeat OS: Beat Posting ──────────────────────── */
 
+const BEAT_STEP_OUTPUT_MIN_CHARS = parseInt(process.env.BEAT_STEP_OUTPUT_MIN_CHARS || '80', 10);
+
+function hasSubstantialText(text, minChars = BEAT_STEP_OUTPUT_MIN_CHARS) {
+    const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+    return normalized.length >= minChars && /\S/.test(normalized);
+}
+
+function isCompletionBeat(beat, headline) {
+    const value = `${beat} ${headline || ''}`;
+    return value.includes('✅ Step') || value.includes('📍 Halfway checkpoint') || value.includes('🔍 Validation passed') || value.includes('✅ Completed:');
+}
+
+function shouldEmitBeat(beat, headline, opts = {}) {
+    if (!isCompletionBeat(beat, headline)) return true;
+    if (opts._skipBeatValidity === true) return true;
+
+    const isStepCompletion = `${beat} ${headline}`.includes('✅ Step');
+    if (isStepCompletion && !opts._hasStepEvidence) {
+        console.log(`⚠️  Beat validity gate blocked: ${beat} beat for ${headline}`);
+        return false;
+    }
+
+    if (!opts._isValidatedResult) {
+        console.log(`⚠️  Beat validity gate blocked: ${beat} beat without validation flag: ${headline}`);
+        return false;
+    }
+
+    return true;
+}
+
 /**
  * Post a progress beat to the progress-timeline Firestore collection.
  * Beat types: hypothesis | work-in-flight | result | block | signal-spike
@@ -1756,6 +1786,10 @@ function validateLeadSourceOfTruthGate(task, steps) {
  */
 async function postBeat(beat, headline, opts = {}) {
     try {
+        if (!shouldEmitBeat(beat, headline, opts)) {
+            return;
+        }
+
         await db.collection(TIMELINE_COLLECTION).add({
             agentId: AGENT_ID,
             agentName: AGENT_NAME,
@@ -5638,10 +5672,14 @@ async function run() {
                 console.log(`✅ Step ${i + 1} completed${steps[i].durationMs ? ` (${formatMs(steps[i].durationMs)})` : ''}`);
 
                 // ─── Heartbeat: post work-in-flight beat on step completion ──
+                const stepEvidence = hasSubstantialText(steps[i].output) ||
+                    (Array.isArray(steps[i].filesChanged) && steps[i].filesChanged.length > 0) ||
+                    Boolean(steps[i].commitHash);
                 await postBeat('work-in-flight', `✅ Step ${i + 1}/${steps.length}: ${steps[i].description}`, {
                     taskId: task.id,
                     color: inferColor(steps, i + 1),
                     objectiveCode: task.objectiveCode || task.id,
+                    _hasStepEvidence: stepEvidence,
                 });
 
                 // ─── Heartbeat: extract and surface insights from step output ──
@@ -5658,6 +5696,7 @@ async function run() {
                         taskId: task.id,
                         color: failedCount > 0 ? 'yellow' : 'green',
                         objectiveCode: task.objectiveCode || task.id,
+                        _isValidatedResult: true,
                     });
                     if (!midpointMissionUpdateSent) {
                         await maybeSendMissionMidpointUpdate(task, missionContext, completedCount, steps.length, failedCount);
@@ -5918,6 +5957,7 @@ async function run() {
                         taskId: task.id,
                         color: 'green',
                         objectiveCode: task.objectiveCode || task.id,
+                        _isValidatedResult: true,
                     });
                 }
 
@@ -6012,6 +6052,7 @@ async function run() {
                     artifactType: resultArtifactUrl ? 'url' : 'none',
                     artifactUrl: resultArtifactUrl,
                     artifactText: primaryDeliverable ? (primaryDeliverable.title || primaryDeliverable.filePath || '') : '',
+                    _isValidatedResult: true,
                 });
                 // Update lastWorkBeatAt on the kanban card for idle tracking
                 try {
