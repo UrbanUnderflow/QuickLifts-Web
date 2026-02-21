@@ -1,5 +1,5 @@
 {
-  "model": "openai/gpt-5.1-codex",
+  "model": "openai/gpt-5.3-codex",
   "provider": "OpenAI",
   "status": "active",
   "description": "Nora configurations for Pulse Fitness"
