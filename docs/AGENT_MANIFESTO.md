@@ -277,6 +277,7 @@ Verify that `project/kanban/board.md` ..."
 **Criteria**
 
 - `STATUS: BLOCKED` **or** `ST..."
+- **[2026-02-21] Nora** — Step "For each `STATUS: BLOCKED` ticket in `project/kanban/board.md` that lacks clear context, append `BLOCKED_REASON:` and `DEPENDENCY:` lines referencing specific artifacts (e.g., `api/partners/onboard.ts`, `web/app/partners/dashboard.tsx`, `config/partnerPlaybook.json`, or partner data sources) directly under the ticket block." still had issues after 2 retries. Output signals: \bmissing\b, \bblocked\b. Last output: "For this step, there are **no `STATUS: BLOCKED` tickets at all** in the canonical board, so there is nothing to annotate..."
 ---
 
 ## Operational Rules
