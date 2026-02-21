@@ -2890,6 +2890,7 @@ const MissionButton: React.FC<MissionButtonProps> = ({ onToast }) => {
   const [status, setStatus] = React.useState<'idle' | 'active' | 'paused'>('idle');
   const [launching, setLaunching] = React.useState(false);
   const [launchResult, setLaunchResult] = React.useState<'success' | 'error' | null>(null);
+  const pauseEnforcedRef = React.useRef(false);
 
   // Live-subscribe to mission status
   React.useEffect(() => {
@@ -2902,6 +2903,18 @@ const MissionButton: React.FC<MissionButtonProps> = ({ onToast }) => {
     );
     return unsub;
   }, []);
+
+  // If mission is already paused, re-run the pause endpoint once to enforce
+  // runner shutdown and clear stale "working" presence fields.
+  React.useEffect(() => {
+    if (status !== 'paused') {
+      pauseEnforcedRef.current = false;
+      return;
+    }
+    if (pauseEnforcedRef.current) return;
+    pauseEnforcedRef.current = true;
+    fetch('/api/agent/kickoff-mission', { method: 'DELETE' }).catch(() => {});
+  }, [status]);
 
   const handleLaunch = async () => {
     if (launching) return;
