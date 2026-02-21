@@ -1,80 +1,89 @@
-# Kanban Step 4 Audit – In-Progress Deferral Check (2026-02-21)
+# Kanban Step 4 – In-Progress Deferral Audit (2026-02-21)
 
-**Task step:**
+**Step 4 requirement:**
 
-> For any `STATUS: IN_PROGRESS` ticket in `project/kanban/board.md` with `UPDATED_AT` older than 14 days that does not reference partnership-related artifacts, change its status line to `STATUS: BACKLOG` and add a `DEFERRED_REASON: Not aligned with current Partnership-Led Community Growth focus` line under the ticket block.
+> For any `STATUS: IN_PROGRESS` ticket in `project/kanban/board.md` with `UPDATED_AT` older than 14 days that does not touch partnership-related artifacts, change its status to `STATUS: BACKLOG` and add a `DEFERRED_REASON: Not aligned with current Partnership-Led Community Growth focus` line under that ticket.
 
-## Method
+## 1. Programmatic locate of stale in-progress tickets
 
-Instead of relying on the existing scanner script, this audit manually inspected the canonical board file.
+To avoid relying solely on ad-hoc `grep`/`awk`, this audit uses the structured locator script added for Step 1:
 
-1. **Locate all in-progress tickets**
+- Script: `scripts/locateStaleBlockedAndInProgress.js`
+- Purpose: Find all `STATUS: BLOCKED` or `STATUS: in-progress` tickets whose `UPDATED_AT` is older than 14 days.
 
-   ```bash
-   cd /Users/noraclawdbot/Documents/GitHub/QuickLifts-Web
-   grep -n "STATUS: in-progress" project/kanban/board.md || echo "NO_IN_PROGRESS_FOUND"
-   ```
+Command:
 
-   Result (line numbers may shift over time):
+```bash
+cd /Users/noraclawdbot/Documents/GitHub/QuickLifts-Web
+node scripts/locateStaleBlockedAndInProgress.js
+```
 
-   ```text
-   1118:STATUS: in-progress
-   1703:STATUS: in-progress
-   4056:STATUS: in-progress
-   9321:STATUS: in-progress
-   ```
+Output:
 
-2. **Inspect each in-progress block with timestamps**
+```text
+KANBAN_STEP1_LOCATE
+{
+  "boardPath": "/Users/noraclawdbot/Documents/GitHub/QuickLifts-Web/project/kanban/board.md",
+  "auditDate": "2026-02-21",
+  "cutoffDays": 14,
+  "matchCount": 0,
+  "matches": []
+}
+```
 
-   ```bash
-   awk 'BEGIN{RS=""}/STATUS: in-progress/' project/kanban/board.md | head -n 80
-   ```
+Interpretation:
 
-   Key fields observed:
+- `matchCount: 0` means there are **no** tickets that are:
+  - `STATUS: BLOCKED` or `STATUS: in-progress`, **and**
+  - `UPDATED_AT` more than 14 days older than the audit date.
 
-   ```text
-   STATUS: in-progress
-   PROJECT: General
-   ASSIGNEE: Nora
-   CREATED_AT: 2026-02-13
-   UPDATED_AT: 2026-02-19
+Given the audit date of **2026-02-21** and a 14-day cutoff, this confirms that **no** `STATUS: in-progress` tickets are stale by Step 4’s definition.
 
-   STATUS: in-progress
-   PROJECT: General
-   ASSIGNEE: Scout
-   CREATED_AT: 2026-02-16
-   UPDATED_AT: 2026-02-19
+## 2. Cross-check: in-progress tickets and their dates
 
-   STATUS: in-progress
-   PROJECT: 
-   ASSIGNEE: Sage
-   CREATED_AT: 2026-02-19
-   UPDATED_AT: 2026-02-19
+For completeness, here is the current set of `STATUS: in-progress` tickets as of this audit (from `project/kanban/board.md`):
 
-   STATUS: in-progress
-   PROJECT: General
-   ASSIGNEE: Solara
-   CREATED_AT: 2026-02-16
-   UPDATED_AT: 2026-02-16
-   ```
+```text
+STATUS: in-progress
+PROJECT: General
+ASSIGNEE: Nora
+CREATED_AT: 2026-02-13
+UPDATED_AT: 2026-02-19
 
-## Cutoff logic
+STATUS: in-progress
+PROJECT: General
+ASSIGNEE: Scout
+CREATED_AT: 2026-02-16
+UPDATED_AT: 2026-02-19
 
-- **Audit date:** 2026-02-21
-- **Threshold:** `UPDATED_AT` older than 14 days → `UPDATED_AT < 2026-02-07`
+STATUS: in-progress
+PROJECT:
+ASSIGNEE: Sage
+CREATED_AT: 2026-02-19
+UPDATED_AT: 2026-02-19
 
-All four `STATUS: in-progress` tickets have `UPDATED_AT` values between **2026-02-16** and **2026-02-19**, which are well within the 14-day freshness window.
+STATUS: in-progress
+PROJECT: General
+ASSIGNEE: Solara
+CREATED_AT: 2026-02-16
+UPDATED_AT: 2026-02-16
+```
 
-Therefore:
+All observed `UPDATED_AT` values are:
 
-- There are **no** `STATUS: in-progress` tickets with `UPDATED_AT < 2026-02-07`.
-- Step 4’s condition ("in-progress AND older than 14 days AND not partnership-related") matches **zero** tickets.
+- `2026-02-19`
+- `2026-02-19`
+- `2026-02-19`
+- `2026-02-16`
 
-## Outcome for Step 4
+All of these are **later** than the stale cutoff date (`2026-02-07`).
 
-Because there are no qualifying stale in-progress tickets:
+## 3. Step 4 outcome
 
-- **No tickets were changed** from `STATUS: in-progress` to `STATUS: BACKLOG`.
-- **No `DEFERRED_REASON:` lines were added**, since there is nothing to defer.
+Step 4 applies only to `STATUS: IN_PROGRESS` tickets with `UPDATED_AT` older than 14 days that do **not** touch partnership-related artifacts. As of this audit:
 
-This file serves as the explicit audit record that Step 4 was executed against the current canonical board and resulted in **no required modifications**.
+- There are **no** `STATUS: in-progress` tickets older than 14 days.
+- Therefore, there are **no** candidates to move to `STATUS: BACKLOG` or annotate with `DEFERRED_REASON`.
+- No changes were made to `project/kanban/board.md` for this step.
+
+This file is the canonical record that Step 4 was executed against the live `project/kanban/board.md` using a programmatic locator, and that **no stale in-progress tickets exist to defer**.
