@@ -62,7 +62,7 @@ function verifyPartnershipSection(board) {
   const nextHeaderIndex = rest.indexOf('\n## ');
   const section = nextHeaderIndex === -1 ? rest : rest.slice(0, nextHeaderIndex);
 
-  const ticketBlocks = section.split(/\n\n+/).filter(b => b.startsWith('### '));
+  const ticketBlocks = section.split(/\n\n+/).filter(b => b.trim().startsWith('### '));
   const northStarTickets = ticketBlocks.filter(b => /NORTH_STAR:\s*Partnership-Led Community Growth/i.test(b));
 
   return {
