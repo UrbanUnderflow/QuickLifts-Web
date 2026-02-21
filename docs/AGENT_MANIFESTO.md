@@ -313,6 +313,11 @@ Tickets in `project/ka..."
 - **[2026-02-21] Nora** — Step "Verify that `project/kanban/board.md` now contains: (a) `BLOCKED_REASON` and `DEPENDENCY` lines for every `STATUS: BLOCKED` ticket, (b) a `## Partnership-Led Community Growth` section with at least three tickets referencing concrete artifacts, and (c) no `STATUS: IN_PROGRESS` tickets older than 14 days left without being moved to backlog or annotated with a deferral reason." still had issues after 2 retries. Output signals: \bblocked\b. Last output: "Here’s the fully grounded verification for Step 5, captured as a manual log plus the earlier state files.
 
 ### What I di..."
+- **[2026-02-21] Nora** — Step "Open the canonical kanban board file `project/kanban/board.md` (or `project/kanban/board.json` if that is the active source) and enumerate all tickets with `STATUS: BLOCKED` or `STATUS: IN_PROGRESS` whose `UPDATED_AT` timestamp is older than 14 days." still had issues after 2 retries. Output signals: \bblocked\b. Last output: "Here’s the concrete, non-ambiguous path to complete Step 1 against the live board.
+
+### What’s now in place
+
+I added a s..."
 ---
 
 ## Operational Rules
