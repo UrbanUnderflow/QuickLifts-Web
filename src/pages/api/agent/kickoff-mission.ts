@@ -106,6 +106,40 @@ async function setRunnerServicesState(action: 'start' | 'stop') {
     }));
 }
 
+async function stopStrayAgentRunners() {
+    try {
+        const { stdout } = await execAsync(`pgrep -af "node scripts/agentRunner.js" || true`);
+        const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean);
+        const pids = lines
+            .map((line) => Number(line.split(/\s+/)[0]))
+            .filter((pid) => Number.isFinite(pid) && pid > 1 && pid !== process.pid);
+
+        if (pids.length === 0) return;
+
+        await Promise.all(pids.map(async (pid) => {
+            try { await execAsync(`kill -TERM ${pid}`); } catch (_) { }
+        }));
+
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+
+        const { stdout: afterTerm } = await execAsync(`pgrep -af "node scripts/agentRunner.js" || true`);
+        const remaining = afterTerm
+            .split('\n')
+            .map((l) => l.trim())
+            .filter(Boolean)
+            .map((line) => Number(line.split(/\s+/)[0]))
+            .filter((pid) => Number.isFinite(pid) && pid > 1 && pid !== process.pid);
+
+        if (remaining.length > 0) {
+            await Promise.all(remaining.map(async (pid) => {
+                try { await execAsync(`kill -KILL ${pid}`); } catch (_) { }
+            }));
+        }
+    } catch (_) {
+        // Non-fatal: launchd/presence controls still apply.
+    }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     const db = getDb();
     const missionRef = db.doc('company-config/mission-status');
@@ -135,6 +169,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 }, { merge: true });
                 await setRunnersEnabled(db, false, 'mission-paused');
                 await setRunnerServicesState('stop');
+                await stopStrayAgentRunners();
                 return res.status(200).json({ success: true, message: 'Mission pause enforced.' });
             }
             if (snap.data()?.status !== 'active') {
@@ -142,6 +177,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 // need to push runner/presence shutdown state in case it drifted.
                 await setRunnersEnabled(db, false, 'mission-paused');
                 await setRunnerServicesState('stop');
+                await stopStrayAgentRunners();
                 return res.status(200).json({ success: true, message: 'Mission already paused — runner shutdown re-enforced.' });
             }
             await missionRef.update({
@@ -151,6 +187,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             });
             await setRunnersEnabled(db, false, 'mission-paused');
             await setRunnerServicesState('stop');
+            await stopStrayAgentRunners();
             return res.status(200).json({ success: true, message: 'Mission paused.' });
         } catch (err: any) {
             return res.status(500).json({ error: err.message });
@@ -173,6 +210,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (force) args.push('--force');
 
     try {
+        // Prevent duplicate worker pools before we start mission services.
+        await stopStrayAgentRunners();
+
         // Ensure all runners are explicitly re-enabled before mission kickoff.
         await setRunnersEnabled(db, true, 'mission-start');
         await setRunnerServicesState('start');
