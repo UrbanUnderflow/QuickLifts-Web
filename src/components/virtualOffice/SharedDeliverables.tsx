@@ -60,6 +60,11 @@ const resolveAgentRouteId = (agentId?: string): string | null => {
   return AGENTS.some((agent) => agent.id === canonical) ? canonical : null;
 };
 
+const normalizeDeliverableStatus = (value?: string): string => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === '' || normalized === 'pending' ? 'needs-review' : normalized;
+};
+
 const sanitizeRecordedFilePath = (rawPath?: string): string => {
   if (!rawPath) return '';
   let next = rawPath.trim();
@@ -129,7 +134,7 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
           filePath,
           emoji: ARTIFACT_EMOJI[data.artifactType] || '📄',
           tags: data.tags || [data.artifactType || 'document'].filter(Boolean),
-          status: data.status || 'pending',
+          status: normalizeDeliverableStatus(data.status),
           reviewReason: data.reviewReason || '',
           completedAt: data.createdAt?.toDate?.()?.toISOString?.() || undefined,
           taskRef: data.taskName || data.taskId || undefined,
@@ -236,16 +241,16 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
 
   const statusCounts = {
     all: deliverables.length,
-    needsReview: deliverables.filter((d) => (d.status || 'pending') === 'needs-review').length,
-    approved: deliverables.filter((d) => (d.status || 'pending') === 'approved').length,
+    needsReview: deliverables.filter((d) => normalizeDeliverableStatus(d.status) === 'needs-review').length,
+    approved: deliverables.filter((d) => normalizeDeliverableStatus(d.status) === 'approved').length,
     work: deliverables.filter((d) => {
-      const status = (d.status || 'pending');
+      const status = normalizeDeliverableStatus(d.status);
       return status !== 'needs-review' && status !== 'approved';
     }).length,
   };
 
-  const isNeedsReview = (status?: string) => (status || 'pending') === 'needs-review';
-  const isApproved = (status?: string) => (status || 'pending') === 'approved';
+  const isNeedsReview = (status?: string) => normalizeDeliverableStatus(status) === 'needs-review';
+  const isApproved = (status?: string) => normalizeDeliverableStatus(status) === 'approved';
 
   const filtered = deliverables
     .filter((d) => {
