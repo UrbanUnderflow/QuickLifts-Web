@@ -42,6 +42,25 @@ function getDb() {
     return getFirestore(adminApp);
 }
 
+const RUNNER_AGENT_IDS = ['nora', 'scout', 'solara', 'sage'];
+
+async function setRunnersEnabled(db: ReturnType<typeof getFirestore>, enabled: boolean, reason: string) {
+    const now = new Date();
+    await Promise.all(
+        RUNNER_AGENT_IDS.map((agentId) =>
+            db.collection('agent-presence').doc(agentId).set(
+                {
+                    runnerEnabled: enabled,
+                    runnerEnabledAt: now,
+                    runnerEnabledReason: reason,
+                    updatedAt: now,
+                },
+                { merge: true }
+            )
+        )
+    );
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     const db = getDb();
     const missionRef = db.doc('company-config/mission-status');
@@ -71,6 +90,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 pausedAt: new Date(),
                 updatedAt: new Date(),
             });
+            await setRunnersEnabled(db, false, 'mission-paused');
             return res.status(200).json({ success: true, message: 'Mission paused.' });
         } catch (err: any) {
             return res.status(500).json({ error: err.message });
@@ -93,6 +113,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (force) args.push('--force');
 
     try {
+        // Ensure all runners are explicitly re-enabled before mission kickoff.
+        await setRunnersEnabled(db, true, 'mission-start');
+
         const child = spawn('node', args, {
             detached: true,
             stdio: ['ignore', 'pipe', 'pipe'],
