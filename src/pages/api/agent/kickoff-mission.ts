@@ -47,17 +47,31 @@ const RUNNER_AGENT_IDS = ['nora', 'scout', 'solara', 'sage'];
 async function setRunnersEnabled(db: ReturnType<typeof getFirestore>, enabled: boolean, reason: string) {
     const now = new Date();
     await Promise.all(
-        RUNNER_AGENT_IDS.map((agentId) =>
-            db.collection('agent-presence').doc(agentId).set(
-                {
-                    runnerEnabled: enabled,
-                    runnerEnabledAt: now,
-                    runnerEnabledReason: reason,
-                    updatedAt: now,
-                },
-                { merge: true }
-            )
-        )
+        RUNNER_AGENT_IDS.map((agentId) => {
+            const patch: Record<string, any> = {
+                runnerEnabled: enabled,
+                runnerEnabledAt: now,
+                runnerEnabledReason: reason,
+                updatedAt: now,
+            };
+
+            // Push immediate UI-safe state on pause so agents do not appear "working"
+            // while their runners are shutting down.
+            if (!enabled) {
+                patch.status = 'offline';
+                patch.notes = 'Mission paused — waiting for resume.';
+                patch.currentTask = '';
+                patch.currentTaskId = '';
+                patch.taskProgress = 0;
+                patch.currentStepIndex = -1;
+                patch.executionSteps = [];
+            } else {
+                patch.status = 'idle';
+                patch.notes = 'Mission resumed — runner re-enabled.';
+            }
+
+            return db.collection('agent-presence').doc(agentId).set(patch, { merge: true });
+        })
     );
 }
 
