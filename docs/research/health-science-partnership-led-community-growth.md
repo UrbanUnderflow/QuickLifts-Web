@@ -23,3 +23,25 @@ This document synthesizes health, behavioral, and community science relevant to 
 - **Run clubs provide structure, identity, and social accountability.** Studies of social running groups find that club membership offers **structured sessions, social support, and an identity as "a runner"** that help novices and recreational runners maintain habits through motivation dips. Pulse’s run club partnerships can leverage this by making rounds the digital record and extension of those club rituals. ([Ogles & Masters, 2003](https://psycnet.apa.org/record/2003-05422-004))
 
 - **Regulators distinguish behavior-support tools from medical devices.** Digital health guidance (e.g., FDA) draws a line between apps that **track or encourage general wellness behaviors** and those that claim to diagnose, treat, or cure specific conditions. The former are often not regulated as medical devices if they avoid clinical claims, reinforcing Pulse’s behavior-only posture in all partner-facing narratives. ([FDA Digital Health Policy Navigator](https://www.fda.gov/medical-devices/digital-health-center-excellence/digital-health-policy-navigator))
+
+## Patterns for Partnership-Led Community Growth
+
+### Pattern 1: Community-Driven Adherence
+
+In all three partner lanes, the most reliable adherence comes from communities where **showing up is part of who people are**, not just what they do. Members of gyms, run clubs, and brand-led communities keep attending because leaving would mean stepping away from an identity and a group that notices their presence. For Pulse, this means designing rounds that feel like they belong to each specific community—mirroring their rituals, language, and weekly rhythm—so behavior is reinforced by belonging.
+
+### Pattern 2: Creator-Led Accountability
+
+Across brands, gyms, and run clubs, people follow *someone* more consistently than they follow an abstract plan. A named coach, creator, or run leader who frames the week, shares their own struggles, and celebrates realistic wins can hold attention through the mid-program dip when novelty fades. On Pulse, this pattern justifies making a visible human leader a default for meaningful rounds in every lane, with tools for check-ins, reflections, and gap-aware encouragement.
+
+### Pattern 3: Hybrid Live + Digital Spines
+
+Partners with strong in-person experiences see the best retention when those experiences are supported by a **digital spine** that holds the plan and the receipts between sessions. Brand activations, gym classes, and club runs become anchor rituals; Pulse becomes the place where they are logged, reflected on, and extended into at-home or between-session behaviors. This pattern suggests that Pulse should prioritize integrations that map live schedules and events into ongoing rounds, rather than treating digital and in-person as separate tracks.
+
+### Pattern 4: Recovery Rituals vs. Burnout Cycles
+
+Communities that glorify only maximal effort tend to produce short bursts of intensity followed by injury, fatigue, or quiet dropout. In contrast, cultures that treat recovery as part of training—sleep, easy days, mobility, deload weeks—see members who are more willing to keep showing up. For brands, gyms, and run clubs on Pulse, this pattern argues for rounds that make recovery rituals visible and celebratory, giving members permission to scale and rest without feeling like they are failing the program.
+
+### Pattern 5: Gap-Sensitive, Human-Centered Engagement
+
+Behavior data make it clear that **long gaps are where people slip away**, but the way communities respond to those gaps determines whether members return. Automated, shaming messages when someone misses a week can accelerate disengagement; warm, specific outreach from a coach, creator, or leader can turn the gap into a re-entry moment. Pulse’s gap detection features are most powerful when they trigger human, empathetic engagement in each partner lane—brand community managers, gym coaches, and run leaders reaching out with "we missed you" rather than "you’re behind."
