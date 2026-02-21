@@ -309,6 +309,7 @@ List tickets in `project/kanban/board.md` wh..."
 ### Step‑1 filter
 
 Tickets in `project/ka..."
+- **[2026-02-21] Nora** — Step "For each `STATUS: BLOCKED` ticket in `project/kanban/board.md` that lacks clear context, append `BLOCKED_REASON:` and `DEPENDENCY:` lines that reference specific artifacts (e.g., `api/partners/onboard.ts`, `web/app/partners/dashboard.tsx`, `config/partnerPlaybook.json`, or partner data files) directly under the ticket block." still had issues after 2 retries. Output signals: \bmissing\b, \bblocked\b. Last output: "For this Step 2 run, there are still no `STATUS: BLOCKED` tickets at all, so there is nothing to enrich with `BLOCKED_RE..."
 ---
 
 ## Operational Rules
