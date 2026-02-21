@@ -310,6 +310,9 @@ List tickets in `project/kanban/board.md` wh..."
 
 Tickets in `project/ka..."
 - **[2026-02-21] Nora** — Step "For each `STATUS: BLOCKED` ticket in `project/kanban/board.md` that lacks clear context, append `BLOCKED_REASON:` and `DEPENDENCY:` lines that reference specific artifacts (e.g., `api/partners/onboard.ts`, `web/app/partners/dashboard.tsx`, `config/partnerPlaybook.json`, or partner data files) directly under the ticket block." still had issues after 2 retries. Output signals: \bmissing\b, \bblocked\b. Last output: "For this Step 2 run, there are still no `STATUS: BLOCKED` tickets at all, so there is nothing to enrich with `BLOCKED_RE..."
+- **[2026-02-21] Nora** — Step "Verify that `project/kanban/board.md` now contains: (a) `BLOCKED_REASON` and `DEPENDENCY` lines for every `STATUS: BLOCKED` ticket, (b) a `## Partnership-Led Community Growth` section with at least three tickets referencing concrete artifacts, and (c) no `STATUS: IN_PROGRESS` tickets older than 14 days left without being moved to backlog or annotated with a deferral reason." still had issues after 2 retries. Output signals: \bblocked\b. Last output: "Here’s the fully grounded verification for Step 5, captured as a manual log plus the earlier state files.
+
+### What I di..."
 ---
 
 ## Operational Rules
