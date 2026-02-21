@@ -40,6 +40,7 @@ const AGENT_NAME_VARIANTS = [
     AGENT_NAME,
     `${AGENT_NAME} ${AGENT_EMOJI}`,
     AGENT_NAME.charAt(0).toUpperCase() + AGENT_NAME.slice(1),  // Title-case variant
+    AGENT_NAME.toLowerCase(),
 ].filter((v, i, a) => a.indexOf(v) === i);  // dedupe
 const HEARTBEAT_MS = parseInt(process.env.HEARTBEAT_MS || '30000', 10);
 
@@ -107,6 +108,10 @@ const MAX_SOUL_LEARNINGS = parseInt(process.env.MAX_SOUL_LEARNINGS || '10', 10);
 const SOUL_EVOLUTION_MIN_COMPLEXITY = parseInt(process.env.SOUL_EVOLUTION_MIN_COMPLEXITY || '2', 10); // Min task complexity to trigger reflection
 const NO_ARTIFACT_LOOP_WINDOW_MS = parseInt(process.env.NO_ARTIFACT_LOOP_WINDOW_MS || String(45 * 60 * 1000), 10); // Look back 45m for repeat no-artifact loops
 const NO_ARTIFACT_LOOP_HISTORY_LIMIT = parseInt(process.env.NO_ARTIFACT_LOOP_HISTORY_LIMIT || '40', 10);
+const SELF_ASSIGN_COOLDOWN_MS = parseInt(process.env.SELF_ASSIGN_COOLDOWN_MS || String(30 * 60 * 1000), 10); // Prevent rapid-fire self-assignment loops
+const NORA_SWEEP_ASSIGN_COOLDOWN_MS = parseInt(process.env.NORA_SWEEP_ASSIGN_COOLDOWN_MS || String(2 * 60 * 60 * 1000), 10); // Keep Nora's sweep from reassigning the same agent too quickly
+const TASK_NAME_DEDUP_WINDOW_MS = parseInt(process.env.TASK_NAME_DEDUP_WINDOW_MS || String(24 * 60 * 60 * 1000), 10); // Suppress near-identical task names in a 24h window
+const MISSION_STATUS_CACHE_MS = parseInt(process.env.MISSION_STATUS_CACHE_MS || '3000', 10); // Keep pause propagation fast while avoiding excessive Firestore reads
 const GROUP_CHAT_SYSTEM_PROMPT_BUDGET_CHARS = parseInt(process.env.GROUP_CHAT_SYSTEM_PROMPT_BUDGET_CHARS || '5600', 10);
 const GROUP_CHAT_USER_PROMPT_BUDGET_CHARS = parseInt(process.env.GROUP_CHAT_USER_PROMPT_BUDGET_CHARS || '1800', 10);
 const GROUP_CHAT_CONTEXT_BUDGET_CHARS = parseInt(process.env.GROUP_CHAT_CONTEXT_BUDGET_CHARS || '1600', 10);
@@ -551,7 +556,10 @@ let cachedManifesto = loadManifesto();
 let cachedSoul = loadSoul();
 let cachedCodebaseMap = loadCodebaseMap();
 let cachedNorthStar = null;
+let cachedNorthStarRaw = null;
 let lastNorthStarFetch = 0;
+let cachedMissionStatus = null;
+let lastMissionStatusFetch = 0;
 const NORTH_STAR_REFRESH_MS = 15 * 60 * 1000; // Re-fetch every 15 min
 
 /**
@@ -565,9 +573,9 @@ async function loadNorthStar() {
     }
     try {
         const snap = await db.collection('company-config').doc('north-star').get();
-        if (!snap.exists) { cachedNorthStar = ''; lastNorthStarFetch = now; return ''; }
+        if (!snap.exists) { cachedNorthStar = ''; cachedNorthStarRaw = null; lastNorthStarFetch = now; return ''; }
         const data = snap.data();
-        if (!data?.title) { cachedNorthStar = ''; lastNorthStarFetch = now; return ''; }
+        if (!data?.title) { cachedNorthStar = ''; cachedNorthStarRaw = null; lastNorthStarFetch = now; return ''; }
 
         const lines = [
             `=== COMPANY NORTH STAR ===`,
@@ -584,15 +592,161 @@ async function loadNorthStar() {
         }
         lines.push(`=== Prioritize work that moves us toward this goal ===`);
         cachedNorthStar = lines.join('\n');
+        cachedNorthStarRaw = data;
         lastNorthStarFetch = now;
         console.log(`⭐ North Star loaded: "${data.title}"`);
         return cachedNorthStar;
     } catch (err) {
         console.warn('⚠️  Could not load North Star:', err.message);
         cachedNorthStar = '';
+        cachedNorthStarRaw = null;
         lastNorthStarFetch = now;
         return '';
     }
+}
+
+function sanitizeNorthStarTitle(rawTitle) {
+    const input = String(rawTitle || '').replace(/\s+/g, ' ').trim();
+    if (!input) return '';
+    return input
+        .replace(/^here'?s your north star content,\s*ready to paste directly into the virtual office north star panel:\s*/i, '')
+        .replace(/^🌟\s*north star title\s*/i, '')
+        .trim();
+}
+
+function extractNorthStarGoalFromText(northStarText) {
+    if (!northStarText) return '';
+    const line = String(northStarText)
+        .split('\n')
+        .map((l) => l.trim())
+        .find((l) => l.startsWith('Goal:'));
+    if (!line) return '';
+    return sanitizeNorthStarTitle(line.replace(/^Goal:\s*/, ''));
+}
+
+async function loadNorthStarContext() {
+    const northStarText = await loadNorthStar();
+    const raw = cachedNorthStarRaw || {};
+    const title = sanitizeNorthStarTitle(raw.title || extractNorthStarGoalFromText(northStarText));
+    const objectives = Array.isArray(raw.objectives)
+        ? raw.objectives.map((o) => sanitizeNorthStarTitle(o)).filter(Boolean)
+        : [];
+    const description = String(raw.description || '').trim();
+    return { title, objectives, description, text: northStarText || '' };
+}
+
+async function loadMissionStatus(forceRefresh = false) {
+    const now = Date.now();
+    if (!forceRefresh && cachedMissionStatus && (now - lastMissionStatusFetch) < MISSION_STATUS_CACHE_MS) {
+        return cachedMissionStatus;
+    }
+    try {
+        const snap = await db.doc('company-config/mission-status').get();
+        cachedMissionStatus = snap.exists ? (snap.data() || {}) : { status: 'idle' };
+    } catch (err) {
+        if (!cachedMissionStatus) cachedMissionStatus = { status: 'unknown' };
+    }
+    lastMissionStatusFetch = now;
+    return cachedMissionStatus;
+}
+
+async function isMissionPaused(forceRefresh = false) {
+    const mission = await loadMissionStatus(forceRefresh);
+    return String(mission?.status || '').toLowerCase() === 'paused';
+}
+
+function buildAssigneeVariants(displayName) {
+    const raw = String(displayName || '').trim();
+    if (!raw) return [];
+    const titleCase = raw.charAt(0).toUpperCase() + raw.slice(1);
+    const lower = raw.toLowerCase();
+    return Array.from(new Set([raw, titleCase, lower, `${raw} ⚡️`, `${titleCase} ⚡️`]));
+}
+
+function slugifyTaskSegment(value) {
+    const safe = String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 64);
+    return safe || 'north-star';
+}
+
+function selectObjectiveFocus(agentId, northStarContext) {
+    const objectives = Array.isArray(northStarContext?.objectives) ? northStarContext.objectives : [];
+    if (objectives.length === 0) return sanitizeNorthStarTitle(northStarContext?.title || '');
+    const offsets = { nora: 0, scout: 1, solara: 2, sage: 3 };
+    const hourBucket = Math.floor(Date.now() / (60 * 60 * 1000));
+    const idx = (hourBucket + (offsets[agentId] || 0)) % objectives.length;
+    return sanitizeNorthStarTitle(objectives[idx]) || sanitizeNorthStarTitle(northStarContext?.title || '');
+}
+
+function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
+    const focus = selectObjectiveFocus(agentId, northStarContext);
+    const fallback = sanitizeNorthStarTitle(northStarContext?.title || '') || 'current priorities';
+    const focusLabel = focus || fallback;
+    const focusSlug = slugifyTaskSegment(focusLabel);
+    const dateStamp = new Date().toISOString().slice(0, 10);
+
+    if (agentId === 'nora') {
+        return {
+            name: `Queue operations audit: ${focusLabel}`,
+            description:
+                `Audit ` +
+                `project/kanban/board.md and active ${KANBAN_COLLECTION} cards for blockers tied to "${focusLabel}". ` +
+                `Publish findings + concrete next actions in docs/ops/${focusSlug}-queue-audit-${dateStamp}.md.`,
+            priority: 'medium',
+            focusObjective: focusLabel,
+        };
+    }
+
+    if (agentId === 'scout') {
+        return {
+            name: `Research sprint: ${focusLabel}`,
+            description:
+                `Create docs/research/${focusSlug}-competitive-brief-${dateStamp}.md with ` +
+                `5 concrete examples (with URLs), 3 differentiated opportunities for Pulse, and one recommended test.`,
+            priority: options.fromManager ? 'high' : 'medium',
+            focusObjective: focusLabel,
+        };
+    }
+
+    if (agentId === 'solara') {
+        return {
+            name: `Messaging build: ${focusLabel}`,
+            description:
+                `Create docs/deliverables/${focusSlug}-partner-messaging-${dateStamp}.md with a core narrative, ` +
+                `3 messaging pillars, and copy snippets for brands, gyms, and run clubs.`,
+            priority: options.fromManager ? 'high' : 'medium',
+            focusObjective: focusLabel,
+        };
+    }
+
+    return {
+        name: `Evidence memo: ${focusLabel}`,
+        description:
+            `Create docs/research/${focusSlug}-health-evidence-${dateStamp}.md with ` +
+            `at least 5 cited findings relevant to engagement/retention and a recommended evidence-backed intervention.`,
+        priority: options.fromManager ? 'high' : 'medium',
+        focusObjective: focusLabel,
+    };
+}
+
+function getRecentTaskMatchByName(taskRows, candidateName, windowMs) {
+    if (!candidateName || !Array.isArray(taskRows) || taskRows.length === 0) return null;
+    const targetKey = normalizeTaskLoopKey(candidateName);
+    if (!targetKey) return null;
+    const cutoff = Date.now() - (windowMs || TASK_NAME_DEDUP_WINDOW_MS);
+
+    for (const row of taskRows) {
+        const rowName = row?.name || row?.taskName || '';
+        if (!rowName) continue;
+        if (normalizeTaskLoopKey(rowName) !== targetKey) continue;
+        const rowTime = toMillis(row?.createdAt || row?.updatedAt || row?.completedAt);
+        if (!rowTime || rowTime < cutoff) continue;
+        return row;
+    }
+    return null;
 }
 
 const SERVICE_ACCOUNT = {
@@ -1873,6 +2027,8 @@ async function checkIdleAndNudge() {
     if (AGENT_ID !== 'nora') return;
 
     try {
+        if (await isMissionPaused()) return;
+
         const snap = await db.collection(KANBAN_COLLECTION)
             .where('status', '==', 'in-progress')
             .get();
@@ -1945,16 +2101,24 @@ async function checkIdleAndNudge() {
  */
 async function selfAssignTask() {
     try {
+        if (await isMissionPaused()) return null;
+
         // Double-check: do we really have no tasks?
-        const existing = await db.collection(KANBAN_COLLECTION)
-            .where('assignee', '==', AGENT_NAME)
-            .limit(40)
-            .get();
-        const hasOpenTask = existing.docs.some((d) => {
-            const status = d.data()?.status;
+        const existingDocs = await fetchTaskCandidatesForAgent(140);
+        const existingRows = existingDocs.map((d) => ({ id: d.id, ...d.data() }));
+        const hasOpenTask = existingRows.some((row) => {
+            const status = row?.status;
             return status === 'todo' || status === 'in-progress';
         });
         if (hasOpenTask) return null; // Race condition — task appeared
+
+        const recentAutoAssign = existingRows
+            .filter((row) => ['self-assigned-idle', 'self-assigned-mission', 'nora-task-manager', 'mission-kickoff', 'telemetry-auto-assign'].includes(row?.source))
+            .sort((a, b) => toMillis(b?.createdAt) - toMillis(a?.createdAt))[0];
+        const recentAutoAssignMs = toMillis(recentAutoAssign?.createdAt || recentAutoAssign?.updatedAt);
+        if (recentAutoAssignMs && (Date.now() - recentAutoAssignMs) < SELF_ASSIGN_COOLDOWN_MS) {
+            return null;
+        }
 
         // Check if mission is active — if so, use smarter North Star-aware self-assignment
         let missionActive = false;
@@ -1967,10 +2131,10 @@ async function selfAssignTask() {
         } catch (_) { }
 
         // Load North Star
-        const nsSnap = await db.collection('company-config').doc('north-star').get();
-        const ns = nsSnap.exists ? nsSnap.data() : null;
-        const nsTitle = ns?.title || '';
-        const nsObjectives = ns?.objectives || [];
+        const nsContext = await loadNorthStarContext();
+        const nsTitle = nsContext.title || '';
+        const nsObjectives = Array.isArray(nsContext.objectives) ? nsContext.objectives : [];
+        const nsDescription = nsContext.description || '';
 
         // ── MISSION MODE: GPT-powered self-assignment ──
         if (missionActive && nsTitle && process.env.OPENAI_API_KEY) {
@@ -2011,7 +2175,7 @@ async function selfAssignTask() {
                     `Your expertise: ${agentStrengths[AGENT_ID] || 'general'}`,
                     ``,
                     `NORTH STAR: ${nsTitle}`,
-                    ns?.description ? `Context: ${ns.description.substring(0, 300)}` : '',
+                    nsDescription ? `Context: ${nsDescription.substring(0, 300)}` : '',
                     nsObjectives.length > 0 ? `Objectives:\n${nsObjectives.map((o, i) => `  ${i + 1}. ${o}`).join('\n')}` : '',
                     missionObjective ? `\nYOUR CLAIMED OBJECTIVE: ${missionObjective}` : '',
                     ``,
@@ -2050,6 +2214,12 @@ async function selfAssignTask() {
                 const taskResult = JSON.parse(data.choices?.[0]?.message?.content || '{}');
 
                 if (taskResult.name && taskResult.name.length > 5) {
+                    const duplicateMissionTask = getRecentTaskMatchByName(existingRows, taskResult.name, TASK_NAME_DEDUP_WINDOW_MS);
+                    if (duplicateMissionTask) {
+                        console.log(`⏭️ Skipping duplicate mission self-assignment: "${taskResult.name}"`);
+                        return null;
+                    }
+
                     const docRef = await db.collection(KANBAN_COLLECTION).add({
                         name: taskResult.name,
                         description: `${taskResult.description || ''}\n\n**North Star Impact:** ${taskResult.direct_impact || ''}`,
@@ -2080,33 +2250,21 @@ async function selfAssignTask() {
         }
 
         // ── IDLE MODE: Role-based defaults ──
-        const roleTasks = {
-            nora: {
-                name: nsTitle ? `Audit task queues and unblock work toward: ${nsTitle}` : 'Audit agent task queues and identify blockers',
-                description: `Review the kanban board for all agents. Check for blocked tasks, stale in-progress items. ${nsTitle ? `Create follow-up tasks aligned to North Star: "${nsTitle}".` : 'Create follow-up tasks as needed.'}`,
-            },
-            scout: {
-                name: nsTitle ? `Research: competitive insights for ${nsTitle}` : 'Competitive analysis: top 3 fitness app features',
-                description: `Research and analyze market trends relevant to Pulse. ${nsTitle ? `Focus on insights that support: "${nsTitle}".` : ''} Save findings as .md in docs/research/.`,
-            },
-            solara: {
-                name: nsTitle ? `Content: brand messaging aligned to ${nsTitle}` : 'Draft community engagement content',
-                description: `Create brand content aligned to Pulse values. ${nsTitle ? `Align messaging with: "${nsTitle}".` : ''} Save as .md in docs/deliverables/.`,
-            },
-            sage: {
-                name: nsTitle ? `Health science synthesis for ${nsTitle}` : 'Research synthesis: recovery science insights',
-                description: `Synthesize health/science insights relevant to Pulse. ${nsTitle ? `Support objective: "${nsTitle}".` : ''} Save as .md in docs/research/.`,
-            },
-        };
+        const taskData = buildRoleTaskBlueprint(AGENT_ID, nsContext, { fromManager: false });
+        const duplicateIdleTask = getRecentTaskMatchByName(existingRows, taskData.name, TASK_NAME_DEDUP_WINDOW_MS);
+        if (duplicateIdleTask) {
+            console.log(`⏭️ Skipping duplicate idle self-assignment: "${taskData.name}"`);
+            return null;
+        }
 
-        const taskData = roleTasks[AGENT_ID] || roleTasks.scout;
         const docRef = await db.collection(KANBAN_COLLECTION).add({
             name: taskData.name,
             description: taskData.description,
             assignee: AGENT_NAME,
             status: 'todo',
-            priority: 'medium',
+            priority: taskData.priority || 'medium',
             source: 'self-assigned-idle',
+            northStarObjective: taskData.focusObjective || nsTitle || '',
             createdAt: FieldValue.serverTimestamp(),
             updatedAt: FieldValue.serverTimestamp(),
         });
@@ -2192,65 +2350,59 @@ async function noraTaskManagerSweep() {
     if (AGENT_ID !== 'nora') return;  // Only Nora does this
 
     try {
+        if (await isMissionPaused()) return;
+
         const allAgents = ['nora', 'scout', 'solara', 'sage'];
         const displayNames = { nora: 'Nora', scout: 'Scout', solara: 'Solara', sage: 'Sage' };
+        const nsContext = await loadNorthStarContext();
 
         for (const agentId of allAgents) {
             if (agentId === 'nora') continue;  // Nora manages others, not herself
 
             const displayName = displayNames[agentId];
+            const assigneeVariants = buildAssigneeVariants(displayName);
             const snap = await db.collection(KANBAN_COLLECTION)
-                .where('assignee', '==', displayName)
+                .where('assignee', 'in', assigneeVariants)
                 .limit(50)
                 .get();
-            const hasOpenTask = snap.docs.some((d) => {
-                const status = d.data()?.status;
+            const taskRows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+            const hasOpenTask = taskRows.some((row) => {
+                const status = row?.status;
                 return status === 'todo' || status === 'in-progress';
             });
 
             if (hasOpenTask) continue;  // Agent has work
 
-            // Check if we already auto-assigned in the last 2 hours
-            const recentAssign = await db.collection(KANBAN_COLLECTION)
-                .where('assignee', '==', displayName)
-                .limit(40)
-                .get();
-            const recentAssignDoc = recentAssign.docs
-                .filter((d) => ['nora-task-manager', 'mission-kickoff'].includes(d.data()?.source))
-                .sort((a, b) => toMillis(b.data()?.createdAt) - toMillis(a.data()?.createdAt))[0];
-
-            if (recentAssignDoc) {
-                const lastAssignTime = recentAssignDoc.data().createdAt?.toDate?.();
-                if (lastAssignTime && (Date.now() - lastAssignTime.getTime()) < 2 * 60 * 60 * 1000) {
-                    continue;  // Already assigned recently
-                }
+            const recentAssignRow = taskRows
+                .filter((row) => ['nora-task-manager', 'mission-kickoff', 'telemetry-auto-assign', 'self-assigned-idle', 'self-assigned-mission'].includes(row?.source))
+                .sort((a, b) => toMillis(b?.createdAt || b?.updatedAt) - toMillis(a?.createdAt || a?.updatedAt))[0];
+            const recentAssignMs = toMillis(recentAssignRow?.createdAt || recentAssignRow?.updatedAt);
+            if (recentAssignMs && (Date.now() - recentAssignMs) < NORA_SWEEP_ASSIGN_COOLDOWN_MS) {
+                continue;  // Already assigned recently
             }
 
-            const northStar = await loadNorthStar();
-            const nsTitle = northStar ? northStar.split('\n').find(l => l.startsWith('Goal:'))?.replace('Goal:', '').trim() : '';
-
-            const roleTasks = {
-                scout: `Research task aligned to${nsTitle ? ': ' + nsTitle : ' current priorities'}`,
-                solara: `Brand/content task aligned to${nsTitle ? ': ' + nsTitle : ' current priorities'}`,
-                sage: `Health science research aligned to${nsTitle ? ': ' + nsTitle : ' current priorities'}`,
-            };
-
-            const taskName = roleTasks[agentId] || `General task for ${displayName}`;
+            const taskBlueprint = buildRoleTaskBlueprint(agentId, nsContext, { fromManager: true });
+            const duplicateTask = getRecentTaskMatchByName(taskRows, taskBlueprint.name, TASK_NAME_DEDUP_WINDOW_MS);
+            if (duplicateTask) {
+                console.log(`⏭️ [Nora Task Manager] Skipped duplicate for ${displayName}: "${taskBlueprint.name}"`);
+                continue;
+            }
 
             await db.collection(KANBAN_COLLECTION).add({
-                name: taskName,
-                description: `Auto-assigned by Nora (task manager sweep). ${nsTitle ? `Align work with North Star: "${nsTitle}".` : 'Work on current priorities.'} Commit deliverables as .md files to the repo.`,
+                name: taskBlueprint.name,
+                description: `Auto-assigned by Nora (task manager sweep). ${taskBlueprint.description}`,
                 assignee: displayName,
                 status: 'todo',
-                priority: 'medium',
+                priority: taskBlueprint.priority || 'medium',
                 source: 'nora-task-manager',
+                northStarObjective: taskBlueprint.focusObjective || nsContext.title || '',
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
             });
 
-            console.log(`📋 [Nora Task Manager] Created task for idle agent ${displayName}: "${taskName}"`);
+            console.log(`📋 [Nora Task Manager] Created task for idle agent ${displayName}: "${taskBlueprint.name}"`);
 
-            await postBeat('work-in-flight', `📋 Task Manager: Assigned "${taskName}" to ${displayName} (idle agent detected)`, {
+            await postBeat('work-in-flight', `📋 Task Manager: Assigned "${taskBlueprint.name}" to ${displayName} (idle agent detected)`, {
                 color: 'blue',
                 lensTag: 'ops',
                 objectiveCode: 'TASK-MANAGER',
@@ -5185,6 +5337,35 @@ async function sweepStaleGroupChatResponses() {
     }
 }
 
+async function enforceMissionPause(currentTaskRef, lastPauseNoticeMs) {
+    const paused = await isMissionPaused(true);
+    if (!paused) {
+        return { paused: false, lastPauseNoticeMs: 0 };
+    }
+
+    if (currentTaskRef) {
+        _forceRecoveryRequested = true;
+        _forceRecoveryReason = 'Mission paused in Mission Control.';
+    }
+
+    const now = Date.now();
+    if (now - lastPauseNoticeMs > 10_000) {
+        await setStatus('offline', {
+            currentTask: currentTaskRef?.name || '',
+            currentTaskId: currentTaskRef?.id || '',
+            notes: currentTaskRef
+                ? 'Mission paused — stopping active work and waiting for resume.'
+                : 'Mission paused — runner standing by.',
+            executionSteps: [],
+            currentStepIndex: -1,
+            taskProgress: 0,
+        });
+        return { paused: true, lastPauseNoticeMs: now };
+    }
+
+    return { paused: true, lastPauseNoticeMs };
+}
+
 /* ─── Main Loop ───────────────────────────────────────── */
 
 async function run() {
@@ -5228,6 +5409,16 @@ async function run() {
         await noraTaskManagerSweep();  // Nora checks all agents' queues
     }, 10 * 60 * 1000);  // Check every 10 minutes
 
+    // Mission pause watchdog — interrupts active execution quickly when admin pauses mission.
+    const missionPauseWatchdog = setInterval(async () => {
+        try {
+            if (currentTaskRef && await isMissionPaused(true)) {
+                _forceRecoveryRequested = true;
+                _forceRecoveryReason = 'Mission paused in Mission Control.';
+            }
+        } catch (_) { }
+    }, 5_000);
+
     // Start command listener (real-time Firestore listener)
     const unsubCommands = startCommandListener();
 
@@ -5237,6 +5428,7 @@ async function run() {
         clearInterval(heartbeatInterval);
         clearInterval(heartbeatOsInterval);
         clearInterval(staleResponseWatchdog);
+        clearInterval(missionPauseWatchdog);
         unsubCommands();
         await setStatus('offline', {
             notes: 'Agent shut down gracefully',
@@ -5251,6 +5443,7 @@ async function run() {
     // Main task loop
     let idleCycles = 0;  // Track consecutive idle cycles for self-assignment
     let lastRunnerDisabledNotice = 0;
+    let lastMissionPausedNotice = 0;
     await isRunnerEnabled();
     while (true) {
         try {
@@ -5276,6 +5469,14 @@ async function run() {
                 continue;
             }
             lastRunnerDisabledNotice = 0;
+
+            const missionPause = await enforceMissionPause(currentTaskRef, lastMissionPausedNotice);
+            if (missionPause.paused) {
+                lastMissionPausedNotice = missionPause.lastPauseNoticeMs;
+                await new Promise(r => setTimeout(r, 5_000));
+                continue;
+            }
+            lastMissionPausedNotice = 0;
 
             console.log('🔍 Looking for tasks...');
             const task = await fetchNextTask();
@@ -5344,6 +5545,7 @@ async function run() {
             let consecutiveFailures = 0;
             let lastFailureContext = '';
             let pausedByCommand = false;
+            let pauseReason = 'Runner disabled — execution paused.';
             let currentStepIndex = 0;
             let midpointMissionUpdateSent = false;
 
@@ -5352,6 +5554,16 @@ async function run() {
                 if (!(await isRunnerEnabled())) {
                     console.log(`🛑 Runner disabled while waiting to run step ${i + 1}/${steps.length}. Pausing.`);
                     pausedByCommand = true;
+                    pauseReason = 'Runner disabled by command.';
+                    break;
+                }
+
+                if (await isMissionPaused(true)) {
+                    console.log(`⏸️ Mission paused while waiting to run step ${i + 1}/${steps.length}. Pausing.`);
+                    _forceRecoveryRequested = true;
+                    _forceRecoveryReason = 'Mission paused in Mission Control.';
+                    pausedByCommand = true;
+                    pauseReason = 'Mission paused — execution halted.';
                     break;
                 }
 
@@ -5377,6 +5589,16 @@ async function run() {
                 if (!(await isRunnerEnabled())) {
                     console.log(`🛑 Runner disabled after step ${i + 1}/${steps.length}. Pausing.`);
                     pausedByCommand = true;
+                    pauseReason = 'Runner disabled by command.';
+                    break;
+                }
+
+                if (await isMissionPaused(true)) {
+                    console.log(`⏸️ Mission paused after step ${i + 1}/${steps.length}. Pausing.`);
+                    _forceRecoveryRequested = true;
+                    _forceRecoveryReason = 'Mission paused in Mission Control.';
+                    pausedByCommand = true;
+                    pauseReason = 'Mission paused — execution halted.';
                     break;
                 }
 
@@ -5458,7 +5680,7 @@ async function run() {
                     executionSteps: steps.map(serializeStep),
                     currentStepIndex,
                     taskProgress,
-                    notes: 'Runner disabled — execution paused.',
+                    notes: pauseReason,
                 });
                 continue;
             }
