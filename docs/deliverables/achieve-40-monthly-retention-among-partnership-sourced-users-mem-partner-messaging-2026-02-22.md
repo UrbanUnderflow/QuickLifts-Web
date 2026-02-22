@@ -24,7 +24,7 @@ Paid channels can spike numbers, but they rarely generate this kind of belonging
 
 **Idea:** People retain when their training has a clear arc and they know where they are inside it; Pulse gives partners the scaffolding to make that true for their community.
 
-- **Named seasons, not endless scroll.** Partnership programs run as defined blocks (e.g., 30-day strength streak, 6-week base miles), so members understand what they’ve signed up for and what "done" looks like.
+- **Named seasons, not endless scroll.** Partnership programs run as defined blocks (e.g., 30‑day strength streak, 6‑week base miles), so members understand what they’ve signed up for and what "done" looks like.
 - **Progress that feels earned.** Checkpoints, streaks, and completion markers give members visible proof they’re moving through a season, making it painful—in a good way—to break the chain.
 - **Habits tied to real-life rhythms.** Blocks are designed around the cadence of the partner’s community (class schedules, club nights, drop calendars), so the behavior required to stick is already embedded in members’ weeks.
 
@@ -35,3 +35,38 @@ Paid channels can spike numbers, but they rarely generate this kind of belonging
 - **Cohort views that spotlight stickiness.** Partners can see which cohorts keep logging sessions together after week four, and members can see that they’re not the only ones still in it.
 - **Moments worth celebrating publicly.** Co-branded badges, round completions, and streak milestones give gyms, brands, and clubs real achievements to shout out—inside Pulse and on social—without inflating the truth.
 - **Signals that inform the next season.** Retention-focused metrics (returning participants per block, blocks completed per member) help partners double down on formats and rituals that people actually stay with, not just sample.
+
+## Copy Snippets
+
+### For Brands
+
+- **Email opener:**
+  > When someone joins Pulse through your crew, they’re not testing an app—they’re signing up for the season your athletes are already leading. That’s why they’re still training with you 30 days from now.
+
+- **Landing-page hero line:**
+  > Members who enter through your community don’t just install Pulse—they stay for the season, not the signup.
+
+- **In-product banner/CTA:**
+  > Invite your community into this block on Pulse and turn first‑week hype into a month‑long habit.
+
+### For Gyms
+
+- **Email opener:**
+  > When a member joins Pulse because you framed the next four weeks as "our strength season," they show up like it’s their spot—not just another subscription.
+
+- **Landing-page hero line:**
+  > Members who come in through your classes return to Pulse the way they return to your floor—because their people are there.
+
+- **In-product banner/CTA:**
+  > Point your next intake or challenge to this Pulse round and give new members a 30‑day path they’ll actually finish.
+
+### For Run Clubs
+
+- **Email opener:**
+  > Runners who join Pulse through your club aren’t here for an app—they’re here for the next six‑week story you’re telling together.
+
+- **Landing-page hero line:**
+  > When the entry point is your crew, runners keep opening Pulse long after the first "I’ll try it" run.
+
+- **In-product banner/CTA:**
+  > Set this block as your club’s official Pulse round and make it easy for new faces to still be with you a month from now.
