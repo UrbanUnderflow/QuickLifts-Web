@@ -8,6 +8,7 @@ import {
   getTemplateById,
   BrandChallengeTemplate,
 } from "../../lib/brandChallengeTemplates";
+import { getBrandChallengeTemplates } from "../../lib/challenges/brandTemplates";
 
 // Temporary, focused UI for wiring brand-specific templates into the
 // challenge creation flow. In later steps this selector will be
@@ -101,13 +102,24 @@ function BrandTemplateSelector(props: {
   );
 }
 
-export default function ChallengeCreatePage() {
+export type ChallengeCreatePageProps = {
+  // Optional brandCampaignId passed from a parent route or server component.
+  // If omitted, we fall back to the `brandCampaignId` query param so
+  // marketing / demo links can still deep-link directly into prefilled
+  // brand campaigns.
+  brandCampaignId?: string;
+};
+
+export default function ChallengeCreatePage(props: ChallengeCreatePageProps) {
   const searchParams = useSearchParams();
 
   // In future steps, this brandType will come from the actual challenge
   // creation form state / brandCampaign selection. For now we read from
   // the query string as a simple way to exercise the template wiring.
   const brandType = (searchParams.get("brandType") || "").toLowerCase();
+
+  const queryBrandCampaignId = searchParams.get("brandCampaignId") || "";
+  const brandCampaignId = (props.brandCampaignId ?? queryBrandCampaignId).trim();
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(
     undefined
@@ -121,6 +133,40 @@ export default function ChallengeCreatePage() {
   const [durationDays, setDurationDays] = useState<number | "">("");
   const [sessionsPerWeek, setSessionsPerWeek] = useState<number | "">("");
   const [visualStyleKey, setVisualStyleKey] = useState("");
+
+  // When a brandCampaignId is provided (either via props or the query
+  // string), prefill the draft with the first template tied to that
+  // archetype. This lets partner links like
+  // `/challenges/create?brandCampaignId=on_running_recovery_block`
+  // immediately render a challenge that feels like "their" season rather
+  // than a generic template.
+  useEffect(() => {
+    if (!brandCampaignId) return;
+
+    const templatesForCampaign = getBrandChallengeTemplates(brandCampaignId);
+    if (!templatesForCampaign.length) return;
+
+    const template = templatesForCampaign[0];
+
+    setTitle((prev) => (prev ? prev : template.title || template.name));
+    setDescription((prev) => (prev ? prev : template.description));
+    setDurationDays((prev) =>
+      prev ? prev : template.durationDays || template.defaultDurationDays
+    );
+    setSessionsPerWeek((prev) =>
+      prev ? prev : template.sessionsPerWeek || template.targetSessionsPerWeek
+    );
+    setVisualStyleKey((prev) =>
+      prev ? prev : template.brandStyleKey || template.visualStyleKey
+    );
+
+    // If no template has been manually chosen yet, align the
+    // selectedTemplateId so the UI reflects the archetype-driven
+    // prefilling.
+    if (!selectedTemplateId) {
+      setSelectedTemplateId(template.id);
+    }
+  }, [brandCampaignId, selectedTemplateId]);
 
   // When a template is selected, apply its presets into the form fields.
   useEffect(() => {
