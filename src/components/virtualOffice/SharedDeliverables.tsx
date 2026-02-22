@@ -21,9 +21,20 @@ interface Deliverable {
   completedAt?: string;
   taskRef?: string;
   agentId: string;
+  deliveryClass?: 'decision-grade' | 'supporting' | 'internal';
+  movementSignals?: {
+    score: number;
+    impactLabel: string;
+    impactToneClass: 'high' | 'medium' | 'low';
+    signals: string[];
+    rationale: string;
+    classLabel: string;
+    classSummary: string;
+  };
 }
 
 type DeliverableStatusFilter = 'all' | 'needs-review' | 'approved' | 'work';
+type DeliveryClassFilter = 'all' | 'decision-grade' | 'supporting' | 'internal';
 
 interface AgentInfo {
   id: string;
@@ -79,67 +90,149 @@ const normalizeDeliverableChangeType = (value?: string): string => {
   return 'edited';
 };
 
-const normalizeText = (value?: string) => String(value || '').toLowerCase();
+const normalizeDeliveryClass = (value?: string): Deliverable['deliveryClass'] => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'decision-grade' || normalized === 'decisiongrade' || normalized === 'decision') return 'decision-grade';
+  if (normalized === 'supporting' || normalized === 'support') return 'supporting';
+  if (normalized === 'internal') return 'internal';
+  return 'supporting';
+};
+
+const MOVEMENT_KEYWORDS = [
+  'north star',
+  'partnership',
+  'customer',
+  'activation',
+  'conversion',
+  'revenue',
+  'retention',
+  'churn',
+  'engagement',
+  'onboarding',
+  'dashboard',
+  'campaign',
+  'api',
+  'automation',
+  'workflow',
+  'community',
+  'run',
+  'checkout',
+  'billing',
+  'on-site',
+];
+
+const INTERNAL_PATH_SEGMENTS = [
+  '/scripts/',
+  '/node_modules/',
+  '/backups/',
+  'AGENTS.md',
+  'agent-runner',
+  '.github',
+  'openapi',
+  'schema',
+];
+
+const resolveDeliveryClass = (score: number, text: string, filePath: string): 'decision-grade' | 'supporting' | 'internal' => {
+  const normalizedText = normalizeText(text);
+  const normalizedPath = normalizeText(filePath);
+
+  if (score <= 2 || /onboarding checklist|runbook|handoff|note|manifesto/.test(normalizedText)) {
+    return 'supporting';
+  }
+
+  if (score >= 4 && !INTERNAL_PATH_SEGMENTS.some((segment) => normalizedPath.includes(normalizeText(segment)))) {
+    return 'decision-grade';
+  }
+
+  if (
+    score >= 3 &&
+    /(^|\/)(src|web|functions)\//.test(normalizedPath)
+  ) {
+    return 'decision-grade';
+  }
+
+  if (score >= 2) {
+    return 'supporting';
+  }
+
+  return 'internal';
+};
 
 const deriveMovementSignals = (d: Deliverable) => {
   const text = normalizeText([d.title, d.description, d.reviewReason, d.filePath, ...(d.tags || [])].join(' '));
+  const filePath = d.filePath || '';
+  const hasObjectiveLanguage = /north\s*star|revenue|partner|conversion|retention|community|engagement|onboarding/.test(text);
+  const isInternalFile = INTERNAL_PATH_SEGMENTS.some((segment) => normalizeText(filePath).includes(normalizeText(segment)));
 
   const signals: string[] = [];
-  let score = 0;
+  let score = 1;
 
-  if (d.reviewReason && d.reviewReason.trim()) {
+  if (d.reviewReason?.trim()) {
     score += 2;
-    signals.push('Reviewer added a rationale for impact.');
+    signals.push('Reviewer supplied a rationale for why this move matters.');
   } else {
-    signals.push('No reviewer rationale attached yet.');
+    signals.push('No reviewer rationale yet.');
   }
 
-  const highImpactTerms = [
-    'north star',
-    'customer',
-    'activation',
-    'conversion',
-    'retention',
-    'partnership',
-    'run',
-    'community',
-    'revenue',
-    'churn',
-    'engagement',
-    'onboarding',
-    'dashboard',
-    'campaign',
-    'api',
-    'automation',
-    'security',
-    'bug',
-    'error',
-  ];
+  const matched = MOVEMENT_KEYWORDS.filter((term) => text.includes(term));
+  score += Math.min(4, matched.length);
+  signals.push(...matched.slice(0, 4).map((term) => `Contains impact signal: ${term}`));
 
-  const matched = highImpactTerms.filter((term) => text.includes(term));
-  score += Math.min(3, matched.length);
-  signals.push(...matched.slice(0, 3).map((term) => `Contains likely impact signal: ${term}`));
+  if (filePath) {
+    if (/\b(src|web|functions)\//.test(filePath)) {
+      score += 2;
+      signals.push('Touches runtime or application behavior.');
+    } else if (/\bdocs\//.test(filePath)) {
+      signals.push('Documentation artifact — verify execution impact before approval.');
+    } else if (/\bconfig\b/.test(filePath)) {
+      signals.push('Configuration artifact; confirm production impact and rollback path.');
+    }
+  }
 
-  if (d.filePath.includes('src/') || d.filePath.includes('web/') || d.filePath.includes('functions/')) {
+  if (d.changeType === 'new') {
     score += 1;
-    signals.push('Touches product code or runtime surfaces.');
-  } else if (d.filePath.includes('docs/')) {
-    score += 0;
-    signals.push('Documentation-only artifact; confirm downstream execution impact before approval.');
+    signals.push('New artifact introduced.');
   }
 
-  const clampedScore = Math.min(5, Math.max(1, score));
-  const impactLabel = clampedScore >= 4 ? 'High' : clampedScore >= 3 ? 'Medium' : 'Low';
-  const impactToneClass = clampedScore >= 4 ? 'high' : clampedScore >= 3 ? 'medium' : 'low';
+  if (isInternalFile) {
+    score = Math.max(0, score - 2);
+    signals.push('Likely internal/operational artifact path.');
+  }
+
+  if (hasObjectiveLanguage) {
+    score += 1;
+  }
+
+  const clampedScore = Math.min(7, Math.max(1, score));
+  const deliveryClass = resolveDeliveryClass(clampedScore, text, filePath);
+  const impactLabel = clampedScore >= 6 ? 'High' : clampedScore >= 4 ? 'Medium' : clampedScore >= 2 ? 'Low' : 'Minimal';
+  const impactToneClass = clampedScore >= 6 ? 'high' : clampedScore >= 4 ? 'high' : clampedScore >= 2 ? 'medium' : 'low';
+
+  const classLabel = deliveryClass === 'decision-grade'
+    ? 'Decision Grade'
+    : deliveryClass === 'supporting'
+      ? 'Supporting'
+      : 'Internal';
+
+  const classSummary =
+    deliveryClass === 'decision-grade'
+      ? 'Likely moves user-facing outcomes and should be reviewed before approval.'
+      : deliveryClass === 'supporting'
+        ? 'Potentially useful but mostly supports downstream execution.'
+        : 'Internal / operational artifact; keep only if paired with external impact tasks.';
 
   return {
     score: clampedScore,
     impactLabel,
     impactToneClass,
-    signals: Array.from(new Set(signals)).slice(0, 4),
+    signals: Array.from(new Set(signals)).slice(0, 6),
     rationale: d.reviewReason || 'No rationale supplied yet. Ask for a concise movement rationale before approving.',
+    classLabel,
+    classSummary,
   };
 };
+
+const normalizeText = (value?: string) => String(value || '').toLowerCase();
 
 const sanitizeRecordedFilePath = (rawPath?: string): string => {
   if (!rawPath) return '';
@@ -180,6 +273,7 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
   const [loading, setLoading] = useState(true);
   const [filterAgent, setFilterAgent] = useState<string | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<DeliverableStatusFilter>('all');
+  const [deliveryClassFilter, setDeliveryClassFilter] = useState<DeliveryClassFilter>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
   const [fileLoading, setFileLoading] = useState(false);
@@ -201,8 +295,7 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
         const data = docSnap.data();
         const filePath = sanitizeRecordedFilePath(data.filePath || '');
         const basename = filePath.split('/').pop() || data.title || 'untitled';
-
-        all.push({
+        const draftDeliverable = {
           id: docSnap.id,
           title: data.title || basename,
           description: data.description || `Task: ${data.taskName || 'Unknown'}`,
@@ -216,6 +309,15 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
           completedAt: data.createdAt?.toDate?.()?.toISOString?.() || undefined,
           taskRef: data.taskName || data.taskId || undefined,
           agentId: data.agentId || 'unknown',
+          deliveryClass: normalizeDeliveryClass(data.deliveryClass),
+        } as Deliverable;
+        const movementSignals = deriveMovementSignals(draftDeliverable);
+
+        const movementClass = draftDeliverable.deliveryClass || resolveDeliveryClass(movementSignals.score, draftDeliverable.title, filePath);
+        all.push({
+          ...draftDeliverable,
+          movementSignals,
+          deliveryClass: movementClass,
         });
       }
     } catch (err) {
@@ -297,9 +399,18 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
       return status !== 'needs-review' && status !== 'approved';
     }).length,
   };
+  const movementClassCounts = {
+    all: deliverables.length,
+    decisionGrade: deliverables.filter((d) => (d.deliveryClass || 'supporting') === 'decision-grade').length,
+    supporting: deliverables.filter((d) => (d.deliveryClass || 'supporting') === 'supporting').length,
+    internal: deliverables.filter((d) => (d.deliveryClass || 'supporting') === 'internal').length,
+  };
 
   const isNeedsReview = (status?: string) => normalizeDeliverableStatus(status) === 'needs-review';
   const isApproved = (status?: string) => normalizeDeliverableStatus(status) === 'approved';
+  const isDecisionGrade = (deliveryClass?: string) => (deliveryClass || 'supporting') === 'decision-grade';
+  const isSupporting = (deliveryClass?: string) => (deliveryClass || 'supporting') === 'supporting';
+  const isInternal = (deliveryClass?: string) => (deliveryClass || 'supporting') === 'internal';
 
   const filtered = deliverables
     .filter((d) => {
@@ -311,6 +422,12 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
       if (statusFilter === 'needs-review') return isNeedsReview(d.status);
       if (statusFilter === 'approved') return isApproved(d.status);
       return !isNeedsReview(d.status) && !isApproved(d.status);
+    })
+    .filter((d) => {
+      if (deliveryClassFilter === 'all') return true;
+      if (deliveryClassFilter === 'decision-grade') return isDecisionGrade(d.deliveryClass);
+      if (deliveryClassFilter === 'supporting') return isSupporting(d.deliveryClass);
+      return isInternal(d.deliveryClass);
     });
 
 const statusBadge = (status?: string) => {
@@ -334,6 +451,17 @@ const statusBadge = (status?: string) => {
       return { className: 'deleted', label: 'DELETED' };
     }
     return { className: 'edited', label: 'EDITED' };
+  };
+
+  const deliveryClassBadge = (deliveryClass?: string) => {
+    const normalized = normalizeDeliveryClass(deliveryClass);
+    if (normalized === 'decision-grade') {
+      return { className: 'decision-grade', label: 'DECISION' };
+    }
+    if (normalized === 'internal') {
+      return { className: 'internal', label: 'INTERNAL' };
+    }
+    return { className: 'supporting', label: 'SUPPORTING' };
   };
 
   const handleApprove = async (deliverableId: string) => {
@@ -441,6 +569,33 @@ const statusBadge = (status?: string) => {
           </button>
         </div>
 
+        <div className="sd-filters">
+          <button
+            className={`sd-filter-pill ${deliveryClassFilter === 'all' ? 'active' : ''}`}
+            onClick={() => setDeliveryClassFilter('all')}
+          >
+            All Classes <span className="sd-pill-count">{movementClassCounts.all}</span>
+          </button>
+          <button
+            className={`sd-filter-pill ${deliveryClassFilter === 'decision-grade' ? 'active' : ''}`}
+            onClick={() => setDeliveryClassFilter('decision-grade')}
+          >
+            Decision Grade <span className="sd-pill-count">{movementClassCounts.decisionGrade}</span>
+          </button>
+          <button
+            className={`sd-filter-pill ${deliveryClassFilter === 'supporting' ? 'active' : ''}`}
+            onClick={() => setDeliveryClassFilter('supporting')}
+          >
+            Supporting <span className="sd-pill-count">{movementClassCounts.supporting}</span>
+          </button>
+          <button
+            className={`sd-filter-pill ${deliveryClassFilter === 'internal' ? 'active' : ''}`}
+            onClick={() => setDeliveryClassFilter('internal')}
+          >
+            Internal <span className="sd-pill-count">{movementClassCounts.internal}</span>
+          </button>
+        </div>
+
         {/* Content */}
         <div className="sd-content">
           {loading && (
@@ -493,6 +648,14 @@ const statusBadge = (status?: string) => {
                           </span>
                         );
                       })()}
+                      {(() => {
+                        const badge = deliveryClassBadge(d.deliveryClass);
+                        return (
+                          <span className={`sd-delivery-badge ${badge.className}`}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
                       {d.completedAt && (
                         <span className="sd-date">{new Date(d.completedAt).toLocaleDateString()}</span>
                       )}
@@ -512,16 +675,16 @@ const statusBadge = (status?: string) => {
                   </div>
                 </div>
 
-                    {isExpanded && (
-                      <div className="sd-item-body">
-                        {(() => {
-                          const movement = deriveMovementSignals(d);
+                  {isExpanded && (
+                    <div className="sd-item-body">
+                      {(() => {
+                          const movement = d.movementSignals || deriveMovementSignals(d);
                           return (
-                            <details className="sd-movement-section" open>
+                            <details className="sd-movement-section">
                               <summary className="sd-movement-summary">
                                 <span>Movement assessment</span>
                                 <span className={`sd-movement-badge ${movement.impactToneClass}`}>
-                                  {movement.impactLabel} ({movement.score}/5)
+                                  {movement.impactLabel} ({movement.score}/7)
                             </span>
                           </summary>
                           <div className="sd-movement-content">
@@ -767,6 +930,22 @@ const statusBadge = (status?: string) => {
         .sd-change-badge.deleted {
           background: rgba(244,63,94,0.1); color: #fda4af;
           border: 1px solid rgba(244,63,94,0.25);
+        }
+        .sd-delivery-badge {
+          font-size: 9px; font-weight: 600; padding: 1px 6px;
+          border-radius: 4px; font-family: 'JetBrains Mono', monospace;
+        }
+        .sd-delivery-badge.decision-grade {
+          background: rgba(16,185,129,0.12); color: #34d399;
+          border: 1px solid rgba(16,185,129,0.2);
+        }
+        .sd-delivery-badge.supporting {
+          background: rgba(59,130,246,0.12); color: #60a5fa;
+          border: 1px solid rgba(59,130,246,0.2);
+        }
+        .sd-delivery-badge.internal {
+          background: rgba(148,163,184,0.12); color: #9ca3af;
+          border: 1px solid rgba(148,163,184,0.2);
         }
         .sd-status-badge.pending {
           background: rgba(245,158,11,0.12); color: #f59e0b;
