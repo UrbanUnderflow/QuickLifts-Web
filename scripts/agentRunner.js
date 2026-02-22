@@ -635,6 +635,116 @@ async function loadNorthStarContext() {
     return { title, objectives, description, text: northStarText || '' };
 }
 
+// ─── Objective-code canonicalization helpers
+// -------------------------------------------------------------
+const NORTH_STAR_OBJECTIVE_CODE_REFRESH_MS = 15 * 60 * 1000;
+let objectiveCodeCatalog = {
+    byCode: /** @type {Record<string, string>} */ ({}),       // code => label
+    byLabelKey: /** @type {Record<string, string>} */ ({}),    // normalized label => code
+    loadedAt: 0,
+};
+
+function normalizeObjectiveCodeValue(value) {
+    const normalized = String(value || '').trim();
+    if (!normalized) return '';
+    const upper = normalized.toUpperCase();
+    if (upper.length < 2 || upper.length > 60) return '';
+    if (/^[0-9]+$/.test(upper)) return '';
+    if (!/^[A-Z0-9][A-Z0-9._-]*$/.test(upper)) return '';
+    return upper;
+}
+
+function normalizeObjectiveLabelKey(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+}
+
+function objectiveCodeFromLabel(label, idx, usedCodes) {
+    const safe = String(label || '')
+        .trim()
+        .toLowerCase()
+        .replace(/&/g, ' and ')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 30)
+        .toUpperCase();
+
+    const base = `OBJ_${safe || `TRACK_${String(idx + 1).padStart(2, '0')}`}`;
+    let code = base;
+    let suffix = 2;
+    while (usedCodes.has(code)) {
+        code = `${base}_${suffix}`;
+        suffix += 1;
+    }
+    usedCodes.add(code);
+    return code;
+}
+
+async function loadObjectiveCodeCatalog(forceRefresh = false) {
+    const now = Date.now();
+    if (!forceRefresh && objectiveCodeCatalog.loadedAt && (now - objectiveCodeCatalog.loadedAt) < NORTH_STAR_OBJECTIVE_CODE_REFRESH_MS) {
+        return objectiveCodeCatalog;
+    }
+
+    const northStar = await loadNorthStarContext();
+    const used = new Set();
+    const byCode = {};
+    const byLabelKey = {};
+    const labels = Array.isArray(northStar.objectives) ? northStar.objectives : [];
+
+    labels.forEach((label, idx) => {
+        const code = objectiveCodeFromLabel(label, idx, used);
+        if (!code) return;
+        byCode[code] = label;
+        byLabelKey[normalizeObjectiveLabelKey(label)] = code;
+    });
+
+    objectiveCodeCatalog = {
+        byCode,
+        byLabelKey,
+        loadedAt: now,
+    };
+
+    return objectiveCodeCatalog;
+}
+
+async function resolveTrackedObjectiveCode(rawCode, fallbackCode = '', fallbackLabel = '') {
+    const catalog = await loadObjectiveCodeCatalog();
+    const exactCandidates = [rawCode, fallbackCode].filter(Boolean);
+    for (const candidate of exactCandidates) {
+        const normalized = normalizeObjectiveCodeValue(candidate);
+        if (normalized && catalog.byCode[normalized]) return normalized;
+        const byLabel = catalog.byLabelKey[normalizeObjectiveLabelKey(candidate)];
+        if (byLabel) return byLabel;
+    }
+
+    if (fallbackLabel) {
+        const direct = normalizeObjectiveCodeValue(fallbackLabel);
+        if (direct && catalog.byCode[direct]) return direct;
+        const byLabel = catalog.byLabelKey[normalizeObjectiveLabelKey(fallbackLabel)];
+        if (byLabel) return byLabel;
+    }
+    return '';
+}
+
+function getObjectiveBeatHint(task = {}, fallbackLabel = '') {
+    return {
+        objectiveCode: task?.objectiveCode || '',
+        objectiveCodeLabel: task?.northStarObjective || task?.focusObjective || task?.objective || fallbackLabel || '',
+    };
+}
+
+function isUntrackedCode(rawCode) {
+    const code = normalizeObjectiveCodeValue(rawCode);
+    return !code;
+}
+
+async function resolveObjectiveCode(rawCode, fallbackLabel = '', fallbackCode = '') {
+    return resolveTrackedObjectiveCode(rawCode || '', fallbackCode || '', fallbackLabel || '');
+}
+
 async function loadMissionStatus(forceRefresh = false) {
     const now = Date.now();
     if (!forceRefresh && cachedMissionStatus && (now - lastMissionStatusFetch) < MISSION_STATUS_CACHE_MS) {
@@ -697,6 +807,7 @@ function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
                 `Publish findings + concrete next actions in docs/ops/${focusSlug}-queue-audit-${dateStamp}.md.`,
             priority: 'medium',
             focusObjective: focusLabel,
+            objectiveCode: focusLabel,
         };
     }
 
@@ -708,6 +819,7 @@ function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
                 `5 concrete examples (with URLs), 3 differentiated opportunities for Pulse, and one recommended test.`,
             priority: options.fromManager ? 'high' : 'medium',
             focusObjective: focusLabel,
+            objectiveCode: focusLabel,
         };
     }
 
@@ -719,6 +831,7 @@ function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
                 `3 messaging pillars, and copy snippets for brands, gyms, and run clubs.`,
             priority: options.fromManager ? 'high' : 'medium',
             focusObjective: focusLabel,
+            objectiveCode: focusLabel,
         };
     }
 
@@ -729,6 +842,7 @@ function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
             `at least 5 cited findings relevant to engagement/retention and a recommended evidence-backed intervention.`,
         priority: options.fromManager ? 'high' : 'medium',
         focusObjective: focusLabel,
+        objectiveCode: focusLabel,
     };
 }
 
@@ -1866,11 +1980,17 @@ async function postBeat(beat, headline, opts = {}) {
             return;
         }
 
+        const resolvedObjectiveCode = await resolveTrackedObjectiveCode(
+            opts.objectiveCode || '',
+            '',
+            opts.objectiveCodeLabel || '',
+        );
+
         await db.collection(TIMELINE_COLLECTION).add({
             agentId: AGENT_ID,
             agentName: AGENT_NAME,
             emoji: AGENT_EMOJI,
-            objectiveCode: opts.objectiveCode || opts.taskId || '',
+            objectiveCode: resolvedObjectiveCode,
             beat: beat,               // hypothesis | work-in-flight | result | block | signal-spike
             headline: headline,
             artifactType: opts.artifactType || 'none',
@@ -1959,7 +2079,8 @@ async function extractAndPostInsight(stepOutput, task, stepIndex, totalSteps) {
     await postBeat('signal-spike', `🔍 ${insight}`, {
         taskId: task.id,
         color: 'green',
-        objectiveCode: task.objectiveCode || task.id,
+        objectiveCode: task.objectiveCode || '',
+        objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
         artifactType: 'text',
         artifactText: `Discovered during step ${stepIndex + 1}/${totalSteps} of "${task.name}":\n\n${bestMatch}`,
         lensTag: 'insight',
@@ -2110,7 +2231,8 @@ async function postHourlySnapshot(currentTask) {
             hourIso: hourIso,
             agentId: AGENT_ID,
             agentName: AGENT_NAME,
-            objectiveCode: currentTask?.id || '',
+            objectiveCode: currentTask?.objectiveCode || '',
+            objectiveCodeLabel: currentTask?.focusObjective || currentTask?.northStarObjective || '',
             beatCompleted: currentTask ? 'work-in-flight' : null,
             color: currentTask ? 'green' : 'blue',
             stateTag: 'signals',
@@ -2163,7 +2285,7 @@ async function checkIdleAndNudge() {
                     agentId: AGENT_ID,
                     agentName: AGENT_NAME,
                     emoji: AGENT_EMOJI,
-                    objectiveCode: data.objectiveCode || doc.id,
+                    objectiveCode: data.objectiveCode || '',
                     beat: 'signal-spike',
                     headline: `🔔 Nudge → ${assignee}: "${taskName}" idle for ${minutesSince}m (${color} state)`,
                     artifactType: 'none',
@@ -2349,7 +2471,8 @@ async function selfAssignTask() {
                     await postBeat('hypothesis', `🎯 Self-assigned: "${taskResult.name}" (mission mode)`, {
                         taskId: docRef.id,
                         color: 'green',
-                        objectiveCode: docRef.id,
+                        objectiveCode: taskResult.objectiveCode || taskResult.focusObjective || '',
+                        objectiveCodeLabel: taskResult.focusObjective || taskResult.northStarObjective || '',
                         lensTag: 'mission',
                     });
                     return docRef.id;
@@ -2381,7 +2504,8 @@ async function selfAssignTask() {
 
         console.log(`⭐ Self-assigned task: "${taskData.name}" (${docRef.id})`);
         await postBeat('hypothesis', `Self-assigned: "${taskData.name}" (idle — no tasks in queue)`, {
-            taskId: docRef.id, color: 'blue', objectiveCode: docRef.id,
+            taskId: docRef.id, color: 'blue', objectiveCode: taskData.focusObjective || '',
+            objectiveCodeLabel: taskData.focusObjective || '',
         });
         return docRef.id;
     } catch (err) {
@@ -2426,7 +2550,7 @@ async function proposeObjective(title, reason, opts = {}) {
         await postBeat('signal-spike', `💡 ${AGENT_NAME} proposed new objective: "${title}"`, {
             color: 'blue',
             lensTag: 'mission',
-            objectiveCode: 'PROPOSED-OBJECTIVE',
+            objectiveCode: '',
             artifactText: reason,
         });
 
@@ -2515,7 +2639,8 @@ async function noraTaskManagerSweep() {
             await postBeat('work-in-flight', `📋 Task Manager: Assigned "${taskBlueprint.name}" to ${displayName} (idle agent detected)`, {
                 color: 'blue',
                 lensTag: 'ops',
-                objectiveCode: 'TASK-MANAGER',
+                objectiveCode: taskBlueprint.focusObjective || '',
+                objectiveCodeLabel: taskBlueprint.focusObjective || '',
             });
         }
     } catch (err) {
@@ -3541,7 +3666,7 @@ async function processCommands() {
 
                                 // Post beat to timeline
                                 await postBeat('work-in-flight', `⚡ Queued from Round Table: ${taskName}`, {
-                                    objectiveCode: 'ROUND-TABLE',
+                                    objectiveCode: '',
                                     artifactText: gcResponse.substring(0, 300),
                                     color: 'blue',
                                     lensTag: 'round-table',
@@ -5770,7 +5895,8 @@ async function run() {
             await postBeat('hypothesis', `Starting: ${task.name}`, {
                 taskId: task.id,
                 color: 'blue',
-                objectiveCode: task.objectiveCode || task.id,
+                objectiveCode: task.objectiveCode || '',
+                objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
             });
             await maybeSendMissionKickoffUpdate(task, steps, missionContext);
 
@@ -5811,7 +5937,8 @@ async function run() {
                     await postBeat('work-in-flight', `▶ Starting step ${i + 1}/${steps.length}: ${steps[i].description}`, {
                         taskId: task.id,
                         color: 'blue',
-                        objectiveCode: task.objectiveCode || task.id,
+                        objectiveCode: task.objectiveCode || '',
+                        objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                     });
                 }
 
@@ -5848,7 +5975,8 @@ async function run() {
                     await postBeat('block', `⚠️ Step ${i + 1}/${steps.length} failed: ${steps[i].description}`, {
                         taskId: task.id,
                         color: 'yellow',
-                        objectiveCode: task.objectiveCode || task.id,
+                        objectiveCode: task.objectiveCode || '',
+                        objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                         artifactText: lastFailureContext.substring(0, 300),
                         artifactType: lastFailureContext ? 'text' : 'none',
                     });
@@ -5881,7 +6009,8 @@ async function run() {
                 await postBeat('work-in-flight', `✅ Step ${i + 1}/${steps.length}: ${steps[i].description}`, {
                     taskId: task.id,
                     color: inferColor(steps, i + 1),
-                    objectiveCode: task.objectiveCode || task.id,
+                    objectiveCode: task.objectiveCode || '',
+                    objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                     _hasStepEvidence: stepEvidence,
                 });
 
@@ -5898,7 +6027,8 @@ async function run() {
                     await postBeat('work-in-flight', `📍 Halfway checkpoint: ${completedCount}/${steps.length} steps done${failedCount > 0 ? `, ${failedCount} failed` : ''} — "${task.name}"`, {
                         taskId: task.id,
                         color: failedCount > 0 ? 'yellow' : 'green',
-                        objectiveCode: task.objectiveCode || task.id,
+                        objectiveCode: task.objectiveCode || '',
+                        objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                         _isValidatedResult: true,
                     });
                     if (!midpointMissionUpdateSent) {
@@ -6018,7 +6148,8 @@ async function run() {
                     await postBeat('result', `${scoreEmoji} North Star check [${score}/10]: ${task.name}`, {
                         taskId: task.id,
                         color: score >= 7 ? 'green' : score >= 4 ? 'yellow' : 'red',
-                        objectiveCode: task.objectiveCode || task.id,
+                        objectiveCode: task.objectiveCode || '',
+                        objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                         artifactType: 'text',
                         artifactText: [
                             `📦 Delivered: ${nsGate.concreteDeliverable || 'unknown'}`,
@@ -6101,7 +6232,8 @@ async function run() {
                         await postBeat('block', `🔍 Validation failed: ${task.name} — ${validation.reason}`, {
                             taskId: task.id,
                             color: 'red',
-                            objectiveCode: task.objectiveCode || task.id,
+                            objectiveCode: task.objectiveCode || '',
+                            objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                             artifactType: 'text',
                             artifactText: `Reason: ${validation.reason}\n\nEvidence: ${validation.evidence?.map(e => e.output).join('\n').substring(0, 400)}`,
                         });
@@ -6161,7 +6293,8 @@ async function run() {
                     await postBeat('work-in-flight', `🔍 Validation passed: ${task.name}`, {
                         taskId: task.id,
                         color: 'green',
-                        objectiveCode: task.objectiveCode || task.id,
+                        objectiveCode: task.objectiveCode || '',
+                        objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                         _isValidatedResult: true,
                     });
                 }
@@ -6169,21 +6302,21 @@ async function run() {
                 // ─── Verifiable artifact gate ──────────────────
                 // Tasks that produce no real file changes get flagged
                 const hasArtifacts = hasVerifiableArtifacts(steps);
-                    if (!hasArtifacts && !hasIssues) {
-                        const reviewReason = 'Task completed all steps but produced no verifiable file artifacts (code, config, tests). Only meta-documents were generated.';
-                        console.log(`\n⚠️  NO VERIFIABLE ARTIFACTS — task produced no substantive file changes`);
-                        await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
-                        await db.collection(KANBAN_COLLECTION).doc(task.id).update({
-                            status: 'needs-review',
-                            reviewReason,
-                            updatedAt: FieldValue.serverTimestamp(),
-                        });
-                        await recordNeedsReviewDeliverables(task, steps, reviewReason);
-                        await sendProactiveMessage(
-                            `⚠️ Task "${task.name}" completed all steps but produced NO verifiable artifacts.\n\n` +
-                            `No new code, configs, or tests were created — only documentation/summaries.\n` +
-                            `Task has been flagged as needs-review instead of done.\n\n` +
-                            `Please review and either approve or reassign with clearer deliverable requirements.`,
+                if (!hasArtifacts && !hasIssues) {
+                    const reviewReason = 'Task completed all steps but produced no verifiable file artifacts (code, config, tests). Only meta-documents were generated.';
+                    console.log(`\n⚠️  NO VERIFIABLE ARTIFACTS — task produced no substantive file changes`);
+                    await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
+                    await db.collection(KANBAN_COLLECTION).doc(task.id).update({
+                        status: 'needs-review',
+                        reviewReason,
+                        updatedAt: FieldValue.serverTimestamp(),
+                    });
+                    await recordNeedsReviewDeliverables(task, steps, reviewReason);
+                    await sendProactiveMessage(
+                        `⚠️ Task "${task.name}" completed all steps but produced NO verifiable artifacts.\n\n` +
+                        `No new code, configs, or tests were created — only documentation/summaries.\n` +
+                        `Task has been flagged as needs-review instead of done.\n\n` +
+                        `Please review and either approve or reassign with clearer deliverable requirements.`,
                         'needs-review'
                     );
                     await setStatus('idle', {
@@ -6257,7 +6390,8 @@ async function run() {
                 await postBeat('result', `✅ Completed: ${task.name}`, {
                     taskId: task.id,
                     color: hasIssues ? 'yellow' : 'green',
-                    objectiveCode: task.objectiveCode || task.id,
+                    objectiveCode: task.objectiveCode || '',
+                    objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                     artifactType: resultArtifactUrl ? 'url' : 'none',
                     artifactUrl: resultArtifactUrl,
                     artifactText: primaryDeliverable ? (primaryDeliverable.title || primaryDeliverable.filePath || '') : '',
@@ -6355,7 +6489,8 @@ async function run() {
                 await postBeat('block', `❌ Failed: ${task.name} — step ${failedIndex + 1}: ${failedStep?.description || 'unknown'}`, {
                     taskId: task.id,
                     color: 'red',
-                    objectiveCode: task.objectiveCode || task.id,
+                    objectiveCode: task.objectiveCode || '',
+                    objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                 });
 
                 // Proactively report failure to the chat
@@ -6370,33 +6505,6 @@ async function run() {
                     `Error: ${failedStep?.output || 'Unknown error'}\n\n` +
                     `This task has been blocked from auto-retry to prevent loops.\n` +
                     `Would you like me to retry this task or skip it?`,
-                    'failed'
-                );
-            }
-
-            currentTaskRef = null;  // Reset for hourly snapshots
-            await new Promise(r => setTimeout(r, 5_000));
-
-        } catch (err) {
-            console.error('❌ Error in main loop:', err.message);
-            await setStatus('idle', { notes: `Error: ${err.message}` });
-            await new Promise(r => setTimeout(r, 10_000));
-        }
-    }
-}
-
-function formatMs(ms) {
-    if (!ms) return '';
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-    return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
-}
-
-run().catch((err) => {
-    console.error('Fatal error:', err);
-    process.exit(1);
-});
-task or skip it?`,
                     'failed'
                 );
             }

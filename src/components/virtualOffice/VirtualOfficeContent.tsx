@@ -10,7 +10,7 @@ import { addDoc, collection, doc, serverTimestamp, query, where, onSnapshot, wri
 import { KanbanTask } from '../../api/firebase/kanban/types';
 import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
-  ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
+  ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap, Target,
   History, ChevronRight, MessageSquare, Archive, X, ListOrdered, Activity, AlertTriangle,
   BookOpen, ToggleLeft, ToggleRight, Power, Calendar, Package, Play, UserPlus, Trash2, ShieldAlert
 } from 'lucide-react';
@@ -4342,7 +4342,12 @@ const VirtualOfficeContent: React.FC = () => {
 
             <div className="progress-timeline-btn" onClick={() => setShowProgressTimeline(true)}>
               <Activity className="w-4 h-4" />
-              <span>Progress Timeline</span>
+              <span>Heartbeat Feed</span>
+            </div>
+
+            <div className="objective-timeline-btn" onClick={() => { router.push('/admin/objective-timeline'); }}>
+              <Target className="w-4 h-4" />
+              <span>Objective Timeline</span>
             </div>
 
             <div className="standup-config-btn" onClick={() => setShowStandupConfig(true)}>
@@ -5116,10 +5121,35 @@ const VirtualOfficeContent: React.FC = () => {
           transform: translateY(-1px);
           box-shadow: 0 4px 16px rgba(59,130,246,0.2);
         }
-        .standup-config-btn {
+        .objective-timeline-btn {
           position: absolute;
           bottom: 16px;
           left: 180px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 14px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(34,197,94,0.08));
+          border: 1px solid rgba(16,185,129,0.2);
+          color: #34d399;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          z-index: 10;
+          backdrop-filter: blur(8px);
+        }
+        .objective-timeline-btn:hover {
+          background: linear-gradient(135deg, rgba(16,185,129,0.22), rgba(34,197,94,0.14));
+          border-color: rgba(16,185,129,0.35);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(16,185,129,0.15);
+        }
+        .standup-config-btn {
+          position: absolute;
+          bottom: 16px;
+          left: 360px;
           display: flex;
           align-items: center;
           gap: 6px;
