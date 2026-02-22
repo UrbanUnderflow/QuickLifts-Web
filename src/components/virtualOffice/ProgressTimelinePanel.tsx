@@ -135,7 +135,6 @@ type FeedItem =
 
 type TabKey = 'feed' | 'snapshots';
 type CopyState = 'idle' | 'copied' | 'error';
-type ObjectiveFilterOption = { code: string; label: string };
 
 const FEED_BEAT_LIMIT = 200;
 const FEED_NUDGE_LIMIT = 80;
@@ -166,21 +165,6 @@ const S = {
   tabs: {
     display: 'flex', alignItems: 'center', gap: 0, padding: '0 24px',
     borderBottom: '1px solid rgba(255,255,255,0.06)',
-  } as CSSProperties,
-  objectiveFilters: {
-    display: 'flex', gap: 6, padding: '8px 20px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)',
-    flexWrap: 'wrap',
-  } as CSSProperties,
-  objectiveFilterBtn: (active: boolean): CSSProperties => ({
-    display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 8,
-    background: active ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.03)',
-    border: active ? '1px solid rgba(99,102,241,0.25)' : '1px solid rgba(255,255,255,0.06)',
-    color: active ? '#a5b4fc' : '#6b7280', fontSize: 11, fontWeight: 600, cursor: 'pointer',
-    transition: 'all 0.2s',
-  }),
-  objectiveFilterCount: {
-    fontSize: 10, fontWeight: 700, padding: '0 5px',
-    background: 'rgba(255,255,255,0.06)', borderRadius: 4, fontFamily: 'JetBrains Mono, monospace',
   } as CSSProperties,
   tab: (active: boolean): CSSProperties => ({
     display: 'flex', alignItems: 'center', gap: 6, padding: '12px 16px', fontSize: 13, fontWeight: 600,
@@ -318,63 +302,14 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   const [nudges, setNudges] = useState<NudgeLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>('feed');
-  const [objectiveFilter, setObjectiveFilter] = useState<string>('all');
   const [objectiveLabelByCode, setObjectiveLabelByCode] = useState<Record<string, string>>({});
   const [composerOpen, setComposerOpen] = useState(false);
   const [hoverCard, setHoverCard] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<CopyState>('idle');
 
-  const objectiveCodeOptions = useMemo<ObjectiveFilterOption[]>(() => {
-    const labelByCode = new Map<string, string>();
-    const seenCounts = new Map<string, number>();
-
-    for (const row of [...entries, ...nudges, ...snapshots]) {
-      const code = normalizeObjectiveCode(row.objectiveCode);
-      if (code) {
-        seenCounts.set(code, (seenCounts.get(code) || 0) + 1);
-        if (!labelByCode.has(code)) {
-          labelByCode.set(code, objectiveLabelByCode[code] || prettifyObjectiveCode(code));
-        }
-      }
-    }
-
-    return [...seenCounts.entries()].filter(([code, count]) => {
-      return count > 0 && (code.length >= 3 || count > 1);
-    }).sort(([a], [b]) => a.localeCompare(b)).map(([code]) => ({
-      code,
-      label: labelByCode.get(code) || prettifyObjectiveCode(code),
-    }));
-  }, [entries, nudges, snapshots, objectiveLabelByCode]);
-
-  const objectiveCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-
-    const bump = (code: string) => {
-      const key = normalizeObjectiveCode(code) || '-';
-      counts.set(key, (counts.get(key) || 0) + 1);
-    };
-
-    entries.forEach((entry) => bump(entry.objectiveCode));
-    nudges.forEach((entry) => bump(entry.objectiveCode));
-    snapshots.forEach((entry) => bump(entry.objectiveCode));
-
-    return counts;
-  }, [entries, nudges, snapshots]);
-
-  const filteredEntries = useMemo(() => {
-    if (objectiveFilter === 'all') return entries;
-    return entries.filter((entry) => normalizeObjectiveCode(entry.objectiveCode) === objectiveFilter);
-  }, [entries, objectiveFilter]);
-
-  const filteredNudges = useMemo(() => {
-    if (objectiveFilter === 'all') return nudges;
-    return nudges.filter((entry) => normalizeObjectiveCode(entry.objectiveCode) === objectiveFilter);
-  }, [nudges, objectiveFilter]);
-
-  const filteredSnapshots = useMemo(() => {
-    if (objectiveFilter === 'all') return snapshots;
-    return snapshots.filter((entry) => normalizeObjectiveCode(entry.objectiveCode) === objectiveFilter);
-  }, [snapshots, objectiveFilter]);
+  const filteredEntries = entries;
+  const filteredNudges = nudges;
+  const filteredSnapshots = snapshots;
 
   const feedItems = useMemo<FeedItem[]>(() => {
     const b: FeedItem[] = filteredEntries.map((e) => ({ id: `b-${e.id}`, type: 'beat', createdAt: e.createdAt?.getTime?.() || 0, payload: e }));
@@ -433,21 +368,13 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
     };
   }, []);
 
-  const objectiveCodeSet = useMemo(() => new Set(objectiveCodeOptions.map((option) => option.code)), [objectiveCodeOptions]);
-
   const resolveObjectiveLabel = (rawCode: string): string => {
     const code = normalizeObjectiveCode(rawCode);
     if (!code) return '';
     return objectiveLabelByCode[code] || prettifyObjectiveCode(code);
   };
 
-  useEffect(() => {
-    if (objectiveFilter !== 'all' && !objectiveCodeSet.has(objectiveFilter)) {
-      setObjectiveFilter('all');
-    }
-  }, [objectiveCodeSet, objectiveFilter]);
-
-  const feedTabCountTitle = `Showing ${feedItems.length} items (${filteredEntries.length} beats + ${filteredNudges.length} nudges). Limits: ${FEED_BEAT_LIMIT} beats, ${FEED_NUDGE_LIMIT} nudges.`;
+  const feedTabCountTitle = `Showing ${feedItems.length} items (${entries.length} beats + ${nudges.length} nudges). Limits: ${FEED_BEAT_LIMIT} beats, ${FEED_NUDGE_LIMIT} nudges.`;
 
   const formatExportTimestamp = (value?: Date): string => {
     if (!value) return 'unknown-time';
@@ -460,7 +387,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
 
   const buildFeedExportText = (): string => {
     const lines: string[] = [
-      'Activity Feed export',
+      'Heartbeat Feed export',
       `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`,
       `Loaded items: ${feedItems.length} (beats: ${filteredEntries.length}, nudges: ${filteredNudges.length})`,
       `Configured limits: beats ${FEED_BEAT_LIMIT}, nudges ${FEED_NUDGE_LIMIT}`,
@@ -506,7 +433,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
     const exportSnapshots = filteredSnapshots;
 
     const lines: string[] = [
-      'Activity Snapshots export',
+      'Health Snapshot export',
       `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`,
       `Loaded snapshots: ${exportSnapshots.length}`,
       `Configured limit: ${SNAPSHOT_LIMIT}`,
@@ -816,14 +743,14 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   };
 
   return (
-    <div style={S.overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div style={S.overlay} onClick={(e) => { e.stopPropagation(); }}>
       <div style={S.panel}>
 
         {/* ── Header ── */}
         <div style={S.header}>
           <div>
-            <h2 style={S.title}>Activity Feed</h2>
-            <p style={S.subtitle}>Beats, nudges, and team progress — all in one stream</p>
+            <h2 style={S.title}>Heartbeat Feed</h2>
+            <p style={S.subtitle}>Events, nudges, and team progress — all in one stream</p>
           </div>
           <button style={S.closeBtn} onClick={onClose}><X size={18} /></button>
         </div>
@@ -831,50 +758,25 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
         {/* ── Tabs ── */}
         <div style={S.tabs}>
           <button style={S.tab(activeTab === 'feed')} onClick={() => setActiveTab('feed')}>
-            <Activity size={14} /> Feed
+            <Activity size={14} /> Events (task work + nudges)
             {feedItems.length > 0 && <span style={S.tabCount} title={feedTabCountTitle}>{feedItems.length}</span>}
           </button>
           <button style={S.tab(activeTab === 'snapshots')} onClick={() => setActiveTab('snapshots')}>
-            <Clock size={14} /> Snapshots
+            <Clock size={14} /> Health Snapshot
             {filteredSnapshots.length > 0 && <span style={S.tabCount}>{filteredSnapshots.length}</span>}
           </button>
           <button
             style={S.copyBtn(copyState)}
             onClick={() => { void handleCopyTimeline(); }}
-            title={activeTab === 'feed' ? 'Copy loaded feed items' : 'Copy loaded snapshots'}
+            title={activeTab === 'feed' ? 'Copy loaded events' : 'Copy health snapshots'}
           >
             <Copy size={13} />
-            {copyState === 'copied' ? 'Copied' : copyState === 'error' ? 'Copy failed' : activeTab === 'feed' ? 'Copy Feed' : 'Copy Snapshots'}
+            {copyState === 'copied' ? 'Copied' : copyState === 'error' ? 'Copy failed' : activeTab === 'feed' ? 'Copy Events' : 'Copy Health Snapshot'}
           </button>
           <button style={S.composeToggle(composerOpen)} onClick={() => setComposerOpen(!composerOpen)}>
             <Send size={14} /> Post Beat
             {composerOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
-        </div>
-
-        <div style={S.objectiveFilters}>
-          <button
-            style={S.objectiveFilterBtn(objectiveFilter === 'all')}
-            onClick={() => setObjectiveFilter('all')}
-          >
-            All Objectives
-            <span style={S.objectiveFilterCount}>{entries.length + nudges.length + snapshots.length}</span>
-          </button>
-          {objectiveCodeOptions.map(({ code, label }) => {
-            const selected = objectiveFilter === code;
-            const count = objectiveCounts.get(code) || 0;
-
-            return (
-              <button
-                key={code}
-                style={S.objectiveFilterBtn(selected)}
-                onClick={() => setObjectiveFilter(code)}
-              >
-                <span title={code}>{label}</span>
-                <span style={S.objectiveFilterCount}>{count}</span>
-              </button>
-            );
-          })}
         </div>
 
         {/* ── Composer ── */}
@@ -933,11 +835,11 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
         <div style={S.content}>
           {activeTab === 'feed' && (
             loading ? (
-              <div style={S.empty}><p style={{ margin: 0, fontSize: 14 }}>Loading feed…</p></div>
+              <div style={S.empty}><p style={{ margin: 0, fontSize: 14 }}>Loading events…</p></div>
             ) : feedItems.length === 0 ? (
               <div style={S.empty}>
                 <Activity size={32} style={{ opacity: 0.3 }} />
-                <p style={{ margin: 0, fontSize: 14 }}>No beats or nudges logged yet.</p>
+                <p style={{ margin: 0, fontSize: 14 }}>No events logged yet.</p>
                 <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>Post the first one using the button above.</p>
               </div>
             ) : (
@@ -953,7 +855,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
             filteredSnapshots.length === 0 ? (
               <div style={S.empty}>
                 <Clock size={32} style={{ opacity: 0.3 }} />
-                <p style={{ margin: 0, fontSize: 14 }}>No hourly snapshots recorded yet.</p>
+                <p style={{ margin: 0, fontSize: 14 }}>No health snapshots recorded yet.</p>
               </div>
             ) : (
               filteredSnapshots.map(renderSnapshotCard)
