@@ -342,6 +342,11 @@ Step..."
 - **[2026-02-22] Nora** — Step "Add a partner type filter control (e.g., a select input bound to React state) in `web/app/partners/dashboard.tsx` that filters the partners array by `type` ('brand', 'gym', 'runClub') before passing it to `PartnerOnboardingTable`." still had issues after 2 retries. Output signals: \berror\b. Last output: "Step 4 is already complete in code and backed by an in-repo verification doc. There’s nothing to change for this step; w..."
 - **[2026-02-22] Nora** — Step "In `web/app/partners/dashboard.tsx`, add a Firestore query using the existing Firestore client to load all documents from the `partners` collection and map them into a typed array with fields `id`, `name`, `type`, `onboardingStage`, `invitedAt`, and `firstRoundCreatedAt`." still had issues after 2 retries. Output signals: \bfailed\b, \berror\b, \bunable to\b. Last output: "For Step 2, the Firestore wiring is already done and now has a concrete verification path baked into the repo. There isn..."
 - **[2026-02-22] Nora** — Step "Add a partner type filter control (e.g., a select input bound to React state) in `web/app/partners/dashboard.tsx` that filters the partners array by `type` ('brand', 'gym', 'runClub') before passing it to `PartnerOnboardingTable`." still had issues after 2 retries. Output signals: \berror\b. Last output: "Step 4 is already fully implemented and verifiable; no additional code changes are needed. Here’s the minimal, concrete ..."
+- **[2026-02-22] Nora** — Step "Add a partner type filter control (e.g., a select input bound to React state) in `web/app/partners/dashboard.tsx` that filters the partners array by `type` ('brand', 'gym', 'runClub') before passing it to `PartnerOnboardingTable`." still had issues after 2 retries. Output signals: \bfailed\b. Last output: "Root cause, then what I changed for Step 4.
+
+### Root cause analysis
+
+My previous replies for Step 4 failed because I on..."
 ---
 
 ## Operational Rules

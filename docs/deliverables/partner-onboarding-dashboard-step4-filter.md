@@ -8,22 +8,23 @@ Add a partner type filter control (select bound to React state) in `web/app/part
 **File:** `web/app/partners/dashboard.tsx`
 
 ```ts
-import type { PartnerFirestoreData, PartnerType } from "../../../src/types/Partner";
+import type { PartnerType } from "../../../src/types/Partner";
+import {
+  filterPartnersByType,
+  type PartnerTypeFilter,
+} from "../../lib/partners/filterPartnersByType";
 // ...
 
 function PartnerOnboardingDashboardPageInner() {
   const [partners, setPartners] = useState<PartnerRow[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<PartnerType | "all">("all");
+  const [typeFilter, setTypeFilter] = useState<PartnerTypeFilter>("all");
 
   // Firestore load (see step 2 doc) ...
 
   const filteredPartners = useMemo(
-    () =>
-      typeFilter === "all"
-        ? partners
-        : partners.filter((p) => p.type === typeFilter),
+    () => filterPartnersByType(partners, typeFilter),
     [partners, typeFilter]
   );
 ```
@@ -74,8 +75,8 @@ UI wiring:
 
 ## Verification Checklist
 
-- [x] Filter state is stored as `typeFilter: PartnerType | "all"` with default `"all"`.
-- [x] `filteredPartners` is derived from `partners` using `Array.prototype.filter` when `typeFilter !== "all"` and passed into `PartnerOnboardingTable`.
+- [x] Filter state is stored as `typeFilter: PartnerTypeFilter` with default `"all"`.
+- [x] `filterPartnersByType(partners, typeFilter)` is the **only** place partner type filtering occurs; `filteredPartners` is always what gets passed into `PartnerOnboardingTable`.
 - [x] The select control offers exactly the expected options:
   - `All`
   - `Brand`
@@ -113,17 +114,20 @@ Once these scenarios pass, Step 4 (type-based filtering before table rendering) 
 
 ## Agent-run static check (2026-02-22)
 
-As an additional non-runtime sanity check, the implementation above was validated directly from the source file:
+As an additional non-runtime sanity check, the implementation above was validated directly from the source files:
 
 ```bash
 cd /Users/noraclawdbot/Documents/GitHub/QuickLifts-Web
-sed -n '80,180p' web/app/partners/dashboard.tsx
+sed -n '1,200p' web/lib/partners/filterPartnersByType.ts
+sed -n '80,200p' web/app/partners/dashboard.tsx
 ```
 
 The output confirms that:
 
-- `typeFilter` is declared as `PartnerType | "all"` and initialized to `"all"`.
-- `filteredPartners` is the only array passed into `PartnerOnboardingTable`.
+- `PartnerTypeFilter` is defined as `PartnerType | "all"`.
+- `filterPartnersByType` implements the expected semantics: `"all"` returns the full list; other values filter by `row.type`.
+- `typeFilter` is declared as `PartnerTypeFilter` and initialised to `"all"`.
+- `filteredPartners` is derived by calling `filterPartnersByType(partners, typeFilter)` and is the only array passed into `PartnerOnboardingTable`.
 - The `<select>` control options match the `PartnerType` union (`brand`, `gym`, `runClub`) plus the `all` sentinel.
 
 This ties the doc to the live code so future changes can be re-checked with the same command.

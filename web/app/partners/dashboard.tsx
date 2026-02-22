@@ -13,6 +13,10 @@ import {
 } from "../../components/partners/PartnerOnboardingTable";
 import { BarChart } from "../../components/charts/BarChart";
 import { mapPartnersSnapshot } from "../../lib/partners/mapPartnersSnapshot";
+import {
+  filterPartnersByType,
+  type PartnerTypeFilter,
+} from "../../lib/partners/filterPartnersByType";
 
 /**
  * Partner Onboarding Dashboard
@@ -29,7 +33,7 @@ function PartnerOnboardingDashboardPageInner() {
   const [partners, setPartners] = useState<PartnerRow[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<PartnerType | "all">("all");
+  const [typeFilter, setTypeFilter] = useState<PartnerTypeFilter>("all");
 
   useEffect(() => {
     let isMounted = true;
@@ -64,10 +68,7 @@ function PartnerOnboardingDashboardPageInner() {
   }, []);
 
   const filteredPartners = useMemo(
-    () =>
-      typeFilter === "all"
-        ? partners
-        : partners.filter((p) => p.type === typeFilter),
+    () => filterPartnersByType(partners, typeFilter),
     [partners, typeFilter]
   );
 
