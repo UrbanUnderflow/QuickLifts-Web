@@ -145,7 +145,7 @@ function PartnerOnboardingDashboardPageInner() {
                   className="border border-gray-300 rounded px-2 py-1 text-sm bg-white"
                   value={typeFilter}
                   onChange={(e) =>
-                    setTypeFilter(e.target.value as PartnerType | "all")
+                    setTypeFilter(e.target.value as PartnerTypeFilter)
                   }
                 >
                   <option value="all">All</option>
