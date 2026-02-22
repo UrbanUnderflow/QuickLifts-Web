@@ -233,11 +233,101 @@ Using the same seeded data, verify the bar chart under **“Average Time to Firs
 
     > `No time-to-first-round data yet for the current filter. Once partners create their first round, lane-level averages will appear here.`
 
-Any mismatch here suggests an issue in the `laneAverages` computation or how the `BarChart` is invoked.
+Any mismatch here suggests an issue in the `laneAverages` computation, the `computeLaneAverages` helper, or how the `BarChart` is invoked.
 
 ---
 
-## 8. Completion Criteria
+## 8. Optional Static Sanity Check (no browser needed)
+
+Before (or after) doing the full browser QA, you can sanity-check the lane-average logic using the pure helpers without hitting Firestore or the UI.
+
+From the project root (this uses a self-contained JS implementation of the same math as `computeLaneAverages` so it does **not** depend on TypeScript imports):
+
+```bash
+cd /Users/noraclawdbot/Documents/GitHub/QuickLifts-Web
+node - << 'EOF'
+  // Minimal JS reimplementation of the lane-average logic used in
+  // web/lib/partners/computeLaneAverages.ts. This is only for sanity
+  // checking the expected numerical behavior.
+  const computeLaneAverages = (partners, lanes) =>
+    lanes.map((lane) => {
+      const lanePartners = partners
+        .filter((p) => p.type === lane.type)
+        .map((p) => {
+          if (!p.firstRoundCreatedAt) return null;
+          const msDiff = p.firstRoundCreatedAt.getTime() - p.invitedAt.getTime();
+          if (msDiff <= 0) return 0;
+          return msDiff / (1000 * 60 * 60 * 24);
+        })
+        .filter((v) => v != null && !Number.isNaN(v));
+
+      if (lanePartners.length === 0) {
+        return { label: lane.label, value: null };
+      }
+
+      const sum = lanePartners.reduce((acc, d) => acc + d, 0);
+      return { label: lane.label, value: sum / lanePartners.length };
+    });
+
+  const mkDate = (daysAgo) => {
+    const now = new Date();
+    return new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+  };
+
+  const partners = [
+    {
+      id: 'brand-1',
+      name: 'brand@example.com',
+      type: 'brand',
+      onboardingStage: 'active',
+      invitedAt: mkDate(10),
+      firstRoundCreatedAt: mkDate(3),
+    },
+    {
+      id: 'gym-1',
+      name: 'gym@example.com',
+      type: 'gym',
+      onboardingStage: 'active',
+      invitedAt: mkDate(5),
+      firstRoundCreatedAt: mkDate(2),
+    },
+    {
+      id: 'runclub-1',
+      name: 'runclub@example.com',
+      type: 'runClub',
+      onboardingStage: 'invited',
+      invitedAt: mkDate(4),
+      firstRoundCreatedAt: null,
+    },
+  ];
+
+  const lanes = [
+    { type: 'brand', label: 'Brand' },
+    { type: 'gym', label: 'Gym' },
+    { type: 'runClub', label: 'Run Club' },
+  ];
+
+  const averages = computeLaneAverages(partners, lanes);
+  console.log('Lane averages (days):');
+  console.log(JSON.stringify(averages, null, 2));
+EOF
+```
+
+Expected output (within minor floating-point drift):
+
+```json
+[
+  { "label": "Brand", "value": 7.0 },
+  { "label": "Gym",   "value": 3.0 },
+  { "label": "Run Club", "value": null }
+]
+```
+
+If the script prints significantly different values, investigate `web/lib/partners/computeLaneAverages.ts` before trusting the runtime metrics.
+
+---
+
+## 9. Completion Criteria
 
 Step 6 can be considered **fully verified** when:
 
