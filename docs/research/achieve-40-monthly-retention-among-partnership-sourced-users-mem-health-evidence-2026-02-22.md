@@ -23,7 +23,52 @@ This document will focus on:
 
 ## Recommended Intervention
 
-> To be populated with a synthesized, evidence-backed recommendation for how Pulse and partners should structure community challenges, accountability loops, and/or retention-triggered messaging to support ≥40% monthly retention among partnership-sourced users.
+**Stand up a “Club Pod” model for partnership-sourced users: small, identity-based squads with a 4-week rolling ritual and retention-triggered nudges anchored in the partner’s calendar.**
+
+Synthesizing the findings above, an intervention aimed at sustaining ≥40% monthly retention for partnership-sourced users should intentionally leverage:
+- The **social advantage** of partner channels (people join as part of a brand, box, or club) [1–3]
+- The power of **structured, recurring touchpoints** instead of ad-hoc engagement [4]
+- **Early, visible progress** and public recognition [5]
+- The inherent **hybrid nature** of partner communities (in-person + digital) [6]
+
+A concrete design for Pulse:
+
+1. **Auto-create small “Club Pods” for every new partner cohort.**
+   - On partner onboarding, Pulse automatically groups new signups into pods of ~5–10 members based on class time, pace group, or sub-community (e.g., “6am Barbell Crew”, “Wednesday Night Tempo Pod”).
+   - Each pod is visibly tied to the partner’s identity (logo, colors, coach/leader avatar) to reinforce community belonging and identity [3].
+
+2. **Attach each Pod to a 4-week rolling ritual aligned with the partner’s schedule.**
+   - Every pod runs on a repeating 4-week rhythm (e.g., weekly flagship workout/route + 1–2 supporting sessions) mapped directly to the partner’s existing timetable [4, 6].
+   - Pods see a simple, shared calendar inside Pulse that mirrors their gym/run club schedule, turning the app into the digital companion for an already committed routine rather than a separate “extra” task.
+
+3. **Define “healthy engagement” for retention and track it at the pod level.**
+   - For partnership-sourced users, operationalize “engaged this month” as:
+     - Completing **≥1 in-person or live session per week** AND
+     - Logging **≥1 digital touch** per week (check-in, reflection, or progress marker) [5, 6].
+   - The partner dashboard and in-app pod view should surface:
+     - % of pod members meeting this standard
+     - Streaks of consecutive weeks meeting the standard
+     - Highlighted pods that are “on fire” (e.g., ≥70% of members engaged for 4 straight weeks).
+
+4. **Build a partner-led accountability loop on top of retention-triggered messaging.**
+   - When a pod’s engagement begins to slip (e.g., <50% of members logging a session in 7 days), Pulse triggers a **tiered response**:
+     - **Tier 1 – Automated nudge:** Friendly, club-branded push/email summarizing the pod’s recent wins and inviting them to the next ritual session [4, 5].
+     - **Tier 2 – Captain/coach follow-up:** The pod’s designated leader gets a prompt with a short script to post in the pod chat or say in person (e.g., “Our Wednesday crew is back on this week—log your check-in in Pulse so we can keep our streak”).
+     - **Tier 3 – Program tweak:** If low engagement persists for >2 weeks, the partner dashboard flags the pod for review (e.g., time slot misfit, workout too intense) so a coach can adjust the structure based on on-the-ground context [4, 6].
+
+5. **Layer in early, visible progress and public recognition within the partner community.**
+   - During the first 4–8 weeks, emphasize **low-bar progress markers**:
+     - Attendance streaks (weeks attended in a row)
+     - “Showed up with your crew” badges
+     - Small performance milestones (e.g., total sessions logged, minutes on feet, sets completed) [5].
+   - Pulse can auto-generate short recap tiles coaches can share in class or on social (“6am Barbell Crew: 82% of you hit last week’s sessions—keep the streak alive”), reinforcing both progress and identity [1–3].
+
+**Why this supports ≥40% monthly retention for partnership-sourced users**
+
+- **Community-anchored engagement instead of individual willpower:** By default, partnership-sourced users are dropped into pods that mirror their real-life communities (class times, pace groups, crews), turning the app into an extension of a social habit rather than a solo app they must remember to open [1–3].
+- **Structured touchpoints increase the odds of repeat behavior:** Weekly rituals plus planned digital nudges align with evidence that recurring, predictable interactions outperform sporadic engagement for adherence [4]. This makes it more likely that users will meet a “≥1 session/week + ≥1 digital touch/week” standard across the month.
+- **Early wins are made visible and socially meaningful:** By highlighting pod-level streaks and collective achievements, the intervention taps into both individual competence and group pride, which are linked to sustained engagement [3, 5].
+- **Hybrid design maximizes partner strengths:** Because partner users already attend physical sessions or live runs, Pulse’s job is to tie those sessions to digital markers and social loops, capitalizing on blended models that outperform standalone digital tools [6]. If pods maintain even modest weekly activity under this structure, hitting a ≥40% monthly retention threshold across partnership cohorts becomes behaviorally plausible rather than aspirational.
 
 ## Sources
 
