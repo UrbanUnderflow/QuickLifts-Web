@@ -11,3 +11,29 @@ For community gyms, Pulse becomes the connective tissue between the whiteboard a
 For run clubs, the product is the ritual: meet spot, warm‑up jokes, that first kilometer where the group settles in, the debrief at coffee. Pulse respects that by treating the app as a frame, not the show. A run club partnership doesn’t add friction; it gives captains a clean way to declare the season (e.g., "5K build", "base miles", "recovery reset"), set weekly Pulse rounds around those intentions, and let members log the story they’re already living—without losing the analog magic of the run itself. Over time, that creates a durable archive of the club’s identity: which blocks people returned for, which distances they grew into, which rituals stuck.
 
 Across brands, gyms, and run clubs, the through‑line is simple: Pulse is where your community’s training story stops living in the cracks. We’re not here to own the relationship; we’re here to give it a container that can handle the scale your next season deserves. A partner who brings their energy, identity, and standards to the table gets a Pulse surface that feels native to them and intuitive to their people—and a path from first conversation to first finished round that fits inside a real campaign timeline, not a nine‑month implementation cycle.
+
+## Messaging Pillars
+
+### 1. One Training Story
+
+**Idea:** Partners shouldn’t have to stitch their season together across ten surfaces. Pulse gives them a single story spine their community can actually follow.
+
+- **From drop to debrief in one place.** Partners can announce a block (e.g., a 30‑day streak or 8‑week season), deliver the day‑to‑day sessions, and close the loop with highlights and shareable stats—all inside Pulse.
+- **Creators and coaches stay in sync.** Brand athletes, gym coaches, and run leaders build on the same structure instead of improvising in isolation, so members see one coherent training arc, not six competing versions.
+- **Members always know "where we’re at."** Each round has a clear start, middle, and end, so whether someone joins in week one or week three, Pulse shows them exactly what this season asks of them and what comes next.
+
+### 2. Real Community Activation
+
+**Idea:** A "campaign" doesn’t count unless people move. Pulse measures activation in finished rounds and shared effort, not just impressions.
+
+- **Participation you can actually feel.** Rounds, streaks, and blocks are built around real sessions, not vague challenges, so success looks like completed workouts and returning cohorts, not vanity sign‑ups.
+- **Leaders get levers, not dashboards.** Captains and coaches can nudge their people with timely prompts, progress highlights, and small wins that keep the group moving together, rather than staring at static charts.
+- **Community rituals stay front and center.** Pulse is designed around the behaviors partners already value—showing up, checking in, finishing together—so activation feels like an amplified version of what the community was doing anyway.
+
+### 3. Proof You Can Screenshot
+
+**Idea:** Partners need proof that their community is training with them, not just watching them. Pulse turns that proof into moments they’re proud to share.
+
+- **Evidence that matches the story.** If a partner promises a "recovery reset" or "strength season," Pulse surfaces streaks, completion rates, and before/after check‑ins that map directly to that promise.
+- **Screenshots that belong in the deck.** Cohort views, challenge summaries, and co‑branded badges are designed to look good on a slide, in a feed, or in an investor update—no manual spreadsheet wrangling.
+- **Signals you can build on.** Partners see which blocks land, which cohorts stick, and which rituals travel, giving them concrete inputs for the next collection, the next programming cycle, or the next city they expand into.
