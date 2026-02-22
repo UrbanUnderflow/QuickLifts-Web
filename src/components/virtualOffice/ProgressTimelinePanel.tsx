@@ -5,6 +5,7 @@ import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { AgentPresence } from '../../api/firebase/presence/service';
 import { db } from '../../api/firebase/config';
 import { progressTimelineService } from '../../api/firebase/progressTimeline/service';
+import { kanbanService } from '../../api/firebase/kanban/service';
 import { nudgeLogService } from '../../api/firebase/nudgeLog/service';
 import {
   ProgressTimelineEntry,
@@ -78,6 +79,20 @@ const normalizeObjectiveCode = (value?: string): string => {
   return normalized;
 };
 
+const prettifyObjectiveCode = (code?: string): string => {
+  const normalized = normalizeObjectiveCode(code);
+  if (!normalized) return '';
+
+  return normalized
+    .toLowerCase()
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+};
+
 const sanitizeRecordedFilePath = (rawPath?: string): string => {
   if (!rawPath) return '';
   let next = rawPath.trim();
@@ -120,6 +135,7 @@ type FeedItem =
 
 type TabKey = 'feed' | 'snapshots';
 type CopyState = 'idle' | 'copied' | 'error';
+type ObjectiveFilterOption = { code: string; label: string };
 
 const FEED_BEAT_LIMIT = 200;
 const FEED_NUDGE_LIMIT = 80;
@@ -303,25 +319,32 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>('feed');
   const [objectiveFilter, setObjectiveFilter] = useState<string>('all');
+  const [objectiveLabelByCode, setObjectiveLabelByCode] = useState<Record<string, string>>({});
   const [composerOpen, setComposerOpen] = useState(false);
   const [hoverCard, setHoverCard] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<CopyState>('idle');
 
-  const objectiveCodeOptions = useMemo(() => {
-    const options = new Set<string>();
+  const objectiveCodeOptions = useMemo<ObjectiveFilterOption[]>(() => {
+    const labelByCode = new Map<string, string>();
     const seenCounts = new Map<string, number>();
 
     for (const row of [...entries, ...nudges, ...snapshots]) {
       const code = normalizeObjectiveCode(row.objectiveCode);
-      if (code) options.add(code);
-      if (code) seenCounts.set(code, (seenCounts.get(code) || 0) + 1);
+      if (code) {
+        seenCounts.set(code, (seenCounts.get(code) || 0) + 1);
+        if (!labelByCode.has(code)) {
+          labelByCode.set(code, objectiveLabelByCode[code] || prettifyObjectiveCode(code));
+        }
+      }
     }
 
-    return [...options].filter((code) => {
-      const count = seenCounts.get(code) || 0;
+    return [...seenCounts.entries()].filter(([code, count]) => {
       return count > 0 && (code.length >= 3 || count > 1);
-    }).sort((a, b) => a.localeCompare(b));
-  }, [entries, nudges, snapshots]);
+    }).sort(([a], [b]) => a.localeCompare(b)).map(([code]) => ({
+      code,
+      label: labelByCode.get(code) || prettifyObjectiveCode(code),
+    }));
+  }, [entries, nudges, snapshots, objectiveLabelByCode]);
 
   const objectiveCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -379,14 +402,50 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
     const u1 = progressTimelineService.listen((items) => { setEntries(items); setLoading(false); }, { limit: FEED_BEAT_LIMIT });
     const u2 = progressTimelineService.listenSnapshots((items) => setSnapshots(items), { limit: SNAPSHOT_LIMIT });
     const u3 = nudgeLogService.listen((items) => setNudges(items), { limit: FEED_NUDGE_LIMIT });
-    return () => { u1(); u2(); u3(); };
+    let active = true;
+
+    const hydrateObjectiveLabels = async () => {
+      try {
+        const tasks = await kanbanService.fetchAllTasks();
+        const labels: Record<string, string> = {};
+
+        tasks.forEach((task) => {
+          const code = normalizeObjectiveCode(task.objectiveCode);
+          const name = (task.name || '').trim();
+
+          if (!code || !name) return;
+          if (!labels[code]) labels[code] = name;
+        });
+
+        if (active) setObjectiveLabelByCode(labels);
+      } catch (error) {
+        console.error('Failed to hydrate objective labels from kanban tasks', error);
+      }
+    };
+
+    void hydrateObjectiveLabels();
+
+    return () => {
+      active = false;
+      u1();
+      u2();
+      u3();
+    };
   }, []);
 
+  const objectiveCodeSet = useMemo(() => new Set(objectiveCodeOptions.map((option) => option.code)), [objectiveCodeOptions]);
+
+  const resolveObjectiveLabel = (rawCode: string): string => {
+    const code = normalizeObjectiveCode(rawCode);
+    if (!code) return '';
+    return objectiveLabelByCode[code] || prettifyObjectiveCode(code);
+  };
+
   useEffect(() => {
-    if (objectiveFilter !== 'all' && !objectiveCodeOptions.includes(objectiveFilter)) {
+    if (objectiveFilter !== 'all' && !objectiveCodeSet.has(objectiveFilter)) {
       setObjectiveFilter('all');
     }
-  }, [objectiveCodeOptions, objectiveFilter]);
+  }, [objectiveCodeSet, objectiveFilter]);
 
   const feedTabCountTitle = `Showing ${feedItems.length} items (${filteredEntries.length} beats + ${filteredNudges.length} nudges). Limits: ${FEED_BEAT_LIMIT} beats, ${FEED_NUDGE_LIMIT} nudges.`;
 
@@ -644,7 +703,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
           <div style={S.cardBody}>
             <div style={S.cardHeader}>
               <span style={S.name}>{entry.agentName}</span>
-              <span style={S.objCode}>{entry.objectiveCode}</span>
+              {entry.objectiveCode && <span style={S.objCode} title={entry.objectiveCode}>{resolveObjectiveLabel(entry.objectiveCode)}</span>}
               <span style={S.dot}>·</span>
               <span style={S.time}>{timeAgo}</span>
             </div>
@@ -747,7 +806,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
           </div>
           <div>
             <span style={S.snapName}>{s.agentName || 'Agent'}</span>
-            <span style={S.snapCode}>{s.objectiveCode}</span>
+            {s.objectiveCode && <span style={S.snapCode} title={s.objectiveCode}>{resolveObjectiveLabel(s.objectiveCode)}</span>}
           </div>
           <span style={S.snapTime}><Clock size={11} /> {timeLabel}</span>
         </div>
@@ -801,7 +860,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
             All Objectives
             <span style={S.objectiveFilterCount}>{entries.length + nudges.length + snapshots.length}</span>
           </button>
-          {objectiveCodeOptions.map((code) => {
+          {objectiveCodeOptions.map(({ code, label }) => {
             const selected = objectiveFilter === code;
             const count = objectiveCounts.get(code) || 0;
 
@@ -811,7 +870,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
                 style={S.objectiveFilterBtn(selected)}
                 onClick={() => setObjectiveFilter(code)}
               >
-                {code}
+                <span title={code}>{label}</span>
                 <span style={S.objectiveFilterCount}>{count}</span>
               </button>
             );
