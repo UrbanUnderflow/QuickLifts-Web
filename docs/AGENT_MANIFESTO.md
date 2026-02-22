@@ -332,6 +332,7 @@ The “failure” flags here aren’t about missing tools or runtime errors; the
 ### Verification against Step 4
 
 Step..."
+- **[2026-02-22] Nora** — Step "In `web/app/partners/dashboard.tsx`, add a Firestore query (using the existing Firestore client) to load all documents from the `partners` collection and map them into a typed array with fields `id`, `name`, `type`, `onboardingStage`, `invitedAt`, and `firstRoundCreatedAt`." still had issues after 2 retries. Output signals: \bfailed\b, \berror\b, \bunable to\b. Last output: "Step 2 is already fully implemented in the codebase; no changes are required for this step. Here’s the concrete verifica..."
 ---
 
 ## Operational Rules
