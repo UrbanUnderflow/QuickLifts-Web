@@ -366,7 +366,7 @@ const statusBadge = (status?: string) => {
   };
 
   const panel = (
-    <div className="sd-overlay" onClick={onClose}>
+    <div className="sd-overlay" onClick={(e) => e.stopPropagation()}>
       <div className="sd-panel" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="sd-header">
