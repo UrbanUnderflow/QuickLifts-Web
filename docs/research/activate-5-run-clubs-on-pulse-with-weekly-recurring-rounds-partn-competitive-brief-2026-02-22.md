@@ -62,4 +62,33 @@
 
 ## Recommended Test
 
-_(To be populated with a concrete activation experiment proposal.)_
+### Pilot: 4-week Pulse Round Ritual with 3–5 Established Run Clubs
+
+- **Objective:**
+  - Validate that Pulse-hosted weekly rounds can become the canonical digital ritual for real-world run clubs — increasing member consistency, simplifying accountability for organizers, and generating reusable social content from each session.
+
+- **Target run club profile (Unverified):**
+  - Urban or suburban run clubs with **200–1,000 active members**, currently coordinating via a mix of IG/FB/WhatsApp/Strava or a basic website (e.g., Midnight Runners city hubs, November Project city chapters, GoodGym city groups).
+  - Already running at least **one recurring group run per week** (e.g., Tuesday tempo, Wednesday social run) with a clear meeting spot and route style.
+  - At least one organizer or captain who is willing to act as the **Pulse Champion** (responsible for setting up rounds and nudging members).
+
+- **Core Pulse feature set to use:**
+  - **Weekly recurring Pulse rounds** mapped 1:1 to existing signature runs (e.g., "Tuesday Tempo", "Bootcamp Run", "Community 5K") with a fixed day/time and simple description.
+  - **Lightweight attendance + consistency tracking**: participants check into the round via Pulse before or after the run; club leaders can view streaks and core member lists.
+  - **Content prompts around each round:** pre-run prompt ("what are you running for tonight?"), optional mid-run capture moment ("shared photo at landmark X"), and post-run reflection prompt ("how did tonight feel?").
+  - **Simple sharing workflow** for club leaders: one-tap export of a weekly Pulse recap (attendance snapshot + 1–3 highlighted posts) that can be cross-posted to IG/FB.
+
+- **Test design:**
+  - Recruit **3–5 clubs** that match the profile above and run the pilot over **4 consecutive weeks**.
+  - For each club, select **one flagship weekly run** and commit to hosting it exclusively on Pulse (no duplicate RSVP tooling) for the pilot duration.
+  - Provide a short onboarding kit: 10–15 minute setup call, template language for inviting members into Pulse, and a playbook for the first two rounds (what to do, what to post, how to talk about it).
+
+- **Success metrics (leading + lagging):**
+  - **Adoption / activation:**
+    - ≥ **50% of typical weekly attendees** for each club check into the Pulse round at least once during the 4-week pilot.
+    - ≥ **30% of attendees** achieve a **2+ week streak** (checked in to at least 2 consecutive weekly rounds).
+  - **Engagement / content creation:**
+    - Average of **≥ 3 member-generated posts** (text, photo, or reflection) per round within Pulse.
+    - At least **1 cross-posted recap** per club per week using Pulse-generated content (IG/FB stories or posts, Unverified).
+  - **Organizer satisfaction / repeatability:**
+    - Post-pilot survey: ≥ **4/5** average rating from organizers on "Pulse makes it easier to run and document our weekly run" and "I would continue using Pulse for at least one of our weekly runs." (Unverified target thresholds.)
