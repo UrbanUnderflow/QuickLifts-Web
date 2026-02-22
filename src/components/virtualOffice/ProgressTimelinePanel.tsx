@@ -60,6 +60,7 @@ const AGENT_ROUTE_ALIASES: Record<string, string> = {
 const AGENT_ROUTE_IDS = new Set(['antigravity', 'nora', 'scout', 'solara', 'sage']);
 
 const normalizeAgentKey = (value?: string) => (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const normalizeObjectiveCode = (value?: string) => (value || '').trim().toUpperCase();
 
 const sanitizeRecordedFilePath = (rawPath?: string): string => {
   if (!rawPath) return '';
@@ -133,6 +134,21 @@ const S = {
   tabs: {
     display: 'flex', alignItems: 'center', gap: 0, padding: '0 24px',
     borderBottom: '1px solid rgba(255,255,255,0.06)',
+  } as CSSProperties,
+  objectiveFilters: {
+    display: 'flex', gap: 6, padding: '8px 20px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)',
+    flexWrap: 'wrap',
+  } as CSSProperties,
+  objectiveFilterBtn: (active: boolean): CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 8,
+    background: active ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.03)',
+    border: active ? '1px solid rgba(99,102,241,0.25)' : '1px solid rgba(255,255,255,0.06)',
+    color: active ? '#a5b4fc' : '#6b7280', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+    transition: 'all 0.2s',
+  }),
+  objectiveFilterCount: {
+    fontSize: 10, fontWeight: 700, padding: '0 5px',
+    background: 'rgba(255,255,255,0.06)', borderRadius: 4, fontFamily: 'JetBrains Mono, monospace',
   } as CSSProperties,
   tab: (active: boolean): CSSProperties => ({
     display: 'flex', alignItems: 'center', gap: 6, padding: '12px 16px', fontSize: 13, fontWeight: 600,
@@ -270,15 +286,57 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   const [nudges, setNudges] = useState<NudgeLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>('feed');
+  const [objectiveFilter, setObjectiveFilter] = useState<string>('all');
   const [composerOpen, setComposerOpen] = useState(false);
   const [hoverCard, setHoverCard] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<CopyState>('idle');
 
+  const objectiveCodeOptions = useMemo(() => {
+    const options = new Set<string>();
+
+    for (const row of [...entries, ...nudges, ...snapshots]) {
+      const code = normalizeObjectiveCode(row.objectiveCode);
+      if (code) options.add(code);
+    }
+
+    return [...options].sort((a, b) => a.localeCompare(b));
+  }, [entries, nudges, snapshots]);
+
+  const objectiveCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    const bump = (code: string) => {
+      const key = normalizeObjectiveCode(code) || '-';
+      counts.set(key, (counts.get(key) || 0) + 1);
+    };
+
+    entries.forEach((entry) => bump(entry.objectiveCode));
+    nudges.forEach((entry) => bump(entry.objectiveCode));
+    snapshots.forEach((entry) => bump(entry.objectiveCode));
+
+    return counts;
+  }, [entries, nudges, snapshots]);
+
+  const filteredEntries = useMemo(() => {
+    if (objectiveFilter === 'all') return entries;
+    return entries.filter((entry) => normalizeObjectiveCode(entry.objectiveCode) === objectiveFilter);
+  }, [entries, objectiveFilter]);
+
+  const filteredNudges = useMemo(() => {
+    if (objectiveFilter === 'all') return nudges;
+    return nudges.filter((entry) => normalizeObjectiveCode(entry.objectiveCode) === objectiveFilter);
+  }, [nudges, objectiveFilter]);
+
+  const filteredSnapshots = useMemo(() => {
+    if (objectiveFilter === 'all') return snapshots;
+    return snapshots.filter((entry) => normalizeObjectiveCode(entry.objectiveCode) === objectiveFilter);
+  }, [snapshots, objectiveFilter]);
+
   const feedItems = useMemo<FeedItem[]>(() => {
-    const b: FeedItem[] = entries.map((e) => ({ id: `b-${e.id}`, type: 'beat', createdAt: e.createdAt?.getTime?.() || 0, payload: e }));
-    const n: FeedItem[] = nudges.map((e) => ({ id: `n-${e.id}`, type: 'nudge', createdAt: e.createdAt?.getTime?.() || 0, payload: e }));
+    const b: FeedItem[] = filteredEntries.map((e) => ({ id: `b-${e.id}`, type: 'beat', createdAt: e.createdAt?.getTime?.() || 0, payload: e }));
+    const n: FeedItem[] = filteredNudges.map((e) => ({ id: `n-${e.id}`, type: 'nudge', createdAt: e.createdAt?.getTime?.() || 0, payload: e }));
     return [...b, ...n].sort((a, b) => b.createdAt - a.createdAt);
-  }, [entries, nudges]);
+  }, [filteredEntries, filteredNudges]);
 
   // Composer state
   const [agentId, setAgentId] = useState('');
@@ -303,7 +361,13 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
     return () => { u1(); u2(); u3(); };
   }, []);
 
-  const feedTabCountTitle = `Showing ${feedItems.length} items (${entries.length} beats + ${nudges.length} nudges). Limits: ${FEED_BEAT_LIMIT} beats, ${FEED_NUDGE_LIMIT} nudges.`;
+  useEffect(() => {
+    if (objectiveFilter !== 'all' && !objectiveCodeOptions.includes(objectiveFilter)) {
+      setObjectiveFilter('all');
+    }
+  }, [objectiveCodeOptions, objectiveFilter]);
+
+  const feedTabCountTitle = `Showing ${feedItems.length} items (${filteredEntries.length} beats + ${filteredNudges.length} nudges). Limits: ${FEED_BEAT_LIMIT} beats, ${FEED_NUDGE_LIMIT} nudges.`;
 
   const formatExportTimestamp = (value?: Date): string => {
     if (!value) return 'unknown-time';
@@ -318,7 +382,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
     const lines: string[] = [
       'Activity Feed export',
       `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`,
-      `Loaded items: ${feedItems.length} (beats: ${entries.length}, nudges: ${nudges.length})`,
+      `Loaded items: ${feedItems.length} (beats: ${filteredEntries.length}, nudges: ${filteredNudges.length})`,
       `Configured limits: beats ${FEED_BEAT_LIMIT}, nudges ${FEED_NUDGE_LIMIT}`,
       '',
     ];
@@ -359,15 +423,17 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   };
 
   const buildSnapshotsExportText = (): string => {
+    const exportSnapshots = filteredSnapshots;
+
     const lines: string[] = [
       'Activity Snapshots export',
       `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`,
-      `Loaded snapshots: ${snapshots.length}`,
+      `Loaded snapshots: ${exportSnapshots.length}`,
       `Configured limit: ${SNAPSHOT_LIMIT}`,
       '',
     ];
 
-    snapshots.forEach((snapshot, index) => {
+    exportSnapshots.forEach((snapshot, index) => {
       lines.push(
         `[${index + 1}] SNAPSHOT ${formatExportTimestamp(snapshot.createdAt)} | ${snapshot.agentName || snapshot.agentId || 'Unknown'} | ${snapshot.objectiveCode || '-'} | ${snapshot.color} | ${snapshot.stateTag}`
       );
@@ -690,7 +756,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
           </button>
           <button style={S.tab(activeTab === 'snapshots')} onClick={() => setActiveTab('snapshots')}>
             <Clock size={14} /> Snapshots
-            {snapshots.length > 0 && <span style={S.tabCount}>{snapshots.length}</span>}
+            {filteredSnapshots.length > 0 && <span style={S.tabCount}>{filteredSnapshots.length}</span>}
           </button>
           <button
             style={S.copyBtn(copyState)}
@@ -704,6 +770,31 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
             <Send size={14} /> Post Beat
             {composerOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
+        </div>
+
+        <div style={S.objectiveFilters}>
+          <button
+            style={S.objectiveFilterBtn(objectiveFilter === 'all')}
+            onClick={() => setObjectiveFilter('all')}
+          >
+            All Objectives
+            <span style={S.objectiveFilterCount}>{entries.length + nudges.length + snapshots.length}</span>
+          </button>
+          {objectiveCodeOptions.map((code) => {
+            const selected = objectiveFilter === code;
+            const count = objectiveCounts.get(code) || 0;
+
+            return (
+              <button
+                key={code}
+                style={S.objectiveFilterBtn(selected)}
+                onClick={() => setObjectiveFilter(code)}
+              >
+                {code}
+                <span style={S.objectiveFilterCount}>{count}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* ── Composer ── */}
@@ -779,13 +870,13 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
           )}
 
           {activeTab === 'snapshots' && (
-            snapshots.length === 0 ? (
+            filteredSnapshots.length === 0 ? (
               <div style={S.empty}>
                 <Clock size={32} style={{ opacity: 0.3 }} />
                 <p style={{ margin: 0, fontSize: 14 }}>No hourly snapshots recorded yet.</p>
               </div>
             ) : (
-              snapshots.map(renderSnapshotCard)
+              filteredSnapshots.map(renderSnapshotCard)
             )
           )}
         </div>

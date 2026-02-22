@@ -63,7 +63,12 @@ const resolveAgentRouteId = (agentId?: string): string | null => {
 
 const normalizeDeliverableStatus = (value?: string): string => {
   const normalized = String(value || '').trim().toLowerCase();
-  return normalized === '' || normalized === 'pending' ? 'needs-review' : normalized;
+  if (!normalized || normalized === 'pending' || normalized === 'in-progress' || normalized === 'queued') {
+    return 'work';
+  }
+  if (normalized === 'needsreview') return 'needs-review';
+  if (normalized === 'approved' || normalized === 'reject' || normalized === 'rejected') return normalized === 'rejected' ? 'needs-review' : 'approved';
+  return normalized || 'work';
 };
 
 const normalizeDeliverableChangeType = (value?: string): string => {
@@ -308,16 +313,16 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
       return !isNeedsReview(d.status) && !isApproved(d.status);
     });
 
-  const statusBadge = (status?: string) => {
+const statusBadge = (status?: string) => {
     if (isNeedsReview(status)) {
       return { className: 'needs-review', label: 'NEEDS REVIEW' };
     }
     if (isApproved(status)) {
       return { className: 'approved', label: 'APPROVED' };
     }
-    if (status === 'pending-recovery') return { className: 'pending', label: 'PENDING' };
-    if (status === 'complete') return { className: 'complete', label: 'COMPLETE' };
-    return { className: 'pending', label: 'PENDING' };
+    if (status === 'pending-recovery') return { className: 'work', label: 'WORK' };
+    if (status === 'complete') return { className: 'approved', label: 'APPROVED' };
+    return { className: 'work', label: 'WORK' };
   };
 
   const changeTypeBadge = (changeType?: string) => {
@@ -507,16 +512,16 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
                   </div>
                 </div>
 
-                {isExpanded && (
-                  <div className="sd-item-body">
-                    {(() => {
-                      const movement = deriveMovementSignals(d);
-                      return (
-                        <details className="sd-movement-section">
-                          <summary className="sd-movement-summary">
-                            <span>Movement assessment</span>
-                            <span className={`sd-movement-badge ${movement.impactToneClass}`}>
-                              {movement.impactLabel} ({movement.score}/5)
+                    {isExpanded && (
+                      <div className="sd-item-body">
+                        {(() => {
+                          const movement = deriveMovementSignals(d);
+                          return (
+                            <details className="sd-movement-section" open>
+                              <summary className="sd-movement-summary">
+                                <span>Movement assessment</span>
+                                <span className={`sd-movement-badge ${movement.impactToneClass}`}>
+                                  {movement.impactLabel} ({movement.score}/5)
                             </span>
                           </summary>
                           <div className="sd-movement-content">
@@ -564,8 +569,8 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
                         </div>
                       )}
                     </div>
-                    {isNeedsReview(d.status) && (
-                      <div className="sd-review-actions">
+                  {isNeedsReview(d.status) && (
+                    <div className="sd-review-actions">
                         <button
                           className="sd-approve-btn"
                           onClick={() => handleApprove(d.id)}
@@ -766,6 +771,14 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
         .sd-status-badge.pending {
           background: rgba(245,158,11,0.12); color: #f59e0b;
           border: 1px solid rgba(245,158,11,0.2);
+        }
+        .sd-status-badge.work {
+          background: rgba(148,163,184,0.12); color: #cbd5e1;
+          border: 1px solid rgba(148,163,184,0.2);
+        }
+        .sd-status-badge.pending {
+          background: rgba(148,163,184,0.12); color: #cbd5e1;
+          border: 1px solid rgba(148,163,184,0.2);
         }
         .sd-status-badge.complete {
           background: rgba(34,197,94,0.1); color: #22c55e;
