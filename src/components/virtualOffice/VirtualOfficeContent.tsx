@@ -6,8 +6,20 @@ import AdminRouteGuard from '../auth/AdminRouteGuard';
 import { presenceService, AgentPresence, AgentThoughtStep, TaskHistoryEntry } from '../../api/firebase/presence/service';
 import { kanbanService } from '../../api/firebase/kanban/service';
 import { db } from '../../api/firebase/config';
-import { addDoc, collection, doc, serverTimestamp, query, where, onSnapshot, writeBatch } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  doc,
+  serverTimestamp,
+  query,
+  where,
+  onSnapshot,
+  writeBatch,
+  getDocs,
+  orderBy,
+} from 'firebase/firestore';
 import { KanbanTask } from '../../api/firebase/kanban/types';
+import { meetingMinutesService } from '../../api/firebase/meetingMinutes/service';
 import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
   ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap, Target,
@@ -59,6 +71,35 @@ const formatMs = (ms?: number) => {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`;
+};
+
+const messageTimeMs = (value: unknown): number | null => {
+  if (!value) return null;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  const raw = value as { toDate?: () => Date; seconds?: number };
+  if (typeof raw.toDate === 'function') {
+    return raw.toDate().getTime();
+  }
+  if (typeof raw.seconds === 'number') {
+    return raw.seconds * 1000;
+  }
+  return null;
+};
+
+const deriveMessageDurationMinutes = (messages: GroupChatMessage[]): string => {
+  const timestamps = messages
+    .map((message) => messageTimeMs(message.createdAt))
+    .filter((value): value is number => typeof value === 'number')
+    .sort((a, b) => a - b);
+
+  if (timestamps.length < 2) {
+    return '< 1m';
+  }
+
+  const spanMs = timestamps[timestamps.length - 1] - timestamps[0];
+  const mins = Math.floor(spanMs / 60_000);
+  return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins || '< 1'}m`;
 };
 
 type TokenUsageBucket = {
@@ -3120,6 +3161,7 @@ const VirtualOfficeContent: React.FC = () => {
   // ── Manual Telemetry Trigger state ──
   const [triggeringStandup, setTriggeringStandup] = useState(false);
   const [standupTriggerResult, setStandupTriggerResult] = useState<'success' | 'error' | null>(null);
+  const [missionMinutesEnabled] = useState(true);
 
 
   const handleTriggerStandup = useCallback(async (type?: 'morning' | 'evening') => {
