@@ -588,7 +588,7 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
 
   return ReactDOM.createPortal(
     <>
-    <div className="rt-overlay" onClick={confirmClose}>
+    <div className="rt-overlay" onClick={(e) => e.stopPropagation()}>
       <div className="rt-modal" onClick={(e) => e.stopPropagation()}>
 
         {/* ── Header ── */}
@@ -1010,7 +1010,7 @@ export const GroupChatModal: React.FC<GroupChatModalProps> = ({
     </div>
 
       {showEndConfirm && (
-        <div className="rt-confirm-overlay" onClick={cancelClose}>
+        <div className="rt-confirm-overlay" onClick={(e) => e.stopPropagation()}>
           <div className="rt-confirm-modal" onClick={(e) => e.stopPropagation()}>
             <h3 className="rt-confirm-title">End round table chat?</h3>
             <p className="rt-confirm-message">{endConfirmMessage}</p>

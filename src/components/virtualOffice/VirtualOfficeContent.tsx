@@ -997,7 +997,7 @@ const AgentProfileModal: React.FC<{
   if (!profile) return null;
 
   return ReactDOM.createPortal(
-    <div className="profile-modal-overlay" onClick={onClose}>
+    <div className="profile-modal-overlay" onClick={(e) => e.stopPropagation()}>
       <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="profile-modal-header">
@@ -1413,7 +1413,7 @@ const TaskHistoryPanel: React.FC<{ agentId: string; agentName?: string; emoji?: 
 
       {/* Full-screen modal via portal */}
       {isOpen && ReactDOM.createPortal(
-        <div className="th-overlay" onClick={() => setIsOpen(false)} onMouseDown={e => e.stopPropagation()}>
+        <div className="th-overlay" onClick={(e) => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
           <div className="th-modal" onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="th-header">
@@ -4616,7 +4616,7 @@ const VirtualOfficeContent: React.FC = () => {
         {tokenBreakdownRows && tokenBreakdownModal.isOpen && ReactDOM.createPortal(
           <div
             className="token-breakdown-overlay"
-            onClick={closeTokenBreakdown}
+            onClick={(e) => { e.stopPropagation(); }}
             onMouseDown={e => e.stopPropagation()}
           >
             <div className="token-breakdown-modal" onClick={e => e.stopPropagation()}>
