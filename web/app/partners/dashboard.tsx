@@ -7,6 +7,8 @@ import { db } from "../../../src/api/firebase/config";
 import type { PartnerType, PartnerFirestoreData } from "../../../src/types/Partner";
 import { PartnerModel } from "../../../src/types/Partner";
 import { GymKpiPanel } from "../../components/partners/GymKpiPanel";
+import { withAdminAuth } from "../../lib/auth/withAdminAuth";
+import { AdminLayout } from "../../components/admin/AdminLayout";
 
 interface PartnerPlaybookSummary {
   type: PartnerType;
@@ -49,7 +51,7 @@ const TYPE_FILTER_OPTIONS: { label: string; value: PartnerType | "all" }[] = [
  * real partner context (current user) once that is available; for now,
  * it is rendered behind a TODO placeholder.
  */
-export default function PartnerOnboardingDashboardPage() {
+function PartnerOnboardingDashboardPageInner() {
   const [partners, setPartners] = useState<PartnerRow[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -155,7 +157,7 @@ export default function PartnerOnboardingDashboardPage() {
   }, [laneAverages]);
 
   return (
-    <main className="p-6 space-y-6">
+    <>
       <header className="mb-2">
         <h1 className="text-2xl font-semibold">Partner Onboarding Dashboard</h1>
         <p className="mt-1 text-sm text-gray-600 max-w-2xl">
@@ -368,6 +370,14 @@ export default function PartnerOnboardingDashboardPage() {
           </div>
         )}
       </section>
-    </main>
+    </>
   );
 }
+
+const PartnerOnboardingDashboardPage = () => (
+  <AdminLayout title="Partner Onboarding Dashboard">
+    <PartnerOnboardingDashboardPageInner />
+  </AdminLayout>
+);
+
+export default withAdminAuth(PartnerOnboardingDashboardPage);

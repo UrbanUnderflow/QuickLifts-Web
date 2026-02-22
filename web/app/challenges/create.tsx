@@ -7,6 +7,7 @@ import {
   getTemplatesForBrand,
   getTemplateById,
   BrandChallengeTemplate,
+  getAllBrandTemplateGroups,
 } from "../../lib/brandChallengeTemplates";
 import { getBrandChallengeTemplates } from "../../lib/challenges/brandTemplates";
 
@@ -119,7 +120,9 @@ export default function ChallengeCreatePage(props: ChallengeCreatePageProps) {
   const brandType = (searchParams.get("brandType") || "").toLowerCase();
 
   const queryBrandCampaignId = searchParams.get("brandCampaignId") || "";
-  const brandCampaignId = (props.brandCampaignId ?? queryBrandCampaignId).trim();
+  const initialBrandCampaignId = (props.brandCampaignId ?? queryBrandCampaignId).trim();
+
+  const [brandCampaignId, setBrandCampaignId] = useState(initialBrandCampaignId);
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(
     undefined
@@ -133,6 +136,30 @@ export default function ChallengeCreatePage(props: ChallengeCreatePageProps) {
   const [durationDays, setDurationDays] = useState<number | "">("");
   const [sessionsPerWeek, setSessionsPerWeek] = useState<number | "">("");
   const [visualStyleKey, setVisualStyleKey] = useState("");
+
+  const brandCampaignOptions = useMemo(() => {
+    const groups = getAllBrandTemplateGroups();
+    const seen = new Set<string>();
+
+    return groups.flatMap((group) => {
+      return group.templates.reduce<{ id: string; label: string }[]>(
+        (acc, template) => {
+          const archetype = template.brandArchetype;
+          if (!archetype || seen.has(archetype)) return acc;
+
+          seen.add(archetype);
+
+          acc.push({
+            id: archetype,
+            label: `${group.displayName} · ${template.title || template.name}`,
+          });
+
+          return acc;
+        },
+        []
+      );
+    });
+  }, []);
 
   // When a brandCampaignId is provided (either via props or the query
   // string), prefill the draft with the first template tied to that
@@ -194,6 +221,34 @@ export default function ChallengeCreatePage(props: ChallengeCreatePageProps) {
           configured templates for that brand and can apply their presets
           into the draft challenge fields.
         </p>
+
+        {brandCampaignOptions.length > 0 && (
+          <div className="mt-4 grid gap-3 rounded-md border border-gray-200 bg-white p-3 text-sm shadow-sm sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-medium text-gray-700">
+                Brand campaign
+              </label>
+              <select
+                value={brandCampaignId}
+                onChange={(e) => setBrandCampaignId(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">No specific campaign</option>
+                {brandCampaignOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="text-xs text-gray-600">
+              Choosing a brand campaign will prefill this draft using that
+              campaign&rsquo;s challenge template (title, description,
+              duration, and target sessions per week) and apply the
+              matching brand style key.
+            </p>
+          </div>
+        )}
       </header>
 
       {!brandType ? (
