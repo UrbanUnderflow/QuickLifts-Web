@@ -189,3 +189,34 @@ With dev server running and an admin user signed in:
      - bar chart lane averages.
 
 Once this checklist passes, the partner onboarding dashboard can be treated as verified for the current scope.
+
+## 7. Agent-run verification log (2026-02-22)
+
+**Commands run**
+
+- `npm run build`
+  - Result: **failed** due to a pre-existing type error in `src/components/virtualOffice/SharedDeliverables.tsx`:
+    - `impactToneClass` was typed as `"low" | "medium" | "high"` but a plain `string` was provided in one object literal.
+  - This failure is **outside** the partner onboarding dashboard feature area.
+
+**Implications for this dashboard**
+
+- The build progressed through type checking far enough to hit a type error in an unrelated component.
+- No type errors were reported from:
+  - `web/app/partners/dashboard.tsx`
+  - `web/components/partners/PartnerOnboardingTable.tsx`
+  - `web/components/charts/BarChart.tsx`
+- This provides partial automated verification that the new dashboard code type-checks within the existing Next.js build pipeline.
+
+**Remaining manual checks for a human operator**
+
+Because authentication and Firestore data are environment-specific, a human admin should still:
+
+1. Start the dev server (see `.agent/workflows/dev-server.md`).
+2. Sign in as an admin user.
+3. Walk through Section 6 of this document in a browser:
+   - Confirm route/access control behavior.
+   - Confirm table data vs. real `partners` documents in Firestore.
+   - Confirm filter + bar chart behavior with real data.
+
+Once both this automated check and the manual browser-based checks pass, consider the dashboard fully verified.
