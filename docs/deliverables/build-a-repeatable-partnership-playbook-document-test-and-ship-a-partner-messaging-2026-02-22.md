@@ -37,3 +37,38 @@ Across brands, gyms, and run clubs, the through‑line is simple: Pulse is where
 - **Evidence that matches the story.** If a partner promises a "recovery reset" or "strength season," Pulse surfaces streaks, completion rates, and before/after check‑ins that map directly to that promise.
 - **Screenshots that belong in the deck.** Cohort views, challenge summaries, and co‑branded badges are designed to look good on a slide, in a feed, or in an investor update—no manual spreadsheet wrangling.
 - **Signals you can build on.** Partners see which blocks land, which cohorts stick, and which rituals travel, giving them concrete inputs for the next collection, the next programming cycle, or the next city they expand into.
+
+## Copy Snippets
+
+### For Brands
+
+- **Email opener:**
+  > You’ve already built a community that wears the logo. Pulse is where they come to train the way your brand actually believes in—one season, one story, all in one place.
+
+- **Landing-page hero line:**
+  > Turn every drop into a training season your community can follow, not just a post they scroll past.
+
+- **In-product banner/CTA:**
+  > Launch your next collection as a Pulse round and watch your athletes lead the story, not just model it.
+
+### For Gyms
+
+- **Email opener:**
+  > Your members don’t need another app—they need a cleaner way to carry your whiteboard into the days they’re not in the building. That’s the gap Pulse fills.
+
+- **Landing-page hero line:**
+  > Turn your programming blocks into seasons your members can see, follow, and finish together.
+
+- **In-product banner/CTA:**
+  > Spin up your next in‑house challenge as a Pulse round and let your community feel it, not just hear about it at the desk.
+
+### For Run Clubs
+
+- **Email opener:**
+  > The magic of your club lives in the miles and the meetups—not in spreadsheets. Pulse gives you a clean way to name the season and keep everyone moving in the same direction.
+
+- **Landing-page hero line:**
+  > Give every run season a clear arc and a shared home, without losing the ritual that makes your club yours.
+
+- **In-product banner/CTA:**
+  > Set this month’s focus as a Pulse round and let your runners log the story they’re already writing together.
