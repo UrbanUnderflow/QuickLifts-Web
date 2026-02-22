@@ -144,13 +144,13 @@ export default function ChallengeCreatePage(props: ChallengeCreatePageProps) {
     return groups.flatMap((group) => {
       return group.templates.reduce<{ id: string; label: string }[]>(
         (acc, template) => {
-          const archetype = template.brandArchetype;
-          if (!archetype || seen.has(archetype)) return acc;
+          const campaignId = template.id;
+          if (!campaignId || seen.has(campaignId)) return acc;
 
-          seen.add(archetype);
+          seen.add(campaignId);
 
           acc.push({
-            id: archetype,
+            id: campaignId,
             label: `${group.displayName} · ${template.title || template.name}`,
           });
 
