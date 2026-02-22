@@ -22,16 +22,25 @@
 - **Location / scope:** National U.S. network of local run groups focused on Black women, with chapters in dozens of cities.
 - **How they organize runs digitally:** Central website with chapter directory; many local groups coordinate weekly runs via Facebook Groups and email lists linked from the main site.
 - **Main community hub / events URL:** https://blackgirlsrun.com/
+- **Tooling stack (Unverified):** Main website for brand and chapter overview, plus city-level Facebook Groups for weekly run schedules and announcements; likely use of email newsletters and possibly Strava groups at the local leader level. Source: https://blackgirlsrun.com/
+- **Attendance / accountability (Unverified):** Informal check-ins managed by local captains in FB Groups and at in-person meetups; expectations around consistency are community-enforced rather than tracked via a centralized attendance system. Source: https://blackgirlsrun.com/
+- **Social content from runs (Unverified):** Run-day photos and member spotlights shared across Facebook and Instagram under the Black Girls RUN! brand; content showcases community stories but is fragmented across many local pages. Source: https://blackgirlsrun.com/
 
 ### 4. Midnight Runners (Global Urban Run Club)
 - **Location / scope:** Urban run club with hubs in major cities including London, Berlin, Boston, and others.
 - **How they organize runs digitally:** Official website listing city hubs and weekly “bootcamp run” events; city-specific Instagram accounts used to announce runs and share recap content.
 - **Main community hub / events URL:** https://www.midnightrunners.com/
+- **Tooling stack (Unverified):** Branded website for information and event discovery, Eventbrite or similar for some city runs, plus highly active city-specific Instagram accounts for promoting weekly “bootcamp runs” and pop-up events. Source: https://www.midnightrunners.com/
+- **Attendance / accountability (Unverified):** Event sign-ups via web/event tools for capacity control, combined with in-person roll calls; most accountability is cultural (crew consistency, social pressure) rather than logged streaks or digital attendance history. Source: https://www.midnightrunners.com/
+- **Social content from runs (Unverified):** Heavy focus on high-energy recap videos and photos shared on Instagram and occasionally YouTube, emphasizing party/run atmosphere; no single owned app destination where this content is aggregated for members. Source: https://www.midnightrunners.com/
 
 ### 5. GoodGym (UK)
 - **Location / scope:** UK-based running community that combines group runs with community projects across multiple cities.
 - **How they organize runs digitally:** Central platform where each city has its own page with recurring “group run” events, sign-up, and attendance tracking.
 - **Main community hub / events URL:** https://www.goodgym.org/
+- **Tooling stack (Unverified):** Custom web platform that hosts city pages, event listings, user accounts, and integration with volunteer tasks; likely paired with email notifications and some social media amplification per city. Source: https://www.goodgym.org/
+- **Attendance / accountability (Unverified):** Members sign up for specific group runs and tasks on the site; post-run, activities are logged with written “run reports” that tag attendees and track contributions over time. Source: https://www.goodgym.org/
+- **Social content from runs (Unverified):** Run reports and photos are published directly on the GoodGym site per event, creating a semi-social feed; additional highlights shared via GoodGym’s social channels. Source: https://www.goodgym.org/
 
 
 ## Pulse Opportunities
