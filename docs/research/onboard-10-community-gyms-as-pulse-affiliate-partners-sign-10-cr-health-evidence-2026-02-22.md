@@ -15,7 +15,15 @@ This document will focus on:
 
 ## Findings
 
-> To be populated with discrete, numbered findings about engagement and retention in gym-based or community fitness programs, each with an inline citation tag (e.g., [1], [2]) referencing clinical research, behavioral data, or practitioner sources.
+1. **Coaching relationship quality and perceived support strongly influence member adherence in community gyms.** Research on CrossFit, group training, and boutique studios shows that members who perceive their coaches as supportive, competent, and attentive report higher satisfaction and are more likely to continue attending sessions over time [1]. Coach endorsement is also a key driver when gyms introduce new tools or programs—members are more likely to try and stick with a new system if it is actively recommended and modeled by coaches.
+
+2. **Social cohesion and a strong sense of “tribe” are core to retention in CrossFit boxes and similar communities.** Studies on CrossFit and community-based exercise highlight that feelings of belonging, shared identity, and mutual encouragement distinguish these environments from traditional gyms and are central to why members stay [2]. Rituals (named workouts, leaderboards, post-class hangouts) and visible community symbols (logos, mottos, in-gym signage) reinforce this identity and can be leveraged to frame Pulse as part of the tribe rather than an external app.
+
+3. **Structured onboarding and clear goal framing improve adoption of new programs in gym settings.** Evidence from exercise and health behavior interventions indicates that when new initiatives are introduced with a clear rationale, specific goals, and a time-bound structure (e.g., a 4–8 week challenge), participants are more likely to sign up and complete the program than when tools are simply made available without a defined container [3]. In gyms, launch challenges that are integrated into existing programming (e.g., "next 6 weeks of classes are part of our Pulse round") see better uptake than optional add-ons.
+
+4. **Peer visibility and in-gym feedback loops increase participation and accountability.** Studies on group-based exercise and behavior change show that publicly displaying progress (attendance boards, whiteboards, leaderboards, shout-outs) increases perceived accountability and engagement [4]. In practice, gyms that use visible tracking (e.g., attendance charts, PR boards) tend to see higher class participation; connecting Pulse account creation and check-ins to these visible systems can drive sign-up behavior.
+
+5. **Lowering friction at the point of decision (e.g., at check-in or during class) is critical for high adoption of digital tools in gyms.** Work on technology adoption and health apps suggests that simple, contextually embedded actions (QR codes at the front desk, one-tap links in SMS or member apps, coach-led "everyone download this now" moments) significantly improve conversion compared with email-only or passive promotion [5]. For community gyms, embedding Pulse account creation into existing high-attention moments—first-day waivers, membership sign-up, or kickoff classes—will likely be necessary to reach ≥50% activation inside 60 days.
 
 ## Recommended Intervention
 
