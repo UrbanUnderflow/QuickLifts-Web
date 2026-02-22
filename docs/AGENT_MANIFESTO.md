@@ -333,6 +333,7 @@ The “failure” flags here aren’t about missing tools or runtime errors; the
 
 Step..."
 - **[2026-02-22] Nora** — Step "In `web/app/partners/dashboard.tsx`, add a Firestore query (using the existing Firestore client) to load all documents from the `partners` collection and map them into a typed array with fields `id`, `name`, `type`, `onboardingStage`, `invitedAt`, and `firstRoundCreatedAt`." still had issues after 2 retries. Output signals: \bfailed\b, \berror\b, \bunable to\b. Last output: "Step 2 is already fully implemented in the codebase; no changes are required for this step. Here’s the concrete verifica..."
+- **[2026-02-22] Nora** — Step "Add a partner type filter control in `web/app/partners/dashboard.tsx` (e.g., a select bound to React state) that filters the partners array by `type` ('brand', 'gym', 'runClub') before passing it to `PartnerOnboardingTable`." still had issues after 2 retries. Output signals: \berror\b. Last output: "Step 4 is already implemented correctly in the code; no new edits are needed. Here’s the concrete verification against t..."
 ---
 
 ## Operational Rules
