@@ -31,4 +31,14 @@ This document will focus on:
 
 ## Sources
 
-> To be populated with full references for each citation tag used in the Findings section (title, author(s), year, publication/source, and URL/DOI where available).
+**Note:** Specific URLs/DOIs should be verified and added during a final editorial pass; references below identify core sources and publication venues.
+
+[1] Galbraith, P., & Butcher, S. (2016). Differences in motivation and adherence to exercise in CrossFit and traditional gym members. *Journal of Sport and Human Performance*, 4(1), 20–27.
+
+[2] Dawson, M. C. (2017). CrossFit: Fitness cult or reinventive institution? *International Review for the Sociology of Sport*, 52(3), 361–379.
+
+[3] Wurtele, S. K., & Maddux, J. E. (1987). Relative contributions of protection motivation theory components in predicting exercise intentions and behavior. *Health Psychology*, 6(5), 453–466.
+
+[4] Burke, S. M., Carron, A. V., Eys, M. A., Ntoumanis, N., & Estabrooks, P. A. (2006). Group versus individual approach? A meta-analysis of the effectiveness of interventions to promote physical activity. *Sport and Exercise Psychology Review*, 2(1), 19–35.
+
+[5] Perski, O., Blandford, A., West, R., & Michie, S. (2017). Conceptualising engagement with digital behaviour change interventions: A systematic review using principles from critical interpretive synthesis. *Translational Behavioral Medicine*, 7(2), 254–267.
