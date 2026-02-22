@@ -1547,7 +1547,7 @@ async function recordDeliverables(task, steps, options = {}) {
     const fileChanges = getFileChangesFromSteps(steps);
     if (fileChanges.length === 0) return [];
 
-    const status = String(options.status || 'needs-review').trim() || 'needs-review';
+    const status = String(options.status || 'work').trim() || 'work';
     const reviewReason = String(options.reviewReason || '').trim();
 
     const deliverables = [];
@@ -1766,6 +1766,17 @@ function validateLeadSourceOfTruthGate(task, steps) {
 const BEAT_STEP_OUTPUT_MIN_CHARS = parseInt(process.env.BEAT_STEP_OUTPUT_MIN_CHARS || '80', 10);
 const BEAT_DEDUP_WINDOW_MS = Math.max(10_000, parseInt(process.env.BEAT_DEDUP_WINDOW_MS || '45000', 10));
 
+function isLikelySpamSelfAssignmentBeat(beat, normalizedHeadline) {
+    return beat === 'hypothesis' && normalizedHeadline.includes('self-assigned');
+}
+
+function isIdleLoopHypothesis(beat, normalizedHeadline) {
+    return (
+        beat === 'hypothesis'
+        && (normalizedHeadline.includes('idle') || normalizedHeadline.includes('no tasks in queue'))
+    );
+}
+
 const beatDedupWindow = new Map();
 
 function normalizeBeatText(text) {
@@ -1786,6 +1797,19 @@ function isCompletionBeat(beat, headline) {
 }
 
 function shouldEmitBeat(beat, headline, opts = {}) {
+    const normalizedHeadline = normalizeBeatText(headline);
+    if (!normalizedHeadline) {
+        console.log(`⚠️  Beat validity gate blocked: empty headline for ${beat}`);
+        return false;
+    }
+
+    if (!hasSubstantialText(normalizedHeadline, BEAT_STEP_OUTPUT_MIN_CHARS)) {
+        if (beat !== 'signal-spike') {
+            console.log(`⚠️  Beat validity gate blocked: short headline for ${beat}: ${headline}`);
+            return false;
+        }
+    }
+
     if (!isCompletionBeat(beat, headline)) return true;
     if (opts._skipBeatValidity === true) return true;
 
@@ -1795,12 +1819,23 @@ function shouldEmitBeat(beat, headline, opts = {}) {
         return false;
     }
 
-    if (!opts._isValidatedResult) {
+    if (!isStepCompletion && !opts._isValidatedResult) {
         console.log(`⚠️  Beat validity gate blocked: ${beat} beat without validation flag: ${headline}`);
         return false;
     }
 
-    const dedupeKey = `agent:${AGENT_ID}|${beat}|${normalizeBeatText(headline)}|${String(opts.taskId || opts.objectiveCode || '')}`;
+    const dedupeKey = isLikelySpamSelfAssignmentBeat(beat, normalizedHeadline)
+        ? `agent:${AGENT_ID}|self-assignment|${normalizedHeadline}`
+        : `agent:${AGENT_ID}|${beat}|${normalizedHeadline}`;
+
+    if (isIdleLoopHypothesis(beat, normalizedHeadline) && !opts.taskId && !opts.objectiveCode) {
+        const artifactUrl = String(opts.artifactUrl || '').trim();
+        if (!artifactUrl) {
+            console.log(`⚠️  Beat validity gate blocked: idle hypothesis beat without task reference: ${headline}`);
+            return false;
+        }
+    }
+
     const now = Date.now();
     const lastSeen = beatDedupWindow.get(dedupeKey) || 0;
     if (now - lastSeen < BEAT_DEDUP_WINDOW_MS) {
@@ -1822,6 +1857,11 @@ function shouldEmitBeat(beat, headline, opts = {}) {
  */
 async function postBeat(beat, headline, opts = {}) {
     try {
+        const missionPaused = await isMissionPaused(true);
+        if (missionPaused) {
+            return;
+        }
+
         if (!shouldEmitBeat(beat, headline, opts)) {
             return;
         }
