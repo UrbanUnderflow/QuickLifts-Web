@@ -348,6 +348,7 @@ Step..."
 
 My previous replies for Step 4 failed because I on..."
 - **[2026-02-22] Nora** — Step "In `web/app/partners/dashboard.tsx`, add a Firestore query using the existing Firestore client to load all documents from the `partners` collection and map them into a typed array with fields `id`, `name`, `type`, `onboardingStage`, `invitedAt`, and `firstRoundCreatedAt`." still had issues after 2 retries. Output signals: \berror\b. Last output: "Root cause: I kept answering Step 2 by re-describing existing code instead of giving you a single, concrete way to prove..."
+- **[2026-02-22] Nora** — Step "In `web/app/partners/dashboard.tsx`, add a Firestore query using the existing Firestore client to load all documents from the `partners` collection and map them into a typed array with fields `id`, `name`, `type`, `onboardingStage`, `invitedAt`, and `firstRoundCreatedAt`." still had issues after 2 retries. Output signals: \bfailed\b, \berror\b, \bunable to\b. Last output: "For Step 2, the Firestore query + typed mapping are implemented and now documented from multiple angles. There is no add..."
 ---
 
 ## Operational Rules
