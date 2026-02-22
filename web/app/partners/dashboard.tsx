@@ -4,8 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 
 import { db } from "../../../src/api/firebase/config";
-import type { PartnerFirestoreData, PartnerType } from "../../../src/types/Partner";
-import { PartnerModel } from "../../../src/types/Partner";
+import type { PartnerType } from "../../../src/types/Partner";
 import { withAdminAuth } from "../../lib/auth/withAdminAuth";
 import { AdminLayout } from "../../components/admin/AdminLayout";
 import {
@@ -13,6 +12,7 @@ import {
   type PartnerRow,
 } from "../../components/partners/PartnerOnboardingTable";
 import { BarChart } from "../../components/charts/BarChart";
+import { mapPartnersSnapshot } from "../../lib/partners/mapPartnersSnapshot";
 
 /**
  * Partner Onboarding Dashboard
@@ -42,22 +42,7 @@ function PartnerOnboardingDashboardPageInner() {
         const snapshot = await getDocs(collection(db, "partners"));
         if (!isMounted) return;
 
-        const rows: PartnerRow[] = snapshot.docs.map((docSnap) => {
-          const raw = docSnap.data() as PartnerFirestoreData;
-          const model = new PartnerModel(docSnap.id, raw);
-
-          return {
-            id: model.id,
-            // TODO: Replace `name` with a dedicated partner name field
-            // once it is available in the schema; for now, use contactEmail
-            // as the display identifier.
-            name: model.contactEmail,
-            type: model.type,
-            onboardingStage: model.onboardingStage,
-            invitedAt: model.invitedAt,
-            firstRoundCreatedAt: model.firstRoundCreatedAt ?? null,
-          };
-        });
+        const rows: PartnerRow[] = mapPartnersSnapshot(snapshot);
 
         setPartners(rows);
       } catch (err) {
