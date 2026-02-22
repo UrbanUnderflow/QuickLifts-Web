@@ -27,4 +27,16 @@ This document will focus on:
 
 ## Sources
 
-> To be populated with full references for each citation tag used in the Findings section (title, author(s), year, publication/source, and URL/DOI where available).
+**Note:** Specific URLs/DOIs should be verified and added during a final editorial pass; references below identify core sources and publication venues.
+
+[1] Zhang, J., Brackbill, D., Yang, S., Becker, J., Herbert, N., & Centola, D. (2016). Support or competition? How online social networks increase physical activity: A randomized controlled trial. *Preventive Medicine Reports*, 4, 453–458.
+
+[2] Patel, M. S., Small, D. S., Harrison, J. D., Fortunato, M. P., Oon, A. L., Rareshide, C. A. L., Reh, G., Szwartz, M. L., et al. (2019). Effectiveness of behaviorally designed gamification interventions with social incentives for increasing physical activity among overweight and obese adults (STEP UP): A randomized clinical trial. *JAMA Internal Medicine*, 179(12), 1624–1632.
+
+[3] Dawson, M. C. (2017). CrossFit: Fitness cult or reinventive institution? *International Review for the Sociology of Sport*, 52(3), 361–379.
+
+[4] Michie, S., Abraham, C., Whittington, C., McAteer, J., & Gupta, S. (2009). Effective techniques in healthy eating and physical activity interventions: A meta-regression. *Health Psychology*, 28(6), 690–701.
+
+[5] Yardley, L., Spring, B. J., Riper, H., Morrison, L. G., Crane, D. H., Curtis, K., Merchant, G. C., Naughton, F., & Blandford, A. (2016). Understanding and promoting effective engagement with digital behavior change interventions. *American Journal of Preventive Medicine*, 51(5), 833–842.
+
+[6] Voth, E. C., Oelke, N. D., & Jung, M. E. (2016). A theory-based exercise app to enhance exercise adherence: A pilot study. *JMIR mHealth and uHealth*, 4(2), e62.
