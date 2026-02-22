@@ -131,7 +131,7 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
   const nextCheckStr = nextCheck.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   const panel = (
-    <div className="scp-overlay" onClick={onClose}>
+    <div className="scp-overlay" onClick={(e) => e.stopPropagation()}>
       <div className="scp-panel" onClick={e => e.stopPropagation()}>
 
         {/* ── Header ── */}

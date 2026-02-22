@@ -182,7 +182,7 @@ export const AgentChatModal: React.FC<AgentChatModalProps> = ({
     }, [agents]);
 
     const modal = (
-        <div className="dm-overlay" onClick={onClose}>
+        <div className="dm-overlay" onClick={(e) => e.stopPropagation()}>
             <div className="dm-container" onClick={e => e.stopPropagation()}>
                 {/* Agent List Sidebar */}
                 <div className={`dm-sidebar ${selectedAgent ? 'dm-sidebar-hidden-mobile' : ''}`}>
