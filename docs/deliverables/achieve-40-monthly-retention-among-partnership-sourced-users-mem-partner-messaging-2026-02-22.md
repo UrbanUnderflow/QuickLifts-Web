@@ -49,6 +49,9 @@ Paid channels can spike numbers, but they rarely generate this kind of belonging
 - **In-product banner/CTA:**
   > Invite your community into this block on Pulse and turn first‑week hype into a month‑long habit.
 
+- **Co-branded value line:**
+  > *On Running × Pulse* makes sure runners who show up for this block are still logging base miles with you 30 days—and many seasons—later.
+
 ### For Gyms
 
 - **Email opener:**
@@ -60,6 +63,9 @@ Paid channels can spike numbers, but they rarely generate this kind of belonging
 - **In-product banner/CTA:**
   > Point your next intake or challenge to this Pulse round and give new members a 30‑day path they’ll actually finish.
 
+- **Co-branded value line:**
+  > *Ironworks Strength Club × Pulse* turns day‑one signups into members still training with your coaches—on and off the floor—after the first month.
+
 ### For Run Clubs
 
 - **Email opener:**
@@ -70,3 +76,6 @@ Paid channels can spike numbers, but they rarely generate this kind of belonging
 
 - **In-product banner/CTA:**
   > Set this block as your club’s official Pulse round and make it easy for new faces to still be with you a month from now.
+
+- **Co-branded value line:**
+  > *Midnight Track Club × Pulse* helps the runners who show up for week one of this cycle still be on the line with you 30 days later—and ready for the next block.
