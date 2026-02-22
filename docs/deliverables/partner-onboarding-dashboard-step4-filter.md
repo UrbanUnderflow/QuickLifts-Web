@@ -130,4 +130,38 @@ The output confirms that:
 - `filteredPartners` is derived by calling `filterPartnersByType(partners, typeFilter)` and is the only array passed into `PartnerOnboardingTable`.
 - The `<select>` control options match the `PartnerType` union (`brand`, `gym`, `runClub`) plus the `all` sentinel.
 
+For a quick, code-only sanity check of the filter logic without React or Firestore, you can also run:
+
+```bash
+cd /Users/noraclawdbot/Documents/GitHub/QuickLifts-Web
+node - << 'EOF'
+  const partners = [
+    { id: '1', name: 'brand@example.com', type: 'brand', onboardingStage: 'active' },
+    { id: '2', name: 'gym@example.com', type: 'gym', onboardingStage: 'active' },
+    { id: '3', name: 'run@example.com', type: 'runClub', onboardingStage: 'invited' },
+  ];
+
+  const filterPartnersByType = (rows, filter) => {
+    if (filter === 'all') return rows;
+    return rows.filter((p) => p.type === filter);
+  };
+
+  console.log('All:', filterPartnersByType(partners, 'all').map((p) => p.id));
+  console.log('Brand:', filterPartnersByType(partners, 'brand').map((p) => p.id));
+  console.log('Gym:', filterPartnersByType(partners, 'gym').map((p) => p.id));
+  console.log('Run Club:', filterPartnersByType(partners, 'runClub').map((p) => p.id));
+EOF
+```
+
+Expected output:
+
+```text
+All: [ '1', '2', '3' ]
+Brand: [ '1' ]
+Gym: [ '2' ]
+Run Club: [ '3' ]
+```
+
+If this script produces different IDs for a given filter value, the semantics of `filterPartnersByType` should be rechecked before relying on the dashboard filter.
+
 This ties the doc to the live code so future changes can be re-checked with the same command.
