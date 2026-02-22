@@ -190,6 +190,14 @@ With dev server running and an admin user signed in:
 
 Once this checklist passes, the partner onboarding dashboard can be treated as verified for the current scope.
 
+## 7. Runtime verification runbook
+
+For a detailed, step-by-step procedure to verify Step 6 in a live dev environment (including seeding test partners via Firebase Admin and walking the UI), see:
+
+- `docs/deliverables/partner-onboarding-dashboard-step6-runtime-verification.md`
+
+Use that runbook in conjunction with this checklist when performing final QA.
+
 ## 7. Agent-run verification log (2026-02-22)
 
 **Commands run**
