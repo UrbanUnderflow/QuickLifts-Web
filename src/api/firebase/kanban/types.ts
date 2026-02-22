@@ -49,10 +49,18 @@ export function normalizeKanbanColor(color: unknown): KanbanColor {
   return colorAliases[color.trim().toLowerCase()] || 'blue';
 }
 
+export type SubtaskStatus = 'not_started' | 'in_progress' | 'blocked' | 'achieved';
+
 export interface Subtask {
   id: string;
   title: string;
   completed: boolean;
+  status?: SubtaskStatus;
+  evidence?: string;          // URL or description proving completion
+  blockerReason?: string;     // why it's blocked
+  reviewRequired?: boolean;   // human gate — needs sign-off before "achieved"
+  reviewedAt?: Date;          // when human approved
+  reviewDeniedReason?: string; // why human denied (if applicable)
   createdAt: Date;
 }
 
@@ -67,6 +75,7 @@ export interface KanbanTaskData {
   lane: KanbanLane;
   color: KanbanColor;
   objectiveCode: string;
+  northStarObjective?: string;
   actOne: string;
   actTwo: string;
   actThree: string;
@@ -89,6 +98,7 @@ export class KanbanTask {
   lane: KanbanLane;
   color: KanbanColor;
   objectiveCode: string;
+  northStarObjective: string;
   actOne: string;
   actTwo: string;
   actThree: string;
@@ -110,13 +120,18 @@ export class KanbanTask {
     this.lane = normalizeKanbanLane(data.lane);
     this.color = normalizeKanbanColor(data.color);
     this.objectiveCode = data.objectiveCode || '';
+    this.northStarObjective = data.northStarObjective || '';
     this.actOne = data.actOne || '';
     this.actTwo = data.actTwo || '';
     this.actThree = data.actThree || '';
     this.lastWorkBeatAt = data.lastWorkBeatAt || data.updatedAt || new Date();
     this.idleThresholdMinutes = typeof data.idleThresholdMinutes === 'number' ? data.idleThresholdMinutes : 120;
     this.notes = data.notes || '';
-    this.subtasks = data.subtasks || [];
+    this.subtasks = (data.subtasks || []).map((s: any) => ({
+      ...s,
+      status: s.status || (s.completed ? 'achieved' : 'not_started'),
+      createdAt: s.createdAt instanceof Date ? s.createdAt : new Date(s.createdAt || Date.now()),
+    }));
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || new Date();
   }
@@ -151,6 +166,7 @@ export class KanbanTask {
       lane: this.lane,
       color: this.color,
       objectiveCode: this.objectiveCode,
+      northStarObjective: this.northStarObjective,
       actOne: this.actOne,
       actTwo: this.actTwo,
       actThree: this.actThree,
@@ -170,6 +186,7 @@ export class KanbanTask {
       notes: data.notes || '',
       subtasks: data.subtasks || [],
       objectiveCode: data.objectiveCode || '',
+      northStarObjective: data.northStarObjective || data.focusObjective || '',
       actOne: data.actOne || '',
       actTwo: data.actTwo || '',
       actThree: data.actThree || '',
