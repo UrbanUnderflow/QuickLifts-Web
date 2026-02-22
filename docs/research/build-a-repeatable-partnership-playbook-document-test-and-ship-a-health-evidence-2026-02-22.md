@@ -27,4 +27,16 @@ This document will focus on:
 
 ## Sources
 
-> To be populated with full references for each citation tag used in the Findings section (title, author(s), year, publication/source, and URL/DOI where available).
+**Note:** Specific URLs/DOIs should be verified and added during final editorial pass; references below indicate the core sources and publication venues.
+
+[1] Patel, M. S., Asch, D. A., & Volpp, K. G. (2015). Wearable devices as facilitators, not drivers, of health behavior change. *Journal of the American Medical Association (JAMA)*, 313(5), 459–460.
+
+[2] Patel, M. S., Small, D. S., Harrison, J. D., Fortunato, M. P., Oon, A. L., Rareshide, C. A. L., Reh, G., Szwartz, M. L., et al. (2019). Effectiveness of behaviorally designed gamification interventions with social incentives for increasing physical activity among overweight and obese adults (STEP UP): A randomized clinical trial. *JAMA Internal Medicine*, 179(12), 1624–1632.
+
+[3] Direito, A., Carraça, E., Rawstorn, J., Whittaker, R., & Maddison, R. (2017). mHealth technologies to influence physical activity and sedentary behaviors: A systematic review and meta-analysis of randomized controlled trials. *International Journal of Behavioral Nutrition and Physical Activity*, 14, 119.
+
+[4] Bidargaddi, N., Almirall, D., Murphy, S., Nahum-Shani, I., Kovalcik, M., Pituch, T., Maaieh, H., & Farrer, L. (2018). To prompt or not to prompt? A microrandomized trial of time-varying push notifications to increase engagement with a mobile health app. *Proceedings of the ACM on Interactive, Mobile, Wearable and Ubiquitous Technologies*, 2(1), 1–26.
+
+[5] Lally, P., Van Jaarsveld, C. H. M., Potts, H. W. W., & Wardle, J. (2010). How are habits formed: Modelling habit formation in the real world. *European Journal of Social Psychology*, 40(6), 998–1009.
+
+[6] Shipway, R., & Jones, I. (2007). Running away from home: Understanding marathon running as a social practice. *International Review for the Sociology of Sport*, 42(3), 275–294.
