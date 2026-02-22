@@ -155,6 +155,9 @@ const S = {
     padding: '20px 24px 14px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
     borderBottom: '1px solid rgba(255,255,255,0.06)',
   } as CSSProperties,
+  headerActions: {
+    display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+  } as CSSProperties,
   title: { fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: '-0.02em' } as CSSProperties,
   subtitle: { fontSize: 13, color: '#6b7280', margin: '3px 0 0' } as CSSProperties,
   closeBtn: {
@@ -162,6 +165,23 @@ const S = {
     border: '1px solid rgba(255,255,255,0.08)', color: '#6b7280', display: 'flex',
     alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
   } as CSSProperties,
+  copyIconBtn: (state: CopyState): CSSProperties => ({
+    width: 34,
+    height: 34,
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    border: '1px solid rgba(255,255,255,0.08)',
+    background:
+      state === 'copied'
+        ? 'rgba(34,197,94,0.15)'
+        : state === 'error'
+          ? 'rgba(248,113,113,0.15)'
+          : 'rgba(255,255,255,0.04)',
+    color: state === 'copied' ? '#4ade80' : state === 'error' ? '#f87171' : '#9ca3af',
+  }),
   tabs: {
     display: 'flex', alignItems: 'center', gap: 0, padding: '0 24px',
     borderBottom: '1px solid rgba(255,255,255,0.06)',
@@ -179,25 +199,6 @@ const S = {
     display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', fontSize: 13, fontWeight: 600,
     background: open ? 'rgba(255,255,255,0.06)' : 'linear-gradient(135deg, #1d9bf0, #1a8cd8)',
     color: open ? '#6b7280' : 'white', border: 'none', borderRadius: 20, cursor: 'pointer', marginLeft: 'auto', margin: '6px 0 6px auto',
-  }),
-  copyBtn: (state: CopyState): CSSProperties => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '7px 14px',
-    fontSize: 12,
-    fontWeight: 600,
-    background:
-      state === 'copied'
-        ? 'rgba(34,197,94,0.15)'
-        : state === 'error'
-          ? 'rgba(248,113,113,0.15)'
-          : 'rgba(255,255,255,0.04)',
-    color: state === 'copied' ? '#4ade80' : state === 'error' ? '#f87171' : '#9ca3af',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: 20,
-    cursor: 'pointer',
-    margin: '6px 8px 6px auto',
   }),
   content: { flex: 1, overflowY: 'auto', overflowX: 'hidden' } as CSSProperties,
   // Card styles
@@ -752,7 +753,33 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
             <h2 style={S.title}>Heartbeat Feed</h2>
             <p style={S.subtitle}>Events, nudges, and team progress — all in one stream</p>
           </div>
-          <button style={S.closeBtn} onClick={onClose}><X size={18} /></button>
+          <div style={S.headerActions}>
+            <button
+              style={S.copyIconBtn(copyState)}
+              onClick={() => { void handleCopyTimeline(); }}
+              title={
+                copyState === 'copied'
+                  ? 'Copied'
+                  : copyState === 'error'
+                    ? 'Copy failed'
+                    : activeTab === 'feed'
+                      ? 'Copy loaded events'
+                      : 'Copy health snapshots'
+              }
+              aria-label={
+                copyState === 'copied'
+                  ? 'Copied'
+                  : copyState === 'error'
+                    ? 'Copy failed'
+                    : activeTab === 'feed'
+                      ? 'Copy loaded events'
+                      : 'Copy health snapshots'
+              }
+            >
+              <Copy size={15} />
+            </button>
+            <button style={S.closeBtn} onClick={onClose}><X size={18} /></button>
+          </div>
         </div>
 
         {/* ── Tabs ── */}
@@ -764,14 +791,6 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
           <button style={S.tab(activeTab === 'snapshots')} onClick={() => setActiveTab('snapshots')}>
             <Clock size={14} /> Health Snapshot
             {filteredSnapshots.length > 0 && <span style={S.tabCount}>{filteredSnapshots.length}</span>}
-          </button>
-          <button
-            style={S.copyBtn(copyState)}
-            onClick={() => { void handleCopyTimeline(); }}
-            title={activeTab === 'feed' ? 'Copy loaded events' : 'Copy health snapshots'}
-          >
-            <Copy size={13} />
-            {copyState === 'copied' ? 'Copied' : copyState === 'error' ? 'Copy failed' : activeTab === 'feed' ? 'Copy Events' : 'Copy Health Snapshot'}
           </button>
           <button style={S.composeToggle(composerOpen)} onClick={() => setComposerOpen(!composerOpen)}>
             <Send size={14} /> Post Beat
