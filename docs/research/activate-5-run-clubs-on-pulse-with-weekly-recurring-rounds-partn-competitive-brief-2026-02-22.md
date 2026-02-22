@@ -45,7 +45,20 @@
 
 ## Pulse Opportunities
 
-_(To be populated with differentiated opportunities for Pulse based on observed gaps.)_
+### 1. Centralized Run Story + Attendance Layer for Fragmented Stacks
+- **Observed gaps:** Nike Run Club, November Project, Black Girls RUN!, and Midnight Runners all rely on a patchwork of tools (apps + IG + FB + custom sites), which fragments the "story" of the run and makes it hard to see who is actually showing up week after week. [Unverified]
+- **Pulse opportunity:** Offer clubs a single Pulse round per week that acts as the canonical record of who showed up, what the session was, and what content came out of it — integrating run logging, simple attendance, and post-run media in one place.
+- **Why this matters:** Gives clubs a longitudinal view of member consistency (who’s truly core) without forcing them to abandon their existing surface-level social channels; aligns with Pulse’s focus on performance + community rather than just RSVP counts.
+
+### 2. Programmed Weekly Rituals Instead of Ad-hoc Event Listings
+- **Observed gaps:** GoodGym has structured events but focuses more on task/volunteering; other clubs (NP, Midnight Runners) list workouts but don’t expose a programmable curriculum or clear progression for members inside their digital surfaces. [Unverified]
+- **Pulse opportunity:** Position Pulse rounds as a programmable weekly ritual (e.g., "Tempo Tuesday", "Hill Thursday") with repeatable templates, built-in prompts, and progression tracking that clubs can reuse across seasons.
+- **Why this matters:** Turns loosely-defined "weekly runs" into recurring rituals with a memory — letting clubs brand and repeat formats while Pulse tracks both performance progression and adherence over time.
+
+### 3. Structured Creator Content Capture Around Each Run
+- **Observed gaps:** All five examples lean heavily on IG/FB for photos and hype, but content capture is manual, inconsistent, and not tied back to specific sessions or performance outcomes. [Unverified]
+- **Pulse opportunity:** Build each weekly Pulse round as a content engine: pre-run storytelling prompt (why this route/effort), in-run capture moments (e.g., a shared photo cue), and post-run reflection prompts that club leaders can easily re-share on social from a single recap view.
+- **Why this matters:** Aligns directly with Pulse’s goal to generate organic creator content from run clubs — and gives partner brands a clearer way to see not just impressions, but the depth of the community’s rituals and effort from week to week.
 
 ## Recommended Test
 
