@@ -155,16 +155,16 @@ const firestoreCollections: DataCollection[] = [
     },
     {
         name: 'progress-timeline',
-        purpose: 'The Activity Feed. All beats, nudges, and signal-spikes from all agents.',
+        purpose: 'The Heartbeat Feed. All events, nudges, and signal-spikes from all agents.',
         writtenBy: 'Agent Runner postBeat(), Telemetry Check, Nora task manager',
         readBy: 'Virtual Office Progress Timeline UI',
         fields: ['agentId', 'agentName', 'beat', 'headline', 'confidenceColor', 'artifactText', 'createdAt'],
     },
     {
         name: 'progress-snapshots',
-        purpose: 'Hourly health snapshots per agent. Powers the Snapshots tab in the Activity Feed.',
+        purpose: 'Hourly Health Snapshot entries per agent. Powers the Health Snapshot view in the Heartbeat Feed.',
         writtenBy: 'Agent Runner (once per calendar hour)',
-        readBy: 'Virtual Office Snapshots UI',
+        readBy: 'Virtual Office Health Snapshot view',
         fields: ['hourIso', 'agentId', 'objectiveCode', 'color', 'stateTag', 'note'],
     },
     {
@@ -297,7 +297,7 @@ export default function HeartbeatProtocolTab() {
                     { title: 'Telemetry Check', value: 'Hourly', icon: <Clock className="w-5 h-5" />, tone: 'from-indigo-500/30 to-indigo-300/10', caption: 'Replaces daily standups' },
                     { title: 'Work Unit', value: 'Capsule', icon: <Layers className="w-5 h-5" />, tone: 'from-violet-500/30 to-violet-300/10', caption: 'Self-contained tasks' },
                     { title: 'Alignment', value: 'North Star', icon: <Target className="w-5 h-5" />, tone: 'from-amber-500/30 to-amber-300/10', caption: 'All work flows from this' },
-                    { title: 'Activity Feed', value: 'Beats', icon: <Activity className="w-5 h-5" />, tone: 'from-green-500/30 to-green-300/10', caption: 'Real-time progress stream' },
+                    { title: 'Heartbeat Feed', value: 'Events', icon: <Activity className="w-5 h-5" />, tone: 'from-green-500/30 to-green-300/10', caption: 'Real-time progress stream' },
                 ].map((card) => (
                     <div key={card.title} className={`bg-gradient-to-br ${card.tone} border border-white/5 rounded-2xl p-4 flex items-center justify-between`}>
                         <div>
@@ -418,7 +418,7 @@ export default function HeartbeatProtocolTab() {
                     <div className="space-y-3">
                         {[
                             { id: 'virtual-office', name: 'Virtual Office', purpose: 'The real-time command center showing all agents, their status, current tasks, and the round table animation. Agents animate between desks and meeting table during telemetry checks. This is the primary admin interface for monitoring the agent workforce.', path: 'src/components/virtualOffice/VirtualOfficeContent.tsx', reads: 'agent-presence, agent-group-chats', color: 'blue' },
-                            { id: 'progress-timeline-ui', name: 'Progress Timeline', purpose: 'The Activity Feed — a real-time stream of beats from all agents. Shows work-in-flight updates, completions, failures, and signal-spike discoveries. Each beat includes the agent name, headline, confidence color, and optional artifact text.', path: 'src/components/virtualOffice/ProgressTimeline.tsx', reads: 'progress-timeline, progress-snapshots', color: 'blue' },
+                            { id: 'progress-timeline-ui', name: 'Progress Timeline', purpose: 'The Heartbeat Feed — a real-time stream of events from all agents. Shows work-in-flight updates, completions, failures, and signal-spike discoveries. Each event includes the agent name, headline, confidence color, and optional artifact text.', path: 'src/components/virtualOffice/ProgressTimeline.tsx', reads: 'progress-timeline, progress-snapshots', color: 'blue' },
                             { id: 'kanban-board', name: 'Kanban Board', purpose: 'Visual board of Capsules (tasks) organized by status: To Do, In Progress, Done, Blocked. Admins can manually create tasks, reassign agents, or adjust priorities. The board is synced with Firestore in real-time.', path: 'src/components/virtualOffice/ (Kanban section)', reads: 'kanbanTasks', color: 'blue' },
                             { id: 'filing-cabinet', name: 'Filing Cabinet', purpose: 'Archive of all telemetry check meeting minutes. Each entry shows the executive summary, participating agents, duration, and key highlights. Opens in a modal with full conversation details.', path: 'src/components/virtualOffice/FilingCabinet.tsx', reads: 'meeting-minutes', color: 'blue' },
                             { id: 'north-star-editor', name: 'North Star Editor', purpose: 'Admin UI for setting the company\'s strategic direction. The North Star has a title, description, and a list of key objectives. All autonomous task generation (Capsules) is aligned to whatever is set here. Changing the North Star immediately shifts what agents work on.', path: 'Virtual Office ⭐ button', reads: 'company-config/north-star', color: 'blue' },
@@ -443,8 +443,8 @@ export default function HeartbeatProtocolTab() {
                     </p>
                     <div className="space-y-3">
                         {[
-                            { id: 'agent-runner', name: 'Agent Runner ×4', purpose: 'The brain of each agent. Runs as a long-lived Node.js process on the Mac Mini. Polls kanbanTasks for assigned work, decomposes tasks into steps, executes each step via the OpenClaw engine, posts beats to the Activity Feed on every milestone, and manages idle self-assignment. Each agent (Nora, Scout, Solara, Sage) runs its own instance with role-specific behavior.', path: 'scripts/agentRunner.js', reads: 'kanbanTasks, agent-presence, progress-timeline', color: 'green' },
-                            { id: 'telemetry-check', name: 'Telemetry Check', purpose: 'The group coordination script. Creates a Firestore group chat session, runs 3 conversation rounds where agents report status, assigns North Star-aligned Capsules to idle agents, saves meeting minutes to the Filing Cabinet, and posts a summary beat to the Activity Feed. Replaces traditional daily standups.', path: 'scripts/dailyStandup.js', reads: 'agent-group-chats, standup-config, company-config', color: 'green' },
+                            { id: 'agent-runner', name: 'Agent Runner ×4', purpose: 'The brain of each agent. Runs as a long-lived Node.js process on the Mac Mini. Polls kanbanTasks for assigned work, decomposes tasks into steps, executes each step via the OpenClaw engine, posts events to the Heartbeat Feed on every milestone, and manages idle self-assignment. Each agent (Nora, Scout, Solara, Sage) runs its own instance with role-specific behavior.', path: 'scripts/agentRunner.js', reads: 'kanbanTasks, agent-presence, progress-timeline', color: 'green' },
+                            { id: 'telemetry-check', name: 'Telemetry Check', purpose: 'The group coordination script. Creates a Firestore group chat session, runs 3 conversation rounds where agents report status, assigns North Star-aligned Capsules to idle agents, saves meeting minutes to the Filing Cabinet, and posts a summary event to the Heartbeat Feed. Replaces traditional daily standups.', path: 'scripts/dailyStandup.js', reads: 'agent-group-chats, standup-config, company-config', color: 'green' },
                             { id: 'trigger-api', name: 'Trigger API', purpose: 'The HTTP bridge. A Next.js API endpoint that spawns dailyStandup.js as a child process when the "Run Telemetry Check" button is clicked in the Virtual Office. Handles authentication and passes the check type (morning/evening).', path: 'pages/api/agent/trigger-standup.ts', reads: 'N/A (triggers script)', color: 'green' },
                             { id: 'openclaw', name: 'OpenClaw Engine', purpose: 'The AI execution runtime. A custom engine that wraps LLM API calls with tool use, file system access, and git integration. Agent Runners delegate step execution to OpenClaw, which produces outputs (code changes, research docs, analyses) that the runner then validates and commits.', path: 'External dependency', reads: 'N/A (called by Agent Runner)', color: 'purple' },
                         ].map((item) => (
@@ -470,8 +470,8 @@ export default function HeartbeatProtocolTab() {
                         {[
                             { id: 'agent-presence', name: 'agent-presence', purpose: 'Real-time agent status and heartbeat data. Each agent writes to their document every 30 seconds with current status (idle/working/meeting), current task name, task progress percentage, and a timestamp. The Virtual Office reads this in real-time to show agent positions and activity.', writtenBy: 'Agent Runner', readBy: 'Virtual Office UI' },
                             { id: 'kanbanTasks', name: 'kanbanTasks', purpose: 'The task queue. Contains all Capsules (work items) with their assignee, status (todo/in-progress/done/blocked), description, priority, and source (manual, telemetry-auto-assign, self-assigned). Agent Runners poll this to find work.', writtenBy: 'Telemetry Check, Nora sweep, Admin UI', readBy: 'Agent Runner, Kanban Board UI' },
-                            { id: 'progress-timeline', name: 'progress-timeline', purpose: 'The Activity Feed\'s data source. Each document is a "beat" — an atomic update from an agent. Contains the beat type (hypothesis, work-in-flight, result, block, signal-spike), headline, optional artifact text, confidence color, and timestamp.', writtenBy: 'Agent Runner postBeat()', readBy: 'Progress Timeline UI' },
-                            { id: 'progress-snapshots', name: 'progress-snapshots', purpose: 'Hourly health check snapshots. Each agent writes one document per calendar hour summarizing their state: what objective they were on, their health color, stateTag, and a brief note. Powers the Snapshots tab in the Activity Feed.', writtenBy: 'Agent Runner (hourly)', readBy: 'Snapshots UI tab' },
+                            { id: 'progress-timeline', name: 'progress-timeline', purpose: 'The Heartbeat Feed data source. Each document is an event — an atomic update from an agent. Contains the beat type (hypothesis, work-in-flight, result, block, signal-spike), headline, optional artifact text, confidence color, and timestamp.', writtenBy: 'Agent Runner postBeat()', readBy: 'Progress Timeline UI' },
+                            { id: 'progress-snapshots', name: 'progress-snapshots', purpose: 'Hourly Health Snapshot entries. Each agent writes one document per calendar hour summarizing their state: what objective they were on, their health color, stateTag, and a brief note. Powers the Health Snapshot tab in the Heartbeat Feed.', writtenBy: 'Agent Runner (hourly)', readBy: 'Health Snapshot UI tab' },
                             { id: 'agent-group-chats', name: 'agent-group-chats', purpose: 'Group conversation sessions. Created when a telemetry check starts. Contains participant list, session metadata, status (open/closed), and a messages subcollection with each round\'s prompt and responses. The Virtual Office listens for new sessions to trigger the round table animation.', writtenBy: 'Telemetry Check script', readBy: 'Virtual Office, GroupChatModal' },
                             { id: 'meeting-minutes', name: 'meeting-minutes', purpose: 'Archived summaries of completed telemetry checks. Each document contains an executive summary, agent highlights, duration, participant list, and the session\'s chat ID. Displayed in the Filing Cabinet drawer.', writtenBy: 'Telemetry Check (post-session)', readBy: 'Filing Cabinet UI' },
                             { id: 'company-config', name: 'company-config', purpose: 'Company-level configuration. The north-star sub-document holds the strategic goal (title, description, objectives array) that drives all autonomous Capsule generation. Changing this immediately redirects what all agents work on.', writtenBy: 'Admin UI (North Star Editor)', readBy: 'Telemetry Check, Agent Runner' },
@@ -511,7 +511,7 @@ export default function HeartbeatProtocolTab() {
             <Collapsible title="Beat Types & Timeline Activity" icon={<Activity className="w-5 h-5 text-violet-300" />}>
                 <div className="mt-4 space-y-3">
                     <p className="text-sm text-zinc-400 mb-4">
-                        Beats are the atomic unit of the Activity Feed. Each beat represents a meaningful moment in an agent&apos;s work.
+                        Events are the atomic unit of the Heartbeat Feed. Each event represents a meaningful moment in an agent&apos;s work.
                     </p>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
