@@ -12,18 +12,18 @@ Use the existing Firestore client in `web/app/partners/dashboard.tsx` to load al
 
 ## Implementation
 
-**File:** `web/app/partners/dashboard.tsx`
+**Page File:** `web/app/partners/dashboard.tsx`
 
 ```ts
 import { collection, getDocs } from "firebase/firestore";
 
 import { db } from "../../../src/api/firebase/config";
-import type { PartnerFirestoreData, PartnerType } from "../../../src/types/Partner";
-import { PartnerModel } from "../../../src/types/Partner";
+import type { PartnerType } from "../../../src/types/Partner";
 import {
   PartnerOnboardingTable,
   type PartnerRow,
 } from "../../components/partners/PartnerOnboardingTable";
+import { mapPartnersSnapshot } from "../../lib/partners/mapPartnersSnapshot";
 ```
 
 The `PartnerRow` type (defined in `web/components/partners/PartnerOnboardingTable.tsx`):
@@ -57,21 +57,7 @@ useEffect(() => {
       const snapshot = await getDocs(collection(db, "partners"));
       if (!isMounted) return;
 
-      const rows: PartnerRow[] = snapshot.docs.map((docSnap) => {
-        const raw = docSnap.data() as PartnerFirestoreData;
-        const model = new PartnerModel(docSnap.id, raw);
-
-        return {
-          id: model.id,
-          // TODO: replace with dedicated partner name once schema supports it; using
-          // contactEmail as a temporary display identifier.
-          name: model.contactEmail,
-          type: model.type,
-          onboardingStage: model.onboardingStage,
-          invitedAt: model.invitedAt,
-          firstRoundCreatedAt: model.firstRoundCreatedAt ?? null,
-        };
-      });
+      const rows: PartnerRow[] = mapPartnersSnapshot(snapshot);
 
       setPartners(rows);
     } catch (err) {
@@ -93,12 +79,43 @@ useEffect(() => {
 }, []);
 ```
 
+**Mapping helper:** `web/lib/partners/mapPartnersSnapshot.ts`
+
+```ts
+import type { QuerySnapshot, DocumentData } from "firebase/firestore";
+
+import type { PartnerFirestoreData } from "../../../src/types/Partner";
+import { PartnerModel } from "../../../src/types/Partner";
+import type { PartnerRow } from "../../components/partners/PartnerOnboardingTable";
+
+export function mapPartnersSnapshot(
+  snapshot: QuerySnapshot<DocumentData>
+): PartnerRow[] {
+  return snapshot.docs.map((docSnap) => {
+    const raw = docSnap.data() as PartnerFirestoreData;
+    const model = new PartnerModel(docSnap.id, raw);
+
+    return {
+      id: model.id,
+      // TODO: replace with dedicated partner name once schema supports it; using
+      // contactEmail as a temporary display identifier.
+      name: model.contactEmail,
+      type: model.type,
+      onboardingStage: model.onboardingStage,
+      invitedAt: model.invitedAt,
+      firstRoundCreatedAt: model.firstRoundCreatedAt ?? null,
+    };
+  });
+}
+```
+
 ## Verification Checklist
 
 - [x] Uses existing client: `db` from `src/api/firebase/config` + `getDocs` and `collection` from `firebase/firestore`.
 - [x] Reads from `collection(db, "partners")`.
-- [x] Maps each document through `PartnerModel` so Firestore timestamps become `Date` instances.
-- [x] Produces a `PartnerRow[]` with exactly the required fields: `id`, `name`, `type`, `onboardingStage`, `invitedAt`, `firstRoundCreatedAt`.
+- [x] Delegates all Firestore → `PartnerRow` mapping to `mapPartnersSnapshot(snapshot)`.
+- [x] `mapPartnersSnapshot` maps each document through `PartnerModel` so Firestore timestamps become `Date` instances.
+- [x] Mapping produces a `PartnerRow[]` with exactly the required fields: `id`, `name`, `type`, `onboardingStage`, `invitedAt`, `firstRoundCreatedAt`.
 - [x] Error and loading state are handled (user feedback on failure).
 
 ## Agent-run static check (2026-02-22)
