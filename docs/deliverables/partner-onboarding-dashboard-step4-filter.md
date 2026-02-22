@@ -110,3 +110,20 @@ With at least three partners in Firestore (one per type: `brand`, `gym`, `runClu
    - Table shows all partners again; summary no longer includes `for type ...` suffix.
 
 Once these scenarios pass, Step 4 (type-based filtering before table rendering) can be treated as verified.
+
+## Agent-run static check (2026-02-22)
+
+As an additional non-runtime sanity check, the implementation above was validated directly from the source file:
+
+```bash
+cd /Users/noraclawdbot/Documents/GitHub/QuickLifts-Web
+sed -n '80,180p' web/app/partners/dashboard.tsx
+```
+
+The output confirms that:
+
+- `typeFilter` is declared as `PartnerType | "all"` and initialized to `"all"`.
+- `filteredPartners` is the only array passed into `PartnerOnboardingTable`.
+- The `<select>` control options match the `PartnerType` union (`brand`, `gym`, `runClub`) plus the `all` sentinel.
+
+This ties the doc to the live code so future changes can be re-checked with the same command.
