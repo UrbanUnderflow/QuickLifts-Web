@@ -206,7 +206,8 @@ const deriveMovementSignals = (d: Deliverable) => {
   const clampedScore = Math.min(7, Math.max(1, score));
   const deliveryClass = resolveDeliveryClass(clampedScore, text, filePath);
   const impactLabel = clampedScore >= 6 ? 'High' : clampedScore >= 4 ? 'Medium' : clampedScore >= 2 ? 'Low' : 'Minimal';
-  const impactToneClass = clampedScore >= 6 ? 'high' : clampedScore >= 4 ? 'high' : clampedScore >= 2 ? 'medium' : 'low';
+  const impactToneClass: 'low' | 'medium' | 'high' =
+    clampedScore >= 6 ? 'high' : clampedScore >= 4 ? 'high' : clampedScore >= 2 ? 'medium' : 'low';
 
   const classLabel = deliveryClass === 'decision-grade'
     ? 'Decision Grade'
