@@ -7,6 +7,7 @@ import { db } from '../../api/firebase/config';
 import { progressTimelineService } from '../../api/firebase/progressTimeline/service';
 import { kanbanService } from '../../api/firebase/kanban/service';
 import { nudgeLogService } from '../../api/firebase/nudgeLog/service';
+import { KanbanTask } from '../../api/firebase/kanban/types';
 import {
   ProgressTimelineEntry,
   ProgressBeat,
@@ -21,7 +22,7 @@ import {
 import {
   X, Send, ChevronDown, ChevronUp,
   Lightbulb, Rocket, CheckCircle2, AlertTriangle, TrendingUp,
-  Zap, Clock, Link2, MessageCircle, Activity, ExternalLink, Copy,
+  Zap, Clock, Link2, MessageCircle, Activity, ExternalLink, Copy, Target, ListChecks,
 } from 'lucide-react';
 
 /* ── Props ── */
@@ -79,20 +80,6 @@ const normalizeObjectiveCode = (value?: string): string => {
   return normalized;
 };
 
-const prettifyObjectiveCode = (code?: string): string => {
-  const normalized = normalizeObjectiveCode(code);
-  if (!normalized) return '';
-
-  return normalized
-    .toLowerCase()
-    .replace(/[-_]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
-    .join(' ');
-};
-
 const sanitizeRecordedFilePath = (rawPath?: string): string => {
   if (!rawPath) return '';
   let next = rawPath.trim();
@@ -133,8 +120,26 @@ type FeedItem =
   | { id: string; type: 'beat'; createdAt: number; payload: ProgressTimelineEntry }
   | { id: string; type: 'nudge'; createdAt: number; payload: NudgeLogEntry };
 
-type TabKey = 'feed' | 'snapshots';
+type ObjectiveProgressItem =
+  | { type: 'beat'; id: string; createdAt: number; payload: ProgressTimelineEntry }
+  | { type: 'nudge'; id: string; createdAt: number; payload: NudgeLogEntry };
+
+type ObjectiveProgressGroup = {
+  code: string;
+  label: string;
+  taskCount: number;
+  doneCount: number;
+  inProgressCount: number;
+  todoCount: number;
+  completionPercent: number;
+  objectiveTasks: KanbanTask[];
+  recentItems: ObjectiveProgressItem[];
+  lastEventAt: number;
+};
+
+type TabKey = 'feed' | 'snapshots' | 'objectives';
 type CopyState = 'idle' | 'copied' | 'error';
+const UNLABELED_OBJECTIVE_LABEL = 'Strategic Objective';
 
 const FEED_BEAT_LIMIT = 200;
 const FEED_NUDGE_LIMIT = 80;
@@ -301,6 +306,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   const [entries, setEntries] = useState<ProgressTimelineEntry[]>([]);
   const [snapshots, setSnapshots] = useState<HourlySnapshotEntry[]>([]);
   const [nudges, setNudges] = useState<NudgeLogEntry[]>([]);
+  const [objectiveTasks, setObjectiveTasks] = useState<KanbanTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>('feed');
   const [objectiveLabelByCode, setObjectiveLabelByCode] = useState<Record<string, string>>({});
@@ -340,7 +346,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
     const u3 = nudgeLogService.listen((items) => setNudges(items), { limit: FEED_NUDGE_LIMIT });
     let active = true;
 
-    const hydrateObjectiveLabels = async () => {
+      const hydrateObjectiveLabels = async () => {
       try {
         const tasks = await kanbanService.fetchAllTasks();
         const labels: Record<string, string> = {};
@@ -352,8 +358,10 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
           if (!code || !name) return;
           if (!labels[code]) labels[code] = name;
         });
-
-        if (active) setObjectiveLabelByCode(labels);
+        if (active) {
+          setObjectiveTasks(tasks);
+          setObjectiveLabelByCode(labels);
+        }
       } catch (error) {
         console.error('Failed to hydrate objective labels from kanban tasks', error);
       }
@@ -372,10 +380,99 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   const resolveObjectiveLabel = (rawCode: string): string => {
     const code = normalizeObjectiveCode(rawCode);
     if (!code) return '';
-    return objectiveLabelByCode[code] || prettifyObjectiveCode(code);
+    return objectiveLabelByCode[code] || '';
+  };
+
+  const resolveObjectiveDisplayLabel = (rawCode: string, fallback = ''): string => {
+    const directLabel = resolveObjectiveLabel(rawCode);
+    if (directLabel) return directLabel;
+    return fallback;
   };
 
   const feedTabCountTitle = `Showing ${feedItems.length} items (${entries.length} beats + ${nudges.length} nudges). Limits: ${FEED_BEAT_LIMIT} beats, ${FEED_NUDGE_LIMIT} nudges.`;
+
+  const objectiveProgressGroups = useMemo<ObjectiveProgressGroup[]>(() => {
+    const groups = new Map<string, ObjectiveProgressGroup>();
+
+    const ensureGroup = (code: string) => {
+      const existing = groups.get(code);
+      if (existing) return existing;
+
+      const label = resolveObjectiveDisplayLabel(code, UNLABELED_OBJECTIVE_LABEL);
+      const group: ObjectiveProgressGroup = {
+        code,
+        label,
+        taskCount: 0,
+        doneCount: 0,
+        inProgressCount: 0,
+        todoCount: 0,
+        completionPercent: 0,
+        objectiveTasks: [],
+        recentItems: [],
+        lastEventAt: 0,
+      };
+      groups.set(code, group);
+      return group;
+    };
+
+    objectiveTasks.forEach((task) => {
+      const code = normalizeObjectiveCode(task.objectiveCode);
+      if (!code) return;
+
+      const group = ensureGroup(code);
+      group.taskCount += 1;
+      if (task.status === 'done') group.doneCount += 1;
+      else if (task.status === 'in-progress') group.inProgressCount += 1;
+      else group.todoCount += 1;
+      group.objectiveTasks.push(task);
+      group.label = resolveObjectiveDisplayLabel(code, group.label);
+    });
+
+    filteredEntries.forEach((entry) => {
+      const code = normalizeObjectiveCode(entry.objectiveCode);
+      if (!code) return;
+      const group = ensureGroup(code);
+      const createdAt = entry.createdAt?.getTime?.() || 0;
+      group.recentItems.push({ type: 'beat', id: `b-${entry.id}`, createdAt, payload: entry });
+      if (createdAt > group.lastEventAt) {
+        group.lastEventAt = createdAt;
+      }
+    });
+
+    filteredNudges.forEach((entry) => {
+      const code = normalizeObjectiveCode(entry.objectiveCode);
+      if (!code) return;
+      const group = ensureGroup(code);
+      const createdAt = entry.createdAt?.getTime?.() || 0;
+      group.recentItems.push({ type: 'nudge', id: `n-${entry.id}`, createdAt, payload: entry });
+      if (createdAt > group.lastEventAt) {
+        group.lastEventAt = createdAt;
+      }
+    });
+
+    // Keep tasks with no events discoverable for progress visibility.
+    objectiveTasks.forEach((task) => {
+      const code = normalizeObjectiveCode(task.objectiveCode);
+      if (!code) return;
+      const group = ensureGroup(code);
+      if (!group.lastEventAt) {
+        const updated = task.updatedAt?.getTime?.() || task.createdAt?.getTime?.() || 0;
+        group.lastEventAt = updated;
+      }
+    });
+
+    groups.forEach((group) => {
+      const total = group.taskCount || 1;
+      group.completionPercent = Math.round((group.doneCount / total) * 100);
+      group.recentItems.sort((a, b) => b.createdAt - a.createdAt);
+      group.label = resolveObjectiveDisplayLabel(group.code, group.label);
+      if (!group.label) {
+        group.label = UNLABELED_OBJECTIVE_LABEL;
+      }
+    });
+
+    return [...groups.values()].sort((a, b) => b.lastEventAt - a.lastEventAt);
+  }, [filteredEntries, filteredNudges, objectiveTasks, objectiveLabelByCode]);
 
   const formatExportTimestamp = (value?: Date): string => {
     if (!value) return 'unknown-time';
@@ -453,6 +550,36 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
     return lines.join('\n').trim();
   };
 
+  const buildObjectiveProgressExportText = (): string => {
+    const lines: string[] = [
+      'Objective Progress export',
+      `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`,
+      `Objectives tracked: ${objectiveProgressGroups.length}`,
+      '',
+    ];
+
+    objectiveProgressGroups.forEach((group, index) => {
+      lines.push(
+        `[${index + 1}] ${group.label} | code:${group.code} | tasks: ${group.taskCount} (${group.doneCount} done, ${group.inProgressCount} in-progress, ${group.todoCount} todo) | completion ${group.completionPercent}%`
+      );
+      if (group.recentItems.length > 0) {
+        lines.push('  Recent events:');
+        group.recentItems.slice(0, 5).forEach((item) => {
+          if (item.type === 'beat') {
+            const beatItem = item.payload as ProgressTimelineEntry;
+            lines.push(`  - ${formatExportTimestamp(beatItem.createdAt)} beat:${beatItem.beat} | ${beatItem.agentName || beatItem.agentId || 'Unknown'} | ${beatItem.headline}`);
+          } else {
+            const nudgeItem = item.payload as NudgeLogEntry;
+            lines.push(`  - ${formatExportTimestamp(nudgeItem.createdAt)} nudge:${nudgeItem.outcome} | ${nudgeItem.agentName || nudgeItem.agentId || 'Unknown'} | ${nudgeItem.message}`);
+          }
+        });
+      }
+      lines.push('');
+    });
+
+    return lines.join('\n').trim();
+  };
+
   const copyTextToClipboard = async (text: string): Promise<boolean> => {
     if (!text) return false;
 
@@ -480,7 +607,11 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   };
 
   const handleCopyTimeline = async () => {
-    const exportText = activeTab === 'feed' ? buildFeedExportText() : buildSnapshotsExportText();
+    const exportText = activeTab === 'feed'
+      ? buildFeedExportText()
+      : activeTab === 'snapshots'
+        ? buildSnapshotsExportText()
+        : buildObjectiveProgressExportText();
     const copied = await copyTextToClipboard(exportText);
     setCopyState(copied ? 'copied' : 'error');
     setTimeout(() => setCopyState('idle'), 1600);
@@ -631,7 +762,9 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
           <div style={S.cardBody}>
             <div style={S.cardHeader}>
               <span style={S.name}>{entry.agentName}</span>
-              {entry.objectiveCode && <span style={S.objCode} title={entry.objectiveCode}>{resolveObjectiveLabel(entry.objectiveCode)}</span>}
+              {resolveObjectiveLabel(entry.objectiveCode) && (
+                <span style={S.objCode} title={resolveObjectiveLabel(entry.objectiveCode)}>{resolveObjectiveLabel(entry.objectiveCode)}</span>
+              )}
               <span style={S.dot}>·</span>
               <span style={S.time}>{timeAgo}</span>
             </div>
@@ -728,17 +861,104 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
 
     return (
       <div key={s.id} style={S.snapCard(cc.dot)}>
-        <div style={S.snapTop}>
+          <div style={S.snapTop}>
           <div style={S.avatar(color, 30)}>
             {s.agentName?.charAt(0)?.toUpperCase() || '?'}
           </div>
           <div>
             <span style={S.snapName}>{s.agentName || 'Agent'}</span>
-            {s.objectiveCode && <span style={S.snapCode} title={s.objectiveCode}>{resolveObjectiveLabel(s.objectiveCode)}</span>}
+            {resolveObjectiveLabel(s.objectiveCode) && (
+              <span style={S.snapCode} title={resolveObjectiveLabel(s.objectiveCode)}>{resolveObjectiveLabel(s.objectiveCode)}</span>
+            )}
           </div>
           <span style={S.snapTime}><Clock size={11} /> {timeLabel}</span>
         </div>
         <p style={S.snapNote}>{s.note || 'No note logged'}</p>
+      </div>
+    );
+  };
+
+  const renderObjectiveProgressCard = (group: ObjectiveProgressGroup) => {
+    const progressColor = group.completionPercent >= 70 ? '#34d399' : group.completionPercent >= 40 ? '#fbbf24' : '#ef4444';
+    const meterValue = Math.min(100, Math.max(0, group.completionPercent));
+    const lastEvent = group.lastEventAt ? `${formatDistanceToNow(new Date(group.lastEventAt), { addSuffix: true })}` : 'No events yet';
+
+    return (
+      <div
+        key={group.code}
+        style={{
+          ...S.card(progressColor),
+          borderLeftWidth: 4,
+          marginBottom: 10,
+          padding: '14px 16px',
+        }}
+      >
+        <div style={S.cardRow}>
+          <div style={S.avatar(progressColor, 30)}>
+            <Target size={14} />
+          </div>
+          <div style={S.cardBody}>
+            <div style={{ ...S.cardHeader, alignItems: 'center' }}>
+              <span style={S.name}>{group.label}</span>
+              <span style={S.dot}>·</span>
+              <span style={{ ...S.time, color: '#6b7280' }}>{lastEvent}</span>
+            </div>
+            <div style={S.tags}>
+              <span style={S.tag(progressColor, `${progressColor}22`)}>
+                <ListChecks size={10} /> {group.taskCount} tasks
+              </span>
+              <span style={S.tag('#a78bfa')}>
+                {group.doneCount} done
+              </span>
+              <span style={S.tag('#f59e0b')}>
+                {group.inProgressCount} active
+              </span>
+              <span style={S.tag('#6b7280')}>
+                {group.todoCount} queued
+              </span>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>
+                Objective completion: <strong style={{ color: '#d1d5db' }}>{group.completionPercent}%</strong>
+              </div>
+              <div style={{ height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ width: `${meterValue}%`, height: '100%', background: progressColor, transition: 'width 0.3s' }} />
+              </div>
+            </div>
+            {group.objectiveTasks.length > 0 && (
+              <div style={{ marginTop: 10, fontSize: 11, color: '#9ca3af', lineHeight: 1.5 }}>
+                <span style={{ color: '#e5e7eb', fontWeight: 600 }}>Tickets:</span>{' '}
+                {group.objectiveTasks.slice(0, 3).map((task) => task.name || 'Unnamed ticket').join(' • ')}
+                {group.objectiveTasks.length > 3 ? ` +${group.objectiveTasks.length - 3} more` : ''}
+              </div>
+            )}
+            {group.recentItems.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Recent signals:</div>
+                <ul style={{ margin: 0, paddingLeft: 16, display: 'grid', gap: 4, fontSize: 11, color: '#d1d5db' }}>
+                  {group.recentItems.slice(0, 4).map((item) => {
+                    if (item.type === 'beat') {
+                      const entry = item.payload as ProgressTimelineEntry;
+                      return (
+                        <li key={item.id}>
+                          <span style={{ color: '#6b7280' }}>{formatDistanceToNow(entry.createdAt || new Date(), { addSuffix: true })}</span>{' '}
+                          <span style={{ color: '#1d9bf0' }}>{entry.agentName || entry.agentId || 'agent'}</span> — {entry.headline}
+                        </li>
+                      );
+                    }
+                    const entry = item.payload as NudgeLogEntry;
+                    return (
+                      <li key={item.id}>
+                        <span style={{ color: '#6b7280' }}>{formatDistanceToNow(entry.createdAt || new Date(), { addSuffix: true })}</span>{' '}
+                        <span style={{ color: '#a78bfa' }}>{entry.agentName || entry.agentId || 'agent'}</span> — {entry.message}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     );
   };
@@ -764,7 +984,9 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
                     ? 'Copy failed'
                     : activeTab === 'feed'
                       ? 'Copy loaded events'
-                      : 'Copy health snapshots'
+                      : activeTab === 'snapshots'
+                        ? 'Copy health snapshots'
+                        : 'Copy objective progress'
               }
               aria-label={
                 copyState === 'copied'
@@ -773,7 +995,9 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
                     ? 'Copy failed'
                     : activeTab === 'feed'
                       ? 'Copy loaded events'
-                      : 'Copy health snapshots'
+                      : activeTab === 'snapshots'
+                        ? 'Copy health snapshots'
+                        : 'Copy objective progress'
               }
             >
               <Copy size={15} />
@@ -791,6 +1015,10 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
           <button style={S.tab(activeTab === 'snapshots')} onClick={() => setActiveTab('snapshots')}>
             <Clock size={14} /> Health Snapshot
             {filteredSnapshots.length > 0 && <span style={S.tabCount}>{filteredSnapshots.length}</span>}
+          </button>
+          <button style={S.tab(activeTab === 'objectives')} onClick={() => setActiveTab('objectives')}>
+            <Target size={14} /> Objective Progress
+            {objectiveProgressGroups.length > 0 && <span style={S.tabCount}>{objectiveProgressGroups.length}</span>}
           </button>
           <button style={S.composeToggle(composerOpen)} onClick={() => setComposerOpen(!composerOpen)}>
             <Send size={14} /> Post Beat
@@ -878,6 +1106,20 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
               </div>
             ) : (
               filteredSnapshots.map(renderSnapshotCard)
+            )
+          )}
+
+          {activeTab === 'objectives' && (
+            objectiveProgressGroups.length === 0 ? (
+              <div style={S.empty}>
+                <Target size={32} style={{ opacity: 0.3 }} />
+                <p style={{ margin: 0, fontSize: 14 }}>No objective progress yet.</p>
+                <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>
+                  Start posting beats with objective codes to see progress maps by objective.
+                </p>
+              </div>
+            ) : (
+              objectiveProgressGroups.map(renderObjectiveProgressCard)
             )
           )}
         </div>
