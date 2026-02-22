@@ -6,10 +6,14 @@
       "templates": [
         {
           "id": "gymshark-30-day-strength-streak",
+          "brandArchetype": "gymshark_strength_streak",
           "name": "30-Day Strength Streak",
+          "title": "30-Day Strength Streak",
           "description": "A 30-day strength-first challenge focused on compound lifts and simple accessory work that members can complete in any commercial gym.",
           "defaultDurationDays": 30,
+          "durationDays": 30,
           "targetSessionsPerWeek": 4,
+          "sessionsPerWeek": 4,
           "targetBehaviors": [
             {
               "key": "compound_strength_sessions",
@@ -22,14 +26,19 @@
               "sessionsPerWeek": 1
             }
           ],
-          "visualStyleKey": "gymshark-strength-dark-neon"
+          "visualStyleKey": "gymshark-strength-dark-neon",
+          "brandStyleKey": "gymshark-strength-dark-neon"
         },
         {
           "id": "gymshark-upper-lower-push",
+          "brandArchetype": "gymshark_strength_season",
           "name": "Upper / Lower Push Season",
+          "title": "Upper / Lower Push Season",
           "description": "An 8-week upper / lower split that gives creators room to showcase their signature push, pull, and lower-body days while the community trains together.",
           "defaultDurationDays": 56,
+          "durationDays": 56,
           "targetSessionsPerWeek": 5,
+          "sessionsPerWeek": 5,
           "targetBehaviors": [
             {
               "key": "upper_body_days",
@@ -47,14 +56,19 @@
               "sessionsPerWeek": 1
             }
           ],
-          "visualStyleKey": "gymshark-season-electric-blue"
+          "visualStyleKey": "gymshark-season-electric-blue",
+          "brandStyleKey": "gymshark-season-electric-blue"
         },
         {
           "id": "gymshark-photo-ready-block",
+          "brandArchetype": "gymshark_photo_ready_block",
           "name": "Photo-Ready Strength Block",
+          "title": "Photo-Ready Strength Block",
           "description": "A 6-week strength block that pairs progressive lifting days with short conditioning bursts for members preparing for a shoot, event, or content-heavy season.",
           "defaultDurationDays": 42,
+          "durationDays": 42,
           "targetSessionsPerWeek": 4,
+          "sessionsPerWeek": 4,
           "targetBehaviors": [
             {
               "key": "strength_days",
@@ -67,7 +81,8 @@
               "sessionsPerWeek": 1
             }
           ],
-          "visualStyleKey": "gymshark-photo-ready-gradient"
+          "visualStyleKey": "gymshark-photo-ready-gradient",
+          "brandStyleKey": "gymshark-photo-ready-gradient"
         }
       ]
     },
@@ -77,10 +92,14 @@
       "templates": [
         {
           "id": "on-running-recovery-reset",
+          "brandArchetype": "on_running_recovery_block",
           "name": "Recovery Reset",
+          "title": "Recovery Reset",
           "description": "A 21-day recovery-focused reset that combines easy runs, mobility, and rest days to bring runners back from burnout without losing the habit.",
           "defaultDurationDays": 21,
+          "durationDays": 21,
           "targetSessionsPerWeek": 5,
+          "sessionsPerWeek": 5,
           "targetBehaviors": [
             {
               "key": "easy_runs",
@@ -93,14 +112,19 @@
               "sessionsPerWeek": 2
             }
           ],
-          "visualStyleKey": "on-running-recovery-soft-neutrals"
+          "visualStyleKey": "on-running-recovery-soft-neutrals",
+          "brandStyleKey": "on-running-recovery-soft-neutrals"
         },
         {
           "id": "on-running-5k-build",
+          "brandArchetype": "on_running_5k_cycle",
           "name": "5K Build Block",
+          "title": "5K Build Block",
           "description": "A 6-week block that takes recreational runners from casual miles to a confident 5K effort using one interval, one easy, and one long run each week.",
           "defaultDurationDays": 42,
+          "durationDays": 42,
           "targetSessionsPerWeek": 3,
+          "sessionsPerWeek": 3,
           "targetBehaviors": [
             {
               "key": "interval_sessions",
@@ -118,14 +142,19 @@
               "sessionsPerWeek": 1
             }
           ],
-          "visualStyleKey": "on-running-5k-clean-minimal"
+          "visualStyleKey": "on-running-5k-clean-minimal",
+          "brandStyleKey": "on-running-5k-clean-minimal"
         },
         {
           "id": "on-running-base-miles-season",
+          "brandArchetype": "on_running_base_miles",
           "name": "Base Miles Season",
+          "title": "Base Miles Season",
           "description": "An 8-week base-building season for runners between races, focused on consistent mileage with light strides and optional cross-training.",
           "defaultDurationDays": 56,
+          "durationDays": 56,
           "targetSessionsPerWeek": 4,
+          "sessionsPerWeek": 4,
           "targetBehaviors": [
             {
               "key": "base_runs",
@@ -138,7 +167,8 @@
               "sessionsPerWeek": 1
             }
           ],
-          "visualStyleKey": "on-running-base-miles-airy"
+          "visualStyleKey": "on-running-base-miles-airy",
+          "brandStyleKey": "on-running-base-miles-airy"
         }
       ]
     },
@@ -148,10 +178,14 @@
       "templates": [
         {
           "id": "oner-active-glute-focus",
+          "brandArchetype": "oner_active_glute_block",
           "name": "Glute Focus Block",
+          "title": "Glute Focus Block",
           "description": "A 6-week glute-focused block built around lower-body lifting days with optional upper body and core add-ons for creators known for lower-body training.",
           "defaultDurationDays": 42,
+          "durationDays": 42,
           "targetSessionsPerWeek": 4,
+          "sessionsPerWeek": 4,
           "targetBehaviors": [
             {
               "key": "glute_days",
@@ -164,14 +198,19 @@
               "sessionsPerWeek": 1
             }
           ],
-          "visualStyleKey": "oner-active-glute-gradient"
+          "visualStyleKey": "oner-active-glute-gradient",
+          "brandStyleKey": "oner-active-glute-gradient"
         },
         {
           "id": "oner-active-confidence-season",
+          "brandArchetype": "oner_active_confidence_season",
           "name": "Confidence in the Gym Season",
+          "title": "Confidence in the Gym Season",
           "description": "An 8-week progression that pairs simple, repeatable strength sessions with small weekly wins to help newer lifters feel at home on the gym floor.",
           "defaultDurationDays": 56,
+          "durationDays": 56,
           "targetSessionsPerWeek": 3,
+          "sessionsPerWeek": 3,
           "targetBehaviors": [
             {
               "key": "full_body_sessions",
@@ -184,14 +223,19 @@
               "sessionsPerWeek": 1
             }
           ],
-          "visualStyleKey": "oner-active-confidence-soft-pastels"
+          "visualStyleKey": "oner-active-confidence-soft-pastels",
+          "brandStyleKey": "oner-active-confidence-soft-pastels"
         },
         {
           "id": "oner-active-mind-body-reset",
+          "brandArchetype": "oner_active_mind_body_reset",
           "name": "Mind-Body Reset",
+          "title": "Mind-Body Reset",
           "description": "A 4-week reset that blends lighter strength work, walks, and mobility so creators can guide their community through a gentler season between heavier blocks.",
           "defaultDurationDays": 28,
+          "durationDays": 28,
           "targetSessionsPerWeek": 5,
+          "sessionsPerWeek": 5,
           "targetBehaviors": [
             {
               "key": "light_strength",
@@ -209,7 +253,8 @@
               "sessionsPerWeek": 1
             }
           ],
-          "visualStyleKey": "oner-active-reset-calming"
+          "visualStyleKey": "oner-active-reset-calming",
+          "brandStyleKey": "oner-active-reset-calming"
         }
       ]
     }
