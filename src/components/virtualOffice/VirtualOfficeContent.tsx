@@ -3161,7 +3161,6 @@ const VirtualOfficeContent: React.FC = () => {
   // ── Manual Telemetry Trigger state ──
   const [triggeringStandup, setTriggeringStandup] = useState(false);
   const [standupTriggerResult, setStandupTriggerResult] = useState<'success' | 'error' | null>(null);
-  const [missionMinutesEnabled] = useState(true);
 
 
   const handleTriggerStandup = useCallback(async (type?: 'morning' | 'evening') => {
@@ -3838,6 +3837,70 @@ const VirtualOfficeContent: React.FC = () => {
     setMinutesPreviewData(null);
   }, []);
 
+  const missionMinutesInFlight = useRef<Set<string>>(new Set());
+
+  const persistMissionMinutes = useCallback(async (missionSession: Omit<GroupChat, 'id'> & { id?: string }) => {
+    if (!missionSession?.id) return;
+    if (missionMinutesInFlight.current.has(missionSession.id)) return;
+    missionMinutesInFlight.current.add(missionSession.id);
+
+    try {
+      const messagesSnap = await getDocs(query(
+        collection(db, `agent-group-chats/${missionSession.id}/messages`),
+        orderBy('createdAt', 'asc')
+      ));
+      const messages = messagesSnap.docs.map((docRef) => ({
+        id: docRef.id,
+        ...(docRef.data() as Omit<GroupChatMessage, 'id'>),
+      }));
+
+      if (!messages.length) {
+        console.log('[Mission] No messages found; skipping minutes save for', missionSession.id);
+        return;
+      }
+
+      const participantList = Array.isArray(missionSession.participants) ? missionSession.participants : [];
+      const participants = participantList.filter((id) => id && id !== 'antigravity');
+      const safeParticipants = participants.length > 0 ? participants : allAgents.map((a) => a.id).filter((id) => id !== 'antigravity');
+      const duration = deriveMessageDurationMinutes(messages);
+
+      const minutes = await meetingMinutesService.generate(
+        missionSession.id,
+        messages as GroupChatMessage[],
+        safeParticipants,
+        duration
+      );
+      const minutesDocId = await meetingMinutesService.save(minutes);
+
+      console.log('📋 Mission roundtable minutes auto-saved:', minutesDocId);
+
+      const highlights = (minutes.highlights || []).slice(0, 3).map(h => `${h.speaker}: ${h.summary}`).join('\n');
+      const summary = minutes.executiveSummary || 'Mission strategy roundtable completed.';
+      await addDoc(collection(db, 'progress-timeline'), {
+        agentId: 'nora',
+        agentName: 'Nora',
+        emoji: '🚀',
+        objectiveCode: 'ROUND-TABLE',
+        beat: 'result',
+        headline: `📋 Mission Roundtable Summary: ${summary.substring(0, 150)}`,
+        artifactType: 'text',
+        artifactText: highlights || summary,
+        artifactUrl: '',
+        lensTag: 'round-table',
+        confidenceColor: 'blue',
+        stateTag: 'signals',
+        minutesDocId,
+        protocol: 'heartbeat',
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('[Mission] Failed to persist mission roundtable minutes:', error);
+      missionMinutesInFlight.current.delete(missionSession.id);
+    } finally {
+      missionMinutesInFlight.current.delete(missionSession.id);
+    }
+  }, [allAgents]);
+
   // ── Active Roundtable listener (Telemetry + Mission strategy) ──
   // Use refs to avoid re-subscribing on every state change.
   const activeStandupRef = useRef(activeStandup);
@@ -3985,6 +4048,7 @@ const VirtualOfficeContent: React.FC = () => {
           }
         } else if (activeMissionSessionRef.current) {
           console.log('[Mission] Strategy roundtable ended — animating agents back to desks');
+          persistMissionMinutes(activeMissionSessionRef.current);
           setActiveMissionSession(null);
           setIsMissionObserving(false);
           setShowGroupChatModal(false);
