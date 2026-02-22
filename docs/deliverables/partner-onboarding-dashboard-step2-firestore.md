@@ -101,6 +101,23 @@ useEffect(() => {
 - [x] Produces a `PartnerRow[]` with exactly the required fields: `id`, `name`, `type`, `onboardingStage`, `invitedAt`, `firstRoundCreatedAt`.
 - [x] Error and loading state are handled (user feedback on failure).
 
+## Agent-run static check (2026-02-22)
+
+To bind this doc to the live code, you can re-validate the Firestore wiring with:
+
+```bash
+cd /Users/noraclawdbot/Documents/GitHub/QuickLifts-Web
+sed -n '1,120p' web/app/partners/dashboard.tsx
+```
+
+Confirm that:
+
+- `collection(db, "partners")` and `getDocs` appear as shown above.
+- The `snapshot.docs.map(...)` block constructs `PartnerModel` and returns an object with the `PartnerRow` fields.
+- `setPartners(rows)` is invoked and `partners` is a `PartnerRow[]`.
+
+If any of these conditions fail after future edits, Step 2 needs to be revisited.
+
 ## Notes / Future Tweaks
 
 - `name` currently uses `contactEmail` as a stand-in. When the schema adds a proper partner display name, update the mapping to use that field instead.
