@@ -23,8 +23,43 @@ This document will focus on:
 
 ## Recommended Intervention
 
-> To be populated with a synthesized, evidence-backed recommendation for how the partner onboarding kit should structure challenges, communication cadence, and/or dashboard metrics to reduce time-to-active from first contact to first Pulse round to under 14 days.
+**Design a "14-Day Launch Sprint" playbook that every partner runs out-of-the-box, anchored on a 4–6 week, club-branded challenge with heavy social scaffolding in the first two weeks.**
 
+Based on the evidence that (a) social accountability and team-based structures improve adherence [1, 2], (b) short, time-bounded challenges in the 3–6 week range balance novelty with habit formation [3], (c) early usage in the first 7–14 days predicts longer-term retention [4], (d) implementation intentions and stable context cues accelerate habit development [5], and (e) community identity and ritual drive engagement in gyms and run clubs [6], the partner onboarding kit should:
+
+1. **Standardize a partner-branded, 4–6 week "Founding Round" template.**
+   - Every new partner chooses one flagship challenge format at onboarding (e.g., "4-Week Club Benchmark Round" or "6-Week Run Club Base Build"), with fixed start/end dates and a clear, shared goal.
+   - The kit provides default structures for CrossFit-style gyms, strength facilities, and run clubs (e.g., weekly benchmark workout, signature route, or ritual session) so partners are not designing from scratch.
+
+2. **Front-load a 14-day activation sprint with explicit commitments and cues.**
+   - During onboarding, the partner designates 2–3 recurring group times in the first two weeks (e.g., "Monday 6pm, Wednesday 6pm, Saturday 9am"), which become the default context cues for the community [5].
+   - The co-branded landing page and partner scripts prompt members to make a simple implementation intention: "If it’s [day] at [time], I meet [club/crew name] inside Pulse for our round." [5]
+   - Success for the sprint is defined as each new member completing **at least 3 Pulse check-ins per week for the first two weeks**, aligning with evidence that early consistency is more predictive of retention than intensity [4].
+
+3. **Bake social structures and roles into the onboarding flow.**
+   - Require each partner to identify at least one "Captain" or "Pacer" per sub-group (e.g., per class time or pace group) whose profile is highlighted in the dashboard and member communications.
+   - Automatically group members into small teams or lanes (e.g., by class time, pace, or training focus) and surface team-level progress ("Your lane has hit 9/12 planned sessions this week") to harness social incentives and team accountability [1, 2].
+
+4. **Align the tracking dashboard around early engagement and group ritual, not just individual volume.**
+   - Default partner dashboard metrics for the first 14 days should emphasize:
+     - % of invited members who created a Pulse account
+     - % of members completing ≥3 sessions per week
+     - Attendance at designated "ritual" sessions (e.g., weekly flagship workout/route)
+     - Number of active teams/captains and their engagement
+   - These metrics map directly onto known predictors of retention (early usage, social engagement, and consistent group rituals) [1–6] and give partners a clear, actionable view of whether the launch is on track.
+
+5. **Provide a scripted communication cadence for the first 14 days.**
+   - The onboarding kit should ship with editable templates for:
+     - T−7 and T−1 announcements ("Our Pulse round starts Monday — here’s how to join")
+     - Day 1 commitment message (captain-led, reinforcing the implementation intention)
+     - Day 3 and Day 7 nudges highlighting team progress and upcoming ritual sessions
+     - Day 14 recap and next-round invitation, leveraging early wins to sustain momentum
+   - This cadence aligns with the evidence that timely prompts can increase engagement with mobile health apps [4], while the content centers group identity and shared ritual [6].
+
+**Connection to the <14-day time-to-active goal:**
+
+- For Pulse, "time-to-active" should be operationalized as the number of days from partner sign-up to (a) creation of a live, scheduled founding round and (b) at least one completed group session inside Pulse. By shipping a ready-made 14-Day Launch Sprint that standardizes challenge length, group rituals, role assignment, and communication, the partner only needs to plug in their branding, select dates, and confirm captains.
+- The co-branded landing page, scripted commitments, and default dashboard metrics collectively reduce friction and decision fatigue for both partners and members, making it realistic for a new partner to go from first contact to a live, attended Pulse round inside two weeks while laying behavioral foundations for longer-term retention.
 ## Sources
 
 **Note:** Specific URLs/DOIs should be verified and added during final editorial pass; references below indicate the core sources and publication venues.
