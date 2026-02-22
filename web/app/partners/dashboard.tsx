@@ -4,19 +4,14 @@ import React, { useEffect, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 
 import { db } from "../../../src/api/firebase/config";
-import type { PartnerType, PartnerFirestoreData } from "../../../src/types/Partner";
+import type { PartnerFirestoreData } from "../../../src/types/Partner";
 import { PartnerModel } from "../../../src/types/Partner";
 import { withAdminAuth } from "../../lib/auth/withAdminAuth";
 import { AdminLayout } from "../../components/admin/AdminLayout";
-
-interface PartnerRow {
-  id: string;
-  name: string;
-  type: PartnerType;
-  onboardingStage: string;
-  invitedAt: Date;
-  firstRoundCreatedAt: Date | null;
-}
+import {
+  PartnerOnboardingTable,
+  type PartnerRow,
+} from "../../components/partners/PartnerOnboardingTable";
 
 /**
  * Partner Onboarding Dashboard
@@ -124,14 +119,7 @@ function PartnerOnboardingDashboardPageInner() {
               Loaded <span className="font-semibold">{partners.length}</span> partners
               from Firestore.
             </p>
-            <ul className="list-disc pl-5 space-y-1">
-              {partners.map((p) => (
-                <li key={p.id}>
-                  <span className="font-medium">{p.name}</span> — {p.type} —
-                  stage: {p.onboardingStage}
-                </li>
-              ))}
-            </ul>
+            <PartnerOnboardingTable partners={partners} />
           </div>
         )}
       </section>
