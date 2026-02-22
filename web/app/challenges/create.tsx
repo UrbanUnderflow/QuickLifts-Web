@@ -9,7 +9,7 @@ import {
   BrandChallengeTemplate,
   getAllBrandTemplateGroups,
 } from "../../lib/brandChallengeTemplates";
-import { getBrandChallengeTemplates } from "../../lib/challenges/brandTemplates";
+import { getBrandChallengeTemplateByCampaignId } from "../../lib/challenges/brandTemplates";
 
 // Temporary, focused UI for wiring brand-specific templates into the
 // challenge creation flow. In later steps this selector will be
@@ -162,33 +162,27 @@ export default function ChallengeCreatePage(props: ChallengeCreatePageProps) {
   }, []);
 
   // When a brandCampaignId is provided (either via props or the query
-  // string), prefill the draft with the first template tied to that
-  // archetype. This lets partner links like
-  // `/challenges/create?brandCampaignId=on_running_recovery_block`
-  // immediately render a challenge that feels like "their" season rather
-  // than a generic template.
+  // string), prefill the draft with the matching brand challenge
+  // template. This lets partner links like
+  // `/challenges/create?brandCampaignId=gymshark-30-day-strength-streak`
+  // immediately render a challenge that feels like the active
+  // campaign rather than a generic template.
   useEffect(() => {
     if (!brandCampaignId) return;
 
-    const templatesForCampaign = getBrandChallengeTemplates(brandCampaignId);
-    if (!templatesForCampaign.length) return;
+    const template = getBrandChallengeTemplateByCampaignId(brandCampaignId);
+    if (!template) return;
 
-    const template = templatesForCampaign[0];
-
-    setTitle((prev) => (prev ? prev : template.title || template.name));
+    setTitle((prev) => (prev ? prev : template.title));
     setDescription((prev) => (prev ? prev : template.description));
-    setDurationDays((prev) =>
-      prev ? prev : template.durationDays || template.defaultDurationDays
-    );
-    setSessionsPerWeek((prev) =>
-      prev ? prev : template.sessionsPerWeek || template.targetSessionsPerWeek
-    );
+    setDurationDays((prev) => (prev ? prev : template.durationDays));
+    setSessionsPerWeek((prev) => (prev ? prev : template.sessionsPerWeek));
     setVisualStyleKey((prev) =>
-      prev ? prev : template.brandStyleKey || template.visualStyleKey
+      prev ? prev : template.brandStyleKey
     );
 
     // If no template has been manually chosen yet, align the
-    // selectedTemplateId so the UI reflects the archetype-driven
+    // selectedTemplateId so the UI reflects the campaign-driven
     // prefilling.
     if (!selectedTemplateId) {
       setSelectedTemplateId(template.id);
