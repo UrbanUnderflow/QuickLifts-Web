@@ -17,6 +17,7 @@ import {
   filterPartnersByType,
   type PartnerTypeFilter,
 } from "../../lib/partners/filterPartnersByType";
+import { computeLaneAverages } from "../../lib/partners/computeLaneAverages";
 
 /**
  * Partner Onboarding Dashboard
@@ -79,25 +80,7 @@ function PartnerOnboardingDashboardPageInner() {
       { type: "runClub", label: "Run Club" },
     ];
 
-    return lanes.map((lane) => {
-      const lanePartners = filteredPartners
-        .filter((p) => p.type === lane.type)
-        .map((p) => {
-          if (!p.firstRoundCreatedAt) return null;
-          const msDiff =
-            p.firstRoundCreatedAt.getTime() - p.invitedAt.getTime();
-          if (msDiff <= 0) return 0;
-          return msDiff / (1000 * 60 * 60 * 24);
-        })
-        .filter((v): v is number => v != null && !isNaN(v));
-
-      if (lanePartners.length === 0) {
-        return { label: lane.label, value: null };
-      }
-
-      const sum = lanePartners.reduce((acc, d) => acc + d, 0);
-      return { label: lane.label, value: sum / lanePartners.length };
-    });
+    return computeLaneAverages(filteredPartners, lanes);
   }, [filteredPartners]);
 
   return (

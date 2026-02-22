@@ -7,27 +7,36 @@ Compute average "Time to First Round" per partner type from the loaded partners 
 
 ### Lane Average Computation
 
-**File:** `web/app/partners/dashboard.tsx`
-
-The page derives `filteredPartners` (see Step 4 doc), then computes lane-level averages:
+**Helper File:** `web/lib/partners/computeLaneAverages.ts`
 
 ```ts
-const laneAverages = useMemo(() => {
-  const lanes: { type: PartnerType; label: string }[] = [
-    { type: "brand", label: "Brand" },
-    { type: "gym", label: "Gym" },
-    { type: "runClub", label: "Run Club" },
-  ];
+import type { PartnerType } from "../../../src/types/Partner";
+import type { PartnerRow } from "../../components/partners/PartnerOnboardingTable";
 
+export type LaneAverageDatum = {
+  label: string;
+  value: number | null;
+};
+
+/**
+ * Compute average time-to-first-round (in days) per partner type for a
+ * given set of partners.
+ *
+ * - Partners without `firstRoundCreatedAt` are ignored for averaging.
+ * - Negative / zero diffs are clamped to 0 days.
+ */
+export function computeLaneAverages(
+  partners: PartnerRow[],
+  lanes: { type: PartnerType; label: string }[]
+): LaneAverageDatum[] {
   return lanes.map((lane) => {
-    const lanePartners = filteredPartners
+    const lanePartners = partners
       .filter((p) => p.type === lane.type)
       .map((p) => {
         if (!p.firstRoundCreatedAt) return null;
-        const msDiff =
-          p.firstRoundCreatedAt.getTime() - p.invitedAt.getTime();
+        const msDiff = p.firstRoundCreatedAt.getTime() - p.invitedAt.getTime();
         if (msDiff <= 0) return 0;
-        return msDiff / (1000 * 60 * 60 * 24); // days
+        return msDiff / (1000 * 60 * 60 * 24);
       })
       .filter((v): v is number => v != null && !isNaN(v));
 
@@ -38,6 +47,20 @@ const laneAverages = useMemo(() => {
     const sum = lanePartners.reduce((acc, d) => acc + d, 0);
     return { label: lane.label, value: sum / lanePartners.length };
   });
+}
+```
+
+**Usage in dashboard page:** `web/app/partners/dashboard.tsx`
+
+```ts
+const laneAverages = useMemo(() => {
+  const lanes: { type: PartnerType; label: string }[] = [
+    { type: "brand", label: "Brand" },
+    { type: "gym", label: "Gym" },
+    { type: "runClub", label: "Run Club" },
+  ];
+
+  return computeLaneAverages(filteredPartners, lanes);
 }, [filteredPartners]);
 ```
 
@@ -137,7 +160,7 @@ export function BarChart({ data, height = 140 }: BarChartProps) {
 ## Verification Checklist
 
 - [x] Lane labels cover all required partner types: Brand, Gym, Run Club.
-- [x] Averages are computed **per type** from `filteredPartners` using `(firstRoundCreatedAt - invitedAt)` in days.
+- [x] Averages are computed **per type** from `filteredPartners` using `(firstRoundCreatedAt - invitedAt)` in days (see `computeLaneAverages`).
 - [x] Partners without `firstRoundCreatedAt` are excluded from averages.
 - [x] Negative or zero diffs are treated as `0` days.
 - [x] `BarChart` receives an array of `{ label, value }` where `value` is `null` for lanes with no data.
