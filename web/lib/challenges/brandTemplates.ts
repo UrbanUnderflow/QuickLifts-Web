@@ -1,25 +1,77 @@
-import {
-  BrandChallengeTemplate,
-} from "../brandChallengeTemplates";
-
 import templatesJson from "../../../config/brandChallengeTemplates.json";
 
-// Local config shape that matches the JSON file, so callers in the
-// challenges namespace can work with the archetype-centric view of
-// templates without having to know about brand groups.
+// Types that mirror the structure of config/brandChallengeTemplates.json.
 
-type TemplatesConfig = typeof templatesJson;
+export type TargetBehavior = {
+  key: string;
+  label: string;
+  sessionsPerWeek: number;
+};
 
-const config = templatesJson as TemplatesConfig;
+export type BrandChallengeTemplate = {
+  // Core identity and campaign wiring
+  id: string;
+  brandArchetype: string;
+
+  // User-facing copy and schedule settings
+  title: string;
+  description: string;
+  durationDays: number;
+  sessionsPerWeek: number;
+  brandStyleKey: string;
+
+  // Optional / legacy fields that are still present in the JSON and
+  // useful for some surfaces. Callers can ignore these if they only
+  // care about the core campaign contract above.
+  name?: string;
+  defaultDurationDays?: number;
+  targetSessionsPerWeek?: number;
+  targetBehaviors?: TargetBehavior[];
+  visualStyleKey?: string;
+};
+
+export type BrandTemplateGroup = {
+  brandType: string;
+  displayName: string;
+  templates: BrandChallengeTemplate[];
+};
+
+export type BrandChallengeTemplatesConfig = {
+  brands: BrandTemplateGroup[];
+};
+
+const config = templatesJson as BrandChallengeTemplatesConfig;
 
 /**
- * Return all brand challenge templates that match a given brand archetype.
+ * Look up a single brand challenge template by campaign id.
  *
- * This is the helper used by brand campaign flows where the entry point is
- * an archetype key like `gymshark_strength_streak` or
- * `on_running_recovery_block`, rather than a specific creative variant.
+ * In the current JSON, `id` is the canonical campaign identifier used
+ * for wiring links like `?brandCampaignId=gymshark-30-day-strength-streak`.
  */
-export function getBrandChallengeTemplates(
+export function getBrandChallengeTemplateByCampaignId(
+  brandCampaignId: string
+): BrandChallengeTemplate | undefined {
+  if (!brandCampaignId) return undefined;
+
+  const normalized = brandCampaignId.toLowerCase();
+
+  for (const brand of config.brands) {
+    const match = brand.templates.find(
+      (t) => t.id.toLowerCase() === normalized
+    );
+    if (match) return match;
+  }
+
+  return undefined;
+}
+
+/**
+ * Convenience helper used when the entry point is an archetype key
+ * (e.g., `gymshark_strength_streak`) instead of a specific campaign id.
+ * This remains available for flows that think in terms of archetypes
+ * rather than individual campaigns.
+ */
+export function getBrandChallengeTemplatesByArchetype(
   brandArchetype: string
 ): BrandChallengeTemplate[] {
   if (!brandArchetype) return [];
@@ -27,16 +79,14 @@ export function getBrandChallengeTemplates(
   const normalized = brandArchetype.toLowerCase();
 
   const allTemplates: BrandChallengeTemplate[] = config.brands.flatMap(
-    (brand) => brand.templates as BrandChallengeTemplate[]
+    (brand) => brand.templates
   );
 
   return allTemplates.filter((template) => {
-    const templateArchetype = (template as any).brandArchetype;
+    const templateArchetype = template.brandArchetype;
     return (
       typeof templateArchetype === "string" &&
       templateArchetype.toLowerCase() === normalized
     );
   });
 }
-
-export type { BrandChallengeTemplate };
