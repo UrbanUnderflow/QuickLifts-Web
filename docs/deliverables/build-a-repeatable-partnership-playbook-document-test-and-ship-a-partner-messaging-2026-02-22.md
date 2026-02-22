@@ -51,6 +51,9 @@ Across brands, gyms, and run clubs, the through‑line is simple: Pulse is where
 - **In-product banner/CTA:**
   > Launch your next collection as a Pulse round and watch your athletes lead the story, not just model it.
 
+- **Co-branded value statement:**
+  > *Gymshark × Pulse* turns a strength collection into a measurable 30‑day season, so the athletes wearing the pieces are the same ones logging the work.
+
 ### For Gyms
 
 - **Email opener:**
@@ -62,6 +65,9 @@ Across brands, gyms, and run clubs, the through‑line is simple: Pulse is where
 - **In-product banner/CTA:**
   > Spin up your next in‑house challenge as a Pulse round and let your community feel it, not just hear about it at the desk.
 
+- **Co-branded value statement:**
+  > *CrossFit Southside × Pulse* turns "this month’s board" into a four‑week season your members can see on their phones and finish together, even on the days they train solo.
+
 ### For Run Clubs
 
 - **Email opener:**
@@ -72,3 +78,6 @@ Across brands, gyms, and run clubs, the through‑line is simple: Pulse is where
 
 - **In-product banner/CTA:**
   > Set this month’s focus as a Pulse round and let your runners log the story they’re already writing together.
+
+- **Co-branded value statement:**
+  > *Bridge Runners × Pulse* turns "Tuesday tempo" from a standing date into a six‑week block with a beginning, middle, and finish line the whole crew can see.
