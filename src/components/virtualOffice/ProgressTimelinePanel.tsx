@@ -60,7 +60,23 @@ const AGENT_ROUTE_ALIASES: Record<string, string> = {
 const AGENT_ROUTE_IDS = new Set(['antigravity', 'nora', 'scout', 'solara', 'sage']);
 
 const normalizeAgentKey = (value?: string) => (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-const normalizeObjectiveCode = (value?: string) => (value || '').trim().toUpperCase();
+
+const OBJECTIVE_CODE_SKIP_TOKENS = new Set([
+  '-', 'N/A', 'NA', 'NONE', 'UNKNOWN', 'UNASSIGNED', 'UNTRACKED', 'NIL', 'NULL', 'TBD', 'TODO', 'TEMP', 'GENERAL',
+]);
+
+const normalizeObjectiveCode = (value?: string): string => {
+  const normalized = (value || '').trim().toUpperCase();
+  if (!normalized) return '';
+  if (normalized.length < 2 || normalized.length > 24) return '';
+  if (OBJECTIVE_CODE_SKIP_TOKENS.has(normalized)) return '';
+  if (normalized.includes('/') || normalized.includes('\\')) return '';
+  if (normalized.includes('://')) return '';
+  if (!/^[A-Z0-9][A-Z0-9._-]*$/.test(normalized)) return '';
+  if (normalized === '-') return '';
+  if (/^\d+$/.test(normalized)) return '';
+  return normalized;
+};
 
 const sanitizeRecordedFilePath = (rawPath?: string): string => {
   if (!rawPath) return '';
@@ -293,13 +309,18 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
 
   const objectiveCodeOptions = useMemo(() => {
     const options = new Set<string>();
+    const seenCounts = new Map<string, number>();
 
     for (const row of [...entries, ...nudges, ...snapshots]) {
       const code = normalizeObjectiveCode(row.objectiveCode);
       if (code) options.add(code);
+      if (code) seenCounts.set(code, (seenCounts.get(code) || 0) + 1);
     }
 
-    return [...options].sort((a, b) => a.localeCompare(b));
+    return [...options].filter((code) => {
+      const count = seenCounts.get(code) || 0;
+      return count > 0 && (code.length >= 3 || count > 1);
+    }).sort((a, b) => a.localeCompare(b));
   }, [entries, nudges, snapshots]);
 
   const objectiveCounts = useMemo(() => {
