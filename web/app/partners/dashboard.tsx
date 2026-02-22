@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { collection, getDocs } from "firebase/firestore";
 
 import { db } from "../../../src/api/firebase/config";
-import type { PartnerFirestoreData } from "../../../src/types/Partner";
+import type { PartnerFirestoreData, PartnerType } from "../../../src/types/Partner";
 import { PartnerModel } from "../../../src/types/Partner";
 import { withAdminAuth } from "../../lib/auth/withAdminAuth";
 import { AdminLayout } from "../../components/admin/AdminLayout";
@@ -28,6 +28,7 @@ function PartnerOnboardingDashboardPageInner() {
   const [partners, setPartners] = useState<PartnerRow[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<PartnerType | "all">("all");
 
   useEffect(() => {
     let isMounted = true;
@@ -76,6 +77,14 @@ function PartnerOnboardingDashboardPageInner() {
     };
   }, []);
 
+  const filteredPartners = useMemo(
+    () =>
+      typeFilter === "all"
+        ? partners
+        : partners.filter((p) => p.type === typeFilter),
+    [partners, typeFilter]
+  );
+
   return (
     <>
       <header className="mb-2">
@@ -106,20 +115,50 @@ function PartnerOnboardingDashboardPageInner() {
           <p className="text-sm text-red-600">{error}</p>
         )}
 
-        {!isLoading && !error && partners.length === 0 && (
+        {!isLoading && !error && filteredPartners.length === 0 && (
           <p className="text-sm text-gray-600">
-            No partners found yet. Once partners are onboarded into the
-            <code>partners</code> collection, they will appear here.
+            No partners found yet for this filter. Once partners are onboarded into
+            the <code>partners</code> collection, they will appear here.
           </p>
         )}
 
-        {!isLoading && !error && partners.length > 0 && (
-          <div className="space-y-2 text-sm text-gray-800">
-            <p>
-              Loaded <span className="font-semibold">{partners.length}</span> partners
-              from Firestore.
-            </p>
-            <PartnerOnboardingTable partners={partners} />
+        {!isLoading && !error && filteredPartners.length > 0 && (
+          <div className="space-y-3 text-sm text-gray-800">
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <p>
+                Showing <span className="font-semibold">{filteredPartners.length}</span>{" "}
+                partners
+                {typeFilter !== "all" && (
+                  <>
+                    {" "}for type <span className="font-semibold">{typeFilter}</span>
+                  </>
+                )}
+                .
+              </p>
+              <div className="flex items-center gap-2 text-sm">
+                <label
+                  htmlFor="partner-type-filter"
+                  className="text-gray-700 font-medium"
+                >
+                  Filter by type:
+                </label>
+                <select
+                  id="partner-type-filter"
+                  className="border border-gray-300 rounded px-2 py-1 text-sm bg-white"
+                  value={typeFilter}
+                  onChange={(e) =>
+                    setTypeFilter(e.target.value as PartnerType | "all")
+                  }
+                >
+                  <option value="all">All</option>
+                  <option value="brand">Brand</option>
+                  <option value="gym">Gym</option>
+                  <option value="runClub">Run Club</option>
+                </select>
+              </div>
+            </div>
+
+            <PartnerOnboardingTable partners={filteredPartners} />
           </div>
         )}
       </section>

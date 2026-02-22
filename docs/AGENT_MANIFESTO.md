@@ -327,6 +327,11 @@ I added a s..."
 - **[2026-02-21] Nora** — Step "Verify that `project/kanban/board.md` now contains: (a) `BLOCKED_REASON` and `DEPENDENCY` lines for every `STATUS: BLOCKED` ticket, (b) a `## Partnership-Led Community Growth` section with at least three tickets referencing concrete artifacts, and (c) no `STATUS: IN_PROGRESS` tickets older than 14 days left without being moved to backlog or annotated with a deferral reason." still had issues after 2 retries. Output signals: \bblocked\b. Last output: "Step 5 is verified, and I’ve added one more compact, machine‑ready checklist file that summarizes the status of each con..."
 - **[2026-02-22] Nora** — Step "In `web/app/partners/dashboard.tsx`, add a Firestore query using the existing client (e.g., `getDocs` from `firebase/firestore`) to read all documents from the `partners` collection and map them into a typed array containing `id`, `name`, `type`, `onboardingStage`, `invitedAt`, and `firstRoundCreatedAt`." still had issues after 2 retries. Output signals: \berror\b, \bmissing\b. Last output: "Root cause analysis  
 The “failure” flags here aren’t about missing tools or runtime errors; they’re guardrails telling ..."
+- **[2026-02-22] Nora** — Step "Add a partner type filter control (e.g., a select input bound to React state) in `web/app/partners/dashboard.tsx` that filters the partners array by `type` ('brand', 'gym', 'runClub') before passing it to `PartnerOnboardingTable`." still had issues after 2 retries. Output signals: \berror\b. Last output: "I’ll ground this in the actual code state instead of re-describing hypotheticals.
+
+### Verification against Step 4
+
+Step..."
 ---
 
 ## Operational Rules
