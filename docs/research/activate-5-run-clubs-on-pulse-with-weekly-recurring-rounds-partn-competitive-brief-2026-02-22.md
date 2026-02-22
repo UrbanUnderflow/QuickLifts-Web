@@ -1,4 +1,4 @@
-# How are leading run clubs structuring digital community + weekly runs today?
+# Competitive Brief: Activating 5 Run Clubs on Pulse with Weekly Recurring Rounds
 
 ## Examples
 
