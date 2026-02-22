@@ -693,7 +693,7 @@ const ObjectiveTimelinePanel: React.FC<ObjectiveTimelinePanelProps> = ({
   const northStarLabelMap = useMemo<Record<string, string>>(() => {
     const map: Record<string, string> = {};
     (northStarObjectiveLabels || []).forEach(label => {
-      const key = normalizeObjectiveCode(label);
+      const key = normalizeObjectiveMatchKey(label);
       if (key) map[key] = String(label || '').trim();
     });
     return map;
@@ -711,22 +711,21 @@ const ObjectiveTimelinePanel: React.FC<ObjectiveTimelinePanelProps> = ({
 
     // Try direct label match from northStarObjective field
     if (northStarObjective) {
-      const nsKey = normalizeObjectiveCode(northStarObjective);
+      const nsKey = normalizeObjectiveMatchKey(northStarObjective);
       if (nsKey && northStarLabelMap[nsKey]) {
         return { key: nsKey, label: northStarLabelMap[nsKey] };
       }
       // Fuzzy: check if northStarObjective contains/is-contained-by a tracked label
-      const nsNorm = normalizeObjectiveCode(northStarObjective);
-      if (nsNorm && nsNorm.length >= 6) {
+      if (nsKey && nsKey.length >= 6) {
         for (const [k, v] of Object.entries(northStarLabelMap)) {
-          if (nsNorm.includes(k) || k.includes(nsNorm)) return { key: k, label: v };
+          if (nsKey.includes(k) || k.includes(nsKey)) return { key: k, label: v };
         }
       }
     }
 
     // Try objectiveCode as label key
     if (objectiveCode) {
-      const codeKey = normalizeObjectiveCode(objectiveCode);
+      const codeKey = normalizeObjectiveMatchKey(objectiveCode);
       if (codeKey && northStarLabelMap[codeKey]) {
         return { key: codeKey, label: northStarLabelMap[codeKey] };
       }
@@ -734,9 +733,10 @@ const ObjectiveTimelinePanel: React.FC<ObjectiveTimelinePanelProps> = ({
 
     // Try objectiveLabelByCode (from task data)
     if (objectiveCode) {
-      const fromTasks = objectiveLabelByCode[normalizeObjectiveCode(objectiveCode)];
+      const normalizedCode = normalizeObjectiveCode(objectiveCode);
+      const fromTasks = normalizedCode ? objectiveLabelByCode[normalizedCode] : undefined;
       if (fromTasks) {
-        const ftKey = normalizeObjectiveCode(fromTasks);
+        const ftKey = normalizeObjectiveMatchKey(fromTasks);
         if (ftKey && northStarLabelMap[ftKey]) {
           return { key: ftKey, label: northStarLabelMap[ftKey] };
         }
@@ -831,9 +831,13 @@ const ObjectiveTimelinePanel: React.FC<ObjectiveTimelinePanelProps> = ({
   const needsAttentionCount = objectiveGroups.filter(
     g => g.taskCount === 0 || (g.completionPercent < 40 && g.taskCount > 0)
   ).length;
+  const KNOWN_AGENTS = new Set(['nora', 'scout', 'solara', 'sage']);
   const uniqueAgentIds = useMemo(() => {
     const ids = new Set<string>();
-    objectiveTasks.forEach(t => { if (t.assignee) ids.add(t.assignee.toLowerCase()); });
+    objectiveTasks.forEach(t => {
+      const name = (t.assignee || '').toLowerCase();
+      if (name && KNOWN_AGENTS.has(name)) ids.add(name);
+    });
     return ids.size;
   }, [objectiveTasks]);
   const totalTasks = objectiveGroups.reduce((s, g) => s + g.taskCount, 0);
