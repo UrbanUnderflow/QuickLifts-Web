@@ -12,6 +12,7 @@ import {
   PartnerOnboardingTable,
   type PartnerRow,
 } from "../../components/partners/PartnerOnboardingTable";
+import { BarChart } from "../../components/charts/BarChart";
 
 /**
  * Partner Onboarding Dashboard
@@ -85,6 +86,34 @@ function PartnerOnboardingDashboardPageInner() {
     [partners, typeFilter]
   );
 
+  const laneAverages = useMemo(() => {
+    const lanes: { type: PartnerType; label: string }[] = [
+      { type: "brand", label: "Brand" },
+      { type: "gym", label: "Gym" },
+      { type: "runClub", label: "Run Club" },
+    ];
+
+    return lanes.map((lane) => {
+      const lanePartners = filteredPartners
+        .filter((p) => p.type === lane.type)
+        .map((p) => {
+          if (!p.firstRoundCreatedAt) return null;
+          const msDiff =
+            p.firstRoundCreatedAt.getTime() - p.invitedAt.getTime();
+          if (msDiff <= 0) return 0;
+          return msDiff / (1000 * 60 * 60 * 24);
+        })
+        .filter((v): v is number => v != null && !isNaN(v));
+
+      if (lanePartners.length === 0) {
+        return { label: lane.label, value: null };
+      }
+
+      const sum = lanePartners.reduce((acc, d) => acc + d, 0);
+      return { label: lane.label, value: sum / lanePartners.length };
+    });
+  }, [filteredPartners]);
+
   return (
     <>
       <header className="mb-2">
@@ -102,8 +131,8 @@ function PartnerOnboardingDashboardPageInner() {
           <h2 className="text-lg font-semibold">Partner Records</h2>
           <p className="mt-1 text-xs text-gray-600 max-w-xl">
             Raw partner data loaded from the <code>partners</code> Firestore
-            collection. Subsequent steps will layer on table rendering, filtering,
-            and time-to-first-round metrics.
+            collection. Use the filter to focus on specific lanes and review
+            how quickly each partner reached their first Pulse-powered round.
           </p>
         </header>
 
@@ -160,6 +189,29 @@ function PartnerOnboardingDashboardPageInner() {
 
             <PartnerOnboardingTable partners={filteredPartners} />
           </div>
+        )}
+      </section>
+
+      <section className="mt-4 border rounded-lg bg-white shadow-sm p-4 space-y-4">
+        <header>
+          <h2 className="text-lg font-semibold">
+            Average Time to First Round by Partner Type
+          </h2>
+          <p className="mt-1 text-xs text-gray-600 max-w-xl">
+            For the currently selected filter, this chart shows the average
+            number of days between initial invite and the first created round
+            for each partner type.
+          </p>
+        </header>
+
+        {laneAverages.every((lane) => lane.value == null) ? (
+          <p className="text-sm text-gray-600">
+            No time-to-first-round data yet for the current filter. Once
+            partners create their first round, lane-level averages will appear
+            here.
+          </p>
+        ) : (
+          <BarChart data={laneAverages} />
         )}
       </section>
     </>
