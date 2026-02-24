@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, limit, doc, deleteDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { AlertTriangle, User, Calendar, Search, Filter, Trash2, Copy, Eye, XCircle, CheckCircle, Loader2, AlertCircle, Clock, Bug } from 'lucide-react';
-import { convertFirestoreTimestamp } from '../../utils/formatDate';
+import { AlertTriangle, User, Search, Filter, Trash2, Copy, Eye, XCircle, CheckCircle, Loader2, AlertCircle, Clock, Bug } from 'lucide-react';
 
 // Define interfaces for display
 interface ErrorLogDisplay {
@@ -12,8 +11,9 @@ interface ErrorLogDisplay {
   username: string;
   userId: string;
   errorMessage: string;
-  createdAt: Date;
-  timestamp?: Date;
+  createdAt: Date | null;
+  timestamp?: Date | null;
+  source: string;
   context?: {
     source?: string;
     prizeId?: string;
@@ -25,9 +25,75 @@ interface ErrorLogDisplay {
     [key: string]: any;
   };
   resolved?: boolean;
-  resolvedAt?: Date;
+  resolvedAt?: Date | null;
   resolvedBy?: string;
+  alertEmailSent?: boolean;
+  alertSuppressed?: boolean;
+  alertEmailError?: string;
+  alertEmailSentAt?: Date | null;
+  alertEmailAttemptedAt?: Date | null;
+  alertEmailRecipients?: string[];
 }
+
+const parseDateValue = (value: unknown): Date | null => {
+  if (value == null) return null;
+
+  if (typeof value === 'object' && value !== null) {
+    const maybeTimestamp = value as { toDate?: () => Date };
+    if (typeof maybeTimestamp.toDate === 'function') {
+      const timestampDate = maybeTimestamp.toDate();
+      return timestampDate instanceof Date && !Number.isNaN(timestampDate.getTime()) ? timestampDate : null;
+    }
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const millis = value > 10000000000 ? value : value * 1000;
+    const parsed = new Date(millis);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) {
+      const millis = numeric > 10000000000 ? numeric : numeric * 1000;
+      const parsed = new Date(millis);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    const parsedMs = Date.parse(trimmed);
+    if (!Number.isNaN(parsedMs)) {
+      return new Date(parsedMs);
+    }
+  }
+
+  return null;
+};
+
+const getLogCreatedAt = (data: Record<string, any>): Date | null => (
+  parseDateValue(data.timestampEpoch) ||
+  parseDateValue(data.timestamp) ||
+  parseDateValue(data.createdAt)
+);
+
+const getAlertStatus = (log: ErrorLogDisplay): { label: string; className: string } => {
+  if (log.alertEmailSent) {
+    return { label: 'Sent', className: 'bg-blue-500/80 text-white' };
+  }
+  if (log.alertSuppressed) {
+    return { label: 'Suppressed', className: 'bg-gray-500/80 text-white' };
+  }
+  if (log.alertEmailError) {
+    return { label: 'Failed', className: 'bg-yellow-500/80 text-black' };
+  }
+  return { label: 'Pending', className: 'bg-gray-700/80 text-white' };
+};
 
 const ErrorLogs: React.FC = () => {
   const [errorLogs, setErrorLogs] = useState<ErrorLogDisplay[]>([]);
@@ -65,6 +131,7 @@ const ErrorLogs: React.FC = () => {
       filtered = filtered.filter(log =>
         log.errorMessage.toLowerCase().includes(errorSearchTerm.toLowerCase()) ||
         log.id.toLowerCase().includes(errorSearchTerm.toLowerCase()) ||
+        log.source.toLowerCase().includes(errorSearchTerm.toLowerCase()) ||
         log.context?.challengeTitle?.toLowerCase().includes(errorSearchTerm.toLowerCase())
       );
     }
@@ -78,7 +145,7 @@ const ErrorLogs: React.FC = () => {
 
     if (sourceFilter) {
       filtered = filtered.filter(log =>
-        log.context?.source?.toLowerCase().includes(sourceFilter.toLowerCase())
+        log.source.toLowerCase().includes(sourceFilter.toLowerCase())
       );
     }
 
@@ -97,32 +164,45 @@ const ErrorLogs: React.FC = () => {
     setError(null);
     try {
       const errorLogsRef = collection(db, 'errorLogs');
-      // Get more logs for better analysis - limit to 500 most recent
-      const q = query(errorLogsRef, orderBy('createdAt', 'desc'), limit(500));
-      const snapshot = await getDocs(q);
+      const snapshot = await getDocs(errorLogsRef);
       
-      const fetchedLogs = snapshot.docs.map(doc => {
-        const data = doc.data();
+      const fetchedLogs = snapshot.docs.map((docSnapshot) => {
+        const data = docSnapshot.data() as Record<string, any>;
         console.log('[ErrorLogs] Fetched error log:', data);
+        const source = data.context?.source || data.source || 'Unknown';
+        const createdAt = getLogCreatedAt(data);
         
         return {
-          id: doc.id,
+          id: docSnapshot.id,
           username: data.username || 'Unknown',
           userId: data.userId || 'Unknown',
           errorMessage: data.errorMessage || 'No error message',
-          createdAt: convertFirestoreTimestamp(data.createdAt || data.timestamp),
-          timestamp: data.timestamp ? convertFirestoreTimestamp(data.timestamp) : undefined,
+          createdAt,
+          timestamp: parseDateValue(data.timestamp),
+          source,
           context: data.context || {},
           resolved: data.resolved || false,
-          resolvedAt: data.resolvedAt ? convertFirestoreTimestamp(data.resolvedAt) : undefined,
+          resolvedAt: parseDateValue(data.resolvedAt),
           resolvedBy: data.resolvedBy || undefined,
+          alertEmailSent: data.alertEmailSent === true,
+          alertSuppressed: data.alertSuppressed === true,
+          alertEmailError: data.alertEmailError || undefined,
+          alertEmailSentAt: parseDateValue(data.alertEmailSentAt),
+          alertEmailAttemptedAt: parseDateValue(data.alertEmailAttemptedAt),
+          alertEmailRecipients: Array.isArray(data.alertEmailRecipients) ? data.alertEmailRecipients : undefined,
         } as ErrorLogDisplay;
       });
 
-      setErrorLogs(fetchedLogs);
-      setFilteredErrorLogs(fetchedLogs);
-      setTotalErrorCount(fetchedLogs.length);
-      console.log(`[ErrorLogs] Fetched ${fetchedLogs.length} error logs.`);
+      const sortedLogs = fetchedLogs.sort((a, b) => {
+        const aTime = a.createdAt?.getTime() || 0;
+        const bTime = b.createdAt?.getTime() || 0;
+        return bTime - aTime;
+      });
+
+      setErrorLogs(sortedLogs);
+      setFilteredErrorLogs(sortedLogs);
+      setTotalErrorCount(sortedLogs.length);
+      console.log(`[ErrorLogs] Fetched ${sortedLogs.length} error logs.`);
     } catch (err) {
       console.error('[ErrorLogs] Error fetching error logs:', err);
       setError(`Failed to load error logs. ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -208,23 +288,22 @@ const ErrorLogs: React.FC = () => {
   };
 
   // Format date helper
-  const formatDate = (dateValue: any): string => {
+  const formatDate = (dateValue: Date | null | undefined): string => {
     if (!dateValue) return 'N/A';
     try {
-      const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
-      if (date instanceof Date && !isNaN(date.getTime())) {
-        return date.toLocaleString();
-      }
-      return 'Invalid Date';
-    } catch (e) {
-      return 'Invalid Date';
+      return dateValue.toLocaleString();
+    } catch {
+      return 'N/A';
     }
   };
 
   // Get time ago string
-  const getTimeAgo = (date: Date): string => {
+  const getTimeAgo = (date: Date | null | undefined): string => {
+    if (!date) return 'Unknown';
+
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
+    if (diffMs < 0) return 'Just now';
     const diffMins = Math.floor(diffMs / (1000 * 60));
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -238,6 +317,7 @@ const ErrorLogs: React.FC = () => {
   // Render Error Details Modal
   const renderErrorDetailsModal = () => {
     if (!selectedError) return null;
+    const selectedAlertStatus = getAlertStatus(selectedError);
 
     return (
       <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 animate-fade-in-up">
@@ -286,6 +366,10 @@ const ErrorLogs: React.FC = () => {
                   <p className="text-white">{formatDate(selectedError.createdAt)}</p>
                 </div>
                 <div>
+                  <p className="text-sm text-gray-400">Source</p>
+                  <p className="text-white font-mono text-sm">{selectedError.source}</p>
+                </div>
+                <div>
                   <p className="text-sm text-gray-400">Status</p>
                   <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
                     selectedError.resolved 
@@ -293,6 +377,12 @@ const ErrorLogs: React.FC = () => {
                       : 'bg-red-500/80 text-white'
                   }`}>
                     {selectedError.resolved ? 'Resolved' : 'Unresolved'}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-400">Alert Email</p>
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${selectedAlertStatus.className}`}>
+                    {selectedAlertStatus.label}
                   </span>
                 </div>
               </div>
@@ -319,6 +409,39 @@ const ErrorLogs: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* Alert Delivery Info */}
+            <div className="bg-blue-900/20 rounded-lg p-4 border border-blue-800">
+              <h4 className="text-lg font-semibold text-blue-300 mb-3">Alert Delivery</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-blue-200">Status</p>
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${selectedAlertStatus.className}`}>
+                    {selectedAlertStatus.label}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-sm text-blue-200">Sent At</p>
+                  <p className="text-blue-100">{formatDate(selectedError.alertEmailSentAt)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-blue-200">Last Attempt</p>
+                  <p className="text-blue-100">{formatDate(selectedError.alertEmailAttemptedAt)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-blue-200">Recipients</p>
+                  <p className="text-blue-100 break-all">
+                    {selectedError.alertEmailRecipients?.length ? selectedError.alertEmailRecipients.join(', ') : 'N/A'}
+                  </p>
+                </div>
+              </div>
+              {selectedError.alertEmailError && (
+                <div className="mt-4 bg-yellow-900/30 border border-yellow-700 rounded p-3">
+                  <p className="text-sm text-yellow-200 mb-1">Alert Error</p>
+                  <p className="text-xs text-yellow-100 break-words">{selectedError.alertEmailError}</p>
+                </div>
+              )}
+            </div>
 
             {/* Resolution Info */}
             {selectedError.resolved && (
@@ -457,7 +580,7 @@ const ErrorLogs: React.FC = () => {
                   {errorLogs.filter(log => {
                     const dayAgo = new Date();
                     dayAgo.setDate(dayAgo.getDate() - 1);
-                    return log.createdAt > dayAgo;
+                    return !!log.createdAt && log.createdAt > dayAgo;
                   }).length}
                 </p>
               )}
@@ -593,6 +716,7 @@ const ErrorLogs: React.FC = () => {
                     <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Error Message</th>
                     <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Source</th>
                     <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Status</th>
+                    <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Alert</th>
                     <th className="py-3 px-5 text-left text-xs text-gray-400 font-semibold uppercase tracking-wider">Created</th>
                     <th className="py-3 px-5 text-center text-xs text-gray-400 font-semibold uppercase tracking-wider">Actions</th>
                   </tr>
@@ -603,7 +727,9 @@ const ErrorLogs: React.FC = () => {
                       <td className="py-4 px-5">
                         <div>
                           <p className="text-sm text-white font-medium">{log.username}</p>
-                          <p className="text-xs text-gray-400 font-mono">{log.userId.substring(0, 8)}...</p>
+                          <p className="text-xs text-gray-400 font-mono">
+                            {log.userId.length > 8 ? `${log.userId.substring(0, 8)}...` : log.userId}
+                          </p>
                         </div>
                       </td>
                       <td className="py-4 px-5">
@@ -619,7 +745,7 @@ const ErrorLogs: React.FC = () => {
                         </div>
                       </td>
                       <td className="py-4 px-5 text-sm text-gray-300">
-                        {log.context?.source || 'Unknown'}
+                        {log.source}
                       </td>
                       <td className="py-4 px-5 text-sm">
                         <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
@@ -629,6 +755,16 @@ const ErrorLogs: React.FC = () => {
                         }`}>
                           {log.resolved ? 'Resolved' : 'Unresolved'}
                         </span>
+                      </td>
+                      <td className="py-4 px-5 text-sm">
+                        {(() => {
+                          const alertStatus = getAlertStatus(log);
+                          return (
+                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${alertStatus.className}`}>
+                              {alertStatus.label}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-4 px-5">
                         <div>
@@ -708,4 +844,3 @@ const ErrorLogs: React.FC = () => {
 };
 
 export default ErrorLogs;
-
