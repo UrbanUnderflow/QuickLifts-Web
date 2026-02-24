@@ -13,6 +13,11 @@ type SequenceRow = {
   functionPath: string;
   templateDocId: string;
   scheduleConfigDocId?: string; // if present, allows admin to set daily send time
+  deliveryRuntime?: 'netlify' | 'firebase';
+  supportsTemplateEditing?: boolean;
+  supportsTestSend?: boolean;
+  openInAdminPath?: string;
+  openInAdminLabel?: string;
 };
 
 const SEQUENCES: SequenceRow[] = [
@@ -112,6 +117,19 @@ const SEQUENCES: SequenceRow[] = [
     defaultSubject: 'Reset your Pulse password',
     functionPath: '/.netlify/functions/send-password-reset-email',
     templateDocId: 'password-reset-v1',
+  },
+  {
+    id: 'error-alerts-v1',
+    name: 'Error Alert Emails',
+    trigger: 'On new Firestore error log creation (`errorLogs/{logId}`)',
+    defaultSubject: '[Pulse Error Alert] {{source}} ({{username}})',
+    functionPath: '',
+    templateDocId: 'error-alerts-v1',
+    deliveryRuntime: 'firebase',
+    supportsTemplateEditing: false,
+    supportsTestSend: false,
+    openInAdminPath: '/admin/ErrorLogs',
+    openInAdminLabel: 'Open error logs',
   },
 ];
 
@@ -404,6 +422,9 @@ const EmailSequencesAdmin: React.FC = () => {
                       <td className="px-4 py-3 text-zinc-200 font-medium">{seq.name}</td>
                       <td className="px-4 py-3 text-zinc-400">
                         {seq.trigger}
+                        <div className="text-xs text-zinc-500 mt-1">
+                          Runtime: {seq.deliveryRuntime === 'firebase' ? 'Firebase Functions' : 'Netlify Functions'}
+                        </div>
                         {seq.scheduleConfigDocId ? (
                           <div className="text-xs text-zinc-500 mt-1">
                             Scheduled: {(scheduleTimeById[seq.id] || '14:00').trim()} UTC
@@ -413,6 +434,16 @@ const EmailSequencesAdmin: React.FC = () => {
                       <td className="px-4 py-3 text-zinc-400">{seq.defaultSubject}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-2">
+                          {seq.openInAdminPath ? (
+                            <a
+                              href={seq.openInAdminPath}
+                              className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors"
+                              title={seq.openInAdminLabel || 'Open in admin'}
+                            >
+                              <Eye className="w-4 h-4" />
+                              {seq.openInAdminLabel || 'Open'}
+                            </a>
+                          ) : null}
                           {seq.scheduleConfigDocId ? (
                             <button
                               onClick={() => openScheduleModal(seq)}
@@ -423,20 +454,24 @@ const EmailSequencesAdmin: React.FC = () => {
                               Schedule
                             </button>
                           ) : null}
-                          <button
-                            onClick={() => openEditModal(seq)}
-                            className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                            View / edit
-                          </button>
-                          <button
-                            onClick={() => openTestModal(seq)}
-                            className="flex items-center gap-2 px-3 py-2 bg-[#d7ff00] text-black hover:bg-[#c5eb00] rounded-lg text-sm font-medium transition-colors"
-                          >
-                            <Send className="w-4 h-4" />
-                            Send test
-                          </button>
+                          {seq.supportsTemplateEditing !== false ? (
+                            <button
+                              onClick={() => openEditModal(seq)}
+                              className="flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                              View / edit
+                            </button>
+                          ) : null}
+                          {seq.supportsTestSend !== false ? (
+                            <button
+                              onClick={() => openTestModal(seq)}
+                              className="flex items-center gap-2 px-3 py-2 bg-[#d7ff00] text-black hover:bg-[#c5eb00] rounded-lg text-sm font-medium transition-colors"
+                            >
+                              <Send className="w-4 h-4" />
+                              Send test
+                            </button>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

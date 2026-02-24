@@ -16,6 +16,7 @@ import { useUser } from '../../../hooks/useUser';
 import { creatorPagesService, CLIENT_QUESTIONNAIRES_PAGE_SLUG, Survey, SurveyResponse } from '../../../api/firebase/creatorPages/service';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { SurveyBuilderModal, SurveysListModal, SurveyResponsesModal } from '../../../components/Surveys';
+import { clubService } from '../../../api/firebase/club/service';
 
 import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseCategory } from '../../../api/firebase/exercise/types';
 import { ProfileImage } from '../../../api/firebase/user/types';
@@ -82,13 +83,13 @@ const Create: React.FC = () => {
   const [lpTitle, setLpTitle] = useState('');
   const [lpHeadline, setLpHeadline] = useState('');
   const [lpBody, setLpBody] = useState('');
-  const [lpBgType, setLpBgType] = useState<'color'|'image'>('color');
+  const [lpBgType, setLpBgType] = useState<'color' | 'image'>('color');
   const [lpBgColor, setLpBgColor] = useState('#0b0b0c');
   const [lpBgImage, setLpBgImage] = useState('');
   const [lpBgImageFile, setLpBgImageFile] = useState<File | null>(null);
   const [lpBgImagePreview, setLpBgImagePreview] = useState<string | null>(null);
   const [lpImageUploading, setLpImageUploading] = useState(false);
-  const [lpCtaType, setLpCtaType] = useState<'link'|'waitlist'>('waitlist');
+  const [lpCtaType, setLpCtaType] = useState<'link' | 'waitlist'>('waitlist');
   const [lpCtaLabel, setLpCtaLabel] = useState('Join Waitlist');
   const [lpCtaHref, setLpCtaHref] = useState('');
   const [lpCtaButtonColor, setLpCtaButtonColor] = useState('#E0FE10');
@@ -106,12 +107,48 @@ const Create: React.FC = () => {
   const [clientQuestionnaireResponses, setClientQuestionnaireResponses] = useState<SurveyResponse[]>([]);
   const [clientQuestionnaireResponsesLoading, setClientQuestionnaireResponsesLoading] = useState(false);
 
+  // Club Check State
+  const [hasClub, setHasClub] = useState(false);
+  const [checkingClub, setCheckingClub] = useState(true);
+
+  // Check if user has a club on mount
+  useEffect(() => {
+    let mounted = true;
+
+    const checkUserClub = async () => {
+      if (!currentUser?.id) {
+        if (mounted) setCheckingClub(false);
+        return;
+      }
+
+      try {
+        const club = await clubService.getClubByCreatorId(currentUser.id);
+        if (mounted) {
+          setHasClub(!!club);
+        }
+      } catch (error) {
+        console.error('[Creator Studio] Error checking user club status:', error);
+      } finally {
+        if (mounted) {
+          setCheckingClub(false);
+        }
+      }
+    };
+
+    checkUserClub();
+
+    return () => {
+      mounted = false;
+    };
+  }, [currentUser?.id]);
+
+
   const categories = [
-    'Weight Training', 
-    'Cardio', 
+    'Weight Training',
+    'Cardio',
     'Pilates',
-    'Mobility', 
-    'Stretching', 
+    'Mobility',
+    'Stretching',
     'Calisthenics'
   ];
 
@@ -123,22 +160,22 @@ const Create: React.FC = () => {
           // First, get URL parameters
           const urlParams = new URLSearchParams(window.location.search);
           const isTrimmed = urlParams.get('trimmed') === 'true';
-          
+
           // Only proceed if we're returning from trim page
           if (!isTrimmed) {
             console.log('[DEBUG] Not returning from trim page, skipping video processing');
             return;
           }
-          
+
           console.log('[DEBUG] Returning from trim page, looking for video data in sessionStorage');
-          
+
           // Get video data from sessionStorage
           const videoDataStr = sessionStorage.getItem('trimmed_video_data');
           if (!videoDataStr) {
             console.error('[DEBUG] No video data found in sessionStorage');
             return;
           }
-          
+
           try {
             // Parse the video data
             const videoData = JSON.parse(videoDataStr);
@@ -148,20 +185,20 @@ const Create: React.FC = () => {
               dataSize: videoData.data ? videoData.data.length : 'not available',
               isMinimal: videoData.isMinimal || false
             });
-            
+
             let trimmedFile;
-            
+
             // Handle normal vs minimal mode
             if (videoData.isMinimal) {
               // Check if we have a video blob in memory
               console.log('[DEBUG] Using minimal mode - looking for video blob in memory');
               const tempBlob = (window as any).tempVideoBlob;
-              
+
               if (!tempBlob) {
                 console.error('[DEBUG] No video blob found in memory for minimal mode');
                 return;
               }
-              
+
               // Use the blob directly
               trimmedFile = tempBlob;
               // Make sure trim metadata is attached
@@ -175,34 +212,34 @@ const Create: React.FC = () => {
               // Convert base64 to File object
               const arrayBuffer = Uint8Array.from(atob(videoData.data), c => c.charCodeAt(0)).buffer;
               trimmedFile = new File([arrayBuffer], videoData.name, { type: videoData.type });
-              
+
               // Add trim metadata if present
               if (videoData.trimStart !== undefined && videoData.trimEnd !== undefined) {
-                console.log('[DEBUG] Attaching trim metadata:', { 
-                  trimStart: videoData.trimStart, 
-                  trimEnd: videoData.trimEnd 
+                console.log('[DEBUG] Attaching trim metadata:', {
+                  trimStart: videoData.trimStart,
+                  trimEnd: videoData.trimEnd
                 });
                 (trimmedFile as any).trimStart = videoData.trimStart;
                 (trimmedFile as any).trimEnd = videoData.trimEnd;
               }
             }
-            
+
             // Create object URL and revoke any previous preview first
             if (previewUrlRef.current) {
-              try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) {}
+              try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) { }
               previewUrlRef.current = null;
             }
             const objectUrl = URL.createObjectURL(trimmedFile);
             console.log('[DEBUG] Created object URL for video preview:', objectUrl);
-            
+
             // Check actual duration of the loaded video
             const durationCheck = document.createElement('video');
             durationCheck.preload = 'metadata';
             durationCheck.onloadedmetadata = () => {
-              console.log('[DEBUG] LOADED VIDEO VERIFICATION - Actual duration after loading:', 
-                          durationCheck.duration.toFixed(3), 'seconds',
-                          'Expected:', ((trimmedFile as any).trimEnd - (trimmedFile as any).trimStart).toFixed(3), 
-                          'seconds');
+              console.log('[DEBUG] LOADED VIDEO VERIFICATION - Actual duration after loading:',
+                durationCheck.duration.toFixed(3), 'seconds',
+                'Expected:', ((trimmedFile as any).trimEnd - (trimmedFile as any).trimStart).toFixed(3),
+                'seconds');
               URL.revokeObjectURL(durationCheck.src);
             };
             durationCheck.onerror = (e) => {
@@ -210,12 +247,12 @@ const Create: React.FC = () => {
               URL.revokeObjectURL(durationCheck.src);
             };
             durationCheck.src = objectUrl;
-            
+
             // Update component state
             setOriginalVideoFile(trimmedFile);
             previewUrlRef.current = objectUrl;
             setVideoPreview(objectUrl);
-            
+
             // If videoData contains trimStart/trimEnd, set them here (though this flow might be deprecated)
             if (videoData.trimStart !== undefined && videoData.trimEnd !== undefined) {
               setTrimStartTime(videoData.trimStart);
@@ -225,27 +262,27 @@ const Create: React.FC = () => {
                 end: videoData.trimEnd,
               });
             }
-            
+
             console.log('[DEBUG] Video state updated successfully');
-            
+
             // Clean up sessionStorage after we've successfully loaded the video
             // (wait a bit to make sure the state updates take effect)
             setTimeout(() => {
               sessionStorage.removeItem('trimmed_video_data');
               console.log('[DEBUG] Removed video data from sessionStorage');
-              
+
               // Also clean up temp blob if it exists
               if ((window as any).tempVideoBlob) {
                 delete (window as any).tempVideoBlob;
                 console.log('[DEBUG] Cleaned up temporary video blob from memory');
               }
-              
+
               // Remove URL parameters for cleanliness
-              const cleanUrl = window.location.pathname + 
+              const cleanUrl = window.location.pathname +
                 (urlParams.toString() ? `?${urlParams.toString()}` : '');
               window.history.replaceState({}, '', cleanUrl);
             }, 2000);
-            
+
           } catch (parseError) {
             console.error('[DEBUG] Error parsing video data from sessionStorage:', parseError);
           }
@@ -253,7 +290,7 @@ const Create: React.FC = () => {
           console.error('[DEBUG] Error processing trimmed video:', error);
         }
       };
-      
+
       // Run the processor
       processTrimmedVideo();
     }
@@ -288,13 +325,13 @@ const Create: React.FC = () => {
   const handleFileSelection = (file: File) => {
     const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
     const ALLOWED_EXTENSIONS = ['.mp4', '.mov', '.qt', '.avi'];
-    
+
     // Check if file extension is allowed, regardless of detected MIME type
     const fileName = file.name.toLowerCase();
     const hasAllowedExtension = ALLOWED_EXTENSIONS.some(ext => fileName.endsWith(ext));
-    
+
     console.log(`[DEBUG] Video file selected - Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB, Type: ${file.type}, Name: ${file.name}`);
-    
+
     if (!ALLOWED_TYPES.includes(file.type) && !hasAllowedExtension) {
       console.log('[DEBUG] Rejected file with unsupported type:', file.type);
       alert('Please upload a valid video file (MP4, QuickTime, or AVI). WebM format is not supported for uploading.');
@@ -304,7 +341,7 @@ const Create: React.FC = () => {
     // Check file size - limit to 50MB for browser processing
     const MAX_SIZE_MB = 50;
     const fileSizeMB = file.size / (1024 * 1024);
-    
+
     if (fileSizeMB > MAX_SIZE_MB) {
       alert(`File size (${fileSizeMB.toFixed(2)} MB) exceeds the maximum allowed size of ${MAX_SIZE_MB} MB. Please select a smaller file.`);
       return;
@@ -337,10 +374,10 @@ const Create: React.FC = () => {
       setTrimEndTime(e);
       console.log('[DEBUG] Trim points set from file metadata', { s, e });
     }
-    
+
     // Create preview URL for the trimmed video
     if (previewUrlRef.current) {
-      try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) {}
+      try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) { }
       previewUrlRef.current = null;
     }
     const previewUrl = URL.createObjectURL(trimmedFile);
@@ -354,7 +391,7 @@ const Create: React.FC = () => {
     if (selectedFile) { // selectedFile should be the original file shown in the trimmer
       setOriginalVideoFile(selectedFile); // Ensure originalVideoFile is the one from the trimmer
       if (previewUrlRef.current) {
-        try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) {}
+        try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) { }
         previewUrlRef.current = null;
       }
       const previewUrl = URL.createObjectURL(selectedFile);
@@ -371,46 +408,46 @@ const Create: React.FC = () => {
     // Define Safari-compatible formats
     const SAFARI_COMPATIBLE_TYPES = ['video/mp4', 'video/quicktime'];
     const SAFARI_COMPATIBLE_CODECS = ['avc1.42E01E, mp4a.40.2']; // H.264 with AAC audio
-    
+
     // If file is already in a Safari-compatible format, return it directly
     if (SAFARI_COMPATIBLE_TYPES.includes(file.type)) {
       console.log('[DEBUG] File already in Safari-compatible format:', file.type);
       return file;
     }
-    
+
     console.log('[DEBUG] Attempting to verify/convert file from', file.type);
-    
+
     return new Promise((resolve, reject) => {
       try {
         // Create video element to test compatibility
         const video = document.createElement('video');
         video.preload = 'metadata';
-        
+
         // Create object URL for the file
         const objectUrl = URL.createObjectURL(file);
-        
+
         // Set up events for processing
         video.onloadedmetadata = () => {
           URL.revokeObjectURL(objectUrl);
-          
+
           // Test if current format can play in Safari
           const canPlayType = video.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
           console.log('[DEBUG] Safari compatibility check:', canPlayType);
-          
+
           if (canPlayType === 'probably' || canPlayType === 'maybe') {
             // If compatible, just update the container format
             const newFileName = file.name.replace(/\.[^/.]+$/, '.mp4');
-            const newFile = new File([file], newFileName, { 
+            const newFile = new File([file], newFileName, {
               type: 'video/mp4',
-              lastModified: file.lastModified 
+              lastModified: file.lastModified
             });
-            
+
             console.log('[DEBUG] Created Safari-compatible file:', {
               name: newFile.name,
               type: newFile.type,
               size: newFile.size
             });
-            
+
             resolve(newFile);
           } else {
             // If not compatible, we should inform the user
@@ -421,12 +458,12 @@ const Create: React.FC = () => {
             resolve(new File([file], newFileName, { type: 'video/mp4' }));
           }
         };
-        
+
         video.onerror = () => {
           URL.revokeObjectURL(objectUrl);
           reject(new Error('Failed to load video metadata'));
         };
-        
+
         // Set the source to load metadata
         video.src = objectUrl;
       } catch (error) {
@@ -449,7 +486,7 @@ const Create: React.FC = () => {
   const clearVideo = () => {
     setOriginalVideoFile(null);
     if (previewUrlRef.current) {
-      try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) {}
+      try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) { }
       previewUrlRef.current = null;
     }
     setVideoPreview(null);
@@ -465,7 +502,7 @@ const Create: React.FC = () => {
   useEffect(() => {
     return () => {
       if (previewUrlRef.current) {
-        try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) {}
+        try { URL.revokeObjectURL(previewUrlRef.current); } catch (_) { }
         previewUrlRef.current = null;
       }
     };
@@ -474,16 +511,16 @@ const Create: React.FC = () => {
   // Check for similar exercises in Firestore
   const checkSimilarExercises = async (): Promise<Exercise[]> => {
     if (!exerciseName.trim()) return [];
-    
+
     try {
       console.log('[DEBUG] Starting similar exercise check for:', exerciseName.trim());
-      
+
       // Always check using lowercase for document ID lookup
       const lowerCaseName = exerciseName.trim().toLowerCase();
       console.log('[DEBUG] Directly checking Firestore for document with ID:', lowerCaseName);
-      
+
       const exists = await exerciseService.verifyExerciseExistsByName(exerciseName.trim());
-      
+
       if (exists) {
         // If it exists, prefer fetching the exercise with its mapped videos so previews can render
         console.log('[DEBUG] Found existing exercise with this name. Fetching exercises with videos for preview.');
@@ -513,14 +550,14 @@ const Create: React.FC = () => {
         const exercise = await exerciseService.getExerciseByName(exerciseName.trim());
         return exercise ? [exercise] : [];
       }
-      
+
       console.log('[DEBUG] No exact match found by document ID');
-      
+
       // For compatibility, also run the existing service check
       console.log('[DEBUG] For comparison, also using exerciseService.fetchExercises()');
       await exerciseService.fetchExercises();
       const allExercises = exerciseService.allExercises;
-      
+
       console.log(`[DEBUG] Service fetched ${allExercises.length} exercises with videos`);
 
       // Filter exercises by name - case insensitive matching
@@ -532,9 +569,9 @@ const Create: React.FC = () => {
         }
         return isMatch;
       });
-      
+
       console.log(`[DEBUG] Service found ${serviceMatches.length} similar exercises`);
-      
+
       return serviceMatches;
     } catch (error) {
       console.error('[DEBUG] Error checking similar exercises:', error);
@@ -549,7 +586,7 @@ const Create: React.FC = () => {
       alert('Please select a video and define trim points.');
       return;
     }
-    
+
     try {
       console.log('[DEBUG] Starting upload process with server-side trim plan');
       console.log('[DEBUG] Original video details:', {
@@ -559,11 +596,11 @@ const Create: React.FC = () => {
         trimStart: trimStartTime,
         trimEnd: trimEndTime,
       });
-      
+
       // Make sure the file type is compatible with Firebase Storage
       const ALLOWED_TYPES = ['video/mp4', 'video/quicktime', 'video/x-msvideo'];
       let fileToUpload = originalVideoFile;
-      
+
       if (!ALLOWED_TYPES.includes(originalVideoFile.type)) {
         console.log('[DEBUG] Converting original video to compatible format before upload');
         try {
@@ -579,19 +616,19 @@ const Create: React.FC = () => {
           throw new Error('Could not convert video to a compatible format. Please upload an MP4 video.');
         }
       }
-      
+
       // Clear the exercise service cache to ensure fresh data
       exerciseService.clearCache();
-      
+
       // Format exercise name consistently
       const formattedExerciseName = formatExerciseNameForId(exerciseName.trim());
-      
+
       if (existingExercise) {
         console.log('[DEBUG] Using existing exercise:', {
           id: existingExercise.id,
           name: existingExercise.name
         });
-        
+
         // Verify the existing exercise is actually in Firestore - by name now
         const exists = await exerciseService.verifyExerciseExistsByName(existingExercise.name);
         if (!exists) {
@@ -602,10 +639,10 @@ const Create: React.FC = () => {
       } else {
         console.log('[DEBUG] Will create new exercise with name:', formattedExerciseName);
       }
-      
+
       setIsUploading(true);
       setUploadProgress(0);
-      
+
       // 1. Upload the ORIGINAL video to Firebase Storage
       // Progress: 0% -> 50%
       console.log('[DEBUG] Starting Firebase Storage upload of ORIGINAL video:', {
@@ -613,7 +650,7 @@ const Create: React.FC = () => {
         type: fileToUpload.type,
         size: fileToUpload.size
       });
-      
+
       const uploadResult = await firebaseStorageService.uploadVideo(
         fileToUpload, // Uploading the original (or container-converted) file
         VideoType.Exercise, // Consider a temporary location if originals aren't kept long-term
@@ -624,42 +661,42 @@ const Create: React.FC = () => {
         },
         existingExercise ? existingExercise.name : formattedExerciseName // Path for original
       );
-      
+
       console.log('[DEBUG] Original video uploaded successfully to Firebase Storage:', uploadResult);
       setUploadProgress(0.5); // Mark original upload as 50% complete
-      
+
       // 2. Get the current user 
       console.log('[DEBUG] Getting current user');
-      
+
       // Get complete user data from userService (Redux store)
       // const completeUserData = userService.currentUser;
       const completeUserData = currentUser;
-      
+
       if (!completeUserData) {
         console.error('[DEBUG] No user found in Redux store');
         throw new Error('User must be logged in to upload videos');
       }
-      
+
       const username = completeUserData.username || 'Anonymous';
       const userId = completeUserData.id;
-      
+
       console.log('[DEBUG] Current user from Redux store:', {
         uid: userId,
         username: username
       });
-      
+
       // 3. Generate IDs for new documents
       const exerciseId = existingExercise?.id || exerciseService.generateExerciseId();
       const videoId = exerciseService.generateExerciseVideoId();
       console.log('[DEBUG] Generated IDs:', { exerciseId, videoId });
-      
+
       // Set progress to 75% after generating IDs and fetching user
       setUploadProgress(0.75);
-      
+
       // 4. Import Firestore modules
       console.log('[DEBUG] Importing Firestore modules');
       const { Timestamp } = await import('firebase/firestore');
-      
+
       // 5. First, prepare the exercise video data
       const exerciseVideoData = new ExerciseVideo({
         id: videoId,
@@ -667,17 +704,17 @@ const Create: React.FC = () => {
         exercise: formattedExerciseName,
         username: username,
         userId: userId,
-        originalVideoStoragePath: uploadResult.gsURL, 
-        originalVideoUrl: uploadResult.downloadURL, 
+        originalVideoStoragePath: uploadResult.gsURL,
+        originalVideoUrl: uploadResult.downloadURL,
         // Seed videoURL with the original so the exercise page has a playable source immediately.
         // The server-side trim can update this to the trimmed URL later.
-        videoURL: uploadResult.downloadURL, 
-        gifURL: '', 
-        trimStatus: 'pending', 
+        videoURL: uploadResult.downloadURL,
+        gifURL: '',
+        trimStatus: 'pending',
         trimStartTime: trimStartTime!, // Assert non-null as checked in uploadVideo start
         trimEndTime: trimEndTime!,   // Assert non-null
         fileName: uploadResult.gsURL.split('/').pop() || 'unknown',
-        storagePath: '', 
+        storagePath: '',
         profileImage: new ProfileImage({
           profileImageURL: completeUserData.profileImage?.profileImageURL || '',
           imageOffsetWidth: 0,
@@ -694,15 +731,15 @@ const Create: React.FC = () => {
         updatedAt: new Date()
         // Old client-side trim metadata removed, new structure handles it
       });
-      
+
       console.log('[DEBUG] Exercise video data prepared (for server-side trim):', exerciseVideoData);
-      
+
       // 6. Create the exercise video using the service
       console.log('[DEBUG] Creating exercise video document in Firestore');
       try {
         // Convert to plain object before saving to Firestore
         const exerciseVideoPlainObject = exerciseVideoData.toDictionary();
-        
+
         // Add server-side trim specific fields explicitly if not already in toDictionary 
         // (depending on ExerciseVideo class implementation)
         exerciseVideoPlainObject.trimStartTime = trimStartTime!;
@@ -712,17 +749,17 @@ const Create: React.FC = () => {
         // Ensure videoURL exists so UI can render immediately
         exerciseVideoPlainObject.videoURL = exerciseVideoPlainObject.videoURL || uploadResult.downloadURL;
         exerciseVideoPlainObject.trimStatus = 'pending';
-        
+
         await exerciseService.createExerciseVideo(exerciseVideoPlainObject);
         console.log('[DEBUG] Exercise video document created successfully with ID:', videoId);
       } catch (firestoreError) {
         console.error('[DEBUG] Error creating exercise video document:', firestoreError);
         throw firestoreError;
       }
-      
+
       // Update progress to 80% after creating the video document
       setUploadProgress(0.8);
-        
+
       // 7. Create or update the Exercise document if it doesn't exist
       if (!existingExercise) {
         console.log('[DEBUG] Preparing to create new exercise document', ExerciseCategory.fromIdentifier(exerciseCategory.toLowerCase().replace(/\s+/g, '-')));
@@ -744,9 +781,9 @@ const Create: React.FC = () => {
           createdAt: new Date(),
           updatedAt: new Date()
         });
-        
+
         console.log('[DEBUG] Exercise data prepared:', exerciseData);
-        
+
         // 8. Create the exercise using the service
         console.log('[DEBUG] Creating exercise document in Firestore');
         try {
@@ -754,7 +791,7 @@ const Create: React.FC = () => {
           const exerciseDataPlainObject = exerciseData.toDictionary();
           await exerciseService.createExercise(exerciseDataPlainObject);
           console.log('[DEBUG] Exercise document created successfully with ID:', exerciseId);
-          
+
           // Verify the exercise was created - by name now
           const created = await exerciseService.verifyExerciseExistsByName(formattedExerciseName);
           if (created) {
@@ -769,14 +806,14 @@ const Create: React.FC = () => {
       } else {
         console.log('[DEBUG] Using existing exercise, no need to create a new one');
       }
-      
+
       // Update progress to 85% after creating the exercise document
       setUploadProgress(0.85);
-      
+
       // 9. Set the uploaded exercise ID
       console.log('[DEBUG] Setting uploaded exercise ID:', exerciseId);
       setUploadedExerciseId(exerciseId);
-      
+
       // 10. Trigger Firebase Cloud Function for trimming
       // Progress: 85% -> 95% (representing triggering and server processing)
       console.log('[DEBUG] Preparing to trigger Firebase Cloud Function for video trimming.');
@@ -794,12 +831,12 @@ const Create: React.FC = () => {
       };
       console.log('[DEBUG] Cloud Function parameters:', cloudFunctionParams);
       console.log(`[DEBUG] NEXT STEP: Call a Firebase Cloud Function (e.g., via HTTPS callable or other trigger) with these params.`);
-      
+
       // Simulate server processing time for UI feedback
       // In a real scenario, you'd listen for Firestore updates or get a response from the callable function.
       // For now, we'll just advance the progress bar.
       // The actual videoURL and gifURL will be updated in Firestore by the cloud function.
-      
+
       // Commenting out client-side GIF generation as it should happen on the server after trimming
       /*
       console.log('[DEBUG] Starting client-side GIF generation for video', videoId);
@@ -810,7 +847,7 @@ const Create: React.FC = () => {
         console.error('[DEBUG] Error starting GIF generation:', gifError);
       }
       */
-      
+
       console.log('[DEBUG] Client-side processing complete. Waiting for server to trim and update URLs.');
       // The UI should now wait for the Firestore document to be updated by the cloud function.
       // For demo, we'll just complete the progress bar.
@@ -820,7 +857,7 @@ const Create: React.FC = () => {
       // when `trimStatus` becomes 'completed' and `videoURL` is populated.
       // For now, let's assume the call is made and we show success.
       // This part needs to be more robust with actual server feedback.
-      
+
       // Progress: 87% -> 100% (simulating call and server work for now)
       // A more realistic progress update would come from observing the Cloud Function's progress
       // (e.g., by listening to Firestore updates on the video document).
@@ -834,7 +871,7 @@ const Create: React.FC = () => {
           console.log('[DEBUG] Simulated server processing complete.');
           // In a real app, this would be triggered by the cloud function finishing
           // and updating the Firestore document, which the client would listen to.
-          setShowSuccessModal(true); 
+          setShowSuccessModal(true);
         }
       }, 300);
 
@@ -846,13 +883,13 @@ const Create: React.FC = () => {
         trimStartTime: trimStartTime,
         trimEndTime: trimEndTime,
       });
-      
+
     } catch (error) {
       console.error('[DEBUG] Upload failed - Full error:', error);
       console.error('[DEBUG] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       console.error('[DEBUG] Error message:', error instanceof Error ? error.message : 'Unknown error');
       console.error('[DEBUG] Error name:', error instanceof Error ? error.name : 'Unknown name');
-      
+
       alert('Video upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       console.log('[DEBUG] Upload process finished');
@@ -863,7 +900,7 @@ const Create: React.FC = () => {
   // Handle submission: check for similar exercises first.
   const handleSubmit = async () => {
     console.log('[DEBUG] Submit button clicked');
-    
+
     if (!originalVideoFile) {
       console.error('[DEBUG] No original video file selected');
       alert('Please select a video file.');
@@ -875,17 +912,17 @@ const Create: React.FC = () => {
       alert('Please select trim points for your video using the trimmer.');
       return;
     }
-    
+
     if (!exerciseName.trim()) {
       console.error('[DEBUG] No exercise name provided');
       return;
     }
-    
+
     console.log('[DEBUG] Checking for similar exercises');
-    
+
     // Check for similar exercises by exact name match
     const similar = await checkSimilarExercises();
-    
+
     if (similar.length > 0) {
       console.log('[DEBUG] Similar exercises found, showing modal');
       setIsDuplicateExercise(true);
@@ -893,7 +930,7 @@ const Create: React.FC = () => {
       setShowSimilarModal(true);
       return;
     }
-    
+
     console.log('[DEBUG] No similar exercises found, proceeding with upload');
     // If no similar exercises found, upload immediately.
     uploadVideo();
@@ -905,13 +942,13 @@ const Create: React.FC = () => {
       id: exercise.id,
       name: exercise.name
     });
-    
+
     // The document ID is the exercise name, so verify by name
     exerciseService.verifyExerciseExistsByName(exercise.name)
       .then(exists => {
         if (!exists) {
           console.error('[DEBUG] Selected exercise does not exist in Firestore!', exercise.name);
-          
+
           // Show a warning and ask user to proceed with creating a new exercise instead
           if (window.confirm('The selected exercise could not be found. Would you like to create a new exercise instead?')) {
             setShowSimilarModal(false);
@@ -945,7 +982,7 @@ const Create: React.FC = () => {
       // The actual URL should use the name as document ID (lowercase with dashes instead of spaces)
       const documentId = exerciseName.trim().toLowerCase().replace(/\s+/g, '-');
       console.log('[DEBUG] Document ID for navigation:', documentId);
-      
+
       // Verify the exercise exists before navigating
       exerciseService.verifyExerciseExistsByName(exerciseName.trim())
         .then(exists => {
@@ -988,16 +1025,16 @@ const Create: React.FC = () => {
 
     try {
       setIsGeneratingCaption(true);
-      
+
       // Prepare the data for the API request
       const data = {
         exerciseName: exerciseName.trim(),
         category: exerciseCategory,
         tags: tags
       };
-      
+
       console.log('[DEBUG] Generating AI caption with data:', data);
-      
+
       // Make API request to our backend (Netlify function)
       const response = await fetch('/.netlify/functions/generateCaption', {
         method: 'POST',
@@ -1006,14 +1043,14 @@ const Create: React.FC = () => {
         },
         body: JSON.stringify(data),
       });
-      
+
       if (!response.ok) {
         throw new Error(`API request failed with status ${response.status}`);
       }
-      
+
       const result = await response.json();
       console.log('[DEBUG] AI caption generated:', result);
-      
+
       // Update the caption state with the generated text
       if (result.caption) {
         setCaption(result.caption);
@@ -1031,7 +1068,7 @@ const Create: React.FC = () => {
   const handleLpImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     // Validate image type
     if (!file.type.startsWith('image/')) {
       alert('Please select an image file');
@@ -1068,7 +1105,7 @@ const Create: React.FC = () => {
         const storage = getStorage();
         const fileName = `${Date.now()}_${lpBgImageFile.name}`;
         const imageRef = storageRef(storage, `landing-page/${currentUser.id}/${fileName}`);
-        
+
         await uploadBytes(imageRef, lpBgImageFile);
         backgroundImageUrl = await getDownloadURL(imageRef);
         setLpImageUploading(false);
@@ -1344,6 +1381,21 @@ const Create: React.FC = () => {
       iconColor: 'text-emerald-400',
       action: handleOpenClientQuestionnaires,
     },
+    {
+      id: 'create-club',
+      title: checkingClub ? 'Loading...' : (hasClub ? 'Manage Club' : 'Create a Club'),
+      description: checkingClub ? 'Checking permissions...' : (hasClub ? 'Edit your club landing page' : 'Host your community & build your landing page'),
+      icon: (
+        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+        </svg>
+      ),
+      color: 'from-amber-500/20 to-yellow-500/20',
+      borderColor: 'border-amber-500/30',
+      iconBg: 'bg-amber-500/20',
+      iconColor: 'text-amber-400',
+      action: () => router.push('/club-studio'),
+    },
   ];
 
   // Upload view content
@@ -1374,7 +1426,7 @@ const Create: React.FC = () => {
         <p className="text-zinc-400">Upload an exercise video to your library</p>
       </div>
 
-      <div 
+      <div
         className={`
           relative border-2 border-dashed rounded-2xl p-8 text-center transition-all duration-300
           ${isDragOver ? 'border-[#E0FE10] bg-[#E0FE10]/5 scale-[1.02]' : 'border-zinc-700 hover:border-zinc-600'}
@@ -1390,12 +1442,12 @@ const Create: React.FC = () => {
           </div>
         ) : videoPreview ? (
           <div className="relative">
-            <video 
-              src={videoPreview} 
-              controls 
+            <video
+              src={videoPreview}
+              controls
               className="w-full rounded-xl"
             />
-            <button 
+            <button
               onClick={clearVideo}
               className="absolute top-3 right-3 bg-red-500/90 hover:bg-red-500 text-white p-2.5 rounded-full backdrop-blur-sm transition-colors"
             >
@@ -1406,8 +1458,8 @@ const Create: React.FC = () => {
           </div>
         ) : (
           <>
-            <input 
-              type="file" 
+            <input
+              type="file"
               ref={fileInputRef}
               accept="video/mp4,video/quicktime,video/x-msvideo"
               onChange={handleFileInputChange}
@@ -1421,7 +1473,7 @@ const Create: React.FC = () => {
               </div>
               <p className="text-zinc-300 text-lg mb-2">Drag and drop your video here</p>
               <p className="text-zinc-500 mb-6">MP4, MOV, or AVI up to 50MB</p>
-              <button 
+              <button
                 onClick={() => fileInputRef.current?.click()}
                 className="bg-[#E0FE10] text-black px-6 py-3 rounded-xl font-semibold hover:bg-[#d0ee00] transition-colors"
               >
@@ -1472,7 +1524,7 @@ const Create: React.FC = () => {
                 placeholder="Add a tag"
                 className="flex-grow bg-zinc-800/50 border border-zinc-700 rounded-xl p-4 text-white placeholder-zinc-500 focus:border-[#E0FE10] focus:outline-none transition-colors"
               />
-              <button 
+              <button
                 onClick={handleAddTag}
                 className="bg-zinc-700 hover:bg-zinc-600 text-white px-5 rounded-xl font-medium transition-colors"
               >
@@ -1482,12 +1534,12 @@ const Create: React.FC = () => {
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {tags.map(tag => (
-                  <span 
-                    key={tag} 
+                  <span
+                    key={tag}
                     className="bg-zinc-800 text-zinc-300 px-4 py-2 rounded-full flex items-center gap-2 text-sm"
                   >
                     {tag}
-                    <button 
+                    <button
                       onClick={() => handleRemoveTag(tag)}
                       className="text-zinc-500 hover:text-red-400 transition-colors"
                     >
@@ -1529,21 +1581,21 @@ const Create: React.FC = () => {
           {/* Progress Bar */}
           {isUploading && (
             <div className="mt-6">
-              <ProgressBar 
-                progress={uploadProgress} 
+              <ProgressBar
+                progress={uploadProgress}
                 label={
                   uploadProgress < 0.5 ? "Uploading video..." :
-                  uploadProgress < 0.8 ? "Creating exercise..." :
-                  uploadProgress < 0.87 ? "Processing..." :
-                  uploadProgress < 1.0 ? "Finalizing..." :
-                  "Complete!"
+                    uploadProgress < 0.8 ? "Creating exercise..." :
+                      uploadProgress < 0.87 ? "Processing..." :
+                        uploadProgress < 1.0 ? "Finalizing..." :
+                          "Complete!"
                 }
               />
             </div>
           )}
 
           {/* Submit Button */}
-          <button 
+          <button
             onClick={handleSubmit}
             disabled={!exerciseName.trim() || isUploading}
             className="w-full bg-[#E0FE10] text-black font-bold py-4 px-6 rounded-xl hover:bg-[#d0ee00] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-lg mt-4"
@@ -1564,7 +1616,7 @@ const Create: React.FC = () => {
         {/* Background gradient orbs */}
         <div className="absolute -top-20 -left-20 w-64 h-64 bg-[#E0FE10]/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -top-10 -right-10 w-48 h-48 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
-        
+
         <div className="relative">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#E0FE10] to-[#a8c00a] flex items-center justify-center">
@@ -1574,7 +1626,7 @@ const Create: React.FC = () => {
             </div>
             <span className="text-[#E0FE10] font-semibold tracking-wide uppercase text-sm">Creator Studio</span>
           </div>
-          
+
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-3">
             Welcome back{currentUser?.username ? `, ${currentUser.username}` : ''}
           </h1>
@@ -1597,7 +1649,7 @@ const Create: React.FC = () => {
             <div className={`w-14 h-14 ${feature.iconBg} ${feature.iconColor} rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300`}>
               {feature.icon}
             </div>
-            
+
             {/* Content */}
             <h3 className="text-xl font-bold text-white mb-2 group-hover:text-[#E0FE10] transition-colors">
               {feature.title}
@@ -1898,12 +1950,12 @@ const Create: React.FC = () => {
                 const now = new Date();
                 const startDate = start ? new Date(start) : null;
                 const endDate = end ? new Date(end) : null;
-                
+
                 // Determine round status
                 let status: 'upcoming' | 'active' | 'completed' = 'upcoming';
                 let statusColor = 'bg-blue-500';
                 let statusText = 'Upcoming';
-                
+
                 if (startDate && endDate) {
                   if (now >= startDate && now <= endDate) {
                     status = 'active';
@@ -2044,7 +2096,7 @@ const Create: React.FC = () => {
           <p className="text-zinc-500 text-sm mb-3">
             If you're experiencing upload problems, clearing browser storage may help resolve the issue.
           </p>
-          <button 
+          <button
             onClick={async () => {
               if (confirm('Clear all video storage? This may help resolve upload issues.')) {
                 try {
@@ -2274,7 +2326,7 @@ const Create: React.FC = () => {
 
       {/* Similar Exercises Modal */}
       {showSimilarModal && (
-        <SimilarExercisesModal 
+        <SimilarExercisesModal
           similarExercises={similarExercisesFound}
           isDuplicateExercise={isDuplicateExercise}
           onSelectExercise={handleSelectSimilarExercise}
@@ -2285,7 +2337,7 @@ const Create: React.FC = () => {
 
       {/* Success Modal */}
       {showSuccessModal && (
-        <SuccessModal 
+        <SuccessModal
           onViewMove={handleViewMove}
           onClose={handleCloseSuccessModal}
         />
@@ -2431,14 +2483,14 @@ const SimilarExercisesModal: React.FC<SimilarExercisesModalProps> = ({
               onClick={onSelectAsUnique}
               className="w-full bg-zinc-800 text-white py-2 px-4 rounded-lg mb-4"
             >
-              {isDuplicateExercise 
+              {isDuplicateExercise
                 ? "Cancel, I have a unique exercise"
                 : "No, this is a unique exercise"
               }
             </button>
-            
+
             <h3 className="text-xl text-white font-semibold">
-              {isDuplicateExercise 
+              {isDuplicateExercise
                 ? "There is an exercise in the vault with the same name. Tap the exercise to link them."
                 : "Similar exercises found in the vault"
               }
@@ -2869,33 +2921,29 @@ const ViewAllRoundsModal: React.FC<ViewAllRoundsModalProps> = ({ rounds, filter,
           <div className="px-6 py-5 border-b border-zinc-800 flex gap-3 overflow-x-auto" style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}>
             <button
               onClick={() => onFilterChange('all')}
-              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap flex-shrink-0 ${
-                filter === 'all' ? 'bg-[#E0FE10] text-black' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-              }`}
+              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap flex-shrink-0 ${filter === 'all' ? 'bg-[#E0FE10] text-black' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                }`}
             >
               All ({rounds.length})
             </button>
             <button
               onClick={() => onFilterChange('active')}
-              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap flex-shrink-0 ${
-                filter === 'active' ? 'bg-green-500 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-              }`}
+              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap flex-shrink-0 ${filter === 'active' ? 'bg-green-500 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                }`}
             >
               Active ({statusCounts.active})
             </button>
             <button
               onClick={() => onFilterChange('upcoming')}
-              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap flex-shrink-0 ${
-                filter === 'upcoming' ? 'bg-blue-500 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-              }`}
+              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap flex-shrink-0 ${filter === 'upcoming' ? 'bg-blue-500 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                }`}
             >
               Upcoming ({statusCounts.upcoming})
             </button>
             <button
               onClick={() => onFilterChange('completed')}
-              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap flex-shrink-0 ${
-                filter === 'completed' ? 'bg-zinc-500 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-              }`}
+              className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap flex-shrink-0 ${filter === 'completed' ? 'bg-zinc-500 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                }`}
             >
               Completed ({statusCounts.completed})
             </button>

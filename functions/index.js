@@ -91,6 +91,9 @@ exports.getParticipantsBatch = require("./getParticipantsBatch").getParticipants
 exports.logNotification = require("./notificationLogger").logNotification;
 exports.logMulticastNotification = require("./notificationLogger").logMulticastNotification; 
 
+// Export error alert trigger (emails admins through Brevo when new errorLogs docs are created)
+exports.sendErrorAlertEmailOnErrorLogCreate = require("./errorAlerts").sendErrorAlertEmailOnErrorLogCreate;
+
 // Export the Challenge sync function
 exports.syncChallengeToUserChallenges = require("./syncChallengeToUserChallenges").syncChallengeToUserChallenges;
 
