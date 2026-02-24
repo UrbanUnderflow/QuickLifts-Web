@@ -118,11 +118,100 @@ function sanitizeId(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 }
 
-function formatObjectiveCode(task, status) {
-  const base = (task.objectiveCode || task.name || `KANBAN-${task.id.slice(-6)}`).trim().toUpperCase();
-  const suffix = status === 'todo' ? 'ACTI' : status === 'in-progress' ? 'ACTII' : 'ACTIII';
-  if (/\-ACT(I|II|III)$/.test(base)) return base;
-  return `${base}-${suffix}`;
+/* ── Objective Code Catalog (from North Star) ── */
+
+let objectiveCodeCatalog = {
+  byCode: {},       // CODE => label
+  byLabelKey: {},   // normalized-label => CODE
+  loadedAt: 0,
+};
+
+function normalizeObjectiveCodeValue(value) {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (!normalized || normalized.length < 2 || normalized.length > 60) return '';
+  if (/^[0-9]+$/.test(normalized)) return '';
+  if (!/^[A-Z0-9][A-Z0-9._-]*$/.test(normalized)) return '';
+  return normalized;
+}
+
+function normalizeObjectiveLabelKey(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function objectiveCodeFromLabel(label, idx, usedCodes) {
+  const safe = String(label || '')
+    .trim().toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/_+/g, '_').replace(/^_+|_+$/g, '')
+    .slice(0, 30).toUpperCase();
+  const base = `OBJ_${safe || `TRACK_${String(idx + 1).padStart(2, '0')}`}`;
+  let code = base;
+  let suffix = 2;
+  while (usedCodes.has(code)) { code = `${base}_${suffix}`; suffix++; }
+  usedCodes.add(code);
+  return code;
+}
+
+async function loadObjectiveCodeCatalog() {
+  try {
+    const snap = await db.collection('company-config').doc('north-star').get();
+    if (!snap.exists) { console.log('No north-star config found'); return objectiveCodeCatalog; }
+    const data = snap.data();
+    const labels = (data.objectives || []).map(o => String(o || '').trim()).filter(Boolean);
+    const used = new Set();
+    const byCode = {};
+    const byLabelKey = {};
+
+    labels.forEach((label, idx) => {
+      const code = objectiveCodeFromLabel(label, idx, used);
+      if (!code) return;
+      byCode[code] = label;
+      byLabelKey[normalizeObjectiveLabelKey(label)] = code;
+    });
+
+    objectiveCodeCatalog = { byCode, byLabelKey, loadedAt: Date.now() };
+    console.log(`Objective catalog loaded: ${Object.keys(byCode).length} tracked objectives`);
+    return objectiveCodeCatalog;
+  } catch (err) {
+    console.error('Failed to load objective catalog:', err.message);
+    return objectiveCodeCatalog;
+  }
+}
+
+/**
+ * Resolve a task's objectiveCode against the North Star catalog.
+ * Returns the canonical code if matched, or empty string if untracked.
+ */
+function resolveObjectiveCode(task) {
+  const catalog = objectiveCodeCatalog;
+  const candidates = [
+    task.objectiveCode,
+    task.focusObjective,
+    task.northStarObjective,
+    task.name,
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    // Try exact code match
+    const normalized = normalizeObjectiveCodeValue(candidate);
+    if (normalized && catalog.byCode[normalized]) return normalized;
+    // Try label match
+    const byLabel = catalog.byLabelKey[normalizeObjectiveLabelKey(candidate)];
+    if (byLabel) return byLabel;
+  }
+
+  // Fuzzy: check if any candidate contains / is contained by a tracked label key
+  for (const candidate of candidates) {
+    const ck = normalizeObjectiveLabelKey(candidate);
+    if (!ck || ck.length < 6) continue;
+    for (const [trackedKey, code] of Object.entries(catalog.byLabelKey)) {
+      if (!trackedKey) continue;
+      if (ck.includes(trackedKey) || trackedKey.includes(ck)) return code;
+    }
+  }
+
+  return '';
 }
 
 function getBeatDetails(task) {
@@ -233,6 +322,13 @@ async function resolvePendingNudge(pendingDoc) {
 }
 
 async function run() {
+  // Load objective catalog FIRST
+  await loadObjectiveCodeCatalog();
+  const catalogSize = Object.keys(objectiveCodeCatalog.byCode).length;
+  if (catalogSize === 0) {
+    console.warn('WARNING: No tracked objectives in catalog — no snapshots will be written.');
+  }
+
   const snapshot = await db.collection('kanbanTasks').get();
   const now = new Date();
   const hourIso = formatHourIso(now);
@@ -241,16 +337,27 @@ async function run() {
   let newNudges = 0;
   let resolvedNudges = 0;
   let skippedTasks = 0;
+  let untrackedTasks = 0;
 
   for (const doc of snapshot.docs) {
     const data = doc.data();
     const status = data.status || 'todo';
-    if (status === 'done') continue; // skip completed objectives
+    if (status === 'done') continue;
 
     const agent = resolveAgent(data.assignee);
     if (!agent) {
       skippedTasks += 1;
       console.warn(`Skipping task ${data.name} — unable to resolve agent (${data.assignee || 'unknown'}).`);
+      continue;
+    }
+
+    // Resolve objective code against North Star catalog
+    const objectiveCode = resolveObjectiveCode({ ...data, id: doc.id });
+    if (!objectiveCode) {
+      untrackedTasks += 1;
+      if (!isDryRun) {
+        console.log(`Skipping task "${data.name}" — no tracked objective code (raw: ${data.objectiveCode || 'none'}).`);
+      }
       continue;
     }
 
@@ -260,7 +367,6 @@ async function run() {
     const idleThreshold = data.idleThresholdMinutes || LANE_DEFAULT_IDLE[lane] || 90;
     const color = data.color || 'blue';
 
-    const objectiveCode = formatObjectiveCode({ ...data, id: doc.id }, status);
     data.objectiveCodeFormatted = objectiveCode;
 
     const { beat, note } = getBeatDetails(data);
@@ -291,6 +397,9 @@ async function run() {
   console.log(`Nudges resolved: ${resolvedNudges}`);
   if (skippedTasks > 0) {
     console.log(`Tasks skipped (unknown agent): ${skippedTasks}`);
+  }
+  if (untrackedTasks > 0) {
+    console.log(`Tasks skipped (no tracked objective): ${untrackedTasks}`);
   }
 }
 

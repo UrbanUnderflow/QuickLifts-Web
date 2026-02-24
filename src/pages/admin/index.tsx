@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, Settings, BarChart2, Bell, FileText, CheckSquare, PlusSquare, Image as ImageIcon, Zap, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket } from 'lucide-react';
+import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -51,6 +51,12 @@ const adminCardsData = [
     description: "Launch autonomous agent missions, monitor North Star progress, and review agent-proposed objectives.",
     icon: <Rocket className="w-5 h-5" />,
     link: "/admin/missionControl"
+  },
+  {
+    title: "System Overview",
+    description: "Passcode-protected architecture map covering Pulse surfaces, services, integrations, and heartbeat protocol.",
+    icon: <Server className="w-5 h-5" />,
+    link: "/admin/systemOverview"
   },
   {
 

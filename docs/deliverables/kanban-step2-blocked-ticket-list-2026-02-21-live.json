@@ -1,0 +1,9 @@
+{
+  "auditDate": "2026-02-21",
+  "boardFile": "project/kanban/board.md",
+  "criteria": {
+    "status": ["BLOCKED"]
+  },
+  "blockedTicketCount": 0,
+  "blockedTickets": []
+}

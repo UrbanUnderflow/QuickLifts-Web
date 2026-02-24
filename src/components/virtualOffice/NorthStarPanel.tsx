@@ -1,8 +1,10 @@
 import React, { useState, useEffect, CSSProperties } from 'react';
 import ReactDOM from 'react-dom';
-import { X, Star, Save, Edit3, Target, Compass, CheckCircle2, AlertTriangle, Plus, Trash2 } from 'lucide-react';
-import { db } from '../../api/firebase/config';
+import { X, Star, Save, Edit3, Target, Compass, AlertTriangle, Plus, Trash2 } from 'lucide-react';
+import { auth, db } from '../../api/firebase/config';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { adminMethods } from '../../api/firebase/admin/methods';
+import { useUser } from '../../hooks/useUser';
 
 /* ─── Types ─────────────────────────────────────────── */
 
@@ -12,6 +14,9 @@ interface NorthStarData {
     objectives: string[];
     updatedAt?: any;
     updatedBy?: string;
+    updatedByEmail?: string;
+    updatedByUid?: string;
+    updatedBySource?: string;
 }
 
 const DEFAULT_NORTH_STAR: NorthStarData = {
@@ -200,6 +205,12 @@ const S: Record<string, CSSProperties> = {
         display: 'flex', gap: 10, alignItems: 'flex-start',
     },
     hintIcon: { flexShrink: 0, color: '#818cf8', marginTop: 1 },
+    lockedNote: {
+        marginTop: 14, padding: '10px 12px', borderRadius: 10,
+        background: 'rgba(239,68,68,0.08)',
+        border: '1px solid rgba(239,68,68,0.2)',
+        fontSize: 12, color: '#fca5a5', lineHeight: 1.5,
+    },
 };
 
 /* ─── Component ─────────────────────────────────────── */
@@ -209,12 +220,15 @@ interface NorthStarPanelProps {
 }
 
 export const NorthStarPanel: React.FC<NorthStarPanelProps> = ({ onClose }) => {
+    const user = useUser();
     const [data, setData] = useState<NorthStarData>(DEFAULT_NORTH_STAR);
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saved, setSaved] = useState(false);
     const [draft, setDraft] = useState<NorthStarData>(DEFAULT_NORTH_STAR);
+    const [canManageNorthStar, setCanManageNorthStar] = useState(false);
+    const [checkingOperator, setCheckingOperator] = useState(true);
 
     useEffect(() => {
         (async () => {
@@ -233,14 +247,72 @@ export const NorthStarPanel: React.FC<NorthStarPanelProps> = ({ onClose }) => {
         })();
     }, []);
 
+    useEffect(() => {
+        let active = true;
+
+        const checkOperatorAccess = async () => {
+            const operatorEmail = auth.currentUser?.email || user?.email;
+            if (!operatorEmail) {
+                if (active) {
+                    setCanManageNorthStar(false);
+                    setCheckingOperator(false);
+                }
+                return;
+            }
+
+            setCheckingOperator(true);
+            try {
+                const isAdmin = await adminMethods.isAdmin(operatorEmail);
+                if (active) setCanManageNorthStar(isAdmin);
+            } catch (err) {
+                console.error('Failed to check North Star editor access:', err);
+                if (active) setCanManageNorthStar(false);
+            } finally {
+                if (active) setCheckingOperator(false);
+            }
+        };
+
+        checkOperatorAccess();
+        return () => { active = false; };
+    }, [user?.email]);
+
+    const canEditNorthStar = canManageNorthStar && !checkingOperator;
+
     const handleSave = async () => {
+        const operatorEmail = auth.currentUser?.email || user?.email;
+        const operatorUid = auth.currentUser?.uid || user?.id;
+        if (!canEditNorthStar || !operatorEmail || !operatorUid) {
+            console.warn('North Star save blocked: operator permissions required.');
+            return;
+        }
+
+        const title = draft.title.trim();
+        const description = draft.description.trim();
+        const objectives = draft.objectives.map(o => o.trim()).filter(Boolean);
+
+        const coreChanged =
+            title !== (data.title || '').trim() ||
+            description !== (data.description || '').trim();
+
+        if (coreChanged) {
+            const confirmed = window.confirm(
+                'You are changing the North Star title/description. This should be done only by the human operator. Continue?'
+            );
+            if (!confirmed) return;
+        }
+
         setSaving(true);
         try {
-            const cleaned = {
+            const cleaned: NorthStarData = {
                 ...draft,
-                objectives: draft.objectives.filter(o => o.trim()),
+                title,
+                description,
+                objectives,
                 updatedAt: serverTimestamp(),
-                updatedBy: 'admin',
+                updatedBy: operatorEmail,
+                updatedByEmail: operatorEmail,
+                updatedByUid: operatorUid,
+                updatedBySource: 'human-ui',
             };
             await setDoc(doc(db, DOC_PATH), cleaned);
             setData(cleaned);
@@ -255,6 +327,7 @@ export const NorthStarPanel: React.FC<NorthStarPanelProps> = ({ onClose }) => {
     };
 
     const startEditing = () => {
+        if (!canEditNorthStar) return;
         setDraft({ ...data });
         setEditing(true);
     };
@@ -283,7 +356,7 @@ export const NorthStarPanel: React.FC<NorthStarPanelProps> = ({ onClose }) => {
         }));
     };
 
-    const hasContent = data.title || data.description;
+    const hasContent = Boolean((data.title || '').trim() || (data.description || '').trim());
     const updatedLabel = data.updatedAt?.toDate
         ? `Last updated ${data.updatedAt.toDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
         : data.updatedAt
@@ -302,10 +375,18 @@ export const NorthStarPanel: React.FC<NorthStarPanelProps> = ({ onClose }) => {
                         Your agents will reference this during standups, brainstorming,
                         and task planning.
                     </p>
-                    <button style={S.emptyBtn} onClick={startEditing}>
-                        <Star size={14} />
-                        Set North Star
-                    </button>
+                    {canEditNorthStar ? (
+                        <button style={S.emptyBtn} onClick={startEditing}>
+                            <Star size={14} />
+                            Set North Star
+                        </button>
+                    ) : (
+                        <div style={S.lockedNote}>
+                            {checkingOperator
+                                ? 'Checking operator access…'
+                                : 'Only the authenticated human operator can set or change the North Star.'}
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -334,14 +415,28 @@ export const NorthStarPanel: React.FC<NorthStarPanelProps> = ({ onClose }) => {
                 )}
 
                 <button
-                    style={S.editBtn}
+                    style={{
+                        ...S.editBtn,
+                        ...(canEditNorthStar
+                            ? {}
+                            : { opacity: 0.55, cursor: 'not-allowed', filter: 'saturate(0.25)' }),
+                    }}
                     onClick={startEditing}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(251,191,36,0.15)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(251,191,36,0.08)'; }}
+                    disabled={!canEditNorthStar}
+                    onMouseEnter={e => { if (canEditNorthStar) e.currentTarget.style.background = 'rgba(251,191,36,0.15)'; }}
+                    onMouseLeave={e => { if (canEditNorthStar) e.currentTarget.style.background = 'rgba(251,191,36,0.08)'; }}
                 >
                     <Edit3 size={14} />
                     Edit North Star
                 </button>
+
+                {!canEditNorthStar && (
+                    <div style={S.lockedNote}>
+                        {checkingOperator
+                            ? 'Checking operator access…'
+                            : 'North Star edits are locked to the human operator. Agents can still propose objectives in Mission Control.'}
+                    </div>
+                )}
 
                 <div style={S.hint}>
                     <Compass size={14} style={S.hintIcon as any} />
@@ -422,7 +517,7 @@ export const NorthStarPanel: React.FC<NorthStarPanelProps> = ({ onClose }) => {
     );
 
     const panel = (
-        <div style={S.overlay} onClick={onClose}>
+        <div style={S.overlay} onClick={(e) => e.stopPropagation()}>
             <div style={S.panel} onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div style={S.header}>
@@ -467,8 +562,8 @@ export const NorthStarPanel: React.FC<NorthStarPanelProps> = ({ onClose }) => {
                         <button
                             style={saved ? S.savedBtn : S.saveBtn}
                             onClick={handleSave}
-                            disabled={saving || !draft.title.trim()}
-                            onMouseEnter={e => { if (!saving) e.currentTarget.style.filter = 'brightness(1.15)'; }}
+                            disabled={saving || !draft.title.trim() || !canEditNorthStar}
+                            onMouseEnter={e => { if (!saving && canEditNorthStar) e.currentTarget.style.filter = 'brightness(1.15)'; }}
                             onMouseLeave={e => { e.currentTarget.style.filter = 'none'; }}
                         >
                             {saving ? 'Saving…' : saved ? '✓ Saved' : (

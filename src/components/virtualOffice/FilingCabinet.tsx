@@ -89,7 +89,7 @@ export const FilingCabinet: React.FC<FilingCabinetProps> = ({ onClose }) => {
     };
 
     const panel = (
-        <div className="fc-overlay" onClick={onClose}>
+        <div className="fc-overlay" onClick={(e) => e.stopPropagation()}>
             <div className="fc-panel" onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div className="fc-header">

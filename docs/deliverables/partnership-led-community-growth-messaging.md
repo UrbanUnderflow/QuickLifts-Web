@@ -4,7 +4,7 @@ Pulse’s north star is Partnership-Led Community Growth: we grow by becoming th
 
 ## Core Narrative
 
-Pulse is where serious fitness communities go when they’re ready for more than a hashtag challenge and a landing page. Your creators, coaches, and captains already have people who show up for them; Pulse gives those people one home for the blocks, seasons, and rituals that keep them coming back. Instead of a program link that disappears in DMs, they see a living challenge with a clear start and finish, a simple way to check in, and a live view of who else is in it with them.
+Pulse is where serious fitness communities go when they’re ready for more than a hashtag challenge and a landing page. Your creators, coaches, and captains already have people who show up for them; Pulse gives those people one home for the creator-led blocks, seasons, and rituals that keep them coming back. Instead of a program link that disappears in DMs, they see a living challenge with a clear start and finish, a simple way to check in, and a live view of who else is in it with them.
 
 For creators, that looks like strength blocks, reset seasons, or race builds their followers can join with a tap — and stay with because they can see their own streaks and their friends’ progress. For gyms and studios, it’s 6–8 week cycles and weekly rituals that extend the energy of the class floor into the rest of the week, with coach-led challenges that turn isolated sessions into a shared story across the whole membership. For brands, it’s product drops and campaign themes that become co-branded seasons — 21-day recovery resets, base miles cycles, performance blocks — hosted by the athletes and ambassadors their community already trusts.
 
@@ -29,20 +29,20 @@ Across all three lanes, Pulse keeps communities showing up together by making th
 
 ## Sample Partner Copy
 
-- **Tier-1 athletic brand (Nike/Gymshark/Oner Active/On Running-style)**  
-  "Pulse turns your next campaign into a season your community can actually train through together. Your athletes host the block, customers join with a tap from your channels, and you see exactly how many people didn’t just see the drop — they lived with it for six weeks."
+**For a tier-one athletic brand**  
+"Turn your next campaign into a season your community can actually train inside of. With Pulse, your athletes and ambassadors host co-branded challenge blocks — from base miles cycles to performance weeks — where your customers see their effort add up alongside the people they follow, not just in a purchase history."
 
-- **Creator-led gym or CrossFit box**  
-  "With Pulse, your 8-week squat cycle becomes a shared story instead of a PDF in someone’s inbox. Members scan a code in class, join the block in seconds, and check off each session together — giving your coaches a live feel for who’s still in the crew and who needs a nudge."
+**For a creator-led gym or CrossFit box**  
+"Your members don’t need another app. They need one place where your 6-week strength cycles, Saturday crews, and reset weeks live as shared challenges they can finish together. Pulse gives your coaches a simple way to host those seasons so your community feels connected even when they’re not on the same class block."
 
-- **Multi-location studio or franchise**  
-  "Pulse gives all of your locations one challenge calendar, so a member in Brooklyn and a member in Austin feel like they’re in the same season. Local coaches host the blocks, your brand frames the story, and you can see how many members ride out the full block instead of disappearing after week two."
+**For a multi-location studio or franchise**  
+"You’ve already built the brand and the programming. Pulse helps you turn that into a unified challenge layer across every location — one seasonal story, local leaders, and a clear view of how many members are joining, finishing, and coming back for the next block."
 
-- **City run club**  
-  "Pulse turns your Tuesday tempos and Saturday long runs into an actual season. Captains host a 6-week block, runners join straight from the club chat, and every week you see who’s logging miles, who’s on a streak, and who might need a check-in before race day."
+**For a city run club**  
+"Your run club is more than a Strava group and a group text. On Pulse, your weekly runs, race builds, and off-season base miles become a living season your runners can see and stick with — with captains leading rounds, streaks that reward consistency, and a shared record of what your crew actually did together."
 
-- **Brand-affiliated run community**  
-  "Your run crew already wears the kit and shows up for events — Pulse gives them a shared challenge to move through between race photos. Think: a co-branded base miles season or race build where your pacing plans, routes, and product moments live inside one challenge everyone can see and finish together."
+**For a brand-affiliated run community**  
+"Instead of sponsoring one-off events, host an entire race build or base season inside Pulse. Your pacers and captains lead the rounds; your brand shows up as the space that holds the plan, the check-ins, and the feeling of crossing the next finish line together."
 
-- **Recovery or wellness brand**  
-  "Instead of another ‘reset’ email, Pulse gives you a co-branded recovery challenge your community moves through together — light strength, walks, and mobility, guided by your ambassadors. The result is fewer burnout valleys, more weeks where people feel like they’re in it together with your brand at the center of the ritual."
+**For a recovery or wellness brand**  
+"Your products already support the work your community is doing; Pulse turns that support into a rhythm they can feel. Host 7-day recovery resets, 21-day sleep or mobility streaks, and monthly check-in weeks that help people see the difference when they actually follow through."

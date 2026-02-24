@@ -1,0 +1,22 @@
+auditDate: "2026-02-21"
+boardFile: "project/kanban/board.md"
+criteria:
+  status:
+    - IN_PROGRESS
+    - in-progress
+  updatedAtOlderThanDays: 14
+  partnershipRelatedArtifacts:
+    - "src/pages/api/partners/onboard.ts"
+    - "web/app/partners/dashboard.tsx"
+    - "config/partnerPlaybook.json"
+    - "server/partners/playbookConfig.ts"
+    - "web/components/BrandCampaignBanner.tsx"
+    - "src/pages/admin/projectManagement.tsx"
+    - "src/components/virtualOffice/VirtualOfficeContent.tsx"
+matchingTickets: []
+matchingTicketCount: 0
+statusChangesApplied: 0
+notes: |
+  No STATUS: IN_PROGRESS / in-progress tickets have UPDATED_AT older than 14 days
+  as of 2026-02-21, so no tickets were moved to BACKLOG or annotated with
+  DEFERRED_REASON for this step.

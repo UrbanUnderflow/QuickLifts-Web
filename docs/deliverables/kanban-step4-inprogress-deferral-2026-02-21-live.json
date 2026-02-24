@@ -1,0 +1,14 @@
+{
+  "auditDate": "2026-02-21",
+  "boardFile": "project/kanban/board.md",
+  "criteria": {
+    "status": ["IN_PROGRESS", "in-progress"],
+    "updatedAtOlderThanDays": 14,
+    "cutoffDate": "2026-02-07",
+    "partnershipRelated": false
+  },
+  "matchingTicketCount": 0,
+  "matchingTickets": [],
+  "statusChangesApplied": 0,
+  "notes": "No STATUS: IN_PROGRESS / in-progress tickets have UPDATED_AT older than 14 days as of 2026-02-21, so no tickets were moved to BACKLOG or annotated with DEFERRED_REASON for this audit."
+}

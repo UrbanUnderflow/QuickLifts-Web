@@ -1,0 +1,5 @@
+condition,description,status,details
+blocked_metadata,"All STATUS: BLOCKED tickets have BLOCKED_REASON and DEPENDENCY","satisfied","blockedTicketCount=0; no blocked tickets present"
+partnership_led_section,"Partnership-Led section exists with 3-5 NORTH_STAR tickets tied to artifacts","satisfied","headerPresent=true; northStarTicketCount=5"
+stale_in_progress,"No IN_PROGRESS tickets older than 14 days remain without deferral/backlog handling","satisfied","staleInProgressCount=0; cutoffDate=2026-02-07"
+all_conditions,"All Step 5 conditions satisfied","satisfied","See kanban-step5-verification-2026-02-21-live.json for full SOT"
