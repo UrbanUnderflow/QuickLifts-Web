@@ -139,7 +139,7 @@ export const AddAgentModal: React.FC<AddAgentModalProps> = ({ onClose, onStartBr
     }, [name, emoji, device, agentId, validate, onStartBrainstorm]);
 
     return ReactDOM.createPortal(
-        <div className="add-agent-overlay" onClick={onClose}>
+        <div className="add-agent-overlay" onClick={(e) => e.stopPropagation()}>
             <div className="add-agent-modal" onClick={(e) => e.stopPropagation()}>
 
                 {/* Header */}

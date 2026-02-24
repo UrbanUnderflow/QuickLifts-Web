@@ -1,6 +1,40 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasEmail() {
+      return isSignedIn() && request.auth.token.email != null;
+    }
+
+    function isAdminUser() {
+      return hasEmail()
+        && exists(/databases/$(database)/documents/admin/$(request.auth.token.email));
+    }
+
+    function isValidNorthStarPayload() {
+      return request.resource.data.title is string
+        && request.resource.data.description is string
+        && request.resource.data.objectives is list;
+    }
+
+    function hasHumanUiAuditFields() {
+      return request.resource.data.updatedBySource == 'human-ui'
+        && request.resource.data.updatedByUid == request.auth.uid
+        && request.resource.data.updatedByEmail == request.auth.token.email;
+    }
+
+    // North Star is writable only by authenticated admin humans through the UI.
+    match /company-config/north-star {
+      allow read: if true;
+      allow create, update: if isAdminUser()
+        && isValidNorthStarPayload()
+        && hasHumanUiAuditFields();
+      allow delete: if false;
+    }
+
     // User documents: allow clients to set partnerSource only at creation.
     // After creation, partnerSource is treated as immutable and can only be
     // changed by trusted backends using the Admin SDK (which bypasses rules).
@@ -14,10 +48,10 @@ service cloud.firestore {
       allow read: if true;
     }
 
-    // Fallback rule for all other documents. This remains open for now but
-    // can be tightened as security hardening progresses.
+    // Fallback rule for all other documents. This remains open for now except
+    // for company-config/north-star, which is intentionally locked above.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if document != 'company-config/north-star';
     }
   }
 }

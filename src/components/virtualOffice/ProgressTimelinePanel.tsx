@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState, CSSProperties } from 'react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { useRouter } from 'next/router';
-import { collection, getDocs, limit, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, limit, query, where } from 'firebase/firestore';
 import { AgentPresence } from '../../api/firebase/presence/service';
 import { db } from '../../api/firebase/config';
 import { progressTimelineService } from '../../api/firebase/progressTimeline/service';
+import { kanbanService } from '../../api/firebase/kanban/service';
 import { nudgeLogService } from '../../api/firebase/nudgeLog/service';
+import { KanbanTask } from '../../api/firebase/kanban/types';
 import {
   ProgressTimelineEntry,
   ProgressBeat,
@@ -18,15 +20,18 @@ import {
   NudgeChannel,
 } from '../../api/firebase/progressTimeline/types';
 import {
-  X, Send, ChevronDown, ChevronUp,
+  X, Send, ChevronDown, ChevronUp, ArrowLeft,
   Lightbulb, Rocket, CheckCircle2, AlertTriangle, TrendingUp,
-  Zap, Clock, Link2, MessageCircle, Activity, ExternalLink, Copy,
+  Zap, Clock, Link2, MessageCircle, Activity, ExternalLink, Copy, Target, ListChecks,
 } from 'lucide-react';
 
 /* ── Props ── */
 interface ProgressTimelinePanelProps {
   agents: AgentPresence[];
   onClose: () => void;
+  initialTab?: TabKey;
+  objectiveOnly?: boolean;
+  displayMode?: 'modal' | 'page';
 }
 
 /* ── Constants ── */
@@ -60,6 +65,23 @@ const AGENT_ROUTE_ALIASES: Record<string, string> = {
 const AGENT_ROUTE_IDS = new Set(['antigravity', 'nora', 'scout', 'solara', 'sage']);
 
 const normalizeAgentKey = (value?: string) => (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const OBJECTIVE_CODE_SKIP_TOKENS = new Set([
+  '-', 'N/A', 'NA', 'NONE', 'UNKNOWN', 'UNASSIGNED', 'UNTRACKED', 'NIL', 'NULL', 'TBD', 'TODO', 'TEMP', 'GENERAL',
+]);
+
+const normalizeObjectiveCode = (value?: string): string => {
+  const normalized = (value || '').trim().toUpperCase();
+  if (!normalized) return '';
+  if (normalized.length < 2 || normalized.length > 24) return '';
+  if (OBJECTIVE_CODE_SKIP_TOKENS.has(normalized)) return '';
+  if (normalized.includes('/') || normalized.includes('\\')) return '';
+  if (normalized.includes('://')) return '';
+  if (!/^[A-Z0-9][A-Z0-9._-]*$/.test(normalized)) return '';
+  if (normalized === '-') return '';
+  if (/^\d+$/.test(normalized)) return '';
+  return normalized;
+};
 
 const sanitizeRecordedFilePath = (rawPath?: string): string => {
   if (!rawPath) return '';
@@ -101,12 +123,47 @@ type FeedItem =
   | { id: string; type: 'beat'; createdAt: number; payload: ProgressTimelineEntry }
   | { id: string; type: 'nudge'; createdAt: number; payload: NudgeLogEntry };
 
-type TabKey = 'feed' | 'snapshots';
+type ObjectiveProgressItem =
+  | { type: 'beat'; id: string; createdAt: number; payload: ProgressTimelineEntry }
+  | { type: 'nudge'; id: string; createdAt: number; payload: NudgeLogEntry };
+
+type ObjectiveProgressGroup = {
+  code: string;
+  label: string;
+  taskCount: number;
+  doneCount: number;
+  inProgressCount: number;
+  todoCount: number;
+  completionPercent: number;
+  objectiveTasks: KanbanTask[];
+  recentItems: ObjectiveProgressItem[];
+  lastEventAt: number;
+};
+
+type TabKey = 'feed' | 'snapshots' | 'objectives';
 type CopyState = 'idle' | 'copied' | 'error';
+const UNLABELED_OBJECTIVE_LABEL = 'Strategic Objective';
+const NORTH_STAR_DOC_PATH = 'company-config';
+const NORTH_STAR_DOC_ID = 'north-star';
+
+interface NorthStarDoc {
+  objectives?: string[];
+}
+
+const normalizeObjectiveLabel = (value?: string): string =>
+  (value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const normalizeObjectiveMatchKey = (value?: string): string =>
+  normalizeObjectiveLabel(value).replace(/\s+/g, '');
 
 const FEED_BEAT_LIMIT = 200;
 const FEED_NUDGE_LIMIT = 80;
 const SNAPSHOT_LIMIT = 40;
+const OBJECTIVE_ALL_TAB_KEY = '__all__';
 
 /* ── Styles ── */
 const S = {
@@ -114,14 +171,31 @@ const S = {
     position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
     zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center',
   } as CSSProperties,
+  pageRoot: {
+    minHeight: '100vh',
+    background: '#030508',
+    padding: '20px',
+    color: '#e7e9ea',
+    boxSizing: 'border-box',
+    overflowY: 'auto',
+  } as CSSProperties,
   panel: {
     width: 'min(640px, 92vw)', maxHeight: '85vh', background: '#0a0e14', border: '1px solid rgba(255,255,255,0.06)',
+    borderRadius: 20, display: 'flex', flexDirection: 'column', color: '#e7e9ea',
+    boxShadow: '0 32px 64px rgba(0,0,0,0.5)', overflow: 'hidden',
+  } as CSSProperties,
+  pagePanel: {
+    width: 'min(1320px, 100%)', maxWidth: '100%', minHeight: 'calc(100vh - 40px)',
+    margin: '0 auto', background: '#0a0e14', border: '1px solid rgba(255,255,255,0.06)',
     borderRadius: 20, display: 'flex', flexDirection: 'column', color: '#e7e9ea',
     boxShadow: '0 32px 64px rgba(0,0,0,0.5)', overflow: 'hidden',
   } as CSSProperties,
   header: {
     padding: '20px 24px 14px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
     borderBottom: '1px solid rgba(255,255,255,0.06)',
+  } as CSSProperties,
+  headerActions: {
+    display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
   } as CSSProperties,
   title: { fontSize: 20, fontWeight: 700, margin: 0, letterSpacing: '-0.02em' } as CSSProperties,
   subtitle: { fontSize: 13, color: '#6b7280', margin: '3px 0 0' } as CSSProperties,
@@ -130,6 +204,23 @@ const S = {
     border: '1px solid rgba(255,255,255,0.08)', color: '#6b7280', display: 'flex',
     alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
   } as CSSProperties,
+  copyIconBtn: (state: CopyState): CSSProperties => ({
+    width: 34,
+    height: 34,
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    border: '1px solid rgba(255,255,255,0.08)',
+    background:
+      state === 'copied'
+        ? 'rgba(34,197,94,0.15)'
+        : state === 'error'
+          ? 'rgba(248,113,113,0.15)'
+          : 'rgba(255,255,255,0.04)',
+    color: state === 'copied' ? '#4ade80' : state === 'error' ? '#f87171' : '#9ca3af',
+  }),
   tabs: {
     display: 'flex', alignItems: 'center', gap: 0, padding: '0 24px',
     borderBottom: '1px solid rgba(255,255,255,0.06)',
@@ -139,33 +230,42 @@ const S = {
     color: active ? '#1d9bf0' : '#6b7280', background: 'none', border: 'none',
     borderBottom: active ? '2px solid #1d9bf0' : '2px solid transparent', cursor: 'pointer',
   }),
+  tabButton: (active: boolean): CSSProperties => ({
+    ...({
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      padding: '7px 14px',
+      fontSize: 13,
+      fontWeight: active ? 700 : 600,
+      borderRadius: 20,
+      border: '1px solid',
+      borderColor: active ? '#1d9bf0' : 'rgba(255,255,255,0.14)',
+      background: active ? 'rgba(29,155,240,0.12)' : 'rgba(255,255,255,0.03)',
+      color: active ? '#1d9bf0' : '#9ca3af',
+      cursor: 'pointer',
+      flexShrink: 0,
+      whiteSpace: 'nowrap',
+      transition: 'all 0.15s',
+    }) as CSSProperties,
+  }),
   tabCount: {
     fontSize: 10, fontWeight: 700, padding: '1px 6px', background: 'rgba(29,155,240,0.15)',
     color: '#1d9bf0', borderRadius: 10, marginLeft: 4,
+  } as CSSProperties,
+  tabsStrip: {
+    display: 'flex', alignItems: 'center', gap: 8, padding: '0 24px', overflowX: 'auto',
+    borderBottom: '1px solid rgba(255,255,255,0.06)',
+  } as CSSProperties,
+  objectiveTabRow: {
+    marginTop: 6,
+    display: 'flex', alignItems: 'center', gap: 8, padding: '0 24px 8px', overflowX: 'auto',
+    borderBottom: '1px solid rgba(255,255,255,0.06)',
   } as CSSProperties,
   composeToggle: (open: boolean): CSSProperties => ({
     display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', fontSize: 13, fontWeight: 600,
     background: open ? 'rgba(255,255,255,0.06)' : 'linear-gradient(135deg, #1d9bf0, #1a8cd8)',
     color: open ? '#6b7280' : 'white', border: 'none', borderRadius: 20, cursor: 'pointer', marginLeft: 'auto', margin: '6px 0 6px auto',
-  }),
-  copyBtn: (state: CopyState): CSSProperties => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '7px 14px',
-    fontSize: 12,
-    fontWeight: 600,
-    background:
-      state === 'copied'
-        ? 'rgba(34,197,94,0.15)'
-        : state === 'error'
-          ? 'rgba(248,113,113,0.15)'
-          : 'rgba(255,255,255,0.04)',
-    color: state === 'copied' ? '#4ade80' : state === 'error' ? '#f87171' : '#9ca3af',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: 20,
-    cursor: 'pointer',
-    margin: '6px 8px 6px auto',
   }),
   content: { flex: 1, overflowY: 'auto', overflowX: 'hidden' } as CSSProperties,
   // Card styles
@@ -260,25 +360,69 @@ const S = {
     fontSize: 11, color: '#6b7280',
   } as CSSProperties,
   snapNote: { fontSize: 13, color: '#9ca3af', margin: '8px 0 0 48px', lineHeight: 1.4 } as CSSProperties,
+  objectiveDetailsPanel: {
+    padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.04)',
+    borderLeft: '3px solid #1d9bf0',
+    display: 'flex', flexDirection: 'column', gap: 12,
+  } as CSSProperties,
+  objectiveDetailsHeader: {
+    display: 'flex', alignItems: 'center', gap: 12,
+  } as CSSProperties,
+  objectiveProgressRailWrap: {
+    padding: '0 2px',
+  } as CSSProperties,
+  objectiveProgressRailLabel: {
+    marginBottom: 6,
+    fontSize: 11,
+    color: '#9ca3af',
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: 12,
+  } as CSSProperties,
+  objectiveTaskSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  } as CSSProperties,
+  objectiveTask: {
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    padding: '10px 12px',
+    background: 'rgba(255,255,255,0.02)',
+  } as CSSProperties,
 };
 
 /* ── Component ── */
-const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, onClose }) => {
+const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({
+  agents,
+  onClose,
+  initialTab = 'feed',
+  objectiveOnly = false,
+  displayMode = 'modal',
+}) => {
   const router = useRouter();
   const [entries, setEntries] = useState<ProgressTimelineEntry[]>([]);
   const [snapshots, setSnapshots] = useState<HourlySnapshotEntry[]>([]);
   const [nudges, setNudges] = useState<NudgeLogEntry[]>([]);
+  const [objectiveTasks, setObjectiveTasks] = useState<KanbanTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabKey>('feed');
+  const [activeTab, setActiveTab] = useState<TabKey>(objectiveOnly ? 'objectives' : initialTab);
+  const [activeObjectiveTab, setActiveObjectiveTab] = useState<string>(OBJECTIVE_ALL_TAB_KEY);
+  const [objectiveLabelByCode, setObjectiveLabelByCode] = useState<Record<string, string>>({});
+  const [northStarObjectiveLabels, setNorthStarObjectiveLabels] = useState<string[]>([]);
   const [composerOpen, setComposerOpen] = useState(false);
   const [hoverCard, setHoverCard] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<CopyState>('idle');
 
+  const filteredEntries = entries;
+  const filteredNudges = nudges;
+  const filteredSnapshots = snapshots;
+
   const feedItems = useMemo<FeedItem[]>(() => {
-    const b: FeedItem[] = entries.map((e) => ({ id: `b-${e.id}`, type: 'beat', createdAt: e.createdAt?.getTime?.() || 0, payload: e }));
-    const n: FeedItem[] = nudges.map((e) => ({ id: `n-${e.id}`, type: 'nudge', createdAt: e.createdAt?.getTime?.() || 0, payload: e }));
+    const b: FeedItem[] = filteredEntries.map((e) => ({ id: `b-${e.id}`, type: 'beat', createdAt: e.createdAt?.getTime?.() || 0, payload: e }));
+    const n: FeedItem[] = filteredNudges.map((e) => ({ id: `n-${e.id}`, type: 'nudge', createdAt: e.createdAt?.getTime?.() || 0, payload: e }));
     return [...b, ...n].sort((a, b) => b.createdAt - a.createdAt);
-  }, [entries, nudges]);
+  }, [filteredEntries, filteredNudges]);
 
   // Composer state
   const [agentId, setAgentId] = useState('');
@@ -294,16 +438,275 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    setActiveTab(objectiveOnly ? 'objectives' : initialTab);
+  }, [initialTab, objectiveOnly]);
+
+  useEffect(() => {
+    if (!objectiveOnly) return;
+    setActiveObjectiveTab(OBJECTIVE_ALL_TAB_KEY);
+  }, [objectiveOnly]);
+
   useEffect(() => { if (!agentId && agents.length > 0) setAgentId(agents[0].id); }, [agents, agentId]);
 
   useEffect(() => {
     const u1 = progressTimelineService.listen((items) => { setEntries(items); setLoading(false); }, { limit: FEED_BEAT_LIMIT });
     const u2 = progressTimelineService.listenSnapshots((items) => setSnapshots(items), { limit: SNAPSHOT_LIMIT });
     const u3 = nudgeLogService.listen((items) => setNudges(items), { limit: FEED_NUDGE_LIMIT });
-    return () => { u1(); u2(); u3(); };
+    let active = true;
+
+    const hydrateObjectiveLabels = async () => {
+      try {
+        const tasks = await kanbanService.fetchAllTasks();
+        const labels: Record<string, string> = {};
+        let northStarObjectives: string[] = [];
+
+        tasks.forEach((task) => {
+          const code = normalizeObjectiveCode(task.objectiveCode);
+          const name = (task.name || '').trim();
+
+          if (!code || !name) return;
+          if (!labels[code]) labels[code] = name;
+        });
+
+        try {
+          const northStarSnap = await getDoc(doc(db, NORTH_STAR_DOC_PATH, NORTH_STAR_DOC_ID));
+          if (northStarSnap.exists()) {
+            const payload = northStarSnap.data() as NorthStarDoc;
+            northStarObjectives = (payload.objectives || [])
+              .map((objective) => String(objective || '').trim())
+              .filter(Boolean);
+          }
+        } catch (northStarError) {
+          console.error('Failed to hydrate north star objective labels', northStarError);
+        }
+
+        if (active) {
+          setObjectiveTasks(tasks);
+          setObjectiveLabelByCode(labels);
+          setNorthStarObjectiveLabels(northStarObjectives);
+        }
+      } catch (error) {
+        console.error('Failed to hydrate objective labels from kanban tasks', error);
+      }
+    };
+
+    void hydrateObjectiveLabels();
+
+    return () => {
+      active = false;
+      u1();
+      u2();
+      u3();
+    };
   }, []);
 
+  const resolveObjectiveLabel = (rawCode: string): string => {
+    const code = normalizeObjectiveCode(rawCode);
+    if (!code) return '';
+    return objectiveLabelByCode[code] || '';
+  };
+
+  const resolvedObjectiveLabelByCode = useMemo<Record<string, string>>(() => {
+    const resolved = { ...objectiveLabelByCode };
+    const collectedCodes = new Set<string>();
+    const objectivePool = (northStarObjectiveLabels || []).map((obj) => (obj || '').trim()).filter(Boolean);
+    const usedPool = new Set<string>(Object.values(resolved).map((value) => value.toLowerCase()));
+
+    objectiveTasks.forEach((task) => {
+      const code = normalizeObjectiveCode(task.objectiveCode);
+      if (code) collectedCodes.add(code);
+    });
+
+    filteredEntries.forEach((entry) => {
+      const code = normalizeObjectiveCode(entry.objectiveCode);
+      if (code) collectedCodes.add(code);
+    });
+
+    filteredNudges.forEach((entry) => {
+      const code = normalizeObjectiveCode(entry.objectiveCode);
+      if (code) collectedCodes.add(code);
+    });
+
+    const unknownCodes = [...collectedCodes]
+      .filter((code) => !resolved[code])
+      .sort();
+
+    let fallbackPoolIndex = 0;
+    unknownCodes.forEach((code, index) => {
+      if (fallbackPoolIndex < objectivePool.length) {
+        const candidate = objectivePool[fallbackPoolIndex];
+        if (!usedPool.has(candidate.toLowerCase())) {
+          resolved[code] = candidate;
+          usedPool.add(candidate.toLowerCase());
+          fallbackPoolIndex += 1;
+          return;
+        }
+        fallbackPoolIndex += 1;
+      }
+
+      resolved[code] = `${UNLABELED_OBJECTIVE_LABEL} ${index + 1}`;
+    });
+
+    return resolved;
+  }, [filteredEntries, filteredNudges, objectiveLabelByCode, objectiveTasks, northStarObjectiveLabels]);
+
+  const resolveObjectiveDisplayLabel = (rawCode: string, fallback = ''): string => {
+    const directLabel = resolveObjectiveLabel(rawCode);
+    if (directLabel) return directLabel;
+    return resolvedObjectiveLabelByCode[normalizeObjectiveCode(rawCode) || ''] || fallback;
+  };
+
   const feedTabCountTitle = `Showing ${feedItems.length} items (${entries.length} beats + ${nudges.length} nudges). Limits: ${FEED_BEAT_LIMIT} beats, ${FEED_NUDGE_LIMIT} nudges.`;
+
+  const objectiveProgressGroups = useMemo<ObjectiveProgressGroup[]>(() => {
+    const groups = new Map<string, ObjectiveProgressGroup>();
+    const trackedNorthStarObjectiveMatchKeys = (northStarObjectiveLabels || [])
+      .map((objective) => normalizeObjectiveMatchKey(objective))
+      .filter(Boolean);
+    const trackedObjectiveMatchKeys = new Set<string>(trackedNorthStarObjectiveMatchKeys);
+    const hasTrackedObjectives = trackedObjectiveMatchKeys.size > 0;
+
+    const ensureGroup = (code: string) => {
+      const existing = groups.get(code);
+      if (existing) return existing;
+
+      const label = resolveObjectiveDisplayLabel(code, UNLABELED_OBJECTIVE_LABEL);
+      const group: ObjectiveProgressGroup = {
+        code,
+        label,
+        taskCount: 0,
+        doneCount: 0,
+        inProgressCount: 0,
+        todoCount: 0,
+        completionPercent: 0,
+        objectiveTasks: [],
+        recentItems: [],
+        lastEventAt: 0,
+      };
+      groups.set(code, group);
+      return group;
+    };
+
+    const isTrackedObjective = (code: string) => {
+      if (!hasTrackedObjectives) return true;
+
+      const codeMatch = normalizeObjectiveMatchKey(code);
+      const labelMatch = normalizeObjectiveMatchKey(resolveObjectiveDisplayLabel(code, ''));
+
+      if (codeMatch && trackedObjectiveMatchKeys.has(codeMatch)) return true;
+      if (labelMatch && trackedObjectiveMatchKeys.has(labelMatch)) return true;
+
+      for (const tracked of trackedObjectiveMatchKeys) {
+        if (!tracked) continue;
+        if (labelMatch && (labelMatch.includes(tracked) || tracked.includes(labelMatch))) return true;
+      }
+
+      return false;
+    };
+
+    objectiveTasks.forEach((task) => {
+      const code = normalizeObjectiveCode(task.objectiveCode);
+      if (!code || !isTrackedObjective(code)) return;
+
+      const group = ensureGroup(code);
+      group.taskCount += 1;
+      if (task.status === 'done') group.doneCount += 1;
+      else if (task.status === 'in-progress') group.inProgressCount += 1;
+      else group.todoCount += 1;
+      group.objectiveTasks.push(task);
+      group.label = resolveObjectiveDisplayLabel(code, group.label);
+    });
+
+    filteredEntries.forEach((entry) => {
+      const code = normalizeObjectiveCode(entry.objectiveCode);
+      if (!code || !isTrackedObjective(code)) return;
+      const group = ensureGroup(code);
+      const createdAt = entry.createdAt?.getTime?.() || 0;
+      group.recentItems.push({ type: 'beat', id: `b-${entry.id}`, createdAt, payload: entry });
+      if (createdAt > group.lastEventAt) {
+        group.lastEventAt = createdAt;
+      }
+    });
+
+    filteredNudges.forEach((entry) => {
+      const code = normalizeObjectiveCode(entry.objectiveCode);
+      if (!code || !isTrackedObjective(code)) return;
+      const group = ensureGroup(code);
+      const createdAt = entry.createdAt?.getTime?.() || 0;
+      group.recentItems.push({ type: 'nudge', id: `n-${entry.id}`, createdAt, payload: entry });
+      if (createdAt > group.lastEventAt) {
+        group.lastEventAt = createdAt;
+      }
+    });
+
+    // Keep tasks with no events discoverable for progress visibility.
+    objectiveTasks.forEach((task) => {
+      const code = normalizeObjectiveCode(task.objectiveCode);
+      if (!code || !isTrackedObjective(code)) return;
+      const group = ensureGroup(code);
+      if (!group.lastEventAt) {
+        const updated = task.updatedAt?.getTime?.() || task.createdAt?.getTime?.() || 0;
+        group.lastEventAt = updated;
+      }
+    });
+
+    groups.forEach((group) => {
+      const total = group.taskCount || 1;
+      group.completionPercent = Math.round((group.doneCount / total) * 100);
+      group.recentItems.sort((a, b) => b.createdAt - a.createdAt);
+      group.label = resolveObjectiveDisplayLabel(group.code, group.label);
+      if (!group.label) {
+        group.label = UNLABELED_OBJECTIVE_LABEL;
+      }
+    });
+
+    return [...groups.values()].sort((a, b) => b.lastEventAt - a.lastEventAt);
+  }, [filteredEntries, filteredNudges, objectiveTasks, resolvedObjectiveLabelByCode]);
+
+  useEffect(() => {
+    if (!objectiveOnly) {
+      return;
+    }
+
+    if (objectiveProgressGroups.length === 0) {
+      setActiveObjectiveTab(OBJECTIVE_ALL_TAB_KEY);
+      return;
+    }
+
+    setActiveObjectiveTab((current) => {
+      if (current === OBJECTIVE_ALL_TAB_KEY) {
+        return current;
+      }
+      const hasMatch = objectiveProgressGroups.some((group) => group.code === current);
+      return hasMatch ? current : OBJECTIVE_ALL_TAB_KEY;
+    });
+  }, [objectiveOnly, objectiveProgressGroups]);
+
+  const isPageMode = displayMode === 'page';
+
+  const visibleObjectiveGroups = useMemo<ObjectiveProgressGroup[]>(() => {
+    if (!objectiveOnly) return objectiveProgressGroups;
+
+    if (activeObjectiveTab === OBJECTIVE_ALL_TAB_KEY) {
+      return objectiveProgressGroups;
+    }
+
+    const match = objectiveProgressGroups.find((group) => group.code === activeObjectiveTab);
+    return match ? [match] : [];
+  }, [activeObjectiveTab, objectiveProgressGroups, objectiveOnly]);
+
+  const objectiveTabMeta = useMemo<{ code: string; label: string }[]>(() => {
+    const items = objectiveProgressGroups.map((group) => ({
+      code: group.code,
+      label: group.label,
+    }));
+
+    return [
+      { code: OBJECTIVE_ALL_TAB_KEY, label: 'All objectives' },
+      ...items,
+    ];
+  }, [objectiveProgressGroups]);
 
   const formatExportTimestamp = (value?: Date): string => {
     if (!value) return 'unknown-time';
@@ -316,9 +719,9 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
 
   const buildFeedExportText = (): string => {
     const lines: string[] = [
-      'Activity Feed export',
+      'Heartbeat Feed export',
       `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`,
-      `Loaded items: ${feedItems.length} (beats: ${entries.length}, nudges: ${nudges.length})`,
+      `Loaded items: ${feedItems.length} (beats: ${filteredEntries.length}, nudges: ${filteredNudges.length})`,
       `Configured limits: beats ${FEED_BEAT_LIMIT}, nudges ${FEED_NUDGE_LIMIT}`,
       '',
     ];
@@ -327,7 +730,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
       if (item.type === 'beat') {
         const entry = item.payload as ProgressTimelineEntry;
         lines.push(
-          `[${index + 1}] BEAT ${formatExportTimestamp(entry.createdAt)} | ${entry.agentName || entry.agentId || 'Unknown'} | ${entry.objectiveCode || '-'} | ${entry.beat} | ${entry.headline}`
+          `[${index + 1}] BEAT ${formatExportTimestamp(entry.createdAt)} | ${entry.agentName || entry.agentId || 'Unknown'} | ${resolveObjectiveDisplayLabel(entry.objectiveCode, UNLABELED_OBJECTIVE_LABEL)} | ${entry.beat} | ${entry.headline}`
         );
 
         const tags: string[] = [];
@@ -345,7 +748,7 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
       } else {
         const entry = item.payload as NudgeLogEntry;
         lines.push(
-          `[${index + 1}] NUDGE ${formatExportTimestamp(entry.createdAt)} | ${entry.agentName || entry.agentId || 'Unknown'} | ${entry.objectiveCode || '-'} | ${entry.outcome} | ${entry.message}`
+          `[${index + 1}] NUDGE ${formatExportTimestamp(entry.createdAt)} | ${entry.agentName || entry.agentId || 'Unknown'} | ${resolveObjectiveDisplayLabel(entry.objectiveCode, UNLABELED_OBJECTIVE_LABEL)} | ${entry.outcome} | ${entry.message}`
         );
         lines.push(
           `channel: ${entry.channel}${entry.respondedAt ? ` | responded: ${formatExportTimestamp(entry.respondedAt)}` : ''}`
@@ -359,20 +762,52 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   };
 
   const buildSnapshotsExportText = (): string => {
+    const exportSnapshots = filteredSnapshots;
+
     const lines: string[] = [
-      'Activity Snapshots export',
+      'Health Snapshot export',
       `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`,
-      `Loaded snapshots: ${snapshots.length}`,
+      `Loaded snapshots: ${exportSnapshots.length}`,
       `Configured limit: ${SNAPSHOT_LIMIT}`,
       '',
     ];
 
-    snapshots.forEach((snapshot, index) => {
+    exportSnapshots.forEach((snapshot, index) => {
       lines.push(
-        `[${index + 1}] SNAPSHOT ${formatExportTimestamp(snapshot.createdAt)} | ${snapshot.agentName || snapshot.agentId || 'Unknown'} | ${snapshot.objectiveCode || '-'} | ${snapshot.color} | ${snapshot.stateTag}`
+        `[${index + 1}] SNAPSHOT ${formatExportTimestamp(snapshot.createdAt)} | ${snapshot.agentName || snapshot.agentId || 'Unknown'} | ${resolveObjectiveDisplayLabel(snapshot.objectiveCode, UNLABELED_OBJECTIVE_LABEL)} | ${snapshot.color} | ${snapshot.stateTag}`
       );
       if (snapshot.note) lines.push(`note: ${snapshot.note}`);
       if (snapshot.beatCompleted) lines.push(`beat_completed: ${snapshot.beatCompleted}`);
+      lines.push('');
+    });
+
+    return lines.join('\n').trim();
+  };
+
+  const buildObjectiveProgressExportText = (): string => {
+    const lines: string[] = [
+      'Objective Progress export',
+      `Generated: ${format(new Date(), 'yyyy-MM-dd HH:mm:ss')}`,
+      `Objectives tracked: ${objectiveProgressGroups.length}`,
+      '',
+    ];
+
+    objectiveProgressGroups.forEach((group, index) => {
+      lines.push(
+        `[${index + 1}] ${group.label} | tasks: ${group.taskCount} (${group.doneCount} done, ${group.inProgressCount} in-progress, ${group.todoCount} todo) | completion ${group.completionPercent}%`
+      );
+      if (group.recentItems.length > 0) {
+        lines.push('  Recent events:');
+        group.recentItems.slice(0, 5).forEach((item) => {
+          if (item.type === 'beat') {
+            const beatItem = item.payload as ProgressTimelineEntry;
+            lines.push(`  - ${formatExportTimestamp(beatItem.createdAt)} beat:${beatItem.beat} | ${beatItem.agentName || beatItem.agentId || 'Unknown'} | ${beatItem.headline}`);
+          } else {
+            const nudgeItem = item.payload as NudgeLogEntry;
+            lines.push(`  - ${formatExportTimestamp(nudgeItem.createdAt)} nudge:${nudgeItem.outcome} | ${nudgeItem.agentName || nudgeItem.agentId || 'Unknown'} | ${nudgeItem.message}`);
+          }
+        });
+      }
       lines.push('');
     });
 
@@ -406,7 +841,11 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
   };
 
   const handleCopyTimeline = async () => {
-    const exportText = activeTab === 'feed' ? buildFeedExportText() : buildSnapshotsExportText();
+    const exportText = activeTab === 'feed'
+      ? buildFeedExportText()
+      : activeTab === 'snapshots'
+        ? buildSnapshotsExportText()
+        : buildObjectiveProgressExportText();
     const copied = await copyTextToClipboard(exportText);
     setCopyState(copied ? 'copied' : 'error');
     setTimeout(() => setCopyState('idle'), 1600);
@@ -557,7 +996,9 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
           <div style={S.cardBody}>
             <div style={S.cardHeader}>
               <span style={S.name}>{entry.agentName}</span>
-              <span style={S.objCode}>{entry.objectiveCode}</span>
+              <span style={S.objCode} title={resolveObjectiveDisplayLabel(entry.objectiveCode, UNLABELED_OBJECTIVE_LABEL)}>
+                {resolveObjectiveDisplayLabel(entry.objectiveCode, UNLABELED_OBJECTIVE_LABEL)}
+              </span>
               <span style={S.dot}>·</span>
               <span style={S.time}>{timeAgo}</span>
             </div>
@@ -654,13 +1095,15 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
 
     return (
       <div key={s.id} style={S.snapCard(cc.dot)}>
-        <div style={S.snapTop}>
+          <div style={S.snapTop}>
           <div style={S.avatar(color, 30)}>
             {s.agentName?.charAt(0)?.toUpperCase() || '?'}
           </div>
           <div>
             <span style={S.snapName}>{s.agentName || 'Agent'}</span>
-            <span style={S.snapCode}>{s.objectiveCode}</span>
+            <span style={S.snapCode} title={resolveObjectiveDisplayLabel(s.objectiveCode, UNLABELED_OBJECTIVE_LABEL)}>
+              {resolveObjectiveDisplayLabel(s.objectiveCode, UNLABELED_OBJECTIVE_LABEL)}
+            </span>
           </div>
           <span style={S.snapTime}><Clock size={11} /> {timeLabel}</span>
         </div>
@@ -669,45 +1112,309 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
     );
   };
 
+  const renderObjectiveProgressCard = (group: ObjectiveProgressGroup) => {
+    const progressColor = group.completionPercent >= 70 ? '#34d399' : group.completionPercent >= 40 ? '#fbbf24' : '#ef4444';
+    const meterValue = Math.min(100, Math.max(0, group.completionPercent));
+    const lastEvent = group.lastEventAt ? `${formatDistanceToNow(new Date(group.lastEventAt), { addSuffix: true })}` : 'No events yet';
+
+    return (
+      <div
+        key={group.code}
+        style={{
+          ...S.card(progressColor),
+          borderLeftWidth: 4,
+          marginBottom: 10,
+          padding: '14px 16px',
+        }}
+      >
+        <div style={S.cardRow}>
+          <div style={S.avatar(progressColor, 30)}>
+            <Target size={14} />
+          </div>
+          <div style={S.cardBody}>
+            <div style={{ ...S.cardHeader, alignItems: 'center' }}>
+              <span style={S.name}>{group.label}</span>
+              <span style={S.dot}>·</span>
+              <span style={{ ...S.time, color: '#6b7280' }}>{lastEvent}</span>
+            </div>
+            <div style={S.tags}>
+              <span style={S.tag(progressColor, `${progressColor}22`)}>
+                <ListChecks size={10} /> {group.taskCount} tasks
+              </span>
+              <span style={S.tag('#a78bfa')}>
+                {group.doneCount} done
+              </span>
+              <span style={S.tag('#f59e0b')}>
+                {group.inProgressCount} active
+              </span>
+              <span style={S.tag('#6b7280')}>
+                {group.todoCount} queued
+              </span>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>
+                Objective completion: <strong style={{ color: '#d1d5db' }}>{group.completionPercent}%</strong>
+              </div>
+              <div style={{ height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ width: `${meterValue}%`, height: '100%', background: progressColor, transition: 'width 0.3s' }} />
+              </div>
+            </div>
+            {group.objectiveTasks.length > 0 && (
+              <div style={{ marginTop: 10, fontSize: 11, color: '#9ca3af', lineHeight: 1.5 }}>
+                <span style={{ color: '#e5e7eb', fontWeight: 600 }}>Tickets:</span>{' '}
+                {group.objectiveTasks.slice(0, 3).map((task) => task.name || 'Unnamed ticket').join(' • ')}
+                {group.objectiveTasks.length > 3 ? ` +${group.objectiveTasks.length - 3} more` : ''}
+              </div>
+            )}
+            {group.recentItems.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Recent signals:</div>
+                <ul style={{ margin: 0, paddingLeft: 16, display: 'grid', gap: 4, fontSize: 11, color: '#d1d5db' }}>
+                  {group.recentItems.slice(0, 4).map((item) => {
+                    if (item.type === 'beat') {
+                      const entry = item.payload as ProgressTimelineEntry;
+                      return (
+                        <li key={item.id}>
+                          <span style={{ color: '#6b7280' }}>{formatDistanceToNow(entry.createdAt || new Date(), { addSuffix: true })}</span>{' '}
+                          <span style={{ color: '#1d9bf0' }}>{entry.agentName || entry.agentId || 'agent'}</span> — {entry.headline}
+                        </li>
+                      );
+                    }
+                    const entry = item.payload as NudgeLogEntry;
+                    return (
+                      <li key={item.id}>
+                        <span style={{ color: '#6b7280' }}>{formatDistanceToNow(entry.createdAt || new Date(), { addSuffix: true })}</span>{' '}
+                        <span style={{ color: '#a78bfa' }}>{entry.agentName || entry.agentId || 'agent'}</span> — {entry.message}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const objectiveStatusLabel = (status: KanbanTask['status']) => {
+    if (status === 'done') return { color: '#34d399', text: 'Done' };
+    if (status === 'in-progress') return { color: '#f59e0b', text: 'In Progress' };
+    return { color: '#6b7280', text: 'Queued' };
+  };
+
+  const renderObjectiveTaskItem = (task: KanbanTask) => {
+    const status = objectiveStatusLabel(task.status);
+
+    return (
+      <div key={task.id} style={S.objectiveTask}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={S.tag(status.color, `${status.color}22`)}>
+            {status.text}
+          </span>
+          <span style={{ ...S.name, fontSize: 13 }}>{task.name || 'Unnamed ticket'}</span>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 12, color: '#9ca3af', display: 'grid', gap: 4 }}>
+          {task.assignee && <span>Assignee: <strong>{task.assignee}</strong></span>}
+          {task.project && <span>Project: <strong>{task.project}</strong></span>}
+          {task.description && <span>{task.description}</span>}
+        </div>
+      </div>
+    );
+  };
+
+  const renderObjectiveProgressDetail = (group: ObjectiveProgressGroup) => {
+    const progressColor = group.completionPercent >= 70 ? '#34d399' : group.completionPercent >= 40 ? '#fbbf24' : '#ef4444';
+    const meterValue = Math.min(100, Math.max(0, group.completionPercent));
+    const recentCount = group.recentItems.length;
+
+    return (
+      <div key={`${group.code}-detail`} style={S.objectiveDetailsPanel}>
+        <div style={S.objectiveDetailsHeader}>
+          <div style={S.avatar(progressColor, 30)}>
+            <Target size={14} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={S.name}>{group.label}</div>
+            <div style={S.objCode} title={group.code}>{group.code}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={S.tag(progressColor, `${progressColor}22`)}>{group.completionPercent}% complete</span>
+          </div>
+        </div>
+
+        <div style={S.tags}>
+          <span style={S.tag('#a78bfa')}>
+            <ListChecks size={10} /> {group.taskCount} tasks
+          </span>
+          <span style={S.tag('#34d399')}>{group.doneCount} done</span>
+          <span style={S.tag('#f59e0b')}>{group.inProgressCount} active</span>
+          <span style={S.tag('#6b7280')}>{group.todoCount} queued</span>
+        </div>
+
+        <div style={S.objectiveProgressRailWrap}>
+          <div style={S.objectiveProgressRailLabel}>
+            <span>Objective completion</span>
+            <span>{group.completionPercent}%</span>
+          </div>
+          <div style={{ height: 8, background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ width: `${meterValue}%`, height: '100%', background: progressColor, transition: 'width 0.3s' }} />
+          </div>
+        </div>
+
+        <div style={S.objectiveTaskSection}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#e5e7eb' }}>
+            Tickets tied to this objective
+          </div>
+          {group.objectiveTasks.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#6b7280' }}>No linked tickets yet.</div>
+          ) : (
+            group.objectiveTasks.map(renderObjectiveTaskItem)
+          )}
+        </div>
+
+        <div style={S.objectiveTaskSection}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#e5e7eb' }}>
+            Recent progress signals ({recentCount})
+          </div>
+          {group.recentItems.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#6b7280' }}>No progress events yet.</div>
+          ) : (
+            <ul style={{ margin: 0, paddingLeft: 16, display: 'grid', gap: 4, fontSize: 12, color: '#d1d5db' }}>
+              {group.recentItems.slice(0, 12).map((item) => {
+                if (item.type === 'beat') {
+                  const entry = item.payload as ProgressTimelineEntry;
+                  return (
+                    <li key={item.id}>
+                      <span style={{ color: '#6b7280' }}>{formatDistanceToNow(entry.createdAt || new Date(), { addSuffix: true })}</span>{' '}
+                      <span style={{ color: '#1d9bf0' }}>{entry.agentName || entry.agentId || 'agent'}</span> — {entry.headline}
+                    </li>
+                  );
+                }
+                const entry = item.payload as NudgeLogEntry;
+                return (
+                  <li key={item.id}>
+                    <span style={{ color: '#6b7280' }}>{formatDistanceToNow(entry.createdAt || new Date(), { addSuffix: true })}</span>{' '}
+                    <span style={{ color: '#a78bfa' }}>{entry.agentName || entry.agentId || 'agent'}</span> — {entry.message}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div style={S.overlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={S.panel}>
+    <div style={isPageMode ? S.pageRoot : S.overlay} onClick={isPageMode ? undefined : ((e) => { e.stopPropagation(); })}>
+      <div style={isPageMode ? S.pagePanel : S.panel}>
 
         {/* ── Header ── */}
         <div style={S.header}>
           <div>
-            <h2 style={S.title}>Activity Feed</h2>
-            <p style={S.subtitle}>Beats, nudges, and team progress — all in one stream</p>
+            <h2 style={S.title}>{objectiveOnly ? 'Objective Timeline' : 'Heartbeat Feed'}</h2>
+            <p style={S.subtitle}>
+              {objectiveOnly
+                ? 'Objective progress with linked tickets and recent progress events'
+                : 'Events, nudges, and team progress — all in one stream'}
+            </p>
           </div>
-          <button style={S.closeBtn} onClick={onClose}><X size={18} /></button>
+          <div style={S.headerActions}>
+            {isPageMode && (
+              <button
+                style={{
+                  ...S.closeBtn,
+                  width: 'auto',
+                  padding: '0 12px',
+                  borderRadius: 18,
+                  gap: 6,
+                  display: 'inline-flex',
+                  letterSpacing: 0.01,
+                }}
+                onClick={() => router.push('/admin/virtualOffice')}
+              >
+                <ArrowLeft size={14} />
+                Back
+              </button>
+            )}
+            <button
+              style={S.copyIconBtn(copyState)}
+              onClick={() => { void handleCopyTimeline(); }}
+              title={
+                copyState === 'copied'
+                  ? 'Copied'
+                  : copyState === 'error'
+                    ? 'Copy failed'
+                    : activeTab === 'feed'
+                      ? 'Copy loaded events'
+                      : activeTab === 'snapshots'
+                        ? 'Copy health snapshots'
+                        : 'Copy objective progress'
+              }
+              aria-label={
+                copyState === 'copied'
+                  ? 'Copied'
+                  : copyState === 'error'
+                    ? 'Copy failed'
+                    : activeTab === 'feed'
+                      ? 'Copy loaded events'
+                      : activeTab === 'snapshots'
+                        ? 'Copy health snapshots'
+                        : 'Copy objective progress'
+              }
+            >
+              <Copy size={15} />
+            </button>
+            {!isPageMode && (
+              <button style={S.closeBtn} onClick={onClose}><X size={18} /></button>
+            )}
+          </div>
         </div>
 
         {/* ── Tabs ── */}
         <div style={S.tabs}>
-          <button style={S.tab(activeTab === 'feed')} onClick={() => setActiveTab('feed')}>
-            <Activity size={14} /> Feed
-            {feedItems.length > 0 && <span style={S.tabCount} title={feedTabCountTitle}>{feedItems.length}</span>}
+          {!objectiveOnly && (
+            <>
+              <button style={S.tab(activeTab === 'feed')} onClick={() => setActiveTab('feed')}>
+                <Activity size={14} /> Events (task work + nudges)
+                {feedItems.length > 0 && <span style={S.tabCount} title={feedTabCountTitle}>{feedItems.length}</span>}
+              </button>
+              <button style={S.tab(activeTab === 'snapshots')} onClick={() => setActiveTab('snapshots')}>
+                <Clock size={14} /> Health Snapshot
+                {filteredSnapshots.length > 0 && <span style={S.tabCount}>{filteredSnapshots.length}</span>}
+              </button>
+            </>
+          )}
+          <button style={S.tab(activeTab === 'objectives')} onClick={() => setActiveTab('objectives')}>
+            <Target size={14} /> Objective Progress
+            {objectiveProgressGroups.length > 0 && <span style={S.tabCount}>{objectiveProgressGroups.length}</span>}
           </button>
-          <button style={S.tab(activeTab === 'snapshots')} onClick={() => setActiveTab('snapshots')}>
-            <Clock size={14} /> Snapshots
-            {snapshots.length > 0 && <span style={S.tabCount}>{snapshots.length}</span>}
-          </button>
-          <button
-            style={S.copyBtn(copyState)}
-            onClick={() => { void handleCopyTimeline(); }}
-            title={activeTab === 'feed' ? 'Copy loaded feed items' : 'Copy loaded snapshots'}
-          >
-            <Copy size={13} />
-            {copyState === 'copied' ? 'Copied' : copyState === 'error' ? 'Copy failed' : activeTab === 'feed' ? 'Copy Feed' : 'Copy Snapshots'}
-          </button>
-          <button style={S.composeToggle(composerOpen)} onClick={() => setComposerOpen(!composerOpen)}>
-            <Send size={14} /> Post Beat
-            {composerOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+          {!objectiveOnly && (
+            <button style={S.composeToggle(composerOpen)} onClick={() => setComposerOpen(!composerOpen)}>
+              <Send size={14} /> Post Beat
+              {composerOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+          )}
         </div>
 
+        {/* ── Objective detail tabs ── */}
+        {objectiveOnly && objectiveTabMeta.length > 1 && (
+          <div style={S.objectiveTabRow}>
+            {objectiveTabMeta.map((objective) => (
+              <button
+                key={objective.code}
+                style={S.tabButton(activeObjectiveTab === objective.code)}
+                onClick={() => setActiveObjectiveTab(objective.code)}
+              >
+                {objective.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ── Composer ── */}
-        {composerOpen && (
+        {composerOpen && !objectiveOnly && (
           <div style={S.composer}>
             <form onSubmit={handleSubmit} style={S.composeForm}>
               <div style={S.composeTop}>
@@ -762,11 +1469,11 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
         <div style={S.content}>
           {activeTab === 'feed' && (
             loading ? (
-              <div style={S.empty}><p style={{ margin: 0, fontSize: 14 }}>Loading feed…</p></div>
+              <div style={S.empty}><p style={{ margin: 0, fontSize: 14 }}>Loading events…</p></div>
             ) : feedItems.length === 0 ? (
               <div style={S.empty}>
                 <Activity size={32} style={{ opacity: 0.3 }} />
-                <p style={{ margin: 0, fontSize: 14 }}>No beats or nudges logged yet.</p>
+                <p style={{ margin: 0, fontSize: 14 }}>No events logged yet.</p>
                 <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>Post the first one using the button above.</p>
               </div>
             ) : (
@@ -779,13 +1486,40 @@ const ProgressTimelinePanel: React.FC<ProgressTimelinePanelProps> = ({ agents, o
           )}
 
           {activeTab === 'snapshots' && (
-            snapshots.length === 0 ? (
+            filteredSnapshots.length === 0 ? (
               <div style={S.empty}>
                 <Clock size={32} style={{ opacity: 0.3 }} />
-                <p style={{ margin: 0, fontSize: 14 }}>No hourly snapshots recorded yet.</p>
+                <p style={{ margin: 0, fontSize: 14 }}>No health snapshots recorded yet.</p>
               </div>
             ) : (
-              snapshots.map(renderSnapshotCard)
+              filteredSnapshots.map(renderSnapshotCard)
+            )
+          )}
+
+          {activeTab === 'objectives' && (
+            objectiveProgressGroups.length === 0 ? (
+              <div style={S.empty}>
+                <Target size={32} style={{ opacity: 0.3 }} />
+                <p style={{ margin: 0, fontSize: 14 }}>No objective progress yet.</p>
+                <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>
+                  Start posting beats with objective codes to see progress maps by objective.
+                </p>
+              </div>
+            ) : (
+              (activeObjectiveTab === OBJECTIVE_ALL_TAB_KEY
+                ? objectiveProgressGroups
+                : visibleObjectiveGroups).length === 0 ? (
+                <div style={S.empty}>
+                  <Target size={32} style={{ opacity: 0.3 }} />
+                  <p style={{ margin: 0, fontSize: 14 }}>No activity for this objective yet.</p>
+                </div>
+              ) : (
+                activeObjectiveTab === OBJECTIVE_ALL_TAB_KEY && objectiveOnly
+                  ? objectiveProgressGroups.map(renderObjectiveProgressCard)
+                  : objectiveOnly
+                    ? visibleObjectiveGroups.map(renderObjectiveProgressDetail)
+                    : objectiveProgressGroups.map(renderObjectiveProgressCard)
+              )
             )
           )}
         </div>

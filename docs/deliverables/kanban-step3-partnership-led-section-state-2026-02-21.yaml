@@ -1,0 +1,47 @@
+auditDate: "2026-02-21"
+boardFile: "project/kanban/board.md"
+sectionHeader: "## Partnership-Led Community Growth"
+headerPresent: true
+northStarTickets:
+  - id: "BOARD-local-NS-API"
+    title: "Harden partner onboarding API for time-to-first-round telemetry"
+    status: "todo"
+    objectiveCode: "NS-PARTNERSHIP-PIPELINE"
+    northStar: "Partnership-Led Community Growth"
+    artifacts:
+      - "src/pages/api/partners/onboard.ts"
+  - id: "BOARD-local-NS-DASHBOARD"
+    title: "Make partner dashboard the single pane of glass for time-to-first-round"
+    status: "todo"
+    objectiveCode: "NS-PARTNERSHIP-DASHBOARD"
+    northStar: "Partnership-Led Community Growth"
+    artifacts:
+      - "web/app/partners/dashboard.tsx"
+  - id: "BOARD-local-NS-PLAYBOOK"
+    title: "Codify partner playbooks as versioned config for all three lanes"
+    status: "todo"
+    objectiveCode: "NS-PARTNERSHIP-PLAYBOOK"
+    northStar: "Partnership-Led Community Growth"
+    artifacts:
+      - "config/partnerPlaybook.json"
+      - "server/partners/playbookConfig.ts"
+  - id: "BOARD-local-NS-CAMPAIGN-BANNER"
+    title: "Ship a branded surface for high-signal partner campaigns"
+    status: "todo"
+    objectiveCode: "NS-PARTNERSHIP-CAMPAIGN"
+    northStar: "Partnership-Led Community Growth"
+    artifacts:
+      - "web/components/BrandCampaignBanner.tsx"
+  - id: "BOARD-local-NS-VO-PANEL"
+    title: "Surface Partnership-Led lane in Virtual Office project management view"
+    status: "todo"
+    objectiveCode: "NS-PARTNERSHIP-VO-PANEL"
+    northStar: "Partnership-Led Community Growth"
+    artifacts:
+      - "src/pages/admin/projectManagement.tsx"
+      - "src/components/virtualOffice/VirtualOfficeContent.tsx"
+northStarTicketCount: 5
+requirement:
+  minTickets: 3
+  maxTicketsPreferred: 5
+satisfied: true

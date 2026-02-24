@@ -7,9 +7,20 @@ export type TargetBehavior = {
 };
 
 export type BrandChallengeTemplate = {
+  // Core identity and campaign wiring
   id: string;
-  name: string;
+  brandArchetype: string;
+
+  // User-facing copy and schedule settings
+  title: string;
   description: string;
+  durationDays: number;
+  sessionsPerWeek: number;
+  brandStyleKey: string;
+
+  // Backwards-compatible fields used by existing flows/tests.
+  // These are kept in sync with the core fields above in the JSON config.
+  name: string;
   defaultDurationDays: number;
   targetSessionsPerWeek: number;
   targetBehaviors: TargetBehavior[];

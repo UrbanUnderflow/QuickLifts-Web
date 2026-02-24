@@ -7,7 +7,9 @@ import {
   getTemplatesForBrand,
   getTemplateById,
   BrandChallengeTemplate,
+  getAllBrandTemplateGroups,
 } from "../../lib/brandChallengeTemplates";
+import { getBrandChallengeTemplateByCampaignId } from "../../lib/challenges/brandTemplates";
 
 // Temporary, focused UI for wiring brand-specific templates into the
 // challenge creation flow. In later steps this selector will be
@@ -101,13 +103,50 @@ function BrandTemplateSelector(props: {
   );
 }
 
-export default function ChallengeCreatePage() {
+export type ChallengeCreatePageProps = {
+  // Optional brandCampaignId passed from a parent route or server component.
+  // If omitted, we fall back to the `brandCampaignId` query param so
+  // marketing / demo links can still deep-link directly into prefilled
+  // brand campaigns.
+  brandCampaignId?: string;
+};
+
+// Map brandStyleKey values into simple Tailwind utility class bundles so
+// tier-1 campaigns feel visually distinct without requiring a full theme
+// system. These can later be wired into design tokens.
+const BRAND_STYLE_CLASS_MAP: Record<string, string> = {
+  "gymshark-strength-dark-neon":
+    "border-fuchsia-500/60 bg-slate-950 text-fuchsia-50",
+  "gymshark-season-electric-blue":
+    "border-sky-500/70 bg-slate-900 text-sky-50",
+  "gymshark-photo-ready-gradient":
+    "border-pink-400/70 bg-slate-900 text-pink-50",
+  "on-running-recovery-soft-neutrals":
+    "border-emerald-300/70 bg-emerald-950 text-emerald-50",
+  "on-running-5k-clean-minimal":
+    "border-slate-300 bg-slate-900 text-slate-50",
+  "on-running-base-miles-airy":
+    "border-sky-200 bg-sky-900 text-sky-50",
+  "oner-active-glute-gradient":
+    "border-rose-400/80 bg-rose-950 text-rose-50",
+  "oner-active-confidence-soft-pastels":
+    "border-violet-300/80 bg-violet-950 text-violet-50",
+  "oner-active-reset-calming":
+    "border-teal-300/80 bg-slate-950 text-teal-50",
+};
+
+export default function ChallengeCreatePage(props: ChallengeCreatePageProps) {
   const searchParams = useSearchParams();
 
   // In future steps, this brandType will come from the actual challenge
   // creation form state / brandCampaign selection. For now we read from
   // the query string as a simple way to exercise the template wiring.
   const brandType = (searchParams.get("brandType") || "").toLowerCase();
+
+  const queryBrandCampaignId = searchParams.get("brandCampaignId") || "";
+  const initialBrandCampaignId = (props.brandCampaignId ?? queryBrandCampaignId).trim();
+
+  const [brandCampaignId, setBrandCampaignId] = useState(initialBrandCampaignId);
 
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(
     undefined
@@ -121,6 +160,63 @@ export default function ChallengeCreatePage() {
   const [durationDays, setDurationDays] = useState<number | "">("");
   const [sessionsPerWeek, setSessionsPerWeek] = useState<number | "">("");
   const [visualStyleKey, setVisualStyleKey] = useState("");
+
+  const brandHeaderClasses = useMemo(() => {
+    if (!visualStyleKey) return "border-gray-200 bg-white";
+    return BRAND_STYLE_CLASS_MAP[visualStyleKey] ?? "border-gray-200 bg-white";
+  }, [visualStyleKey]);
+
+  const brandCampaignOptions = useMemo(() => {
+    const groups = getAllBrandTemplateGroups();
+    const seen = new Set<string>();
+
+    return groups.flatMap((group) => {
+      return group.templates.reduce<{ id: string; label: string }[]>(
+        (acc, template) => {
+          const campaignId = template.id;
+          if (!campaignId || seen.has(campaignId)) return acc;
+
+          seen.add(campaignId);
+
+          acc.push({
+            id: campaignId,
+            label: `${group.displayName} · ${template.title || template.name}`,
+          });
+
+          return acc;
+        },
+        []
+      );
+    });
+  }, []);
+
+  // When a brandCampaignId is provided (either via props or the query
+  // string), prefill the draft with the matching brand challenge
+  // template. This lets partner links like
+  // `/challenges/create?brandCampaignId=gymshark-30-day-strength-streak`
+  // immediately render a challenge that feels like the active
+  // campaign rather than a generic template.
+  useEffect(() => {
+    if (!brandCampaignId) return;
+
+    const template = getBrandChallengeTemplateByCampaignId(brandCampaignId);
+    if (!template) return;
+
+    setTitle((prev) => (prev ? prev : template.title));
+    setDescription((prev) => (prev ? prev : template.description));
+    setDurationDays((prev) => (prev ? prev : template.durationDays));
+    setSessionsPerWeek((prev) => (prev ? prev : template.sessionsPerWeek));
+    setVisualStyleKey((prev) =>
+      prev ? prev : template.brandStyleKey
+    );
+
+    // If no template has been manually chosen yet, align the
+    // selectedTemplateId so the UI reflects the campaign-driven
+    // prefilling.
+    if (!selectedTemplateId) {
+      setSelectedTemplateId(template.id);
+    }
+  }, [brandCampaignId, selectedTemplateId]);
 
   // When a template is selected, apply its presets into the form fields.
   useEffect(() => {
@@ -137,17 +233,47 @@ export default function ChallengeCreatePage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-6">
-      <header className="mb-4">
-        <h1 className="text-2xl font-semibold text-gray-900">
+      <header
+        className={`mb-4 rounded-md border p-4 shadow-sm transition-colors ${brandHeaderClasses}`}
+      >
+        <h1 className="text-2xl font-semibold">
           Create Brand Challenge
         </h1>
-        <p className="mt-1 text-sm text-gray-600">
+        <p className="mt-1 text-sm opacity-90">
           This page will host the full challenge creation flow. For now,
           when a <code>brandType</code> is provided in the URL
           (e.g., <code>?brandType=gymshark</code>), you’ll see the
           configured templates for that brand and can apply their presets
           into the draft challenge fields.
         </p>
+
+        {brandCampaignOptions.length > 0 && (
+          <div className="mt-4 grid gap-3 rounded-md bg-black/5 p-3 text-sm shadow-sm ring-1 ring-inset ring-white/5 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-medium opacity-90">
+                Brand campaign
+              </label>
+              <select
+                value={brandCampaignId}
+                onChange={(e) => setBrandCampaignId(e.target.value)}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">No specific campaign</option>
+                {brandCampaignOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p className="text-xs text-gray-600">
+              Choosing a brand campaign will prefill this draft using that
+              campaign&rsquo;s challenge template (title, description,
+              duration, and target sessions per week) and apply the
+              matching brand style key.
+            </p>
+          </div>
+        )}
       </header>
 
       {!brandType ? (

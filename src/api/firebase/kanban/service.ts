@@ -11,7 +11,7 @@ import {
   where
 } from 'firebase/firestore';
 import { db } from '../config';
-import { KanbanTask, KanbanTaskData, Subtask, KanbanLane } from './types';
+import { KanbanTask, KanbanTaskData, Subtask, SubtaskStatus, KanbanLane } from './types';
 import { adminMethods } from '../admin/methods';
 
 class KanbanService {
@@ -46,7 +46,7 @@ class KanbanService {
 
       await setDoc(taskRef, task.toDictionary());
       console.log('Kanban task created successfully:', task.id);
-      
+
       return task;
     } catch (error) {
       console.error('Error creating kanban task:', error);
@@ -63,7 +63,7 @@ class KanbanService {
       const q = query(tasksRef, orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(q);
 
-      const tasks = querySnapshot.docs.map(doc => 
+      const tasks = querySnapshot.docs.map(doc =>
         KanbanTask.fromFirestore(doc.data(), doc.id)
       );
 
@@ -84,7 +84,7 @@ class KanbanService {
       const q = query(tasksRef, where('status', '==', status), orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(q);
 
-      const tasks = querySnapshot.docs.map(doc => 
+      const tasks = querySnapshot.docs.map(doc =>
         KanbanTask.fromFirestore(doc.data(), doc.id)
       );
 
@@ -155,22 +155,23 @@ class KanbanService {
     try {
       const taskRef = doc(db, 'kanbanTasks', taskId);
       const taskDoc = await getDoc(taskRef);
-      
+
       if (!taskDoc.exists()) {
         throw new Error('Task not found');
       }
 
       const task = KanbanTask.fromFirestore(taskDoc.data(), taskId);
       const newSubtask: Subtask = {
-        id: Date.now().toString(), // Simple ID generation for subtasks
+        id: Date.now().toString(),
         title: subtaskTitle,
         completed: false,
+        status: 'not_started',
         createdAt: new Date()
       };
 
       const updatedSubtasks = [...task.subtasks, newSubtask];
       await this.updateTask(taskId, { subtasks: updatedSubtasks });
-      
+
       console.log('Subtask added successfully to task:', taskId);
     } catch (error) {
       console.error('Error adding subtask:', error);
@@ -185,14 +186,14 @@ class KanbanService {
     try {
       const taskRef = doc(db, 'kanbanTasks', taskId);
       const taskDoc = await getDoc(taskRef);
-      
+
       if (!taskDoc.exists()) {
         throw new Error('Task not found');
       }
 
       const task = KanbanTask.fromFirestore(taskDoc.data(), taskId);
-      const updatedSubtasks = task.subtasks.map(subtask => 
-        subtask.id === subtaskId 
+      const updatedSubtasks = task.subtasks.map(subtask =>
+        subtask.id === subtaskId
           ? { ...subtask, ...updates }
           : subtask
       );
@@ -212,7 +213,7 @@ class KanbanService {
     try {
       const taskRef = doc(db, 'kanbanTasks', taskId);
       const taskDoc = await getDoc(taskRef);
-      
+
       if (!taskDoc.exists()) {
         throw new Error('Task not found');
       }
@@ -235,14 +236,14 @@ class KanbanService {
     try {
       const taskRef = doc(db, 'kanbanTasks', taskId);
       const taskDoc = await getDoc(taskRef);
-      
+
       if (!taskDoc.exists()) {
         throw new Error('Task not found');
       }
 
       const task = KanbanTask.fromFirestore(taskDoc.data(), taskId);
-      const updatedSubtasks = task.subtasks.map(subtask => 
-        subtask.id === subtaskId 
+      const updatedSubtasks = task.subtasks.map(subtask =>
+        subtask.id === subtaskId
           ? { ...subtask, completed: !subtask.completed }
           : subtask
       );
@@ -251,6 +252,98 @@ class KanbanService {
       console.log('Subtask completion toggled:', subtaskId);
     } catch (error) {
       console.error('Error toggling subtask completion:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Set evidence on a subtask (proof of completion)
+   */
+  async setSubtaskEvidence(taskId: string, subtaskId: string, evidence: string): Promise<void> {
+    try {
+      const taskRef = doc(db, 'kanbanTasks', taskId);
+      const taskDoc = await getDoc(taskRef);
+      if (!taskDoc.exists()) throw new Error('Task not found');
+
+      const task = KanbanTask.fromFirestore(taskDoc.data(), taskId);
+      const updatedSubtasks = task.subtasks.map(subtask =>
+        subtask.id === subtaskId
+          ? { ...subtask, evidence, status: 'achieved' as SubtaskStatus, completed: true }
+          : subtask
+      );
+      await this.updateTask(taskId, { subtasks: updatedSubtasks });
+      console.log('Subtask evidence set:', subtaskId);
+    } catch (error) {
+      console.error('Error setting subtask evidence:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark a review-required subtask as approved by human
+   */
+  async approveSubtask(taskId: string, subtaskId: string): Promise<void> {
+    try {
+      const taskRef = doc(db, 'kanbanTasks', taskId);
+      const taskDoc = await getDoc(taskRef);
+      if (!taskDoc.exists()) throw new Error('Task not found');
+
+      const task = KanbanTask.fromFirestore(taskDoc.data(), taskId);
+      const updatedSubtasks = task.subtasks.map(subtask =>
+        subtask.id === subtaskId
+          ? { ...subtask, reviewedAt: new Date(), status: 'achieved' as SubtaskStatus, completed: true }
+          : subtask
+      );
+      await this.updateTask(taskId, { subtasks: updatedSubtasks });
+      console.log('Subtask approved:', subtaskId);
+    } catch (error) {
+      console.error('Error approving subtask:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Deny a review-required subtask — reverts to in_progress with reason
+   */
+  async denySubtask(taskId: string, subtaskId: string, reason: string): Promise<void> {
+    try {
+      const taskRef = doc(db, 'kanbanTasks', taskId);
+      const taskDoc = await getDoc(taskRef);
+      if (!taskDoc.exists()) throw new Error('Task not found');
+
+      const task = KanbanTask.fromFirestore(taskDoc.data(), taskId);
+      const updatedSubtasks = task.subtasks.map(subtask =>
+        subtask.id === subtaskId
+          ? { ...subtask, reviewDeniedReason: reason, status: 'in_progress' as SubtaskStatus, completed: false, reviewedAt: undefined }
+          : subtask
+      );
+      await this.updateTask(taskId, { subtasks: updatedSubtasks });
+      console.log('Subtask denied:', subtaskId, reason);
+    } catch (error) {
+      console.error('Error denying subtask:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update a subtask's status
+   */
+  async updateSubtaskStatus(taskId: string, subtaskId: string, status: SubtaskStatus): Promise<void> {
+    try {
+      const taskRef = doc(db, 'kanbanTasks', taskId);
+      const taskDoc = await getDoc(taskRef);
+      if (!taskDoc.exists()) throw new Error('Task not found');
+
+      const task = KanbanTask.fromFirestore(taskDoc.data(), taskId);
+      const updatedSubtasks = task.subtasks.map(subtask =>
+        subtask.id === subtaskId
+          ? { ...subtask, status, completed: status === 'achieved' }
+          : subtask
+      );
+      await this.updateTask(taskId, { subtasks: updatedSubtasks });
+      console.log('Subtask status updated:', subtaskId, status);
+    } catch (error) {
+      console.error('Error updating subtask status:', error);
       throw error;
     }
   }
@@ -277,7 +370,7 @@ class KanbanService {
       const q = query(tasksRef, where('project', '==', project), orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(q);
 
-      const tasks = querySnapshot.docs.map(doc => 
+      const tasks = querySnapshot.docs.map(doc =>
         KanbanTask.fromFirestore(doc.data(), doc.id)
       );
 
@@ -297,7 +390,7 @@ class KanbanService {
       const q = query(tasksRef, where('assignee', '==', assignee), orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(q);
 
-      const tasks = querySnapshot.docs.map(doc => 
+      const tasks = querySnapshot.docs.map(doc =>
         KanbanTask.fromFirestore(doc.data(), doc.id)
       );
 
@@ -311,17 +404,17 @@ class KanbanService {
   /**
    * Fetch all admin users for assignee autocomplete
    */
-  async fetchAdminUsers(): Promise<Array<{id: string; email: string; displayName: string; username: string}>> {
+  async fetchAdminUsers(): Promise<Array<{ id: string; email: string; displayName: string; username: string }>> {
     try {
       console.log('[KanbanService] Fetching admin users...');
-      
+
       // Fetch all users
       const usersRef = collection(db, 'users');
       const q = query(usersRef, orderBy('displayName'));
       const querySnapshot = await getDocs(q);
-      
+
       console.log(`[KanbanService] Found ${querySnapshot.docs.length} total users`);
-      
+
       const allUsers = querySnapshot.docs.map(doc => ({
         id: doc.id,
         email: doc.data().email || '',
@@ -334,12 +427,12 @@ class KanbanService {
       // Filter to only admin users with better error handling
       const adminUsers = [];
       let checkedCount = 0;
-      
+
       for (const user of allUsers) {
         try {
           checkedCount++;
           console.log(`[KanbanService] Checking admin status ${checkedCount}/${allUsers.length}: ${user.email}`);
-          
+
           const isAdmin = await adminMethods.isAdmin(user.email);
           if (isAdmin) {
             adminUsers.push(user);
@@ -368,7 +461,7 @@ class KanbanService {
       const q = query(tasksRef, where('theme', '==', theme), orderBy('createdAt', 'desc'));
       const querySnapshot = await getDocs(q);
 
-      const tasks = querySnapshot.docs.map(doc => 
+      const tasks = querySnapshot.docs.map(doc =>
         KanbanTask.fromFirestore(doc.data(), doc.id)
       );
 

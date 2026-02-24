@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { useRouter } from 'next/router';
-import { X, Package, ExternalLink, FileText, ChevronRight, RefreshCw, MessageSquare } from 'lucide-react';
+import { X, Package, ExternalLink, FileText, ChevronRight, RefreshCw, Check, XCircle } from 'lucide-react';
 import { MarkdownRenderer } from '../MarkdownRenderer';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, doc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 
 /* ─── types ─── */
@@ -13,13 +13,28 @@ interface Deliverable {
   description: string;
   filename: string;
   filePath: string;
+  changeType?: string;
   emoji: string;
   tags: string[];
   status: string;
+  reviewReason?: string;
   completedAt?: string;
   taskRef?: string;
   agentId: string;
+  deliveryClass?: 'decision-grade' | 'supporting' | 'internal';
+  movementSignals?: {
+    score: number;
+    impactLabel: string;
+    impactToneClass: 'high' | 'medium' | 'low';
+    signals: string[];
+    rationale: string;
+    classLabel: string;
+    classSummary: string;
+  };
 }
+
+type DeliverableStatusFilter = 'all' | 'needs-review' | 'approved' | 'work';
+type DeliveryClassFilter = 'all' | 'decision-grade' | 'supporting' | 'internal';
 
 interface AgentInfo {
   id: string;
@@ -56,6 +71,169 @@ const resolveAgentRouteId = (agentId?: string): string | null => {
   const canonical = AGENT_ROUTE_ALIASES[normalized] || normalized;
   return AGENTS.some((agent) => agent.id === canonical) ? canonical : null;
 };
+
+const normalizeDeliverableStatus = (value?: string): string => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized || normalized === 'pending' || normalized === 'in-progress' || normalized === 'queued') {
+    return 'work';
+  }
+  if (normalized === 'needsreview') return 'needs-review';
+  if (normalized === 'approved' || normalized === 'reject' || normalized === 'rejected') return normalized === 'rejected' ? 'needs-review' : 'approved';
+  return normalized || 'work';
+};
+
+const normalizeDeliverableChangeType = (value?: string): string => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'new') return 'new';
+  if (normalized === 'edited' || normalized === 'modified') return 'edited';
+  if (normalized === 'deleted') return 'deleted';
+  return 'edited';
+};
+
+const normalizeDeliveryClass = (value?: string): Deliverable['deliveryClass'] => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'decision-grade' || normalized === 'decisiongrade' || normalized === 'decision') return 'decision-grade';
+  if (normalized === 'supporting' || normalized === 'support') return 'supporting';
+  if (normalized === 'internal') return 'internal';
+  return 'supporting';
+};
+
+const MOVEMENT_KEYWORDS = [
+  'north star',
+  'partnership',
+  'customer',
+  'activation',
+  'conversion',
+  'revenue',
+  'retention',
+  'churn',
+  'engagement',
+  'onboarding',
+  'dashboard',
+  'campaign',
+  'api',
+  'automation',
+  'workflow',
+  'community',
+  'run',
+  'checkout',
+  'billing',
+  'on-site',
+];
+
+const INTERNAL_PATH_SEGMENTS = [
+  '/scripts/',
+  '/node_modules/',
+  '/backups/',
+  'AGENTS.md',
+  'agent-runner',
+  '.github',
+  'openapi',
+  'schema',
+];
+
+const resolveDeliveryClass = (score: number, text: string, filePath: string): 'decision-grade' | 'supporting' | 'internal' => {
+  const normalizedText = normalizeText(text);
+  const normalizedPath = normalizeText(filePath);
+
+  if (score <= 2 || /onboarding checklist|runbook|handoff|note|manifesto/.test(normalizedText)) {
+    return 'supporting';
+  }
+
+  if (score >= 4 && !INTERNAL_PATH_SEGMENTS.some((segment) => normalizedPath.includes(normalizeText(segment)))) {
+    return 'decision-grade';
+  }
+
+  if (
+    score >= 3 &&
+    /(^|\/)(src|web|functions)\//.test(normalizedPath)
+  ) {
+    return 'decision-grade';
+  }
+
+  if (score >= 2) {
+    return 'supporting';
+  }
+
+  return 'internal';
+};
+
+const deriveMovementSignals = (d: Deliverable) => {
+  const text = normalizeText([d.title, d.description, d.reviewReason, d.filePath, ...(d.tags || [])].join(' '));
+  const filePath = d.filePath || '';
+  const hasObjectiveLanguage = /north\s*star|revenue|partner|conversion|retention|community|engagement|onboarding/.test(text);
+  const isInternalFile = INTERNAL_PATH_SEGMENTS.some((segment) => normalizeText(filePath).includes(normalizeText(segment)));
+
+  const signals: string[] = [];
+  let score = 1;
+
+  if (d.reviewReason?.trim()) {
+    score += 2;
+    signals.push('Reviewer supplied a rationale for why this move matters.');
+  } else {
+    signals.push('No reviewer rationale yet.');
+  }
+
+  const matched = MOVEMENT_KEYWORDS.filter((term) => text.includes(term));
+  score += Math.min(4, matched.length);
+  signals.push(...matched.slice(0, 4).map((term) => `Contains impact signal: ${term}`));
+
+  if (filePath) {
+    if (/\b(src|web|functions)\//.test(filePath)) {
+      score += 2;
+      signals.push('Touches runtime or application behavior.');
+    } else if (/\bdocs\//.test(filePath)) {
+      signals.push('Documentation artifact — verify execution impact before approval.');
+    } else if (/\bconfig\b/.test(filePath)) {
+      signals.push('Configuration artifact; confirm production impact and rollback path.');
+    }
+  }
+
+  if (d.changeType === 'new') {
+    score += 1;
+    signals.push('New artifact introduced.');
+  }
+
+  if (isInternalFile) {
+    score = Math.max(0, score - 2);
+    signals.push('Likely internal/operational artifact path.');
+  }
+
+  if (hasObjectiveLanguage) {
+    score += 1;
+  }
+
+  const clampedScore = Math.min(7, Math.max(1, score));
+  const deliveryClass = resolveDeliveryClass(clampedScore, text, filePath);
+  const impactLabel = clampedScore >= 6 ? 'High' : clampedScore >= 4 ? 'Medium' : clampedScore >= 2 ? 'Low' : 'Minimal';
+  const impactToneClass: 'low' | 'medium' | 'high' =
+    clampedScore >= 6 ? 'high' : clampedScore >= 4 ? 'high' : clampedScore >= 2 ? 'medium' : 'low';
+
+  const classLabel = deliveryClass === 'decision-grade'
+    ? 'Decision Grade'
+    : deliveryClass === 'supporting'
+      ? 'Supporting'
+      : 'Internal';
+
+  const classSummary =
+    deliveryClass === 'decision-grade'
+      ? 'Likely moves user-facing outcomes and should be reviewed before approval.'
+      : deliveryClass === 'supporting'
+        ? 'Potentially useful but mostly supports downstream execution.'
+        : 'Internal / operational artifact; keep only if paired with external impact tasks.';
+
+  return {
+    score: clampedScore,
+    impactLabel,
+    impactToneClass,
+    signals: Array.from(new Set(signals)).slice(0, 6),
+    rationale: d.reviewReason || 'No rationale supplied yet. Ask for a concise movement rationale before approving.',
+    classLabel,
+    classSummary,
+  };
+};
+
+const normalizeText = (value?: string) => String(value || '').toLowerCase();
 
 const sanitizeRecordedFilePath = (rawPath?: string): string => {
   if (!rawPath) return '';
@@ -95,6 +273,8 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
   const [deliverables, setDeliverables] = useState<Deliverable[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterAgent, setFilterAgent] = useState<string | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<DeliverableStatusFilter>('needs-review');
+  const [deliveryClassFilter, setDeliveryClassFilter] = useState<DeliveryClassFilter>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
   const [fileLoading, setFileLoading] = useState(false);
@@ -116,8 +296,7 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
         const data = docSnap.data();
         const filePath = sanitizeRecordedFilePath(data.filePath || '');
         const basename = filePath.split('/').pop() || data.title || 'untitled';
-
-        all.push({
+        const draftDeliverable = {
           id: docSnap.id,
           title: data.title || basename,
           description: data.description || `Task: ${data.taskName || 'Unknown'}`,
@@ -125,10 +304,21 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
           filePath,
           emoji: ARTIFACT_EMOJI[data.artifactType] || '📄',
           tags: data.tags || [data.artifactType || 'document'].filter(Boolean),
-          status: data.status || 'pending',
+          changeType: normalizeDeliverableChangeType(data.changeType),
+          status: normalizeDeliverableStatus(data.status),
+          reviewReason: data.reviewReason || '',
           completedAt: data.createdAt?.toDate?.()?.toISOString?.() || undefined,
           taskRef: data.taskName || data.taskId || undefined,
           agentId: data.agentId || 'unknown',
+          deliveryClass: normalizeDeliveryClass(data.deliveryClass),
+        } as Deliverable;
+        const movementSignals = deriveMovementSignals(draftDeliverable);
+
+        const movementClass = draftDeliverable.deliveryClass || resolveDeliveryClass(movementSignals.score, draftDeliverable.title, filePath);
+        all.push({
+          ...draftDeliverable,
+          movementSignals,
+          deliveryClass: movementClass,
         });
       }
     } catch (err) {
@@ -140,10 +330,6 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
   };
 
   useEffect(() => { loadAll(); }, []);
-
-  const filtered = filterAgent === 'all'
-    ? deliverables
-    : deliverables.filter((d) => (resolveAgentRouteId(d.agentId) || d.agentId) === filterAgent);
 
   const getAgent = (id: string) => AGENTS.find((a) => a.id === (resolveAgentRouteId(id) || id)) || AGENTS[0];
 
@@ -200,41 +386,116 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
     router.push(`/admin/deliverables/${agent.id}${params.toString() ? `?${params.toString()}` : ''}`);
   };
 
-  const navigateToExplainChat = (deliverable: Deliverable) => {
-    const routeAgentId = resolveAgentRouteId(deliverable.agentId);
-    const normalizedFilePath = sanitizeRecordedFilePath(deliverable.filePath);
-    const taskRef = deliverable.taskRef?.trim();
-    const title = deliverable.title || deliverable.filename || 'this deliverable';
-
-    const prefillMessage = [
-      `Please explain the purpose of "${title}" and how it gets us to the North Star.`,
-      normalizedFilePath ? `Deliverable file: ${normalizedFilePath}` : '',
-      taskRef ? `Task context: ${taskRef}` : '',
-      '',
-      'Please include:',
-      '1) why this deliverable matters right now,',
-      '2) what impact it should create, and',
-      '3) what signal will confirm it is moving us toward the North Star.',
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    const params = new URLSearchParams();
-    if (routeAgentId) params.set('agent', routeAgentId);
-    params.set('prefill', prefillMessage);
-    params.set('type', 'question');
-
-    onClose();
-    router.push(`/admin/agentChat?${params.toString()}`);
-  };
-
   const agentCounts = AGENTS.map((a) => ({
     ...a,
     count: deliverables.filter((d) => (resolveAgentRouteId(d.agentId) || normalizeAgentKey(d.agentId)) === a.id).length,
   }));
 
+  const statusCounts = {
+    all: deliverables.length,
+    needsReview: deliverables.filter((d) => normalizeDeliverableStatus(d.status) === 'needs-review').length,
+    approved: deliverables.filter((d) => normalizeDeliverableStatus(d.status) === 'approved').length,
+    work: deliverables.filter((d) => {
+      const status = normalizeDeliverableStatus(d.status);
+      return status !== 'needs-review' && status !== 'approved';
+    }).length,
+  };
+  const movementClassCounts = {
+    all: deliverables.length,
+    decisionGrade: deliverables.filter((d) => (d.deliveryClass || 'supporting') === 'decision-grade').length,
+    supporting: deliverables.filter((d) => (d.deliveryClass || 'supporting') === 'supporting').length,
+    internal: deliverables.filter((d) => (d.deliveryClass || 'supporting') === 'internal').length,
+  };
+
+  const isNeedsReview = (status?: string) => normalizeDeliverableStatus(status) === 'needs-review';
+  const isApproved = (status?: string) => normalizeDeliverableStatus(status) === 'approved';
+  const isDecisionGrade = (deliveryClass?: string) => (deliveryClass || 'supporting') === 'decision-grade';
+  const isSupporting = (deliveryClass?: string) => (deliveryClass || 'supporting') === 'supporting';
+  const isInternal = (deliveryClass?: string) => (deliveryClass || 'supporting') === 'internal';
+
+  const filtered = deliverables
+    .filter((d) => {
+      if (filterAgent === 'all') return true;
+      return (resolveAgentRouteId(d.agentId) || d.agentId) === filterAgent;
+    })
+    .filter((d) => {
+      if (statusFilter === 'all') return true;
+      if (statusFilter === 'needs-review') return isNeedsReview(d.status);
+      if (statusFilter === 'approved') return isApproved(d.status);
+      return !isNeedsReview(d.status) && !isApproved(d.status);
+    })
+    .filter((d) => {
+      if (deliveryClassFilter === 'all') return true;
+      if (deliveryClassFilter === 'decision-grade') return isDecisionGrade(d.deliveryClass);
+      if (deliveryClassFilter === 'supporting') return isSupporting(d.deliveryClass);
+      return isInternal(d.deliveryClass);
+    });
+
+const statusBadge = (status?: string) => {
+    if (isNeedsReview(status)) {
+      return { className: 'needs-review', label: 'NEEDS REVIEW' };
+    }
+    if (isApproved(status)) {
+      return { className: 'approved', label: 'APPROVED' };
+    }
+    if (status === 'pending-recovery') return { className: 'work', label: 'WORK' };
+    if (status === 'complete') return { className: 'approved', label: 'APPROVED' };
+    return { className: 'work', label: 'WORK' };
+  };
+
+  const changeTypeBadge = (changeType?: string) => {
+    const normalized = normalizeDeliverableChangeType(changeType);
+    if (normalized === 'new') {
+      return { className: 'new', label: 'NEW' };
+    }
+    if (normalized === 'deleted') {
+      return { className: 'deleted', label: 'DELETED' };
+    }
+    return { className: 'edited', label: 'EDITED' };
+  };
+
+  const deliveryClassBadge = (deliveryClass?: string) => {
+    const normalized = normalizeDeliveryClass(deliveryClass);
+    if (normalized === 'decision-grade') {
+      return { className: 'decision-grade', label: 'DECISION' };
+    }
+    if (normalized === 'internal') {
+      return { className: 'internal', label: 'INTERNAL' };
+    }
+    return { className: 'supporting', label: 'SUPPORTING' };
+  };
+
+  const handleApprove = async (deliverableId: string) => {
+    try {
+      await updateDoc(doc(db, 'agent-deliverables', deliverableId), {
+        status: 'approved',
+        reviewedAt: serverTimestamp(),
+      });
+      setDeliverables((current) => current.map((item) => item.id === deliverableId ? { ...item, status: 'approved' } : item));
+    } catch (err) {
+      console.error('Failed to approve deliverable:', err);
+    }
+  };
+
+  const handleDeny = async (deliverable: Deliverable) => {
+    const title = deliverable.title || deliverable.filename || 'this deliverable';
+    const confirmed = window.confirm(`Delete ${title}? This will remove it from Shared Deliverables.`);
+    if (!confirmed) return;
+
+    try {
+      await deleteDoc(doc(db, 'agent-deliverables', deliverable.id));
+      setDeliverables((current) => current.filter((item) => item.id !== deliverable.id));
+      if (expandedId === deliverable.id) {
+        setExpandedId(null);
+        setFileContent('');
+      }
+    } catch (err) {
+      console.error('Failed to delete deliverable:', err);
+    }
+  };
+
   const panel = (
-    <div className="sd-overlay" onClick={onClose}>
+    <div className="sd-overlay" onClick={(e) => e.stopPropagation()}>
       <div className="sd-panel" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="sd-header">
@@ -244,8 +505,8 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
             </div>
             <div>
               <h2 className="sd-title">Shared Deliverables</h2>
-              <p className="sd-subtitle">
-                {deliverables.length} deliverable{deliverables.length !== 1 ? 's' : ''} across {agentCounts.filter((a) => a.count > 0).length} agent{agentCounts.filter((a) => a.count > 0).length !== 1 ? 's' : ''}
+            <p className="sd-subtitle">
+                {statusCounts.all} deliverable{statusCounts.all !== 1 ? 's' : ''} across {agentCounts.filter((a) => a.count > 0).length} agent{agentCounts.filter((a) => a.count > 0).length !== 1 ? 's' : ''}
               </p>
             </div>
           </div>
@@ -279,6 +540,61 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
               <span className="sd-pill-count">{a.count}</span>
             </button>
           ))}
+        </div>
+
+        {/* Status filter pills */}
+        <div className="sd-filters">
+          <button
+            className={`sd-filter-pill ${statusFilter === 'all' ? 'active' : ''}`}
+            onClick={() => setStatusFilter('all')}
+          >
+            All <span className="sd-pill-count">{statusCounts.all}</span>
+          </button>
+          <button
+            className={`sd-filter-pill ${statusFilter === 'needs-review' ? 'active' : ''}`}
+            onClick={() => setStatusFilter('needs-review')}
+          >
+            Needs Review <span className="sd-pill-count">{statusCounts.needsReview}</span>
+          </button>
+          <button
+            className={`sd-filter-pill ${statusFilter === 'approved' ? 'active' : ''}`}
+            onClick={() => setStatusFilter('approved')}
+          >
+            Approved <span className="sd-pill-count">{statusCounts.approved}</span>
+          </button>
+          <button
+            className={`sd-filter-pill ${statusFilter === 'work' ? 'active' : ''}`}
+            onClick={() => setStatusFilter('work')}
+          >
+            Work <span className="sd-pill-count">{statusCounts.work}</span>
+          </button>
+        </div>
+
+        <div className="sd-filters">
+          <button
+            className={`sd-filter-pill ${deliveryClassFilter === 'all' ? 'active' : ''}`}
+            onClick={() => setDeliveryClassFilter('all')}
+          >
+            All Classes <span className="sd-pill-count">{movementClassCounts.all}</span>
+          </button>
+          <button
+            className={`sd-filter-pill ${deliveryClassFilter === 'decision-grade' ? 'active' : ''}`}
+            onClick={() => setDeliveryClassFilter('decision-grade')}
+          >
+            Decision Grade <span className="sd-pill-count">{movementClassCounts.decisionGrade}</span>
+          </button>
+          <button
+            className={`sd-filter-pill ${deliveryClassFilter === 'supporting' ? 'active' : ''}`}
+            onClick={() => setDeliveryClassFilter('supporting')}
+          >
+            Supporting <span className="sd-pill-count">{movementClassCounts.supporting}</span>
+          </button>
+          <button
+            className={`sd-filter-pill ${deliveryClassFilter === 'internal' ? 'active' : ''}`}
+            onClick={() => setDeliveryClassFilter('internal')}
+          >
+            Internal <span className="sd-pill-count">{movementClassCounts.internal}</span>
+          </button>
         </div>
 
         {/* Content */}
@@ -317,12 +633,30 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
                       >
                         {agent.emoji} {agent.displayName}
                       </span>
-                      {d.status === 'pending-recovery' && (
-                        <span className="sd-status-badge pending">⏳ pending</span>
-                      )}
-                      {d.status === 'complete' && (
-                        <span className="sd-status-badge complete">✓ complete</span>
-                      )}
+                      {(() => {
+                        const badge = statusBadge(d.status);
+                        return (
+                          <span className={`sd-status-badge ${badge.className}`}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
+                      {(() => {
+                        const badge = changeTypeBadge(d.changeType);
+                        return (
+                          <span className={`sd-change-badge ${badge.className}`}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
+                      {(() => {
+                        const badge = deliveryClassBadge(d.deliveryClass);
+                        return (
+                          <span className={`sd-delivery-badge ${badge.className}`}>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
                       {d.completedAt && (
                         <span className="sd-date">{new Date(d.completedAt).toLocaleDateString()}</span>
                       )}
@@ -342,8 +676,40 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
                   </div>
                 </div>
 
-                {isExpanded && (
-                  <div className="sd-item-body">
+                  {isExpanded && (
+                    <div className="sd-item-body">
+                      {(() => {
+                          const movement = d.movementSignals || deriveMovementSignals(d);
+                          return (
+                            <details className="sd-movement-section">
+                              <summary className="sd-movement-summary">
+                                <span>Movement assessment</span>
+                                <span className={`sd-movement-badge ${movement.impactToneClass}`}>
+                                  {movement.impactLabel} ({movement.score}/7)
+                            </span>
+                          </summary>
+                          <div className="sd-movement-content">
+                            <div className="sd-movement-rationale">
+                              <strong>Why this matters:</strong>
+                              <p>{movement.rationale}</p>
+                            </div>
+                            {movement.signals.length > 0 && (
+                              <ul className="sd-movement-signals">
+                                {movement.signals.map((signal) => (
+                                  <li key={signal}>{signal}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </details>
+                      );
+                    })()}
+                    {isNeedsReview(d.status) && d.reviewReason && (
+                      <div className="sd-review-note">
+                        <strong>Review reason:</strong>
+                        <span>{d.reviewReason}</span>
+                      </div>
+                    )}
                     {d.tags.length > 0 && (
                       <div className="sd-tags">
                         {d.tags.map((t) => (
@@ -367,13 +733,24 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
                         </div>
                       )}
                     </div>
-                    <button
-                      className="sd-explain-btn"
-                      onClick={() => navigateToExplainChat(d)}
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      Ask for Explanation
-                    </button>
+                  {isNeedsReview(d.status) && (
+                    <div className="sd-review-actions">
+                        <button
+                          className="sd-approve-btn"
+                          onClick={() => handleApprove(d.id)}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          Keep
+                        </button>
+                        <button
+                          className="sd-deny-btn"
+                          onClick={() => handleDeny(d)}
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
                     <button
                       className="sd-open-page-btn"
                       onClick={() => navigateToAgent(d.agentId, d.filePath, d.taskRef)}
@@ -539,17 +916,124 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
           font-size: 9px; font-weight: 600; padding: 1px 6px;
           border-radius: 4px; font-family: 'JetBrains Mono', monospace;
         }
+        .sd-change-badge {
+          font-size: 9px; font-weight: 600; padding: 1px 6px;
+          border-radius: 4px; font-family: 'JetBrains Mono', monospace;
+        }
+        .sd-change-badge.new {
+          background: rgba(34,197,94,0.12); color: #4ade80;
+          border: 1px solid rgba(34,197,94,0.25);
+        }
+        .sd-change-badge.edited {
+          background: rgba(59,130,246,0.12); color: #60a5fa;
+          border: 1px solid rgba(59,130,246,0.25);
+        }
+        .sd-change-badge.deleted {
+          background: rgba(244,63,94,0.1); color: #fda4af;
+          border: 1px solid rgba(244,63,94,0.25);
+        }
+        .sd-delivery-badge {
+          font-size: 9px; font-weight: 600; padding: 1px 6px;
+          border-radius: 4px; font-family: 'JetBrains Mono', monospace;
+        }
+        .sd-delivery-badge.decision-grade {
+          background: rgba(16,185,129,0.12); color: #34d399;
+          border: 1px solid rgba(16,185,129,0.2);
+        }
+        .sd-delivery-badge.supporting {
+          background: rgba(59,130,246,0.12); color: #60a5fa;
+          border: 1px solid rgba(59,130,246,0.2);
+        }
+        .sd-delivery-badge.internal {
+          background: rgba(148,163,184,0.12); color: #9ca3af;
+          border: 1px solid rgba(148,163,184,0.2);
+        }
         .sd-status-badge.pending {
           background: rgba(245,158,11,0.12); color: #f59e0b;
           border: 1px solid rgba(245,158,11,0.2);
+        }
+        .sd-status-badge.work {
+          background: rgba(148,163,184,0.12); color: #cbd5e1;
+          border: 1px solid rgba(148,163,184,0.2);
+        }
+        .sd-status-badge.pending {
+          background: rgba(148,163,184,0.12); color: #cbd5e1;
+          border: 1px solid rgba(148,163,184,0.2);
         }
         .sd-status-badge.complete {
           background: rgba(34,197,94,0.1); color: #22c55e;
           border: 1px solid rgba(34,197,94,0.2);
         }
+        .sd-status-badge.needs-review {
+          background: rgba(249,115,22,0.12); color: #fb923c;
+          border: 1px solid rgba(249,115,22,0.2);
+        }
+        .sd-status-badge.approved {
+          background: rgba(16,185,129,0.12); color: #34d399;
+          border: 1px solid rgba(16,185,129,0.2);
+        }
         .sd-date {
           font-size: 10px; color: #52525b;
           font-family: 'JetBrains Mono', monospace;
+        }
+        .sd-review-note {
+          margin: 10px 0 0;
+          padding: 8px 10px;
+          border: 1px solid rgba(251,146,60,0.2);
+          border-radius: 8px;
+          background: rgba(251,146,60,0.06);
+          color: #fdba74;
+          font-size: 11px;
+          line-height: 1.4;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .sd-review-note strong {
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          color: #f59e0b;
+        }
+        .sd-review-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 10px;
+        }
+        .sd-approve-btn,
+        .sd-deny-btn {
+          flex: 1;
+          border-radius: 8px;
+          border: 1px solid transparent;
+          padding: 8px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 11px;
+          font-weight: 600;
+          font-family: inherit;
+        }
+        .sd-approve-btn {
+          color: #34d399;
+          border-color: rgba(16,185,129,0.3);
+          background: rgba(16,185,129,0.08);
+        }
+        .sd-approve-btn:hover {
+          background: rgba(16,185,129,0.16);
+          border-color: rgba(16,185,129,0.45);
+        }
+        .sd-deny-btn {
+          color: #fda4af;
+          border-color: rgba(248,113,113,0.3);
+          background: rgba(248,113,113,0.08);
+        }
+        .sd-deny-btn:hover {
+          background: rgba(248,113,113,0.16);
+          border-color: rgba(248,113,113,0.45);
         }
         .sd-item-actions {
           display: flex; align-items: center; gap: 4px;
@@ -582,6 +1066,87 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
         @keyframes sdExpand {
           from { opacity: 0; }
           to { opacity: 1; }
+        }
+        .sd-movement-section {
+          margin-top: 10px;
+          border: 1px solid rgba(16,185,129,0.18);
+          border-radius: 8px;
+          background: rgba(16,185,129,0.08);
+          overflow: hidden;
+        }
+        .sd-movement-summary {
+          list-style: none;
+          cursor: pointer;
+          padding: 8px 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          font-size: 10px;
+          color: #6ee7b7;
+          font-weight: 700;
+          font-family: inherit;
+          letter-spacing: 0.03em;
+        }
+        .sd-movement-summary::-webkit-details-marker { display: none; }
+        .sd-movement-summary::after {
+          content: '▸';
+          color: #7dd3fc;
+          transition: transform 0.2s;
+        }
+        .sd-movement-section[open] .sd-movement-summary::after {
+          transform: rotate(90deg);
+        }
+        .sd-movement-content {
+          padding: 10px;
+          border-top: 1px solid rgba(16,185,129,0.14);
+          background: rgba(17, 24, 39, 0.55);
+          display: grid;
+          gap: 8px;
+        }
+        .sd-movement-rationale {
+          color: #d1fae5;
+          font-size: 11px;
+          line-height: 1.45;
+        }
+        .sd-movement-rationale strong {
+          color: #6ee7b7;
+          font-size: 10px;
+          display: block;
+          margin-bottom: 4px;
+          letter-spacing: 0.02em;
+        }
+        .sd-movement-rationale p { margin: 0; }
+        .sd-movement-signals {
+          margin: 0;
+          padding-left: 14px;
+          font-size: 10px;
+          color: #99f6e4;
+          display: grid;
+          gap: 4px;
+          line-height: 1.4;
+        }
+        .sd-movement-badge {
+          border-radius: 999px;
+          font-size: 9px;
+          padding: 2px 8px;
+          border: 1px solid transparent;
+          flex-shrink: 0;
+        }
+        .sd-movement-badge.high {
+          background: rgba(16, 185, 129, 0.14);
+          color: #86efac;
+          border-color: rgba(16, 185, 129, 0.35);
+        }
+        .sd-movement-badge.medium {
+          background: rgba(250, 204, 21, 0.14);
+          color: #fde047;
+          border-color: rgba(250, 204, 21, 0.35);
+        }
+        .sd-movement-badge.low {
+          background: rgba(248, 113, 113, 0.14);
+          color: #fca5a5;
+          border-color: rgba(248, 113, 113, 0.35);
         }
         .sd-tags {
           display: flex; flex-wrap: wrap; gap: 4px;
@@ -638,20 +1203,6 @@ export const SharedDeliverables: React.FC<SharedDeliverablesProps> = ({ onClose 
           background: rgba(99,102,241,0.12);
           border-color: rgba(99,102,241,0.3);
           box-shadow: 0 0 16px rgba(99,102,241,0.08);
-        }
-        .sd-explain-btn {
-          display: flex; align-items: center; justify-content: center; gap: 6px;
-          width: 100%; padding: 8px; margin-top: 10px;
-          border-radius: 8px;
-          border: 1px solid rgba(245,158,11,0.25);
-          background: rgba(245,158,11,0.08);
-          color: #fbbf24; font-size: 11px; font-weight: 600;
-          cursor: pointer; transition: all 0.2s; font-family: inherit;
-        }
-        .sd-explain-btn:hover {
-          background: rgba(245,158,11,0.16);
-          border-color: rgba(245,158,11,0.4);
-          box-shadow: 0 0 16px rgba(245,158,11,0.12);
         }
       `}</style>
     </div>

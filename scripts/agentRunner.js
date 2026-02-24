@@ -635,6 +635,116 @@ async function loadNorthStarContext() {
     return { title, objectives, description, text: northStarText || '' };
 }
 
+// ─── Objective-code canonicalization helpers
+// -------------------------------------------------------------
+const NORTH_STAR_OBJECTIVE_CODE_REFRESH_MS = 15 * 60 * 1000;
+let objectiveCodeCatalog = {
+    byCode: /** @type {Record<string, string>} */ ({}),       // code => label
+    byLabelKey: /** @type {Record<string, string>} */ ({}),    // normalized label => code
+    loadedAt: 0,
+};
+
+function normalizeObjectiveCodeValue(value) {
+    const normalized = String(value || '').trim();
+    if (!normalized) return '';
+    const upper = normalized.toUpperCase();
+    if (upper.length < 2 || upper.length > 60) return '';
+    if (/^[0-9]+$/.test(upper)) return '';
+    if (!/^[A-Z0-9][A-Z0-9._-]*$/.test(upper)) return '';
+    return upper;
+}
+
+function normalizeObjectiveLabelKey(value) {
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+}
+
+function objectiveCodeFromLabel(label, idx, usedCodes) {
+    const safe = String(label || '')
+        .trim()
+        .toLowerCase()
+        .replace(/&/g, ' and ')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 30)
+        .toUpperCase();
+
+    const base = `OBJ_${safe || `TRACK_${String(idx + 1).padStart(2, '0')}`}`;
+    let code = base;
+    let suffix = 2;
+    while (usedCodes.has(code)) {
+        code = `${base}_${suffix}`;
+        suffix += 1;
+    }
+    usedCodes.add(code);
+    return code;
+}
+
+async function loadObjectiveCodeCatalog(forceRefresh = false) {
+    const now = Date.now();
+    if (!forceRefresh && objectiveCodeCatalog.loadedAt && (now - objectiveCodeCatalog.loadedAt) < NORTH_STAR_OBJECTIVE_CODE_REFRESH_MS) {
+        return objectiveCodeCatalog;
+    }
+
+    const northStar = await loadNorthStarContext();
+    const used = new Set();
+    const byCode = {};
+    const byLabelKey = {};
+    const labels = Array.isArray(northStar.objectives) ? northStar.objectives : [];
+
+    labels.forEach((label, idx) => {
+        const code = objectiveCodeFromLabel(label, idx, used);
+        if (!code) return;
+        byCode[code] = label;
+        byLabelKey[normalizeObjectiveLabelKey(label)] = code;
+    });
+
+    objectiveCodeCatalog = {
+        byCode,
+        byLabelKey,
+        loadedAt: now,
+    };
+
+    return objectiveCodeCatalog;
+}
+
+async function resolveTrackedObjectiveCode(rawCode, fallbackCode = '', fallbackLabel = '') {
+    const catalog = await loadObjectiveCodeCatalog();
+    const exactCandidates = [rawCode, fallbackCode].filter(Boolean);
+    for (const candidate of exactCandidates) {
+        const normalized = normalizeObjectiveCodeValue(candidate);
+        if (normalized && catalog.byCode[normalized]) return normalized;
+        const byLabel = catalog.byLabelKey[normalizeObjectiveLabelKey(candidate)];
+        if (byLabel) return byLabel;
+    }
+
+    if (fallbackLabel) {
+        const direct = normalizeObjectiveCodeValue(fallbackLabel);
+        if (direct && catalog.byCode[direct]) return direct;
+        const byLabel = catalog.byLabelKey[normalizeObjectiveLabelKey(fallbackLabel)];
+        if (byLabel) return byLabel;
+    }
+    return '';
+}
+
+function getObjectiveBeatHint(task = {}, fallbackLabel = '') {
+    return {
+        objectiveCode: task?.objectiveCode || '',
+        objectiveCodeLabel: task?.northStarObjective || task?.focusObjective || task?.objective || fallbackLabel || '',
+    };
+}
+
+function isUntrackedCode(rawCode) {
+    const code = normalizeObjectiveCodeValue(rawCode);
+    return !code;
+}
+
+async function resolveObjectiveCode(rawCode, fallbackLabel = '', fallbackCode = '') {
+    return resolveTrackedObjectiveCode(rawCode || '', fallbackCode || '', fallbackLabel || '');
+}
+
 async function loadMissionStatus(forceRefresh = false) {
     const now = Date.now();
     if (!forceRefresh && cachedMissionStatus && (now - lastMissionStatusFetch) < MISSION_STATUS_CACHE_MS) {
@@ -697,6 +807,7 @@ function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
                 `Publish findings + concrete next actions in docs/ops/${focusSlug}-queue-audit-${dateStamp}.md.`,
             priority: 'medium',
             focusObjective: focusLabel,
+            objectiveCode: focusLabel,
         };
     }
 
@@ -708,6 +819,7 @@ function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
                 `5 concrete examples (with URLs), 3 differentiated opportunities for Pulse, and one recommended test.`,
             priority: options.fromManager ? 'high' : 'medium',
             focusObjective: focusLabel,
+            objectiveCode: focusLabel,
         };
     }
 
@@ -719,6 +831,7 @@ function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
                 `3 messaging pillars, and copy snippets for brands, gyms, and run clubs.`,
             priority: options.fromManager ? 'high' : 'medium',
             focusObjective: focusLabel,
+            objectiveCode: focusLabel,
         };
     }
 
@@ -729,6 +842,7 @@ function buildRoleTaskBlueprint(agentId, northStarContext, options = {}) {
             `at least 5 cited findings relevant to engagement/retention and a recommended evidence-backed intervention.`,
         priority: options.fromManager ? 'high' : 'medium',
         focusObjective: focusLabel,
+        objectiveCode: focusLabel,
     };
 }
 
@@ -1543,16 +1657,19 @@ async function saveTaskHistory(taskName, taskId, steps, status, startedAt) {
  * Record deliverables produced by a task into the `agent-deliverables` Firestore
  * collection so the PulseCommand deliverables tray can display them.
  */
-async function recordDeliverables(task, steps) {
-    const allFiles = [...new Set(
-        steps.flatMap(s => s.filesChanged || []).map(parseGitStatusPath).filter(Boolean)
-    )];
-    if (allFiles.length === 0) return [];
+async function recordDeliverables(task, steps, options = {}) {
+    const fileChanges = getFileChangesFromSteps(steps);
+    if (fileChanges.length === 0) return [];
+
+    const status = String(options.status || 'work').trim() || 'work';
+    const reviewReason = String(options.reviewReason || '').trim();
 
     const deliverables = [];
     const batch = db.batch();
 
-    for (const filePath of allFiles) {
+    for (const item of fileChanges) {
+        const filePath = item.filePath;
+
         // Determine artifact type from file extension
         const ext = (filePath.split('.').pop() || '').toLowerCase();
         let artifactType = 'document';
@@ -1577,7 +1694,9 @@ async function recordDeliverables(task, steps) {
             taskName: task.name,
             artifactType,
             filePath: filePath,
-            status: 'pending',
+            changeType: item.changeType || 'unknown',
+            status,
+            reviewReason: reviewReason || undefined,
             createdAt: FieldValue.serverTimestamp(),
         };
         batch.set(ref, deliverable);
@@ -1592,6 +1711,15 @@ async function recordDeliverables(task, steps) {
     }
 
     return deliverables;
+}
+
+async function recordNeedsReviewDeliverables(task, steps, reviewReason) {
+    const normalizedReason = String(reviewReason || '').trim();
+    if (!normalizedReason) return [];
+    return recordDeliverables(task, steps, {
+        status: 'needs-review',
+        reviewReason: normalizedReason,
+    });
 }
 
 /**
@@ -1749,6 +1877,93 @@ function validateLeadSourceOfTruthGate(task, steps) {
 
 /* ─── Heartbeat OS: Beat Posting ──────────────────────── */
 
+const BEAT_STEP_OUTPUT_MIN_CHARS = parseInt(process.env.BEAT_STEP_OUTPUT_MIN_CHARS || '80', 10);
+const BEAT_DEDUP_WINDOW_MS = Math.max(10_000, parseInt(process.env.BEAT_DEDUP_WINDOW_MS || '45000', 10));
+
+function isLikelySpamSelfAssignmentBeat(beat, normalizedHeadline) {
+    return beat === 'hypothesis' && normalizedHeadline.includes('self-assigned');
+}
+
+function isIdleLoopHypothesis(beat, normalizedHeadline) {
+    return (
+        beat === 'hypothesis'
+        && (normalizedHeadline.includes('idle') || normalizedHeadline.includes('no tasks in queue'))
+    );
+}
+
+const beatDedupWindow = new Map();
+
+function normalizeBeatText(text) {
+    return String(text || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+
+function hasSubstantialText(text, minChars = BEAT_STEP_OUTPUT_MIN_CHARS) {
+    const normalized = String(text || '').replace(/\s+/g, ' ').trim();
+    return normalized.length >= minChars && /\S/.test(normalized);
+}
+
+function isCompletionBeat(beat, headline) {
+    const value = `${beat} ${headline || ''}`;
+    return value.includes('✅ Step') || value.includes('📍 Halfway checkpoint') || value.includes('🔍 Validation passed') || value.includes('✅ Completed:');
+}
+
+function shouldEmitBeat(beat, headline, opts = {}) {
+    const normalizedHeadline = normalizeBeatText(headline);
+    if (!normalizedHeadline) {
+        console.log(`⚠️  Beat validity gate blocked: empty headline for ${beat}`);
+        return false;
+    }
+
+    if (!hasSubstantialText(normalizedHeadline, BEAT_STEP_OUTPUT_MIN_CHARS)) {
+        if (beat !== 'signal-spike') {
+            console.log(`⚠️  Beat validity gate blocked: short headline for ${beat}: ${headline}`);
+            return false;
+        }
+    }
+
+    if (!isCompletionBeat(beat, headline)) return true;
+    if (opts._skipBeatValidity === true) return true;
+
+    const isStepCompletion = `${beat} ${headline}`.includes('✅ Step');
+    if (isStepCompletion && !opts._hasStepEvidence) {
+        console.log(`⚠️  Beat validity gate blocked: ${beat} beat for ${headline}`);
+        return false;
+    }
+
+    if (!isStepCompletion && !opts._isValidatedResult) {
+        console.log(`⚠️  Beat validity gate blocked: ${beat} beat without validation flag: ${headline}`);
+        return false;
+    }
+
+    const dedupeKey = isLikelySpamSelfAssignmentBeat(beat, normalizedHeadline)
+        ? `agent:${AGENT_ID}|self-assignment|${normalizedHeadline}`
+        : `agent:${AGENT_ID}|${beat}|${normalizedHeadline}`;
+
+    if (isIdleLoopHypothesis(beat, normalizedHeadline) && !opts.taskId && !opts.objectiveCode) {
+        const artifactUrl = String(opts.artifactUrl || '').trim();
+        if (!artifactUrl) {
+            console.log(`⚠️  Beat validity gate blocked: idle hypothesis beat without task reference: ${headline}`);
+            return false;
+        }
+    }
+
+    const now = Date.now();
+    const lastSeen = beatDedupWindow.get(dedupeKey) || 0;
+    if (now - lastSeen < BEAT_DEDUP_WINDOW_MS) {
+        console.log(`⚠️  Beat validity gate blocked: duplicate ${beat} beat for ${headline}`);
+        return false;
+    }
+    beatDedupWindow.set(dedupeKey, now);
+    for (const [key, seenAt] of Array.from(beatDedupWindow.entries())) {
+        if (now - seenAt > BEAT_DEDUP_WINDOW_MS * 2) beatDedupWindow.delete(key);
+    }
+
+    return true;
+}
+
 /**
  * Post a progress beat to the progress-timeline Firestore collection.
  * Beat types: hypothesis | work-in-flight | result | block | signal-spike
@@ -1756,11 +1971,26 @@ function validateLeadSourceOfTruthGate(task, steps) {
  */
 async function postBeat(beat, headline, opts = {}) {
     try {
+        const missionPaused = await isMissionPaused(true);
+        if (missionPaused) {
+            return;
+        }
+
+        if (!shouldEmitBeat(beat, headline, opts)) {
+            return;
+        }
+
+        const resolvedObjectiveCode = await resolveTrackedObjectiveCode(
+            opts.objectiveCode || '',
+            '',
+            opts.objectiveCodeLabel || '',
+        );
+
         await db.collection(TIMELINE_COLLECTION).add({
             agentId: AGENT_ID,
             agentName: AGENT_NAME,
             emoji: AGENT_EMOJI,
-            objectiveCode: opts.objectiveCode || opts.taskId || '',
+            objectiveCode: resolvedObjectiveCode,
             beat: beat,               // hypothesis | work-in-flight | result | block | signal-spike
             headline: headline,
             artifactType: opts.artifactType || 'none',
@@ -1849,7 +2079,8 @@ async function extractAndPostInsight(stepOutput, task, stepIndex, totalSteps) {
     await postBeat('signal-spike', `🔍 ${insight}`, {
         taskId: task.id,
         color: 'green',
-        objectiveCode: task.objectiveCode || task.id,
+        objectiveCode: task.objectiveCode || '',
+        objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
         artifactType: 'text',
         artifactText: `Discovered during step ${stepIndex + 1}/${totalSteps} of "${task.name}":\n\n${bestMatch}`,
         lensTag: 'insight',
@@ -2000,7 +2231,8 @@ async function postHourlySnapshot(currentTask) {
             hourIso: hourIso,
             agentId: AGENT_ID,
             agentName: AGENT_NAME,
-            objectiveCode: currentTask?.id || '',
+            objectiveCode: currentTask?.objectiveCode || '',
+            objectiveCodeLabel: currentTask?.focusObjective || currentTask?.northStarObjective || '',
             beatCompleted: currentTask ? 'work-in-flight' : null,
             color: currentTask ? 'green' : 'blue',
             stateTag: 'signals',
@@ -2053,7 +2285,7 @@ async function checkIdleAndNudge() {
                     agentId: AGENT_ID,
                     agentName: AGENT_NAME,
                     emoji: AGENT_EMOJI,
-                    objectiveCode: data.objectiveCode || doc.id,
+                    objectiveCode: data.objectiveCode || '',
                     beat: 'signal-spike',
                     headline: `🔔 Nudge → ${assignee}: "${taskName}" idle for ${minutesSince}m (${color} state)`,
                     artifactType: 'none',
@@ -2239,7 +2471,8 @@ async function selfAssignTask() {
                     await postBeat('hypothesis', `🎯 Self-assigned: "${taskResult.name}" (mission mode)`, {
                         taskId: docRef.id,
                         color: 'green',
-                        objectiveCode: docRef.id,
+                        objectiveCode: taskResult.objectiveCode || taskResult.focusObjective || '',
+                        objectiveCodeLabel: taskResult.focusObjective || taskResult.northStarObjective || '',
                         lensTag: 'mission',
                     });
                     return docRef.id;
@@ -2271,7 +2504,8 @@ async function selfAssignTask() {
 
         console.log(`⭐ Self-assigned task: "${taskData.name}" (${docRef.id})`);
         await postBeat('hypothesis', `Self-assigned: "${taskData.name}" (idle — no tasks in queue)`, {
-            taskId: docRef.id, color: 'blue', objectiveCode: docRef.id,
+            taskId: docRef.id, color: 'blue', objectiveCode: taskData.focusObjective || '',
+            objectiveCodeLabel: taskData.focusObjective || '',
         });
         return docRef.id;
     } catch (err) {
@@ -2316,7 +2550,7 @@ async function proposeObjective(title, reason, opts = {}) {
         await postBeat('signal-spike', `💡 ${AGENT_NAME} proposed new objective: "${title}"`, {
             color: 'blue',
             lensTag: 'mission',
-            objectiveCode: 'PROPOSED-OBJECTIVE',
+            objectiveCode: '',
             artifactText: reason,
         });
 
@@ -2405,7 +2639,8 @@ async function noraTaskManagerSweep() {
             await postBeat('work-in-flight', `📋 Task Manager: Assigned "${taskBlueprint.name}" to ${displayName} (idle agent detected)`, {
                 color: 'blue',
                 lensTag: 'ops',
-                objectiveCode: 'TASK-MANAGER',
+                objectiveCode: taskBlueprint.focusObjective || '',
+                objectiveCodeLabel: taskBlueprint.focusObjective || '',
             });
         }
     } catch (err) {
@@ -3431,7 +3666,7 @@ async function processCommands() {
 
                                 // Post beat to timeline
                                 await postBeat('work-in-flight', `⚡ Queued from Round Table: ${taskName}`, {
-                                    objectiveCode: 'ROUND-TABLE',
+                                    objectiveCode: '',
                                     artifactText: gcResponse.substring(0, 300),
                                     color: 'blue',
                                     lensTag: 'round-table',
@@ -4532,40 +4767,120 @@ Notes: ${task.notes || 'None'}`;
 /**
  * Get the current git status (changed files) in the project directory.
  */
-function parseGitStatusPath(line) {
-    const normalizeLegacySageDeliverablePath = (raw) => {
-        const trimmed = String(raw || '').trim().replace(/^\.\/+/, '');
-        return trimmed.replace(/^docs\/agents\/sage\/deliverables(?=$|\/)/, 'docs/sage/deliverables');
-    };
+function normalizeLegacySageDeliverablePath(raw) {
+    const trimmed = String(raw || '').trim().replace(/^\.\/+/, '');
+    return trimmed.replace(/^docs\/agents\/sage\/deliverables(?=$|\/)/, 'docs/sage/deliverables');
+}
 
+function parseGitStatusEntry(line) {
     const entry = (line || '').trim();
-    if (!entry) return '';
+    if (!entry) return null;
 
-    // Parse `git status --porcelain` entries like:
-    // `M src/file.ts`, `?? docs/file.md`, `R old -> new`.
-    const porcelainMatch = entry.match(/^[ MADRCU?!]{1,2}\s+(.*)$/);
-    let pathValue = porcelainMatch ? porcelainMatch[1].trim() : entry;
+    const porcelainMatch = entry.match(/^([ MADRCU?!]{1,2})\s+(.*)$/);
+    const pathValue = porcelainMatch ? porcelainMatch[2].trim() : entry;
+    const operation = porcelainMatch ? porcelainMatch[1].trim() : '';
 
-    if (pathValue.includes(' -> ')) {
-        pathValue = pathValue.split(' -> ').pop().trim();
+    let next = pathValue;
+    if (next.includes(' -> ')) {
+        next = next.split(' -> ').pop().trim();
     }
 
     if (
-        (pathValue.startsWith('"') && pathValue.endsWith('"')) ||
-        (pathValue.startsWith("'") && pathValue.endsWith("'"))
+        (next.startsWith('"') && next.endsWith('"')) ||
+        (next.startsWith("'") && next.endsWith("'"))
     ) {
-        pathValue = pathValue.slice(1, -1);
+        next = next.slice(1, -1);
     }
 
-    return normalizeLegacySageDeliverablePath(pathValue);
+    return {
+        operation,
+        path: normalizeLegacySageDeliverablePath(next),
+    };
 }
 
-function getChangedFilesFromSteps(steps) {
-    const files = (steps || [])
-        .flatMap((s) => s.filesChanged || [])
-        .map(parseGitStatusPath)
-        .filter(Boolean);
-    return [...new Set(files)];
+function parseGitStatusPath(line) {
+    const parsed = parseGitStatusEntry(line);
+    return parsed ? parsed.path : '';
+}
+
+function inferFileChangeType(op) {
+    const normalized = String(op || '').replace(/\s/g, '').toUpperCase();
+    if (!normalized || normalized === '') return 'unknown';
+    if (normalized === '??' || normalized.startsWith('A')) return 'new';
+    if (normalized.startsWith('M') || normalized.startsWith('R') || normalized.startsWith('C') || normalized.startsWith('U')) {
+        return 'edited';
+    }
+    if (normalized === 'D') return 'deleted';
+    return 'edited';
+}
+
+function sanitizeRecordedFilePath(rawPath) {
+    if (!rawPath) return '';
+    let next = rawPath.trim();
+    if (!next) return '';
+
+    // `git status --porcelain` entries are recorded like `M path/to/file` or `?? docs/file.md`.
+    const porcelainMatch = next.match(/^[ MADRCU?!]{1,2}\s+(.*)$/);
+    if (porcelainMatch) {
+        next = porcelainMatch[1].trim();
+    }
+
+    // Rename entries can appear like `old/path -> new/path`; we want the destination.
+    if (next.includes(' -> ')) {
+        next = next.split(' -> ').pop()?.trim() || next;
+    }
+
+    // Remove wrapping quotes from paths with spaces.
+    if (
+        (next.startsWith('"') && next.endsWith('"')) ||
+        (next.startsWith("'") && next.endsWith("'"))
+    ) {
+        next = next.slice(1, -1);
+    }
+
+    return normalizeLegacySageDeliverablePath(next);
+}
+
+function getFileChangesFromSteps(steps) {
+    const fileMap = new Map();
+    const normalizedChanges = (steps || []).flatMap((step) => {
+        if (Array.isArray(step?.fileChanges) && step.fileChanges.length > 0) {
+            return step.fileChanges.map((entry) => {
+                if (!entry || typeof entry !== 'object') {
+                    const parsed = parseGitStatusEntry(entry);
+                    return {
+                        filePath: parsed ? parsed.path : parseGitStatusPath(entry),
+                        changeType: parsed ? inferFileChangeType(parsed.operation) : 'unknown',
+                    };
+                }
+                return {
+                    filePath: parseGitStatusPath(entry.path || ''),
+                    changeType: itemToChangeType(entry),
+                };
+            });
+        }
+
+        return (step.filesChanged || []).map((entry) => {
+            const parsed = parseGitStatusEntry(entry);
+            return {
+                filePath: parsed ? parsed.path : parseGitStatusPath(entry),
+                changeType: parsed ? inferFileChangeType(parsed.operation) : 'unknown',
+            };
+        });
+    }).filter((entry) => Boolean(entry.filePath));
+
+    for (const entry of normalizedChanges) {
+        const filePath = entry.filePath;
+        const changeType = String(entry.changeType || 'unknown');
+        if (!filePath) continue;
+
+        const existing = fileMap.get(filePath);
+        if (!existing || (existing !== 'new' && changeType === 'new')) {
+            fileMap.set(filePath, changeType);
+        }
+    }
+
+    return Array.from(fileMap.entries()).map(([filePath, changeType]) => ({ filePath, changeType }));
 }
 
 function getGitChanges() {
@@ -4584,6 +4899,48 @@ function getGitChanges() {
     } catch {
         return [];
     }
+}
+
+function getGitStatusEntries() {
+    try {
+        const status = execSync('git status --porcelain', {
+            cwd: projectDir,
+            encoding: 'utf-8',
+            timeout: 10_000,
+        }).trim();
+        if (!status) return [];
+        return status
+            .split('\n')
+            .map(parseGitStatusEntry)
+            .filter((entry) => Boolean(entry && entry.path));
+    } catch {
+        return [];
+    }
+}
+
+function getChangedFilesFromSteps(steps) {
+    return [...new Set(
+        getFileChangesFromSteps(steps).map((item) => item.filePath)
+    )];
+}
+
+function hasVerifiableArtifacts(steps) {
+    const allFiles = getChangedFilesFromSteps(steps);
+    if (allFiles.length === 0) return false;
+
+    const substantiveFiles = allFiles.filter((filePath) => {
+        const basename = (filePath.split('/').pop() || '').toLowerCase();
+        return !META_PATTERNS.some((rx) => rx.test(basename));
+    });
+
+    return substantiveFiles.length > 0;
+}
+
+function itemToChangeType(item) {
+    if (!item || typeof item !== 'object') return 'unknown';
+    return inferFileChangeType(
+        item.changeType || item.operation || item.op || item.status || '',
+    );
 }
 
 /**
@@ -4683,7 +5040,7 @@ async function executeStep(step, task, stepIndex, allSteps) {
         const useOpenClaw = USE_OPENCLAW;
 
         // Snapshot git state before the step
-        const changesBefore = getGitChanges();
+        const changesBefore = getGitStatusEntries();
 
         if (useOpenClaw) {
             if (OPENCLAW_SMOKE_TEST) {
@@ -5116,11 +5473,16 @@ ${smokeOutput}`.substring(0, 2000);
                 }
 
                 // Capture what files changed
-                const changesAfter = getGitChanges();
-                const newChanges = changesAfter.filter(c => !changesBefore.includes(c));
+                const changesAfter = getGitStatusEntries();
+                const beforeSet = new Set(changesBefore.map((entry) => entry.path));
+                const newChanges = changesAfter.filter((entry) => !beforeSet.has(entry.path));
                 if (newChanges.length > 0) {
-                    step.filesChanged = newChanges;
-                    console.log(`   📁 Files changed: ${newChanges.join(', ')}`);
+                    step.fileChanges = newChanges.map((entry) => ({
+                        path: entry.path,
+                        changeType: inferFileChangeType(entry.operation),
+                    }));
+                    step.filesChanged = newChanges.map((entry) => entry.path);
+                    console.log(`   📁 Files changed: ${newChanges.map((entry) => entry.path).join(', ')}`);
                 }
 
                 // Auto-commit the changes
@@ -5533,7 +5895,8 @@ async function run() {
             await postBeat('hypothesis', `Starting: ${task.name}`, {
                 taskId: task.id,
                 color: 'blue',
-                objectiveCode: task.objectiveCode || task.id,
+                objectiveCode: task.objectiveCode || '',
+                objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
             });
             await maybeSendMissionKickoffUpdate(task, steps, missionContext);
 
@@ -5574,7 +5937,8 @@ async function run() {
                     await postBeat('work-in-flight', `▶ Starting step ${i + 1}/${steps.length}: ${steps[i].description}`, {
                         taskId: task.id,
                         color: 'blue',
-                        objectiveCode: task.objectiveCode || task.id,
+                        objectiveCode: task.objectiveCode || '',
+                        objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                     });
                 }
 
@@ -5611,7 +5975,8 @@ async function run() {
                     await postBeat('block', `⚠️ Step ${i + 1}/${steps.length} failed: ${steps[i].description}`, {
                         taskId: task.id,
                         color: 'yellow',
-                        objectiveCode: task.objectiveCode || task.id,
+                        objectiveCode: task.objectiveCode || '',
+                        objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                         artifactText: lastFailureContext.substring(0, 300),
                         artifactType: lastFailureContext ? 'text' : 'none',
                     });
@@ -5638,10 +6003,15 @@ async function run() {
                 console.log(`✅ Step ${i + 1} completed${steps[i].durationMs ? ` (${formatMs(steps[i].durationMs)})` : ''}`);
 
                 // ─── Heartbeat: post work-in-flight beat on step completion ──
+                const stepEvidence = hasSubstantialText(steps[i].output) ||
+                    (Array.isArray(steps[i].filesChanged) && steps[i].filesChanged.length > 0) ||
+                    Boolean(steps[i].commitHash);
                 await postBeat('work-in-flight', `✅ Step ${i + 1}/${steps.length}: ${steps[i].description}`, {
                     taskId: task.id,
                     color: inferColor(steps, i + 1),
-                    objectiveCode: task.objectiveCode || task.id,
+                    objectiveCode: task.objectiveCode || '',
+                    objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
+                    _hasStepEvidence: stepEvidence,
                 });
 
                 // ─── Heartbeat: extract and surface insights from step output ──
@@ -5657,7 +6027,9 @@ async function run() {
                     await postBeat('work-in-flight', `📍 Halfway checkpoint: ${completedCount}/${steps.length} steps done${failedCount > 0 ? `, ${failedCount} failed` : ''} — "${task.name}"`, {
                         taskId: task.id,
                         color: failedCount > 0 ? 'yellow' : 'green',
-                        objectiveCode: task.objectiveCode || task.id,
+                        objectiveCode: task.objectiveCode || '',
+                        objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
+                        _isValidatedResult: true,
                     });
                     if (!midpointMissionUpdateSent) {
                         await maybeSendMissionMidpointUpdate(task, missionContext, completedCount, steps.length, failedCount);
@@ -5776,7 +6148,8 @@ async function run() {
                     await postBeat('result', `${scoreEmoji} North Star check [${score}/10]: ${task.name}`, {
                         taskId: task.id,
                         color: score >= 7 ? 'green' : score >= 4 ? 'yellow' : 'red',
-                        objectiveCode: task.objectiveCode || task.id,
+                        objectiveCode: task.objectiveCode || '',
+                        objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                         artifactType: 'text',
                         artifactText: [
                             `📦 Delivered: ${nsGate.concreteDeliverable || 'unknown'}`,
@@ -5800,13 +6173,15 @@ async function run() {
 
                     if (verdict === 'no-deliverable') {
                         // Task produced only planning docs — reject it
+                        const reviewReason = `North Star Gate: Task produced no real deliverable. ${nsGate.missingDeliverable ? `Should have built: ${nsGate.missingDeliverable}` : 'Only planning/documentation was produced.'}`;
                         console.log(`\n🚫 NORTH STAR GATE: Task produced no real deliverable. Flagging for review.`);
                         await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
                         await db.collection(KANBAN_COLLECTION).doc(task.id).update({
                             status: 'needs-review',
-                            reviewReason: `North Star Gate: Task produced no real deliverable. ${nsGate.missingDeliverable ? `Should have built: ${nsGate.missingDeliverable}` : 'Only planning/documentation was produced.'}`,
+                            reviewReason,
                             updatedAt: FieldValue.serverTimestamp(),
                         });
+                        await recordNeedsReviewDeliverables(task, steps, reviewReason);
                         await sendProactiveMessage(
                             `🚫 North Star Gate REJECTED "${task.name}"\n\n` +
                             `Only planning/documentation was produced — no real code, feature, or user-facing change.\n\n` +
@@ -5857,7 +6232,8 @@ async function run() {
                         await postBeat('block', `🔍 Validation failed: ${task.name} — ${validation.reason}`, {
                             taskId: task.id,
                             color: 'red',
-                            objectiveCode: task.objectiveCode || task.id,
+                            objectiveCode: task.objectiveCode || '',
+                            objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                             artifactType: 'text',
                             artifactText: `Reason: ${validation.reason}\n\nEvidence: ${validation.evidence?.map(e => e.output).join('\n').substring(0, 400)}`,
                         });
@@ -5917,7 +6293,9 @@ async function run() {
                     await postBeat('work-in-flight', `🔍 Validation passed: ${task.name}`, {
                         taskId: task.id,
                         color: 'green',
-                        objectiveCode: task.objectiveCode || task.id,
+                        objectiveCode: task.objectiveCode || '',
+                        objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
+                        _isValidatedResult: true,
                     });
                 }
 
@@ -5925,13 +6303,15 @@ async function run() {
                 // Tasks that produce no real file changes get flagged
                 const hasArtifacts = hasVerifiableArtifacts(steps);
                 if (!hasArtifacts && !hasIssues) {
+                    const reviewReason = 'Task completed all steps but produced no verifiable file artifacts (code, config, tests). Only meta-documents were generated.';
                     console.log(`\n⚠️  NO VERIFIABLE ARTIFACTS — task produced no substantive file changes`);
                     await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
                     await db.collection(KANBAN_COLLECTION).doc(task.id).update({
                         status: 'needs-review',
-                        reviewReason: 'Task completed all steps but produced no verifiable file artifacts (code, config, tests). Only meta-documents were generated.',
+                        reviewReason,
                         updatedAt: FieldValue.serverTimestamp(),
                     });
+                    await recordNeedsReviewDeliverables(task, steps, reviewReason);
                     await sendProactiveMessage(
                         `⚠️ Task "${task.name}" completed all steps but produced NO verifiable artifacts.\n\n` +
                         `No new code, configs, or tests were created — only documentation/summaries.\n` +
@@ -5952,13 +6332,15 @@ async function run() {
                 // ─── Lead source-of-truth gate ──────────────────
                 const sourceTruthGate = validateLeadSourceOfTruthGate(task, steps);
                 if (sourceTruthGate.required && !sourceTruthGate.passed) {
+                    const reviewReason = `Lead source-of-truth gate failed: ${sourceTruthGate.reason}`;
                     console.log(`\n⚠️  SOURCE-OF-TRUTH GATE FAILED — ${sourceTruthGate.reason}`);
                     await saveTaskHistory(task.name, task.id, steps, 'needs-review', taskStartTime);
                     await db.collection(KANBAN_COLLECTION).doc(task.id).update({
                         status: 'needs-review',
-                        reviewReason: `Lead source-of-truth gate failed: ${sourceTruthGate.reason}`,
+                        reviewReason,
                         updatedAt: FieldValue.serverTimestamp(),
                     });
+                    await recordNeedsReviewDeliverables(task, steps, reviewReason);
                     await sendProactiveMessage(
                         `⚠️ Task "${task.name}" failed the lead source-of-truth gate.\n\n` +
                         `${sourceTruthGate.reason}\n\n` +
@@ -6008,10 +6390,12 @@ async function run() {
                 await postBeat('result', `✅ Completed: ${task.name}`, {
                     taskId: task.id,
                     color: hasIssues ? 'yellow' : 'green',
-                    objectiveCode: task.objectiveCode || task.id,
+                    objectiveCode: task.objectiveCode || '',
+                    objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                     artifactType: resultArtifactUrl ? 'url' : 'none',
                     artifactUrl: resultArtifactUrl,
                     artifactText: primaryDeliverable ? (primaryDeliverable.title || primaryDeliverable.filePath || '') : '',
+                    _isValidatedResult: true,
                 });
                 // Update lastWorkBeatAt on the kanban card for idle tracking
                 try {
@@ -6105,7 +6489,8 @@ async function run() {
                 await postBeat('block', `❌ Failed: ${task.name} — step ${failedIndex + 1}: ${failedStep?.description || 'unknown'}`, {
                     taskId: task.id,
                     color: 'red',
-                    objectiveCode: task.objectiveCode || task.id,
+                    objectiveCode: task.objectiveCode || '',
+                    objectiveCodeLabel: task.focusObjective || task.northStarObjective || '',
                 });
 
                 // Proactively report failure to the chat

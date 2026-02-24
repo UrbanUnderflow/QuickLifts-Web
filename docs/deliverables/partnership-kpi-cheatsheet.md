@@ -1,45 +1,83 @@
-# Partnership KPI Cheatsheet – Partnership-Led Community Growth
+# Partnership KPI Cheatsheet
 
-Use these KPIs when framing Pulse’s impact with partners. They are all behavior metrics — what people actually do together — and each one should be backed by real challenge data, not vanity numbers.
+This cheatsheet highlights the core behavior-first metrics we use to evaluate Partnership-Led Community Growth. These are written for conversations with brands, gyms/studios, and run clubs — concrete enough to bring into a deck or internal recap, and flexible enough to adapt to different partner contexts.
 
 ---
 
 ## 1. Challenge Join Rate
 
-**What it is:** The share of a partner’s reachable community (email list, app users, social followers, members) that joins a given Pulse challenge or block.  
-**How Pulse influences it:** Pulse lets creators, coaches, and captains launch challenges directly from the channels people already use, with one-tap joins and clear, human framing (e.g., "6-week strength season"). That lowers friction and makes it much easier for more people to say "yes" to a shared journey.
+**What it is:** The percentage of eligible members who join a Pulse challenge or season once it’s announced. 
+
+**Why it matters:** A high join rate means the community recognizes the challenge as "for us" — the theme, timing, and host resonate. It’s an early signal that the partner’s culture is strong and that the story we’re telling together lands.
+
+**How Pulse influences it:** Clear, single-link entry points across existing channels (social, email, in-gym signage, group chats), simple join flows, and creator-led framing (ambassadors, coaches, captains) all make it easy and obvious to step in.
+
+---
 
 ## 2. Challenge Completion Rate
 
-**What it is:** The percentage of participants who actually finish a challenge or block — reaching the end date with enough check-ins to count as completed.  
-**How Pulse influences it:** Pulse keeps people in the story with visible streaks, soft accountability from leaders, and small, specific actions instead of vague goals. For partners, a higher completion rate means more of their community actually lived through the full season instead of dropping off mid-way.
+**What it is:** The percentage of members who finish a challenge or season they joined, according to the criteria set with the partner (e.g., number of check-ins, key sessions completed).
+
+**Why it matters:** Completion is where trust is built. When people finish together, they remember the partner that held the season and are more likely to come back for the next one.
+
+**How Pulse influences it:** Lightweight check-ins, streak tracking, and visible progress (for individuals and the group) help members see how far they’ve come and what’s left. Push prompts and in-app nudges are tied to the rhythm of the block, not generic reminders.
+
+---
 
 ## 3. Repeat-Challenge Rate
 
-**What it is:** The percentage of challenge finishers who roll straight into the next Pulse-powered block with the same partner (or ecosystem).  
-**How Pulse influences it:** Because Pulse structures challenges as linked seasons — reset weeks, build cycles, race builds — there is always a clear "next thing" to do together. A higher repeat-challenge rate shows that people aren’t just showing up once; they’re choosing to stay inside the partner’s world for the next chapter.
+**What it is:** The percentage of members who complete one Pulse challenge or season and then join another within a defined window (e.g., 3–6 months).
+
+**Why it matters:** Repeat-challenge rate is the clearest signal that a partner’s community sees value in coming back for another block together — it’s the heartbeat of Partnership-Led Community Growth.
+
+**How Pulse influences it:** We design seasons to roll into the next natural chapter (base → build → peak, strength → deload → new block, reset → everyday rhythm) and make joining the next round a default step, not a fresh acquisition campaign.
+
+---
 
 ## 4. Active Creators / Hosts
 
-**What it is:** The number of athletes, coaches, captains, or staff actively running Pulse challenges for a partner in a given period.  
-**How Pulse influences it:** Pulse makes it simple for more leaders to host blocks — with templates, scheduling, and built-in check-in flows — so partners can activate a broader slice of their roster instead of relying on one or two faces. More active hosts usually means more resilient, distributed community engagement.
+**What it is:** The number (and percentage) of coaches, ambassadors, captains, or community leaders actively hosting Pulse challenges over a given period.
+
+**Why it matters:** A partnership is healthier when leadership is distributed. More active hosts mean the partner’s community isn’t bottlenecked on one person or one channel — the culture is being carried by many.
+
+**How Pulse influences it:** We make it simple for leaders to spin up new blocks with templates, reusable structures, and clear guardrails, so more of them feel confident hosting seasons without needing a full marketing campaign behind them.
+
+---
 
 ## 5. Streak Weeks
 
-**What it is:** The count (or percentage) of weeks where a meaningful slice of the community maintains a shared streak inside a challenge (for example, hitting 3+ touchpoints per week).  
-**How Pulse influences it:** By structuring challenges around weekly rituals — Monday lifts, Tuesday tempos, Saturday long runs, reset days — and surfacing streaks visibly, Pulse creates more "alive" weeks where people are doing something together on purpose. Partners can point to these streak weeks as proof that their community isn’t just watching; they’re participating.
+**What it is:** The number of consecutive weeks a member checks into at least one Pulse challenge or season.
+
+**Why it matters:** Streaks show depth, not just intent. They are a proxy for how well the partnership is supporting consistent behavior, not just excitement at the start of a campaign.
+
+**How Pulse influences it:** Streak visuals, gentle reminders when a streak is at risk, and programming that respects rest and life schedules help members keep a realistic, sustainable rhythm instead of burning out.
+
+---
 
 ## 6. Inactivity Gap Rate
 
-**What it is:** The percentage of active community members who experience a 4+ day gap with no Pulse-tracked participation during a block or season.  
-**How Pulse influences it:** Pulse spots early drop-offs and gives leaders tools to respond — nudges, shout-outs, light "catch-up" tasks — so gaps shrink. A lower inactivity gap rate means fewer people quietly drifting away mid-season, which matters for partners who care about culture, not just acquisition.
+**What it is:** The percentage of members who go from being active in a Pulse challenge or season to a defined inactive period (e.g., 4+ weeks without a check-in).
+
+**Why it matters:** Inactivity gaps show where the story breaks. If many members drop off between blocks, it’s a sign that the handoff between seasons — or the fit of the programming — needs work.
+
+**How Pulse influences it:** Season design that anticipates natural lulls (post-race, post-peak), offers lighter follow-up blocks, and surfaces re-entry points helps reduce long gaps and makes it easier for people to come back without shame.
+
+---
 
 ## 7. Creator-Led Participation Rate
 
-**What it is:** The share of a partner’s reachable community that joins at least one creator- or coach-led Pulse block in a given season.  
-**How Pulse influences it:** Because challenges are built around leaders a community already trusts, Pulse makes it easier for more followers or members to cross the line from "I watch" to "I’m in." Partners can use this metric to tell a simple internal story: a measurable percentage of our people are now inside structured, socially visible journeys led by our own athletes, coaches, and captains.
+**What it is:** The percentage of challenge joins and check-ins that are attached to blocks hosted by creators, coaches, or captains (vs. centrally run or purely brand-run programs).
+
+**Why it matters:** When most behavior is flowing through creator-led blocks, the partnership is aligned with how the community naturally organizes itself. This is where we see the strongest retention and word-of-mouth.
+
+**How Pulse influences it:** By keeping hosts at the center of the experience (their name on the season, their story in the prompts) and giving them tools that feel natural to use, Pulse encourages communities to follow people, not logos.
+
+---
 
 ## 8. Partner-Sourced Retention
 
-**What it is:** The retention rate of users who first joined Pulse through a partner channel (brand, gym, or run club), measured over a period like 3 or 6 months.  
-**How Pulse influences it:** Partnership-sourced users tend to land inside a community and a challenge from day one, not in an empty app. By keeping those users in ongoing seasons and creator-led blocks, Pulse helps partners prove that community-anchored acquisition produces more durable engagement than one-off paid installs.
+**What it is:** The percentage of users acquired through a partner channel (brand, gym, run club) who remain active on Pulse after a defined period (e.g., 3 or 6 months).
+
+**Why it matters:** High partner-sourced retention is proof that community-anchored acquisition produces higher-quality users than paid channels alone. It shows that the people who arrive via the partnership stay because the ongoing seasons and rituals fit their real training life.
+
+**How Pulse influences it:** By ensuring partner-sourced users land directly in live or soon-to-start challenges, see familiar names and leaders, and have a clear path from one block to the next, we give them reasons to keep showing up — with their community and with the partner’s brand at the center of that experience.

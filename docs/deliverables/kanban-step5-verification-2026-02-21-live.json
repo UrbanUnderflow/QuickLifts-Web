@@ -1,0 +1,30 @@
+{
+  "auditDate": "2026-02-21",
+  "boardFile": "project/kanban/board.md",
+  "conditions": {
+    "blockedMetadata": {
+      "description": "Every STATUS: BLOCKED ticket must have BLOCKED_REASON and DEPENDENCY lines.",
+      "blockedTicketCount": 0,
+      "blockedTicketsMissingMetadata": 0,
+      "satisfied": true
+    },
+    "partnershipLedSection": {
+      "description": "Board contains a Partnership-Led Community Growth section with 3–5 NORTH_STAR tickets tied to concrete artifacts.",
+      "sectionHeader": "## Partnership-Led Community Growth",
+      "headerPresent": true,
+      "northStarTicketCount": 5,
+      "minTickets": 3,
+      "maxTicketsPreferred": 5,
+      "satisfied": true
+    },
+    "staleInProgress": {
+      "description": "No STATUS: IN_PROGRESS tickets older than 14 days remain without being moved to BACKLOG or annotated with a deferral reason.",
+      "cutoffDays": 14,
+      "cutoffDate": "2026-02-07",
+      "staleInProgressCount": 0,
+      "satisfied": true
+    }
+  },
+  "allConditionsSatisfied": true,
+  "notes": "As of 2026-02-21, there are no STATUS: BLOCKED tickets; the Partnership-Led Community Growth section exists with 5 NORTH_STAR tickets tied to concrete artifacts; and there are no STATUS: IN_PROGRESS tickets older than 14 days that lack deferral/backlog handling."
+}

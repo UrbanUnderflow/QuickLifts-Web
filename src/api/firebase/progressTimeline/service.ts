@@ -8,7 +8,7 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../config';
-import { ConfidenceColor, HourlySnapshotEntry, ProgressTimelineEntry, TimelineStateTag } from './types';
+import { ConfidenceColor, HourlySnapshotEntry, ProgressTimelineEntry, ReviewStatus, TimelineStateTag } from './types';
 
 const TIMELINE_COLLECTION = 'progress-timeline';
 const SNAPSHOT_COLLECTION = 'progress-snapshots';
@@ -25,10 +25,17 @@ export const progressTimelineService = {
       artifactType: entry.artifactType || 'none',
       artifactText: entry.artifactText || '',
       artifactUrl: entry.artifactUrl || '',
-      lensTag: entry.lensTag || '',
-      confidenceColor: entry.confidenceColor,
-      stateTag: entry.stateTag || 'signals',
-      createdAt: serverTimestamp(),
+  lensTag: entry.lensTag || '',
+  confidenceColor: entry.confidenceColor,
+  stateTag: entry.stateTag || 'signals',
+  objectiveCodeLabel: entry.objectiveCodeLabel || '',
+  reviewStatus: entry.reviewStatus || 'none',
+  reviewRequired: entry.reviewRequired || false,
+  reviewedAt: entry.reviewedAt || null,
+  reviewDeniedReason: entry.reviewDeniedReason || '',
+  movementImpact: entry.movementImpact || null,
+  isValidatedResult: entry.isValidatedResult || false,
+  createdAt: serverTimestamp(),
     });
   },
 
@@ -54,8 +61,15 @@ export const progressTimelineService = {
           artifactText: data.artifactText || '',
           artifactUrl: data.artifactUrl || '',
           lensTag: data.lensTag || '',
+          objectiveCodeLabel: data.objectiveCodeLabel || '',
           confidenceColor: data.confidenceColor || 'blue',
           stateTag: data.stateTag || 'signals',
+          reviewStatus: (data.reviewStatus || 'none') as ReviewStatus,
+          reviewRequired: !!data.reviewRequired,
+          reviewedAt: data.reviewedAt?.toDate?.() || undefined,
+          reviewDeniedReason: data.reviewDeniedReason || '',
+          movementImpact: data.movementImpact || undefined,
+          isValidatedResult: !!data.isValidatedResult,
           createdAt: data.createdAt?.toDate?.() || undefined,
         };
       });
@@ -69,6 +83,7 @@ export const progressTimelineService = {
       agentId: entry.agentId,
       agentName: entry.agentName,
       objectiveCode: entry.objectiveCode,
+      objectiveCodeLabel: entry.objectiveCodeLabel || '',
       beatCompleted: entry.beatCompleted || null,
       color: entry.color,
       stateTag: entry.stateTag,
@@ -93,6 +108,7 @@ export const progressTimelineService = {
           agentId: data.agentId,
           agentName: data.agentName,
           objectiveCode: data.objectiveCode,
+          objectiveCodeLabel: data.objectiveCodeLabel || '',
           beatCompleted: data.beatCompleted || undefined,
           color: (data.color || 'blue') as ConfidenceColor,
           stateTag: (data.stateTag || 'signals') as TimelineStateTag,

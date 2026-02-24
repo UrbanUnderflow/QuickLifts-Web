@@ -6,11 +6,23 @@ import AdminRouteGuard from '../auth/AdminRouteGuard';
 import { presenceService, AgentPresence, AgentThoughtStep, TaskHistoryEntry } from '../../api/firebase/presence/service';
 import { kanbanService } from '../../api/firebase/kanban/service';
 import { db } from '../../api/firebase/config';
-import { addDoc, collection, doc, serverTimestamp, query, where, onSnapshot, writeBatch } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  doc,
+  serverTimestamp,
+  query,
+  where,
+  onSnapshot,
+  writeBatch,
+  getDocs,
+  orderBy,
+} from 'firebase/firestore';
 import { KanbanTask } from '../../api/firebase/kanban/types';
+import { meetingMinutesService } from '../../api/firebase/meetingMinutes/service';
 import {
   RefreshCcw, Clock, ExternalLink, CheckCircle2, Circle,
-  ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap,
+  ArrowRight, Loader2, XCircle, ChevronDown, Brain, Zap, Target,
   History, ChevronRight, MessageSquare, Archive, X, ListOrdered, Activity, AlertTriangle,
   BookOpen, ToggleLeft, ToggleRight, Power, Calendar, Package, Play, UserPlus, Trash2, ShieldAlert
 } from 'lucide-react';
@@ -59,6 +71,35 @@ const formatMs = (ms?: number) => {
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`;
+};
+
+const messageTimeMs = (value: unknown): number | null => {
+  if (!value) return null;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  const raw = value as { toDate?: () => Date; seconds?: number };
+  if (typeof raw.toDate === 'function') {
+    return raw.toDate().getTime();
+  }
+  if (typeof raw.seconds === 'number') {
+    return raw.seconds * 1000;
+  }
+  return null;
+};
+
+const deriveMessageDurationMinutes = (messages: GroupChatMessage[]): string => {
+  const timestamps = messages
+    .map((message) => messageTimeMs(message.createdAt))
+    .filter((value): value is number => typeof value === 'number')
+    .sort((a, b) => a - b);
+
+  if (timestamps.length < 2) {
+    return '< 1m';
+  }
+
+  const spanMs = timestamps[timestamps.length - 1] - timestamps[0];
+  const mins = Math.floor(spanMs / 60_000);
+  return mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins || '< 1'}m`;
 };
 
 type TokenUsageBucket = {
@@ -997,7 +1038,7 @@ const AgentProfileModal: React.FC<{
   if (!profile) return null;
 
   return ReactDOM.createPortal(
-    <div className="profile-modal-overlay" onClick={onClose}>
+    <div className="profile-modal-overlay" onClick={(e) => e.stopPropagation()}>
       <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="profile-modal-header">
@@ -1413,7 +1454,7 @@ const TaskHistoryPanel: React.FC<{ agentId: string; agentName?: string; emoji?: 
 
       {/* Full-screen modal via portal */}
       {isOpen && ReactDOM.createPortal(
-        <div className="th-overlay" onClick={() => setIsOpen(false)} onMouseDown={e => e.stopPropagation()}>
+        <div className="th-overlay" onClick={(e) => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
           <div className="th-modal" onClick={e => e.stopPropagation()}>
             {/* Modal Header */}
             <div className="th-header">
@@ -2890,6 +2931,7 @@ const MissionButton: React.FC<MissionButtonProps> = ({ onToast }) => {
   const [status, setStatus] = React.useState<'idle' | 'active' | 'paused'>('idle');
   const [launching, setLaunching] = React.useState(false);
   const [launchResult, setLaunchResult] = React.useState<'success' | 'error' | null>(null);
+  const pauseEnforcedRef = React.useRef(false);
 
   // Live-subscribe to mission status
   React.useEffect(() => {
@@ -2902,6 +2944,18 @@ const MissionButton: React.FC<MissionButtonProps> = ({ onToast }) => {
     );
     return unsub;
   }, []);
+
+  // If mission is already paused, re-run the pause endpoint once to enforce
+  // runner shutdown and clear stale "working" presence fields.
+  React.useEffect(() => {
+    if (status !== 'paused') {
+      pauseEnforcedRef.current = false;
+      return;
+    }
+    if (pauseEnforcedRef.current) return;
+    pauseEnforcedRef.current = true;
+    fetch('/api/agent/kickoff-mission', { method: 'DELETE' }).catch(() => {});
+  }, [status]);
 
   const handleLaunch = async () => {
     if (launching) return;
@@ -3783,6 +3837,70 @@ const VirtualOfficeContent: React.FC = () => {
     setMinutesPreviewData(null);
   }, []);
 
+  const missionMinutesInFlight = useRef<Set<string>>(new Set());
+
+  const persistMissionMinutes = useCallback(async (missionSession: Omit<GroupChat, 'id'> & { id?: string }) => {
+    if (!missionSession?.id) return;
+    if (missionMinutesInFlight.current.has(missionSession.id)) return;
+    missionMinutesInFlight.current.add(missionSession.id);
+
+    try {
+      const messagesSnap = await getDocs(query(
+        collection(db, `agent-group-chats/${missionSession.id}/messages`),
+        orderBy('createdAt', 'asc')
+      ));
+      const messages = messagesSnap.docs.map((docRef) => ({
+        id: docRef.id,
+        ...(docRef.data() as Omit<GroupChatMessage, 'id'>),
+      }));
+
+      if (!messages.length) {
+        console.log('[Mission] No messages found; skipping minutes save for', missionSession.id);
+        return;
+      }
+
+      const participantList = Array.isArray(missionSession.participants) ? missionSession.participants : [];
+      const participants = participantList.filter((id) => id && id !== 'antigravity');
+      const safeParticipants = participants.length > 0 ? participants : allAgents.map((a) => a.id).filter((id) => id !== 'antigravity');
+      const duration = deriveMessageDurationMinutes(messages);
+
+      const minutes = await meetingMinutesService.generate(
+        missionSession.id,
+        messages as GroupChatMessage[],
+        safeParticipants,
+        duration
+      );
+      const minutesDocId = await meetingMinutesService.save(minutes);
+
+      console.log('📋 Mission roundtable minutes auto-saved:', minutesDocId);
+
+      const highlights = (minutes.highlights || []).slice(0, 3).map(h => `${h.speaker}: ${h.summary}`).join('\n');
+      const summary = minutes.executiveSummary || 'Mission strategy roundtable completed.';
+      await addDoc(collection(db, 'progress-timeline'), {
+        agentId: 'nora',
+        agentName: 'Nora',
+        emoji: '🚀',
+        objectiveCode: 'ROUND-TABLE',
+        beat: 'result',
+        headline: `📋 Mission Roundtable Summary: ${summary.substring(0, 150)}`,
+        artifactType: 'text',
+        artifactText: highlights || summary,
+        artifactUrl: '',
+        lensTag: 'round-table',
+        confidenceColor: 'blue',
+        stateTag: 'signals',
+        minutesDocId,
+        protocol: 'heartbeat',
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('[Mission] Failed to persist mission roundtable minutes:', error);
+      missionMinutesInFlight.current.delete(missionSession.id);
+    } finally {
+      missionMinutesInFlight.current.delete(missionSession.id);
+    }
+  }, [allAgents]);
+
   // ── Active Roundtable listener (Telemetry + Mission strategy) ──
   // Use refs to avoid re-subscribing on every state change.
   const activeStandupRef = useRef(activeStandup);
@@ -3930,6 +4048,7 @@ const VirtualOfficeContent: React.FC = () => {
           }
         } else if (activeMissionSessionRef.current) {
           console.log('[Mission] Strategy roundtable ended — animating agents back to desks');
+          persistMissionMinutes(activeMissionSessionRef.current);
           setActiveMissionSession(null);
           setIsMissionObserving(false);
           setShowGroupChatModal(false);
@@ -4329,7 +4448,12 @@ const VirtualOfficeContent: React.FC = () => {
 
             <div className="progress-timeline-btn" onClick={() => setShowProgressTimeline(true)}>
               <Activity className="w-4 h-4" />
-              <span>Progress Timeline</span>
+              <span>Heartbeat Feed</span>
+            </div>
+
+            <div className="objective-timeline-btn" onClick={() => { router.push('/admin/objective-timeline'); }}>
+              <Target className="w-4 h-4" />
+              <span>Objective Timeline</span>
             </div>
 
             <div className="standup-config-btn" onClick={() => setShowStandupConfig(true)}>
@@ -4603,7 +4727,7 @@ const VirtualOfficeContent: React.FC = () => {
         {tokenBreakdownRows && tokenBreakdownModal.isOpen && ReactDOM.createPortal(
           <div
             className="token-breakdown-overlay"
-            onClick={closeTokenBreakdown}
+            onClick={(e) => { e.stopPropagation(); }}
             onMouseDown={e => e.stopPropagation()}
           >
             <div className="token-breakdown-modal" onClick={e => e.stopPropagation()}>
@@ -5103,10 +5227,35 @@ const VirtualOfficeContent: React.FC = () => {
           transform: translateY(-1px);
           box-shadow: 0 4px 16px rgba(59,130,246,0.2);
         }
-        .standup-config-btn {
+        .objective-timeline-btn {
           position: absolute;
           bottom: 16px;
           left: 180px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 14px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(34,197,94,0.08));
+          border: 1px solid rgba(16,185,129,0.2);
+          color: #34d399;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          z-index: 10;
+          backdrop-filter: blur(8px);
+        }
+        .objective-timeline-btn:hover {
+          background: linear-gradient(135deg, rgba(16,185,129,0.22), rgba(34,197,94,0.14));
+          border-color: rgba(16,185,129,0.35);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 16px rgba(16,185,129,0.15);
+        }
+        .standup-config-btn {
+          position: absolute;
+          bottom: 16px;
+          left: 360px;
           display: flex;
           align-items: center;
           gap: 6px;

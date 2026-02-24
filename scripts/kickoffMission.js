@@ -6,7 +6,7 @@
  * ──────────────────────────────────
  * When triggered (by the "Start Mission" button or API), this script:
  *
- *  1. Reads the North Star + any approved proposed objectives from Firestore
+ *  1. Reads the North Star + approved agent-proposed objectives from Firestore
  *  2. Loads each agent's current queue to understand gaps
  *  3. Uses GPT-4o to run a structured "mission briefing" — each agent
  *     claims one North Star objective and immediately generates 2-3 real tasks
@@ -112,6 +112,80 @@ async function loadProposedObjectives() {
     return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+function normalizeObjectiveText(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function getPrimaryObjectives(northStar) {
+    const explicitObjectives = Array.isArray(northStar?.objectives)
+        ? northStar.objectives.map(normalizeObjectiveText).filter(Boolean)
+        : [];
+    if (explicitObjectives.length > 0) return explicitObjectives;
+
+    const fallback = normalizeObjectiveText(northStar?.title);
+    return fallback ? [fallback] : ['Advance the current company North Star'];
+}
+
+function getApprovedProposedObjectives(proposedObjectives) {
+    return (Array.isArray(proposedObjectives) ? proposedObjectives : [])
+        .map((item) => {
+            const id = normalizeObjectiveText(item?.id);
+            const title = normalizeObjectiveText(item?.title);
+            if (!id || !title) return null;
+            return {
+                id,
+                title,
+                reason: normalizeObjectiveText(item?.reason),
+                proposedBy: normalizeObjectiveText(item?.proposedBy || item?.proposedByName || 'agent'),
+            };
+        })
+        .filter(Boolean);
+}
+
+function findBestPrimaryObjective(rawValue, primaryObjectives, fallbackIndex = 0) {
+    const candidate = normalizeObjectiveText(rawValue);
+    if (candidate) {
+        const exact = primaryObjectives.find((o) => o === candidate);
+        if (exact) return exact;
+
+        const caseInsensitive = primaryObjectives.find((o) => o.toLowerCase() === candidate.toLowerCase());
+        if (caseInsensitive) return caseInsensitive;
+
+        const fuzzy = primaryObjectives.find((o) =>
+            o.toLowerCase().includes(candidate.toLowerCase()) ||
+            candidate.toLowerCase().includes(o.toLowerCase())
+        );
+        if (fuzzy) return fuzzy;
+    }
+
+    return primaryObjectives[fallbackIndex % primaryObjectives.length];
+}
+
+function normalizeObjectiveSource(rawValue) {
+    const value = String(rawValue || '').trim().toLowerCase();
+    return value === 'agent-proposed' ? 'agent-proposed' : 'primary';
+}
+
+function findMatchingProposedObjective(task, approvedProposedObjectives) {
+    const requestedId = normalizeObjectiveText(task?.proposedObjectiveId);
+    if (requestedId) {
+        const byId = approvedProposedObjectives.find((o) => o.id === requestedId);
+        if (byId) return byId;
+    }
+
+    const requestedTitle = normalizeObjectiveText(task?.objectiveLink);
+    if (!requestedTitle) return null;
+
+    const exact = approvedProposedObjectives.find((o) => o.title.toLowerCase() === requestedTitle.toLowerCase());
+    if (exact) return exact;
+
+    const fuzzy = approvedProposedObjectives.find((o) =>
+        o.title.toLowerCase().includes(requestedTitle.toLowerCase()) ||
+        requestedTitle.toLowerCase().includes(o.title.toLowerCase())
+    );
+    return fuzzy || null;
+}
+
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -205,10 +279,9 @@ async function callGPT(systemPrompt, userPrompt, maxTokens = 2000) {
 
 /* ─── Phase 1: Mission Plan Generation ───────────────── */
 
-async function generateMissionPlan(northStar, queues, proposedObjectives, planningTranscript) {
-    const objectives = northStar.objectives || [];
-    const proposedBlock = proposedObjectives.length > 0
-        ? `\nApproved Agent-Proposed Objectives (treat these with equal priority to the main objectives):\n${proposedObjectives.map((o, i) => `  ${i + 1}. [${o.proposedBy}] ${o.title}: ${o.reason || ''}`).join('\n')}`
+async function generateMissionPlan(northStar, primaryObjectives, approvedProposedObjectives, queues, planningTranscript) {
+    const proposedBlock = approvedProposedObjectives.length > 0
+        ? `\nAPPROVED AGENT-PROPOSED OBJECTIVES (SECONDARY LANE; LOWER PRIORITY THAN PRIMARY OBJECTIVES):\n${approvedProposedObjectives.map((o, i) => `  ${i + 1}. [${o.proposedBy}] (${o.id}) ${o.title}${o.reason ? `: ${o.reason}` : ''}`).join('\n')}`
         : '';
     const planningBlock = planningTranscript
         ? `\nROUND-TABLE STRATEGY TRANSCRIPT (use this to drive assignment choices):\n${planningTranscript}`
@@ -226,8 +299,8 @@ async function generateMissionPlan(northStar, queues, proposedObjectives, planni
         `NORTH STAR: ${northStar.title}`,
         northStar.description ? `Context: ${northStar.description}` : '',
         ``,
-        `NORTH STAR OBJECTIVES:`,
-        objectives.map((o, i) => `${i + 1}. ${o}`).join('\n'),
+        `PRIMARY NORTH STAR OBJECTIVES (operator-set, highest priority):`,
+        primaryObjectives.map((o, i) => `${i + 1}. ${o}`).join('\n'),
         proposedBlock,
         ``,
         `CURRENT AGENT QUEUES:`,
@@ -235,34 +308,40 @@ async function generateMissionPlan(northStar, queues, proposedObjectives, planni
         planningBlock,
         ``,
         `RULES:`,
-        `1. Assign each agent exactly ONE objective they will OWN this mission.`,
+        `1. Assign each agent exactly ONE claimedObjective from the PRIMARY objective list above. Copy objective text exactly.`,
         `2. Generate 2-3 CONCRETE tasks per agent. Each task must name a specific file, feature, Firestore collection, or API endpoint.`,
         `3. Tasks must be immediately executable — no planning docs, no "analyze X".`,
-        `4. Each task must have a direct_impact explaining exactly how it moves the North Star.`,
-        `5. Complexity 1-5: 1=trivial, 3=moderate, 5=massive.`,
-        `6. For agents that already have tasks, create tasks that COMPLEMENT (not duplicate) existing work.`,
-        `7. Reflect at least one concrete idea from each agent's strategy response when possible.`,
+        `4. PRIMARY objectives take priority over agent-proposed objectives.`,
+        `5. For each agent: at least 2 tasks must have objectiveSource="primary". At most 1 task may have objectiveSource="agent-proposed".`,
+        `6. If objectiveSource="agent-proposed", proposedObjectiveId must reference an approved proposed objective from the list above.`,
+        `7. Each task must include objectiveLink (exact objective text this task advances) and direct_impact (how it moves the North Star).`,
+        `8. Complexity 1-5: 1=trivial, 3=moderate, 5=massive.`,
+        `9. For agents that already have tasks, create tasks that COMPLEMENT (not duplicate) existing work.`,
+        `10. Reflect at least one concrete idea from each agent's strategy response when possible.`,
     ].filter(Boolean).join('\n');
 
     const result = await callGPT(systemPrompt, `Generate the mission plan. Return JSON with shape:
 {
   "mission_summary": "One paragraph describing the overall mission plan",
-  "agents": [
-    {
-      "agentId": "nora|scout|solara|sage",
-      "agentName": "Name",
-      "claimedObjective": "Which North Star objective they own",
-      "tasks": [
+      "agents": [
         {
-          "name": "Task name (specific, action-oriented)",
-          "description": "Detailed description with file paths, endpoints, or Firestore collections named explicitly",
-          "priority": "high|medium|low",
-          "complexity": 1-5,
-          "direct_impact": "How this specifically moves the North Star"
+          "agentId": "nora|scout|solara|sage",
+          "agentName": "Name",
+          "claimedObjective": "ONE primary objective text copied exactly from the PRIMARY list",
+          "tasks": [
+            {
+              "name": "Task name (specific, action-oriented)",
+              "description": "Detailed description with file paths, endpoints, or Firestore collections named explicitly",
+              "priority": "high|medium|low",
+              "complexity": 1-5,
+              "objectiveSource": "primary|agent-proposed",
+              "objectiveLink": "Exact objective text this task advances",
+              "proposedObjectiveId": "Required only when objectiveSource is agent-proposed, else empty string",
+              "direct_impact": "How this specifically moves the North Star"
+            }
+          ]
         }
       ]
-    }
-  ]
 }`, 3000);
 
     return result;
@@ -270,17 +349,46 @@ async function generateMissionPlan(northStar, queues, proposedObjectives, planni
 
 /* ─── Phase 2: Create Tasks in Firestore ─────────────── */
 
-async function createMissionTasks(plan, missionId) {
+async function createMissionTasks(plan, missionId, primaryObjectives, approvedProposedObjectives) {
     const created = [];
     const batch = db.batch();
     const now = FieldValue.serverTimestamp();
 
-    for (const agentPlan of plan.agents || []) {
+    for (let agentIndex = 0; agentIndex < (plan.agents || []).length; agentIndex += 1) {
+        const agentPlan = plan.agents[agentIndex];
+        const claimedObjective = findBestPrimaryObjective(agentPlan?.claimedObjective, primaryObjectives, agentIndex);
+        let secondaryTaskCount = 0;
+
         for (const task of agentPlan.tasks || []) {
+            let objectiveSource = normalizeObjectiveSource(task?.objectiveSource);
+            let objectiveLink = normalizeObjectiveText(task?.objectiveLink);
+            let matchedProposedObjective = null;
+
+            if (objectiveSource === 'agent-proposed') {
+                matchedProposedObjective = findMatchingProposedObjective(task, approvedProposedObjectives);
+                const canUseSecondaryLane = matchedProposedObjective && secondaryTaskCount < 1;
+                if (!canUseSecondaryLane) {
+                    objectiveSource = 'primary';
+                } else {
+                    secondaryTaskCount += 1;
+                    objectiveLink = matchedProposedObjective.title;
+                }
+            }
+
+            if (objectiveSource === 'primary') {
+                objectiveLink = findBestPrimaryObjective(objectiveLink || claimedObjective, primaryObjectives, agentIndex);
+            }
+
+            const taskDescription = String(task?.description || '').trim();
+            const directImpact = String(task?.direct_impact || '').trim() || 'Advances the assigned objective through concrete execution.';
+            const objectiveLaneLabel = objectiveSource === 'agent-proposed'
+                ? `Agent-Proposed Objective (secondary): ${objectiveLink}`
+                : `North Star Objective (primary): ${objectiveLink}`;
+
             const ref = db.collection(KANBAN_COLLECTION).doc();
             batch.set(ref, {
                 name: task.name,
-                description: `${task.description}\n\n**North Star Impact:** ${task.direct_impact}`,
+                description: `${taskDescription}\n\n**North Star Impact:** ${directImpact}\n**Objective Lane:** ${objectiveLaneLabel}`,
                 assignee: agentPlan.agentName,
                 status: 'todo',
                 priority: task.priority || 'high',
@@ -288,13 +396,23 @@ async function createMissionTasks(plan, missionId) {
                 source: 'mission-kickoff',
                 missionId,
                 objectiveCode: `MISSION-${agentPlan.agentId.toUpperCase()}`,
-                northStarObjective: agentPlan.claimedObjective,
-                northStarDirectImpact: task.direct_impact,
+                northStarObjective: claimedObjective,
+                northStarObjectiveSource: objectiveSource,
+                northStarObjectiveLink: objectiveLink,
+                northStarDirectImpact: directImpact,
+                agentProposedObjectiveId: matchedProposedObjective?.id || '',
+                agentProposedObjectiveTitle: matchedProposedObjective?.title || '',
                 missionKickoffAt: now,
                 createdAt: now,
                 updatedAt: now,
             });
-            created.push({ id: ref.id, agent: agentPlan.agentName, name: task.name });
+            created.push({
+                id: ref.id,
+                agent: agentPlan.agentName,
+                name: task.name,
+                objectiveSource,
+                objectiveLink,
+            });
         }
     }
 
@@ -431,9 +549,15 @@ async function waitForMissionPlanningResponses(chatId, messageId, kickoffContent
     };
 }
 
-async function postMissionExecutionHandoff(chatId, northStar, plan, createdTasks, missionId) {
+async function postMissionExecutionHandoff(chatId, northStar, plan, primaryObjectives, createdTasks, missionId) {
     const now = FieldValue.serverTimestamp();
-    const agentClaims = (plan.agents || []).map(a =>
+    const secondaryCount = createdTasks.filter((t) => t.objectiveSource === 'agent-proposed').length;
+    const primaryCount = createdTasks.length - secondaryCount;
+    const normalizedAgents = (plan.agents || []).map((a, i) => ({
+        ...a,
+        claimedObjective: findBestPrimaryObjective(a?.claimedObjective, primaryObjectives, i),
+    }));
+    const agentClaims = normalizedAgents.map(a =>
         `**${a.agentName}** owns: *${a.claimedObjective}*\n${(a.tasks || []).map(t => `  → ${t.name}`).join('\n')}`
     ).join('\n\n');
     const createdByAgent = AGENTS.map(agent => {
@@ -451,6 +575,7 @@ async function postMissionExecutionHandoff(chatId, northStar, plan, createdTasks
         ``,
         `**Mission Summary:** ${plan.mission_summary}`,
         `**Tasks Created:** ${createdTasks.length} total (${createdByAgent})`,
+        `**Objective Lane Split:** ${primaryCount} primary / ${secondaryCount} agent-proposed secondary`,
         ``,
         `Execution mode is now active. Build immediately; keep cross-agent updates concise and concrete.`,
     ].filter(Boolean).join('\n');
@@ -530,7 +655,7 @@ async function setMissionPlanningStatus(northStar, missionId, chatId) {
     console.log(`🎯 Mission status set to PLANNING (${missionId})`);
 }
 
-async function activateMission(northStar, plan, chatId, taskIds, missionId) {
+async function activateMission(northStar, plan, primaryObjectives, chatId, taskIds, missionId) {
     await db.doc(MISSION_DOC).set({
         status: 'active',
         missionPhase: 'execution',
@@ -539,7 +664,7 @@ async function activateMission(northStar, plan, chatId, taskIds, missionId) {
         missionSummary: plan.mission_summary,
         kickoffChatId: chatId,
         agentObjectives: Object.fromEntries(
-            (plan.agents || []).map(a => [a.agentId, a.claimedObjective])
+            (plan.agents || []).map((a, i) => [a.agentId, findBestPrimaryObjective(a?.claimedObjective, primaryObjectives, i)])
         ),
         taskCount: taskIds.length,
         createdTaskIds: taskIds.map(t => t.id),
@@ -582,7 +707,8 @@ async function main() {
         console.log('\n⭐ Loading North Star...');
         northStar = await loadNorthStar();
         console.log(`   Title: ${northStar.title}`);
-        console.log(`   Objectives: ${(northStar.objectives || []).length}`);
+        const primaryObjectives = getPrimaryObjectives(northStar);
+        console.log(`   Primary objectives: ${primaryObjectives.length}`);
 
         // Step 2: Load agent queues
         console.log('\n📊 Loading agent queues...');
@@ -593,8 +719,9 @@ async function main() {
 
         // Step 3: Load approved proposed objectives
         const proposedObjectives = await loadProposedObjectives();
-        if (proposedObjectives.length > 0) {
-            console.log(`\n💡 ${proposedObjectives.length} approved agent-proposed objectives included`);
+        const approvedProposedObjectives = getApprovedProposedObjectives(proposedObjectives);
+        if (approvedProposedObjectives.length > 0) {
+            console.log(`\n💡 ${approvedProposedObjectives.length} approved agent-proposed objectives loaded as secondary lane`);
         }
 
         // Step 4: Start strategy roundtable first (no task assignment yet)
@@ -625,7 +752,13 @@ async function main() {
 
         // Step 6: Generate mission plan from North Star + strategy transcript
         console.log(`\n🧠 Generating mission plan with ${USE_OPENCLAW ? `OpenClaw (${OPENCLAW_AGENT_ID})` : 'GPT-4o'}...`);
-        const plan = await generateMissionPlan(northStar, queues, proposedObjectives, planningResults.transcript);
+        const plan = await generateMissionPlan(
+            northStar,
+            primaryObjectives,
+            approvedProposedObjectives,
+            queues,
+            planningResults.transcript
+        );
         console.log(`\n📋 Mission Summary: ${plan.mission_summary?.substring(0, 150)}...`);
         for (const agent of plan.agents || []) {
             console.log(`\n   ${agent.agentName} → "${agent.claimedObjective}"`);
@@ -636,15 +769,15 @@ async function main() {
 
         // Step 7: Create tasks only AFTER planning roundtable completes
         console.log('\n✏️  Creating tasks in Firestore...');
-        const createdTasks = await createMissionTasks(plan, missionId);
+        const createdTasks = await createMissionTasks(plan, missionId, primaryObjectives, approvedProposedObjectives);
 
         // Step 8: Post execution handoff back to the roundtable
         console.log('\n📣 Posting mission execution handoff...');
-        await postMissionExecutionHandoff(chatId, northStar, plan, createdTasks, missionId);
+        await postMissionExecutionHandoff(chatId, northStar, plan, primaryObjectives, createdTasks, missionId);
 
         // Step 9: Activate mission execution status
         console.log('\n🎯 Activating mission...');
-        await activateMission(northStar, plan, chatId, createdTasks, missionId);
+        await activateMission(northStar, plan, primaryObjectives, chatId, createdTasks, missionId);
 
         // Step 10: Post timeline beat
         await postTimeline(
