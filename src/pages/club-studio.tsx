@@ -1,242 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Head from 'next/head';
+import PageHead from '../components/PageHead';
 import { useRouter } from 'next/router';
-import { FiArrowRight, FiUsers, FiTarget, FiActivity, FiCheckCircle, FiShare2, FiEdit3, FiSliders, FiArrowLeft, FiSettings, FiCamera, FiX, FiCheck, FiStar } from 'react-icons/fi';
+import { FiArrowRight, FiUsers, FiTarget, FiActivity, FiCheckCircle, FiShare2, FiEdit3, FiSliders, FiArrowLeft, FiSettings, FiCamera, FiX, FiCheck, FiStar, FiUserMinus, FiMoreVertical } from 'react-icons/fi';
 import { useUser } from '../hooks/useUser';
 import { clubService } from '../api/firebase/club/service';
-import { Club } from '../api/firebase/club/types';
+import { Club, ClubMember } from '../api/firebase/club/types';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { workoutService } from '../api/firebase/workout/service';
 import { SweatlistCollection } from '../api/firebase/workout/types';
-import { userService, User } from '../api/firebase/user';
+import { userService, User, ShortUser } from '../api/firebase/user';
 import { useDispatch } from 'react-redux';
 import { setUser } from '../redux/userSlice';
 
-type Step = 'prompt' | 'generating' | 'preview';
-
-function ClubGenerator({ onGenerated }: { onGenerated: () => void }) {
-    const [step, setStep] = useState<Step>('prompt');
-    const [prompt, setPrompt] = useState('');
-    const [loadingText, setLoadingText] = useState('Analyzing audience...');
-
-    // Generated fake data
-    const [clubName, setClubName] = useState('My Awesome Club');
-    const [bgImage, setBgImage] = useState("https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2070&auto=format&fit=crop");
-
-    const generateClub = () => {
-        if (!prompt) return;
-        setStep('generating');
-
-        // Simulate generation steps
-        setTimeout(() => setLoadingText('Structuring landing page...'), 1500);
-        setTimeout(() => setLoadingText('Writing copy...'), 3000);
-        setTimeout(() => setLoadingText('Generating stunning visuals...'), 4500);
-
-        setTimeout(() => {
-            // Basic heuristic to pick a title from prompt
-            setClubName(prompt.split(' ').slice(0, 3).join(' ') + " Club");
-            // Pick a random bg image
-            const images = [
-                "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2070&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?q=80&w=2070&auto=format&fit=crop",
-                "https://images.unsplash.com/photo-1541534741688-6078c6bfb5c5?q=80&w=2069&auto=format&fit=crop"
-            ];
-            setBgImage(images[Math.floor(Math.random() * images.length)]);
-            setStep('preview');
-        }, 6000);
-    };
-
-    return (
-        <AnimatePresence mode="wait">
-            {step === 'prompt' && (
-                <motion.div
-                    key="prompt"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    className="max-w-4xl mx-auto pt-32 px-6"
-                >
-                    <div className="text-center mb-16">
-                        <motion.div
-                            initial={{ scale: 0.9 }}
-                            animate={{ scale: 1 }}
-                            transition={{ duration: 0.8, ease: "easeOut" }}
-                            className="inline-block p-1 rounded-full bg-gradient-to-r from-emerald-500/20 to-teal-500/20 mb-6"
-                        >
-                            <div className="px-4 py-2 rounded-full border border-emerald-500/30 bg-black/40 backdrop-blur-md text-sm text-emerald-300 font-medium">
-                                Pulse Club Studio AI ✨
-                            </div>
-                        </motion.div>
-                        <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
-                            Instantly build your <br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
-                                community landing page.
-                            </span>
-                        </h1>
-                        <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-                            No coding or design skills needed. Describe your perfect club, and our AI will generate a stunning landing page to convert visitors into members.
-                        </p>
-                    </div>
-
-                    {/* Prompt Input */}
-                    <div className="relative group max-w-2xl mx-auto mb-24 z-10">
-                        <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-teal-400 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-500"></div>
-                        <div className="relative flex items-center bg-[#151518] border border-gray-800 rounded-2xl p-2 shadow-2xl">
-                            <textarea
-                                value={prompt}
-                                onChange={(e) => setPrompt(e.target.value)}
-                                placeholder="e.g. A high-intensity interval training club for busy founders in NYC, focusing on mental toughness and early morning workouts..."
-                                className="w-full bg-transparent text-white placeholder-gray-600 px-4 py-4 focus:outline-none resize-none h-24"
-                            />
-                            <button
-                                onClick={generateClub}
-                                disabled={!prompt}
-                                className="absolute bottom-4 right-4 bg-emerald-500 hover:bg-emerald-400 text-black p-3 rounded-xl disabled:opacity-40 disabled:hover:bg-emerald-500 transition-all font-bold flex items-center justify-center cursor-pointer shadow-[0_0_20px_rgba(16,185,129,0.3)]"
-                            >
-                                <FiArrowRight size={20} />
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* How it Works Section */}
-                    <div className="pt-20 border-t border-white/5 relative z-0 pb-32">
-                        <div className="text-center mb-12">
-                            <h2 className="text-3xl font-bold text-white mb-4">How Pulse Clubs Work</h2>
-                            <p className="text-gray-400">Everything you need to host, manage, and monetize your community.</p>
-                        </div>
-                        <div className="grid md:grid-cols-3 gap-8">
-                            <div className="bg-[#151518] border border-white/5 p-8 rounded-2xl hover:border-emerald-500/30 transition-colors">
-                                <div className="w-12 h-12 bg-emerald-500/10 rounded-xl flex items-center justify-center mb-6 text-emerald-400">
-                                    <FiActivity size={24} />
-                                </div>
-                                <h3 className="text-xl font-bold text-white mb-3">1. Build The Experience</h3>
-                                <p className="text-gray-400 leading-relaxed text-sm">
-                                    Upload your programs, daily workouts, and exclusive content. Set your monthly subscription or one-time entry fee.
-                                </p>
-                            </div>
-                            <div className="bg-[#151518] border border-white/5 p-8 rounded-2xl hover:border-emerald-500/30 transition-colors">
-                                <div className="w-12 h-12 bg-teal-500/10 rounded-xl flex items-center justify-center mb-6 text-teal-400">
-                                    <FiUsers size={24} />
-                                </div>
-                                <h3 className="text-xl font-bold text-white mb-3">2. Launch & Grow</h3>
-                                <p className="text-gray-400 leading-relaxed text-sm">
-                                    Generate your stunning landing page with AI. Share the link on your socials and watch your community grow.
-                                </p>
-                            </div>
-                            <div className="bg-[#151518] border border-white/5 p-8 rounded-2xl hover:border-emerald-500/30 transition-colors">
-                                <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center mb-6 text-purple-400">
-                                    <FiTarget size={24} />
-                                </div>
-                                <h3 className="text-xl font-bold text-white mb-3">3. Engage & Lead</h3>
-                                <p className="text-gray-400 leading-relaxed text-sm">
-                                    Host live events, drop new workouts in the shared feed, and manage participant leaderboards inside the app.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </motion.div>
-            )}
-
-            {step === 'generating' && (
-                <motion.div
-                    key="generating"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="flex flex-col items-center justify-center min-h-screen text-center"
-                >
-                    <div className="relative mb-12">
-                        <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                            className="w-32 h-32 rounded-full border-t-2 border-r-2 border-emerald-500 shadow-[0_0_40px_rgba(16,185,129,0.4)]"
-                        />
-                        <motion.div
-                            animate={{ rotate: -360 }}
-                            transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                            className="w-24 h-24 rounded-full border-b-2 border-l-2 border-teal-400 absolute top-4 left-4"
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center text-emerald-400">
-                            <FiSliders size={32} />
-                        </div>
-                    </div>
-                    <motion.h2
-                        key={loadingText}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-2xl font-semibold text-white tracking-wide"
-                    >
-                        {loadingText}
-                    </motion.h2>
-                </motion.div>
-            )}
-
-            {step === 'preview' && (
-                <motion.div
-                    key="preview"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="relative min-h-screen bg-black"
-                >
-                    {/* Editor Top Bar */}
-                    <div className="fixed top-0 left-0 right-0 h-16 bg-[#0E0E10]/90 backdrop-blur-lg border-b border-white/10 z-50 flex items-center justify-between px-6">
-                        <div className="flex items-center gap-3">
-                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="text-sm font-semibold text-white">Preview Mode</span>
-                        </div>
-                        <div className="flex gap-4">
-                            <button onClick={() => setStep('prompt')} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors flex items-center gap-2">
-                                <FiEdit3 size={16} /> Edit Prompt
-                            </button>
-                            <button onClick={onGenerated} className="px-5 py-2 text-sm bg-white text-black font-bold rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2">
-                                <FiCheckCircle size={16} /> Continue
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Generated Landing Page Content */}
-                    <div className="pt-16 pb-24">
-                        <div className="relative h-[80vh] w-full flex items-center justify-center overflow-hidden">
-                            <div className="absolute inset-0 z-0">
-                                <img src={bgImage} alt="Club Background" className="w-full h-full object-cover scale-105" />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent" />
-                                <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black" />
-                            </div>
-
-                            <div className="relative z-10 text-center max-w-4xl px-6 pt-20">
-                                <motion.div
-                                    initial={{ y: 20, opacity: 0 }}
-                                    animate={{ y: 0, opacity: 1 }}
-                                    transition={{ delay: 0.2 }}
-                                    className="inline-block px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md text-white/90 text-sm font-medium border border-white/20 mb-8"
-                                >
-                                    Host: You
-                                </motion.div>
-                                <motion.h1
-                                    initial={{ y: 20, opacity: 0 }}
-                                    animate={{ y: 0, opacity: 1 }}
-                                    transition={{ delay: 0.3 }}
-                                    className="text-6xl md:text-8xl font-black text-white mb-6 uppercase tracking-tighter"
-                                >
-                                    {clubName}
-                                </motion.h1>
-                                <motion.p
-                                    initial={{ y: 20, opacity: 0 }}
-                                    animate={{ y: 0, opacity: 1 }}
-                                    transition={{ delay: 0.4 }}
-                                    className="text-xl md:text-2xl text-gray-300 font-light mb-12 max-w-2xl mx-auto"
-                                >
-                                    Generated exclusively from your prompt. A space purposely built for those ready to push limits.
-                                </motion.p>
-                            </div>
-                        </div>
-                    </div>
-                </motion.div>
-            )}
-        </AnimatePresence>
-    );
-}
+import LandingPageBuilder from '../components/club/LandingPageBuilder';
 
 const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club) => void }) => {
     const router = useRouter();
@@ -245,11 +23,36 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploadingImage, setUploadingImage] = useState(false);
 
+    // Landing Page Modal State
+    const [showLandingPageModal, setShowLandingPageModal] = useState(false);
+    const [totalWorkoutsCompleted, setTotalWorkoutsCompleted] = useState<number | null>(null);
+    const [allRounds, setAllRounds] = useState<SweatlistCollection[]>([]);
+
     // Featured Rounds Modal State
     const [showRoundsModal, setShowRoundsModal] = useState(false);
     const [userCollections, setUserCollections] = useState<SweatlistCollection[]>([]);
     const [draftFeatured, setDraftFeatured] = useState<string[]>([]);
+
+    // Members Modal State
+    const [showMembersModal, setShowMembersModal] = useState(false);
+    const [clubMembers, setClubMembers] = useState<ClubMember[]>([]);
+    const [loadingMembers, setLoadingMembers] = useState(false);
     const [loadingRounds, setLoadingRounds] = useState(false);
+    const [activeMemberMenu, setActiveMemberMenu] = useState<string | null>(null);
+
+    const handleRemoveMember = async (userId: string) => {
+        if (!club) return;
+        if (window.confirm("Are you sure you want to remove this member?")) {
+            try {
+                await clubService.leaveClub(club.id, userId);
+                setClubMembers(prev => prev.filter(m => m.userId !== userId));
+                setClub({ ...club, memberCount: Math.max(0, club.memberCount - 1) } as Club);
+            } catch (error) {
+                console.error("Failed to remove member:", error);
+                alert("Failed to remove member. Please try again.");
+            }
+        }
+    };
 
     const [roundTab, setRoundTab] = useState<'active' | 'completed'>('active');
     const [relaunchPrompt, setRelaunchPrompt] = useState<SweatlistCollection | null>(null);
@@ -278,6 +81,50 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
             });
         }
     }, [showRoundsModal, currentUser?.id]);
+
+    // Fetch total workouts + active linked round when landing page builder opens
+    useEffect(() => {
+        if (showLandingPageModal && club?.id) {
+            setTotalWorkoutsCompleted(null);
+            clubService.getTotalWorkoutsCompletedByMembers(club.id)
+                .then(setTotalWorkoutsCompleted)
+                .catch(() => setTotalWorkoutsCompleted(null));
+
+            const linkedIds = club.linkedRoundIds || [];
+            const featuredIds = currentUser?.featuredRoundIds || [];
+            const allRoundIds = [...new Set([...linkedIds, ...featuredIds])];
+            if (allRoundIds.length > 0) {
+                setAllRounds([]);
+                Promise.all(allRoundIds.map(id => workoutService.getCollectionById(id).catch(() => null)))
+                    .then(async collections => {
+                        const valid = collections.filter((c): c is SweatlistCollection => c !== null);
+                        // Fetch real participant counts from user-challenge collection
+                        // (challenge.participants is never populated — real data is in user-challenge docs)
+                        const participantCounts = await Promise.all(
+                            valid.map(col =>
+                                workoutService.fetchUserChallengesByChallengeId(col.id)
+                                    .then(uc => uc.length)
+                                    .catch(() => 0)
+                            )
+                        );
+                        // Attach real counts and sort by most activity
+                        const enriched = valid.map((col, i) => ({
+                            ...col,
+                            _participantCount: participantCounts[i]
+                        }));
+                        enriched.sort((a, b) => {
+                            const aScore = a._participantCount + (a.sweatlistIds?.length ?? 0);
+                            const bScore = b._participantCount + (b.sweatlistIds?.length ?? 0);
+                            return bScore - aScore;
+                        });
+                        setAllRounds(enriched);
+                    })
+                    .catch(() => setAllRounds([]));
+            } else {
+                setAllRounds([]);
+            }
+        }
+    }, [showLandingPageModal, club?.id]);
 
     const handleSaveFeatured = async () => {
         if (!currentUser) return;
@@ -308,6 +155,20 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
         // TODO: copy actual link
         navigator.clipboard.writeText(`https://fitwithpulse.ai/club/${club.id}`);
         alert("Invite link copied!");
+    };
+
+    const handleOpenMembers = async () => {
+        if (!club) return;
+        setShowMembersModal(true);
+        setLoadingMembers(true);
+        try {
+            const members = await clubService.getClubMembers(club.id);
+            setClubMembers(members);
+        } catch (error) {
+            console.error("Failed to load members:", error);
+        } finally {
+            setLoadingMembers(false);
+        }
     };
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -348,7 +209,7 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
             <div className="max-w-6xl mx-auto px-6 py-12 md:py-24">
                 <div className="flex items-center justify-between mb-12">
                     <button
-                        onClick={() => router.push('/creator')}
+                        onClick={() => router.push('/?tab=create')}
                         className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
                     >
                         <FiArrowLeft /> Back to Creator Studio
@@ -411,7 +272,10 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
 
                 {/* Quick Actions */}
                 <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <button className="bg-[#151518] border border-white/5 hover:border-emerald-500/50 p-6 md:p-8 rounded-3xl transition-all group text-left relative overflow-hidden">
+                    <button
+                        onClick={() => setShowLandingPageModal(true)}
+                        className="bg-[#151518] border border-white/5 hover:border-emerald-500/50 p-6 md:p-8 rounded-3xl transition-all group text-left relative overflow-hidden"
+                    >
                         <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-bl-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
                         <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-4 md:mb-6 relative z-10">
                             <FiEdit3 size={24} />
@@ -432,7 +296,10 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
                         <p className="text-gray-400 text-xs md:text-sm relative z-10">Manage which of your rounds appear directly on your club and public profile.</p>
                     </button>
 
-                    <button className="bg-[#151518] border border-white/5 hover:border-teal-500/50 p-6 md:p-8 rounded-3xl transition-all group text-left relative overflow-hidden">
+                    <button
+                        onClick={handleOpenMembers}
+                        className="bg-[#151518] border border-white/5 hover:border-teal-500/50 p-6 md:p-8 rounded-3xl transition-all group text-left relative overflow-hidden"
+                    >
                         <div className="absolute top-0 right-0 w-32 h-32 bg-teal-500/10 rounded-bl-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
                         <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-teal-500/10 text-teal-400 flex items-center justify-center mb-4 md:mb-6 relative z-10">
                             <FiUsers size={24} />
@@ -441,7 +308,10 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
                         <p className="text-gray-400 text-xs md:text-sm relative z-10">View and manage your club members, their roles, and track their participation.</p>
                     </button>
 
-                    <button className="bg-[#151518] border border-white/5 hover:border-purple-500/50 p-6 md:p-8 rounded-3xl transition-all group text-left relative overflow-hidden">
+                    <button
+                        onClick={() => router.push('/club-analytics')}
+                        className="bg-[#151518] border border-white/5 hover:border-purple-500/50 p-6 md:p-8 rounded-3xl transition-all group text-left relative overflow-hidden"
+                    >
                         <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-bl-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
                         <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center mb-4 md:mb-6 relative z-10">
                             <FiActivity size={24} />
@@ -478,6 +348,135 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
                         </div>
                     </div>
                 </div>
+
+                {/* Landing Page Modal */}
+                <AnimatePresence>
+                    {showLandingPageModal && (
+                        <div className="fixed inset-0 z-[60] overflow-y-auto bg-black/90 backdrop-blur-md">
+                            <LandingPageBuilder
+                                club={club}
+                                creatorFallback={currentUser ? { displayName: currentUser.displayName, username: currentUser.username, profileImage: currentUser.profileImage } : null}
+                                totalWorkoutsCompleted={totalWorkoutsCompleted}
+                                allRounds={allRounds}
+                                onCancel={() => setShowLandingPageModal(false)}
+                                onGenerated={async (config) => {
+                                    const updatedClub = new Club({ ...club.toDictionary(), landingPageConfig: config, name: config.heroTitle || club.name, description: config.aboutText || club.description, coverImageURL: config.heroImage || club.coverImageURL, updatedAt: new Date() });
+                                    try {
+                                        await clubService.updateClub(updatedClub);
+                                        setClub(updatedClub);
+                                        setShowLandingPageModal(false);
+                                    } catch (err) {
+                                        console.error(err);
+                                        alert("Failed to save landing page.");
+                                    }
+                                }}
+                            />
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* Members Modal */}
+                <AnimatePresence>
+                    {showMembersModal && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+                        >
+                            <motion.div
+                                initial={{ scale: 0.95, y: 20 }}
+                                animate={{ scale: 1, y: 0 }}
+                                exit={{ scale: 0.95, y: 20 }}
+                                transition={{ type: 'spring', bounce: 0.4, duration: 0.5 }}
+                                className="bg-[#0E0E10] border border-white/10 rounded-3xl p-6 md:p-8 max-w-2xl w-full max-h-[80vh] flex flex-col shadow-2xl"
+                            >
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-2xl font-bold flex items-center gap-3">
+                                        <FiUsers className="text-teal-400" />
+                                        Club Members
+                                    </h3>
+                                    <button
+                                        onClick={() => setShowMembersModal(false)}
+                                        className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+                                    >
+                                        <FiX size={20} />
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+                                    {loadingMembers ? (
+                                        <div className="flex justify-center py-12">
+                                            <div className="w-8 h-8 rounded-full border-t-2 border-teal-400 animate-spin"></div>
+                                        </div>
+                                    ) : clubMembers.length === 0 ? (
+                                        <div className="text-center py-12 px-6 bg-[#151518] rounded-2xl border border-white/5">
+                                            <FiUsers className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                                            <p className="text-gray-400 mb-2">No members yet.</p>
+                                            <p className="text-sm text-gray-500">Share your invite link to grow your club!</p>
+                                        </div>
+                                    ) : clubMembers.map(member => (
+                                        <div key={member.id} className="flex items-center justify-between p-4 rounded-2xl border border-white/5 bg-[#151518]">
+                                            <div className="flex items-center gap-4">
+                                                <img
+                                                    src={member.userInfo?.profileImage?.profileImageURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(member.userInfo?.displayName || 'User')}&background=random`}
+                                                    alt={member.userInfo?.displayName}
+                                                    className="w-12 h-12 rounded-full object-cover bg-zinc-800"
+                                                />
+                                                <div>
+                                                    <p className="font-bold text-white">{member.userInfo?.displayName}</p>
+                                                    <p className="text-sm text-gray-500">@{member.userInfo?.username}</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right flex items-center justify-end gap-3 relative">
+                                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-teal-500/10 text-teal-400">
+                                                    Joined
+                                                </span>
+                                                {member.userId !== club.creatorId && (
+                                                    <div className="relative">
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveMemberMenu(activeMemberMenu === member.id ? null : member.id);
+                                                            }}
+                                                            className="p-1.5 text-gray-500 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+                                                        >
+                                                            <FiMoreVertical size={18} />
+                                                        </button>
+
+                                                        {activeMemberMenu === member.id && (
+                                                            <>
+                                                                <div
+                                                                    className="fixed inset-0 z-40"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setActiveMemberMenu(null);
+                                                                    }}
+                                                                />
+                                                                <div className="absolute right-0 top-full mt-2 w-48 bg-[#1E1E21] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[60]">
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleRemoveMember(member.userId);
+                                                                            setActiveMemberMenu(null);
+                                                                        }}
+                                                                        className="w-full text-left px-4 py-3 text-sm text-red-500 hover:bg-red-500/10 hover:text-red-400 flex items-center gap-3 transition-colors font-medium"
+                                                                    >
+                                                                        <FiUserMinus size={16} />
+                                                                        Remove Member
+                                                                    </button>
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Featured Rounds Modal */}
                 <AnimatePresence>
@@ -573,10 +572,10 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
                                                     <div
                                                         key={collection.id}
                                                         className={`flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer group select-none ${isDrafted
-                                                                ? 'bg-[#E0FE10]/10 border-[#E0FE10]/30 hover:bg-[#E0FE10]/20'
-                                                                : isCompletedMode
-                                                                    ? 'bg-[#151518]/50 border-white/5 hover:border-white/20 opacity-70 hover:opacity-100'
-                                                                    : 'bg-[#151518] border-white/5 hover:border-white/10'
+                                                            ? 'bg-[#E0FE10]/10 border-[#E0FE10]/30 hover:bg-[#E0FE10]/20'
+                                                            : isCompletedMode
+                                                                ? 'bg-[#151518]/50 border-white/5 hover:border-white/20 opacity-70 hover:opacity-100'
+                                                                : 'bg-[#151518] border-white/5 hover:border-white/10'
                                                             }`}
                                                         onClick={() => toggleFeatured(collection.id, isCompletedMode, collection)}
                                                     >
@@ -591,8 +590,8 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
 
                                                         {!isCompletedMode ? (
                                                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${isDrafted
-                                                                    ? 'bg-[#E0FE10] text-black scale-110 shadow-[0_0_15px_rgba(224,254,16,0.5)]'
-                                                                    : 'bg-black/50 border border-gray-600 group-hover:border-gray-500'
+                                                                ? 'bg-[#E0FE10] text-black scale-110 shadow-[0_0_15px_rgba(224,254,16,0.5)]'
+                                                                : 'bg-black/50 border border-gray-600 group-hover:border-gray-500'
                                                                 }`}>
                                                                 {isDrafted && <FiCheck size={16} strokeWidth={3} />}
                                                             </div>
@@ -638,7 +637,7 @@ export default function ClubStudioPage() {
         }
 
         // Fetch user's club using clubService
-        clubService.getClubByCreatorId(currentUser.id)
+        clubService.getOrCreateClub(currentUser)
             .then((fetchedClub) => {
                 setClub(fetchedClub);
             })
@@ -652,9 +651,17 @@ export default function ClubStudioPage() {
 
     return (
         <div className="min-h-screen bg-[#0E0E10] min-h-screen text-white font-sans overflow-hidden">
-            <Head>
-                <title>Club Studio | Pulse</title>
-            </Head>
+            <PageHead
+                pageOgUrl="https://fitwithpulse.ai/club-studio"
+                metaData={{
+                    pageId: 'club-studio',
+                    pageTitle: 'Club Studio | Pulse',
+                    metaDescription: 'Manage your club on Pulse.',
+                    ogTitle: 'Club Studio | Pulse',
+                    ogDescription: 'Manage your club on Pulse.',
+                    lastUpdated: new Date().toISOString()
+                }}
+            />
 
             {loadingClub && (
                 <div className="flex flex-col items-center justify-center min-h-screen text-center">
@@ -665,24 +672,6 @@ export default function ClubStudioPage() {
 
             {!loadingClub && club && (
                 <ManageClubDashboard club={club} setClub={setClub} />
-            )}
-
-            {!loadingClub && !club && (
-                <ClubGenerator onGenerated={() => {
-                    // Navigate to back to manage club or create one?
-                    // As a dummy action for now, reload or mock club
-                    setClub(new Club({
-                        id: 'fake-id',
-                        name: 'My New Club',
-                        description: 'Generated from AI Prompt.',
-                        coverImageURL: '',
-                        memberCount: 1,
-                        creatorId: currentUser?.id || '',
-                        createdAt: Date.now(),
-                        updatedAt: Date.now(),
-                        creatorInfo: {}
-                    }));
-                }} />
             )}
         </div>
     );

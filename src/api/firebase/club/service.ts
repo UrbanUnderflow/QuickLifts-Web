@@ -14,7 +14,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config';
 import { Club, ClubMember } from './types';
-import { ShortUser } from '../user';
+import { ShortUser, userService } from '../user';
+import { workoutService } from '../workout/service';
 import { dateToUnixTimestamp } from '../../../utils/formatDate';
 
 class ClubService {
@@ -202,6 +203,27 @@ class ClubService {
 
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => new ClubMember({ id: doc.id, ...doc.data() }));
+  }
+
+  /**
+   * Returns the sum of completed workouts by all active club members.
+   * Uses each user's workoutCount when present; falls back to subcollection count for users without it (e.g. before backfill).
+   */
+  async getTotalWorkoutsCompletedByMembers(clubId: string): Promise<number> {
+    const members = await this.getClubMembers(clubId);
+    if (members.length === 0) return 0;
+    const userIds = members.map((m) => m.userId);
+    const counts = await userService.getWorkoutCounts(userIds);
+    const withFallback = { ...counts };
+    await Promise.all(
+      userIds.map(async (uid) => {
+        if (withFallback[uid] === undefined || withFallback[uid] === 0) {
+          const subCount = await workoutService.getWorkoutSummaryCount(uid);
+          if (subCount > 0) withFallback[uid] = subCount;
+        }
+      })
+    );
+    return Object.values(withFallback).reduce((a, b) => a + b, 0);
   }
 
   /**

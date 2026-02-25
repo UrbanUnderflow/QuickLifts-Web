@@ -7,7 +7,8 @@ import {
   updateDoc,
   query,
   where,
-  orderBy, 
+  orderBy,
+  getCountFromServer,
   DocumentData,
   QueryDocumentSnapshot,
   collection as fsCollection,
@@ -627,6 +628,19 @@ async updateWorkout(workout: Workout): Promise<void> {
     }
   }
 
+  /**
+   * Returns the count of completed workout summaries for a user (for club stats).
+   * Uses getCountFromServer for efficient counting.
+   */
+  async getWorkoutSummaryCount(userId: string): Promise<number> {
+    try {
+      const summariesRef = collection(db, 'users', userId, 'workoutSummary');
+      const snapshot = await getCountFromServer(summariesRef);
+      return snapshot.data().count;
+    } catch {
+      return 0;
+    }
+  }
 
   /**
  * Fetch user challenges by userId.
@@ -1169,6 +1183,8 @@ async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
   
     try {
       const summaryRef = doc(db, 'users', userId, 'workoutSummary', summary.id);
+      const existingSnap = await getDoc(summaryRef);
+      const isNewSummary = !existingSnap.exists();
 
       // Update the updatedAt timestamp
       summary.updatedAt = new Date();
@@ -1182,6 +1198,9 @@ async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
       });
 
       await setDoc(summaryRef, summaryData, { merge: true });
+      if (isNewSummary) {
+        await userService.incrementWorkoutCount(userId);
+      }
       console.log('Workout summary document updated successfully');
     } catch (error) {
       console.error('Error updating workout summary:', error);
@@ -1272,10 +1291,11 @@ async deleteWorkoutSession(workoutId: string | null): Promise<void> {
     if (!workoutSummaryId || !userService.nonUICurrentUser?.id) {
       return;
     }
-    
+    const userId = userService.nonUICurrentUser.id;
     try {
-      const summaryRef = doc(db, "users", userService.nonUICurrentUser.id, "workoutSummary", workoutSummaryId);
+      const summaryRef = doc(db, "users", userId, "workoutSummary", workoutSummaryId);
       await deleteDoc(summaryRef);
+      await userService.decrementWorkoutCount(userId);
       console.log("Workout summary deleted successfully.");
     } catch (error) {
       console.error("Error deleting workout summary:", error);

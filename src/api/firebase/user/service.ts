@@ -3,7 +3,7 @@ import { Workout } from '../workout';
 import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseLog } from '../exercise/types';
 import { ProfileImage, SubscriptionType } from '../user';
 
-import { doc, getDoc, setDoc, documentId, collection, query, where, getDocs, limit, writeBatch, deleteDoc, addDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, documentId, collection, query, where, getDocs, limit, writeBatch, deleteDoc, addDoc, increment } from 'firebase/firestore';
 import { ref, deleteObject, getStorage } from 'firebase/storage';
 import { db } from '../config';
 
@@ -118,6 +118,51 @@ class UserService {
       throw error;
     }
    }
+
+  /**
+   * Increment the user's workoutCount by 1 (call when a new workout summary is saved).
+   */
+  async incrementWorkoutCount(userId: string): Promise<void> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, { workoutCount: increment(1) });
+    } catch (error) {
+      console.error('Error incrementing workout count:', error);
+    }
+  }
+
+  /**
+   * Decrement the user's workoutCount by 1 (call when a workout summary is deleted).
+   */
+  async decrementWorkoutCount(userId: string): Promise<void> {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, { workoutCount: increment(-1) });
+    } catch (error) {
+      console.error('Error decrementing workout count:', error);
+    }
+  }
+
+  /**
+   * Returns workoutCount for each userId. Used for club total workouts. Missing or invalid counts are 0.
+   * Batches reads (up to 30 per query) to avoid limit issues.
+   */
+  async getWorkoutCounts(userIds: string[]): Promise<Record<string, number>> {
+    const result: Record<string, number> = {};
+    if (userIds.length === 0) return result;
+    const CHUNK = 30;
+    for (let i = 0; i < userIds.length; i += CHUNK) {
+      const chunk = userIds.slice(i, i + CHUNK);
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where(documentId(), 'in', chunk));
+      const snapshot = await getDocs(q);
+      snapshot.docs.forEach((d) => {
+        const data = d.data();
+        result[d.id] = typeof data.workoutCount === 'number' ? data.workoutCount : 0;
+      });
+    }
+    return result;
+  }
 
    async deleteUserVideo(exerciseId: string): Promise<void> {
     if (!this.nonUICurrentUser?.id) {
