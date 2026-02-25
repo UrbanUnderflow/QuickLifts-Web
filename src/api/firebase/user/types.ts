@@ -76,6 +76,8 @@ export class User {
   referrer?: string;
   isCurrentlyActive: boolean;
   videoCount: number;
+  /** Total completed workout summaries (denormalized for club stats and dashboards). */
+  workoutCount: number;
   role: 'athlete' | 'coach';
   linkedCoachId?: string;
   featuredRoundIds: string[];
@@ -132,6 +134,7 @@ export class User {
     this.referrer = data.referrer || '';
     this.isCurrentlyActive = data.isCurrentlyActive || false;
     this.videoCount = data.videoCount || 0;
+    this.workoutCount = typeof data.workoutCount === 'number' ? data.workoutCount : 0;
     this.role = data.role || 'athlete';
     this.linkedCoachId = data.linkedCoachId || undefined;
     this.featuredRoundIds = data.featuredRoundIds || [];
@@ -194,6 +197,7 @@ export class User {
       referrer: this.referrer,
       isCurrentlyActive: this.isCurrentlyActive,
       videoCount: this.videoCount,
+      workoutCount: this.workoutCount,
       role: this.role,
       linkedCoachId: this.linkedCoachId ?? null,
       featuredRoundIds: this.featuredRoundIds,

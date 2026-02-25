@@ -354,6 +354,12 @@ const adminCardsData = [
     link: "/admin/emailSequences"
   },
   {
+    title: "Notification Sequences",
+    description: "View every push notification in the app — when it fires, the trigger, delivery method, and payload.",
+    icon: <Bell className="w-5 h-5" />,
+    link: "/admin/notificationSequences"
+  },
+  {
     title: "Research Articles",
     description: "Create, edit, and publish research articles. Substack-like editor for managing /research content.",
     icon: <FileText className="w-5 h-5" />,

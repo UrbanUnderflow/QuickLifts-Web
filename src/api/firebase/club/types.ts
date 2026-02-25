@@ -15,6 +15,7 @@ export class Club {
   linkedRoundIds: string[];
   createdAt: Date;
   updatedAt: Date;
+  landingPageConfig?: any;
 
   constructor(data: any) {
     this.id = data.id || '';
@@ -26,6 +27,7 @@ export class Club {
     this.linkedRoundIds = data.linkedRoundIds || [];
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
+    this.landingPageConfig = data.landingPageConfig || undefined;
 
     // Parse creatorInfo
     if (data.creatorInfo) {
@@ -57,6 +59,10 @@ export class Club {
 
     if (this.coverImageURL) {
       dict.coverImageURL = this.coverImageURL;
+    }
+
+    if (this.landingPageConfig) {
+      dict.landingPageConfig = this.landingPageConfig;
     }
 
     return dict;
