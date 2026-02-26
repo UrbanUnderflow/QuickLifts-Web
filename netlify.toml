@@ -292,3 +292,12 @@
 [functions.send-onboarding-email]
   # Sends the branded onboarding email with set-password link
 
+# Round Daily Summary: End-of-day push notification to all active round participants
+[functions.scheduled-round-daily-summary]
+  # Runs at 2 AM UTC (9 PM EST) every day
+  schedule = "0 2 * * *"
+
+# Round Win Badges: Awards badges to top 3 finishers of completed rounds
+[functions.award-round-badges]
+  # Runs at 3 AM UTC (after challenge-status updater)
+  schedule = "0 3 * * *"

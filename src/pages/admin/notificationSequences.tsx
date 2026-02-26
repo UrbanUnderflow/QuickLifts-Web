@@ -267,6 +267,32 @@ const NOTIFICATIONS: NotificationRow[] = [
         adminLinkLabel: 'Mental Training Library',
         notes: 'Logs to notification-logs collection.',
     },
+
+    // ── Round Daily Summary (Scheduled) ────────────────
+    {
+        id: 'round-daily-summary',
+        name: 'Round Daily Summary',
+        trigger: 'Scheduled function (runs daily at 9 PM EST / 2 AM UTC). Sends to all participants of every active Round.',
+        title: '📊 {{roundTitle}} — Daily Recap',
+        body: '🥇 {{leader}} leads with {{pts}} pts · ⏳ {{daysLeft}} days left · ⚡ {{topScorer}} scored {{pts}} pts today',
+        category: 'round-activity',
+        deliveryMethod: 'scheduled-function',
+        source: 'Netlify — scheduled-round-daily-summary.ts',
+        dataKeys: [
+            'type: ROUND_DAILY_SUMMARY',
+            'challengeId',
+            'roundTitle',
+            'daysLeft',
+            'totalParticipants',
+            'recipientRank',
+            'isRunRound',
+            'top3 (JSON array)',
+            'todayTopScorer (JSON)',
+            'todayTopRunner (JSON)',
+            'timestamp',
+        ],
+        notes: 'Personalised per recipient (shows their rank). Tapping opens the Round detail and shows a summary modal with top 3 leaderboard, daily highlights, and days remaining. Implemented on both iOS (RoundDailySummaryView) and Android (RoundDailySummaryScreen). Idempotent — skips if already sent today. Logs batch results to notification-logs collection.',
+    },
 ];
 
 /* ─────────────────────────── Helpers ─────────────────────────── */
@@ -419,8 +445,8 @@ const NotificationSequencesAdmin: React.FC = () => {
                             <button
                                 onClick={() => setCategoryFilter('all')}
                                 className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${categoryFilter === 'all'
-                                        ? 'bg-[#d7ff00] text-black'
-                                        : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                                    ? 'bg-[#d7ff00] text-black'
+                                    : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
                                     }`}
                             >
                                 All
@@ -432,8 +458,8 @@ const NotificationSequencesAdmin: React.FC = () => {
                                         key={cat}
                                         onClick={() => setCategoryFilter(cat)}
                                         className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${categoryFilter === cat
-                                                ? 'bg-[#d7ff00] text-black'
-                                                : `bg-zinc-800 ${meta.color} hover:bg-zinc-700`
+                                            ? 'bg-[#d7ff00] text-black'
+                                            : `bg-zinc-800 ${meta.color} hover:bg-zinc-700`
                                             }`}
                                     >
                                         {meta.icon}
