@@ -285,6 +285,67 @@ export default function HeartbeatProtocolTab() {
                 </div>
             </div>
 
+            {/* ─── Documentation Downloads ─── */}
+            <section className="bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/20 rounded-2xl p-6">
+                <div className="flex items-start justify-between">
+                    <div>
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                            <Layers className="w-5 h-5 text-indigo-400" />
+                            Agent Infrastructure Setup
+                        </h3>
+                        <p className="text-zinc-400 text-sm mt-1 mb-4 flex-grow max-w-2xl">
+                            Deploy identical Virtual Office capabilities to other machines or environments. Download the step-by-step setup guides below.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <a
+                        href="/docs/agent-infra/01_Architecture_Overview.md"
+                        download
+                        className="flex flex-col gap-2 p-4 rounded-xl bg-black/20 border border-white/5 hover:border-indigo-400/50 hover:bg-indigo-500/10 transition-all group"
+                    >
+                        <span className="text-xs text-indigo-300 font-mono tracking-wider opacity-60">PART 01</span>
+                        <span className="font-semibold text-white text-sm group-hover:text-indigo-200 transition-colors">Architecture Overview</span>
+                    </a>
+                    <a
+                        href="/docs/agent-infra/02_Setting_Up_Firestore_Collections.md"
+                        download
+                        className="flex flex-col gap-2 p-4 rounded-xl bg-black/20 border border-white/5 hover:border-indigo-400/50 hover:bg-indigo-500/10 transition-all group"
+                    >
+                        <span className="text-xs text-indigo-300 font-mono tracking-wider opacity-60">PART 02</span>
+                        <span className="font-semibold text-white text-sm group-hover:text-indigo-200 transition-colors">Firestore Collections</span>
+                    </a>
+                    <a
+                        href="/docs/agent-infra/03_Configuring_The_Agent_Runner.md"
+                        download
+                        className="flex flex-col gap-2 p-4 rounded-xl bg-black/20 border border-white/5 hover:border-indigo-400/50 hover:bg-indigo-500/10 transition-all group"
+                    >
+                        <span className="text-xs text-indigo-300 font-mono tracking-wider opacity-60">PART 03</span>
+                        <span className="font-semibold text-white text-sm group-hover:text-indigo-200 transition-colors">Runner Context</span>
+                    </a>
+                    <a
+                        href="/docs/agent-infra/04_Building_Virtual_Office_UI.md"
+                        download
+                        className="flex flex-col gap-2 p-4 rounded-xl bg-black/20 border border-white/5 hover:border-indigo-400/50 hover:bg-indigo-500/10 transition-all group"
+                    >
+                        <span className="text-xs text-indigo-300 font-mono tracking-wider opacity-60">PART 04</span>
+                        <span className="font-semibold text-white text-sm group-hover:text-indigo-200 transition-colors">Building the Web UI</span>
+                    </a>
+                </div>
+
+                <div className="flex justify-end">
+                    <a
+                        href="/docs/agent-infra-bundle.zip"
+                        download
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-xl text-sm font-semibold transition-colors flex items-center gap-2"
+                    >
+                        <Database className="w-4 h-4" />
+                        Download Full Bundle (.zip)
+                    </a>
+                </div>
+            </section>
+
             <p className="text-zinc-400 text-sm leading-relaxed max-w-3xl">
                 Instead of traditional standups, the system uses <strong className="text-white">hourly telemetry checks</strong>,
                 <strong className="text-white"> automated Capsule assignment</strong>, and <strong className="text-white">real-time beat posting</strong> to

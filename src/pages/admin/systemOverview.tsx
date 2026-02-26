@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { presenceService, AgentPresence } from '../../api/firebase/presence/service';
-import { Activity, Database, Layers, Link2, Server, Users } from 'lucide-react';
+import { Activity, Database, Layers, Link2, Server, Users, Swords } from 'lucide-react';
 import HeartbeatProtocolTab from '../../components/admin/HeartbeatProtocolTab';
+import HunterWorldTab from '../../components/admin/HunterWorldTab';
 
 const AGENT_EMOJIS: Record<string, string> = {
   nora: '⚡',
@@ -346,7 +347,7 @@ const SystemOverviewPage: React.FC = () => {
   const [agentPresence, setAgentPresence] = useState<AgentPresence[]>([]);
   const [layerFilter, setLayerFilter] = useState<'all' | SystemNode['layer']>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'architecture' | 'heartbeat'>('architecture');
+  const [activeTab, setActiveTab] = useState<'architecture' | 'heartbeat' | 'world'>('architecture');
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passcodeInput, setPasscodeInput] = useState('');
   const [passcodeError, setPasscodeError] = useState('');
@@ -364,8 +365,8 @@ const SystemOverviewPage: React.FC = () => {
     if (!router.isReady) return;
     const tabParam = router.query.tab;
     const normalizedTab = Array.isArray(tabParam) ? tabParam[0] : tabParam;
-    if (normalizedTab === 'heartbeat' || normalizedTab === 'architecture') {
-      setActiveTab(normalizedTab);
+    if (normalizedTab === 'heartbeat' || normalizedTab === 'architecture' || normalizedTab === 'world') {
+      setActiveTab(normalizedTab as 'architecture' | 'heartbeat' | 'world');
     }
   }, [router.isReady, router.query.tab]);
 
@@ -411,9 +412,9 @@ const SystemOverviewPage: React.FC = () => {
     setPasscodeError('Incorrect passcode. Please try again.');
   };
 
-  const handleTabChange = (tab: 'architecture' | 'heartbeat') => {
+  const handleTabChange = (tab: 'architecture' | 'heartbeat' | 'world') => {
     setActiveTab(tab);
-    const nextQuery = tab === 'heartbeat' ? { tab: 'heartbeat' } : {};
+    const nextQuery = tab === 'architecture' ? {} : { tab };
     router.replace(
       { pathname: router.pathname, query: nextQuery },
       undefined,
@@ -475,14 +476,15 @@ const SystemOverviewPage: React.FC = () => {
         <div className="flex gap-2">
           {[
             { id: 'architecture' as const, label: 'System Architecture', icon: <Server className="w-4 h-4" /> },
-            { id: 'heartbeat' as const, label: 'Heartbeat Protocol', icon: <Activity className="w-4 h-4" /> },
+            { id: 'heartbeat' as const, label: 'Agent Infrastructure', icon: <Activity className="w-4 h-4" /> },
+            { id: 'world' as const, label: 'Hunter World', icon: <Swords className="w-4 h-4" /> },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id)}
               className={`px-4 py-2 rounded-full text-sm border transition-all flex items-center gap-2 ${activeTab === tab.id
-                  ? 'bg-white text-black border-white font-semibold'
-                  : 'text-zinc-400 border-zinc-700 hover:border-white/40'
+                ? 'bg-white text-black border-white font-semibold'
+                : 'text-zinc-400 border-zinc-700 hover:border-white/40'
                 }`}
             >
               {tab.icon}
@@ -506,8 +508,8 @@ const SystemOverviewPage: React.FC = () => {
                   key={layer}
                   onClick={() => setLayerFilter(layer as typeof layerFilter)}
                   className={`px-3 py-1.5 rounded-full text-xs uppercase tracking-wide border transition-colors ${layerFilter === layer
-                      ? 'bg-white text-black border-white'
-                      : 'text-zinc-400 border-zinc-700 hover:border-white/40'
+                    ? 'bg-white text-black border-white'
+                    : 'text-zinc-400 border-zinc-700 hover:border-white/40'
                     }`}
                 >
                   {layer === 'all' ? 'All Layers' : layer}
@@ -652,6 +654,10 @@ const SystemOverviewPage: React.FC = () => {
 
         {activeTab === 'heartbeat' && (
           <HeartbeatProtocolTab />
+        )}
+
+        {activeTab === 'world' && (
+          <HunterWorldTab />
         )}
       </div>
     </div>

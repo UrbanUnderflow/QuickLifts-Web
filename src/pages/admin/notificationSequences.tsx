@@ -83,6 +83,18 @@ const NOTIFICATIONS: NotificationRow[] = [
         source: 'iOS — NotificationService.scheduleWeeklyCheckinReminder()',
         dataKeys: ['type: checkin_reminder', 'dayOfWeek'],
     },
+    {
+        id: 'streak-3-days',
+        name: '3 Day Streak',
+        trigger: 'When a user reaches a 3-day activity streak',
+        title: 'Streak Alert 🔥',
+        body: "You've started a Streak! Stay consistent by logging an activity once a week to keep it alive.",
+        category: 'engagement',
+        deliveryMethod: 'fcm-remote',
+        source: 'Backend / Firestore trigger',
+        dataKeys: ['type: streak_alert', 'userId'],
+        notes: 'Sent when the user successfully starts a 3-day streak.',
+    },
 
     // ── Social ──────────────────────────────────────────
     {

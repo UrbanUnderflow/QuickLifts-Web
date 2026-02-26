@@ -49,12 +49,12 @@ exports.onMainChallengeStatusChange = require("./challengeNotifications").onMain
 exports.sendDirectMessageNotification = require("./directMessageNotifications").sendDirectMessageNotification;
 
 // Export the new single notification function
-exports.sendSingleNotification = require("./sendSingleNotification").sendSingleNotification; 
+exports.sendSingleNotification = require("./sendSingleNotification").sendSingleNotification;
 
 // Export the new thumbnail / media functions
 exports.generateThumbnailOnWrite = generateThumbnailOnWrite;
-exports.generateMissingThumbnails = generateMissingThumbnails; 
-exports.processThumbnailQueue = processThumbnailQueue; 
+exports.generateMissingThumbnails = generateMissingThumbnails;
+exports.processThumbnailQueue = processThumbnailQueue;
 exports.generateGifForExerciseVideo = generateGifForExerciseVideo;
 exports.generateGifForExerciseVideoHttp = generateGifForExerciseVideoHttp;
 exports.normalizeExerciseVideoToMp4 = normalizeExerciseVideoToMp4;
@@ -63,10 +63,10 @@ exports.normalizeExerciseVideoToMp4 = normalizeExerciseVideoToMp4;
 // exports.selectMoveOfTheDay = selectMoveOfTheDay;
 
 // Export the new manual trigger Move of the Day function
-exports.manualTriggerMoveOfTheDay = require("./moveOfTheDay").manualTriggerMoveOfTheDay; 
+exports.manualTriggerMoveOfTheDay = require("./moveOfTheDay").manualTriggerMoveOfTheDay;
 
 // Export the new check-in callout notification function
-exports.sendCheckinCalloutNotification = require("./challengeNotifications").sendCheckinCalloutNotification; 
+exports.sendCheckinCalloutNotification = require("./challengeNotifications").sendCheckinCalloutNotification;
 
 // Export the referral bonus functions
 exports.handleReferralBonus = require("./challengeNotifications").handleReferralBonus;
@@ -82,14 +82,14 @@ exports.sendRoundTableNotificationAlt = require("./chatNotifications").sendRound
 // Export the new batch workout fetch function, now directly from its v2 definition
 // The function is defined and exported in getWorkoutsBatch.js using the v2 onCall method.
 // We just need to re-export it here for Firebase to discover.
-exports.getWorkoutsBatch = require("./getWorkoutsBatch").getWorkoutsBatch; 
+exports.getWorkoutsBatch = require("./getWorkoutsBatch").getWorkoutsBatch;
 
 // Export the new batch participants fetch function (used by iOS Run Rounds push fan-out)
 exports.getParticipantsBatch = require("./getParticipantsBatch").getParticipantsBatch;
 
 // Export notification logger functions for debugging and monitoring
 exports.logNotification = require("./notificationLogger").logNotification;
-exports.logMulticastNotification = require("./notificationLogger").logMulticastNotification; 
+exports.logMulticastNotification = require("./notificationLogger").logMulticastNotification;
 
 // Export error alert trigger (emails admins through Brevo when new errorLogs docs are created)
 exports.sendErrorAlertEmailOnErrorLogCreate = require("./errorAlerts").sendErrorAlertEmailOnErrorLogCreate;
@@ -108,7 +108,7 @@ exports.processEmailQueue = require("./mentalCurriculumNotifications").processEm
 
 // Export the Daily Reflection notification functions
 exports.scheduledDailyReflection = require("./dailyReflectionNotifications").scheduledDailyReflection;
-exports.sendTestReflectionNotification = require("./dailyReflectionNotifications").sendTestReflectionNotification; 
+exports.sendTestReflectionNotification = require("./dailyReflectionNotifications").sendTestReflectionNotification;
 
 // Export Lead Massaging worker functions
 exports.onLeadMassageJobCreated = onLeadMassageJobCreated;
@@ -128,3 +128,6 @@ try {
 } catch (e) {
   console.warn('[functions/index] computePartnerRetention export skipped (compiled file missing).');
 }
+
+// Export the scheduled leaderboard cache
+exports.scheduledLeaderboardCache = require('./leaderboardCache').scheduledLeaderboardCache;
