@@ -507,7 +507,7 @@ export const getServerSideProps: GetServerSideProps<ClubPageProps> = async ({ pa
         let featuredIds: string[] = [];
         try {
             if (club.creatorId) {
-                const creator = await userService.getUser(club.creatorId);
+                const creator = await userService.getUserById(club.creatorId);
                 featuredIds = creator?.featuredRoundIds || [];
             }
         } catch (e) {

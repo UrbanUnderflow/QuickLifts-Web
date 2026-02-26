@@ -108,13 +108,13 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
                             )
                         );
                         // Attach real counts and sort by most activity
-                        const enriched = valid.map((col, i) => ({
-                            ...col,
-                            _participantCount: participantCounts[i]
-                        }));
+                        const enriched = valid.map((col, i) => {
+                            (col as any)._participantCount = participantCounts[i];
+                            return col;
+                        });
                         enriched.sort((a, b) => {
-                            const aScore = a._participantCount + (a.sweatlistIds?.length ?? 0);
-                            const bScore = b._participantCount + (b.sweatlistIds?.length ?? 0);
+                            const aScore = ((a as any)._participantCount || 0) + (a.sweatlistIds?.length ?? 0);
+                            const bScore = ((b as any)._participantCount || 0) + (b.sweatlistIds?.length ?? 0);
                             return bScore - aScore;
                         });
                         setAllRounds(enriched);

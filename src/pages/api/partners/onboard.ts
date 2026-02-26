@@ -3,7 +3,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../../api/firebase/config';
 import type { PartnerType, PartnerFirestoreData } from '../../../types/Partner';
 import { PartnerModel } from '../../../types/Partner';
-import { getPlaybookForType } from '../../../server/partners/playbookConfig';
+import { getPlaybookForType } from '../../../../server/partners/playbookConfig';
 
 // Basic runtime validation helpers for this handler (steps 2–4)
 const ALLOWED_TYPES: PartnerType[] = ['brand', 'gym', 'runClub'];
