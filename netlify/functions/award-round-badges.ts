@@ -95,27 +95,57 @@ export const handler: Handler = async () => {
                 });
             }
 
-            // Sort by points descending
-            participants.sort((a, b) => b.totalPoints - a.totalPoints);
+            let sortedParticipants = participants;
+            sortedParticipants.sort((a, b) => b.totalPoints - a.totalPoints);
+            const roundType = challenge.challengeType || "lift";
 
-            // Need at least 3 participants for meaningful competition
-            if (participants.length < 3) {
+            if (roundType === "run") {
+                try {
+                    const { handler: getRunLeaderboard } = require("./get-run-round-leaderboard");
+                    const runRes = await getRunLeaderboard({
+                        httpMethod: "GET",
+                        queryStringParameters: {
+                            challengeId: roundId,
+                            leaderboardMetric: challenge.runRoundConfig?.leaderboardMetric || "totalDistance",
+                            allowTreadmill: "true",
+                            startDate: challenge.startDate ? String(challenge.startDate) : undefined,
+                            endDate: challenge.endDate ? String(challenge.endDate) : undefined
+                        }
+                    });
+                    if (runRes.statusCode === 200) {
+                        const data = JSON.parse(runRes.body);
+                        if (data.success && data.leaderboard && data.leaderboard.length > 0) {
+                            sortedParticipants = data.leaderboard.map((lb: any) => ({
+                                userId: lb.userId,
+                                username: lb.username,
+                                totalPoints: Math.round(lb.totalDistance),
+                                completedWorkouts: lb.totalRuns,
+                                metricFormatted: lb.formattedValue,
+                                fcmToken: null
+                            }));
+                        }
+                    }
+                } catch (e) {
+                    console.error("Failed to get run round leaderboard:", e);
+                }
+            }
+
+            if (participants.length < 1) {
                 console.log(
-                    `[award-round-badges] Round ${roundId} has fewer than 3 participants. Skipping.`
+                    `[award-round-badges] Round ${roundId} has 0 participants. Skipping.`
                 );
                 await db.collection("round-badge-log").doc(roundId).set({
                     roundId,
                     processedAt: nowSeconds,
                     participantCount: participants.length,
                     skipped: true,
-                    reason: "fewer than 3 participants",
+                    reason: "0 participants",
                 });
                 continue;
             }
 
-            // ── 4. Award badges to 1st place only ──────────────────────────────
-            const top1 = participants.slice(0, 1);
-            const roundType = challenge.challengeType || "lift";
+            // ── 4. Award badges to top 3 ────────────────────────────────
+            const top3 = sortedParticipants.slice(0, 3);
             const hostIds: string[] = Array.isArray(challenge.ownerId)
                 ? challenge.ownerId
                 : challenge.ownerId
@@ -142,13 +172,24 @@ export const handler: Handler = async () => {
 
             const batch = db.batch();
 
-            for (let i = 0; i < top1.length; i++) {
-                const p = top1[i];
+            // Build a snapshot of the top 3 for embedding in every badge
+            const topParticipants = top3.map((tp: any, idx: number) => ({
+                userId: tp.userId,
+                username: tp.username,
+                rank: idx + 1,
+                totalPoints: tp.totalPoints,
+                completedWorkouts: tp.completedWorkouts,
+                metricFormatted: (tp as any).metricFormatted || null,
+            }));
+
+            for (let i = 0; i < top3.length; i++) {
+                const p = top3[i];
                 if (!p.userId) continue;
 
                 const rank = i + 1;
                 const badgeId = `${roundId}-${rank}`;
 
+                // ── 5. Save the Badge ─────────────────────────────────────
                 const badgeData = {
                     id: badgeId,
                     userId: p.userId,
@@ -159,7 +200,9 @@ export const handler: Handler = async () => {
                     totalPoints: p.totalPoints,
                     participantCount: participants.length,
                     completedWorkouts: p.completedWorkouts,
-                    awardedAt: nowSeconds,
+                    metricFormatted: (p as any).metricFormatted || null,
+                    topParticipants,
+                    awardedAt: endDate,
                     roundStartDate: startDate,
                     roundEndDate: endDate,
                     hostUsername,
@@ -221,7 +264,7 @@ export const handler: Handler = async () => {
                 roundTitle,
                 processedAt: nowSeconds,
                 participantCount: participants.length,
-                top1: top1.map((p, i) => ({
+                top3: top3.map((p, i) => ({
                     userId: p.userId,
                     username: p.username,
                     rank: i + 1,
@@ -233,7 +276,7 @@ export const handler: Handler = async () => {
             roundsProcessed++;
 
             console.log(
-                `[award-round-badges] Awarded ${top1.length} badges for "${roundTitle}" (${roundId}).`
+                `[award-round-badges] Awarded ${Math.min(3, top3.length)} badges for "${roundTitle}" (${roundId}).`
             );
         }
 
