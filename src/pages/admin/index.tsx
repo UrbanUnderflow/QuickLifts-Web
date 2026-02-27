@@ -376,6 +376,12 @@ const adminCardsData = [
     description: "View creator wallet balances, historically generated earnings, and monitor Stripe withdrawal logs.",
     icon: <PieChart className="w-5 h-5" />,
     link: "/admin/adminPayouts"
+  },
+  {
+    title: "Fitness Seeker Leads",
+    description: "Browse migrated fitness seeker user data with analytics, search, filtering, and CSV export.",
+    icon: <Activity className="w-5 h-5" />,
+    link: "/admin/fitnessSeekerLeads"
   }
 ];
 
