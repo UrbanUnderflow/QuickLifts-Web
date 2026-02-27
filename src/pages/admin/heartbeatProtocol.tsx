@@ -6,7 +6,7 @@ import { useRouter } from 'next/router';
 export default function HeartbeatProtocolRedirect() {
     const router = useRouter();
     useEffect(() => {
-        router.replace('/admin/systemOverview?tab=heartbeat');
+        router.replace('/admin/systemOverview#agent-infrastructure-handbook');
     }, [router]);
     return null;
 }

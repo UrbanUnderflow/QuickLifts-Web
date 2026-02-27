@@ -1,356 +1,79 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
-import { useRouter } from 'next/router';
-import { presenceService, AgentPresence } from '../../api/firebase/presence/service';
-import { Activity, Database, Layers, Link2, Server, Users, Swords } from 'lucide-react';
+import { Activity, AlertTriangle, Database, Layers, Link2, Server, Users } from 'lucide-react';
+import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
+import SectionNav from '../../components/admin/system-overview/SectionNav';
+import ProductHandbook from '../../components/admin/system-overview/ProductHandbook';
 import HeartbeatProtocolTab from '../../components/admin/HeartbeatProtocolTab';
 import HunterWorldTab from '../../components/admin/HunterWorldTab';
-
-const AGENT_EMOJIS: Record<string, string> = {
-  nora: '⚡',
-  scout: '🕵️',
-  solara: '❤️‍🔥',
-  sage: '🧬',
-};
+import { systemOverviewManifest } from '../../content/system-overview/manifest';
+import type { ConnectionType, EcosystemConnection, EcosystemNode } from '../../content/system-overview/schema';
 
 const SYSTEM_OVERVIEW_PASSCODE = 'PULSESECURE';
 const SYSTEM_OVERVIEW_UNLOCK_KEY = 'system-overview-unlocked';
 
-interface SystemNode {
-  id: string;
-  name: string;
-  layer: 'surface' | 'backend' | 'integration' | 'agent';
-  status: 'stable' | 'degraded' | 'planned';
-  description: string;
-  owner?: string;
-  repo?: string;
-  link?: string;
-  x: number; // percentage positions inside map canvas
-  y: number;
-}
+const CONNECTION_COLORS: Record<ConnectionType, string> = {
+  data: '#38bdf8',
+  auth: '#a78bfa',
+  events: '#facc15',
+};
 
-interface Connection {
-  from: string;
-  to: string;
-  type: 'data' | 'auth' | 'events';
-}
+const LAYER_STYLES: Record<EcosystemNode['layer'], string> = {
+  surface: 'bg-blue-500/10 border-blue-400/40',
+  backend: 'bg-purple-500/10 border-purple-400/40',
+  integration: 'bg-amber-500/10 border-amber-400/40',
+  agent: 'bg-green-500/10 border-green-400/40',
+};
 
-const systemNodes: SystemNode[] = [
-  {
-    id: 'quicklifts-ios',
-    name: 'QuickLifts iOS',
-    layer: 'surface',
-    status: 'stable',
-    description: 'Flagship consumer + creator surface built in SwiftUI.',
-    owner: 'iOS Squad',
-    repo: 'QuickLifts',
-    x: 15,
-    y: 20,
-  },
-  {
-    id: 'pulse-android',
-    name: 'Pulse Android',
-    layer: 'surface',
-    status: 'stable',
-    description: 'Jetpack Compose app nearing feature parity.',
-    owner: 'Android Squad',
-    repo: 'Pulse-Android',
-    x: 35,
-    y: 25,
-  },
-  {
-    id: 'pulsecheck-ios',
-    name: 'PulseCheck iOS',
-    layer: 'surface',
-    status: 'stable',
-    description: 'Mental training + Nora companion app.',
-    owner: 'PulseCheck Team',
-    repo: 'PulseCheck',
-    x: 55,
-    y: 20,
-  },
-  {
-    id: 'quicklifts-web',
-    name: 'QuickLifts Web',
-    layer: 'surface',
-    status: 'stable',
-    description: 'Marketing site, admin console, creator tooling.',
-    owner: 'Web Platform',
-    repo: 'QuickLifts-Web',
-    x: 75,
-    y: 24,
-  },
-  {
-    id: 'firebase-auth',
-    name: 'Firebase Auth',
-    layer: 'backend',
-    status: 'stable',
-    description: 'Email/Apple/Google sign-in for all clients.',
-    x: 20,
-    y: 55,
-  },
-  {
-    id: 'firestore',
-    name: 'Cloud Firestore',
-    layer: 'backend',
-    status: 'stable',
-    description: 'Primary data store: users, rounds, creator pages.',
-    x: 40,
-    y: 60,
-  },
-  {
-    id: 'storage',
-    name: 'Firebase Storage',
-    layer: 'backend',
-    status: 'stable',
-    description: 'Move videos, thumbnails, legal docs.',
-    x: 60,
-    y: 58,
-  },
-  {
-    id: 'netlify-functions',
-    name: 'Netlify Functions',
-    layer: 'backend',
-    status: 'stable',
-    description: 'Serverless jobs (payments, emails, automations).',
-    x: 80,
-    y: 62,
-  },
-  {
-    id: 'stripe',
-    name: 'Stripe',
-    layer: 'integration',
-    status: 'stable',
-    description: 'Subscriptions, deposits, prize payouts.',
-    x: 25,
-    y: 80,
-  },
-  {
-    id: 'revenuecat',
-    name: 'RevenueCat',
-    layer: 'integration',
-    status: 'stable',
-    description: 'Cross-platform subscription sync.',
-    x: 45,
-    y: 82,
-  },
-  {
-    id: 'brevo',
-    name: 'Brevo',
-    layer: 'integration',
-    status: 'stable',
-    description: 'Waitlist + lifecycle email flows.',
-    x: 65,
-    y: 84,
-  },
-  {
-    id: 'instantly',
-    name: 'Instantly',
-    layer: 'integration',
-    status: 'stable',
-    description: 'Outbound sequencing + automations.',
-    x: 85,
-    y: 80,
-  },
-  {
-    id: 'virtual-office',
-    name: 'Virtual Office',
-    layer: 'agent',
-    status: 'stable',
-    description: 'Presence UI powered by agent-presence collection.',
-    x: 30,
-    y: 35,
-  },
-  {
-    id: 'agent-runner',
-    name: 'Agent Runner',
-    layer: 'agent',
-    status: 'stable',
-    description: 'CLI daemon executing kanban tasks + heartbeats.',
-    x: 50,
-    y: 38,
-  },
-  {
-    id: 'antigravity',
-    name: 'Antigravity',
-    layer: 'agent',
-    status: 'stable',
-    description: 'IDE copilot coordinating engineering tasks.',
-    x: 70,
-    y: 36,
-  },
-];
-
-const connections: Connection[] = [
-  { from: 'quicklifts-ios', to: 'firebase-auth', type: 'auth' },
-  { from: 'quicklifts-ios', to: 'firestore', type: 'data' },
-  { from: 'quicklifts-web', to: 'netlify-functions', type: 'events' },
-  { from: 'quicklifts-web', to: 'firestore', type: 'data' },
-  { from: 'pulse-android', to: 'firestore', type: 'data' },
-  { from: 'pulsecheck-ios', to: 'firestore', type: 'data' },
-  { from: 'firestore', to: 'netlify-functions', type: 'events' },
-  { from: 'netlify-functions', to: 'stripe', type: 'data' },
-  { from: 'netlify-functions', to: 'brevo', type: 'events' },
-  { from: 'netlify-functions', to: 'instantly', type: 'events' },
-  { from: 'firebase-auth', to: 'virtual-office', type: 'data' },
-  { from: 'firestore', to: 'virtual-office', type: 'data' },
-  { from: 'firestore', to: 'agent-runner', type: 'data' },
-  { from: 'virtual-office', to: 'antigravity', type: 'events' },
-];
-
-interface SummaryCardConfig {
-  title: string;
-  value: string;
-  icon: React.ReactNode;
-  tone: string;
-  caption?: string;
-}
-
-
-const surfacesTable = [
-  { name: 'QuickLifts iOS', repo: 'QuickLifts', release: 'TestFlight weekly', status: 'Production' },
-  { name: 'Pulse Android', repo: 'Pulse-Android', release: 'Internal QA', status: 'Staging' },
-  { name: 'PulseCheck iOS', repo: 'PulseCheck', release: 'App Store beta', status: 'Production' },
-  { name: 'QuickLifts Web', repo: 'QuickLifts-Web', release: 'Netlify (main)', status: 'Production' },
-];
-
-const backendTable = [
-  { name: 'Firestore', detail: 'Users, rounds, creator-pages, kanban tasks', owner: 'Platform', status: 'Healthy' },
-  { name: 'Netlify Functions', detail: 'Payments, messaging, automation jobs', owner: 'Platform', status: 'Healthy' },
-  { name: 'Firebase Auth', detail: 'Email, Apple, Google sign-in', owner: 'Platform', status: 'Healthy' },
-  { name: 'Firebase Storage', detail: 'Videos, waivers, legal docs', owner: 'Platform', status: 'Healthy' },
-];
-
-const integrationsTable = [
-  { name: 'Stripe', purpose: 'Subscriptions, deposits, prize payouts', status: 'Connected' },
-  { name: 'RevenueCat', purpose: 'Subscription sync for mobile apps', status: 'Connected' },
-  { name: 'Brevo', purpose: 'Waitlists + lifecycle messaging', status: 'Connected' },
-  { name: 'Instantly', purpose: 'Outbound automation', status: 'Active' },
-];
-
-const flowHighlights = [
-  'QuickLifts clients authenticate via Firebase Auth → Firestore replicates user + round data → Netlify functions trigger payouts.',
-  'Creator landing pages push waitlist entries into Firestore and Brevo simultaneously for redundancy.',
-  'Agent runner polls Firestore kanban tasks, executes via OpenClaw, and updates agent-presence for Virtual Office.',
-  'Stripe + RevenueCat ensure mobile + web subscription parity; Netlify functions reconcile daily.'
-];
-
-const detailCopy: Record<string, string> = systemNodes.reduce((acc, node) => {
-  acc[node.id] = node.description;
-  return acc;
-}, {} as Record<string, string>);
-
-function SummaryCard({ title, value, icon, tone, caption }: SummaryCardConfig) {
-  return (
-    <div className={`bg-gradient-to-br ${tone} border border-white/5 rounded-2xl p-4 flex items-center justify-between`}>
-      <div>
-        <p className="text-xs uppercase tracking-wide text-zinc-400">{title}</p>
-        <p className="text-2xl font-semibold text-white mt-1">{value}</p>
-        {caption && <p className="text-[11px] text-white/70 mt-0.5">{caption}</p>}
-      </div>
-      <div className="p-3 rounded-full bg-black/30 text-white">{icon}</div>
-    </div>
-  );
-}
-
-function SystemMap({ nodes, selectedId, onSelect, highlightConnections }: { nodes: SystemNode[]; selectedId?: string; onSelect: (id: string) => void; highlightConnections?: boolean }) {
+function EcosystemMap({ nodes, connections }: { nodes: EcosystemNode[]; connections: EcosystemConnection[] }) {
   const nodeMap = useMemo(() => Object.fromEntries(nodes.map((node) => [node.id, node])), [nodes]);
-  const lines = connections.filter((conn) => nodeMap[conn.from] && nodeMap[conn.to]);
 
   return (
-    <div className="relative bg-[#06090f] border border-zinc-800 rounded-2xl h-[420px] overflow-hidden">
+    <div className="relative bg-[#050a14] border border-zinc-800 rounded-2xl h-[460px] overflow-hidden">
       <svg className="absolute inset-0 w-full h-full pointer-events-none">
-        {lines.map((conn) => {
-          const from = nodeMap[conn.from];
-          const to = nodeMap[conn.to];
+        {connections.map((connection) => {
+          const from = nodeMap[connection.from];
+          const to = nodeMap[connection.to];
+          if (!from || !to) return null;
           const path = `M ${from.x}% ${from.y}% C ${(from.x + to.x) / 2}% ${from.y}%, ${(from.x + to.x) / 2}% ${to.y}%, ${to.x}% ${to.y}%`;
-          const color = conn.type === 'data' ? '#38bdf8' : conn.type === 'auth' ? '#a78bfa' : '#facc15';
-          const isHighlighted = highlightConnections && (conn.from === selectedId || conn.to === selectedId);
           return (
             <path
-              key={`${conn.from}-${conn.to}`}
+              key={`${connection.from}-${connection.to}`}
               d={path}
-              stroke={color}
-              strokeWidth={isHighlighted ? 2.4 : 1.4}
+              stroke={CONNECTION_COLORS[connection.type]}
+              strokeWidth={1.5}
               fill="none"
-              strokeOpacity={isHighlighted ? 0.9 : 0.3}
-              markerEnd="url(#arrowhead)"
+              strokeOpacity={0.45}
+              markerEnd="url(#map-arrowhead)"
             />
           );
         })}
         <defs>
-          <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" fill="#f8fafc">
+          <marker id="map-arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" fill="#f8fafc">
             <path d="M0,0 L0,6 L6,3 z" />
           </marker>
         </defs>
       </svg>
       {nodes.map((node) => (
-        <button
+        <div
           key={node.id}
-          className={`absolute px-3 py-2 rounded-xl text-left text-sm border shadow-lg transition-all duration-300 ${node.layer === 'surface'
-            ? 'bg-blue-500/10 border-blue-400/40'
-            : node.layer === 'backend'
-              ? 'bg-purple-500/10 border-purple-400/40'
-              : node.layer === 'integration'
-                ? 'bg-amber-500/10 border-amber-400/40'
-                : 'bg-green-500/10 border-green-400/40'
-            } ${selectedId === node.id ? 'ring-2 ring-white/60' : ''}`}
+          className={`absolute px-3 py-2 rounded-xl text-left text-xs border shadow-lg ${LAYER_STYLES[node.layer]}`}
           style={{ left: `${node.x}%`, top: `${node.y}%`, transform: 'translate(-50%, -50%)' }}
-          onClick={() => onSelect(node.id)}
         >
-          <p className="text-xs uppercase tracking-wide text-white/60">{node.layer}</p>
-          <p className="text-white font-semibold">{node.name}</p>
-          <p className="text-xs text-white/60">{node.status === 'stable' ? 'Stable' : node.status === 'degraded' ? 'Degraded' : 'Planned'}</p>
-        </button>
+          <p className="uppercase tracking-wide text-white/60">{node.layer}</p>
+          <p className="text-sm text-white font-semibold">{node.name}</p>
+          <p className="text-white/70">{node.owner}</p>
+        </div>
       ))}
     </div>
   );
 }
 
-const DetailPanel: React.FC<{ node?: SystemNode; agents: AgentPresence[] }> = ({ node, agents }) => {
-  if (!node) {
-    return (
-      <div className="bg-[#0b0f18] border border-zinc-800 rounded-2xl p-6 text-zinc-500 text-sm">
-        Select a node to view details.
-      </div>
-    );
-  }
-
-  const linkedAgent = node.layer === 'agent' ? agents.find((a) => a.displayName === node.name || a.id === node.id) : undefined;
-
-  return (
-    <div className="bg-[#0b0f18] border border-zinc-800 rounded-2xl p-6">
-      <p className="text-xs uppercase tracking-wide text-zinc-500">{node.layer}</p>
-      <h3 className="text-2xl font-semibold text-white mb-2">{node.name}</h3>
-      <p className="text-sm text-zinc-300 mb-4">{detailCopy[node.id]}</p>
-      {node.owner && (
-        <p className="text-xs text-zinc-400 mb-1">Owner: <span className="text-white">{node.owner}</span></p>
-      )}
-      {node.repo && (
-        <p className="text-xs text-zinc-400 mb-3">Repo: <span className="text-white">{node.repo}</span></p>
-      )}
-      {linkedAgent && (
-        <div className="mt-4 text-xs text-zinc-300">
-          <p className="font-semibold text-sm text-white mb-1">Live presence</p>
-          <p>Status: {linkedAgent.status}</p>
-          <p>Task: {linkedAgent.currentTask || '-'}</p>
-          <p>Last heartbeat: {linkedAgent.lastUpdate ? linkedAgent.lastUpdate.toLocaleTimeString() : '-'}</p>
-        </div>
-      )}
-    </div>
-  );
-};
-
 const SystemOverviewPage: React.FC = () => {
-  const router = useRouter();
-  const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>('quicklifts-web');
-  const [agentPresence, setAgentPresence] = useState<AgentPresence[]>([]);
-  const [layerFilter, setLayerFilter] = useState<'all' | SystemNode['layer']>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'architecture' | 'heartbeat' | 'world'>('architecture');
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passcodeInput, setPasscodeInput] = useState('');
   const [passcodeError, setPasscodeError] = useState('');
+  const [activeSectionId, setActiveSectionId] = useState<string>(systemOverviewManifest.sections[0]?.id || 'executive-summary');
 
   useEffect(() => {
     try {
@@ -362,36 +85,62 @@ const SystemOverviewPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!router.isReady) return;
-    const tabParam = router.query.tab;
-    const normalizedTab = Array.isArray(tabParam) ? tabParam[0] : tabParam;
-    if (normalizedTab === 'heartbeat' || normalizedTab === 'architecture' || normalizedTab === 'world') {
-      setActiveTab(normalizedTab as 'architecture' | 'heartbeat' | 'world');
-    }
-  }, [router.isReady, router.query.tab]);
+    const sectionIds = systemOverviewManifest.sections.map((section) => section.id);
+    const observers: IntersectionObserver[] = [];
 
-  useEffect(() => {
-    if (!isUnlocked) return;
-    const unsubscribe = presenceService.listen((agents) => setAgentPresence(agents));
-    return () => unsubscribe();
+    sectionIds.forEach((sectionId) => {
+      const element = document.getElementById(sectionId);
+      if (!element) return;
+
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            setActiveSectionId(sectionId);
+          }
+        },
+        { rootMargin: '-40% 0px -45% 0px', threshold: 0.1 }
+      );
+
+      observer.observe(element);
+      observers.push(observer);
+    });
+
+    return () => observers.forEach((observer) => observer.disconnect());
   }, [isUnlocked]);
 
-  const filteredNodes = useMemo(() => {
-    return systemNodes.filter((node) => {
-      const matchesLayer = layerFilter === 'all' || node.layer === layerFilter;
-      const matchesSearch = node.name.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesLayer && matchesSearch;
-    });
-  }, [layerFilter, searchQuery]);
-
-  const summaryCards: SummaryCardConfig[] = [
-    { title: 'Client Surfaces', value: String(systemNodes.filter((n) => n.layer === 'surface').length), icon: <Layers className="w-5 h-5" />, tone: 'from-blue-500/30 to-blue-300/10', caption: 'iOS + Android + Web' },
-    { title: 'Backend Services', value: String(systemNodes.filter((n) => n.layer === 'backend').length), icon: <Server className="w-5 h-5" />, tone: 'from-purple-500/30 to-purple-300/10', caption: 'Firebase + Netlify' },
-    { title: 'Integrations', value: String(systemNodes.filter((n) => n.layer === 'integration').length), icon: <Link2 className="w-5 h-5" />, tone: 'from-amber-500/30 to-amber-300/10', caption: 'Stripe, Brevo, etc.' },
-    { title: 'Agents Online', value: String(agentPresence.length), icon: <Users className="w-5 h-5" />, tone: 'from-green-500/30 to-green-300/10', caption: agentPresence.length ? agentPresence.map((a) => a.displayName).join(', ') : 'None' },
-  ];
-
-  const selectedNode = useMemo(() => systemNodes.find((node) => node.id === selectedNodeId), [selectedNodeId]);
+  const summaryCards = useMemo(
+    () => [
+      {
+        title: 'Products',
+        value: String(systemOverviewManifest.products.length),
+        icon: <Layers className="w-5 h-5" />,
+        caption: 'QuickLifts iOS, Android, PulseCheck, Web',
+        tone: 'from-blue-500/30 to-blue-300/10',
+      },
+      {
+        title: 'Backend Services',
+        value: String(systemOverviewManifest.backendServices.length),
+        icon: <Server className="w-5 h-5" />,
+        caption: 'Core platform runtime services',
+        tone: 'from-purple-500/30 to-purple-300/10',
+      },
+      {
+        title: 'Integrations',
+        value: String(systemOverviewManifest.integrations.length),
+        icon: <Link2 className="w-5 h-5" />,
+        caption: 'Billing, messaging, AI, health data',
+        tone: 'from-amber-500/30 to-amber-300/10',
+      },
+      {
+        title: 'End-to-End Flows',
+        value: String(systemOverviewManifest.flows.length),
+        icon: <Activity className="w-5 h-5" />,
+        caption: 'Cross-product lifecycle maps',
+        tone: 'from-green-500/30 to-green-300/10',
+      },
+    ],
+    []
+  );
 
   const handlePasscodeSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -401,7 +150,7 @@ const SystemOverviewPage: React.FC = () => {
       try {
         sessionStorage.setItem(SYSTEM_OVERVIEW_UNLOCK_KEY, 'true');
       } catch {
-        // Non-blocking if storage is unavailable.
+        // no-op when session storage is unavailable
       }
       setIsUnlocked(true);
       setPasscodeInput('');
@@ -412,255 +161,329 @@ const SystemOverviewPage: React.FC = () => {
     setPasscodeError('Incorrect passcode. Please try again.');
   };
 
-  const handleTabChange = (tab: 'architecture' | 'heartbeat' | 'world') => {
-    setActiveTab(tab);
-    const nextQuery = tab === 'architecture' ? {} : { tab };
-    router.replace(
-      { pathname: router.pathname, query: nextQuery },
-      undefined,
-      { shallow: true }
-    );
-  };
-
   if (!isUnlocked) {
     return (
-      <div className="min-h-screen bg-[#05070c] text-white flex items-center justify-center px-6">
-        <Head>
-          <title>System Overview Access | Pulse</title>
-        </Head>
-        <div className="w-full max-w-sm bg-[#0b0f18] border border-zinc-800 rounded-2xl p-6">
-          <h1 className="text-xl font-semibold">System Overview</h1>
-          <p className="text-zinc-400 text-sm mt-1 mb-5">Enter passcode to view the architecture map.</p>
-          <form onSubmit={handlePasscodeSubmit} className="space-y-3">
-            <input
-              type="password"
-              value={passcodeInput}
-              onChange={(event) => {
-                setPasscodeInput(event.target.value.toUpperCase());
-                setPasscodeError('');
-              }}
-              placeholder="Passcode"
-              className="w-full px-4 py-3 rounded-xl bg-black/40 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:border-white/50 uppercase"
-              style={{ textTransform: 'uppercase' }}
-              autoComplete="off"
-              autoFocus
-            />
-            <button
-              type="submit"
-              className="w-full py-3 rounded-xl bg-white text-black font-semibold hover:bg-zinc-200 transition-colors"
-            >
-              Enter
-            </button>
-            {passcodeError && (
-              <p className="text-red-400 text-sm">{passcodeError}</p>
-            )}
-          </form>
+      <AdminRouteGuard>
+        <div className="min-h-screen bg-[#05070c] text-white flex items-center justify-center px-6">
+          <Head>
+            <title>System Overview Access | Pulse</title>
+          </Head>
+          <div className="w-full max-w-sm bg-[#0b0f18] border border-zinc-800 rounded-2xl p-6">
+            <h1 className="text-xl font-semibold">System Overview</h1>
+            <p className="text-zinc-400 text-sm mt-1 mb-5">Enter passcode to view the handbook.</p>
+            <form onSubmit={handlePasscodeSubmit} className="space-y-3">
+              <input
+                type="password"
+                value={passcodeInput}
+                onChange={(event) => {
+                  setPasscodeInput(event.target.value.toUpperCase());
+                  setPasscodeError('');
+                }}
+                placeholder="Passcode"
+                className="w-full px-4 py-3 rounded-xl bg-black/40 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:border-white/50 uppercase"
+                style={{ textTransform: 'uppercase' }}
+                autoComplete="off"
+                autoFocus
+              />
+              <button
+                type="submit"
+                className="w-full py-3 rounded-xl bg-white text-black font-semibold hover:bg-zinc-200 transition-colors"
+              >
+                Enter
+              </button>
+              {passcodeError && <p className="text-red-400 text-sm">{passcodeError}</p>}
+            </form>
+          </div>
         </div>
-      </div>
+      </AdminRouteGuard>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#05070c] text-white">
-      <Head>
-        <title>System Architecture Overview - Pulse Admin</title>
-      </Head>
-      <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
-        <header>
-          <p className="text-sm text-zinc-500 uppercase">Operations</p>
-          <h1 className="text-3xl font-semibold">System Overview</h1>
-          <p className="text-zinc-400 text-sm mt-1">Living map of surfaces, services, integrations, and agents powering Pulse.</p>
-        </header>
+    <AdminRouteGuard>
+      <div className="min-h-screen bg-[#05070c] text-white overflow-x-hidden">
+        <Head>
+          <title>{systemOverviewManifest.title} | Pulse Admin</title>
+        </Head>
 
-        {/* ─── Tab Switcher ─── */}
-        <div className="flex gap-2">
-          {[
-            { id: 'architecture' as const, label: 'System Architecture', icon: <Server className="w-4 h-4" /> },
-            { id: 'heartbeat' as const, label: 'Agent Infrastructure', icon: <Activity className="w-4 h-4" /> },
-            { id: 'world' as const, label: 'Hunter World', icon: <Swords className="w-4 h-4" /> },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => handleTabChange(tab.id)}
-              className={`px-4 py-2 rounded-full text-sm border transition-all flex items-center gap-2 ${activeTab === tab.id
-                ? 'bg-white text-black border-white font-semibold'
-                : 'text-zinc-400 border-zinc-700 hover:border-white/40'
-                }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <div className="w-full max-w-[1440px] mx-auto px-4 md:px-6 py-8 md:py-10 space-y-6">
+          <header className="space-y-2">
+            <p className="text-xs uppercase tracking-wide text-zinc-500">Operations Handbook</p>
+            <h1 className="text-3xl font-semibold">{systemOverviewManifest.title}</h1>
+            <p className="text-zinc-300 text-sm max-w-4xl">{systemOverviewManifest.subtitle}</p>
+            <p className="text-xs text-zinc-500">Last updated: {systemOverviewManifest.lastUpdated}</p>
+          </header>
 
-        {activeTab === 'architecture' && (<>
+          <main className="grid grid-cols-1 xl:grid-cols-[260px_minmax(0,1fr)] gap-6 items-start min-w-0">
+            <SectionNav sections={systemOverviewManifest.sections} activeSectionId={activeSectionId} />
 
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {summaryCards.map((card) => (
-              <SummaryCard key={card.title} {...card} />
-            ))}
-          </section>
-
-          <section className="bg-[#070b12] border border-zinc-900 rounded-2xl p-4 flex flex-col gap-3">
-            <div className="flex flex-wrap gap-2">
-              {['all', 'surface', 'backend', 'integration', 'agent'].map((layer) => (
-                <button
-                  key={layer}
-                  onClick={() => setLayerFilter(layer as typeof layerFilter)}
-                  className={`px-3 py-1.5 rounded-full text-xs uppercase tracking-wide border transition-colors ${layerFilter === layer
-                    ? 'bg-white text-black border-white'
-                    : 'text-zinc-400 border-zinc-700 hover:border-white/40'
-                    }`}
-                >
-                  {layer === 'all' ? 'All Layers' : layer}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <input
-                type="text"
-                placeholder="Search node..."
-                className="flex-1 min-w-[200px] bg-black/30 border border-zinc-800 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-white/60"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <div className="text-xs text-zinc-500 flex items-center gap-3">
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#38bdf8] inline-block" /> Data</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#a78bfa] inline-block" /> Auth</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#facc15] inline-block" /> Events</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-            <div className="lg:col-span-2 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">Systems Map</h2>
-                  <p className="text-xs text-zinc-500">Highlight connections in {layerFilter === 'all' ? 'all layers' : `${layerFilter}`} view.</p>
+            <div className="space-y-8 min-w-0">
+              <section id="executive-summary" className="space-y-4 scroll-mt-20">
+                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4">
+                  {summaryCards.map((card) => (
+                    <div key={card.title} className={`bg-gradient-to-br ${card.tone} border border-white/5 rounded-2xl p-4 flex items-center justify-between`}>
+                      <div>
+                        <p className="text-xs uppercase tracking-wide text-zinc-400">{card.title}</p>
+                        <p className="text-2xl font-semibold text-white mt-1">{card.value}</p>
+                        <p className="text-[11px] text-white/70 mt-0.5">{card.caption}</p>
+                      </div>
+                      <div className="p-3 rounded-full bg-black/30 text-white">{card.icon}</div>
+                    </div>
+                  ))}
                 </div>
-                <span className="text-xs text-zinc-500 flex items-center gap-1"><Activity className="w-3 h-3" /> Live</span>
-              </div>
-              <SystemMap
-                nodes={filteredNodes.length ? filteredNodes : systemNodes}
-                selectedId={selectedNodeId}
-                onSelect={setSelectedNodeId}
-                highlightConnections
-              />
-            </div>
-            <DetailPanel node={selectedNode} agents={agentPresence} />
-          </section>
 
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Layers className="w-4 h-4 text-blue-300" />
-                <h3 className="text-lg font-semibold">Client Surfaces</h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-zinc-500 text-xs uppercase">
-                    <tr>
-                      <th className="text-left py-2">Surface</th>
-                      <th className="text-left">Repo</th>
-                      <th className="text-left">Release</th>
-                      <th className="text-left">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-zinc-300">
-                    {surfacesTable.map((row) => (
-                      <tr key={row.name} className="border-t border-zinc-800">
-                        <td className="py-2">{row.name}</td>
-                        <td>{row.repo}</td>
-                        <td>{row.release}</td>
-                        <td>{row.status}</td>
+                <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
+                  <div>
+                    <h2 className="text-xl font-semibold">Mission</h2>
+                    <p className="text-sm text-zinc-300 mt-1">{systemOverviewManifest.executiveSummary.mission}</p>
+                    <p className="text-xs text-zinc-500 mt-2">Audience: {systemOverviewManifest.executiveSummary.audience}</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div className="bg-black/20 border border-zinc-800 rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-wide text-zinc-500 mb-2">What Changed Recently</p>
+                      <ul className="list-disc pl-5 space-y-1 text-sm text-zinc-300">
+                        {systemOverviewManifest.executiveSummary.whatChangedRecently.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="bg-black/20 border border-zinc-800 rounded-xl p-4">
+                      <p className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Highlights</p>
+                      <ul className="list-disc pl-5 space-y-1 text-sm text-zinc-300">
+                        {systemOverviewManifest.executiveSummary.highlights.map((item) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section id="ecosystem-map" className="space-y-4 scroll-mt-20">
+                <div>
+                  <h2 className="text-xl font-semibold">Ecosystem Map</h2>
+                  <p className="text-sm text-zinc-400 mt-1">Layered map of system surfaces, backend, integrations, and agent infrastructure.</p>
+                </div>
+                <EcosystemMap nodes={systemOverviewManifest.ecosystemMap.nodes} connections={systemOverviewManifest.ecosystemMap.connections} />
+                <div className="text-xs text-zinc-500 flex flex-wrap items-center gap-4">
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#38bdf8] inline-block" />Data</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#a78bfa] inline-block" />Auth</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#facc15] inline-block" />Events</span>
+                </div>
+              </section>
+
+              <section id="product-handbooks" className="space-y-4 scroll-mt-20">
+                <div>
+                  <h2 className="text-xl font-semibold">Product Handbooks</h2>
+                  <p className="text-sm text-zinc-400 mt-1">Feature-by-feature inventory with dependencies, data paths, ownership, and release channels.</p>
+                </div>
+                <div className="space-y-6">
+                  {systemOverviewManifest.products.map((product) => (
+                    <ProductHandbook key={product.id} product={product} />
+                  ))}
+                </div>
+              </section>
+
+              <section id="backend-data" className="space-y-4 scroll-mt-20">
+                <div>
+                  <h2 className="text-xl font-semibold">Backend and Data</h2>
+                  <p className="text-sm text-zinc-400 mt-1">Platform service inventory and canonical data collection usage.</p>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Server className="w-4 h-4 text-purple-300" />
+                      <h3 className="text-lg font-semibold">Backend Services</h3>
+                    </div>
+                    <div className="space-y-3 text-sm">
+                      {systemOverviewManifest.backendServices.map((service) => (
+                        <div key={service.id} className="border border-zinc-800 rounded-xl p-3 bg-black/20">
+                          <p className="text-white font-semibold">{service.name}</p>
+                          <p className="text-zinc-400 text-xs mt-1">{service.purpose}</p>
+                          <p className="text-zinc-500 text-xs mt-2">Owner: {service.owner} | Environments: {service.environments.join(', ')}</p>
+                          <p className="text-zinc-500 text-xs">Dependencies: {service.keyDependencies.join(', ')}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Database className="w-4 h-4 text-amber-300" />
+                      <h3 className="text-lg font-semibold">Data Collections</h3>
+                    </div>
+                    <div className="space-y-3 text-sm max-h-[560px] overflow-auto pr-1">
+                      {systemOverviewManifest.dataCollections.map((collection) => (
+                        <div key={collection.id} className="border border-zinc-800 rounded-xl p-3 bg-black/20">
+                          <p className="text-white font-semibold font-mono text-xs">{collection.name}</p>
+                          <p className="text-zinc-400 text-xs mt-1">{collection.purpose}</p>
+                          <p className="text-zinc-500 text-xs mt-2">Written by: {collection.writtenBy}</p>
+                          <p className="text-zinc-500 text-xs">Read by: {collection.readBy}</p>
+                          <p className="text-zinc-500 text-xs">Critical fields: {collection.criticalFields.join(', ')}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section id="integrations" className="space-y-4 scroll-mt-20">
+                <div>
+                  <h2 className="text-xl font-semibold">Integrations</h2>
+                  <p className="text-sm text-zinc-400 mt-1">External systems, operational ownership, and credential origin visibility.</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {systemOverviewManifest.integrations.map((integration) => (
+                    <article key={integration.id} className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-lg font-semibold text-white">{integration.name}</h3>
+                        <span className="text-[11px] uppercase tracking-wide text-zinc-400">{integration.status}</span>
+                      </div>
+                      <p className="text-sm text-zinc-300 mt-2">{integration.purpose}</p>
+                      <p className="text-xs text-zinc-500 mt-2">Owner: {integration.owner}</p>
+                      <p className="text-xs text-zinc-500">Credential source: {integration.credentialSource}</p>
+                      <p className="text-xs text-zinc-500">Products: {integration.products.join(', ')}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section id="end-to-end-flows" className="space-y-4 scroll-mt-20">
+                <div>
+                  <h2 className="text-xl font-semibold">End-to-End Flows</h2>
+                  <p className="text-sm text-zinc-400 mt-1">Trigger-to-outcome maps with data touchpoints and failure modes.</p>
+                </div>
+                <div className="space-y-4">
+                  {systemOverviewManifest.flows.map((flow) => (
+                    <article key={flow.id} className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-white">{flow.name}</h3>
+                        <p className="text-sm text-zinc-400 mt-1">Trigger: {flow.trigger}</p>
+                      </div>
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 text-xs">
+                        <div className="border border-zinc-800 rounded-xl p-3 bg-black/20">
+                          <p className="uppercase tracking-wide text-zinc-500 mb-1">System Path</p>
+                          <p className="text-zinc-300">{flow.backendPath.join(' -> ')}</p>
+                          <p className="text-zinc-500 mt-2 break-words">Products: {flow.involvedProducts.join(', ')}</p>
+                          <p className="text-zinc-500 break-words">Collections: {flow.collectionsTouched.join(', ')}</p>
+                          <p className="text-zinc-500 break-words">Integrations: {flow.integrations.join(', ') || 'N/A'}</p>
+                        </div>
+                        <div className="border border-zinc-800 rounded-xl p-3 bg-black/20">
+                          <p className="uppercase tracking-wide text-zinc-500 mb-1">Failure Points</p>
+                          <ul className="list-disc pl-4 text-zinc-300 space-y-1">
+                            {flow.failurePoints.map((failure) => (
+                              <li key={failure}>{failure}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                      <ol className="space-y-2">
+                        {flow.steps.map((step) => (
+                          <li key={step.id} className="border border-zinc-800 rounded-xl p-3 bg-black/20">
+                            <p className="text-xs text-zinc-500 uppercase tracking-wide">{step.actor}</p>
+                            <p className="text-sm text-white font-semibold mt-1">{step.action}</p>
+                            <p className="text-xs text-zinc-400 mt-1">Output: {step.output}</p>
+                          </li>
+                        ))}
+                      </ol>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section id="ownership-release-matrix" className="space-y-4 scroll-mt-20">
+                <div>
+                  <h2 className="text-xl font-semibold">Ownership and Release Matrix</h2>
+                  <p className="text-sm text-zinc-400 mt-1">Primary operational ownership, escalation backup, and cadence references.</p>
+                </div>
+                <div className="overflow-x-auto border border-zinc-800 rounded-2xl">
+                  <table className="w-full text-sm min-w-[860px]">
+                    <thead className="bg-black/20 text-zinc-400 uppercase text-xs tracking-wide">
+                      <tr>
+                        <th className="text-left px-3 py-2">Domain</th>
+                        <th className="text-left px-3 py-2">Primary Owner</th>
+                        <th className="text-left px-3 py-2">Backup Owner</th>
+                        <th className="text-left px-3 py-2">Release Cadence</th>
+                        <th className="text-left px-3 py-2">Runbook Path</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {systemOverviewManifest.ownershipMatrix.map((row) => (
+                        <tr key={row.domain} className="border-t border-zinc-800">
+                          <td className="px-3 py-3 text-zinc-200">{row.domain}</td>
+                          <td className="px-3 py-3 text-zinc-300">{row.primaryOwner}</td>
+                          <td className="px-3 py-3 text-zinc-300">{row.backupOwner}</td>
+                          <td className="px-3 py-3 text-zinc-300">{row.releaseCadence}</td>
+                          <td className="px-3 py-3 text-zinc-500 text-xs font-mono break-all">{row.runbookPath}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section id="agent-infrastructure-handbook" className="space-y-4 scroll-mt-20">
+                <div>
+                  <h2 className="text-xl font-semibold">Agent Infrastructure Handbook</h2>
+                  <p className="text-sm text-zinc-400 mt-1">Embedded chapter preserving current heartbeat protocol, data schema, and operator docs.</p>
+                </div>
+                <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-4 overflow-hidden">
+                  <HeartbeatProtocolTab />
+                </div>
+              </section>
+
+              <section id="hunter-world-handbook" className="space-y-4 scroll-mt-20">
+                <div>
+                  <h2 className="text-xl font-semibold">Hunter World Handbook</h2>
+                  <p className="text-sm text-zinc-400 mt-1">Embedded chapter for leveling mechanics, specialty classes, and creator narrative system.</p>
+                </div>
+                <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-4 overflow-hidden">
+                  <HunterWorldTab />
+                </div>
+              </section>
+
+              <section id="risks-gaps" className="space-y-4 scroll-mt-20">
+                <div>
+                  <h2 className="text-xl font-semibold">Risks and Gaps</h2>
+                  <p className="text-sm text-zinc-400 mt-1">Known system risks and active mitigation posture.</p>
+                </div>
+                <div className="space-y-3">
+                  {systemOverviewManifest.risksAndGaps.map((risk) => (
+                    <article key={risk.id} className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-4">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-300" />
+                        <h3 className="text-lg font-semibold text-white">{risk.title}</h3>
+                        <span className="text-[11px] uppercase tracking-wide text-zinc-400 ml-auto">{risk.severity}</span>
+                      </div>
+                      <p className="text-sm text-zinc-300 mt-2">Impact: {risk.impact}</p>
+                      <p className="text-sm text-zinc-400 mt-1">Mitigation: {risk.mitigation}</p>
+                      <p className="text-xs text-zinc-500 mt-2">Owner: {risk.owner}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section id="glossary" className="space-y-4 scroll-mt-20 pb-12">
+                <div>
+                  <h2 className="text-xl font-semibold">Glossary</h2>
+                  <p className="text-sm text-zinc-400 mt-1">Shared language across product, engineering, and operations.</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {systemOverviewManifest.glossary.map((entry) => (
+                    <article key={entry.term} className="bg-[#090f1c] border border-zinc-800 rounded-xl p-4">
+                      <p className="text-sm font-semibold text-white">{entry.term}</p>
+                      <p className="text-xs text-zinc-400 mt-1">{entry.definition}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
             </div>
-
-            <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Server className="w-4 h-4 text-purple-300" />
-                <h3 className="text-lg font-semibold">Backend Services</h3>
-              </div>
-              <div className="space-y-3 text-sm text-zinc-300">
-                {backendTable.map((service) => (
-                  <div key={service.name} className="border border-zinc-800 rounded-xl p-3 bg-white/5">
-                    <p className="text-white font-semibold">{service.name}</p>
-                    <p className="text-xs text-zinc-400">{service.detail}</p>
-                    <p className="text-xs text-zinc-500 mt-1">Owner: {service.owner} • Status: {service.status}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Users className="w-4 h-4 text-green-300" />
-                <h3 className="text-lg font-semibold">Agent Infrastructure</h3>
-              </div>
-              <div className="space-y-3 text-sm">
-                {agentPresence.length === 0 && <p className="text-zinc-500">No agents online.</p>}
-                {agentPresence.map((agent) => (
-                  <div key={agent.id} className="border border-zinc-800 rounded-xl p-3 bg-white/5">
-                    <p className="text-white font-semibold flex items-center gap-2">
-                      {AGENT_EMOJIS[agent.id] || agent.emoji} {agent.displayName}
-                    </p>
-                    <p className="text-xs text-zinc-400">Status: {agent.status}</p>
-                    <p className="text-xs text-zinc-400">Task: {agent.currentTask || '—'}</p>
-                    <p className="text-xs text-zinc-500">Last heartbeat: {agent.lastUpdate ? agent.lastUpdate.toLocaleTimeString() : '—'}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center gap-2">
-                <Database className="w-4 h-4 text-amber-300" />
-                <h3 className="text-lg font-semibold">Integrations</h3>
-              </div>
-              <div className="space-y-3 text-sm text-zinc-300">
-                {integrationsTable.map((integration) => (
-                  <div key={integration.name} className="border border-zinc-800 rounded-xl p-3 bg-white/5">
-                    <p className="text-white font-semibold">{integration.name}</p>
-                    <p className="text-xs text-zinc-400">{integration.purpose}</p>
-                    <p className="text-xs text-zinc-500 mt-1">Status: {integration.status}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="text-xs text-zinc-500 border border-zinc-800 rounded-xl p-3 bg-black/20">
-                <p className="uppercase tracking-wide mb-1">Onboarding</p>
-                <p className="text-zinc-300">
-                  New teammate? Read the <a href="https://github.com/UrbanUnderflow/QuickLifts-Web/blob/main/docs/system-architecture-overview-plan.md" className="text-blue-300 underline" target="_blank" rel="noreferrer">Systems Handbook</a> and watch the Loom in /admin/systems-handbook (coming soon).
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section className="bg-[#090d14] border border-zinc-800 rounded-2xl p-5">
-            <h3 className="text-lg font-semibold mb-3">Data Flow Highlights</h3>
-            <ul className="space-y-2 text-sm text-zinc-300 list-disc pl-5">
-              {flowHighlights.map((item, idx) => (
-                <li key={idx}>{item}</li>
-              ))}
-            </ul>
-          </section>
-        </>)}
-
-        {activeTab === 'heartbeat' && (
-          <HeartbeatProtocolTab />
-        )}
-
-        {activeTab === 'world' && (
-          <HunterWorldTab />
-        )}
+          </main>
+        </div>
       </div>
-    </div>
+    </AdminRouteGuard>
   );
 };
 

@@ -77,8 +77,6 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/one-pager',
     // Wunna Run proposal (passcode-protected on the page itself)
     '/WunnaRun',
-    // Public system architecture overview (passcode-protected on the page itself)
-    '/admin/systemOverview',
     // Onboarding password setup (public so new users can set their password)
     '/onboarding/set-password'
   ].map(route => route?.toLowerCase());

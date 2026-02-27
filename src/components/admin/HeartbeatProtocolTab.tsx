@@ -484,14 +484,14 @@ export default function HeartbeatProtocolTab() {
                             { id: 'filing-cabinet', name: 'Filing Cabinet', purpose: 'Archive of all telemetry check meeting minutes. Each entry shows the executive summary, participating agents, duration, and key highlights. Opens in a modal with full conversation details.', path: 'src/components/virtualOffice/FilingCabinet.tsx', reads: 'meeting-minutes', color: 'blue' },
                             { id: 'north-star-editor', name: 'North Star Editor', purpose: 'Admin UI for setting the company\'s strategic direction. The North Star has a title, description, and a list of key objectives. All autonomous task generation (Capsules) is aligned to whatever is set here. Changing the North Star immediately shifts what agents work on.', path: 'Virtual Office ⭐ button', reads: 'company-config/north-star', color: 'blue' },
                         ].map((item) => (
-                            <div key={item.id} id={`glossary-${item.id}`} className="border border-zinc-800 rounded-xl p-4 bg-blue-500/[0.03] scroll-mt-24">
-                                <div className="flex items-center gap-2 mb-2">
+                            <div key={item.id} id={`glossary-${item.id}`} className="border border-zinc-800 rounded-xl p-4 bg-blue-500/[0.03] scroll-mt-24 min-w-0">
+                                <div className="flex items-center gap-2 mb-2 min-w-0">
                                     <div className="w-2 h-2 rounded-full bg-blue-400" />
                                     <span className="text-sm font-semibold text-white">{item.name}</span>
-                                    <span className="text-[10px] font-mono text-zinc-600 ml-auto">{item.path}</span>
+                                    <span className="text-[10px] font-mono text-zinc-600 ml-auto max-w-[60%] text-right truncate">{item.path}</span>
                                 </div>
                                 <p className="text-sm text-zinc-300 leading-relaxed">{item.purpose}</p>
-                                <p className="text-[10px] text-zinc-500 mt-2">Reads from: <span className="text-zinc-400 font-mono">{item.reads}</span></p>
+                                <p className="text-[10px] text-zinc-500 mt-2">Reads from: <span className="text-zinc-400 font-mono break-all">{item.reads}</span></p>
                             </div>
                         ))}
                     </div>
@@ -509,14 +509,14 @@ export default function HeartbeatProtocolTab() {
                             { id: 'trigger-api', name: 'Trigger API', purpose: 'The HTTP bridge. A Next.js API endpoint that spawns dailyStandup.js as a child process when the "Run Telemetry Check" button is clicked in the Virtual Office. Handles authentication and passes the check type (morning/evening).', path: 'pages/api/agent/trigger-standup.ts', reads: 'N/A (triggers script)', color: 'green' },
                             { id: 'openclaw', name: 'OpenClaw Engine', purpose: 'The AI execution runtime. A custom engine that wraps LLM API calls with tool use, file system access, and git integration. Agent Runners delegate step execution to OpenClaw, which produces outputs (code changes, research docs, analyses) that the runner then validates and commits.', path: 'External dependency', reads: 'N/A (called by Agent Runner)', color: 'purple' },
                         ].map((item) => (
-                            <div key={item.id} id={`glossary-${item.id}`} className={`border border-zinc-800 rounded-xl p-4 scroll-mt-24 ${item.color === 'purple' ? 'bg-purple-500/[0.03]' : 'bg-green-500/[0.03]'}`}>
-                                <div className="flex items-center gap-2 mb-2">
+                            <div key={item.id} id={`glossary-${item.id}`} className={`border border-zinc-800 rounded-xl p-4 scroll-mt-24 min-w-0 ${item.color === 'purple' ? 'bg-purple-500/[0.03]' : 'bg-green-500/[0.03]'}`}>
+                                <div className="flex items-center gap-2 mb-2 min-w-0">
                                     <div className={`w-2 h-2 rounded-full ${item.color === 'purple' ? 'bg-purple-400' : 'bg-green-400'}`} />
                                     <span className="text-sm font-semibold text-white">{item.name}</span>
-                                    <span className="text-[10px] font-mono text-zinc-600 ml-auto">{item.path}</span>
+                                    <span className="text-[10px] font-mono text-zinc-600 ml-auto max-w-[60%] text-right truncate">{item.path}</span>
                                 </div>
                                 <p className="text-sm text-zinc-300 leading-relaxed">{item.purpose}</p>
-                                <p className="text-[10px] text-zinc-500 mt-2">Connects to: <span className="text-zinc-400 font-mono">{item.reads}</span></p>
+                                <p className="text-[10px] text-zinc-500 mt-2">Connects to: <span className="text-zinc-400 font-mono break-all">{item.reads}</span></p>
                             </div>
                         ))}
                     </div>
