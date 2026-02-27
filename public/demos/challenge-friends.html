@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Pulse — Challenge Your Friends</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="challenge-friends.css">
+</head>
+
+<body>
+    <div class="cinema" id="cinema">
+        <div class="ambient">
+            <div class="orb orb-1"></div>
+            <div class="orb orb-2"></div>
+            <div class="orb orb-3"></div>
+            <div class="noise"></div>
+        </div>
+        <div class="vignette"></div>
+        <div class="scanlines"></div>
+        <div class="progress-bar" id="progress"></div>
+
+        <div id="play-overlay" onclick="startShow()">
+            <div class="play-ring">
+                <div class="play-ring-inner"></div>
+            </div>
+            <div class="play-btn"><svg viewBox="0 0 24 24">
+                    <polygon points="8,4 20,12 8,20" />
+                </svg></div>
+            <div class="play-label">PLAY DEMO</div>
+        </div>
+
+        <!-- S0: Logo -->
+        <div class="scene" id="scene-0">
+            <div class="s-center">
+                <div class="logo-mark" id="logo-mark">⚡</div>
+                <div class="logo-text" id="logo-text">PULSE</div>
+                <div class="logo-sub" id="logo-sub">COMMUNITY FITNESS</div>
+            </div>
+        </div>
+
+        <!-- S1: Hook -->
+        <div class="scene" id="scene-1">
+            <div class="s-center">
+                <div class="hook-line" id="hook-1">What if your workouts</div>
+                <div class="hook-line hook-accent" id="hook-2">actually paid you?</div>
+            </div>
+        </div>
+
+        <!-- S2: Feed -->
+        <div class="scene" id="scene-2">
+            <div class="phone-stage">
+                <div class="phone-text">
+                    <div class="step-tag" id="s2-tag">STEP 01</div>
+                    <div class="step-h" id="s2-h">Discover<br>Challenges</div>
+                    <div class="step-p" id="s2-p">Real prizes. Real people. Tap in.</div>
+                </div>
+                <div class="phone-wrap">
+                    <div class="phone-glow glow-green"></div>
+                    <div class="phone" id="phone-2">
+                        <div class="phone-inner">
+                            <div class="phone-screen">
+                                <div class="mini-bar"><span>9:41</span><span>●●●</span></div>
+                                <div class="feed-h">🔥 Active Rounds</div>
+                                <div class="feed-sub">3 challenges near you</div>
+                                <div class="fcard" id="fc1">
+                                    <div class="fc-glow"
+                                        style="background:linear-gradient(90deg,transparent,#E0FE10,transparent)"></div>
+                                    <div class="fc-row">
+                                        <div class="fc-ico"
+                                            style="background:linear-gradient(135deg,#E0FE10,#3B82F6);color:#000">30
+                                        </div>
+                                        <div class="fc-info"><b>30-Day Strength</b><span>@trefit · 14d left</span></div>
+                                        <span class="badge bg-green">LIVE</span>
+                                    </div>
+                                    <div class="fc-stats"><span>🏆 <b>$150</b></span><span>👥 <b>24</b></span><span>💪
+                                            <b>482</b></span></div>
+                                    <div class="fc-faces">
+                                        <div class="face"
+                                            style="background:linear-gradient(135deg,#E0FE10,#3B82F6);color:#000">T
+                                        </div>
+                                        <div class="face" style="background:linear-gradient(135deg,#8B5CF6,#EF4444)">M
+                                        </div>
+                                        <div class="face" style="background:linear-gradient(135deg,#3B82F6,#06B6D4)">K
+                                        </div>
+                                        <div class="face"
+                                            style="background:rgba(255,255,255,.08);color:rgba(255,255,255,.4);font-size:7px">
+                                            +20</div>
+                                    </div>
+                                </div>
+                                <div class="fcard" id="fc2">
+                                    <div class="fc-glow"
+                                        style="background:linear-gradient(90deg,transparent,#3B82F6,transparent)"></div>
+                                    <div class="fc-row">
+                                        <div class="fc-ico" style="background:linear-gradient(135deg,#3B82F6,#8B5CF6)">
+                                            🏃</div>
+                                        <div class="fc-info"><b>5K Every Day</b><span>@runclub_atl · 7d</span></div>
+                                        <span class="badge bg-red">🔥 HOT</span>
+                                    </div>
+                                    <div class="fc-stats"><span>🏆 <b>$75</b></span><span>👥 <b>18</b></span><span>🏃
+                                            <b>156</b></span></div>
+                                </div>
+                                <div class="fcard" id="fc3">
+                                    <div class="fc-glow"
+                                        style="background:linear-gradient(90deg,transparent,#8B5CF6,transparent)"></div>
+                                    <div class="fc-row">
+                                        <div class="fc-ico" style="background:linear-gradient(135deg,#8B5CF6,#EF4444)">
+                                            🧘</div>
+                                        <div class="fc-info"><b>Morning Mobility</b><span>@flexfitpro · New</span></div>
+                                        <span class="badge bg-purple">NEW</span>
+                                    </div>
+                                    <div class="fc-stats"><span>🏆 <b>Free</b></span><span>👥 <b>42</b></span><span>🧘
+                                            <b>84</b></span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- S3: Join -->
+        <div class="scene" id="scene-3">
+            <div class="phone-stage reverse">
+                <div class="phone-text">
+                    <div class="step-tag" id="s3-tag">STEP 02</div>
+                    <div class="step-h" id="s3-h">Join &<br>Compete</div>
+                    <div class="step-p" id="s3-p">One tap. Friends notified. Game on.</div>
+                </div>
+                <div class="phone-wrap">
+                    <div class="phone-glow glow-purple"></div>
+                    <div class="phone" id="phone-3">
+                        <div class="phone-inner">
+                            <div class="phone-screen">
+                                <div class="mini-bar"><span>9:41</span><span>●●●</span></div>
+                                <div style="text-align:center;font-size:36px;margin:4px 0">🏋️</div>
+                                <div class="det-name">30-Day Strength</div>
+                                <div class="det-host">by @trefit</div>
+                                <div class="prize-box">
+                                    <div class="prize-amt" id="prize-amt">$150</div>
+                                    <div class="prize-lbl">PRIZE POOL</div>
+                                </div>
+                                <div class="det-grid">
+                                    <div class="dg">
+                                        <div class="dg-n">30</div>
+                                        <div class="dg-l">Days</div>
+                                    </div>
+                                    <div class="dg">
+                                        <div class="dg-n">24</div>
+                                        <div class="dg-l">People</div>
+                                    </div>
+                                    <div class="dg">
+                                        <div class="dg-n">482</div>
+                                        <div class="dg-l">Workouts</div>
+                                    </div>
+                                    <div class="dg">
+                                        <div class="dg-n">87%</div>
+                                        <div class="dg-l">Rate</div>
+                                    </div>
+                                </div>
+                                <div class="join-btn" id="join-btn">Join Challenge 🎯</div>
+                                <div class="tap-circle" id="tap-circle"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- S4: Leaderboard -->
+        <div class="scene" id="scene-4">
+            <div class="phone-stage">
+                <div class="phone-text">
+                    <div class="step-tag" id="s4-tag">STEP 03</div>
+                    <div class="step-h" id="s4-h">Climb the<br>Rankings</div>
+                    <div class="step-p" id="s4-p">Every rep counts. Every day matters.</div>
+                </div>
+                <div class="phone-wrap">
+                    <div class="phone-glow glow-gold"></div>
+                    <div class="phone" id="phone-4">
+                        <div class="phone-inner">
+                            <div class="phone-screen">
+                                <div class="mini-bar"><span>9:41</span><span>●●●</span></div>
+                                <div class="lb-h">🏆 Leaderboard</div>
+                                <div class="lb-sub">30-Day Strength · Day 16</div>
+                                <div class="podium">
+                                    <div class="pod" id="pod2">
+                                        <div class="pod-av silver">M</div>
+                                        <div class="pod-nm">@maya</div>
+                                        <div class="pod-pt">2,840</div>
+                                        <div class="pod-bar b2"></div>
+                                    </div>
+                                    <div class="pod" id="pod1">
+                                        <div class="pod-av gold"><span class="crown">👑</span>T</div>
+                                        <div class="pod-nm">@trefit</div>
+                                        <div class="pod-pt">3,120</div>
+                                        <div class="pod-bar b1"></div>
+                                    </div>
+                                    <div class="pod" id="pod3">
+                                        <div class="pod-av bronze">K</div>
+                                        <div class="pod-nm">@kfit</div>
+                                        <div class="pod-pt">2,650</div>
+                                        <div class="pod-bar b3"></div>
+                                    </div>
+                                </div>
+                                <div class="rr" id="rr1"><span class="rr-n">4</span>
+                                    <div class="rr-av" style="background:linear-gradient(135deg,#3B82F6,#06B6D4)">J
+                                    </div>
+                                    <div class="rr-info"><b>@jordan_lifts</b><span>14 workouts</span></div><span
+                                        class="rr-pts">2,410</span>
+                                </div>
+                                <div class="rr you" id="rr2"><span class="rr-n" style="color:#E0FE10">5</span>
+                                    <div class="rr-av" style="background:linear-gradient(135deg,#E0FE10,#3B82F6)">Y
+                                    </div>
+                                    <div class="rr-info"><b style="color:#E0FE10">You</b><span>12 workouts</span></div>
+                                    <span class="rr-pts">2,280</span>
+                                </div>
+                                <div class="rr" id="rr3"><span class="rr-n">6</span>
+                                    <div class="rr-av" style="background:linear-gradient(135deg,#EF4444,#8B5CF6)">S
+                                    </div>
+                                    <div class="rr-info"><b>@sarah_gains</b><span>11 workouts</span></div><span
+                                        class="rr-pts">2,150</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- S5: Win -->
+        <div class="scene" id="scene-5">
+            <div class="phone-stage reverse">
+                <div class="phone-text">
+                    <div class="step-tag" id="s5-tag">STEP 04</div>
+                    <div class="step-h" id="s5-h">Win and<br>Get Paid</div>
+                    <div class="step-p" id="s5-p">Real money. Instant payout. Via Stripe.</div>
+                </div>
+                <div class="phone-wrap">
+                    <div class="phone-glow glow-gold"></div>
+                    <div class="phone" id="phone-5">
+                        <div class="phone-inner">
+                            <div class="phone-screen" style="padding:0">
+                                <div class="win-wrap">
+                                    <div class="confetti-box" id="confetti-box"></div>
+                                    <div class="win-trophy" id="win-trophy">🏆</div>
+                                    <div class="win-title" id="win-title">YOU WON!</div>
+                                    <div class="win-sub" id="win-sub">1st Place — 30-Day Strength</div>
+                                    <div class="win-card" id="win-card">
+                                        <div class="win-amt">$75.00</div>
+                                        <div class="win-lbl">YOUR PRIZE</div>
+                                    </div>
+                                    <div class="win-btn" id="win-btn">Claim Your Prize 💰</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- S6: Close -->
+        <div class="scene" id="scene-6">
+            <div class="s-center">
+                <div class="close-h" id="close-h"></div>
+                <div class="close-sub" id="close-sub">Download Pulse. Start a challenge today.</div>
+                <div class="close-cta" id="close-cta">Get Pulse Free →</div>
+            </div>
+        </div>
+
+        <button class="replay-btn" id="replay-btn" onclick="replay()">↻ Replay</button>
+    </div>
+    <script src="challenge-friends.js"></script>
+</body>
+
+</html>
