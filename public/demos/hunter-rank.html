@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Pulse — Become The Hunter</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="hunter-rank.css">
+</head>
+
+<body>
+    <div class="cinema" id="cinema">
+        <div class="ambient">
+            <div class="orb orb-1"></div>
+            <div class="orb orb-2"></div>
+            <div class="orb orb-3"></div>
+            <div class="particles" id="particles"></div>
+            <div class="noise"></div>
+        </div>
+        <div class="vignette"></div>
+        <div class="scanlines"></div>
+        <div class="progress-bar" id="progress"></div>
+
+        <div id="play-overlay" onclick="startShow()">
+            <div class="play-ring">
+                <div class="play-ring-inner"></div>
+            </div>
+            <div class="play-btn"><svg viewBox="0 0 24 24">
+                    <polygon points="8,4 20,12 8,20" />
+                </svg></div>
+            <div class="play-label">PLAY DEMO</div>
+        </div>
+
+        <!-- S0: Dark Intro -->
+        <div class="scene" id="scene-0">
+            <div class="s-center">
+                <div class="intro-flicker" id="intro-flicker">SYSTEM ALERT</div>
+                <div class="intro-line" id="intro-line">A new hunter has awakened.</div>
+            </div>
+        </div>
+
+        <!-- S1: Title Reveal -->
+        <div class="scene" id="scene-1">
+            <div class="s-center">
+                <div class="title-top" id="t-top">EVERY REP</div>
+                <div class="title-mid" id="t-mid">LEVELS YOU UP</div>
+                <div class="title-glow"></div>
+            </div>
+        </div>
+
+        <!-- S2: Rank Ladder -->
+        <div class="scene" id="scene-2">
+            <div class="s-center">
+                <div class="ladder-label" id="ladder-label">THE RANKS</div>
+                <div class="ladder" id="ladder">
+                    <div class="rank-row" data-color="#888888" id="rr-e"><span class="rr-letter">E</span><span
+                            class="rr-name">Newcomer</span><span class="rr-pts">0 pts</span><span
+                            class="rr-icon">🛡️</span></div>
+                    <div class="rank-row" data-color="#CD7F32" id="rr-d"><span class="rr-letter"
+                            style="color:#CD7F32">D</span><span class="rr-name">Contender</span><span
+                            class="rr-pts">1,000 pts</span><span class="rr-icon">🛡️</span></div>
+                    <div class="rank-row" data-color="#C0C0C0" id="rr-c"><span class="rr-letter"
+                            style="color:#C0C0C0">C</span><span class="rr-name">Warrior</span><span class="rr-pts">5,000
+                            pts</span><span class="rr-icon">⚔️</span></div>
+                    <div class="rank-row" data-color="#2B95F6" id="rr-b"><span class="rr-letter"
+                            style="color:#2B95F6">B</span><span class="rr-name">Elite</span><span class="rr-pts">15,000
+                            pts</span><span class="rr-icon">⚡</span></div>
+                    <div class="rank-row" data-color="#9747FF" id="rr-a"><span class="rr-letter"
+                            style="color:#9747FF">A</span><span class="rr-name">Champion</span><span
+                            class="rr-pts">40,000 pts</span><span class="rr-icon">🔥</span></div>
+                    <div class="rank-row rank-s" data-color="#D7FF00" id="rr-s"><span class="rr-letter"
+                            style="color:#D7FF00">S</span><span class="rr-name"
+                            style="color:#D7FF00">Monarch</span><span class="rr-pts"
+                            style="color:rgba(215,255,0,.6)">100,000 pts</span><span class="rr-icon">⭐</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- S3: XP Earn -->
+        <div class="scene" id="scene-3">
+            <div class="phone-stage">
+                <div class="phone-text">
+                    <div class="step-tag" id="s3-tag">EARN XP</div>
+                    <div class="step-h" id="s3-h">Every Workout<br>Counts</div>
+                    <div class="step-p" id="s3-p">Lift, run, stretch — every session earns Pulse Points toward your next
+                        rank.</div>
+                </div>
+                <div class="phone-wrap">
+                    <div class="phone-glow glow-green"></div>
+                    <div class="phone" id="phone-3">
+                        <div class="phone-inner">
+                            <div class="phone-screen">
+                                <div class="mini-bar"><span>9:41</span><span>●●●</span></div>
+                                <div class="xp-header">Workout Complete!</div>
+                                <div class="xp-sub">30-Day Strength · Day 16</div>
+                                <div class="xp-card" id="xp-card">
+                                    <div class="xp-icon">🏋️</div>
+                                    <div class="xp-earned" id="xp-earned">+240 pts</div>
+                                    <div class="xp-anim-bar">
+                                        <div class="xp-anim-fill" id="xp-fill"></div>
+                                    </div>
+                                    <div class="xp-rank-row"><span style="color:#2B95F6">B-Rank</span><span
+                                            style="color:rgba(255,255,255,.3)">→ 15,240 pts</span></div>
+                                </div>
+                                <div class="xp-breakdown" id="xp-break">
+                                    <div class="xb-row" id="xb1"><span>🏋️ Exercises</span><b>+120</b></div>
+                                    <div class="xb-row" id="xb2"><span>🔥 Streak Bonus</span><b
+                                            style="color:#FF8C00">+60</b></div>
+                                    <div class="xb-row" id="xb3"><span>⏱ Duration</span><b>+40</b></div>
+                                    <div class="xb-row" id="xb4"><span>🏆 Challenge</span><b
+                                            style="color:#D7FF00">+20</b></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- S4: Rank Up -->
+        <div class="scene" id="scene-4">
+            <div class="s-center">
+                <div class="rankup-flash" id="rankup-flash"></div>
+                <div class="rankup-text" id="rankup-text">RANK UP</div>
+                <div class="rankup-divider" id="rankup-div"></div>
+                <div class="rankup-badge" id="rankup-badge">
+                    <div class="rb-glow"></div>
+                    <div class="rb-circle"><span>A</span></div>
+                </div>
+                <div class="rankup-name" id="rankup-name">A-RANK</div>
+                <div class="rankup-title" id="rankup-title">CHAMPION</div>
+                <div class="rankup-trans" id="rankup-trans">
+                    <span class="rt-from"><span style="color:#2B95F6">B</span></span>
+                    <span class="rt-arrow">→</span>
+                    <span class="rt-to"><span style="color:#9747FF">A</span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- S5: Specialty Class -->
+        <div class="scene" id="scene-5">
+            <div class="phone-stage reverse">
+                <div class="phone-text">
+                    <div class="step-tag" id="s5-tag">YOUR CLASS</div>
+                    <div class="step-h" id="s5-h">Choose Your<br>Identity</div>
+                    <div class="step-p" id="s5-p">Your dominant training style defines your class. Are you an Iron Fist
+                        or a Shadow Runner?</div>
+                </div>
+                <div class="phone-wrap">
+                    <div class="phone-glow glow-red"></div>
+                    <div class="phone" id="phone-5">
+                        <div class="phone-inner">
+                            <div class="phone-screen">
+                                <div class="mini-bar"><span>9:41</span><span>●●●</span></div>
+                                <div class="class-header">Your Class</div>
+                                <div class="class-main" id="class-main">
+                                    <div class="cm-icon" style="background:rgba(255,68,68,.12);color:#FF4444">🥊</div>
+                                    <div class="cm-name" style="color:#FF4444">Iron Fist</div>
+                                    <div class="cm-sub">Strength Specialist</div>
+                                </div>
+                                <div class="class-list">
+                                    <div class="cl-row" id="cl1">
+                                        <div class="cl-icon" style="background:rgba(255,68,68,.1)"><span
+                                                style="color:#FF4444">🥊</span></div>
+                                        <div class="cl-info"><b>Iron Fist</b><span>Strength</span></div>
+                                        <div class="cl-bar">
+                                            <div class="cl-fill" style="width:72%;background:#FF4444"></div>
+                                        </div><span class="cl-pct">72%</span>
+                                    </div>
+                                    <div class="cl-row" id="cl2">
+                                        <div class="cl-icon" style="background:rgba(0,191,255,.1)"><span
+                                                style="color:#00BFFF">🏃</span></div>
+                                        <div class="cl-info"><b>Shadow Runner</b><span>Endurance</span></div>
+                                        <div class="cl-bar">
+                                            <div class="cl-fill" style="width:18%;background:#00BFFF"></div>
+                                        </div><span class="cl-pct">18%</span>
+                                    </div>
+                                    <div class="cl-row" id="cl3">
+                                        <div class="cl-icon" style="background:rgba(255,140,0,.1)"><span
+                                                style="color:#FF8C00">🔥</span></div>
+                                        <div class="cl-info"><b>Inferno</b><span>Burn</span></div>
+                                        <div class="cl-bar">
+                                            <div class="cl-fill" style="width:7%;background:#FF8C00"></div>
+                                        </div><span class="cl-pct">7%</span>
+                                    </div>
+                                    <div class="cl-row" id="cl4">
+                                        <div class="cl-icon" style="background:rgba(170,119,255,.1)"><span
+                                                style="color:#AA77FF">🧘</span></div>
+                                        <div class="cl-info"><b>Phantom</b><span>Flexibility</span></div>
+                                        <div class="cl-bar">
+                                            <div class="cl-fill" style="width:3%;background:#AA77FF"></div>
+                                        </div><span class="cl-pct">3%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- S6: The Hunt -->
+        <div class="scene" id="scene-6">
+            <div class="s-center">
+                <div class="hunt-tag" id="hunt-tag">THE HUNT NEVER STOPS</div>
+                <div class="hunt-h" id="hunt-h"></div>
+                <div class="hunt-sub" id="hunt-sub">Every workout brings you closer to S-Rank.</div>
+                <div class="hunt-cta" id="hunt-cta">Start Your Ascent →</div>
+            </div>
+        </div>
+
+        <button class="replay-btn" id="replay-btn" onclick="replay()">↻ Replay</button>
+    </div>
+    <script src="hunter-rank.js"></script>
+</body>
+
+</html>

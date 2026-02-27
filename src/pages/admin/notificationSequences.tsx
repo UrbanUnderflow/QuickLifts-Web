@@ -20,6 +20,8 @@ import {
     Flame,
     Timer,
     Watch,
+    Home,
+    Footprints,
 } from 'lucide-react';
 
 /* ─────────────────────────── Types ───────────────────────────── */
@@ -35,6 +37,8 @@ type NotificationCategory =
     | 'fat-burn-round'
     | 'race'
     | 'chat'
+    | 'club'
+    | 'step-challenge'
     | 'mental-training'
     | 'watch'
     | 'system';
@@ -209,6 +213,86 @@ const NOTIFICATIONS: NotificationRow[] = [
         dataKeys: ['type: raceStarted', 'challengeId', 'roundId', 'roundName'],
         notes: 'Broadcast to all Round participants.',
     },
+    {
+        id: 'race-ended',
+        name: 'Race Ended',
+        trigger: 'When all runners finish OR the host manually ends the race',
+        title: '🏁 Race Over!',
+        body: '{{roundName}} has ended. {{winnerUsername}} takes the win! Tap to see full results.',
+        category: 'race',
+        deliveryMethod: 'fcm-remote',
+        source: 'iOS — NotificationService.sendRaceEndedNotification()',
+        dataKeys: ['type: raceEnded', 'challengeId', 'roundId', 'roundName', 'endedBy', 'winnerUsername'],
+        notes: 'Deep links to race results page. endedBy: "auto" (last runner) or "host" (manual).',
+    },
+
+    // ── Club ───────────────────────────────────────────
+    {
+        id: 'new-challenge-in-club',
+        name: 'New Challenge in Club',
+        trigger: 'When a club host links a new challenge/round to their club',
+        title: '🆕 New Challenge in {{clubName}}',
+        body: '"{{challengeTitle}}" has been added. Tap to check it out!',
+        category: 'club',
+        deliveryMethod: 'fcm-remote',
+        source: 'iOS — NotificationService.sendNewChallengeInClubNotification()',
+        dataKeys: ['type: new_challenge_in_club', 'challengeId', 'clubId', 'clubName', 'challengeTitle'],
+        notes: 'Excludes the host who created the challenge.',
+    },
+
+    // ── Challenge Lifecycle ───────────────────────────
+    {
+        id: 'challenge-ending-soon',
+        name: 'Challenge Ending Soon',
+        trigger: 'When a challenge/round has 24 hours or less remaining',
+        title: '⏰ Challenge Ending Soon!',
+        body: '"{{challengeTitle}}" ends in less than 24 hours. Make your final push!',
+        category: 'round-activity',
+        deliveryMethod: 'fcm-remote',
+        source: 'iOS — NotificationService.sendChallengeEndingSoonNotification() / Scheduled function',
+        dataKeys: ['type: challenge_ending_soon', 'challengeId', 'challengeTitle', 'hoursRemaining'],
+        notes: 'Best triggered from a scheduled cloud function that checks active challenges daily.',
+    },
+    {
+        id: 'challenge-ended',
+        name: 'Challenge Ended',
+        trigger: 'When a challenge/round reaches its end date',
+        title: '🎉 Challenge Complete!',
+        body: '"{{challengeTitle}}" has ended. {{winnerUsername}} wins! Tap to see the final standings.',
+        category: 'round-activity',
+        deliveryMethod: 'fcm-remote',
+        source: 'iOS — NotificationService.sendChallengeEndedNotification() / Scheduled function',
+        dataKeys: ['type: challenge_ended', 'challengeId', 'challengeTitle', 'winnerUsername'],
+        notes: 'Deep links to challenge detail with final leaderboard.',
+    },
+
+    // ── Leaderboard ───────────────────────────────────
+    {
+        id: 'leaderboard-passed',
+        name: 'Leaderboard — Passed',
+        trigger: 'When another participant passes you on the leaderboard',
+        title: "📉 You've been passed!",
+        body: '{{passerUsername}} just passed you in "{{challengeTitle}}". You\'re now {{newRank}}{{ordinal}}. Time to fight back!',
+        category: 'round-activity',
+        deliveryMethod: 'fcm-remote',
+        source: 'iOS — NotificationService.sendLeaderboardPassedNotification()',
+        dataKeys: ['type: leaderboard_passed', 'challengeId', 'challengeTitle', 'passerUsername', 'newRank', 'metricLabel', 'userId'],
+        notes: 'Sent when leaderboard recalculates and detects a rank change.',
+    },
+
+    // ── Step Milestones ───────────────────────────────
+    {
+        id: 'step-milestone',
+        name: 'Step Milestone',
+        trigger: 'When a user hits 5K, 10K, 15K, or 20K steps in a day',
+        title: '👟 {{milestone}} Steps Today!',
+        body: "Amazing! You've hit {{milestone}} steps. Keep the momentum going!",
+        category: 'step-challenge',
+        deliveryMethod: 'fcm-remote',
+        source: 'iOS — NotificationService.sendStepMilestoneNotification()',
+        dataKeys: ['type: step_milestone', 'steps', 'milestone', 'userId', 'challengeId?', 'challengeTitle?'],
+        notes: 'Context-aware: if user is in a Step Challenge, title and body reference the challenge name. Otherwise standalone milestone.',
+    },
 
     // ── Chat ───────────────────────────────────────────
     {
@@ -221,7 +305,7 @@ const NOTIFICATIONS: NotificationRow[] = [
         deliveryMethod: 'fcm-remote',
         source: 'iOS — NotificationService.sendRoundChatMessageNotification()',
         dataKeys: ['type: round_chat_message', 'challengeId', 'roundId', 'roundName', 'messageId', 'fromUsername', 'fromUserId'],
-        notes: 'Excludes the sender from recipients.',
+        notes: 'Excludes the sender from recipients. Works for ALL challenge/round types.',
     },
 
     // ── Apple Watch ────────────────────────────────────
@@ -321,6 +405,8 @@ const CATEGORY_META: Record<
     'fat-burn-round': { label: 'Fat Burn Round', icon: <Flame className="w-3.5 h-3.5" />, color: 'text-orange-400' },
     race: { label: 'Race', icon: <Trophy className="w-3.5 h-3.5" />, color: 'text-yellow-400' },
     chat: { label: 'Chat', icon: <MessageCircle className="w-3.5 h-3.5" />, color: 'text-indigo-400' },
+    club: { label: 'Club', icon: <Home className="w-3.5 h-3.5" />, color: 'text-lime-400' },
+    'step-challenge': { label: 'Step Challenge', icon: <Footprints className="w-3.5 h-3.5" />, color: 'text-teal-400' },
     'mental-training': { label: 'Mental Training', icon: <Brain className="w-3.5 h-3.5" />, color: 'text-violet-400' },
     watch: { label: 'Apple Watch', icon: <Watch className="w-3.5 h-3.5" />, color: 'text-rose-400' },
     system: { label: 'System', icon: <Server className="w-3.5 h-3.5" />, color: 'text-zinc-400' },
