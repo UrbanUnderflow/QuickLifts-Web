@@ -53,13 +53,13 @@ async function run() {
     });
     console.log(`Cached Global 100 logic updated. Count: ${global100Users.length}`);
 
-    // 2. Top Architects 
-    const architectsSnap = await db.collection("users")
+    // 2. Top Creators 
+    const creatorsSnap = await db.collection("users")
         .orderBy("categoryPoints.creator", "desc")
         .limit(100)
         .get();
 
-    const architectUsers = architectsSnap.docs.map(doc => {
+    const creatorUsers = creatorsSnap.docs.map(doc => {
         const data = doc.data();
         return {
             id: doc.id,
@@ -67,15 +67,16 @@ async function run() {
             displayName: data.displayName || "",
             email: data.email || "",
             profileImage: data.profileImage || { profileImageURL: "" },
-            lifetimePulsePoints: data.lifetimePulsePoints || 0
+            lifetimePulsePoints: data.lifetimePulsePoints || 0,
+            creatorScore: (data.categoryPoints && data.categoryPoints.creator) ? data.categoryPoints.creator : 0
         };
     });
 
-    await db.collection("leaderboards").doc("topArchitects").set({
-        users: architectUsers,
+    await db.collection("leaderboards").doc("topCreators").set({
+        users: creatorUsers,
         updatedAt: new Date()
     });
-    console.log(`Cached Top Architects logic updated. Count: ${architectUsers.length}`);
+    console.log(`Cached Top Creators logic updated. Count: ${creatorUsers.length}`);
 
     console.log("Leaderboards successfully cached.");
     process.exit(0);

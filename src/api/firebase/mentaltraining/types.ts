@@ -69,12 +69,20 @@ export interface ConfidenceExerciseConfig {
   duration?: number;
 }
 
-export type ExerciseConfig = 
+export type ExerciseConfig =
   | { type: 'breathing'; config: BreathingExerciseConfig }
   | { type: 'visualization'; config: VisualizationExerciseConfig }
   | { type: 'focus'; config: FocusExerciseConfig }
   | { type: 'mindset'; config: MindsetExerciseConfig }
   | { type: 'confidence'; config: ConfidenceExerciseConfig };
+
+export interface ExerciseOverview {
+  when: string;      // When to use this exercise
+  focus: string;     // What it focuses on
+  timeScale: string; // How long it takes
+  skill: string;     // What mental skill it builds
+  analogy: string;   // Relatable analogy for understanding
+}
 
 /**
  * MentalExercise - A reusable exercise template
@@ -90,6 +98,9 @@ export interface MentalExercise {
   exerciseConfig: ExerciseConfig;
   benefits: string[];
   bestFor: string[]; // e.g., ['pre-competition', 'anxiety', 'focus issues']
+  origin: string; // Who uses this technique — e.g., 'Navy SEALs', 'Stanford Neuroscience Lab'
+  neuroscience: string; // The science behind why this works
+  overview: ExerciseOverview; // Quick-glance table for athlete understanding
   iconName: string;
   isActive: boolean;
   sortOrder: number;
@@ -125,26 +136,26 @@ export interface ExerciseAssignment {
   athleteUserId: string;
   exerciseId: string;
   exercise?: MentalExercise; // Denormalized for quick access
-  
+
   // Assignment details
   source: AssignmentSource;
   assignedBy?: string; // Coach ID or 'nora' or 'self'
   assignedByName?: string;
   reason?: string; // Why this was assigned
-  
+
   // Scheduling
   dueDate?: number; // Unix timestamp
   scheduledTime?: string; // e.g., 'morning', 'pre-workout', 'evening'
   isRecurring: boolean;
   recurringPattern?: 'daily' | 'weekdays' | 'custom';
   recurringDays?: number[]; // 0-6, Sunday-Saturday
-  
+
   // Status
   status: AssignmentStatus;
   completedAt?: number;
   skippedAt?: number;
   skippedReason?: string;
-  
+
   // Metadata
   createdAt: number;
   updatedAt: number;
@@ -165,21 +176,21 @@ export interface ExerciseCompletion {
   exerciseName: string;
   exerciseCategory: ExerciseCategory;
   assignmentId?: string; // If completed from an assignment
-  
+
   // Completion details
   completedAt: number;
   durationSeconds: number;
-  
+
   // Self-assessment
   preExerciseMood?: number; // 1-10
   postExerciseMood?: number; // 1-10
   difficultyRating?: number; // 1-5
   helpfulnessRating?: number; // 1-5
   notes?: string;
-  
+
   // Context
   context?: 'morning' | 'pre-workout' | 'post-workout' | 'evening' | 'competition';
-  
+
   createdAt: number;
 }
 
@@ -193,28 +204,28 @@ export interface ExerciseCompletion {
  */
 export interface MentalTrainingStreak {
   userId: string;
-  
+
   // Streaks
   currentStreak: number;
   longestStreak: number;
   lastActivityDate: string; // YYYY-MM-DD format for easy comparison
-  
+
   // Totals
   totalExercisesCompleted: number;
   totalMinutesTrained: number;
-  
+
   // Category breakdown
   categoryCompletions: {
     [key in ExerciseCategory]?: number;
   };
-  
+
   // Achievements
   achievements: Achievement[];
-  
+
   // Weekly stats (rolling 7 days)
   weeklyCompletions: number;
   weeklyMinutes: number;
-  
+
   updatedAt: number;
 }
 
@@ -247,21 +258,21 @@ export interface MentalCheckIn {
   id: string;
   userId: string;
   type: CheckInType;
-  
+
   // Responses
   readinessScore: number; // 1-5
   moodWord?: string; // Single word describing mindset
   energyLevel?: number; // 1-5
   stressLevel?: number; // 1-5
   sleepQuality?: number; // 1-5 (for morning check-ins)
-  
+
   // Optional notes
   notes?: string;
-  
+
   // Follow-up
   suggestedExerciseId?: string;
   exerciseCompleted?: boolean;
-  
+
   createdAt: number;
   date: string; // YYYY-MM-DD for grouping
 }
@@ -288,10 +299,10 @@ export interface MentalTrainingProgram {
   durationWeeks: number;
   difficulty: ExerciseDifficulty;
   targetGoals: string[]; // e.g., ['pressure performance', 'confidence']
-  
+
   // Weekly structure
   weeks: ProgramWeek[];
-  
+
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
@@ -317,17 +328,17 @@ export interface UserProgramEnrollment {
   userId: string;
   programId: string;
   programName: string;
-  
+
   status: ProgramStatus;
   startDate: string; // YYYY-MM-DD
   currentWeek: number;
   currentDay: number;
-  
+
   // Progress
   completedExercises: number;
   totalExercises: number;
   completionPercentage: number;
-  
+
   createdAt: number;
   updatedAt: number;
 }
@@ -397,22 +408,22 @@ export interface BaselineAssessment {
   // Section 1: Current Mental Training
   mentalTrainingExperience: 'never' | 'self_tried' | 'worked_with_professional' | 'consistent_6_months';
   currentPracticeFrequency: 'never' | 'occasionally_when_stressed' | 'weekly' | 'daily';
-  
+
   // Section 2: Self-Assessment by Domain (1-5)
   arousalControlRating: number;
   focusRating: number;
   confidenceRating: number;
   visualizationRating: number;
   resilienceRating: number;
-  
+
   // Section 3: Pressure Response
   pressureResponse: 'freeze_perform_worse' | 'anxious_push_through' | 'same_as_training' | 'rise_to_occasion';
   setbackRecovery: 'dwell_for_days' | 'struggle_same_day' | 'move_on_after_time' | 'let_go_immediately';
-  
+
   // Section 4: Goals
   biggestChallenge: BiggestChallenge;
   biggestChallengeOther?: string;
-  
+
   // Metadata
   completedAt: number;
 }
@@ -427,21 +438,21 @@ export interface MentalRecommendation {
   coachId: string;
   exerciseId: string;
   exercise?: MentalExercise; // Denormalized
-  
+
   // Recommendation details
   reason: string;
   confidence: RecommendationConfidence;
   pathway: MentalPathway;
   pathwayStep: number; // Position in pathway sequence
-  
+
   // Trigger info
   triggerType: 'assessment_complete' | 'assignment_complete' | 'manual_request' | 'intervention' | 'competition_prep';
   previousAssignmentId?: string; // If triggered by completion
-  
+
   // Status
   status: RecommendationStatus;
   coachOverrideReason?: string; // If coach modified/dismissed
-  
+
   createdAt: number;
   updatedAt: number;
 }
@@ -456,14 +467,14 @@ export interface DailyCompletion {
   completed: boolean;
   completionCount: number; // How many times completed that day
   targetCount: number; // Required completions per day
-  
+
   // Completion records
   completions: {
     completedAt: number;
     durationSeconds: number;
     postMood?: number; // 1-5
   }[];
-  
+
   createdAt: number;
   updatedAt: number;
 }
@@ -478,39 +489,39 @@ export interface CurriculumAssignment {
   coachId: string;
   exerciseId: string;
   exercise?: MentalExercise; // Denormalized
-  
+
   // Source tracking
   recommendationId?: string; // If created from a recommendation
   source: AssignmentSource;
-  
+
   // Curriculum tracking
   durationDays: number; // Default 14
   frequency: number; // Times per day (default 1-2)
   startDate: number; // Unix timestamp
   endDate: number; // Unix timestamp (startDate + durationDays)
-  
+
   // Progress (updated from daily-completions subcollection)
   completedDays: number;
   targetDays: number; // = durationDays
   completionRate: number; // 0-100
   currentDayNumber: number; // 1-14
-  
+
   // Status
   status: CurriculumAssignmentStatus;
   masteryAchieved: boolean;
   extendedCount: number; // How many times extended
-  
+
   // Coach note
   coachNote?: string;
-  
+
   // Reminder settings
   reminderEnabled: boolean;
   reminderTimes: string[]; // ['08:00', '20:00']
-  
+
   // Pathway info
   pathway: MentalPathway;
   pathwayStep: number;
-  
+
   createdAt: number;
   updatedAt: number;
 }
@@ -522,35 +533,35 @@ export interface CurriculumAssignment {
 export interface AthleteMentalProgress {
   athleteId: string;
   coachId?: string; // Primary coach
-  
+
   // MPR Score (1-10)
   mprScore: number;
   mprLastCalculated: number; // Unix timestamp
-  
+
   // Pathway progress
   currentPathway: MentalPathway;
   pathwayStep: number;
   completedPathways: MentalPathway[];
   foundationComplete: boolean;
-  
+
   // Foundation tracking
   foundationBoxBreathingComplete: boolean;
   foundationCheckInsComplete: boolean;
-  
+
   // Assessment
   baselineAssessment?: BaselineAssessment;
   assessmentNeeded: boolean;
-  
+
   // Stats
   totalExercisesMastered: number;
   totalAssignmentsCompleted: number;
   currentStreak: number;
   longestStreak: number;
-  
+
   // Active assignment tracking
   activeAssignmentId?: string;
   activeAssignmentExerciseName?: string;
-  
+
   createdAt: number;
   updatedAt: number;
 }
@@ -587,6 +598,9 @@ export function exerciseToFirestore(exercise: MentalExercise): Record<string, an
     exerciseConfig: exercise.exerciseConfig,
     benefits: exercise.benefits,
     bestFor: exercise.bestFor,
+    origin: exercise.origin,
+    neuroscience: exercise.neuroscience,
+    overview: exercise.overview,
     iconName: exercise.iconName,
     isActive: exercise.isActive,
     sortOrder: exercise.sortOrder,
@@ -606,6 +620,9 @@ export function exerciseFromFirestore(id: string, data: Record<string, any>): Me
     exerciseConfig: data.exerciseConfig,
     benefits: data.benefits || [],
     bestFor: data.bestFor || [],
+    origin: data.origin || '',
+    neuroscience: data.neuroscience || '',
+    overview: data.overview || { when: '', focus: '', timeScale: '', skill: '', analogy: '' },
     iconName: data.iconName || 'brain',
     isActive: data.isActive ?? true,
     sortOrder: data.sortOrder || 0,

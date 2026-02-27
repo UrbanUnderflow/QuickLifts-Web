@@ -131,3 +131,9 @@ try {
 
 // Export the scheduled leaderboard cache
 exports.scheduledLeaderboardCache = require('./leaderboardCache').scheduledLeaderboardCache;
+
+// Export Engagement Tracking triggers
+exports.processEngagementEvent = require('./engagementTracking').processEngagementEvent;
+
+// Export Monthly Creator Payout calculation (runs 1st of every month automatically)
+exports.calculateMonthlyPayouts = require('./calculateMonthlyPayouts').calculateMonthlyPayouts;

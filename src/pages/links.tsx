@@ -65,6 +65,8 @@ const sections: Section[] = [
       { name: 'Challenge Status', url: '/admin/challengestatus' },
       { name: 'User Challenge Management', url: '/admin/inactivityCheck' },
       { name: 'Users', url: '/admin/users' },
+      { name: 'Payout Dashboard', url: '/admin/adminPayouts' },
+      { name: 'Add App Version', url: '/admin/addVersion' },
       { name: 'Send Notifications', url: '/admin/SendNotification' }
     ]
   },
@@ -139,7 +141,7 @@ const LinksDirectory: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <a href={item.url} target="_blank" rel="noreferrer" className="bg-[#E0FE10] text-black px-3 py-1.5 rounded-lg text-sm hover:bg-lime-400">Open</a>
                       <button
-                        onClick={async ()=>{ try { await navigator.clipboard.writeText(item.url); } catch(_){} }}
+                        onClick={async () => { try { await navigator.clipboard.writeText(item.url); } catch (_) { } }}
                         className="bg-zinc-800 border border-zinc-700 px-3 py-1.5 rounded-lg text-sm hover:bg-zinc-700"
                       >Copy</button>
                     </div>

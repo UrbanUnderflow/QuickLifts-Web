@@ -93,6 +93,7 @@ const Directory: NextPage = () => {
         { label: 'Press Releases', path: '/admin/pressReleases', description: 'Manage press' },
         { label: 'Send Notifications', path: '/admin/SendNotification', description: 'Push notifications' },
         { label: 'User Management', path: '/admin/users', description: 'Manage users' },
+        { label: 'Payout Dashboard', path: '/admin/adminPayouts', description: 'Monitor creator payouts' },
         { label: 'Subscriptions', path: '/admin/subscriptions', description: 'Subscription admin' },
         { label: 'Move Management', path: '/admin/MoveManagement', description: 'Exercise library' },
         { label: 'Meta Data Management', path: '/admin/manageMeta', description: 'SEO & metadata' },
@@ -195,128 +196,128 @@ const Directory: NextPage = () => {
           <meta name="description" content="Complete directory of Pulse application pages and links" />
         </Head>
 
-      {/* Hero Section */}
-      <div className="relative overflow-hidden border-b border-zinc-800">
-        <div className="absolute inset-0 bg-gradient-to-br from-lime-500/5 via-transparent to-purple-500/5" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(224,254,16,0.08),transparent_50%)]" />
-        
-        <div className="relative max-w-7xl mx-auto px-6 py-16 sm:py-24">
-          <div className="text-center">
-            <h1 className="text-5xl sm:text-7xl font-bold mb-6 bg-gradient-to-r from-white via-lime-200 to-lime-400 bg-clip-text text-transparent">
-              Site Directory
-            </h1>
-            <p className="text-xl text-zinc-400 mb-8 max-w-2xl mx-auto">
-              Navigate every corner of the Pulse ecosystem. All links, routes, and pages in one stunning directory.
-            </p>
-            
-            {/* Search Bar */}
-            <div className="max-w-2xl mx-auto">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search pages, routes, or descriptions..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-zinc-900/80 backdrop-blur border border-zinc-700 rounded-2xl px-6 py-4 text-white placeholder-zinc-500 outline-none focus:border-lime-400 focus:ring-2 focus:ring-lime-400/20 transition-all"
-                />
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+        {/* Hero Section */}
+        <div className="relative overflow-hidden border-b border-zinc-800">
+          <div className="absolute inset-0 bg-gradient-to-br from-lime-500/5 via-transparent to-purple-500/5" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(224,254,16,0.08),transparent_50%)]" />
 
-      {/* Directory Grid */}
-      <div className="max-w-7xl mx-auto px-6 py-12">
-        {filteredSections.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">🔍</div>
-            <p className="text-zinc-400 text-lg">No pages found matching "{searchTerm}"</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {filteredSections.map((section, idx) => (
-              <div
-                key={idx}
-                className="group relative bg-gradient-to-br from-zinc-900/50 to-zinc-900/30 backdrop-blur border border-zinc-800 rounded-2xl p-6 hover:border-lime-400/30 transition-all duration-300"
-              >
-                {/* Glow effect on hover */}
-                <div className="absolute inset-0 bg-gradient-to-br from-lime-400/0 to-purple-500/0 group-hover:from-lime-400/5 group-hover:to-purple-500/5 rounded-2xl transition-all duration-300" />
-                
+          <div className="relative max-w-7xl mx-auto px-6 py-16 sm:py-24">
+            <div className="text-center">
+              <h1 className="text-5xl sm:text-7xl font-bold mb-6 bg-gradient-to-r from-white via-lime-200 to-lime-400 bg-clip-text text-transparent">
+                Site Directory
+              </h1>
+              <p className="text-xl text-zinc-400 mb-8 max-w-2xl mx-auto">
+                Navigate every corner of the Pulse ecosystem. All links, routes, and pages in one stunning directory.
+              </p>
+
+              {/* Search Bar */}
+              <div className="max-w-2xl mx-auto">
                 <div className="relative">
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="text-3xl">{section.icon}</span>
-                    <h2 className="text-2xl font-bold text-white">{section.title}</h2>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    {section.links.map((link, linkIdx) => (
-                      <button
-                        key={linkIdx}
-                        onClick={() => handleLinkClick(link)}
-                        className="w-full text-left group/link flex items-center justify-between bg-zinc-800/40 hover:bg-zinc-800/80 border border-zinc-700/50 hover:border-lime-400/40 rounded-lg px-4 py-3 transition-all duration-200"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-white group-hover/link:text-lime-400 transition-colors">
-                              {link.label}
-                            </span>
-                            {link.external && (
-                              <svg className="w-3 h-3 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
-                            )}
-                          </div>
-                          {link.description && (
-                            <p className="text-sm text-zinc-500 mt-1 truncate">{link.description}</p>
-                          )}
-                          <p className="text-xs text-zinc-600 mt-1 font-mono truncate">{link.path}</p>
-                        </div>
-                        <svg 
-                          className="w-5 h-5 text-zinc-600 group-hover/link:text-lime-400 group-hover/link:translate-x-1 transition-all flex-shrink-0 ml-3" 
-                          fill="none" 
-                          stroke="currentColor" 
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    ))}
+                  <input
+                    type="text"
+                    placeholder="Search pages, routes, or descriptions..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full bg-zinc-900/80 backdrop-blur border border-zinc-700 rounded-2xl px-6 py-4 text-white placeholder-zinc-500 outline-none focus:border-lime-400 focus:ring-2 focus:ring-lime-400/20 transition-all"
+                  />
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Footer Stats */}
-      <div className="border-t border-zinc-800 py-8">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-wrap items-center justify-center gap-8 text-center">
-            <div>
-              <div className="text-3xl font-bold text-lime-400">{sections.length}</div>
-              <div className="text-sm text-zinc-500">Categories</div>
-            </div>
-            <div className="w-px h-8 bg-zinc-800" />
-            <div>
-              <div className="text-3xl font-bold text-lime-400">
-                {sections.reduce((acc, s) => acc + s.links.length, 0)}
-              </div>
-              <div className="text-sm text-zinc-500">Total Links</div>
-            </div>
-            <div className="w-px h-8 bg-zinc-800" />
-            <div>
-              <div className="text-3xl font-bold text-lime-400">{filteredSections.length}</div>
-              <div className="text-sm text-zinc-500">Showing</div>
             </div>
           </div>
         </div>
-      </div>
+
+        {/* Directory Grid */}
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          {filteredSections.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="text-6xl mb-4">🔍</div>
+              <p className="text-zinc-400 text-lg">No pages found matching "{searchTerm}"</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {filteredSections.map((section, idx) => (
+                <div
+                  key={idx}
+                  className="group relative bg-gradient-to-br from-zinc-900/50 to-zinc-900/30 backdrop-blur border border-zinc-800 rounded-2xl p-6 hover:border-lime-400/30 transition-all duration-300"
+                >
+                  {/* Glow effect on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-lime-400/0 to-purple-500/0 group-hover:from-lime-400/5 group-hover:to-purple-500/5 rounded-2xl transition-all duration-300" />
+
+                  <div className="relative">
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className="text-3xl">{section.icon}</span>
+                      <h2 className="text-2xl font-bold text-white">{section.title}</h2>
+                    </div>
+
+                    <div className="space-y-2">
+                      {section.links.map((link, linkIdx) => (
+                        <button
+                          key={linkIdx}
+                          onClick={() => handleLinkClick(link)}
+                          className="w-full text-left group/link flex items-center justify-between bg-zinc-800/40 hover:bg-zinc-800/80 border border-zinc-700/50 hover:border-lime-400/40 rounded-lg px-4 py-3 transition-all duration-200"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-white group-hover/link:text-lime-400 transition-colors">
+                                {link.label}
+                              </span>
+                              {link.external && (
+                                <svg className="w-3 h-3 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                              )}
+                            </div>
+                            {link.description && (
+                              <p className="text-sm text-zinc-500 mt-1 truncate">{link.description}</p>
+                            )}
+                            <p className="text-xs text-zinc-600 mt-1 font-mono truncate">{link.path}</p>
+                          </div>
+                          <svg
+                            className="w-5 h-5 text-zinc-600 group-hover/link:text-lime-400 group-hover/link:translate-x-1 transition-all flex-shrink-0 ml-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer Stats */}
+        <div className="border-t border-zinc-800 py-8">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="flex flex-wrap items-center justify-center gap-8 text-center">
+              <div>
+                <div className="text-3xl font-bold text-lime-400">{sections.length}</div>
+                <div className="text-sm text-zinc-500">Categories</div>
+              </div>
+              <div className="w-px h-8 bg-zinc-800" />
+              <div>
+                <div className="text-3xl font-bold text-lime-400">
+                  {sections.reduce((acc, s) => acc + s.links.length, 0)}
+                </div>
+                <div className="text-sm text-zinc-500">Total Links</div>
+              </div>
+              <div className="w-px h-8 bg-zinc-800" />
+              <div>
+                <div className="text-3xl font-bold text-lime-400">{filteredSections.length}</div>
+                <div className="text-sm text-zinc-500">Showing</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </AdminRouteGuard>
   );
