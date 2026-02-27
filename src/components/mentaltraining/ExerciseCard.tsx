@@ -15,6 +15,8 @@ import {
   Clock,
   ChevronRight,
   Play,
+  FlaskConical,
+  Shield,
 } from 'lucide-react';
 import { MentalExercise, ExerciseCategory } from '../../api/firebase/mentaltraining/types';
 
@@ -163,6 +165,54 @@ export const ExerciseCard: React.FC<ExerciseCardProps> = ({
           </span>
         </div>
 
+        {/* Origin */}
+        {exercise.origin && (
+          <div className="mb-3 p-3 rounded-xl bg-zinc-800/60 border border-zinc-700/40">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Shield className="w-3.5 h-3.5 text-zinc-400" />
+              <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wide">Origin</span>
+            </div>
+            <p className="text-xs text-zinc-400 leading-relaxed">{exercise.origin}</p>
+          </div>
+        )}
+
+        {/* Neuroscience */}
+        {exercise.neuroscience && (
+          <div className="mb-4 p-3 rounded-xl bg-zinc-800/60 border border-zinc-700/40">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <FlaskConical className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wide">Neuroscience</span>
+            </div>
+            <p className="text-xs text-zinc-400 leading-relaxed">{exercise.neuroscience}</p>
+          </div>
+        )}
+
+        {/* Quick Overview Table */}
+        {exercise.overview && exercise.overview.when && (
+          <div className="mb-4 rounded-xl overflow-hidden border border-zinc-700/40">
+            <div className="bg-zinc-800/80 px-3 py-2 border-b border-zinc-700/40">
+              <span className="text-xs font-semibold text-zinc-300 uppercase tracking-wide">Quick Overview</span>
+            </div>
+            <div className="divide-y divide-zinc-800/80">
+              {[
+                { label: 'When', value: exercise.overview.when },
+                { label: 'Focus', value: exercise.overview.focus },
+                { label: 'Time Scale', value: exercise.overview.timeScale },
+                { label: 'Skill', value: exercise.overview.skill },
+                { label: 'Analogy', value: exercise.overview.analogy },
+              ].map((row) => (
+                <div key={row.label} className="flex">
+                  <div className="w-20 shrink-0 px-3 py-2 bg-zinc-800/40">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase">{row.label}</span>
+                  </div>
+                  <div className="flex-1 px-3 py-2">
+                    <span className="text-xs text-zinc-300 leading-relaxed">{row.value}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Actions */}
         <div className="flex gap-2">
           {showPlayButton && onPlay && (

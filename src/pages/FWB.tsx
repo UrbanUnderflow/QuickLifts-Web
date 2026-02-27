@@ -984,7 +984,6 @@ const FWB = ({ metaData }: FWBProps) => {
             <li><a href="#preview">Preview</a></li>
             <li><a href="#vision">Vision</a></li>
             <li><a href="#experience">Experience</a></li>
-            <li><a href="#funnel">Funnel</a></li>
             <li><a href="#monetize">Monetize</a></li>
             <li><a href="#manage">Manage</a></li>
           </ul>
@@ -1186,72 +1185,66 @@ const FWB = ({ metaData }: FWBProps) => {
         <section className="fwb-section" id="vision">
           <div className="fwb-section-label">01 — The Vision</div>
           <h2 className="fwb-section-title">
-            More than a run club.<br />A cultural movement with a heartbeat.
+            Your culture in motion.<br />A digital home for the heartbeat of Atlanta.
           </h2>
           <p className="fwb-section-text">
-            FWB was built on a simple idea: give people in Atlanta a reason to come together that isn't just another night out. Track workouts, strength training, community — all rooted in Black culture, Black joy, and Black art. Pulse gives that movement a digital home where every member, every workout, and every moment of community lives and grows beyond the physical event.
+            FWB gives people a reason to come together that isn't just another night out. Pulse gives your movement a premium digital home where the energy, connection, and growth live on beyond the physical track.
           </p>
 
           <div className="fwb-pillars-grid">
             <div className="fwb-pillar-card">
               <div className="fwb-pillar-number">01</div>
               <div className="fwb-pillar-title">Black Art</div>
-              <p className="fwb-pillar-desc">Cultural identity embedded into the experience — from the visual design of your club page to curated content that reflects the community you're building.</p>
+              <p className="fwb-pillar-desc">Your creative identity seamlessly embedded. A dedicated space that looks, feels, and acts as a true extension of your brand.</p>
             </div>
             <div className="fwb-pillar-card">
               <div className="fwb-pillar-number">02</div>
               <div className="fwb-pillar-title">Black Joy</div>
-              <p className="fwb-pillar-desc">Fitness should feel like celebration. Pulse brings the energy of your in-person sessions into a digital space that keeps the vibe alive between events.</p>
+              <p className="fwb-pillar-desc">Translate that in-person electricity into a digital space where the vibe never drops between track days.</p>
             </div>
             <div className="fwb-pillar-card">
               <div className="fwb-pillar-number">03</div>
               <div className="fwb-pillar-title">Black Culture</div>
-              <p className="fwb-pillar-desc">Community-first, always. Run clubs, track days, strength sessions — all connected through a platform that understands culture isn't an afterthought, it's the foundation.</p>
+              <p className="fwb-pillar-desc">Community first, always. A platform built to cultivate connection and put your people front and center.</p>
             </div>
           </div>
         </section>
 
         {/* EXPERIENCE FLOW */}
         <section className="fwb-section" id="experience">
-          <div className="fwb-section-label">02 — The Member Experience</div>
+          <div className="fwb-section-label">02 — The FWB Experience</div>
           <h2 className="fwb-section-title">
-            What your members see,<br />feel, and do on Pulse.
+            How your crew moves<br />on Pulse.
           </h2>
           <p className="fwb-section-text">
-            From the moment someone discovers FWB to the moment they become a loyal member, Pulse creates a seamless experience that keeps people engaged, connected, and coming back.
+            From discovering FWB to becoming a loyal member, we make the journey effortless. Build an inclusive community that funnels naturally into premium experiences.
           </p>
 
           <div className="fwb-flow-container">
             {[
               {
                 num: '01',
-                title: 'Discover FWB',
-                desc: "A member finds FWB through Instagram, word of mouth, or a local event. They tap the link and land on your club's page inside Pulse — branded, clean, and unmistakably FWB.",
+                title: 'Discover & Join',
+                desc: "A link in your bio drops them into a customized FWB experience. One tap, and they're instantly plugged into your community.",
                 tag: 'Entry Point',
               },
               {
                 num: '02',
-                title: 'Join the Community',
-                desc: "One tap to join. They're now part of the FWB club on Pulse — they see upcoming events, workout content, community posts, and who else is in the crew. It feels like walking into the room.",
-                tag: 'Onboarding',
-              },
-              {
-                num: '03',
                 title: 'Train Together',
-                desc: "Whether it's a track day at a local facility or a strength session you've programmed — members follow the workout in real time through Pulse. Playlist-style training with social energy built in.",
+                desc: "Track days and programmed strength sessions live on Pulse. Members follow the workout in real time and hit their PRs as a unit.",
                 tag: 'Core Experience',
               },
               {
-                num: '04',
-                title: 'Stay Connected Between Sessions',
-                desc: "The workout ends but the community doesn't. Members engage through the club feed, share progress, hype each other up, and stay plugged in until the next event. This is where retention lives.",
+                num: '03',
+                title: 'Keep the Vibe Alive',
+                desc: "The workout ends, but the chat keeps going. Feed posts, member highlights, and event RSVPs create a social loop that brings them back.",
                 tag: 'Engagement Loop',
               },
               {
-                num: '05',
-                title: 'Level Up',
-                desc: "Members who want more unlock premium content, exclusive training programs, early access to events, or VIP experiences. The free community becomes the funnel to premium — naturally, not forcefully.",
-                tag: 'Premium Upsell',
+                num: '04',
+                title: 'Level Up to Premium',
+                desc: "Offer VIP events, specialized programs, and exclusive content to members who want more. The free community feeds the premium tier organically.",
+                tag: 'Upsell',
               },
             ].map((step, i) => (
               <div
@@ -1270,73 +1263,41 @@ const FWB = ({ metaData }: FWBProps) => {
           </div>
         </section>
 
-        {/* FUNNEL */}
-        <section className="fwb-section" id="funnel">
-          <div className="fwb-section-label">03 — The Funnel</div>
-          <h2 className="fwb-section-title">
-            From discovery to loyalty.<br />Every step is designed.
-          </h2>
-          <p className="fwb-section-text">
-            Pulse doesn't just host your community — it builds your growth engine. Here's how new people become lifelong members of FWB.
-          </p>
-
-          <div className="fwb-funnel-visual">
-            {[
-              { label: 'Awareness', title: 'Social Media, Events & Word of Mouth', desc: 'Instagram, local events, Atlanta Turkey Legs cross-promotion, partner collabs' },
-              { label: 'Interest', title: 'FWB Club Page on Pulse', desc: 'Branded landing experience — see the vibe, the community, upcoming events' },
-              { label: 'Join', title: 'Free Community Membership', desc: 'One-tap join — instant access to the club, the feed, and the schedule' },
-              { label: 'Engage', title: 'Attend Sessions & Train Together', desc: 'Track workouts, strength training, community events — all logged on Pulse' },
-              { label: 'Convert', title: 'Premium Membership', desc: 'Exclusive programs, VIP events, advanced training — recurring revenue for FWB' },
-            ].map((stage, i) => (
-              <React.Fragment key={stage.label}>
-                {i > 0 && <div className="fwb-funnel-arrow">▼</div>}
-                <div className="fwb-funnel-stage">
-                  <div>
-                    <div className="fwb-funnel-stage-label">{stage.label}</div>
-                    <div className="fwb-funnel-stage-title">{stage.title}</div>
-                    <div className="fwb-funnel-stage-desc">{stage.desc}</div>
-                  </div>
-                </div>
-              </React.Fragment>
-            ))}
-          </div>
-        </section>
-
 
 
         {/* MONETIZATION */}
         <section className="fwb-section" id="monetize">
-          <div className="fwb-section-label">04 — Monetization</div>
+          <div className="fwb-section-label">03 — Monetization</div>
           <h2 className="fwb-section-title">
             Free to join.<br />Premium to unlock.
           </h2>
           <p className="fwb-section-text">
-            The FWB community is free — anyone can join, attend events, and be part of the culture. Premium upsells create recurring revenue without making the community feel gated.
+            Grow your community organically, then offer exclusive value to the members who want more. FWB becomes a self-sustaining engine.
           </p>
 
           <div className="fwb-money-grid">
             <div className="fwb-money-card">
               <div className="fwb-money-badge">Free Tier</div>
-              <div className="fwb-money-title">FWB Community</div>
-              <p className="fwb-money-desc">Access to the club feed, event calendar, community posts, and basic workout content. This is where everyone starts and where the culture lives.</p>
+              <div className="fwb-money-title">The Open Community</div>
+              <p className="fwb-money-desc">Access to the club feed, event calendar, and basic workouts. Where anyone can start and where the culture lives.</p>
               <div className="fwb-money-price">$0 <span>/ forever</span></div>
             </div>
             <div className="fwb-money-card featured">
               <div className="fwb-money-badge">Premium</div>
               <div className="fwb-money-title">FWB Inner Circle</div>
-              <p className="fwb-money-desc">Exclusive training programs, early access to events, VIP experiences, advanced workout content, and direct access to Nile and the FWB leadership. The premium tier for members who want more.</p>
+              <p className="fwb-money-desc">Exclusive programs, early event access, and direct connection to leadership. Recurring revenue from your most loyal members.</p>
               <div className="fwb-money-price">$XX <span>/ month</span></div>
             </div>
             <div className="fwb-money-card">
               <div className="fwb-money-badge">Events</div>
               <div className="fwb-money-title">Ticketed Experiences</div>
-              <p className="fwb-money-desc">Special events, pop-up workouts, cultural collaborations, and partner activations — sold directly through Pulse. Revenue goes straight to FWB.</p>
-              <div className="fwb-money-price">Per event</div>
+              <p className="fwb-money-desc">Pop-up workouts and partner activations—sold straight through Pulse. Revenue flows directly to FWB.</p>
+              <div className="fwb-money-price">Variable</div>
             </div>
             <div className="fwb-money-card">
               <div className="fwb-money-badge">Merch & Collabs</div>
               <div className="fwb-money-title">Brand Extensions</div>
-              <p className="fwb-money-desc">FWB merch drops, partner collaborations, and cross-promotions with Atlanta Turkey Legs and other FWB-aligned brands. Pulse becomes the storefront for your community.</p>
+              <p className="fwb-money-desc">Merch drops and partner cross-promotions. Pulse becomes the streamlined storefront for your community.</p>
               <div className="fwb-money-price">Variable</div>
             </div>
           </div>
@@ -1344,30 +1305,30 @@ const FWB = ({ metaData }: FWBProps) => {
 
         {/* MANAGEMENT */}
         <section className="fwb-section" id="manage">
-          <div className="fwb-section-label">05 — Club Management</div>
+          <div className="fwb-section-label">04 — Club Management</div>
           <h2 className="fwb-section-title">
-            Run your club<br />like a business.
+            Run the club,<br />effortlessly.
           </h2>
           <p className="fwb-section-text">
-            Pulse gives you the tools to manage FWB without the chaos. Everything lives in one place — members, content, events, revenue.
+            All the tools you need—content, events, and revenue—in a single powerful dashboard. Manage the business without the chaos.
           </p>
 
           <div className="fwb-manage-features">
             <div className="fwb-manage-feature">
-              <h4>Member Dashboard</h4>
-              <p>See who's in your club, who's active, who's dropping off, and who's ready for premium. Real data on your community, not guesswork.</p>
+              <h4>Member Insights</h4>
+              <p>Real data on your community. See who's active and who's ready for premium without the guesswork.</p>
             </div>
             <div className="fwb-manage-feature">
-              <h4>Content Management</h4>
-              <p>Upload workouts, create training programs, post to the club feed, and schedule content drops. Everything your members consume flows through Pulse.</p>
+              <h4>Content Hub</h4>
+              <p>Drop workouts, programs, and feed updates to your members directly. You own the content flow.</p>
             </div>
             <div className="fwb-manage-feature">
               <h4>Event Coordination</h4>
-              <p>Create events, manage RSVPs, send reminders, and track attendance. No more spreadsheets and DMs — it's all built in.</p>
+              <p>Handle RSVPs, reminders, and attendance without the stress of managing DMs and spreadsheets.</p>
             </div>
             <div className="fwb-manage-feature">
               <h4>Revenue Tracking</h4>
-              <p>See your monthly recurring revenue, premium conversions, event ticket sales, and growth trends. Know what's working and what needs attention.</p>
+              <p>Monitor ticket sales, premium conversions, and monthly growth in real-time. Know exactly what's working.</p>
             </div>
           </div>
         </section>
