@@ -379,9 +379,15 @@ const adminCardsData = [
   },
   {
     title: "Fitness Seeker Leads",
-    description: "Browse migrated fitness seeker user data with analytics, search, filtering, and CSV export.",
-    icon: <Activity className="w-5 h-5" />,
+    description: "Browse migrated fitness seeker user data and batch them into internal staging campaigns.",
+    icon: <Users className="w-5 h-5" />,
     link: "/admin/fitnessSeekerLeads"
+  },
+  {
+    title: "Outreach Campaigns",
+    description: "Verify email validity of fitness seeker staged databases and push to Instantly.",
+    icon: <Send className="w-5 h-5" />,
+    link: "/admin/outreach-campaigns"
   }
 ];
 
