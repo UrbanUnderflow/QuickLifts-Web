@@ -63,6 +63,16 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
         console.log(`[Instantly Push Background] Found ${leadsSnap.size} valid leads to push`);
 
         let pushedCount = campDoc.data()?.pushedLeads || 0;
+        let pushLogs: string[] = campDoc.data()?.pushLogs || [];
+
+        const addLog = (msg: string) => {
+            const timeStr = new Date().toLocaleTimeString();
+            const fullMsg = `[${timeStr}] ${msg}`;
+            pushLogs.push(fullMsg);
+            console.log(`[Instantly Push] ${msg}`);
+        };
+
+        addLog(`Started push for ${leadsSnap.size} valid leads to Instantly ID: ${instantlyCampaignId}`);
 
         // Process in small parallel chunks to respect Instantly rate limits and endpoints
         const BATCH_SIZE = 50;
@@ -119,11 +129,19 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
             // Log any errors silently on backend for tracing
             const failedBatch = results.filter(r => r.status === 'rejected');
             if (failedBatch.length > 0) {
-                console.error(`[Instantly Push] Batch ${i} had ${failedBatch.length} failures. First error:`, (failedBatch[0] as PromiseRejectedResult).reason);
+                const firstErrorMsg = (failedBatch[0] as PromiseRejectedResult).reason;
+                addLog(`Batch ${(i / BATCH_SIZE) + 1} failed ${failedBatch.length} leads. Error: ${firstErrorMsg}`);
+            }
+
+            if (batchSuccessCount > 0) {
+                addLog(`Batch ${(i / BATCH_SIZE) + 1} pushed ${batchSuccessCount} leads successfully.`);
             }
 
             // Sync doc progressively so UI updates
-            await campRef.update({ pushedLeads: pushedCount });
+            await campRef.update({
+                pushedLeads: pushedCount,
+                pushLogs: pushLogs.length > 200 ? pushLogs.slice(-200) : pushLogs
+            });
 
             // Add a small delay between batches to respect instantly rate limits
             if (i + BATCH_SIZE < docs.length) {
@@ -132,17 +150,21 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
         }
 
         // Complete
-        console.log(`[Instantly Push Background] Finished ${campaignId}. Pushed: ${pushedCount}`);
+        addLog(`Finished pushing to ${campaignId}. Total Pushed: ${pushedCount}`);
         await campRef.update({
             status: 'completed',
             pushedLeads: pushedCount,
+            pushLogs,
             updatedAt: new Date().toISOString()
         });
 
         return { statusCode: 200, body: 'Push complete' };
-    } catch (error) {
+    } catch (error: any) {
         console.error('[Instantly Push Background] Fatal error:', error);
-        db.collection('outreach_campaigns').doc(campaignId).update({ status: 'ready_to_push' }).catch(() => { });
+        db.collection('outreach_campaigns').doc(campaignId).update({
+            status: 'ready_to_push',
+            pushLogs: admin.firestore.FieldValue.arrayUnion(`[FATAL ERROR] ${error.message || 'Unknown crash'}`)
+        }).catch(() => { });
         return { statusCode: 500, body: 'Fatal error' };
     }
 };

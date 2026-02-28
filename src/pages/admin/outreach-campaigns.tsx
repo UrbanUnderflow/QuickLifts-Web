@@ -15,7 +15,9 @@ import {
     Clock,
     ExternalLink,
     Target,
-    Trash2
+    Trash2,
+    Terminal,
+    Copy as CopyIcon
 } from 'lucide-react';
 import { collection, getDocs, orderBy, query, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
@@ -37,11 +39,13 @@ export interface OutreachCampaign {
     targetLevel?: string;
     targetMinScore?: string | number;
     targetMinCalorieReq?: number;
+    pushLogs?: string[];
 }
 
 const OutreachCampaignsPage: React.FC = () => {
     const [campaigns, setCampaigns] = useState<OutreachCampaign[]>([]);
     const [loading, setLoading] = useState(true);
+    const [viewingLogsFor, setViewingLogsFor] = useState<OutreachCampaign | null>(null);
     const router = useRouter();
 
     // Refresh
@@ -148,6 +152,64 @@ const OutreachCampaignsPage: React.FC = () => {
 
     const formatDate = (dateStr: string) => {
         return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+    };
+
+    const copyLogsToClipboard = () => {
+        if (!viewingLogsFor?.pushLogs) return;
+        navigator.clipboard.writeText(viewingLogsFor.pushLogs.join('\n'));
+        alert('Logs copied to clipboard!');
+    };
+
+    const renderLogsModal = () => {
+        if (!viewingLogsFor) return null;
+
+        return (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+                <div className="bg-[#111417] border border-zinc-800 rounded-3xl p-6 w-full max-w-3xl flex flex-col max-h-[85vh] shadow-2xl relative">
+                    <button
+                        onClick={() => setViewingLogsFor(null)}
+                        className="absolute right-6 top-6 text-zinc-500 hover:text-white transition-colors"
+                    >
+                        <XCircle className="w-6 h-6" />
+                    </button>
+
+                    <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                        <Terminal className="w-5 h-5 text-zinc-400" />
+                        Campaign Debug Logs
+                    </h3>
+                    <p className="text-zinc-500 text-sm mb-6">
+                        System traces for <strong>{viewingLogsFor.title}</strong> directly from background workers.
+                    </p>
+
+                    <div className="bg-[#0b0d10] border border-zinc-800 rounded-xl flex-grow overflow-y-auto p-4 mb-6 font-mono text-sm">
+                        {!viewingLogsFor.pushLogs || viewingLogsFor.pushLogs.length === 0 ? (
+                            <div className="text-zinc-600 text-center py-12">No logs recorded for this campaign yet.</div>
+                        ) : (
+                            viewingLogsFor.pushLogs.map((log, i) => (
+                                <div key={i} className={`py-1 ${log.includes('FATAL ERROR') || log.includes('failed') ? 'text-rose-400' : 'text-zinc-300'} border-b border-zinc-800/50 last:border-0`}>
+                                    {log}
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    <div className="flex justify-end gap-3 mt-auto">
+                        <button
+                            onClick={copyLogsToClipboard}
+                            className="px-4 py-2.5 rounded-xl border border-zinc-700 bg-[#1a1e24] text-white hover:bg-zinc-800 transition-colors flex items-center gap-2 text-sm font-medium"
+                        >
+                            <CopyIcon className="w-4 h-4" /> Copy Entire Log
+                        </button>
+                        <button
+                            onClick={() => setViewingLogsFor(null)}
+                            className="px-4 py-2.5 rounded-xl bg-[#d7ff00] text-black font-bold hover:bg-[#bce600] transition-colors"
+                        >
+                            Close Viewer
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -277,6 +339,15 @@ const OutreachCampaignsPage: React.FC = () => {
                                                         )}
                                                     </>
                                                 )}
+                                                {(camp.pushLogs && camp.pushLogs.length > 0) && (
+                                                    <button
+                                                        onClick={() => setViewingLogsFor(camp)}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/50 text-zinc-300 hover:bg-zinc-800 transition-colors text-sm font-medium"
+                                                        title="View Logs"
+                                                    >
+                                                        <Terminal className="w-4 h-4" /> Logs
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => handleDeleteCampaign(camp.id)}
                                                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors text-sm font-medium"
@@ -293,6 +364,7 @@ const OutreachCampaignsPage: React.FC = () => {
                     </div>
                 </div>
             </div>
+            {renderLogsModal()}
         </AdminRouteGuard>
     );
 };
