@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import {
@@ -8,7 +8,6 @@ import {
     Copy,
     ChevronLeft,
     ChevronRight,
-    Download,
     Filter,
     FolderPlus,
     Info,
@@ -16,17 +15,13 @@ import {
     Upload,
     CheckCircle,
     Loader2,
-    Send,
     CheckSquare,
     Square,
-    Activity,
     Target,
-    Utensils,
-    Dumbbell,
-    Calendar,
     X,
     ArrowLeft,
-    Trash2
+    Trash2,
+    Rocket
 } from 'lucide-react';
 import {
     collection,
@@ -125,9 +120,9 @@ const FitnessSeekerLeadsPage: React.FC = () => {
     const [selectedLead, setSelectedLead] = useState<FitnessSeekerLead | null>(null);
 
     // Migration state
-    const [isMigrating, setIsMigrating] = useState(false);
+    const [_isMigrating, setIsMigrating] = useState(false);
     const [migrationProgress, setMigrationProgress] = useState({ current: 0, total: 0 });
-    const [migrationLog, setMigrationLog] = useState<string[]>([]);
+    const [_migrationLog, setMigrationLog] = useState<string[]>([]);
     const [showMigrationModal, setShowMigrationModal] = useState(false);
 
     // Lead Selection
@@ -378,7 +373,7 @@ const FitnessSeekerLeadsPage: React.FC = () => {
 
     // ─── Migration ─────────────────────────────────────────────────────────────
 
-    const runMigration = async () => {
+    const _runMigration = async () => {
         setIsMigrating(true);
         setMigrationLog([]);
         setMigrationProgress({ current: 0, total: 0 });
@@ -829,12 +824,20 @@ const FitnessSeekerLeadsPage: React.FC = () => {
                             <h3 className="text-white font-bold flex items-center gap-2">
                                 <Target className="w-5 h-5 text-[#40c9ff]" /> Outreach Staging Campaigns
                             </h3>
-                            <button
-                                onClick={() => setShowCreateWizard(true)}
-                                className="text-sm font-medium text-[#40c9ff] bg-[#40c9ff]/10 hover:bg-[#40c9ff]/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors border border-[#40c9ff]/20"
-                            >
-                                <FolderPlus className="w-4 h-4" /> New Campaign
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => router.push('/admin/outreach-campaigns')}
+                                    className="text-sm font-medium text-[#d7ff00] bg-[#d7ff00]/10 hover:bg-[#d7ff00]/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors border border-[#d7ff00]/20"
+                                >
+                                    <Rocket className="w-4 h-4" /> Open Autopilot
+                                </button>
+                                <button
+                                    onClick={() => setShowCreateWizard(true)}
+                                    className="text-sm font-medium text-[#40c9ff] bg-[#40c9ff]/10 hover:bg-[#40c9ff]/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors border border-[#40c9ff]/20"
+                                >
+                                    <FolderPlus className="w-4 h-4" /> New Campaign
+                                </button>
+                            </div>
                         </div>
 
                         {campaigns.length === 0 ? (
@@ -882,6 +885,11 @@ const FitnessSeekerLeadsPage: React.FC = () => {
                                                     <span className="text-zinc-300">Cal ≥{camp.targetMinCalorieReq}</span>
                                                 </>
                                             )}
+                                        </div>
+                                        <div className="mt-2 w-full">
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-zinc-800 text-zinc-400">
+                                                Plan in Autopilot
+                                            </span>
                                         </div>
                                     </button>
                                 ))}

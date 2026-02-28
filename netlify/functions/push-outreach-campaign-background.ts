@@ -21,7 +21,7 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const INSTANTLY_KEY = process.env.INSTANTLY_KEY || process.env.INSTANTLY_API_KEY;
 
-export const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
+export const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) => {
     if (!event.body) return { statusCode: 400, body: 'Missing body' };
 
     if (!INSTANTLY_KEY) {
@@ -32,7 +32,7 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
     let bodyData;
     try {
         bodyData = JSON.parse(event.body);
-    } catch (e) {
+    } catch (_error) {
         return { statusCode: 400, body: 'Invalid JSON' };
     }
 
@@ -150,6 +150,7 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
         addLog(`Finished pushing to ${campaignId}. Total Pushed: ${pushedCount}`);
         await campRef.update({
             status: 'completed',
+            deployStatus: 'deployed',
             pushedLeads: pushedCount,
             pushLogs,
             updatedAt: new Date().toISOString()
@@ -160,6 +161,8 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
         console.error('[Instantly Push Background] Fatal error:', error);
         db.collection('outreach_campaigns').doc(campaignId).update({
             status: 'ready_to_push',
+            deployStatus: 'deploy_failed',
+            deployError: `Lead push failed: ${error.message || 'Unknown crash'}`,
             pushLogs: admin.firestore.FieldValue.arrayUnion(`[FATAL ERROR] ${error.message || 'Unknown crash'}`)
         }).catch(() => { });
         return { statusCode: 500, body: 'Fatal error' };

@@ -3,6 +3,19 @@ import admin from '../../../lib/firebase-admin';
 
 const adminDb = admin.firestore();
 
+const DEFAULT_CAMPAIGN_SETTINGS = {
+    dailyLimit: 30,
+    scheduleFrom: '08:00',
+    scheduleTo: '13:00',
+    scheduleDays: [1, 2, 3, 4, 5],
+    timezone: 'America/Detroit',
+    stopOnReply: true,
+    stopOnAutoReply: false,
+    linkTracking: false,
+    openTracking: true,
+    textOnly: true
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -29,6 +42,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             failedLeads: 0,
             pushedLeads: 0,
             status: 'pending_verification',
+            deployStatus: 'planned',
+            emailSequences: [],
+            campaignSettings: DEFAULT_CAMPAIGN_SETTINGS,
+            sendingEmail: '',
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         });
