@@ -87,29 +87,26 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
                     if (!lead.email) throw new Error('Missing email');
 
                     const instantlyPayload = {
-                        api_key: INSTANTLY_KEY,
+                        email: lead.email.toLowerCase().trim(),
                         campaign_id: instantlyCampaignId,
-                        skip_if_in_workspace: false,
-                        leads: [
-                            {
-                                email: lead.email.toLowerCase().trim(),
-                                first_name: lead.name ? lead.name.split(' ')[0] : '',
-                                last_name: lead.name && lead.name.includes(' ') ? lead.name.split(' ').slice(1).join(' ') : '',
-                                custom_variables: {
-                                    goal: lead.goal || '',
-                                    focusArea: lead.focusArea || '',
-                                    weight: lead.weight ? `${lead.weight}` : '',
-                                    calorieReq: lead.calorieReq ? `${lead.calorieReq}` : '',
-                                    gender: lead.gender || '',
-                                    level: lead.level || ''
-                                }
-                            }
-                        ]
+                        first_name: lead.name ? lead.name.split(' ')[0] : '',
+                        last_name: lead.name && lead.name.includes(' ') ? lead.name.split(' ').slice(1).join(' ') : '',
+                        custom_variables: {
+                            goal: lead.goal || '',
+                            focusArea: lead.focusArea || '',
+                            weight: lead.weight ? `${lead.weight}` : '',
+                            calorieReq: lead.calorieReq ? `${lead.calorieReq}` : '',
+                            gender: lead.gender || '',
+                            level: lead.level || ''
+                        }
                     };
 
-                    const response = await fetch('https://api.instantly.ai/api/v1/lead/add', {
+                    const response = await fetch('https://api.instantly.ai/api/v2/leads', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${INSTANTLY_KEY}`
+                        },
                         body: JSON.stringify(instantlyPayload),
                     });
 
