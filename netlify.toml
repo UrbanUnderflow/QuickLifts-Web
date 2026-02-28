@@ -141,6 +141,10 @@
 [functions.update-challenge-status]
   schedule = "@daily"
 
+# Sync Instantly campaign analytics every 4 hours
+[functions.sync-campaign-analytics]
+  schedule = "0 */4 * * *"
+
 # Configure the specific function as background
 [functions.manual-sync-sessions]
   is_background = true
