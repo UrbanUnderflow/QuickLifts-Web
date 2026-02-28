@@ -20,8 +20,9 @@ interface InstantlyLead {
   first_name?: string;
   last_name?: string;
   company_name?: string;
-  campaign_id: string;
+  campaign: string;
   custom_variables?: Record<string, string>;
+  [key: string]: any;
 }
 
 const BATCH_SIZE = 50; // Instantly recommends batching API calls
@@ -108,7 +109,7 @@ const handler: Handler = async (event) => {
           // Build the Instantly lead payload
           const instantlyLead: InstantlyLead = {
             email: email.toLowerCase().trim(),
-            campaign_id: campaignId,
+            campaign: campaignId,
           };
 
           // Add optional fields

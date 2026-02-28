@@ -337,6 +337,23 @@ const OutreachCampaignsPage: React.FC = () => {
                                                                 <RefreshCw className="w-3.5 h-3.5" /> Retry Push
                                                             </button>
                                                         )}
+                                                        {(camp.pushedLeads || 0) >= (camp.verifiedLeads || 0) && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (confirm('This will wipe the local pushed count and completely force all valid leads back into Instantly. Instantly naturally ignores duplicates. Proceed?')) {
+                                                                        import('firebase/firestore').then(({ updateDoc, doc }) => {
+                                                                            updateDoc(doc(db, 'outreach_campaigns', camp.id), { pushedLeads: 0 }).then(() => {
+                                                                                handlePushToInstantly(camp.id);
+                                                                            });
+                                                                        });
+                                                                    }
+                                                                }}
+                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 transition-colors text-sm font-medium border border-yellow-500/20"
+                                                                title="Force Repush"
+                                                            >
+                                                                <RefreshCw className="w-3.5 h-3.5" /> Force Repush
+                                                            </button>
+                                                        )}
                                                     </>
                                                 )}
                                                 {(camp.pushLogs && camp.pushLogs.length > 0) && (
