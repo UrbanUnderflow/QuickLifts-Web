@@ -86,9 +86,9 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
                     const lead = docSnap.data();
                     if (!lead.email) throw new Error('Missing email');
 
-                    const instantlyPayload = {
+                    const v2Payload = {
+                        campaign: instantlyCampaignId,
                         email: lead.email.toLowerCase().trim(),
-                        campaign_id: instantlyCampaignId,
                         first_name: lead.name ? lead.name.split(' ')[0] : '',
                         last_name: lead.name && lead.name.includes(' ') ? lead.name.split(' ').slice(1).join(' ') : '',
                         custom_variables: {
@@ -107,7 +107,7 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
                             'Content-Type': 'application/json',
                             'Authorization': `Bearer ${INSTANTLY_KEY}`
                         },
-                        body: JSON.stringify(instantlyPayload),
+                        body: JSON.stringify(v2Payload),
                     });
 
                     if (!response.ok) {
@@ -119,15 +119,15 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
                 })
             );
 
-            // Tally successes
+            // Tally successes natively
             const batchSuccessCount = results.filter(r => r.status === 'fulfilled').length;
             pushedCount += batchSuccessCount;
 
-            // Log any errors silently on backend for tracing
+            // Log any errors natively
             const failedBatch = results.filter(r => r.status === 'rejected');
             if (failedBatch.length > 0) {
                 const firstErrorMsg = (failedBatch[0] as PromiseRejectedResult).reason;
-                addLog(`Batch ${(i / BATCH_SIZE) + 1} failed ${failedBatch.length} leads. Error: ${firstErrorMsg}`);
+                addLog(`Batch ${(i / BATCH_SIZE) + 1} failed ${failedBatch.length} leads. First Error: ${firstErrorMsg}`);
             }
 
             if (batchSuccessCount > 0) {
@@ -142,7 +142,7 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
 
             // Add a small delay between batches to respect instantly rate limits
             if (i + BATCH_SIZE < docs.length) {
-                await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 2000));
             }
         }
 
