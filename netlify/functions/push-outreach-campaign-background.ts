@@ -64,64 +64,70 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
 
         let pushedCount = campDoc.data()?.pushedLeads || 0;
 
-        // We send payload directly to Instantly Bulk Endpoint
-        // The Instantly Bulk Lead Add takes an array of leads
-        const BATCH_SIZE = 500;
+        // Process in small parallel chunks to respect Instantly rate limits and endpoints
+        const BATCH_SIZE = 50;
         const docs = leadsSnap.docs;
 
         for (let i = 0; i < docs.length; i += BATCH_SIZE) {
             const batchDocs = docs.slice(i, i + BATCH_SIZE);
 
-            const leadsPayload = batchDocs.map(docSnap => {
-                const lead = docSnap.data();
-                return {
-                    email: lead.email.toLowerCase().trim(),
-                    first_name: lead.name ? lead.name.split(' ')[0] : '',
-                    last_name: lead.name && lead.name.includes(' ') ? lead.name.split(' ').slice(1).join(' ') : '',
-                    custom_variables: {
-                        goal: lead.goal || '',
-                        focusArea: lead.focusArea || '',
-                        weight: lead.weight ? `${lead.weight}` : '',
-                        calorieReq: lead.calorieReq ? `${lead.calorieReq}` : '',
-                        gender: lead.gender || '',
-                        level: lead.level || ''
+            const results = await Promise.allSettled(
+                batchDocs.map(async (docSnap) => {
+                    const lead = docSnap.data();
+                    if (!lead.email) throw new Error('Missing email');
+
+                    const instantlyPayload = {
+                        api_key: INSTANTLY_KEY,
+                        campaign_id: instantlyCampaignId,
+                        skip_if_in_workspace: false,
+                        leads: [
+                            {
+                                email: lead.email.toLowerCase().trim(),
+                                first_name: lead.name ? lead.name.split(' ')[0] : '',
+                                last_name: lead.name && lead.name.includes(' ') ? lead.name.split(' ').slice(1).join(' ') : '',
+                                custom_variables: {
+                                    goal: lead.goal || '',
+                                    focusArea: lead.focusArea || '',
+                                    weight: lead.weight ? `${lead.weight}` : '',
+                                    calorieReq: lead.calorieReq ? `${lead.calorieReq}` : '',
+                                    gender: lead.gender || '',
+                                    level: lead.level || ''
+                                }
+                            }
+                        ]
+                    };
+
+                    const response = await fetch('https://api.instantly.ai/api/v1/lead/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(instantlyPayload),
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`API error: ${response.status} - ${errorText}`);
                     }
-                };
-            });
 
-            const instantlyPayload = {
-                api_key: INSTANTLY_KEY,
-                campaign_id: instantlyCampaignId,
-                skip_if_in_workspace: false,
-                leads: leadsPayload
-            };
+                    return true;
+                })
+            );
 
-            try {
-                const response = await fetch('https://api.instantly.ai/api/v1/lead/add', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(instantlyPayload),
-                });
+            // Tally successes
+            const batchSuccessCount = results.filter(r => r.status === 'fulfilled').length;
+            pushedCount += batchSuccessCount;
 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error(`[Instantly Push Background] API error at offset ${i}: ${response.status} - ${errorText}`);
-                    continue; // If one batch fails, we log and try the next rather than crashing the whole 15min worker
-                }
-
-                pushedCount += batchDocs.length;
-
-                await campRef.update({
-                    pushedLeads: pushedCount
-                });
-
-            } catch (e) {
-                console.error(`[Instantly Push Background] Network error on instantly API:`, e);
+            // Log any errors silently on backend for tracing
+            const failedBatch = results.filter(r => r.status === 'rejected');
+            if (failedBatch.length > 0) {
+                console.error(`[Instantly Push] Batch ${i} had ${failedBatch.length} failures. First error:`, (failedBatch[0] as PromiseRejectedResult).reason);
             }
+
+            // Sync doc progressively so UI updates
+            await campRef.update({ pushedLeads: pushedCount });
 
             // Add a small delay between batches to respect instantly rate limits
             if (i + BATCH_SIZE < docs.length) {
-                await new Promise(r => setTimeout(r, 2000));
+                await new Promise(r => setTimeout(r, 1000));
             }
         }
 

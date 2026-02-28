@@ -225,7 +225,7 @@ const OutreachCampaignsPage: React.FC = () => {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span className={`px-2.5 py-1 rounded-full text-xs font-medium border border-current/20 ${getStatusBadgeColor(camp.status)}`}>
+                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border border-current/20 whitespace-nowrap ${getStatusBadgeColor(camp.status)}`}>
                                                     {formatStatus(camp.status)}
                                                 </span>
                                             </td>
@@ -262,9 +262,20 @@ const OutreachCampaignsPage: React.FC = () => {
                                                     </span>
                                                 )}
                                                 {camp.status === 'completed' && (
-                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 text-sm font-medium rounded-lg">
-                                                        <CheckCircle className="w-3.5 h-3.5" /> Published ({camp.instantlyCampaignId?.substring(0, 8)})
-                                                    </span>
+                                                    <>
+                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 text-sm font-medium rounded-lg">
+                                                            <CheckCircle className="w-3.5 h-3.5" /> Published ({camp.instantlyCampaignId?.substring(0, 8) || 'No ID'})
+                                                        </span>
+                                                        {(camp.pushedLeads || 0) < (camp.verifiedLeads || 0) && (
+                                                            <button
+                                                                onClick={() => handlePushToInstantly(camp.id)}
+                                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20 transition-colors text-sm font-medium border border-yellow-500/20"
+                                                                title="Retry missing leads"
+                                                            >
+                                                                <RefreshCw className="w-3.5 h-3.5" /> Retry Push
+                                                            </button>
+                                                        )}
+                                                    </>
                                                 )}
                                                 <button
                                                     onClick={() => handleDeleteCampaign(camp.id)}
