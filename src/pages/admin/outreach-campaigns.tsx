@@ -23,7 +23,11 @@ import {
     MessageSquare,
     HelpCircle,
     Upload,
-    Zap
+    Zap,
+    FileText,
+    Wand2,
+    SendHorizonal,
+    Shield
 } from 'lucide-react';
 import { collection, getDocs, orderBy, query, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
@@ -48,6 +52,8 @@ interface CampaignSettings {
     linkTracking: boolean;
     openTracking: boolean;
     textOnly: boolean;
+    slowRampUp?: boolean;
+    slowRampUpIncrement?: number;
 }
 
 interface CampaignAnalytics {
@@ -88,6 +94,7 @@ export interface OutreachCampaign {
     settingsLastSynced?: string;
     activatedAt?: string;
     pausedAt?: string;
+    strategyArtifact?: string;
 }
 
 const DEFAULT_SETTINGS: CampaignSettings = {
@@ -100,7 +107,9 @@ const DEFAULT_SETTINGS: CampaignSettings = {
     stopOnAutoReply: false,
     linkTracking: false,
     openTracking: true,
-    textOnly: true
+    textOnly: true,
+    slowRampUp: true,
+    slowRampUpIncrement: 2
 };
 
 const DEFAULT_SEQUENCE: EmailSequence = {
@@ -153,11 +162,21 @@ const OutreachCampaignsPage: React.FC = () => {
     const [planSequences, setPlanSequences] = useState<EmailSequence[]>([]);
     const [planSettings, setPlanSettings] = useState<CampaignSettings>(DEFAULT_SETTINGS);
     const [planSendingEmail, setPlanSendingEmail] = useState('');
-    const [planActiveTab, setPlanActiveTab] = useState<'sequences' | 'settings'>('sequences');
+    const [planActiveTab, setPlanActiveTab] = useState<'sequences' | 'settings' | 'strategy'>('sequences');
     const [savingPlan, setSavingPlan] = useState(false);
     const [parsingStrategy, setParsingStrategy] = useState(false);
     const [planInstantlyId, setPlanInstantlyId] = useState('');
+    const [planArtifact, setPlanArtifact] = useState('');
+    const [artifactPrompt, setArtifactPrompt] = useState('');
+    const [refiningArtifact, setRefiningArtifact] = useState(false);
+    const [applyingArtifact, setApplyingArtifact] = useState(false);
+    const [refineResponse, setRefineResponse] = useState('');
+    const [checkingSpam, setCheckingSpam] = useState(false);
+    const [spamReport, setSpamReport] = useState<any>(null);
+    const [toastMessage, setToastMessage] = useState('');
+    const [appliedAt, setAppliedAt] = useState<number | null>(null);
     const strategyFileInputRef = useRef<HTMLInputElement | null>(null);
+    const spamReportRef = useRef<HTMLDivElement | null>(null);
 
     const fetchCampaigns = async () => {
         setLoading(true);
@@ -258,6 +277,8 @@ const OutreachCampaignsPage: React.FC = () => {
         setPlanSettings(camp.campaignSettings || { ...DEFAULT_SETTINGS });
         setPlanSendingEmail(camp.sendingEmail || 'tre@teamfitwithpulse.com');
         setPlanInstantlyId(camp.instantlyCampaignId || '');
+        setPlanArtifact(camp.strategyArtifact || '');
+        setArtifactPrompt('');
         setPlanActiveTab('sequences');
         setEditingPlanFor(camp);
     };
@@ -267,11 +288,13 @@ const OutreachCampaignsPage: React.FC = () => {
 
         const validSequences = planSequences.filter(s => s.body.trim());
         if (validSequences.length === 0) {
-            alert('Add at least one email sequence with a body.');
+            setToastMessage('✗ Add at least one email sequence with a body.');
+            setTimeout(() => setToastMessage(''), 5000);
             return;
         }
         if (!planSendingEmail.trim()) {
-            alert('Enter a sending email address.');
+            setToastMessage('✗ Enter a sending email address.');
+            setTimeout(() => setToastMessage(''), 5000);
             return;
         }
 
@@ -290,6 +313,11 @@ const OutreachCampaignsPage: React.FC = () => {
                 updatePayload.instantlyCampaignId = planInstantlyId.trim();
             }
 
+            // Save strategy artifact if present
+            if (planArtifact.trim()) {
+                updatePayload.strategyArtifact = planArtifact.trim();
+            }
+
             await updateDoc(doc(db, 'outreach_campaigns', editingPlanFor.id), updatePayload);
 
             setCampaigns(prev => prev.map(c => c.id === editingPlanFor.id ? {
@@ -298,13 +326,15 @@ const OutreachCampaignsPage: React.FC = () => {
                 campaignSettings: planSettings,
                 sendingEmail: planSendingEmail.trim(),
                 instantlyCampaignId: planInstantlyId.trim() || c.instantlyCampaignId,
+                strategyArtifact: planArtifact.trim() || c.strategyArtifact,
                 deployStatus: c.deployStatus || 'planned'
             } : c));
 
             setEditingPlanFor(null);
         } catch (error: any) {
             console.error('Failed to save plan:', error);
-            alert('Failed to save plan: ' + error.message);
+            setToastMessage('✗ Failed to save plan: ' + error.message);
+            setTimeout(() => setToastMessage(''), 6000);
         } finally {
             setSavingPlan(false);
         }
@@ -352,48 +382,19 @@ const OutreachCampaignsPage: React.FC = () => {
 
             const rawText = await file.text();
             const strategyText = rawText.slice(0, 180000);
-            const textLooksReadable = isLikelyReadableText(strategyText);
 
-            const fileDataBase64 = textLooksReadable ? '' : await readFileAsBase64(file);
-
-            const response = await fetch('/api/outreach/parse-campaign-strategy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    campaignTitle: editingPlanFor?.title || '',
-                    fileName: file.name,
-                    mimeType: file.type || 'application/octet-stream',
-                    strategyText,
-                    fileDataBase64
-                })
-            });
-
-            const result = await response.json();
-            if (!response.ok) {
-                throw new Error(result.error || 'Could not parse campaign strategy');
+            if (!strategyText || strategyText.trim().length < 20) {
+                throw new Error('File appears to be empty or too short to be a strategy document.');
             }
 
-            const parsed = result.parsed || {};
-            const importedSequences: EmailSequence[] = Array.isArray(parsed.emailSequences)
-                ? parsed.emailSequences
-                : [];
+            // Save the raw text as the artifact — do NOT auto-parse
+            setPlanArtifact(strategyText);
 
-            if (importedSequences.length === 0) {
-                throw new Error('No email sequences were found in the parsed strategy.');
-            }
-
-            const importedSettings = parsed.campaignSettings || DEFAULT_SETTINGS;
-            const importedEmail = typeof parsed.sendingEmail === 'string' ? parsed.sendingEmail.trim() : '';
-
-            setPlanSequences(importedSequences);
-            setPlanSettings(importedSettings);
-            if (importedEmail) {
-                setPlanSendingEmail(importedEmail);
-            }
-
-            alert(`Strategy parsed successfully: ${importedSequences.length} email sequence(s) loaded.`);
+            // Switch to Strategy tab so user can review + manually apply
+            setPlanActiveTab('strategy');
         } catch (error: any) {
-            alert(`Could not import strategy file: ${error.message}`);
+            setToastMessage(`✗ Could not import strategy: ${error.message}`);
+            setTimeout(() => setToastMessage(''), 6000);
         } finally {
             setParsingStrategy(false);
             if (strategyFileInputRef.current) {
@@ -465,15 +466,15 @@ const OutreachCampaignsPage: React.FC = () => {
         // Save the plan first, then sync to Instantly
         const validSequences = planSequences.filter(s => s.body.trim());
         if (validSequences.length === 0) {
-            alert('Add at least one email sequence with a body before deploying settings.');
+            setToastMessage('✗ Add at least one email sequence with a body before deploying settings.');
+            setTimeout(() => setToastMessage(''), 5000);
             return;
         }
         if (!planSendingEmail.trim()) {
-            alert('Enter a sending email address.');
+            setToastMessage('✗ Enter a sending email address.');
+            setTimeout(() => setToastMessage(''), 5000);
             return;
         }
-
-        if (!confirm('Deploy current settings to Instantly? This will update the sequences, schedule, and options on the live Instantly campaign.')) return;
 
         setSyncingSettings(true);
         try {
@@ -509,10 +510,12 @@ const OutreachCampaignsPage: React.FC = () => {
             } : c));
             setEditingPlanFor(prev => prev ? { ...prev, settingsLastSynced: now } : null);
 
-            alert(`Settings deployed to Instantly! ${validSequences.length} email sequences synced.`);
+            setToastMessage(`✓ Settings deployed to Instantly! ${validSequences.length} email sequences synced.`);
+            setTimeout(() => setToastMessage(''), 6000);
         } catch (error: any) {
             console.error('Sync settings error:', error);
-            alert('Failed to deploy settings: ' + error.message);
+            setToastMessage('✗ Failed to deploy settings: ' + error.message);
+            setTimeout(() => setToastMessage(''), 8000);
         } finally {
             setSyncingSettings(false);
         }
@@ -522,7 +525,6 @@ const OutreachCampaignsPage: React.FC = () => {
         if (!editingPlanFor?.instantlyCampaignId) return;
 
         const actionLabel = action === 'activate' ? 'activate' : 'pause';
-        if (!confirm(`Are you sure you want to ${actionLabel} this campaign on Instantly? ${action === 'activate' ? 'Emails will start sending based on your schedule.' : 'All email sending will be paused.'}`)) return;
 
         setActivatingCampaign(true);
         try {
@@ -545,12 +547,184 @@ const OutreachCampaignsPage: React.FC = () => {
             } : c));
             setEditingPlanFor(prev => prev ? { ...prev, campaignActive: isActive } : null);
 
-            alert(`Campaign ${action === 'activate' ? 'activated' : 'paused'} successfully!${action === 'activate' ? ' Emails will begin sending on schedule.' : ''}`);
+            setToastMessage(`✓ Campaign ${action === 'activate' ? 'activated' : 'paused'} successfully!${action === 'activate' ? ' Emails will begin sending on schedule.' : ''}`);
+            setTimeout(() => setToastMessage(''), 6000);
         } catch (error: any) {
             console.error(`${actionLabel} campaign error:`, error);
-            alert(`Failed to ${actionLabel} campaign: ` + error.message);
+            setToastMessage(`✗ Failed to ${actionLabel} campaign: ${error.message}`);
+            setTimeout(() => setToastMessage(''), 8000);
         } finally {
             setActivatingCampaign(false);
+        }
+    };
+
+    const handleRefineArtifact = async () => {
+        if (!planArtifact || !artifactPrompt.trim() || !editingPlanFor) return;
+
+        setRefiningArtifact(true);
+        try {
+            const response = await fetch('/api/outreach/refine-campaign-strategy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    artifact: planArtifact,
+                    prompt: artifactPrompt.trim(),
+                    campaignTitle: editingPlanFor.title
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to refine strategy');
+            }
+
+            setPlanArtifact(result.artifact);
+            setArtifactPrompt('');
+            setRefineResponse(result.summary || 'Changes applied to the strategy document.');
+        } catch (error: any) {
+            console.error('Refine artifact error:', error);
+            setToastMessage('✗ Failed to refine strategy: ' + error.message);
+            setTimeout(() => setToastMessage(''), 8000);
+        } finally {
+            setRefiningArtifact(false);
+        }
+    };
+
+    const handleApplyArtifact = async () => {
+        if (!planArtifact || !editingPlanFor) return;
+
+        setApplyingArtifact(true);
+        setToastMessage('');
+        try {
+            console.log('[Apply Artifact] Sending artifact to parser, length:', planArtifact.length);
+            const response = await fetch('/api/outreach/parse-campaign-strategy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    campaignTitle: editingPlanFor.title,
+                    fileName: 'strategy-artifact.md',
+                    mimeType: 'text/markdown',
+                    strategyText: planArtifact,
+                    fileDataBase64: ''
+                })
+            });
+
+            const result = await response.json();
+            console.log('[Apply Artifact] Parse result:', result);
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to parse strategy');
+            }
+
+            const parsed = result.parsed || {};
+            const importedSequences: EmailSequence[] = Array.isArray(parsed.emailSequences)
+                ? parsed.emailSequences
+                : [];
+
+            if (importedSequences.length === 0) {
+                throw new Error('No email sequences found after re-parsing.');
+            }
+
+            const importedSettings = parsed.campaignSettings || DEFAULT_SETTINGS;
+            const importedEmail = typeof parsed.sendingEmail === 'string' ? parsed.sendingEmail.trim() : '';
+
+            setPlanSequences(importedSequences);
+            setPlanSettings(importedSettings);
+            if (importedEmail) {
+                setPlanSendingEmail(importedEmail);
+            }
+
+            // Mark as recently applied for blue dot indicators
+            setAppliedAt(Date.now());
+            // Auto-clear the dots after 30 seconds
+            setTimeout(() => setAppliedAt(null), 30000);
+
+            // Switch to sequences tab and show toast
+            setPlanActiveTab('sequences');
+            setToastMessage(`✓ Applied ${importedSequences.length} email sequence(s). Review and Save Plan when ready.`);
+            setTimeout(() => setToastMessage(''), 6000);
+        } catch (error: any) {
+            console.error('[Apply Artifact] Error:', error);
+            setToastMessage(`✗ Failed to apply: ${error.message}`);
+            setTimeout(() => setToastMessage(''), 8000);
+        } finally {
+            setApplyingArtifact(false);
+        }
+    };
+
+    const handleCheckSpam = async () => {
+        if (!planArtifact) return;
+
+        setCheckingSpam(true);
+        setSpamReport(null);
+        try {
+            const response = await fetch('/api/outreach/check-spam-triggers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ artifact: planArtifact })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to check for spam triggers');
+            }
+
+            setSpamReport(result);
+
+            // Auto-scroll to the report after state updates
+            setTimeout(() => {
+                spamReportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        } catch (error: any) {
+            console.error('Spam check error:', error);
+            setToastMessage('✗ Failed to check for spam triggers: ' + error.message);
+            setTimeout(() => setToastMessage(''), 8000);
+        } finally {
+            setCheckingSpam(false);
+        }
+    };
+
+    const handleFixSpamIssues = async () => {
+        if (!planArtifact || !spamReport?.issues?.length || !editingPlanFor) return;
+
+        // Build a focused prompt from all the flagged issues
+        const issueLines = spamReport.issues.map((issue: any, idx: number) => {
+            const location = issue.email ? ` (${issue.email})` : '';
+            const text = issue.text ? `"${issue.text}"` : issue.type;
+            return `${idx + 1}. ${text}${location}: ${issue.suggestion}`;
+        }).join('\n');
+
+        const fixPrompt = `Fix the following deliverability issues found in the email copy. Apply each suggestion while keeping the overall message and tone intact:\n\n${issueLines}`;
+
+        setRefiningArtifact(true);
+        try {
+            const response = await fetch('/api/outreach/refine-campaign-strategy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    artifact: planArtifact,
+                    prompt: fixPrompt,
+                    campaignTitle: editingPlanFor.title
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to fix spam issues');
+            }
+
+            setPlanArtifact(result.artifact);
+            setRefineResponse(result.summary || 'Spam trigger fixes applied to the strategy.');
+            setSpamReport(null); // Clear the report since we've fixed the issues
+        } catch (error: any) {
+            console.error('Fix spam issues error:', error);
+            setToastMessage('✗ Failed to fix spam issues: ' + error.message);
+            setTimeout(() => setToastMessage(''), 8000);
+        } finally {
+            setRefiningArtifact(false);
         }
     };
 
@@ -654,10 +828,31 @@ const OutreachCampaignsPage: React.FC = () => {
                             <Settings className="w-4 h-4 inline mr-2" />
                             Campaign Settings
                         </button>
+                        <button
+                            onClick={() => setPlanActiveTab('strategy')}
+                            className={`px-6 py-3 text-sm font-medium transition-colors ${planActiveTab === 'strategy'
+                                ? 'text-[#40c9ff] border-b-2 border-[#40c9ff]'
+                                : 'text-zinc-500 hover:text-zinc-300'
+                                }`}
+                        >
+                            <FileText className="w-4 h-4 inline mr-2" />
+                            Strategy {planArtifact ? '●' : ''}
+                        </button>
                     </div>
+
+                    {/* Toast Notification — always visible above scroll area */}
+                    {toastMessage && (
+                        <div className={`mx-6 mt-2 px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2 ${toastMessage.startsWith('✓')
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            }`}>
+                            {toastMessage}
+                        </div>
+                    )}
 
                     {/* Body */}
                     <div className="flex-grow overflow-y-auto p-6">
+
                         {planActiveTab === 'sequences' && (
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between bg-[#1a1e24] border border-zinc-800 rounded-xl p-3">
@@ -683,13 +878,18 @@ const OutreachCampaignsPage: React.FC = () => {
                                     </div>
                                 </div>
 
+
                                 {planSequences.map((seq, idx) => (
-                                    <div key={idx} className="bg-[#1a1e24] border border-zinc-800 rounded-xl p-4">
+                                    <div key={idx} className={`bg-[#1a1e24] border rounded-xl p-4 ${appliedAt ? 'border-[#40c9ff]/40' : 'border-zinc-800'
+                                        }`}>
                                         <div className="flex items-center justify-between mb-3">
                                             <div className="flex items-center gap-2">
                                                 <span className="bg-[#40c9ff]/10 text-[#40c9ff] text-xs font-bold px-2 py-0.5 rounded-full">
                                                     Email {idx + 1}
                                                 </span>
+                                                {appliedAt && (
+                                                    <span className="w-2 h-2 rounded-full bg-[#40c9ff] animate-pulse" title="Updated from strategy" />
+                                                )}
                                                 <span className="text-zinc-500 text-xs">
                                                     {idx === 0 ? 'Day 0' : `+${seq.delayDays} days`}
                                                 </span>
@@ -917,7 +1117,8 @@ const OutreachCampaignsPage: React.FC = () => {
                                         { key: 'stopOnAutoReply' as const, label: 'Stop on Auto-Reply', desc: 'Stop on out-of-office replies' },
                                         { key: 'openTracking' as const, label: 'Open Tracking', desc: 'Track email opens' },
                                         { key: 'linkTracking' as const, label: 'Link Tracking', desc: 'Track link clicks (reduces deliverability)' },
-                                        { key: 'textOnly' as const, label: 'Text Only', desc: 'Send plain text (better inbox placement)' }
+                                        { key: 'textOnly' as const, label: 'Text Only', desc: 'Send plain text (better inbox placement)' },
+                                        { key: 'slowRampUp' as const, label: 'Slow Ramp Up', desc: 'Gradually increase daily sends to build reputation' }
                                     ].map(toggle => (
                                         <div key={toggle.key} className="flex items-center justify-between p-3 bg-[#1a1e24] rounded-lg border border-zinc-800">
                                             <div>
@@ -934,7 +1135,227 @@ const OutreachCampaignsPage: React.FC = () => {
                                             </button>
                                         </div>
                                     ))}
+
+                                    {/* Slow Ramp Up Increment — only show when ramp up is on */}
+                                    {planSettings.slowRampUp && (
+                                        <div className="flex items-center justify-between p-3 bg-[#1a1e24] rounded-lg border border-zinc-800">
+                                            <div>
+                                                <div className="text-white text-sm font-medium">Ramp Up Increment</div>
+                                                <div className="text-zinc-500 text-xs">Emails added per day (e.g. +2/day until limit)</div>
+                                            </div>
+                                            <input
+                                                type="number"
+                                                value={planSettings.slowRampUpIncrement || 2}
+                                                onChange={(e) => setPlanSettings(prev => ({ ...prev, slowRampUpIncrement: Math.max(1, Math.min(10, parseInt(e.target.value) || 2)) }))}
+                                                min={1}
+                                                max={10}
+                                                className="w-16 bg-[#111417] border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-sm text-center focus:border-[#40c9ff] focus:outline-none"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
+                            </div>
+                        )}
+
+                        {planActiveTab === 'strategy' && (
+                            <div className="flex flex-col h-full gap-4">
+                                {planArtifact ? (
+                                    <>
+                                        {/* Artifact Display */}
+                                        <div className="flex-grow">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <label className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Strategy Document</label>
+                                                <span className="text-zinc-600 text-[10px]">{planArtifact.length.toLocaleString()} chars</span>
+                                            </div>
+                                            <textarea
+                                                value={planArtifact}
+                                                onChange={(e) => setPlanArtifact(e.target.value)}
+                                                rows={14}
+                                                className="w-full bg-[#1a1e24] border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm font-mono resize-y focus:border-[#40c9ff] focus:outline-none transition-colors leading-relaxed"
+                                                placeholder="Strategy artifact will appear here after uploading a file..."
+                                            />
+                                        </div>
+
+                                        {/* AI Refine Prompt */}
+                                        <div className="bg-[#1a1e24] border border-zinc-800 rounded-xl p-4">
+                                            <label className="text-zinc-400 text-xs font-semibold uppercase tracking-wider block mb-2">
+                                                <Wand2 className="w-3.5 h-3.5 inline mr-1.5" />
+                                                Refine with AI
+                                            </label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={artifactPrompt}
+                                                    onChange={(e) => setArtifactPrompt(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' && !e.shiftKey && artifactPrompt.trim() && !refiningArtifact) {
+                                                            e.preventDefault();
+                                                            handleRefineArtifact();
+                                                        }
+                                                    }}
+                                                    placeholder="e.g. Make email 2 shorter and more casual..."
+                                                    className="flex-1 bg-[#111417] border border-zinc-700 rounded-lg px-3 py-2.5 text-white text-sm placeholder:text-zinc-600 focus:border-[#40c9ff] focus:outline-none"
+                                                    disabled={refiningArtifact}
+                                                />
+                                                <button
+                                                    onClick={handleRefineArtifact}
+                                                    disabled={refiningArtifact || !artifactPrompt.trim()}
+                                                    className="px-4 py-2.5 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors text-sm font-bold border border-purple-500/20 disabled:opacity-50 inline-flex items-center gap-2"
+                                                >
+                                                    {refiningArtifact ? (
+                                                        <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Refining...</>
+                                                    ) : (
+                                                        <><SendHorizonal className="w-3.5 h-3.5" /> Refine</>
+                                                    )}
+                                                </button>
+                                            </div>
+                                            <p className="text-zinc-600 text-[10px] mt-2">
+                                                Changes update the strategy document only. Click &quot;Apply to Campaign&quot; below to repopulate sequences &amp; settings.
+                                            </p>
+                                        </div>
+
+                                        {/* AI Response */}
+                                        {refineResponse && (
+                                            <div className="bg-purple-500/5 border border-purple-500/15 rounded-xl p-4 flex gap-3">
+                                                <div className="flex-shrink-0 w-7 h-7 bg-purple-500/20 rounded-full flex items-center justify-center">
+                                                    <Wand2 className="w-3.5 h-3.5 text-purple-400" />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-white text-sm leading-relaxed">{refineResponse}</p>
+                                                    <button
+                                                        onClick={() => setRefineResponse('')}
+                                                        className="text-zinc-600 text-[10px] mt-1.5 hover:text-zinc-400 transition-colors"
+                                                    >
+                                                        Dismiss
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Action Buttons Row */}
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={handleApplyArtifact}
+                                                disabled={applyingArtifact}
+                                                className="flex-1 py-3 rounded-xl bg-[#40c9ff]/10 text-[#40c9ff] font-bold hover:bg-[#40c9ff]/20 transition-colors text-sm border border-[#40c9ff]/20 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                                            >
+                                                {applyingArtifact ? (
+                                                    <><RefreshCw className="w-4 h-4 animate-spin" /> Applying...</>
+                                                ) : (
+                                                    <><Wand2 className="w-4 h-4" /> Apply to Campaign</>
+                                                )}
+                                            </button>
+                                            <button
+                                                onClick={handleCheckSpam}
+                                                disabled={checkingSpam}
+                                                className="py-3 px-5 rounded-xl bg-amber-500/10 text-amber-400 font-bold hover:bg-amber-500/20 transition-colors text-sm border border-amber-500/20 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                                            >
+                                                {checkingSpam ? (
+                                                    <><RefreshCw className="w-4 h-4 animate-spin" /> Checking...</>
+                                                ) : (
+                                                    <><Shield className="w-4 h-4" /> Check Spam Triggers</>
+                                                )}
+                                            </button>
+                                        </div>
+
+                                        {/* Spam Report */}
+                                        {spamReport && (
+                                            <div ref={spamReportRef} className="bg-[#1a1e24] border border-zinc-800 rounded-xl overflow-hidden">
+                                                {/* Score Header */}
+                                                <div className={`px-4 py-3 flex items-center justify-between ${spamReport.score >= 80 ? 'bg-emerald-500/10 border-b border-emerald-500/20' :
+                                                    spamReport.score >= 60 ? 'bg-yellow-500/10 border-b border-yellow-500/20' :
+                                                        'bg-red-500/10 border-b border-red-500/20'
+                                                    }`}>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`text-2xl font-black ${spamReport.score >= 80 ? 'text-emerald-400' :
+                                                            spamReport.score >= 60 ? 'text-yellow-400' :
+                                                                'text-red-400'
+                                                            }`}>
+                                                            {spamReport.score}/100
+                                                        </div>
+                                                        <div>
+                                                            <div className={`text-sm font-bold uppercase ${spamReport.score >= 80 ? 'text-emerald-400' :
+                                                                spamReport.score >= 60 ? 'text-yellow-400' :
+                                                                    'text-red-400'
+                                                                }`}>
+                                                                {spamReport.verdict === 'clean' ? 'Clean' :
+                                                                    spamReport.verdict === 'minor_issues' ? 'Minor Issues' :
+                                                                        spamReport.verdict === 'needs_attention' ? 'Needs Attention' :
+                                                                            'High Risk'}
+                                                            </div>
+                                                            <div className="text-zinc-400 text-xs">{spamReport.summary}</div>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setSpamReport(null)}
+                                                        className="text-zinc-600 hover:text-zinc-400 text-xs"
+                                                    >
+                                                        Dismiss
+                                                    </button>
+                                                </div>
+
+                                                {/* Issues List */}
+                                                {spamReport.issues && spamReport.issues.length > 0 && (
+                                                    <div className="divide-y divide-zinc-800/50">
+                                                        {spamReport.issues.map((issue: any, idx: number) => (
+                                                            <div key={idx} className="px-4 py-3 flex gap-3">
+                                                                <div className={`flex-shrink-0 w-2 h-2 rounded-full mt-1.5 ${issue.severity === 'high' ? 'bg-red-400' :
+                                                                    issue.severity === 'medium' ? 'bg-yellow-400' :
+                                                                        'bg-blue-400'
+                                                                    }`} />
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-white text-sm font-medium">
+                                                                            {issue.text ? `"${issue.text}"` : issue.type}
+                                                                        </span>
+                                                                        {issue.email && (
+                                                                            <span className="text-zinc-600 text-[10px] uppercase">{issue.email}</span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="text-zinc-500 text-xs mt-0.5">{issue.suggestion}</div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {/* Fix All Issues Button */}
+                                                {spamReport.issues && spamReport.issues.length > 0 && (
+                                                    <div className="px-4 py-3 border-t border-zinc-800">
+                                                        <button
+                                                            onClick={handleFixSpamIssues}
+                                                            disabled={refiningArtifact}
+                                                            className="w-full py-2.5 rounded-lg bg-amber-500/10 text-amber-400 font-bold hover:bg-amber-500/20 transition-colors text-sm border border-amber-500/20 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+                                                        >
+                                                            {refiningArtifact ? (
+                                                                <><RefreshCw className="w-4 h-4 animate-spin" /> Fixing Issues...</>
+                                                            ) : (
+                                                                <><Wand2 className="w-4 h-4" /> Fix All Issues</>
+                                                            )}
+                                                        </button>
+                                                        <p className="text-zinc-600 text-[10px] mt-1.5 text-center">
+                                                            AI will rewrite the strategy to fix all flagged issues
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                                        <FileText className="w-12 h-12 text-zinc-700 mb-4" />
+                                        <h4 className="text-white font-semibold mb-2">No Strategy Artifact</h4>
+                                        <p className="text-zinc-500 text-sm max-w-sm">
+                                            Upload a strategy file in the Email Sequences tab to create your strategy artifact. Once uploaded, you can view, edit, and refine it here with AI.
+                                        </p>
+                                        <button
+                                            onClick={() => setPlanActiveTab('sequences')}
+                                            className="mt-4 px-4 py-2 rounded-lg bg-[#40c9ff]/10 text-[#40c9ff] text-sm font-medium hover:bg-[#40c9ff]/20 transition-colors"
+                                        >
+                                            Go to Email Sequences
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
