@@ -21,6 +21,8 @@ interface CampaignSettings {
     linkTracking: boolean;
     openTracking: boolean;
     textOnly: boolean;
+    slowRampUp?: boolean;
+    slowRampUpIncrement?: number;
 }
 
 /**
@@ -106,6 +108,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             open_tracking: settings.openTracking,
             text_only: settings.textOnly,
             first_email_text_only: settings.textOnly,
+            slow_ramp_up: settings.slowRampUp ?? true,
+            slow_ramp_up_increment: settings.slowRampUpIncrement ?? 2,
             custom_variables: {
                 goal: true,
                 focusArea: true,

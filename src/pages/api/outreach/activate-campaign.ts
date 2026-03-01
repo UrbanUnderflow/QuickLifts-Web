@@ -57,7 +57,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${INSTANTLY_KEY}`
-            }
+            },
+            body: JSON.stringify({})
         });
 
         if (!response.ok) {
