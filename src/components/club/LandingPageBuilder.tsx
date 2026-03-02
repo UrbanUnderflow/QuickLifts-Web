@@ -44,6 +44,10 @@ export default function LandingPageBuilder({ club, creatorFallback, totalWorkout
     const [uploadingImages, setUploadingImages] = useState(false);
     const [uploadedImages, setUploadedImages] = useState<string[]>([]);
 
+    // Club accent color — falls back to Pulse green
+    const rawAccent = club?.accentColor || '#E0FE10';
+    const accent = rawAccent.startsWith('#') ? rawAccent : `#${rawAccent}`;
+
     // Generated fake data config
     const [config, setConfig] = useState<any>(club?.landingPageConfig || (club ? {
         heroTitle: club.name,
@@ -303,11 +307,11 @@ export default function LandingPageBuilder({ club, creatorFallback, totalWorkout
                                     <div className="absolute inset-0 bg-gradient-to-t from-[#0E0E10] via-[#0E0E10]/70 to-transparent" />
                                 </div>
                                 <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-                                    <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-[#E0FE10]/10 blur-[120px]" />
+                                    <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-[120px] opacity-[0.12]" style={{ backgroundColor: accent }} />
                                 </div>
                                 <div className="relative z-10 px-6 pb-20 pt-20 w-full max-w-4xl mx-auto">
                                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 mb-6">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-[#E0FE10] animate-pulse" />
+                                        <span className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: accent }} />
                                         <span className="text-white/90 text-sm font-semibold tracking-wide uppercase">Active Now</span>
                                     </div>
                                     <h1 className="text-5xl md:text-7xl font-black text-white mb-6 uppercase tracking-tighter">
@@ -316,7 +320,7 @@ export default function LandingPageBuilder({ club, creatorFallback, totalWorkout
                                     <p className="text-lg md:text-2xl text-gray-300 font-light mb-10 max-w-2xl">
                                         {config.heroSubtitle || config.aboutText || club?.description || "A space purposely built for those ready to push limits."}
                                     </p>
-                                    <button className="bg-[#E0FE10] text-black font-bold px-8 py-4 rounded-xl opacity-70 cursor-not-allowed">
+                                    <button className="font-bold px-8 py-4 rounded-xl opacity-70 cursor-not-allowed" style={{ backgroundColor: accent, color: '#000' }}>
                                         Join Club (Preview)
                                     </button>
                                 </div>
@@ -327,7 +331,7 @@ export default function LandingPageBuilder({ club, creatorFallback, totalWorkout
                                 <div className="flex animate-marquee whitespace-nowrap w-max">
                                     {["Active members", "Daily workouts", "Live chat", "Challenges", "Leaderboards", "Community support"].flatMap((item, i) => [item, item]).map((item, i) => (
                                         <span key={i} className="mx-8 text-gray-400 font-semibold flex items-center gap-2">
-                                            <span className="text-[#E0FE10]">◆</span> {item}
+                                            <span style={{ color: accent }}>◆</span> {item}
                                         </span>
                                     ))}
                                 </div>
@@ -341,22 +345,22 @@ export default function LandingPageBuilder({ club, creatorFallback, totalWorkout
                                 const hasCreator = creator && (creator.displayName || creator.username || (creator as { profileImage?: { profileImageURL?: string } })?.profileImage?.profileImageURL);
                                 return (
                                     <div className="py-16 px-6">
-                                        <p className="text-sm font-semibold text-[#E0FE10] uppercase tracking-wider mb-4">Designed and led by</p>
+                                        <p className="text-sm font-semibold uppercase tracking-wider mb-4" style={{ color: accent }}>Designed and led by</p>
                                         <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
                                             <div className="relative shrink-0">
                                                 {hasCreator ? (
                                                     <>
-                                                        <div className="w-32 h-32 md:w-40 md:h-40 rounded-full ring-4 ring-[#E0FE10]/30 ring-offset-4 ring-offset-[#0E0E10] overflow-hidden">
+                                                        <div className="w-32 h-32 md:w-40 md:h-40 rounded-full ring-offset-4 ring-offset-[#0E0E10] overflow-hidden" style={{ boxShadow: `0 0 0 4px ${accent}4d` }}>
                                                             <img
                                                                 src={(creator as { profileImage?: { profileImageURL?: string } })?.profileImage?.profileImageURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(creator.displayName || creator.username || 'Coach')}`}
                                                                 alt={creator.displayName || creator.username || 'Creator'}
                                                                 className="w-full h-full object-cover"
                                                             />
                                                         </div>
-                                                        <div className="absolute -inset-1 rounded-full bg-[#E0FE10]/20 blur-xl -z-10" />
+                                                        <div className="absolute -inset-1 rounded-full blur-xl -z-10 opacity-30" style={{ backgroundColor: accent }} />
                                                     </>
                                                 ) : (
-                                                    <div className="w-24 h-24 rounded-full bg-white/10 border-2 border-[#E0FE10]/30 flex items-center justify-center text-2xl font-black text-white/60">
+                                                    <div className="w-24 h-24 rounded-full bg-white/10 border-2 flex items-center justify-center text-2xl font-black text-white/60" style={{ borderColor: `${accent}4d` }}>
                                                         ?
                                                     </div>
                                                 )}
@@ -407,7 +411,7 @@ export default function LandingPageBuilder({ club, creatorFallback, totalWorkout
                             {/* Section 5: All Featured Rounds */}
                             <div className="py-16 px-6">
                                 <div className="text-center mb-10">
-                                    <p className="text-[#E0FE10] text-sm font-bold uppercase tracking-widest mb-2">Featured Rounds</p>
+                                    <p className="text-sm font-bold uppercase tracking-widest mb-2" style={{ color: accent }}>Featured Rounds</p>
                                     <h2 className="text-3xl font-black mb-2">See What&apos;s Waiting Inside</h2>
                                     <p className="text-gray-400 text-sm">Join the club to get access to these rounds.</p>
                                 </div>
@@ -434,7 +438,7 @@ export default function LandingPageBuilder({ club, creatorFallback, totalWorkout
                                                         </span>
                                                     </div>
                                                     <div className="flex items-center gap-3 flex-wrap">
-                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#E0FE10]/10 text-[#E0FE10] font-semibold text-sm">
+                                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-sm" style={{ backgroundColor: `${accent}15`, color: accent }}>
                                                             <FiActivity className="w-3.5 h-3.5" />
                                                             {workoutCount} workout{workoutCount !== 1 ? 's' : ''}
                                                         </span>
@@ -463,9 +467,9 @@ export default function LandingPageBuilder({ club, creatorFallback, totalWorkout
                                 <div className="bg-[#151518] border border-white/10 rounded-3xl p-8 text-center">
                                     <h2 className="text-xl font-bold text-white mb-6">Join others already training</h2>
                                     <div className="grid grid-cols-3 gap-4">
-                                        <div><p className="text-3xl font-black text-[#E0FE10]">{club?.memberCount != null ? club.memberCount.toLocaleString() : '—'}</p><p className="text-gray-400 text-sm">Members</p></div>
-                                        <div><p className="text-3xl font-black text-[#E0FE10]">{totalWorkoutsCompleted != null ? totalWorkoutsCompleted.toLocaleString() : '—'}</p><p className="text-gray-400 text-sm">Workouts Completed</p></div>
-                                        <div><p className="text-3xl font-black text-[#E0FE10]">24/7</p><p className="text-gray-400 text-sm">Community</p></div>
+                                        <div><p className="text-3xl font-black" style={{ color: accent }}>{club?.memberCount != null ? club.memberCount.toLocaleString() : '—'}</p><p className="text-gray-400 text-sm">Members</p></div>
+                                        <div><p className="text-3xl font-black" style={{ color: accent }}>{totalWorkoutsCompleted != null ? totalWorkoutsCompleted.toLocaleString() : '—'}</p><p className="text-gray-400 text-sm">Workouts Completed</p></div>
+                                        <div><p className="text-3xl font-black" style={{ color: accent }}>24/7</p><p className="text-gray-400 text-sm">Community</p></div>
                                     </div>
                                 </div>
                             </div>
@@ -475,7 +479,7 @@ export default function LandingPageBuilder({ club, creatorFallback, totalWorkout
                                 <div className="rounded-3xl bg-gradient-to-b from-white/10 to-white/5 border border-white/10 p-10 text-center">
                                     <h2 className="text-3xl font-black text-white mb-4">Ready to Join {config.heroTitle || club?.name || "Your Club"}?</h2>
                                     <p className="text-gray-300 mb-8 max-w-xl mx-auto">{config.aboutText || club?.description || "Get started today."}</p>
-                                    <button className="bg-[#E0FE10] text-black font-bold px-8 py-4 rounded-xl opacity-70 cursor-not-allowed">
+                                    <button className="font-bold px-8 py-4 rounded-xl opacity-70 cursor-not-allowed" style={{ backgroundColor: accent, color: '#000' }}>
                                         Join Club (Preview)
                                     </button>
                                     <p className="text-gray-500 text-sm mt-6">Powered by Pulse</p>

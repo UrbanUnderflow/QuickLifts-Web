@@ -78,6 +78,7 @@ exports.sendChainReactionNotification = require("./challengeNotifications").send
 exports.sendDirectMessageNotification = require("./chatNotifications").sendDirectMessageNotification;
 exports.sendRoundTableNotification = require("./chatNotifications").sendRoundTableNotification;
 exports.sendRoundTableNotificationAlt = require("./chatNotifications").sendRoundTableNotificationAlt;
+exports.sendClubChatNotification = require("./chatNotifications").sendClubChatNotification;
 
 // Export the new batch workout fetch function, now directly from its v2 definition
 // The function is defined and exported in getWorkoutsBatch.js using the v2 onCall method.

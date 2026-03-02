@@ -19,13 +19,14 @@ import {
     Zap,
     Star,
     Wind,
+    Bell,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────
 
-type DemoAct = 'act1' | 'act2' | 'act3';
+type DemoAct = 'intro' | 'act1' | 'act2' | 'act3';
 
 interface ScriptMessage {
     role: 'nora' | 'athlete' | 'system';
@@ -113,6 +114,41 @@ const DEMO_SCRIPT: ScriptMessage[] = [
         transitionTo: 'act2',
     },
 ];
+
+// ─────────────────────────────────────────────────────────
+// SUGGESTED RESPONSE CHIPS
+// ─────────────────────────────────────────────────────────
+
+const SUGGESTED_RESPONSES: Record<number, string[]> = {
+    1: [
+        'I feel okay, just trying to get locked in.',
+        "I'm good, ready for today.",
+    ],
+    2: [
+        'That\'s good to hear. Hey what time did Coach say to meet for competition prep today?',
+        "Nice. When's the comp prep meeting?",
+    ],
+    3: [
+        "Cool. I'm not going to lie, I'm a little nervous about today's game.",
+        'Yeah… honestly I\'m kinda nervous about today.',
+    ],
+    4: [
+        "There's just a lot of pressure. If we lose today, our season is over. And I know there are scouts watching.",
+        "I don't know, everything just feels like it's on the line today.",
+    ],
+    5: [
+        "Sure, let's do it.",
+        "Yeah, I'm ready.",
+    ],
+    7: [
+        "I'm still feeling pretty anxious.",
+        'A little better, but still tense.',
+    ],
+    8: [
+        'Sure, go ahead and let Coach know.',
+        "Yeah, that's fine. Let him know.",
+    ],
+};
 
 // ─────────────────────────────────────────────────────────
 // FLOATING ORB COMPONENT
@@ -246,6 +282,79 @@ const BoxBreathingAnimation: React.FC<{ onComplete: () => void }> = ({
 };
 
 // ─────────────────────────────────────────────────────────
+// BIOMETRIC HUD (during breathing exercise)
+// ─────────────────────────────────────────────────────────
+
+const BiometricHUD: React.FC<{ isActive: boolean }> = ({ isActive }) => {
+    const [hr, setHr] = useState(72);
+    const [hrv, setHrv] = useState(45);
+    const [calmScore, setCalmScore] = useState(34);
+
+    useEffect(() => {
+        if (!isActive) return;
+        const interval = setInterval(() => {
+            setHr((prev) => Math.max(56, prev - Math.floor(Math.random() * 3 + 1)));
+            setHrv((prev) => Math.min(72, prev + Math.floor(Math.random() * 3 + 1)));
+            setCalmScore((prev) => Math.min(85, prev + Math.floor(Math.random() * 4 + 2)));
+        }, 2000);
+        return () => clearInterval(interval);
+    }, [isActive]);
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ delay: 0.5 }}
+            className="grid grid-cols-3 gap-3 mt-6 max-w-md mx-auto"
+        >
+            <div className="rounded-xl bg-zinc-900/80 border border-red-500/20 p-3 text-center relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-t from-red-500/5 to-transparent" />
+                <Heart className="w-4 h-4 text-red-400 mx-auto mb-1 relative z-10" />
+                <motion.div
+                    key={hr}
+                    initial={{ scale: 1.3 }}
+                    animate={{ scale: 1, color: hr <= 62 ? '#4ade80' : '#f87171' }}
+                    className="text-xl font-bold relative z-10"
+                >
+                    {hr}
+                </motion.div>
+                <div className="text-[10px] text-zinc-500 uppercase relative z-10">BPM</div>
+                <div className="text-[9px] text-green-400/70 mt-0.5 relative z-10">↓ Decreasing</div>
+            </div>
+            <div className="rounded-xl bg-zinc-900/80 border border-blue-500/20 p-3 text-center relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-t from-blue-500/5 to-transparent" />
+                <Activity className="w-4 h-4 text-blue-400 mx-auto mb-1 relative z-10" />
+                <motion.div
+                    key={hrv}
+                    initial={{ scale: 1.3 }}
+                    animate={{ scale: 1 }}
+                    className="text-xl font-bold text-blue-400 relative z-10"
+                >
+                    {hrv}
+                </motion.div>
+                <div className="text-[10px] text-zinc-500 uppercase relative z-10">HRV</div>
+                <div className="text-[9px] text-green-400/70 mt-0.5 relative z-10">↑ Improving</div>
+            </div>
+            <div className="rounded-xl bg-zinc-900/80 border border-[#E0FE10]/20 p-3 text-center relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-t from-[#E0FE10]/5 to-transparent" />
+                <Brain className="w-4 h-4 text-[#E0FE10] mx-auto mb-1 relative z-10" />
+                <motion.div
+                    key={calmScore}
+                    initial={{ scale: 1.3 }}
+                    animate={{ scale: 1 }}
+                    className="text-xl font-bold text-[#E0FE10] relative z-10"
+                >
+                    {calmScore}
+                </motion.div>
+                <div className="text-[10px] text-zinc-500 uppercase relative z-10">Calm</div>
+                <div className="text-[9px] text-green-400/70 mt-0.5 relative z-10">↑ Stabilizing</div>
+            </div>
+        </motion.div>
+    );
+};
+
+// ─────────────────────────────────────────────────────────
 // COACH DASHBOARD (Act 2)
 // ─────────────────────────────────────────────────────────
 
@@ -253,17 +362,20 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
     onContinue,
 }) => {
     const [showAlert, setShowAlert] = useState(false);
+    const [showRoster, setShowRoster] = useState(false);
     const [showExercises, setShowExercises] = useState(false);
     const [showHandoff, setShowHandoff] = useState(false);
 
     useEffect(() => {
         const t1 = setTimeout(() => setShowAlert(true), 800);
-        const t2 = setTimeout(() => setShowExercises(true), 2500);
-        const t3 = setTimeout(() => setShowHandoff(true), 4000);
+        const t2 = setTimeout(() => setShowRoster(true), 2200);
+        const t3 = setTimeout(() => setShowExercises(true), 3800);
+        const t4 = setTimeout(() => setShowHandoff(true), 5200);
         return () => {
             clearTimeout(t1);
             clearTimeout(t2);
             clearTimeout(t3);
+            clearTimeout(t4);
         };
     }, []);
 
@@ -304,6 +416,50 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
             status: 'Suggested',
         },
     ];
+
+    const roster = [
+        { name: 'T. Grant', pos: 'DB', num: 24, status: 'elevated', text: 'Elevated Anxiety', time: '8:15 AM', hl: true },
+        { name: 'K. Thompson', pos: 'LB', num: 52, status: 'critical', text: 'Escalated — Clinical', time: '6:50 AM', hl: true },
+        { name: 'D. Okafor', pos: 'DT', num: 94, status: 'warning', text: 'Low Sleep (4.5h)', time: '7:55 AM', hl: false },
+        { name: 'B. Washington', pos: 'TE', num: 87, status: 'warning', text: 'Elevated Stress', time: '7:50 AM', hl: false },
+        { name: 'J. Rodriguez', pos: 'QB', num: 7, status: 'optimal', text: 'Game Ready', time: '7:30 AM', hl: false },
+        { name: 'M. Williams', pos: 'WR', num: 11, status: 'optimal', text: 'Optimal', time: '7:45 AM', hl: false },
+        { name: 'A. Johnson', pos: 'RB', num: 28, status: 'optimal', text: 'Game Ready', time: '8:00 AM', hl: false },
+        { name: 'C. Martinez', pos: 'OG', num: 75, status: 'optimal', text: 'Optimal', time: '7:20 AM', hl: false },
+        { name: 'R. Davis', pos: 'S', num: 21, status: 'optimal', text: 'Optimal', time: '7:40 AM', hl: false },
+        { name: 'L. Chen', pos: 'K', num: 3, status: 'optimal', text: 'Optimal', time: '7:15 AM', hl: false },
+        { name: 'J. Patel', pos: 'CB', num: 32, status: 'optimal', text: 'Game Ready', time: '8:05 AM', hl: false },
+        { name: 'S. Brooks', pos: 'WR', num: 15, status: 'optimal', text: 'Optimal', time: '7:35 AM', hl: false },
+        { name: 'T. Morrison', pos: 'DE', num: 91, status: 'optimal', text: 'Game Ready', time: '7:25 AM', hl: false },
+        { name: 'E. Campbell', pos: 'OT', num: 68, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
+        { name: 'M. Foster', pos: 'LB', num: 56, status: 'optimal', text: 'Optimal', time: '7:55 AM', hl: false },
+        { name: 'D. Rivera', pos: 'CB', num: 29, status: 'optimal', text: 'Game Ready', time: '8:10 AM', hl: false },
+        { name: 'K. Wright', pos: 'RB', num: 33, status: 'optimal', text: 'Optimal', time: '7:30 AM', hl: false },
+        { name: 'J. Harper', pos: 'WR', num: 84, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
+        { name: 'N. Cooper', pos: 'DT', num: 97, status: 'optimal', text: 'Optimal', time: '7:45 AM', hl: false },
+        { name: 'C. Bell', pos: 'S', num: 26, status: 'optimal', text: 'Optimal', time: '7:50 AM', hl: false },
+        { name: 'P. Adams', pos: 'C', num: 62, status: 'optimal', text: 'Game Ready', time: '7:40 AM', hl: false },
+        { name: 'R. Mitchell', pos: 'DE', num: 95, status: 'optimal', text: 'Optimal', time: '7:55 AM', hl: false },
+        { name: 'L. Turner', pos: 'FB', num: 45, status: 'optimal', text: 'Optimal', time: '7:25 AM', hl: false },
+        { name: 'A. Scott', pos: 'P', num: 8, status: 'optimal', text: 'Optimal', time: '7:35 AM', hl: false },
+        { name: 'H. Baker', pos: 'LS', num: 48, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
+    ];
+
+    const statusDot = (s: string) => (
+        s === 'optimal' ? 'bg-green-400' :
+            s === 'warning' ? 'bg-amber-400' :
+                s === 'elevated' ? 'bg-orange-400' :
+                    s === 'critical' ? 'bg-red-400 animate-pulse' :
+                        'bg-zinc-600'
+    );
+
+    const statusColor = (s: string) => (
+        s === 'optimal' ? 'text-green-400/80' :
+            s === 'warning' ? 'text-amber-400/80' :
+                s === 'elevated' ? 'text-orange-400/80' :
+                    s === 'critical' ? 'text-red-400/80' :
+                        'text-zinc-600'
+    );
 
     return (
         <motion.div
@@ -418,6 +574,79 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
                                     meeting. Monitor throughout the day in case escalation to
                                     clinical support is needed.
                                 </p>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Full Team Roster */}
+            <AnimatePresence>
+                {showRoster && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5 }}
+                    >
+                        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                            <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
+                                Team Roster — Game Day Status
+                            </h3>
+                            <div className="flex items-center gap-3 text-[11px]">
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" /> 19 Optimal</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> 2 Flagged</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" /> 1 Elevated</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> 1 Escalated</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-600 inline-block" /> 3 Pending</span>
+                            </div>
+                        </div>
+
+                        {/* Check-in progress */}
+                        <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 mb-3 flex items-center gap-4">
+                            <div className="text-sm text-zinc-300">
+                                <span className="text-white font-bold">22</span>/25 checked in
+                            </div>
+                            <div className="flex-1 h-2 bg-zinc-700/50 rounded-full overflow-hidden">
+                                <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: '88%' }}
+                                    transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
+                                    className="h-full rounded-full"
+                                    style={{ background: 'linear-gradient(90deg, #22C55E, #E0FE10)' }}
+                                />
+                            </div>
+                            <div className="text-xs text-zinc-500">88%</div>
+                        </div>
+
+                        {/* Roster table */}
+                        <div className="rounded-xl border border-zinc-700/30 overflow-hidden">
+                            <div className="grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 text-[10px] font-bold text-zinc-500 uppercase tracking-wide px-3 py-2 bg-zinc-800/60 border-b border-zinc-700/30">
+                                <div>#</div>
+                                <div>Player</div>
+                                <div>Pos</div>
+                                <div>Status</div>
+                                <div className="text-right">Time</div>
+                            </div>
+                            <div className="max-h-[340px] overflow-y-auto">
+                                {roster.map((p, i) => (
+                                    <motion.div
+                                        key={p.name}
+                                        initial={{ opacity: 0, x: -10 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: i * 0.03 }}
+                                        className={`grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 items-center px-3 py-2 border-b border-zinc-800/50 text-sm hover:bg-zinc-800/40 transition-colors ${p.hl ? 'bg-orange-500/5' : ''
+                                            }`}
+                                    >
+                                        <div className="text-zinc-500 font-mono text-xs">{p.num}</div>
+                                        <div className={`font-medium ${p.hl ? 'text-orange-400' : 'text-white'}`}>{p.name}</div>
+                                        <div className="text-zinc-500 text-xs">{p.pos}</div>
+                                        <div className="flex items-center gap-1.5">
+                                            <div className={`w-2 h-2 rounded-full shrink-0 ${statusDot(p.status)}`} />
+                                            <span className={`text-xs truncate ${statusColor(p.status)}`}>{p.text}</span>
+                                        </div>
+                                        <div className="text-zinc-500 text-xs text-right">{p.time}</div>
+                                    </motion.div>
+                                ))}
                             </div>
                         </div>
                     </motion.div>
@@ -846,12 +1075,13 @@ const TheClose: React.FC = () => {
 
 const PulseCheckDemo: React.FC = () => {
     // ── State ─────────────────────────────────────────────
-    const [currentAct, setCurrentAct] = useState<DemoAct>('act1');
+    const [currentAct, setCurrentAct] = useState<DemoAct>('intro');
     const [messages, setMessages] = useState<ChatMsg[]>([]);
     const [input, setInput] = useState('');
     const [scriptIndex, setScriptIndex] = useState(0);
     const [isTyping, setIsTyping] = useState(false);
     const [showBreathing, setShowBreathing] = useState(false);
+    const [showNotification, setShowNotification] = useState(false);
     const scrollerRef = useRef<HTMLDivElement>(null);
 
     // Voice state
@@ -872,8 +1102,10 @@ const PulseCheckDemo: React.FC = () => {
         });
     }, [messages, showBreathing]);
 
-    // ── Initial Nora greeting ─────────────────────────────
+    // ── Initial Nora greeting (only after intro dismissed) ─
     useEffect(() => {
+        if (currentAct !== 'act1') return;
+        if (messages.length > 0) return; // already greeted
         const firstMsg = DEMO_SCRIPT[0];
         const timer = setTimeout(async () => {
             setIsTyping(true);
@@ -889,10 +1121,10 @@ const PulseCheckDemo: React.FC = () => {
             setMessages([msg]);
             if (playFn) playFn(); // plays instantly — audio is already loaded
             setScriptIndex(1);
-        }, 500);
+        }, 800);
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [currentAct]);
 
     // ── TTS: preload audio and return a play() function ────
     // Call this while typing indicator is showing → audio loads in background
@@ -1173,99 +1405,199 @@ const PulseCheckDemo: React.FC = () => {
                 {/* Noise texture */}
                 <div className="absolute inset-0 opacity-[0.015] bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIgdHlwZT0iZnJhY3RhbE5vaXNlIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxwYXRoIGQ9Ik0wIDBoMzAwdjMwMEgweiIgZmlsdGVyPSJ1cmwoI2EpIiBvcGFjaXR5PSIuMDUiLz48L3N2Zz4=')]" />
 
-                {/* Header */}
-                <header className="relative z-20 flex items-center justify-between px-6 py-4 backdrop-blur-xl bg-zinc-900/30 border-b border-white/5">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/15 flex items-center justify-center">
-                            <Brain className="w-4 h-4 text-[#E0FE10]" />
+                {/* Header — hide on intro */}
+                {currentAct !== 'intro' && (
+                    <header className="relative z-20 flex items-center justify-between px-6 py-4 backdrop-blur-xl bg-zinc-900/30 border-b border-white/5">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/15 flex items-center justify-center">
+                                <Brain className="w-4 h-4 text-[#E0FE10]" />
+                            </div>
+                            <div>
+                                <h1 className="text-sm font-bold text-white">Pulse Check</h1>
+                                <p className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                                    {currentAct === 'act1'
+                                        ? 'Athlete Experience'
+                                        : currentAct === 'act2'
+                                            ? 'Coach Dashboard'
+                                            : 'The Close'}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h1 className="text-sm font-bold text-white">Pulse Check</h1>
-                            <p className="text-[10px] text-zinc-500 uppercase tracking-wider">
-                                {currentAct === 'act1'
-                                    ? 'Athlete Experience'
-                                    : currentAct === 'act2'
-                                        ? 'Coach Dashboard'
-                                        : 'The Close'}
-                            </p>
-                        </div>
-                    </div>
 
-                    {/* Voice controls */}
-                    <div className="flex items-center gap-2">
-                        {/* TTS Toggle */}
-                        <button
-                            onClick={() => {
-                                setTtsEnabled(!ttsEnabled);
-                                if (ttsEnabled) {
-                                    // Stop OpenAI audio
-                                    if (audioRef.current) {
-                                        audioRef.current.pause();
-                                        audioRef.current = null;
-                                        setIsSpeaking(false);
+                        {/* Voice controls */}
+                        <div className="flex items-center gap-2">
+                            {/* TTS Toggle */}
+                            <button
+                                onClick={() => {
+                                    setTtsEnabled(!ttsEnabled);
+                                    if (ttsEnabled) {
+                                        // Stop OpenAI audio
+                                        if (audioRef.current) {
+                                            audioRef.current.pause();
+                                            audioRef.current = null;
+                                            setIsSpeaking(false);
+                                        }
+                                        // Also stop Web Speech fallback
+                                        window.speechSynthesis?.cancel();
                                     }
-                                    // Also stop Web Speech fallback
-                                    window.speechSynthesis?.cancel();
+                                }}
+                                className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-all ${ttsEnabled
+                                    ? 'bg-[#E0FE10]/15 border border-[#E0FE10]/30'
+                                    : 'bg-zinc-800/60 border border-zinc-700/40'
+                                    }`}
+                                title={ttsEnabled ? 'Mute Nora' : 'Unmute Nora'}
+                            >
+                                {isSpeaking && (
+                                    <motion.div
+                                        className="absolute inset-0 rounded-lg border-2 border-[#E0FE10]/50"
+                                        animate={{ opacity: [0.5, 1, 0.5] }}
+                                        transition={{ duration: 1.5, repeat: Infinity }}
+                                    />
+                                )}
+                                {ttsEnabled ? (
+                                    <Volume2 className="w-4 h-4 text-[#E0FE10]" />
+                                ) : (
+                                    <VolumeX className="w-4 h-4 text-zinc-500" />
+                                )}
+                            </button>
+
+                            {/* STT Toggle */}
+                            <button
+                                onClick={toggleSTT}
+                                className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${sttEnabled
+                                    ? 'bg-blue-500/15 border border-blue-500/30'
+                                    : 'bg-zinc-800/60 border border-zinc-700/40'
+                                    }`}
+                                title={
+                                    sttEnabled ? 'Disable Voice Input' : 'Enable Voice Input'
                                 }
-                            }}
-                            className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-all ${ttsEnabled
-                                ? 'bg-[#E0FE10]/15 border border-[#E0FE10]/30'
-                                : 'bg-zinc-800/60 border border-zinc-700/40'
-                                }`}
-                            title={ttsEnabled ? 'Mute Nora' : 'Unmute Nora'}
-                        >
-                            {isSpeaking && (
-                                <motion.div
-                                    className="absolute inset-0 rounded-lg border-2 border-[#E0FE10]/50"
-                                    animate={{ opacity: [0.5, 1, 0.5] }}
-                                    transition={{ duration: 1.5, repeat: Infinity }}
-                                />
-                            )}
-                            {ttsEnabled ? (
-                                <Volume2 className="w-4 h-4 text-[#E0FE10]" />
-                            ) : (
-                                <VolumeX className="w-4 h-4 text-zinc-500" />
-                            )}
-                        </button>
+                            >
+                                {sttEnabled ? (
+                                    <Mic className="w-4 h-4 text-blue-400" />
+                                ) : (
+                                    <MicOff className="w-4 h-4 text-zinc-500" />
+                                )}
+                            </button>
 
-                        {/* STT Toggle */}
-                        <button
-                            onClick={toggleSTT}
-                            className={`w-9 h-9 rounded-lg flex items-center justify-center transition-all ${sttEnabled
-                                ? 'bg-blue-500/15 border border-blue-500/30'
-                                : 'bg-zinc-800/60 border border-zinc-700/40'
-                                }`}
-                            title={
-                                sttEnabled ? 'Disable Voice Input' : 'Enable Voice Input'
-                            }
-                        >
-                            {sttEnabled ? (
-                                <Mic className="w-4 h-4 text-blue-400" />
-                            ) : (
-                                <MicOff className="w-4 h-4 text-zinc-500" />
-                            )}
-                        </button>
-
-                        {/* Act indicator pills */}
-                        <div className="flex gap-1 ml-3">
-                            {(['act1', 'act2', 'act3'] as DemoAct[]).map((act) => (
-                                <div
-                                    key={act}
-                                    className={`w-2 h-2 rounded-full transition-all duration-500 ${act === currentAct
-                                        ? 'bg-[#E0FE10] scale-125'
-                                        : act < currentAct
-                                            ? 'bg-zinc-500'
-                                            : 'bg-zinc-700'
-                                        }`}
-                                />
-                            ))}
+                            {/* Act indicator pills */}
+                            <div className="flex gap-1 ml-3">
+                                {(['act1', 'act2', 'act3'] as DemoAct[]).map((act) => (
+                                    <div
+                                        key={act}
+                                        className={`w-2 h-2 rounded-full transition-all duration-500 ${act === currentAct
+                                            ? 'bg-[#E0FE10] scale-125'
+                                            : act < currentAct
+                                                ? 'bg-zinc-500'
+                                                : 'bg-zinc-700'
+                                            }`}
+                                    />
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                </header>
+                    </header>
+                )}
 
                 {/* Main Content */}
                 <main className="flex-1 relative z-10 overflow-hidden">
                     <AnimatePresence mode="wait">
+                        {/* ── INTRO: Phone Notification ──── */}
+                        {currentAct === 'intro' && (
+                            <motion.div
+                                key="intro"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0, scale: 0.95 }}
+                                className="h-full flex flex-col items-center justify-center px-6"
+                            >
+                                {/* Phone frame */}
+                                <motion.div
+                                    initial={{ opacity: 0, y: 40 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.8, ease: 'easeOut' }}
+                                    className="relative w-[340px] rounded-[40px] overflow-hidden border-2 border-zinc-700/60 shadow-2xl shadow-black/60"
+                                    style={{ background: 'linear-gradient(180deg, #111113 0%, #0a0a0b 100%)' }}
+                                >
+                                    {/* Status bar */}
+                                    <div className="flex items-center justify-between px-8 pt-4 pb-2">
+                                        <span className="text-xs font-semibold text-white">T-Mobile</span>
+                                        <div className="flex items-center gap-1">
+                                            <div className="w-4 h-2 rounded-sm border border-white/60 relative">
+                                                <div className="absolute inset-[1px] right-[2px] bg-green-400 rounded-[1px]" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Lock screen content */}
+                                    <div className="text-center py-12">
+                                        <div className="text-zinc-500 text-xs uppercase tracking-widest mb-1">
+                                            Saturday, March 2
+                                        </div>
+                                        <div className="text-6xl font-thin text-white tracking-tight">
+                                            6:47
+                                        </div>
+                                        <div className="text-xs text-[#E0FE10]/60 mt-2 font-medium uppercase tracking-wider">
+                                            ★ Game Day
+                                        </div>
+                                    </div>
+
+                                    {/* Push notification — slides in */}
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -60 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 1.5, duration: 0.5, type: 'spring', stiffness: 300, damping: 25 }}
+                                        onClick={() => {
+                                            setCurrentAct('act1');
+                                        }}
+                                        className="mx-4 mb-8 rounded-2xl p-3.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-transform"
+                                        style={{
+                                            background: 'rgba(255,255,255,0.08)',
+                                            backdropFilter: 'blur(40px)',
+                                            border: '1px solid rgba(255,255,255,0.12)',
+                                        }}
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                <Brain className="w-5 h-5 text-[#E0FE10]" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between mb-0.5">
+                                                    <span className="text-xs font-bold text-white uppercase tracking-wide">Pulse Check</span>
+                                                    <span className="text-[10px] text-zinc-500">now</span>
+                                                </div>
+                                                <p className="text-sm text-zinc-200 leading-snug">
+                                                    Good morning, Tremaine. Time for your check-in with Nora.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+
+                                    {/* Swipe hint */}
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        transition={{ delay: 2.5 }}
+                                        className="text-center pb-8"
+                                    >
+                                        <span className="text-[10px] text-zinc-600 uppercase tracking-widest">
+                                            Tap notification to open
+                                        </span>
+                                    </motion.div>
+                                </motion.div>
+
+                                {/* Context label below phone */}
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    transition={{ delay: 2 }}
+                                    className="mt-6 text-center"
+                                >
+                                    <div className="text-xs text-zinc-500 uppercase tracking-widest">
+                                        Athlete Experience — Game Day Morning
+                                    </div>
+                                </motion.div>
+                            </motion.div>
+                        )}
+
                         {currentAct === 'act1' && (
                             <motion.div
                                 key="act1"
@@ -1337,12 +1669,15 @@ const PulseCheckDemo: React.FC = () => {
                                                 ))}
                                             </AnimatePresence>
 
-                                            {/* Box Breathing */}
+                                            {/* Box Breathing + Biometric HUD */}
                                             <AnimatePresence>
                                                 {showBreathing && (
-                                                    <BoxBreathingAnimation
-                                                        onComplete={handleBreathingComplete}
-                                                    />
+                                                    <div>
+                                                        <BoxBreathingAnimation
+                                                            onComplete={handleBreathingComplete}
+                                                        />
+                                                        <BiometricHUD isActive={showBreathing} />
+                                                    </div>
                                                 )}
                                             </AnimatePresence>
 
@@ -1395,6 +1730,29 @@ const PulseCheckDemo: React.FC = () => {
 
                                 {/* Input bar */}
                                 <div className="relative z-20 backdrop-blur-xl bg-zinc-900/40 border-t border-white/5 px-4 py-3">
+                                    {/* Response Chips */}
+                                    {SUGGESTED_RESPONSES[scriptIndex] && !showBreathing && !isTyping && (
+                                        <div className="max-w-3xl mx-auto mb-3">
+                                            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Suggested Responses</div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {SUGGESTED_RESPONSES[scriptIndex].map((suggestion, idx) => (
+                                                    <motion.button
+                                                        key={idx}
+                                                        initial={{ opacity: 0, y: 10 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        transition={{ delay: idx * 0.1 + 0.5 }}
+                                                        onClick={() => {
+                                                            setInput('');
+                                                            advanceScript(suggestion);
+                                                        }}
+                                                        className="px-4 py-2.5 rounded-xl text-sm text-left bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:bg-[#E0FE10]/10 hover:border-[#E0FE10]/30 hover:text-[#E0FE10] transition-all duration-200 max-w-[90%]"
+                                                    >
+                                                        &quot;{suggestion}&quot;
+                                                    </motion.button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="max-w-3xl mx-auto flex items-center gap-3">
                                         {/* Mic button (when STT is on) */}
                                         {sttEnabled && (

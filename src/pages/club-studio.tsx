@@ -209,10 +209,10 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
             <div className="max-w-6xl mx-auto px-6 py-12 md:py-24">
                 <div className="flex items-center justify-between mb-12">
                     <button
-                        onClick={() => router.push('/?tab=create')}
+                        onClick={() => router.push('/manage-clubs')}
                         className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
                     >
-                        <FiArrowLeft /> Back to Creator Studio
+                        <FiArrowLeft /> Back to My Clubs
                     </button>
                     <button
                         onClick={handleCopyLink}
@@ -629,25 +629,38 @@ export default function ClubStudioPage() {
     const router = useRouter();
     const [club, setClub] = useState<Club | null>(null);
     const [loadingClub, setLoadingClub] = useState(true);
+    const { clubId } = router.query;
 
     useEffect(() => {
-        if (!currentUser?.id) {
+        if (!currentUser?.id || !router.isReady) {
             setLoadingClub(false);
             return;
         }
 
-        // Fetch user's club using clubService
-        clubService.getOrCreateClub(currentUser)
-            .then((fetchedClub) => {
+        const loadClub = async () => {
+            try {
+                let fetchedClub: Club | null = null;
+
+                if (clubId && typeof clubId === 'string') {
+                    // Load specific club by ID
+                    fetchedClub = await clubService.getClubById(clubId);
+                }
+
+                if (!fetchedClub) {
+                    // Fallback: get or create the default club
+                    fetchedClub = await clubService.getOrCreateClub(currentUser);
+                }
+
                 setClub(fetchedClub);
-            })
-            .catch((err) => {
+            } catch (err) {
                 console.error("Failed to load club:", err);
-            })
-            .finally(() => {
+            } finally {
                 setLoadingClub(false);
-            });
-    }, [currentUser?.id]);
+            }
+        };
+
+        loadClub();
+    }, [currentUser?.id, clubId, router.isReady]);
 
     return (
         <div className="min-h-screen bg-[#0E0E10] min-h-screen text-white font-sans overflow-hidden">

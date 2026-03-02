@@ -1,11 +1,10 @@
 import { GetServerSideProps } from 'next';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import PageHead from '../../components/PageHead';
 import { clubService } from '../../api/firebase/club/service';
 import { workoutService } from '../../api/firebase/workout/service';
-import { userService } from '../../api/firebase/user';
-import { FiShare2, FiUsers, FiMessageCircle, FiAward, FiActivity, FiCheckCircle } from 'react-icons/fi';
+import { FiShare2, FiUsers, FiMessageCircle, FiAward, FiActivity, FiCheckCircle, FiChevronDown } from 'react-icons/fi';
 import { motion, useInView } from 'framer-motion';
 
 interface RoundPreview {
@@ -24,6 +23,14 @@ interface ClubPageProps {
     allRounds?: RoundPreview[];
     error?: string | null;
 }
+
+// Club type display names
+const CLUB_TYPE_LABELS: Record<string, string> = {
+    runClub: 'Run Club', trainingClub: 'Training Club', liftClub: 'Lift Club',
+    stretchClub: 'Stretch Club', hiitClub: 'HIIT Club', yogaClub: 'Yoga Club',
+    crossFitClub: 'CrossFit Club', boxingClub: 'Boxing Club', cyclingClub: 'Cycling Club',
+    swimmingClub: 'Swimming Club', calisthenicsClub: 'Calisthenics Club', generalFitness: 'General Fitness',
+};
 
 function getFeatureDescription(featureName: string): string {
     const lower = featureName.toLowerCase();
@@ -51,6 +58,39 @@ function useCountUp(end: number, duration: number, startOnView: boolean, inView:
     return count;
 }
 
+/**
+ * Derives a "brand-dark" background from the accent hex — keeps hue,
+ * lowers saturation 40%, crushes lightness to ~5%.
+ */
+function deriveDarkBackground(hex: string): string {
+    const r = parseInt(hex.slice(0, 2), 16) / 255;
+    const g = parseInt(hex.slice(2, 4), 16) / 255;
+    const b = parseInt(hex.slice(4, 6), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const d = max - min;
+    if (d > 0) {
+        s = d / max;
+        if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+        else if (max === g) h = ((b - r) / d + 2) / 6;
+        else h = ((r - g) / d + 4) / 6;
+    }
+    // Crush to dark
+    const ns = s * 0.6;
+    const nv = 0.06;
+    const c = nv * ns, x = c * (1 - Math.abs((h * 6) % 2 - 1)), m = nv - c;
+    let r1 = 0, g1 = 0, b1 = 0;
+    const hi = Math.floor(h * 6) % 6;
+    if (hi === 0) { r1 = c; g1 = x; }
+    else if (hi === 1) { r1 = x; g1 = c; }
+    else if (hi === 2) { g1 = c; b1 = x; }
+    else if (hi === 3) { g1 = x; b1 = c; }
+    else if (hi === 4) { r1 = x; b1 = c; }
+    else { r1 = c; b1 = x; }
+    const toHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+    return `#${toHex(r1)}${toHex(g1)}${toHex(b1)}`;
+}
+
 const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkoutsCompleted = 0, allRounds = [], error }) => {
     const router = useRouter();
     const [copied, setCopied] = useState(false);
@@ -73,6 +113,23 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
     const workoutsTotal = totalWorkoutsCompleted ?? 0;
     const countWorkouts = useCountUp(workoutsTotal, 1400, true, statsInView);
 
+    // --- Accent Color System ---
+    const rawAccent = clubData?.accentColor || '#E0FE10';
+    // Ensure hex has # prefix
+    const accent = rawAccent.startsWith('#') ? rawAccent : `#${rawAccent}`;
+    // Clean hex for CSS usage
+    const accentHex = accent.replace('#', '');
+    const darkBg = useMemo(() => deriveDarkBackground(accentHex), [accentHex]);
+
+    // Compute whether the accent is "light" (for text contrast)
+    const isLightAccent = useMemo(() => {
+        const r = parseInt(accentHex.slice(0, 2), 16);
+        const g = parseInt(accentHex.slice(2, 4), 16);
+        const b = parseInt(accentHex.slice(4, 6), 16);
+        return (r * 299 + g * 587 + b * 114) / 1000 > 128;
+    }, [accentHex]);
+    const accentTextColor = isLightAccent ? '#000000' : '#ffffff';
+
     if (error || !clubData) {
         return (
             <div className="min-h-screen bg-[#0E0E10] flex items-center justify-center text-white">
@@ -87,6 +144,8 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
     const description = config.heroSubtitle || config.aboutText || clubData.description || 'Welcome to our fitness community! Join rounds, chat, and grow together.';
     const heroImage = config.heroImage || clubData.coverImageURL || "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2070&auto=format&fit=crop";
     const features = config.features && config.features.length > 0 ? config.features : ["Chat", "Challenges", "Leaderboard", "Community"];
+    const tagline = clubData.tagline || null;
+    const clubTypeLabel = clubData.clubType ? CLUB_TYPE_LABELS[clubData.clubType] || null : null;
 
     const handleShare = () => {
         navigator.clipboard.writeText(`https://fitwithpulse.ai/club/${clubData.id}`);
@@ -108,7 +167,7 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
     ];
 
     return (
-        <div className="min-h-screen bg-[#0E0E10] text-white font-sans overflow-y-auto">
+        <div className="min-h-screen text-white font-sans overflow-y-auto" style={{ backgroundColor: darkBg }}>
             <PageHead
                 pageOgUrl={`https://fitwithpulse.ai/club/${clubData.id}`}
                 metaData={{
@@ -127,25 +186,39 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                 pageOgImage={heroImage}
             />
 
+            {/* Ambient accent glow — top of page */}
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+                <div
+                    className="absolute -top-32 left-1/2 -translate-x-1/2 w-[800px] h-[600px] rounded-full blur-[180px] opacity-[0.07]"
+                    style={{ backgroundColor: accent }}
+                />
+                <div
+                    className="absolute top-1/3 -right-40 w-[500px] h-[500px] rounded-full blur-[150px] opacity-[0.04]"
+                    style={{ backgroundColor: accent }}
+                />
+            </div>
+
             {/* Sticky CTA (mobile-first) */}
             <motion.div
                 initial={{ y: -80, opacity: 0 }}
                 animate={{ y: showStickyCta ? 0 : -80, opacity: showStickyCta ? 1 : 0 }}
                 transition={{ type: 'spring', stiffness: 200, damping: 25 }}
-                className="fixed top-0 left-0 right-0 z-50 p-3 bg-[#0E0E10]/95 backdrop-blur-lg border-b border-white/10 md:hidden"
+                className="fixed top-0 left-0 right-0 z-50 p-3 backdrop-blur-lg border-b border-white/10 md:hidden"
+                style={{ backgroundColor: `${darkBg}e6` }}
             >
                 <div className="flex items-center justify-between gap-3 max-w-5xl mx-auto">
                     <span className="font-bold text-sm truncate">{title}</span>
                     <button
                         onClick={handleJoin}
-                        className="shrink-0 bg-[#E0FE10] hover:bg-[#c8e60e] text-black font-extrabold px-5 py-2.5 rounded-xl transition-all text-sm"
+                        className="shrink-0 font-extrabold px-5 py-2.5 rounded-xl transition-all text-sm"
+                        style={{ backgroundColor: accent, color: accentTextColor }}
                     >
                         Join Club
                     </button>
                 </div>
             </motion.div>
 
-            <div className="max-w-5xl mx-auto pb-24">
+            <div className="max-w-5xl mx-auto pb-24 relative z-10">
                 {/* Section 1: Cinematic Hero */}
                 <div
                     ref={heroRef}
@@ -153,23 +226,55 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                 >
                     <div className="absolute inset-0 z-0">
                         <img src={heroImage} alt="Club Background" className="w-full h-full object-cover scale-105" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0E0E10] via-[#0E0E10]/70 to-transparent" />
+                        {/* Color-tinted overlay */}
+                        <div
+                            className="absolute inset-0 mix-blend-overlay opacity-20"
+                            style={{ backgroundColor: accent }}
+                        />
+                        <div className="absolute inset-0" style={{
+                            background: `linear-gradient(to top, ${darkBg} 0%, ${darkBg}b3 35%, transparent 100%)`
+                        }} />
                         <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-transparent" />
                     </div>
-                    {/* Ambient glow orbs */}
+                    {/* Accent glow orbs */}
                     <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-                        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-[#E0FE10]/10 blur-[120px]" />
-                        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full bg-[#E0FE10]/5 blur-[100px]" />
+                        <div
+                            className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-[120px] opacity-[0.12]"
+                            style={{ backgroundColor: accent }}
+                        />
+                        <div
+                            className="absolute bottom-1/3 right-1/4 w-80 h-80 rounded-full blur-[100px] opacity-[0.06]"
+                            style={{ backgroundColor: accent }}
+                        />
                     </div>
 
                     <div className="relative z-10 px-6 pb-20 md:pb-24 pt-24 md:pt-32 w-full max-w-4xl mx-auto">
+                        {/* Club Type Badge */}
+                        {clubTypeLabel && (
+                            <motion.div
+                                initial={{ y: 24, opacity: 0 }}
+                                animate={{ y: 0, opacity: 1 }}
+                                transition={{ duration: 0.5 }}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md border mb-4"
+                                style={{
+                                    backgroundColor: `${accent}1a`,
+                                    borderColor: `${accent}40`,
+                                }}
+                            >
+                                <span className="text-sm font-bold tracking-wide uppercase" style={{ color: accent }}>
+                                    {clubTypeLabel}
+                                </span>
+                            </motion.div>
+                        )}
+
+                        {/* Active Now badge */}
                         <motion.div
                             initial={{ y: 24, opacity: 0 }}
                             animate={{ y: 0, opacity: 1 }}
-                            transition={{ duration: 0.5 }}
+                            transition={{ duration: 0.5, delay: 0.04 }}
                             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 mb-6"
                         >
-                            <span className="w-2.5 h-2.5 rounded-full bg-[#E0FE10] animate-pulse" />
+                            <span className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: accent }} />
                             <span className="text-white/90 text-sm font-semibold tracking-wide uppercase">Active Now</span>
                         </motion.div>
 
@@ -177,10 +282,27 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                             initial={{ y: 24, opacity: 0 }}
                             animate={{ y: 0, opacity: 1 }}
                             transition={{ delay: 0.08, duration: 0.5 }}
-                            className="text-5xl md:text-7xl lg:text-8xl font-black text-white mb-6 uppercase tracking-tighter drop-shadow-2xl"
+                            className="text-5xl md:text-7xl lg:text-8xl font-black text-white mb-4 uppercase tracking-tighter drop-shadow-2xl"
                         >
-                            <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-white/90">{title}</span>
+                            <span className="bg-clip-text text-transparent" style={{
+                                backgroundImage: `linear-gradient(135deg, #ffffff 30%, ${accent})`
+                            }}>
+                                {title}
+                            </span>
                         </motion.h1>
+
+                        {/* Tagline */}
+                        {tagline && (
+                            <motion.p
+                                initial={{ y: 24, opacity: 0 }}
+                                animate={{ y: 0, opacity: 1 }}
+                                transition={{ delay: 0.12, duration: 0.5 }}
+                                className="text-lg md:text-xl font-medium italic mb-4 drop-shadow-md"
+                                style={{ color: `${accent}cc` }}
+                            >
+                                &ldquo;{tagline}&rdquo;
+                            </motion.p>
+                        )}
 
                         <motion.p
                             initial={{ y: 24, opacity: 0 }}
@@ -199,7 +321,12 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                         >
                             <button
                                 onClick={handleJoin}
-                                className="flex-1 md:flex-none bg-[#E0FE10] hover:bg-[#c8e60e] text-black font-extrabold px-8 py-4 rounded-xl transition-all shadow-xl shadow-[#E0FE10]/20 flex items-center justify-center gap-2"
+                                className="flex-1 md:flex-none font-extrabold px-8 py-4 rounded-xl transition-all flex items-center justify-center gap-2"
+                                style={{
+                                    backgroundColor: accent,
+                                    color: accentTextColor,
+                                    boxShadow: `0 10px 40px ${accent}33`,
+                                }}
                             >
                                 Join Club
                             </button>
@@ -217,11 +344,12 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                             transition={{ delay: 0.8 }}
                             className="mt-16 flex justify-center"
                         >
-                            <div className="w-8 h-12 rounded-full border-2 border-white/30 flex items-start justify-center p-2">
+                            <div className="w-8 h-12 rounded-full border-2 flex items-start justify-center p-2" style={{ borderColor: `${accent}50` }}>
                                 <motion.span
                                     animate={{ y: [0, 6, 0] }}
                                     transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-                                    className="w-1.5 h-1.5 rounded-full bg-white/80"
+                                    className="w-1.5 h-1.5 rounded-full"
+                                    style={{ backgroundColor: `${accent}cc` }}
                                 />
                             </div>
                         </motion.div>
@@ -229,11 +357,11 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                 </div>
 
                 {/* Section 2: Social Proof Marquee */}
-                <div className="relative py-6 overflow-hidden border-y border-white/10 bg-[#0E0E10]">
+                <div className="relative py-6 overflow-hidden border-y border-white/10" style={{ backgroundColor: darkBg }}>
                     <div className="flex animate-marquee whitespace-nowrap w-max">
                         {[...marqueeItems, ...marqueeItems].map((item, i) => (
                             <span key={i} className="mx-8 text-gray-400 font-semibold flex items-center gap-2">
-                                <span className="text-[#E0FE10]">◆</span> {item}
+                                <span style={{ color: accent }}>◆</span> {item}
                             </span>
                         ))}
                     </div>
@@ -248,30 +376,38 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                         transition={{ duration: 0.5 }}
                         className="py-20 md:py-28 px-6 md:px-12"
                     >
-                        <p className="text-sm font-semibold text-[#E0FE10] uppercase tracking-wider mb-6">Designed and led by</p>
+                        <p className="text-sm font-semibold uppercase tracking-wider mb-6" style={{ color: accent }}>Designed and led by</p>
                         <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
                             <div className="relative shrink-0">
-                                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full ring-4 ring-[#E0FE10]/30 ring-offset-4 ring-offset-[#0E0E10] overflow-hidden">
+                                <div
+                                    className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden"
+                                    style={{
+                                        boxShadow: `0 0 0 4px ${accent}4d`,
+                                    }}
+                                >
                                     <img
                                         src={creatorData.profileImage?.profileImageURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(creatorData.displayName || 'Coach')}`}
                                         alt={creatorData.displayName}
                                         className="w-full h-full object-cover"
                                     />
                                 </div>
-                                <div className="absolute -inset-1 rounded-full bg-[#E0FE10]/20 blur-xl -z-10" />
+                                <div
+                                    className="absolute -inset-1 rounded-full blur-xl -z-10 opacity-30"
+                                    style={{ backgroundColor: accent }}
+                                />
                             </div>
                             <div className="text-center md:text-left max-w-xl">
                                 <h2 className="text-3xl md:text-4xl font-black text-white mb-2">{creatorData.displayName}</h2>
-                                <p className="text-gray-400 font-semibold mb-6">Head Coach</p>
+                                <p className="font-semibold mb-6" style={{ color: `${accent}99` }}>Head Coach</p>
                                 <blockquote className="text-lg md:text-xl text-gray-300 font-light leading-relaxed italic">
-                                    "{description}"
+                                    &ldquo;{description}&rdquo;
                                 </blockquote>
                             </div>
                         </div>
                     </motion.section>
                 )}
 
-                {/* Section 4: What's Inside (Features Reimagined) */}
+                {/* Section 4: What's Inside (Features) */}
                 <section className="py-20 md:py-28 px-6 md:px-12">
                     <motion.div
                         initial={{ opacity: 0, y: 24 }}
@@ -288,28 +424,10 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                         {features.map((ft: string, idx: number) => {
                             let Icon = FiCheckCircle;
-                            let colorClass = 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-                            let glowClass = 'shadow-emerald-500/20';
-                            if (ft.toLowerCase().includes('chat')) {
-                                Icon = FiMessageCircle;
-                                colorClass = 'text-teal-400 bg-teal-500/10 border-teal-500/20';
-                                glowClass = 'shadow-teal-500/20';
-                            }
-                            if (ft.toLowerCase().includes('leaderboard')) {
-                                Icon = FiAward;
-                                colorClass = 'text-purple-400 bg-purple-500/10 border-purple-500/20';
-                                glowClass = 'shadow-purple-500/20';
-                            }
-                            if (ft.toLowerCase().includes('challenges')) {
-                                Icon = FiActivity;
-                                colorClass = 'text-orange-400 bg-orange-500/10 border-orange-500/20';
-                                glowClass = 'shadow-orange-500/20';
-                            }
-                            if (ft.toLowerCase().includes('community')) {
-                                Icon = FiUsers;
-                                colorClass = 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-                                glowClass = 'shadow-blue-500/20';
-                            }
+                            if (ft.toLowerCase().includes('chat')) Icon = FiMessageCircle;
+                            if (ft.toLowerCase().includes('leaderboard')) Icon = FiAward;
+                            if (ft.toLowerCase().includes('challenges')) Icon = FiActivity;
+                            if (ft.toLowerCase().includes('community')) Icon = FiUsers;
 
                             return (
                                 <motion.div
@@ -318,9 +436,20 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                                     whileInView={{ opacity: 1, y: 0 }}
                                     viewport={{ once: true, amount: 0.2 }}
                                     transition={{ delay: idx * 0.05 }}
-                                    className="bg-[#151518] p-6 md:p-8 rounded-3xl border border-white/5 text-center group hover:border-white/20 hover:shadow-xl transition-all duration-300"
+                                    className="p-6 md:p-8 rounded-3xl border border-white/5 text-center group hover:border-white/20 transition-all duration-300"
+                                    style={{
+                                        backgroundColor: '#151518',
+                                    }}
                                 >
-                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform border ${colorClass} shadow-lg ${glowClass}`}>
+                                    <div
+                                        className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-5 group-hover:scale-110 transition-transform border"
+                                        style={{
+                                            color: accent,
+                                            backgroundColor: `${accent}15`,
+                                            borderColor: `${accent}30`,
+                                            boxShadow: `0 4px 16px ${accent}20`,
+                                        }}
+                                    >
                                         <Icon size={28} />
                                     </div>
                                     <h3 className="font-bold text-lg mb-2">{ft}</h3>
@@ -339,7 +468,7 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                     className="py-20 md:py-28 px-6 md:px-12"
                 >
                     <div className="text-center mb-12">
-                        <p className="text-[#E0FE10] text-sm font-bold uppercase tracking-widest mb-3">Featured Rounds</p>
+                        <p className="text-sm font-bold uppercase tracking-widest mb-3" style={{ color: accent }}>Featured Rounds</p>
                         <h2 className="text-4xl md:text-5xl font-black mb-6 tracking-tight">See What&apos;s Waiting Inside</h2>
                         <p className="text-xl text-gray-400 max-w-2xl mx-auto">
                             {allRounds.length > 0
@@ -355,19 +484,33 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                                     initial={{ opacity: 0, y: 12 }}
                                     whileInView={{ opacity: 1, y: 0 }}
                                     viewport={{ once: true }}
-                                    className="rounded-2xl border border-white/10 bg-[#151518] hover:border-[#E0FE10]/20 transition-colors p-5 md:p-6"
+                                    className="rounded-2xl border bg-[#151518] transition-colors p-5 md:p-6"
+                                    style={{
+                                        borderColor: 'rgba(255,255,255,0.1)',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        (e.currentTarget as HTMLDivElement).style.borderColor = `${accent}33`;
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.1)';
+                                    }}
                                 >
                                     <div className="flex items-start justify-between mb-3">
                                         <div className="min-w-0">
                                             <h3 className="text-lg md:text-xl font-bold text-white truncate">{round.title}</h3>
                                             {round.subtitle && <p className="text-gray-400 text-sm mt-0.5 line-clamp-1">{round.subtitle}</p>}
                                         </div>
-                                        <span className={`shrink-0 ml-3 px-2.5 py-1 rounded-full text-xs font-bold uppercase ${round.isActive ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-gray-400'}`}>
+                                        <span className={`shrink-0 ml-3 px-2.5 py-1 rounded-full text-xs font-bold uppercase ${round.isActive ? 'text-green-400' : 'bg-white/10 text-gray-400'}`}
+                                            style={round.isActive ? { backgroundColor: `${accent}20`, color: accent } : {}}
+                                        >
                                             {round.isActive ? 'Live' : 'Ended'}
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-3 flex-wrap">
-                                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#E0FE10]/10 text-[#E0FE10] font-semibold text-sm">
+                                        <span
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold text-sm"
+                                            style={{ backgroundColor: `${accent}15`, color: accent }}
+                                        >
                                             <FiActivity className="w-3.5 h-3.5" />
                                             {round.workoutCount} workout{round.workoutCount !== 1 ? 's' : ''}
                                         </span>
@@ -399,24 +542,28 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                         initial={{ opacity: 0, y: 24 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true, amount: 0.2 }}
-                        className="bg-[#151518] border border-white/10 rounded-3xl p-8 md:p-12 text-center relative overflow-hidden"
+                        className="border border-white/10 rounded-3xl p-8 md:p-12 text-center relative overflow-hidden"
+                        style={{ backgroundColor: '#151518' }}
                     >
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-32 bg-[#E0FE10]/10 rounded-full blur-3xl" />
+                        <div
+                            className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-32 rounded-full blur-3xl opacity-[0.12]"
+                            style={{ backgroundColor: accent }}
+                        />
                         <div className="relative">
                             <h2 className="text-2xl md:text-3xl font-bold text-white mb-10">
                                 Join {memberCount}+ others already training
                             </h2>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
                                 <div>
-                                    <p className="text-4xl md:text-5xl font-black text-[#E0FE10]">{countMembers.toLocaleString()}</p>
+                                    <p className="text-4xl md:text-5xl font-black" style={{ color: accent }}>{countMembers.toLocaleString()}</p>
                                     <p className="text-gray-400 font-semibold uppercase tracking-wider mt-1">Members</p>
                                 </div>
                                 <div>
-                                    <p className="text-4xl md:text-5xl font-black text-[#E0FE10]">{countWorkouts.toLocaleString()}</p>
+                                    <p className="text-4xl md:text-5xl font-black" style={{ color: accent }}>{countWorkouts.toLocaleString()}</p>
                                     <p className="text-gray-400 font-semibold uppercase tracking-wider mt-1">Workouts Completed</p>
                                 </div>
                                 <div className="col-span-2 md:col-span-1">
-                                    <p className="text-4xl md:text-5xl font-black text-[#E0FE10]">24/7</p>
+                                    <p className="text-4xl md:text-5xl font-black" style={{ color: accent }}>24/7</p>
                                     <p className="text-gray-400 font-semibold uppercase tracking-wider mt-1">Community</p>
                                 </div>
                             </div>
@@ -432,8 +579,11 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                     className="py-20 md:py-28 px-6 md:px-12"
                 >
                     <div className="relative rounded-3xl bg-gradient-to-b from-white/10 to-white/5 border border-white/10 p-10 md:p-16 text-center overflow-hidden">
-                        <div className="absolute inset-0 bg-[#E0FE10]/5" />
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-[#E0FE10]/10 blur-[120px] pointer-events-none" />
+                        <div className="absolute inset-0 opacity-5" style={{ backgroundColor: accent }} />
+                        <div
+                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full blur-[120px] pointer-events-none opacity-[0.10]"
+                            style={{ backgroundColor: accent }}
+                        />
                         <div className="relative">
                             <h2 className="text-4xl md:text-5xl font-black text-white mb-6">
                                 Ready to Join {title}?
@@ -446,7 +596,12 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
                                     onClick={handleJoin}
                                     whileHover={{ scale: 1.02 }}
                                     whileTap={{ scale: 0.98 }}
-                                    className="w-full sm:w-auto bg-[#E0FE10] hover:bg-[#c8e60e] text-black font-extrabold px-10 py-4 rounded-xl transition-all shadow-xl shadow-[#E0FE10]/30 flex items-center justify-center gap-2"
+                                    className="w-full sm:w-auto font-extrabold px-10 py-4 rounded-xl transition-all flex items-center justify-center gap-2"
+                                    style={{
+                                        backgroundColor: accent,
+                                        color: accentTextColor,
+                                        boxShadow: `0 10px 40px ${accent}4d`,
+                                    }}
                                 >
                                     Join Club
                                 </motion.button>
@@ -479,9 +634,22 @@ export const getServerSideProps: GetServerSideProps<ClubPageProps> = async ({ pa
         );
 
         const club = await clubService.getClubById(id);
+        console.log(`[ClubLanding] Fetched club id=${id}, raw memberCount from Firestore: ${club?.memberCount}`);
 
         if (!club) {
             return { props: { error: 'Club not found' } };
+        }
+
+        // Debug: fetch actual members from clubMembers collection
+        try {
+            const actualMembers = await clubService.getClubMembers(club.id);
+            console.log(`[ClubLanding] Actual active members in clubMembers collection: ${actualMembers.length}`);
+            actualMembers.forEach((m, i) => {
+                console.log(`[ClubLanding]   member[${i}]: userId=${m.userId}, joinedVia=${m.joinedVia}, isActive=${m.isActive}`);
+            });
+            console.log(`[ClubLanding] MISMATCH CHECK: stored memberCount=${club.memberCount} vs actual members=${actualMembers.length}`);
+        } catch (e) {
+            console.error('[ClubLanding] Error fetching actual members for debug:', e);
         }
 
         const clubData = {
@@ -489,8 +657,12 @@ export const getServerSideProps: GetServerSideProps<ClubPageProps> = async ({ pa
             name: club.name || '',
             description: club.description || '',
             coverImageURL: club.coverImageURL || null,
+            logoURL: club.logoURL || null,
             creatorId: club.creatorId || '',
             memberCount: club.memberCount || 1,
+            accentColor: club.accentColor || null,
+            tagline: club.tagline || null,
+            clubType: club.clubType || null,
             landingPageConfig: club.landingPageConfig || null
         };
 
@@ -503,18 +675,8 @@ export const getServerSideProps: GetServerSideProps<ClubPageProps> = async ({ pa
             console.error('Error fetching total workouts for club:', e);
         }
 
-        const linkedIds = club.linkedRoundIds || [];
-        let featuredIds: string[] = [];
-        try {
-            if (club.creatorId) {
-                const creator = await userService.getUserById(club.creatorId);
-                featuredIds = creator?.featuredRoundIds || [];
-            }
-        } catch (e) {
-            console.error('Error fetching creator featured rounds:', e);
-        }
-
-        const allRoundIds = [...new Set([...linkedIds, ...featuredIds])];
+        // Only show rounds that are explicitly linked to this club (matches iOS loadLinkedRounds)
+        const allRoundIds = club.linkedRoundIds || [];
         if (allRoundIds.length > 0) {
             try {
                 const collections = await Promise.all(
@@ -522,9 +684,6 @@ export const getServerSideProps: GetServerSideProps<ClubPageProps> = async ({ pa
                 );
                 const valid = collections.filter((c): c is any => c !== null);
 
-                // Fetch real participant counts from user-challenge collection
-                // (challenge.participants is never populated from Firestore — participants
-                //  are stored as separate docs in user-challenge where challengeId == collection.id)
                 const participantCounts = await Promise.all(
                     valid.map(col =>
                         workoutService.fetchUserChallengesByChallengeId(col.id)
@@ -557,10 +716,14 @@ export const getServerSideProps: GetServerSideProps<ClubPageProps> = async ({ pa
             }
         }
 
+        // Serialize creatorInfo to plain JSON (ShortUser is a class instance)
+        const creatorInfo = club.creatorInfo;
+        const creatorData = creatorInfo ? JSON.parse(JSON.stringify(creatorInfo.toDictionary ? creatorInfo.toDictionary() : creatorInfo)) : null;
+
         return {
             props: {
                 clubData,
-                creatorData: club.creatorInfo || null,
+                creatorData,
                 totalWorkoutsCompleted,
                 allRounds
             }

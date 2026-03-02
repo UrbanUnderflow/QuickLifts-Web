@@ -16,7 +16,7 @@ import { useUser } from '../../../hooks/useUser';
 import { creatorPagesService, CLIENT_QUESTIONNAIRES_PAGE_SLUG, Survey, SurveyResponse } from '../../../api/firebase/creatorPages/service';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { SurveyBuilderModal, SurveysListModal, SurveyResponsesModal } from '../../../components/Surveys';
-import { clubService } from '../../../api/firebase/club/service';
+
 
 import { Exercise, ExerciseVideo, ExerciseAuthor, ExerciseCategory } from '../../../api/firebase/exercise/types';
 import { ProfileImage } from '../../../api/firebase/user/types';
@@ -107,40 +107,8 @@ const Create: React.FC = () => {
   const [clientQuestionnaireResponses, setClientQuestionnaireResponses] = useState<SurveyResponse[]>([]);
   const [clientQuestionnaireResponsesLoading, setClientQuestionnaireResponsesLoading] = useState(false);
 
-  // Club Check State
-  const [hasClub, setHasClub] = useState(false);
-  const [checkingClub, setCheckingClub] = useState(true);
 
-  // Check if user has a club on mount
-  useEffect(() => {
-    let mounted = true;
 
-    const checkUserClub = async () => {
-      if (!currentUser?.id) {
-        if (mounted) setCheckingClub(false);
-        return;
-      }
-
-      try {
-        const club = await clubService.getClubByCreatorId(currentUser.id);
-        if (mounted) {
-          setHasClub(!!club);
-        }
-      } catch (error) {
-        console.error('[Creator Studio] Error checking user club status:', error);
-      } finally {
-        if (mounted) {
-          setCheckingClub(false);
-        }
-      }
-    };
-
-    checkUserClub();
-
-    return () => {
-      mounted = false;
-    };
-  }, [currentUser?.id]);
 
 
   const categories = [
@@ -1382,9 +1350,9 @@ const Create: React.FC = () => {
       action: handleOpenClientQuestionnaires,
     },
     {
-      id: 'create-club',
-      title: checkingClub ? 'Loading...' : (hasClub ? 'Manage Club' : 'Create a Club'),
-      description: checkingClub ? 'Checking permissions...' : (hasClub ? 'Edit your club landing page' : 'Host your community & build your landing page'),
+      id: 'manage-clubs',
+      title: 'Manage Clubs',
+      description: 'View and manage your club communities',
       icon: (
         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -1394,7 +1362,7 @@ const Create: React.FC = () => {
       borderColor: 'border-amber-500/30',
       iconBg: 'bg-amber-500/20',
       iconColor: 'text-amber-400',
-      action: () => router.push('/club-studio'),
+      action: () => router.push('/manage-clubs'),
     },
   ];
 
