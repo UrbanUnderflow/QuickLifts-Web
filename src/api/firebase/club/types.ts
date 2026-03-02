@@ -11,8 +11,13 @@ export class Club {
   name: string;
   description: string;
   coverImageURL?: string;
+  logoURL?: string;
   memberCount: number;
   linkedRoundIds: string[];
+  accentColor?: string;
+  secondaryColor?: string;
+  tagline?: string;
+  clubType?: string;
   createdAt: Date;
   updatedAt: Date;
   landingPageConfig?: any;
@@ -23,8 +28,13 @@ export class Club {
     this.name = data.name || '';
     this.description = data.description || '';
     this.coverImageURL = data.coverImageURL || undefined;
+    this.logoURL = data.logoURL || undefined;
     this.memberCount = data.memberCount || 0;
     this.linkedRoundIds = data.linkedRoundIds || [];
+    this.accentColor = data.accentColor || undefined;
+    this.secondaryColor = data.secondaryColor || undefined;
+    this.tagline = data.tagline || undefined;
+    this.clubType = data.clubType || undefined;
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
     this.updatedAt = convertFirestoreTimestamp(data.updatedAt);
     this.landingPageConfig = data.landingPageConfig || undefined;
@@ -59,6 +69,26 @@ export class Club {
 
     if (this.coverImageURL) {
       dict.coverImageURL = this.coverImageURL;
+    }
+
+    if (this.logoURL) {
+      dict.logoURL = this.logoURL;
+    }
+
+    if (this.accentColor) {
+      dict.accentColor = this.accentColor;
+    }
+
+    if (this.secondaryColor) {
+      dict.secondaryColor = this.secondaryColor;
+    }
+
+    if (this.tagline) {
+      dict.tagline = this.tagline;
+    }
+
+    if (this.clubType) {
+      dict.clubType = this.clubType;
     }
 
     if (this.landingPageConfig) {

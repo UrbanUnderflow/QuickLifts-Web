@@ -45,7 +45,7 @@ class ClubService {
       name,
       description,
       coverImageURL,
-      memberCount: 1, // Creator is automatically a member
+      memberCount: 0, // Creator is automatically a member (incremented via joinClub)
       linkedRoundIds,
       createdAt: dateToUnixTimestamp(now),
       updatedAt: dateToUnixTimestamp(now)
@@ -92,6 +92,24 @@ class ClubService {
 
     const doc = snapshot.docs[0];
     return new Club({ id: doc.id, ...doc.data() });
+  }
+
+  /**
+   * Fetches all clubs by creator ID (supports multiple clubs per creator)
+   */
+  async getClubsByCreatorId(creatorId: string): Promise<Club[]> {
+    const q = query(
+      this.clubsCollection,
+      where('creatorId', '==', creatorId)
+    );
+
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      return [];
+    }
+
+    return snapshot.docs.map(doc => new Club({ id: doc.id, ...doc.data() }));
   }
 
   /**
@@ -142,10 +160,16 @@ class ClubService {
           joinedVia
         });
         console.log(`[ClubService] Reactivated member ${userId} in club ${clubId}`);
+
+        // Increment member count since they rejoined
+        const clubRef = doc(this.clubsCollection, clubId);
+        await updateDoc(clubRef, {
+          memberCount: increment(1)
+        });
       } else {
         console.log(`[ClubService] User ${userId} is already a member of club ${clubId}`);
       }
-      return new ClubMember({ id: memberId, ...existingSnapshot.data() });
+      return new ClubMember({ id: memberId, ...existingData, isActive: true });
     }
 
     // Create new member

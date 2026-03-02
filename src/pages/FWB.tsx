@@ -52,6 +52,8 @@ const FWB = ({ metaData }: FWBProps) => {
 
   // Scroll animation observer
   const flowStepsRef = useRef<(HTMLDivElement | null)[]>([]);
+  const clubCardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const journeyRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
     if (!isUnlocked) return;
@@ -67,6 +69,12 @@ const FWB = ({ metaData }: FWBProps) => {
     );
     flowStepsRef.current.forEach((step) => {
       if (step) observer.observe(step);
+    });
+    clubCardRefs.current.forEach((card) => {
+      if (card) observer.observe(card);
+    });
+    journeyRefs.current.forEach((el) => {
+      if (el) observer.observe(el);
     });
     return () => observer.disconnect();
   }, [isUnlocked]);
@@ -983,8 +991,9 @@ const FWB = ({ metaData }: FWBProps) => {
           <ul className="fwb-nav-links">
             <li><a href="#preview">Preview</a></li>
             <li><a href="#vision">Vision</a></li>
-            <li><a href="#experience">Experience</a></li>
-            <li><a href="#monetize">Monetize</a></li>
+            <li><a href="#journey">Journey</a></li>
+            <li><a href="#clubs">Clubs</a></li>
+            <li><a href="#monetize">Platform</a></li>
             <li><a href="#manage">Manage</a></li>
           </ul>
         </nav>
@@ -1185,7 +1194,7 @@ const FWB = ({ metaData }: FWBProps) => {
         <section className="fwb-section" id="vision">
           <div className="fwb-section-label">01 — The Vision</div>
           <h2 className="fwb-section-title">
-            Your culture in motion.<br />A digital home for the heartbeat of Atlanta.
+            Your movement,<br />amplified.
           </h2>
           <p className="fwb-section-text">
             FWB gives people a reason to come together that isn't just another night out. Pulse gives your movement a premium digital home where the energy, connection, and growth live on beyond the physical track.
@@ -1265,47 +1274,593 @@ const FWB = ({ metaData }: FWBProps) => {
 
 
 
-        {/* MONETIZATION */}
-        <section className="fwb-section" id="monetize">
-          <div className="fwb-section-label">03 — Monetization</div>
+        <style>{`
+          .fwb-clubs-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-top: 60px;
+          }
+          .fwb-club-showcase-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 32px;
+            padding: 40px;
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          .fwb-club-showcase-card.visible {
+            opacity: 1;
+            transform: translateY(0);
+          }
+          .fwb-club-showcase-phone {
+            width: 320px;
+            height: 680px;
+            background: #000;
+            border-radius: 46px;
+            border: 12px solid #1A1A1A;
+            box-shadow: 0 40px 100px rgba(0,0,0,0.4), inset 0 0 0 2px rgba(255,255,255,0.1);
+            position: relative;
+            overflow: hidden;
+            margin: 0 auto;
+          }
+          .fwb-club-showcase-phone-inner {
+            height: 100%;
+            overflow-y: auto;
+            scrollbar-width: none;
+            position: relative;
+          }
+          .fwb-club-showcase-phone-inner::-webkit-scrollbar {
+            display: none;
+          }
+          .pulse-chat-msg {
+            display: flex; gap: 12px; margin-bottom: 20px;
+          }
+          .pulse-chat-avatar {
+            width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 700; color: #fff;
+          }
+          .pulse-chat-bubble {
+            background: #1A1A1A; border-radius: 12px; padding: 12px 14px;
+            font-size: 13px; line-height: 1.5; color: #EEE; border: 1px solid #222;
+          }
+          @media (max-width: 768px) {
+            .fwb-clubs-grid { grid-template-columns: 1fr; }
+            .fwb-club-showcase-phone { width: 100%; max-width: 320px; height: 600px; }
+          }
+        `}</style>
+
+        {/* THE MEMBER JOURNEY */}
+        <section className="fwb-section" id="journey">
+          <div className="fwb-section-label">02 — The Member Journey</div>
           <h2 className="fwb-section-title">
-            Free to join.<br />Premium to unlock.
+            From tap <br />to obsession.
           </h2>
           <p className="fwb-section-text">
-            Grow your community organically, then offer exclusive value to the members who want more. FWB becomes a self-sustaining engine.
+            This isn't just a group chat. It's a fully immersive community experience designed to activate members, gamify growth, and keep them coming back.
+          </p>
+
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: 120, marginTop: 80
+          }}>
+            {/* Step 1: Join */}
+            <div className={`fwb-club-showcase-card ${isUnlocked ? 'visible' : ''}`} ref={(el) => { journeyRefs.current[0] = el; }} style={{ background: 'transparent', border: 'none', padding: 0, opacity: 1, transform: 'none' }}>
+              <div style={{ display: 'flex', gap: 60, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 300px' }}>
+                  <div style={{ color: 'var(--fwb-gold)', fontFamily: "'Space Mono', monospace", fontSize: 13, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16 }}>Step 01: Activation</div>
+                  <h3 style={{ fontSize: 32, fontFamily: "'Playfair Display', serif", marginBottom: 16 }}>They drop in.</h3>
+                  <p style={{ color: 'var(--fwb-warm-gray)', fontSize: 16, lineHeight: 1.7 }}>
+                    Your link in bio leads to a premium landing page. They read the vision, select a tier, and securely join. No friction.
+                  </p>
+                </div>
+                <div style={{ flex: '1 1 300px' }}>
+                  {/* Reuse existing phone frame from head for illustration if needed, or simple mock */}
+                  <div style={{
+                    padding: 30, background: 'rgba(255,255,255,0.03)', borderRadius: 24, border: '1px solid rgba(255,255,255,0.05)',
+                    display: 'flex', justifyContent: 'center'
+                  }}>
+                    <div style={{ width: '100%', maxWidth: 260, padding: 24, background: '#111', borderRadius: 20, boxShadow: '0 20px 40px rgba(0,0,0,0.5)', border: '1px solid #222' }}>
+                      <div style={{ width: 60, height: 60, background: '#DA7837', borderRadius: 16, marginBottom: 20 }} />
+                      <div style={{ height: 24, background: '#333', borderRadius: 4, width: '80%', marginBottom: 12 }} />
+                      <div style={{ height: 16, background: '#222', borderRadius: 4, width: '100%', marginBottom: 8 }} />
+                      <div style={{ height: 16, background: '#222', borderRadius: 4, width: '90%', marginBottom: 32 }} />
+                      <div style={{ height: 48, background: '#DA7837', borderRadius: 12, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14 }}>Join Club</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 2: Chat */}
+            <div className={`fwb-club-showcase-card`} ref={(el) => { journeyRefs.current[1] = el; }} style={{ background: 'transparent', border: 'none', padding: 0 }}>
+              <div style={{ display: 'flex', gap: 60, alignItems: 'center', flexWrap: 'wrap', flexDirection: 'row-reverse' }}>
+                <div style={{ flex: '1 1 300px' }}>
+                  <div style={{ color: 'var(--fwb-gold)', fontFamily: "'Space Mono', monospace", fontSize: 13, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16 }}>Step 02: Connection</div>
+                  <h3 style={{ fontSize: 32, fontFamily: "'Playfair Display', serif", marginBottom: 16 }}>They tap in.</h3>
+                  <p style={{ color: 'var(--fwb-warm-gray)', fontSize: 16, lineHeight: 1.7 }}>
+                    The Pulse Club Chat organizes conversations elegantly. Threaded replies, challenge drops directly in-stream, and a UI that feels like home.
+                  </p>
+                </div>
+                <div style={{ flex: '1 1 300px', display: 'flex', justifyContent: 'center' }}>
+                  <div className="fwb-club-showcase-phone" style={{ borderColor: '#DA7837' }}>
+                    <div className="fwb-club-showcase-phone-inner" style={{ background: '#070E08', padding: '50px 16px 20px' }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, textAlign: 'center', marginBottom: 30, fontFamily: "'Playfair Display', serif" }}>Pulse Chat</div>
+
+                      <div className="pulse-chat-msg">
+                        <div className="pulse-chat-avatar" style={{ background: 'linear-gradient(135deg, #1d4ed8, #1e40af)' }}>JT</div>
+                        <div>
+                          <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>Jason • 9:41 AM</div>
+                          <div className="pulse-chat-bubble">Just finished the morning track session. Legs are dead.</div>
+                        </div>
+                      </div>
+
+                      <div className="pulse-chat-msg" style={{ flexDirection: 'row-reverse' }}>
+                        <div className="pulse-chat-avatar" style={{ background: '#DA7837' }}>Me</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                          <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>You • 9:45 AM</div>
+                          <div className="pulse-chat-bubble" style={{ background: 'rgba(218,120,55,0.15)', borderColor: 'rgba(218,120,55,0.4)', color: '#fff' }}>Good stuff bro! Make sure to log it on the leaderboard.</div>
+                        </div>
+                      </div>
+
+                      {/* System Message / Challenge */}
+                      <div style={{ margin: '30px 0', padding: 16, background: '#111', borderRadius: 16, border: '1px solid #222' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                          <div style={{ width: 8, height: 8, background: '#DA7837', borderRadius: '50%' }} />
+                          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, color: '#DA7837' }}>New Challenge</div>
+                        </div>
+                        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>The 10k Weekend</div>
+                        <div style={{ fontSize: 13, color: '#888', marginBottom: 16 }}>Log 10,000 meters before Sunday night. Top 3 get pinned.</div>
+                        <div style={{ padding: '10px 0', background: '#222', borderRadius: 8, textAlign: 'center', fontSize: 13, fontWeight: 600, color: '#fff' }}>Accept Challenge</div>
+                      </div>
+
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 3: Leaderboard */}
+            <div className={`fwb-club-showcase-card`} ref={(el) => { journeyRefs.current[2] = el; }} style={{ background: 'transparent', border: 'none', padding: 0 }}>
+              <div style={{ display: 'flex', gap: 60, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 300px' }}>
+                  <div style={{ color: 'var(--fwb-gold)', fontFamily: "'Space Mono', monospace", fontSize: 13, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16 }}>Step 03: Engagement</div>
+                  <h3 style={{ fontSize: 32, fontFamily: "'Playfair Display', serif", marginBottom: 16 }}>They compete.</h3>
+                  <p style={{ color: 'var(--fwb-warm-gray)', fontSize: 16, lineHeight: 1.7 }}>
+                    Gamification is baked in. Members track workouts and nutrition, earning points that climb the live club leaderboard. Friendly competition drives insane retention.
+                  </p>
+                </div>
+                <div style={{ flex: '1 1 300px', display: 'flex', justifyContent: 'center' }}>
+                  <div className="fwb-club-showcase-phone" style={{ borderColor: '#DA7837' }}>
+                    <div className="fwb-club-showcase-phone-inner" style={{ background: '#070E08', padding: '50px 16px 20px' }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, textAlign: 'center', marginBottom: 20, fontFamily: "'Playfair Display', serif" }}>Leaderboard</div>
+
+                      {/* Toggles */}
+                      <div style={{ display: 'flex', background: '#111', borderRadius: 12, padding: 4, marginBottom: 30 }}>
+                        <div style={{ flex: 1, padding: '8px 0', background: '#222', borderRadius: 8, textAlign: 'center', fontSize: 12, fontWeight: 600 }}>Workouts</div>
+                        <div style={{ flex: 1, padding: '8px 0', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#888' }}>Nutrition</div>
+                      </div>
+
+                      {/* Podium */}
+                      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 12, marginBottom: 40, height: 140 }}>
+                        {/* 2nd */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#333', marginBottom: 8, border: '2px solid silver' }} />
+                          <div style={{ width: '100%', height: 70, background: 'linear-gradient(to top, rgba(255,255,255,0.05), transparent)', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 8 }}>
+                            <span style={{ fontSize: 20, fontWeight: 800, color: 'silver' }}>2</span>
+                          </div>
+                        </div>
+                        {/* 1st */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <div style={{ width: 50, height: 50, borderRadius: '50%', background: '#DA7837', marginBottom: 8, border: '2px solid gold' }} />
+                          <div style={{ width: '100%', height: 100, background: 'linear-gradient(to top, rgba(218,120,55,0.15), transparent)', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 8 }}>
+                            <span style={{ fontSize: 24, fontWeight: 800, color: 'gold' }}>1</span>
+                          </div>
+                        </div>
+                        {/* 3rd */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#333', marginBottom: 8, border: '2px solid #cd7f32' }} />
+                          <div style={{ width: '100%', height: 50, background: 'linear-gradient(to top, rgba(255,255,255,0.05), transparent)', borderTopLeftRadius: 8, borderTopRightRadius: 8, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 8 }}>
+                            <span style={{ fontSize: 20, fontWeight: 800, color: '#cd7f32' }}>3</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* List */}
+                      {[4, 5, 6].map(rank => (
+                        <div key={rank} style={{ display: 'flex', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid #1A1A1A' }}>
+                          <div style={{ width: 24, fontSize: 13, fontWeight: 700, color: '#888' }}>{rank}</div>
+                          <div style={{ width: 32, height: 32, borderRadius: 8, background: '#222', marginRight: 12 }} />
+                          <div style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>Member {rank}</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#DA7837' }}>{1200 - (rank * 100)} pts</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 4: Retention */}
+            <div className={`fwb-club-showcase-card`} ref={(el) => { journeyRefs.current[3] = el; }} style={{ background: 'transparent', border: 'none', padding: 0 }}>
+              <div style={{ display: 'flex', gap: 60, alignItems: 'center', flexWrap: 'wrap', flexDirection: 'row-reverse' }}>
+                <div style={{ flex: '1 1 300px' }}>
+                  <div style={{ color: 'var(--fwb-gold)', fontFamily: "'Space Mono', monospace", fontSize: 13, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16 }}>Step 04: Retention</div>
+                  <h3 style={{ fontSize: 32, fontFamily: "'Playfair Display', serif", marginBottom: 16 }}>They stay.</h3>
+                  <p style={{ color: 'var(--fwb-warm-gray)', fontSize: 16, lineHeight: 1.7 }}>
+                    Through push notifications, daily habits, and pure social gravity, FWB members build a routine on Pulse. They don't just consume your content; they belong to your eco-system.
+                  </p>
+                </div>
+                <div style={{ flex: '1 1 300px', display: 'flex', justifyContent: 'center' }}>
+                  <div style={{
+                    padding: 30, background: 'rgba(255,255,255,0.03)', borderRadius: 24, border: '1px solid rgba(255,255,255,0.05)',
+                    display: 'flex', flexDirection: 'column', gap: 16, width: '100%', maxWidth: 260
+                  }}>
+                    <div style={{ padding: 16, background: '#111', borderRadius: 16, border: '1px solid #222', display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(218,120,55,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🔥</div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>3 Day Daily Streak!</div>
+                        <div style={{ fontSize: 11, color: '#888' }}>You're on fire. Keep going.</div>
+                      </div>
+                    </div>
+                    <div style={{ padding: 16, background: '#111', borderRadius: 16, border: '1px solid #222', display: 'flex', alignItems: 'center', gap: 12, marginLeft: 16 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(0,200,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>💧</div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>Hydration Goal Met</div>
+                        <div style={{ fontSize: 11, color: '#888' }}>+50 Club Points</div>
+                      </div>
+                    </div>
+                    <div style={{ padding: 16, background: '#111', borderRadius: 16, border: '1px solid #222', display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(200,255,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>💬</div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>New post in FWB</div>
+                        <div style={{ fontSize: 11, color: '#888' }}>Nile just dropped a new video.</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        {/* CLUBS ALREADY ON PULSE */}
+        <section className="fwb-section" id="clubs">
+          <div className="fwb-section-label">03 — Clubs Already on Pulse</div>
+          <h2 className="fwb-section-title">
+            The platform is live.<br />The energy is real.
+          </h2>
+          <p className="fwb-section-text">
+            Pulse isn't an idea. It's a living ecosystem powering real communities right now. Take a look at clubs currently mobilizing their members on the platform.
+          </p>
+
+          <div className="fwb-clubs-grid">
+
+            {/* THE PACT */}
+            <div
+              className={`fwb-club-showcase-card`}
+              ref={(el) => { clubCardRefs.current[0] = el; }}
+              style={{
+                background: 'rgba(200,255,0,0.03)',
+                border: '1px solid rgba(200,255,0,0.1)',
+              }}
+            >
+              <div className="fwb-club-showcase-phone">
+                <div className="fwb-club-showcase-phone-inner" style={{ background: '#070E08' }}>
+                  {/* Hero — matching iOS ClubDetailView exactly */}
+                  <div style={{ position: 'relative', height: 340, overflow: 'hidden' }}>
+                    {/* Cover image — group running scene */}
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: "url('https://images.unsplash.com/photo-1552674605-db6ffd4facb5?w=800&q=80') center 20% / cover no-repeat",
+                      filter: 'saturate(1.15)',
+                    }} />
+                    {/* Accent color overlay blend */}
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(200,255,0,0.10)', mixBlendMode: 'overlay' }} />
+                    {/* Radial vignette */}
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: 'radial-gradient(circle at center, transparent 30%, rgba(7,14,8,0.6) 75%)',
+                    }} />
+                    {/* The Melt — dissolves photo into brand background */}
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: 'linear-gradient(180deg, rgba(0,0,0,0.45) 0%, transparent 12%, transparent 20%, rgba(7,14,8,0.05) 28%, rgba(7,14,8,0.14) 36%, rgba(7,14,8,0.35) 44%, rgba(7,14,8,0.55) 52%, rgba(7,14,8,0.75) 60%, rgba(7,14,8,0.90) 70%, rgba(7,14,8,0.97) 80%, #070E08 88%)',
+                    }} />
+                    {/* Accent glow at bottom */}
+                    <div style={{
+                      position: 'absolute', bottom: -30, left: '10%', right: '10%', height: 100,
+                      background: 'radial-gradient(ellipse at 50% 100%, rgba(200,255,0,0.08) 0%, transparent 60%)',
+                    }} />
+                    {/* Text overlay — bottom-left anchored */}
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 20px 20px', zIndex: 5 }}>
+                      {/* Club type badge pill */}
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 10,
+                        padding: '5px 12px', borderRadius: 20,
+                        background: 'rgba(200,255,0,0.15)', border: '1px solid rgba(200,255,0,0.4)',
+                        fontSize: 10, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase', color: '#C8FF00',
+                      }}>💪 TRAINING CLUB</div>
+                      {/* Club name — ALL CAPS HEAVY */}
+                      <h3 style={{ fontSize: 32, fontWeight: 900, margin: '0 0 4px', letterSpacing: -0.5, textTransform: 'uppercase', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>THE PACT</h3>
+                      {/* Tagline — italic, actual text */}
+                      <p style={{ fontSize: 13, fontWeight: 500, fontStyle: 'italic', color: 'rgba(255,255,255,0.65)', margin: '0 0 8px' }}>We lift. We run. We honor The Pact</p>
+                      {/* by @username • pulsing dot • member count + logo */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <span style={{ color: 'rgba(255,255,255,0.6)' }}>by</span>
+                        <span style={{ color: '#C8FF00', fontWeight: 700 }}>@thetrefecta</span>
+                        <span style={{ color: 'rgba(255,255,255,0.3)' }}>•</span>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#C8FF00', boxShadow: '0 0 6px rgba(200,255,0,0.6)', animation: 'fwbPulseDot 2s infinite' }} />
+                        <span style={{ color: 'rgba(255,255,255,0.6)' }}>98 members</span>
+                        {/* Logo circle on right */}
+                        <div style={{ marginLeft: 'auto' }}>
+                          <div style={{
+                            width: 36, height: 36, borderRadius: '50%', background: '#fff',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                          }} />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Body — Bio card + Tabs + Stats */}
+                  <div style={{ padding: '0 16px', background: '#070E08' }}>
+                    {/* Bio Card */}
+                    <div style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 12,
+                      padding: '14px 18px', borderRadius: 16, marginTop: 16,
+                      background: 'rgba(200,255,0,0.05)', border: '1px solid rgba(200,255,0,0.1)',
+                    }}>
+                      {/* Profile photo placeholder — rounded square */}
+                      <div style={{
+                        width: 42, height: 42, borderRadius: 12, flexShrink: 0, overflow: 'hidden',
+                        background: 'linear-gradient(135deg, #C8FF00, #96BF00)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <div style={{
+                          width: '100%', height: '100%',
+                          background: "url('https://images.unsplash.com/photo-1568602471122-7832951cc4c5?w=200&q=80') center / cover no-repeat",
+                          borderRadius: 12,
+                        }} />
+                      </div>
+                      <div style={{ fontSize: 12, lineHeight: 1.6, color: 'rgba(255,255,255,0.7)' }}>
+                        The Pact isn't just a training club—it's a commitment. We are a crew built on the non-negotiable principle of showing up. Whether we're lifting heavy, logging miles, or tackling grueling weekly challenges, we do it as one.
+                      </div>
+                    </div>
+                    {/* Tab Bar — PULSE | MEMBERS | CHALLENGES */}
+                    <div style={{ display: 'flex', marginTop: 22 }}>
+                      {['Pulse', 'Members', 'Challenges'].map((tab, i) => (
+                        <div key={tab} style={{
+                          flex: 1, textAlign: 'center', paddingBottom: 12,
+                          fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase',
+                          color: i === 1 ? '#C8FF00' : 'rgba(255,255,255,0.3)',
+                          borderBottom: i === 1 ? '2px solid #C8FF00' : '1px solid rgba(255,255,255,0.04)',
+                          boxShadow: i === 1 ? '0 2px 10px rgba(200,255,0,0.3)' : 'none',
+                        }}>{tab}</div>
+                      ))}
+                    </div>
+                    {/* Stats Row — 98 MEMBERS | 98 ACTIVE | 1 CHALLENGES */}
+                    <div style={{ display: 'flex', gap: 3, marginTop: 16, paddingBottom: 16 }}>
+                      {[
+                        { val: '98', label: 'MEMBERS' },
+                        { val: '98', label: 'ACTIVE' },
+                        { val: '1', label: 'CHALLENGES' },
+                      ].map((stat) => (
+                        <div key={stat.label} style={{
+                          flex: 1, textAlign: 'center', padding: '14px 0',
+                          borderRadius: 12,
+                          background: 'rgba(200,255,0,0.025)',
+                          border: '0.5px solid rgba(200,255,0,0.035)',
+                        }}>
+                          <div style={{ fontSize: 22, fontWeight: 700, color: '#C8FF00' }}>{stat.val}</div>
+                          <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', marginTop: 3 }}>{stat.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'center', marginTop: 32 }}>
+                <h4 style={{ fontSize: 20, fontFamily: "'Space Grotesk', sans-serif", marginBottom: 8 }}>The Pact</h4>
+                <p style={{ fontSize: 14, color: 'var(--fwb-warm-gray)', lineHeight: 1.6 }}>
+                  98 members strong and growing. A high-intensity crew using Pulse to run brutal weekly challenges and hold each other accountable.
+                </p>
+                <p style={{
+                  marginTop: 16, fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--fwb-green)'
+                }}>
+                  "Pulse gave us a home base."
+                </p>
+              </div>
+            </div>
+
+            {/* BULK UP */}
+            <div
+              className={`fwb-club-showcase-card`}
+              ref={(el) => { clubCardRefs.current[1] = el; }}
+              style={{
+                background: 'rgba(192,57,43,0.03)',
+                border: '1px solid rgba(192,57,43,0.1)',
+              }}
+            >
+              <div className="fwb-club-showcase-phone">
+                <div className="fwb-club-showcase-phone-inner" style={{ background: '#100606' }}>
+                  {/* Hero — dark red/coral accent like screenshot */}
+                  <div style={{ position: 'relative', height: 340, overflow: 'hidden' }}>
+                    {/* Cover image — dark gym with barbells */}
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: "url('https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&q=80') center 30% / cover no-repeat",
+                      filter: 'saturate(1.1) brightness(0.85)',
+                    }} />
+                    {/* Red accent overlay */}
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(192,57,43,0.10)', mixBlendMode: 'overlay' }} />
+                    {/* Radial vignette */}
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: 'radial-gradient(circle at center, transparent 30%, rgba(16,6,6,0.6) 75%)',
+                    }} />
+                    {/* The Melt — red-tinted dark */}
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: 'linear-gradient(180deg, rgba(0,0,0,0.45) 0%, transparent 12%, transparent 20%, rgba(16,6,6,0.05) 28%, rgba(16,6,6,0.14) 36%, rgba(16,6,6,0.35) 44%, rgba(16,6,6,0.55) 52%, rgba(16,6,6,0.75) 60%, rgba(16,6,6,0.90) 70%, rgba(16,6,6,0.97) 80%, #100606 88%)',
+                    }} />
+                    {/* Accent glow */}
+                    <div style={{
+                      position: 'absolute', bottom: -30, left: '10%', right: '10%', height: 100,
+                      background: 'radial-gradient(ellipse at 50% 100%, rgba(192,57,43,0.08) 0%, transparent 60%)',
+                    }} />
+                    {/* Text overlay */}
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '0 20px 20px', zIndex: 5 }}>
+                      {/* Club type badge */}
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 10,
+                        padding: '5px 12px', borderRadius: 20,
+                        background: 'rgba(192,57,43,0.15)', border: '1px solid rgba(192,57,43,0.4)',
+                        fontSize: 10, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase', color: '#E74C3C',
+                      }}>🏋️ LIFT CLUB</div>
+                      <h3 style={{ fontSize: 32, fontWeight: 900, margin: '0 0 4px', letterSpacing: -0.5, textTransform: 'uppercase', textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>BULK UP</h3>
+                      <p style={{ fontSize: 13, fontWeight: 500, fontStyle: 'italic', color: 'rgba(255,255,255,0.65)', margin: '0 0 8px' }}>Lift Big. Eat heavy, Grow Together!</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                        <span style={{ color: 'rgba(255,255,255,0.6)' }}>by</span>
+                        <span style={{ color: '#E74C3C', fontWeight: 700 }}>@thetrefecta</span>
+                        <span style={{ color: 'rgba(255,255,255,0.3)' }}>•</span>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#E74C3C', boxShadow: '0 0 6px rgba(231,76,60,0.6)', animation: 'fwbPulseDot 2s infinite' }} />
+                        <span style={{ color: 'rgba(255,255,255,0.6)' }}>1 member</span>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Body */}
+                  <div style={{ padding: '0 16px', background: '#100606' }}>
+                    {/* Bio Card */}
+                    <div style={{
+                      display: 'flex', alignItems: 'flex-start', gap: 12,
+                      padding: '14px 18px', borderRadius: 16, marginTop: 16,
+                      background: 'rgba(192,57,43,0.05)', border: '1px solid rgba(192,57,43,0.1)',
+                    }}>
+                      {/* Profile photo */}
+                      <div style={{
+                        width: 42, height: 42, borderRadius: 12, flexShrink: 0, overflow: 'hidden',
+                        background: 'linear-gradient(135deg, #E74C3C, #C0392B)',
+                      }}>
+                        <div style={{
+                          width: '100%', height: '100%',
+                          background: "url('https://images.unsplash.com/photo-1568602471122-7832951cc4c5?w=200&q=80') center / cover no-repeat",
+                          borderRadius: 12,
+                        }} />
+                      </div>
+                      <div style={{ fontSize: 12, lineHeight: 1.6, color: 'rgba(255,255,255,0.7)' }}>
+                        Ready to put on real size? Bulk Up is a training club built for lifters chasing muscle and weight gain — with a full workout program, a bulking meal plan, weekly challenges, and a crew that's all grinding toward the same goal.
+                      </div>
+                    </div>
+                    {/* Tab Bar — PULSE | MEMBERS | CHALLENGES */}
+                    <div style={{ display: 'flex', marginTop: 22 }}>
+                      {['Pulse', 'Members', 'Challenges'].map((tab, i) => (
+                        <div key={tab} style={{
+                          flex: 1, textAlign: 'center', paddingBottom: 12,
+                          fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: 'uppercase',
+                          color: i === 0 ? '#E74C3C' : 'rgba(255,255,255,0.3)',
+                          borderBottom: i === 0 ? '2px solid #E74C3C' : '1px solid rgba(255,255,255,0.04)',
+                          boxShadow: i === 0 ? '0 2px 10px rgba(231,76,60,0.3)' : 'none',
+                        }}>{tab}</div>
+                      ))}
+                    </div>
+                    {/* Message Input Bar */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      marginTop: 16, paddingBottom: 16,
+                    }}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: '50%',
+                        background: '#E74C3C',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 18, fontWeight: 700, color: '#fff', flexShrink: 0,
+                      }}>+</div>
+                      <div style={{
+                        flex: 1, padding: '10px 16px', borderRadius: 20,
+                        background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+                        fontSize: 13, color: 'rgba(255,255,255,0.3)',
+                      }}>Message...</div>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: '50%',
+                        background: 'rgba(231,76,60,0.15)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 14, flexShrink: 0,
+                      }}>🎙️</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ textAlign: 'center', marginTop: 32 }}>
+                <h4 style={{ fontSize: 20, fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, marginBottom: 8, color: '#fff' }}>Bulk Up</h4>
+                <p style={{ fontSize: 14, color: 'var(--fwb-warm-gray)', lineHeight: 1.6 }}>
+                  A training club built for lifters chasing muscle and weight gain, with full workout programs and bulking meal plans on Pulse.
+                </p>
+                <p style={{
+                  marginTop: 16, fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', color: '#E74C3C'
+                }}>
+                  "The platform makes it easy."
+                </p>
+              </div>
+            </div>
+
+          </div>
+
+          <p style={{
+            textAlign: 'center',
+            marginTop: 60,
+            fontFamily: "'Playfair Display', serif",
+            fontSize: 'clamp(18px, 2.5vw, 24px)',
+            fontWeight: 400,
+            fontStyle: 'italic',
+            color: 'var(--fwb-white)',
+            lineHeight: 1.5,
+          }}>
+            Every club has its own energy.
+            <span style={{ color: 'var(--fwb-gold)' }}> Yours will too.</span>
+          </p>
+        </section>
+
+        {/* YOUR CLUB YOUR RULES */}
+        <section className="fwb-section" id="monetize">
+          <div className="fwb-section-label">04 — Your Club, Your Rules</div>
+          <h2 className="fwb-section-title">
+            Free to use.<br />Flexible by design.
+          </h2>
+          <p className="fwb-section-text">
+            Pulse Clubs is completely free for hosts. No subscriptions, no platform fees. You decide how your community runs — offer everything for free, create paid challenges, gate premium content, or mix and match. The model is yours.
           </p>
 
           <div className="fwb-money-grid">
-            <div className="fwb-money-card">
-              <div className="fwb-money-badge">Free Tier</div>
-              <div className="fwb-money-title">The Open Community</div>
-              <p className="fwb-money-desc">Access to the club feed, event calendar, and basic workouts. Where anyone can start and where the culture lives.</p>
-              <div className="fwb-money-price">$0 <span>/ forever</span></div>
-            </div>
             <div className="fwb-money-card featured">
-              <div className="fwb-money-badge">Premium</div>
-              <div className="fwb-money-title">FWB Inner Circle</div>
-              <p className="fwb-money-desc">Exclusive programs, early event access, and direct connection to leadership. Recurring revenue from your most loyal members.</p>
-              <div className="fwb-money-price">$XX <span>/ month</span></div>
+              <div className="fwb-money-badge">The Platform</div>
+              <div className="fwb-money-title">100% Free to Host</div>
+              <p className="fwb-money-desc">Create your club, invite your people, post content, run challenges, and manage members — all at no cost. Pulse gives you the infrastructure. You bring the community.</p>
             </div>
             <div className="fwb-money-card">
-              <div className="fwb-money-badge">Events</div>
-              <div className="fwb-money-title">Ticketed Experiences</div>
-              <p className="fwb-money-desc">Pop-up workouts and partner activations—sold straight through Pulse. Revenue flows directly to FWB.</p>
-              <div className="fwb-money-price">Variable</div>
+              <div className="fwb-money-badge">Your Choice</div>
+              <div className="fwb-money-title">Challenges & Upsells</div>
+              <p className="fwb-money-desc">Want to monetize? Offer paid challenges, exclusive programs, or ticketed events through the club. Or keep everything free — it's entirely up to you.</p>
             </div>
             <div className="fwb-money-card">
-              <div className="fwb-money-badge">Merch & Collabs</div>
-              <div className="fwb-money-title">Brand Extensions</div>
-              <p className="fwb-money-desc">Merch drops and partner cross-promotions. Pulse becomes the streamlined storefront for your community.</p>
-              <div className="fwb-money-price">Variable</div>
+              <div className="fwb-money-badge">Organize</div>
+              <div className="fwb-money-title">Your Digital Center</div>
+              <p className="fwb-money-desc">Think of it as your community's home base. Organize track days, mobilize your crew, share workouts, and keep the energy alive between meetups.</p>
+            </div>
+            <div className="fwb-money-card">
+              <div className="fwb-money-badge">Gamify</div>
+              <div className="fwb-money-title">Leaderboards & Challenges</div>
+              <p className="fwb-money-desc">Turn participation into friendly competition. Workout leaderboards, nutrition tracking, and weekly challenges keep your members engaged and coming back.</p>
             </div>
           </div>
         </section>
 
         {/* MANAGEMENT */}
         <section className="fwb-section" id="manage">
-          <div className="fwb-section-label">04 — Club Management</div>
+          <div className="fwb-section-label">05 — Club Management</div>
           <h2 className="fwb-section-title">
             Run the club,<br />effortlessly.
           </h2>
@@ -1342,9 +1897,20 @@ const FWB = ({ metaData }: FWBProps) => {
           <p className="fwb-closing-attribution">
             Built for Nile Jones &amp; Frens With Benefits
           </p>
-          <a className="fwb-closing-cta" href="mailto:tre@fitwithpulse.ai">
-            Let's Build This →
-          </a>
+          <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+            <a className="fwb-closing-cta" href="mailto:tre@fitwithpulse.ai">
+              Let's Build This →
+            </a>
+            <a
+              className="fwb-closing-cta"
+              href="https://calendly.com/tre-aqo7/30min"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ background: 'transparent', border: '1px solid var(--fwb-gold)', color: 'var(--fwb-gold)' }}
+            >
+              Schedule a Call →
+            </a>
+          </div>
         </div>
 
         {/* FOOTER */}

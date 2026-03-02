@@ -1,5 +1,5 @@
 // --- Imports for newer SDK ---
-const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const { FieldValue } = require("firebase-admin/firestore");
 
@@ -71,7 +71,7 @@ async function sendMulticastNotification(tokens, title, body, dataPayload = {}, 
   try {
     console.log(`Sending ${notificationType} notification via sendEachForMulticast to ${tokens.length} tokens.`);
     const response = await messaging.sendEachForMulticast(message);
-    
+
     // Log multicast notification
     await logMulticastNotification({
       tokens,
@@ -82,13 +82,13 @@ async function sendMulticastNotification(tokens, title, body, dataPayload = {}, 
       functionName: 'chatNotifications',
       response
     });
-    
+
     console.log(`Finished sending ${notificationType} notifications. Sent: ${response.successCount}, Failed: ${response.failureCount}.`);
 
     if (response.failureCount > 0) {
       response.responses.forEach((resp, idx) => {
         if (!resp.success) {
-          console.error(` - Failed sending to token [${idx}] (${tokens[idx].substring(0,10)}...): ${resp.error.code} - ${resp.error.message}`);
+          console.error(` - Failed sending to token [${idx}] (${tokens[idx].substring(0, 10)}...): ${resp.error.code} - ${resp.error.message}`);
         }
       });
     }
@@ -246,7 +246,7 @@ exports.sendDirectMessageNotification = onDocumentCreated("chats/{chatId}/messag
         dataPayload,
         'DIRECT_MESSAGE'
       );
-      
+
       console.log(`Direct message notifications sent. Success: ${result.successCount}, Failed: ${result.failureCount}, Missing tokens: ${missingTokenCount}`);
     } else {
       console.log(`No eligible tokens found for direct message notification in chat ${chatId}. Missing tokens: ${missingTokenCount}`);
@@ -262,6 +262,11 @@ exports.sendDirectMessageNotification = onDocumentCreated("chats/{chatId}/messag
 /**
  * Sends notifications when a new round table message is created
  * Triggered when a new document is created in 'sweatlist-collection/{challengeId}/messages/{messageId}'
+ *
+ * iOS stores messages with a nested `sender` object: { id, username, displayName, ... }
+ * We extract senderId from either `sender.id` or the legacy flat `senderId` field.
+ * FCM tokens are fetched from the `users` collection (source of truth) rather than
+ * the potentially stale `user-challenge` documents.
  */
 exports.sendRoundTableNotification = onDocumentCreated("sweatlist-collection/{challengeId}/messages/{messageId}", async (event) => {
   const snap = event.data;
@@ -279,30 +284,44 @@ exports.sendRoundTableNotification = onDocumentCreated("sweatlist-collection/{ch
     return null;
   }
 
-  const { senderId, content } = messageData;
+  // Extract senderId: iOS stores sender as a nested object { id, username, ... }
+  // Fall back to flat senderId field for backwards compatibility
+  const senderId = messageData.sender?.id || messageData.senderId;
+  const content = messageData.content;
+
+  // Extract sender username from the sender object if available
+  let senderUsername = messageData.sender?.username || messageData.sender?.displayName || 'Someone';
 
   if (!senderId) {
-    console.error(`Missing senderId in round table message ${messageId}. Cannot send notifications.`);
+    console.error(`Missing senderId in round table message ${messageId}. Message data keys: ${Object.keys(messageData).join(', ')}. Cannot send notifications.`);
+    return null;
+  }
+
+  // Skip private messages (Nora AI conversations)
+  const visibility = messageData.visibility || 'public';
+  if (visibility !== 'public') {
+    console.log(`Message ${messageId} has visibility '${visibility}'. Skipping notification.`);
     return null;
   }
 
   if (!content || !content.trim()) {
-    console.log(`Empty content in round table message ${messageId}. Skipping notification to avoid duplicates.`);
+    console.log(`Empty content in round table message ${messageId}. Skipping notification.`);
     return null;
   }
 
-  console.log(`New round table message ${messageId} from ${senderId} in challenge ${challengeId}. Preparing notifications.`);
+  console.log(`New round table message ${messageId} from ${senderUsername} (${senderId}) in challenge ${challengeId}. Preparing notifications.`);
 
   try {
-    // Get sender information for notification
-    let senderUsername = 'Someone';
-    try {
-      const senderDoc = await db.collection('users').doc(senderId).get();
-      if (senderDoc.exists) {
-        senderUsername = senderDoc.data().username || senderDoc.data().displayName || 'Someone';
+    // If we didn't get sender username from the message, fetch it from users collection
+    if (senderUsername === 'Someone') {
+      try {
+        const senderDoc = await db.collection('users').doc(senderId).get();
+        if (senderDoc.exists) {
+          senderUsername = senderDoc.data().username || senderDoc.data().displayName || 'Someone';
+        }
+      } catch (error) {
+        console.error(`Error fetching sender ${senderId} info:`, error);
       }
-    } catch (error) {
-      console.error(`Error fetching sender ${senderId} info:`, error);
     }
 
     // Get challenge title for notification context
@@ -326,23 +345,43 @@ exports.sendRoundTableNotification = onDocumentCreated("sweatlist-collection/{ch
       return null;
     }
 
-    // Collect FCM tokens for participants (excluding sender)
-    const eligibleTokens = [];
-    let missingTokenCount = 0;
-
+    // Collect participant user IDs (excluding sender)
+    const participantUserIds = [];
     for (const doc of participantsSnapshot.docs) {
       const participantData = doc.data();
       const participantId = participantData.userId;
-      const fcmToken = participantData.fcmToken;
+      if (participantId && participantId !== senderId) {
+        participantUserIds.push(participantId);
+      }
+    }
 
-      // Skip if this is the sender
-      if (participantId === senderId) continue;
+    if (participantUserIds.length === 0) {
+      console.log(`No other participants found for challenge ${challengeId}. No notifications to send.`);
+      return null;
+    }
 
-      if (fcmToken) {
-        eligibleTokens.push(fcmToken);
-      } else {
+    // Fetch fresh FCM tokens from the users collection (source of truth)
+    const eligibleTokens = [];
+    let missingTokenCount = 0;
+
+    for (const userId of participantUserIds) {
+      try {
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          const fcmToken = userDoc.data().fcmToken;
+          if (fcmToken) {
+            eligibleTokens.push(fcmToken);
+          } else {
+            missingTokenCount++;
+            console.warn(`User ${userId} in challenge ${challengeId} has no FCM token in users collection.`);
+          }
+        } else {
+          missingTokenCount++;
+          console.warn(`User ${userId} not found in users collection.`);
+        }
+      } catch (error) {
+        console.error(`Error fetching user ${userId}:`, error);
         missingTokenCount++;
-        console.warn(`Participant ${participantId} in challenge ${challengeId} is missing an FCM token.`);
       }
     }
 
@@ -369,7 +408,7 @@ exports.sendRoundTableNotification = onDocumentCreated("sweatlist-collection/{ch
         dataPayload,
         'ROUND_TABLE_MESSAGE'
       );
-      
+
       console.log(`Round table notifications sent. Success: ${result.successCount}, Failed: ${result.failureCount}, Missing tokens: ${missingTokenCount}`);
     } else {
       console.log(`No eligible tokens found for round table notification in challenge ${challengeId}. Missing tokens: ${missingTokenCount}`);
@@ -401,7 +440,9 @@ exports.sendRoundTableNotificationAlt = onDocumentCreated("roundTableMessages/{m
     return null;
   }
 
-  const { senderId, content, challengeId } = messageData;
+  const senderId = messageData.sender?.id || messageData.senderId;
+  const content = messageData.content;
+  const challengeId = messageData.challengeId;
 
   if (!senderId || !challengeId) {
     console.error(`Missing senderId or challengeId in round table message ${messageId}. Cannot send notifications.`);
@@ -418,6 +459,182 @@ exports.sendRoundTableNotificationAlt = onDocumentCreated("roundTableMessages/{m
   // Use the same logic as the main round table function
   // This is essentially the same implementation but for a different collection structure
   // ... (implementation would be identical to sendRoundTableNotification)
-  
+
+  return null;
+});
+
+/**
+ * Sends notifications when a new message is posted in a Creator Club's Pulse chat.
+ * Club messages are stored at: round-chat/{clubId}/messages/{messageId}
+ *
+ * The function:
+ * 1. Extracts sender info from the message's sender object
+ * 2. Looks up club name from the clubs collection
+ * 3. Finds all active club members from the clubMembers collection
+ * 4. Fetches fresh FCM tokens from the users collection
+ * 5. Sends push notification to all members (excluding the sender)
+ */
+exports.sendClubChatNotification = onDocumentCreated("round-chat/{clubId}/messages/{messageId}", async (event) => {
+  const snap = event.data;
+  if (!snap) {
+    console.log(`No data associated with the event for round-chat/${event.params.clubId}/messages/${event.params.messageId}. Exiting.`);
+    return null;
+  }
+
+  const messageData = snap.data();
+  const messageId = event.params.messageId;
+  const clubId = event.params.clubId;
+
+  if (!messageData) {
+    console.log(`No data found for new club message ${messageId} in club ${clubId}. Exiting.`);
+    return null;
+  }
+
+  // Extract senderId: iOS stores sender as a nested object { id, username, ... }
+  const senderId = messageData.sender?.id || messageData.senderId;
+  const content = messageData.content;
+  let senderUsername = messageData.sender?.username || messageData.sender?.displayName || 'Someone';
+
+  if (!senderId) {
+    console.error(`Missing senderId in club message ${messageId}. Message data keys: ${Object.keys(messageData).join(', ')}. Cannot send notifications.`);
+    return null;
+  }
+
+  // Skip private messages
+  const visibility = messageData.visibility || 'public';
+  if (visibility !== 'public') {
+    console.log(`Club message ${messageId} has visibility '${visibility}'. Skipping notification.`);
+    return null;
+  }
+
+  // Determine notification body based on content type
+  const mediaURL = messageData.mediaURL;
+  const mediaType = messageData.mediaType || 'none';
+  let notificationBody = '';
+
+  if (content && content.trim()) {
+    notificationBody = content.length > 100 ? content.substring(0, 100) + '...' : content;
+  } else if (mediaType === 'image') {
+    notificationBody = '📷 Sent a photo';
+  } else if (mediaType === 'video') {
+    notificationBody = '🎥 Sent a video';
+  } else if (mediaType === 'audio') {
+    notificationBody = '🎙️ Sent a voice message';
+  } else {
+    // No text content and no known media — skip to avoid sending empty notifications
+    console.log(`Empty content and no media in club message ${messageId}. Skipping notification.`);
+    return null;
+  }
+
+  console.log(`New club message ${messageId} from ${senderUsername} (${senderId}) in club ${clubId}. Preparing notifications.`);
+
+  try {
+    // If we didn't get sender username from the message, fetch from users collection
+    if (senderUsername === 'Someone') {
+      try {
+        const senderDoc = await db.collection('users').doc(senderId).get();
+        if (senderDoc.exists) {
+          senderUsername = senderDoc.data().username || senderDoc.data().displayName || 'Someone';
+        }
+      } catch (error) {
+        console.error(`Error fetching sender ${senderId} info:`, error);
+      }
+    }
+
+    // Get club name for notification context
+    let clubName = 'Club';
+    try {
+      const clubDoc = await db.collection('clubs').doc(clubId).get();
+      if (clubDoc.exists) {
+        clubName = clubDoc.data().name || 'Club';
+      }
+    } catch (error) {
+      console.error(`Error fetching club ${clubId} info:`, error);
+    }
+
+    // Find all active club members from the clubMembers collection
+    const membersSnapshot = await db.collection('clubMembers')
+      .where('clubId', '==', clubId)
+      .where('isActive', '==', true)
+      .get();
+
+    if (membersSnapshot.empty) {
+      console.log(`No active members found for club ${clubId}. No notifications to send.`);
+      return null;
+    }
+
+    // Collect member user IDs (excluding sender)
+    const memberUserIds = [];
+    for (const doc of membersSnapshot.docs) {
+      const memberData = doc.data();
+      const memberId = memberData.userId;
+      if (memberId && memberId !== senderId) {
+        memberUserIds.push(memberId);
+      }
+    }
+
+    if (memberUserIds.length === 0) {
+      console.log(`No other members found for club ${clubId}. No notifications to send.`);
+      return null;
+    }
+
+    // Fetch fresh FCM tokens from the users collection (source of truth)
+    const eligibleTokens = [];
+    let missingTokenCount = 0;
+
+    for (const userId of memberUserIds) {
+      try {
+        const userDoc = await db.collection('users').doc(userId).get();
+        if (userDoc.exists) {
+          const fcmToken = userDoc.data().fcmToken;
+          if (fcmToken) {
+            eligibleTokens.push(fcmToken);
+          } else {
+            missingTokenCount++;
+            console.warn(`User ${userId} in club ${clubId} has no FCM token.`);
+          }
+        } else {
+          missingTokenCount++;
+          console.warn(`User ${userId} not found in users collection.`);
+        }
+      } catch (error) {
+        console.error(`Error fetching user ${userId}:`, error);
+        missingTokenCount++;
+      }
+    }
+
+    // Prepare notification content
+    const title = `💬 ${clubName}`;
+    const body = `${senderUsername}: ${notificationBody}`;
+
+    const dataPayload = {
+      clubId: clubId,
+      messageId: messageId,
+      senderId: senderId,
+      senderUsername: senderUsername,
+      clubName: clubName,
+      type: 'CLUB_CHAT_MESSAGE',
+      timestamp: String(Math.floor(Date.now() / 1000))
+    };
+
+    // Send notifications
+    if (eligibleTokens.length > 0) {
+      const result = await sendMulticastNotification(
+        eligibleTokens,
+        title,
+        body,
+        dataPayload,
+        'CLUB_CHAT_MESSAGE'
+      );
+
+      console.log(`Club chat notifications sent for ${clubName}. Success: ${result.successCount}, Failed: ${result.failureCount}, Missing tokens: ${missingTokenCount}`);
+    } else {
+      console.log(`No eligible tokens found for club chat notification in club ${clubId}. Missing tokens: ${missingTokenCount}`);
+    }
+
+  } catch (error) {
+    console.error(`Error processing club chat notification for club ${clubId}:`, error);
+  }
+
   return null;
 }); 
