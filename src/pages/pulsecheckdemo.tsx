@@ -855,7 +855,7 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                             initial={{ opacity: 0, y: 40 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.8, ease: 'easeOut' }}
-                            className="relative w-[340px] rounded-[40px] overflow-hidden border-2 border-red-500/30 shadow-2xl"
+                            className="relative w-[393px] h-[852px] rounded-[40px] overflow-hidden border-2 border-red-500/30 shadow-2xl"
                             style={{
                                 background: 'linear-gradient(180deg, #111113 0%, #0a0a0b 100%)',
                                 boxShadow: '0 0 60px rgba(239,68,68,0.15), 0 20px 40px rgba(0,0,0,0.5)',
@@ -1592,7 +1592,7 @@ const TheClose: React.FC = () => {
                             initial={{ opacity: 0, y: 40 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.8, ease: 'easeOut' }}
-                            className="relative w-[340px] rounded-[40px] overflow-hidden border-2 border-green-500/20 shadow-2xl"
+                            className="relative w-[393px] h-[852px] rounded-[40px] overflow-hidden border-2 border-green-500/20 shadow-2xl"
                             style={{
                                 background: 'linear-gradient(180deg, #111113 0%, #0a0a0b 100%)',
                                 boxShadow: '0 0 60px rgba(34,197,94,0.1), 0 20px 40px rgba(0,0,0,0.5)',
@@ -1715,8 +1715,8 @@ const TheClose: React.FC = () => {
                                                         <div>
                                                             <div
                                                                 className={`rounded-2xl px-4 py-3 max-w-[85%] ${m.role === 'athlete'
-                                                                        ? 'bg-[#E0FE10]/10 border border-[#E0FE10]/20 ml-auto'
-                                                                        : 'bg-zinc-800/60 border border-zinc-700/30'
+                                                                    ? 'bg-[#E0FE10]/10 border border-[#E0FE10]/20 ml-auto'
+                                                                    : 'bg-zinc-800/60 border border-zinc-700/30'
                                                                     }`}
                                                             >
                                                                 {m.role === 'nora' && (
@@ -2407,7 +2407,7 @@ const PulseCheckDemo: React.FC = () => {
                                     initial={{ opacity: 0, y: 40 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ duration: 0.8, ease: 'easeOut' }}
-                                    className="relative w-[340px] rounded-[40px] overflow-hidden border-2 border-zinc-700/60 shadow-2xl shadow-black/60"
+                                    className="relative w-[393px] h-[852px] rounded-[40px] overflow-hidden border-2 border-zinc-700/60 shadow-2xl shadow-black/60"
                                     style={{ background: 'linear-gradient(180deg, #111113 0%, #0a0a0b 100%)' }}
                                 >
                                     {/* Status bar */}
