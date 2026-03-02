@@ -20,13 +20,19 @@ import {
     Star,
     Wind,
     Bell,
+    Home,
+    Users,
+    FileText,
+    Pill,
+    Building2,
+    LogOut,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────
 
-type DemoAct = 'intro' | 'act1' | 'act2' | 'act3';
+type DemoAct = 'intro' | 'act1' | 'act2' | 'act3' | 'act4';
 
 interface ScriptMessage {
     role: 'nora' | 'athlete' | 'system';
@@ -107,7 +113,7 @@ const DEMO_SCRIPT: ScriptMessage[] = [
     {
         role: 'nora',
         content:
-            "Done. I've sent Coach a secure briefing with your physical baseline data and today's conversation context. He'll have the full picture before your 10 AM meeting.\n\nIn the meantime, let me show your coaching staff what they see on their end.",
+            "Done. I've sent Coach a secure briefing with your physical baseline data and today's conversation context. He'll have the full picture before your 10 AM meeting.",
         delay: 2000,
         autoAdvance: true,
         autoAdvanceDelay: 4000,
@@ -122,31 +128,38 @@ const DEMO_SCRIPT: ScriptMessage[] = [
 const SUGGESTED_RESPONSES: Record<number, string[]> = {
     1: [
         'I feel okay, just trying to get locked in.',
-        "I'm good, ready for today.",
+        "Eh, I don't know. Just woke up.",
+        "Honestly? I barely slept.",
     ],
     2: [
         'That\'s good to hear. Hey what time did Coach say to meet for competition prep today?',
         "Nice. When's the comp prep meeting?",
+        "Cool. Whatever. What time is the meeting?",
     ],
     3: [
         "Cool. I'm not going to lie, I'm a little nervous about today's game.",
         'Yeah… honestly I\'m kinda nervous about today.',
+        "I'm stressed. Like really stressed about today.",
     ],
     4: [
         "There's just a lot of pressure. If we lose today, our season is over. And I know there are scouts watching.",
         "I don't know, everything just feels like it's on the line today.",
+        "I feel like I'm going to let everyone down.",
     ],
     5: [
         "Sure, let's do it.",
-        "Yeah, I'm ready.",
+        "I guess I'll try it.",
+        "I don't know if that'll help, but fine.",
     ],
     7: [
-        "I'm still feeling pretty anxious.",
+        "I feel a lot better actually.",
         'A little better, but still tense.',
+        "I'm still feeling pretty anxious.",
     ],
     8: [
         'Sure, go ahead and let Coach know.',
         "Yeah, that's fine. Let him know.",
+        "Do you have to? I don't want him to think I can't handle it.",
     ],
 };
 
@@ -365,17 +378,20 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
     const [showRoster, setShowRoster] = useState(false);
     const [showExercises, setShowExercises] = useState(false);
     const [showHandoff, setShowHandoff] = useState(false);
+    const [showRosterHint, setShowRosterHint] = useState(false);
 
     useEffect(() => {
         const t1 = setTimeout(() => setShowAlert(true), 800);
         const t2 = setTimeout(() => setShowRoster(true), 2200);
         const t3 = setTimeout(() => setShowExercises(true), 3800);
         const t4 = setTimeout(() => setShowHandoff(true), 5200);
+        const t5 = setTimeout(() => setShowRosterHint(true), 7000);
         return () => {
             clearTimeout(t1);
             clearTimeout(t2);
             clearTimeout(t3);
             clearTimeout(t4);
+            clearTimeout(t5);
         };
     }, []);
 
@@ -634,8 +650,14 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
                                         initial={{ opacity: 0, x: -10 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ delay: i * 0.03 }}
-                                        className={`grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 items-center px-3 py-2 border-b border-zinc-800/50 text-sm hover:bg-zinc-800/40 transition-colors ${p.hl ? 'bg-orange-500/5' : ''
+                                        className={`grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 items-center px-3 py-2 border-b border-zinc-800/50 text-sm transition-colors ${p.hl ? 'bg-orange-500/5' : ''
+                                            } ${p.status === 'critical' ? 'cursor-pointer hover:bg-red-500/10' : 'hover:bg-zinc-800/40'
                                             }`}
+                                        onClick={() => {
+                                            if (p.status === 'critical') {
+                                                onContinue();
+                                            }
+                                        }}
                                     >
                                         <div className="text-zinc-500 font-mono text-xs">{p.num}</div>
                                         <div className={`font-medium ${p.hl ? 'text-orange-400' : 'text-white'}`}>{p.name}</div>
@@ -644,7 +666,12 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
                                             <div className={`w-2 h-2 rounded-full shrink-0 ${statusDot(p.status)}`} />
                                             <span className={`text-xs truncate ${statusColor(p.status)}`}>{p.text}</span>
                                         </div>
-                                        <div className="text-zinc-500 text-xs text-right">{p.time}</div>
+                                        <div className="flex items-center justify-end gap-1">
+                                            <span className="text-zinc-500 text-xs">{p.time}</span>
+                                            {p.status === 'critical' && (
+                                                <ChevronRight className="w-3 h-3 text-red-400" />
+                                            )}
+                                        </div>
                                     </motion.div>
                                 ))}
                             </div>
@@ -739,22 +766,19 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
                 )}
             </AnimatePresence>
 
-            {/* Continue button */}
+            {/* Roster hint */}
             <AnimatePresence>
-                {showHandoff && (
+                {showRosterHint && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
-                        transition={{ delay: 1.5 }}
-                        className="flex justify-center pt-4"
+                        className="flex justify-center pt-2"
                     >
-                        <button
-                            onClick={onContinue}
-                            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[#E0FE10] text-black font-bold hover:bg-[#c8e40e] transition-colors"
-                        >
-                            Continue to The Close
-                            <ChevronRight className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2 text-xs text-red-400/80">
+                            <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                            Click K. Thompson to explore clinical escalation
+                            <ChevronRight className="w-3 h-3" />
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -763,305 +787,1173 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
 };
 
 // ─────────────────────────────────────────────────────────
-// THE CLOSE — Act 3
+// CLINICAL ESCALATION — Act 3
+// ─────────────────────────────────────────────────────────
+
+const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
+    const [phase, setPhase] = useState<'phone' | 'clinicianView' | 'calling'>('phone');
+    const [alertTapped, setAlertTapped] = useState(false);
+    const [alertTapPos, setAlertTapPos] = useState<{ x: number; y: number } | null>(null);
+    const [showNotifCard, setShowNotifCard] = useState(false);
+    const [callStatus, setCallStatus] = useState<'ringing' | 'connected' | 'ended'>('ringing');
+
+    // Play critical alert sound using Web Audio API
+    const playCriticalAlert = useCallback(() => {
+        try {
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const playTone = (freq: number, startTime: number, duration: number) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.3, startTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+                osc.start(startTime);
+                osc.stop(startTime + duration);
+            };
+            // Urgent tri-tone pattern
+            playTone(880, ctx.currentTime, 0.15);
+            playTone(1046, ctx.currentTime + 0.18, 0.15);
+            playTone(880, ctx.currentTime + 0.36, 0.15);
+            // repeat
+            playTone(880, ctx.currentTime + 0.7, 0.15);
+            playTone(1046, ctx.currentTime + 0.88, 0.15);
+            playTone(880, ctx.currentTime + 1.06, 0.15);
+        } catch (e) {
+            // Audio not available — silent fallback
+        }
+    }, []);
+
+    useEffect(() => {
+        const t1 = setTimeout(() => {
+            setShowNotifCard(true);
+            playCriticalAlert();
+        }, 1500);
+        return () => clearTimeout(t1);
+    }, [playCriticalAlert]);
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="max-w-4xl mx-auto px-4 py-6"
+        >
+            <AnimatePresence mode="wait">
+                {/* ── PHASE 1: Clinician Phone Screen ── */}
+                {phase === 'phone' && (
+                    <motion.div
+                        key="clinician-phone"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="flex flex-col items-center justify-center py-8"
+                    >
+                        {/* Phone frame */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 40 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.8, ease: 'easeOut' }}
+                            className="relative w-[340px] rounded-[40px] overflow-hidden border-2 border-red-500/30 shadow-2xl"
+                            style={{
+                                background: 'linear-gradient(180deg, #111113 0%, #0a0a0b 100%)',
+                                boxShadow: '0 0 60px rgba(239,68,68,0.15), 0 20px 40px rgba(0,0,0,0.5)',
+                            }}
+                        >
+                            {/* Status bar */}
+                            <div className="flex items-center justify-between px-8 pt-4 pb-2">
+                                <span className="text-xs font-semibold text-white">T-Mobile</span>
+                                <div className="flex items-center gap-1">
+                                    <div className="w-4 h-2 rounded-sm border border-white/60 relative">
+                                        <div className="absolute inset-[1px] right-[2px] bg-green-400 rounded-[1px]" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Lock screen */}
+                            <div className="text-center py-10">
+                                <div className="text-zinc-500 text-xs uppercase tracking-widest mb-1">
+                                    Saturday, March 2
+                                </div>
+                                <div className="text-6xl font-thin text-white tracking-tight">
+                                    7:14
+                                </div>
+                                <div className="text-xs text-zinc-500 mt-2 font-medium uppercase tracking-wider">
+                                    Office Hours
+                                </div>
+                            </div>
+
+                            {/* Critical Alert Notification */}
+                            <AnimatePresence>
+                                {showNotifCard && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -60, scale: 0.9 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                                        onClick={(e) => {
+                                            if (alertTapped) return;
+                                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                            setAlertTapPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                                            setAlertTapped(true);
+                                            setTimeout(() => setPhase('clinicianView'), 2500);
+                                        }}
+                                        className="mx-4 mb-6 rounded-2xl p-3.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-transform relative overflow-hidden"
+                                        style={{
+                                            background: 'rgba(239,68,68,0.12)',
+                                            backdropFilter: 'blur(40px)',
+                                            border: alertTapped ? '1px solid rgba(239,68,68,0.6)' : '1px solid rgba(239,68,68,0.3)',
+                                        }}
+                                    >
+                                        {/* Tap ripple — red */}
+                                        {alertTapped && alertTapPos && (
+                                            <motion.div
+                                                initial={{ scale: 0, opacity: 0.8 }}
+                                                animate={{ scale: 6, opacity: 0 }}
+                                                transition={{ duration: 2.5, ease: 'easeOut' }}
+                                                className="absolute rounded-full pointer-events-none"
+                                                style={{
+                                                    width: 40,
+                                                    height: 40,
+                                                    left: alertTapPos.x - 20,
+                                                    top: alertTapPos.y - 20,
+                                                    background: 'radial-gradient(circle, rgba(239,68,68,0.6) 0%, rgba(239,68,68,0) 70%)',
+                                                    boxShadow: '0 0 30px rgba(239,68,68,0.5)',
+                                                }}
+                                            />
+                                        )}
+
+                                        <div className="flex items-start gap-3 relative z-10">
+                                            <div className="relative flex-shrink-0 mt-0.5">
+                                                <div className="w-10 h-10 rounded-xl bg-red-500/25 flex items-center justify-center">
+                                                    <Shield className="w-5 h-5 text-red-400" />
+                                                </div>
+                                                {/* Pulsing red dot */}
+                                                <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between mb-0.5">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-[10px] font-black text-red-400 uppercase tracking-wider">⚠ Critical Alert</span>
+                                                    </div>
+                                                    <span className="text-[10px] text-zinc-500">now</span>
+                                                </div>
+                                                <p className="text-xs font-bold text-white mb-0.5">AuntEdna — Clinical Escalation</p>
+                                                <p className="text-[11px] text-zinc-300 leading-snug">
+                                                    K. Thompson (#52) has been flagged for immediate clinical attention. Tap to review full briefing.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                            {/* iOS Critical Alert note */}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: showNotifCard ? 1 : 0 }}
+                                transition={{ delay: 0.5 }}
+                                className="text-center pb-6"
+                            >
+                                <span className="text-[9px] text-red-400/50 uppercase tracking-widest">
+                                    Critical Alert • Bypasses Do Not Disturb
+                                </span>
+                            </motion.div>
+                        </motion.div>
+
+                        {/* Context label */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 2 }}
+                            className="mt-6 text-center"
+                        >
+                            <div className="text-xs text-zinc-500 uppercase tracking-widest">
+                                Clinician Experience — Critical Escalation Alert
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {/* ── PHASE 2: Full Clinician Interface ── */}
+                {phase === 'clinicianView' && (
+                    <motion.div
+                        key="clinician-interface"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6 }}
+                        className="flex gap-0 pb-12"
+                        style={{ maxWidth: '1200px', margin: '0 auto' }}
+                    >
+                        {/* ── Sidebar ── */}
+                        <motion.aside
+                            initial={{ opacity: 0, x: -30 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.5 }}
+                            className="w-56 shrink-0 rounded-2xl border border-zinc-700/40 mr-5 flex flex-col overflow-hidden"
+                            style={{ background: 'linear-gradient(180deg, rgba(147,51,234,0.05) 0%, rgba(15,15,18,0.95) 100%)' }}
+                        >
+                            {/* App Logo */}
+                            <div className="px-4 pt-5 pb-3 border-b border-zinc-800/60">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 rounded-lg bg-purple-500/15 border border-purple-500/20 flex items-center justify-center">
+                                        <Shield className="w-4 h-4 text-purple-400" />
+                                    </div>
+                                    <div>
+                                        <div className="text-sm font-bold text-white">AuntEdna</div>
+                                        <div className="text-[9px] text-zinc-600 uppercase tracking-wider">Clinical Platform</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Dr. Mitchell Profile */}
+                            <div className="px-4 py-4 border-b border-zinc-800/60">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500/30 to-blue-500/20 border border-purple-500/20 flex items-center justify-center">
+                                        <span className="text-sm font-bold text-purple-300">DM</span>
+                                    </div>
+                                    <div>
+                                        <div className="text-sm font-semibold text-white">Dr. R. Mitchell</div>
+                                        <div className="text-[10px] text-zinc-500">PsyD, CMPC</div>
+                                        <div className="text-[9px] text-purple-400/70">Team Psychologist</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Navigation */}
+                            <nav className="flex-1 px-2 py-3 space-y-0.5">
+                                {[
+                                    { icon: Home, label: 'Home', active: false },
+                                    { icon: Users, label: 'Patients', active: true, badge: '3' },
+                                    { icon: Pill, label: 'Prescriptions', active: false },
+                                    { icon: Building2, label: 'Pharmacies', active: false },
+                                    { icon: FileText, label: 'Documents', active: false },
+                                ].map((item) => (
+                                    <div
+                                        key={item.label}
+                                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${item.active
+                                            ? 'bg-purple-500/15 text-purple-300 border border-purple-500/20'
+                                            : 'text-zinc-500 hover:bg-zinc-800/40 hover:text-zinc-300 border border-transparent'
+                                            }`}
+                                    >
+                                        <item.icon className={`w-4 h-4 ${item.active ? 'text-purple-400' : ''}`} />
+                                        <span className="text-sm font-medium">{item.label}</span>
+                                        {item.badge && (
+                                            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/25 font-bold">
+                                                {item.badge}
+                                            </span>
+                                        )}
+                                    </div>
+                                ))}
+                            </nav>
+
+                            {/* Logout */}
+                            <div className="px-2 pb-4 mt-auto">
+                                <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-zinc-600 hover:bg-zinc-800/40 hover:text-zinc-400 cursor-pointer transition-colors border border-transparent">
+                                    <LogOut className="w-4 h-4" />
+                                    <span className="text-sm font-medium">Logout</span>
+                                </div>
+                            </div>
+                        </motion.aside>
+
+                        {/* ── Main Content ── */}
+                        <div className="flex-1 space-y-5 min-w-0">
+                            {/* Top Bar */}
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-zinc-500">Patients</span>
+                                        <ChevronRight className="w-3 h-3 text-zinc-600" />
+                                        <span className="text-sm text-white font-medium">K. Thompson</span>
+                                    </div>
+                                </div>
+                                <span className="text-xs px-3 py-1.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/25 font-bold animate-pulse">
+                                    CRITICAL
+                                </span>
+                            </div>
+
+                            {/* Player Profile Card */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.15 }}
+                                className="rounded-2xl border border-zinc-700/40 p-5"
+                                style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.04) 0%, rgba(147,51,234,0.04) 100%)' }}
+                            >
+                                <div className="flex items-start gap-4 mb-4">
+                                    <div className="w-14 h-14 rounded-xl bg-red-500/20 flex items-center justify-center border border-red-500/20">
+                                        <span className="text-xl font-bold text-red-400">#52</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="text-xl font-bold text-white">Kevin Thompson</h3>
+                                        <p className="text-xs text-zinc-500">Linebacker • Junior • 6&apos;2&quot; 235 lbs</p>
+                                        <p className="text-xs text-zinc-600 mt-0.5">Escalated: March 2, 2026 at 7:12 AM</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-2xl font-bold text-red-400">8.2</div>
+                                        <div className="text-[9px] text-zinc-500 uppercase">Distress Score</div>
+                                    </div>
+                                </div>
+
+                                {/* Biometric Snapshot */}
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[
+                                        { label: 'Resting HR', value: '78 bpm', color: 'text-amber-400', note: '↑ Elevated' },
+                                        { label: 'HRV', value: '28 ms', color: 'text-red-400', note: '↓ Low' },
+                                        { label: 'Sleep', value: '3.5h', color: 'text-red-400', note: '↓ Poor' },
+                                        { label: 'Cortisol', value: 'High', color: 'text-amber-400', note: '↑ Elevated' },
+                                    ].map((m) => (
+                                        <div key={m.label} className="rounded-xl bg-zinc-800/50 border border-zinc-700/30 p-2.5 text-center">
+                                            <div className={`text-base font-bold ${m.color}`}>{m.value}</div>
+                                            <div className="text-[9px] text-zinc-500 uppercase">{m.label}</div>
+                                            <div className={`text-[8px] mt-0.5 ${m.color}`}>{m.note}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+
+                            {/* Flagged Conversation */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.3 }}
+                                className="rounded-2xl border border-red-500/20 p-5"
+                                style={{ background: 'rgba(239,68,68,0.03)' }}
+                            >
+                                <div className="flex items-center gap-2 mb-3">
+                                    <AlertTriangle className="w-4 h-4 text-red-400" />
+                                    <h4 className="text-sm font-bold text-white">Flagged Conversation Excerpts</h4>
+                                    <span className="text-[9px] text-zinc-600 ml-auto">Check-in • 6:50 AM</span>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {/* Nora asks */}
+                                    <div className="flex gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-[#E0FE10]/15 flex items-center justify-center shrink-0 mt-0.5">
+                                            <Brain className="w-3 h-3 text-[#E0FE10]" />
+                                        </div>
+                                        <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 px-3 py-2 text-sm text-zinc-300">
+                                            Hey Kevin, good morning. How are you feeling heading into today?
+                                        </div>
+                                    </div>
+
+                                    {/* Athlete response — flagged */}
+                                    <div className="flex gap-2 justify-end">
+                                        <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/30 px-3 py-2 text-sm text-zinc-200 max-w-[80%]">
+                                            Honestly I don&apos;t even want to be here today. Everything just feels{' '}
+                                            <span className="bg-red-500/20 text-red-300 px-1 rounded border-b border-red-400/50 font-medium">
+                                                pointless
+                                            </span>
+                                            . I don&apos;t know why I even bother anymore.
+                                        </div>
+                                    </div>
+
+                                    {/* Nora follows up */}
+                                    <div className="flex gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-[#E0FE10]/15 flex items-center justify-center shrink-0 mt-0.5">
+                                            <Brain className="w-3 h-3 text-[#E0FE10]" />
+                                        </div>
+                                        <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 px-3 py-2 text-sm text-zinc-300">
+                                            I appreciate you being honest with me. Can you tell me more about what&apos;s going on?
+                                        </div>
+                                    </div>
+
+                                    {/* Second flagged response */}
+                                    <div className="flex gap-2 justify-end">
+                                        <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/30 px-3 py-2 text-sm text-zinc-200 max-w-[80%]">
+                                            I&apos;ve been having these thoughts like{' '}
+                                            <span className="bg-red-500/20 text-red-300 px-1 rounded border-b border-red-400/50 font-medium">
+                                                maybe everyone would be better off without me
+                                            </span>
+                                            . I can&apos;t sleep. I haven&apos;t eaten. I just{' '}
+                                            <span className="bg-red-500/20 text-red-300 px-1 rounded border-b border-red-400/50 font-medium">
+                                                feel completely empty
+                                            </span>
+                                            .
+                                        </div>
+                                    </div>
+
+                                    {/* Nora escalation response */}
+                                    <div className="flex gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-[#E0FE10]/15 flex items-center justify-center shrink-0 mt-0.5">
+                                            <Brain className="w-3 h-3 text-[#E0FE10]" />
+                                        </div>
+                                        <div className="rounded-xl bg-purple-500/10 border border-purple-500/20 px-3 py-2 text-sm text-zinc-300">
+                                            Kevin, thank you for trusting me with that. What you&apos;re describing sounds like something that would really benefit from talking to someone who specializes in this. I&apos;m going to connect you with Dr. Mitchell right now&hellip;
+                                            <div className="text-[9px] text-purple-400 mt-1 uppercase font-bold tracking-wider">
+                                                → Clinical handoff initiated
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* AI Analysis */}
+                                <div className="mt-4 rounded-xl bg-zinc-900/60 border border-zinc-700/20 p-3">
+                                    <div className="text-[9px] text-red-400 uppercase font-bold tracking-wider mb-1">AI Sentiment Analysis</div>
+                                    <div className="grid grid-cols-3 gap-2 text-center">
+                                        <div>
+                                            <div className="text-sm font-bold text-red-400">Critical</div>
+                                            <div className="text-[9px] text-zinc-500">Severity</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-bold text-red-400">3 Triggers</div>
+                                            <div className="text-[9px] text-zinc-500">Flagged Phrases</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-bold text-amber-400">Escalating</div>
+                                            <div className="text-[9px] text-zinc-500">7-Day Trend</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+
+                            {/* Medical History */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.45 }}
+                                className="rounded-2xl border border-zinc-700/40 p-5"
+                                style={{ background: 'rgba(147,51,234,0.03)' }}
+                            >
+                                <div className="flex items-center gap-2 mb-4">
+                                    <Shield className="w-4 h-4 text-purple-400" />
+                                    <h4 className="text-sm font-bold text-white">Medical History</h4>
+                                    <span className="text-[9px] text-zinc-600 ml-auto">HIPAA Protected</span>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    {/* Past Injuries */}
+                                    <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
+                                        <div className="text-[9px] text-zinc-500 uppercase font-bold mb-2">Injury History</div>
+                                        <div className="space-y-2">
+                                            {[
+                                                { injury: 'ACL Tear (Left Knee)', date: 'Oct 2024', note: 'Full surgical repair — 8 mo recovery' },
+                                                { injury: 'Grade 2 Concussion', date: 'Sep 2023', note: 'Missed 3 games — cleared Nov 2023' },
+                                                { injury: 'Shoulder Sprain (Right)', date: 'Nov 2022', note: 'Conservative treatment — 4 weeks' },
+                                            ].map((inj) => (
+                                                <div key={inj.injury} className="border-l-2 border-zinc-700 pl-2">
+                                                    <div className="text-xs font-medium text-zinc-200">{inj.injury}</div>
+                                                    <div className="text-[10px] text-zinc-500">{inj.date} • {inj.note}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Surgery & Medications */}
+                                    <div className="space-y-3">
+                                        <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
+                                            <div className="text-[9px] text-zinc-500 uppercase font-bold mb-2">Surgical History</div>
+                                            <div className="border-l-2 border-purple-500/30 pl-2">
+                                                <div className="text-xs font-medium text-zinc-200">ACL Reconstruction</div>
+                                                <div className="text-[10px] text-zinc-500">Oct 15, 2024 • Dr. Sarah Chen, MD</div>
+                                                <div className="text-[10px] text-zinc-500">Patellar tendon autograft — cleared for full contact Feb 2025</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3">
+                                            <div className="text-[9px] text-zinc-500 uppercase font-bold mb-2">Current Medications</div>
+                                            <div className="space-y-1.5">
+                                                {[
+                                                    { med: 'Sertraline 50mg', purpose: 'SSRI — prescribed Jan 2026', status: 'Active' },
+                                                    { med: 'Melatonin 5mg', purpose: 'Sleep aid — OTC', status: 'Active' },
+                                                    { med: 'Ibuprofen 400mg', purpose: 'Anti-inflammatory — PRN', status: 'As needed' },
+                                                ].map((rx) => (
+                                                    <div key={rx.med} className="flex items-center justify-between">
+                                                        <div>
+                                                            <div className="text-xs font-medium text-zinc-200">{rx.med}</div>
+                                                            <div className="text-[10px] text-zinc-500">{rx.purpose}</div>
+                                                        </div>
+                                                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                                            {rx.status}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+
+                            {/* Recommended Next Steps */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.6 }}
+                                className="rounded-2xl border border-purple-500/20 p-5"
+                                style={{ background: 'linear-gradient(135deg, rgba(147,51,234,0.05) 0%, rgba(59,130,246,0.03) 100%)' }}
+                            >
+                                <div className="flex items-center gap-2 mb-4">
+                                    <Zap className="w-4 h-4 text-purple-400" />
+                                    <h4 className="text-sm font-bold text-white">Recommended Clinical Actions</h4>
+                                </div>
+                                <div className="space-y-2.5">
+                                    {[
+                                        { step: 'Initiate immediate welfare check — contact K. Thompson directly', priority: 'Urgent', color: 'bg-red-500/15 text-red-400 border-red-500/25', clickable: true },
+                                        { step: 'Schedule same-day clinical session with Dr. Mitchell (team psychologist)', priority: 'High', color: 'bg-amber-500/15 text-amber-400 border-amber-500/25', clickable: false },
+                                        { step: 'Review medication compliance — Sertraline prescribed 8 weeks ago, verify adherence', priority: 'High', color: 'bg-amber-500/15 text-amber-400 border-amber-500/25', clickable: false },
+                                        { step: 'Coordinate with athletic training on practice status — recommend hold pending evaluation', priority: 'Medium', color: 'bg-blue-500/15 text-blue-400 border-blue-500/25', clickable: false },
+                                        { step: 'Notify head coach of availability status only (no clinical details per HIPAA)', priority: 'Medium', color: 'bg-blue-500/15 text-blue-400 border-blue-500/25', clickable: false },
+                                        { step: 'Document all actions and clearance decision in clinical record', priority: 'Standard', color: 'bg-zinc-700/40 text-zinc-400 border-zinc-600/30', clickable: false },
+                                    ].map((item, i) => (
+                                        <div
+                                            key={i}
+                                            className={`flex items-start gap-3 p-2.5 rounded-xl bg-zinc-800/30 border border-zinc-700/20 ${item.clickable ? 'cursor-pointer hover:bg-red-500/10 hover:border-red-500/20 transition-colors' : ''
+                                                }`}
+                                            onClick={() => {
+                                                if (item.clickable) {
+                                                    setPhase('calling');
+                                                }
+                                            }}
+                                        >
+                                            <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-[10px] font-bold text-purple-400 shrink-0 mt-0.5">
+                                                {i + 1}
+                                            </div>
+                                            <div className="flex-1">
+                                                <span className="text-sm text-zinc-200">{item.step}</span>
+                                            </div>
+                                            <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold shrink-0 ${item.color}`}>
+                                                {item.priority}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        </div>{/* end main content */}
+                    </motion.div>
+                )}
+
+                {/* ── PHASE 3: Calling K. Thompson ── */}
+                {phase === 'calling' && (
+                    <motion.div
+                        key="calling-phase"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => onContinue()}
+                        className="flex flex-col items-center justify-center py-16 space-y-6 cursor-pointer"
+                    >
+                        {/* Phone UI */}
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="w-[300px] rounded-[36px] overflow-hidden border border-zinc-700/40 p-8 text-center"
+                            style={{ background: 'linear-gradient(180deg, #16161a 0%, #0c0c0e 100%)' }}
+                        >
+                            {/* Avatar */}
+                            <div className="w-20 h-20 rounded-full bg-zinc-800 border-2 border-zinc-700 flex items-center justify-center mx-auto mb-4">
+                                <span className="text-2xl font-bold text-zinc-400">KT</span>
+                            </div>
+                            <div className="text-lg font-bold text-white mb-1">Kevin Thompson</div>
+                            <div className="text-xs text-zinc-500 mb-6">#52 • Linebacker</div>
+
+                            {/* Status */}
+                            <motion.div
+                                animate={{ opacity: [0.5, 1, 0.5] }}
+                                transition={{ duration: 2, repeat: callStatus === 'ringing' ? Infinity : 0 }}
+                                className="mb-6"
+                            >
+                                {callStatus === 'ringing' && (
+                                    <div className="text-sm text-green-400">Calling&hellip;</div>
+                                )}
+                                {callStatus === 'connected' && (
+                                    <div className="text-sm text-green-400 font-medium">Connected • 0:03</div>
+                                )}
+                                {callStatus === 'ended' && (
+                                    <div className="text-sm text-zinc-400">Call Ended</div>
+                                )}
+                            </motion.div>
+
+                            {/* Pulsing ring indicator */}
+                            {callStatus === 'ringing' && (
+                                <div className="flex justify-center mb-4">
+                                    <motion.div
+                                        animate={{ scale: [1, 1.6, 1], opacity: [0.4, 0, 0.4] }}
+                                        transition={{ duration: 1.5, repeat: Infinity }}
+                                        className="w-16 h-16 rounded-full bg-green-500/20 absolute"
+                                    />
+                                    <div className="w-16 h-16 rounded-full bg-green-500/15 flex items-center justify-center">
+                                        <Volume2 className="w-6 h-6 text-green-400" />
+                                    </div>
+                                </div>
+                            )}
+
+                            {callStatus === 'connected' && (
+                                <div className="flex justify-center">
+                                    <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                    >
+                                        <div className="text-[10px] text-zinc-500 mt-2">&quot;Hey Doc, thanks for calling...&quot;</div>
+                                    </motion.div>
+                                </div>
+                            )}
+
+                            {callStatus === 'ended' && (
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center">
+                                    <div className="text-xs text-green-400 mb-1">✓ Welfare check complete</div>
+                                    <div className="text-[10px] text-zinc-600">Session scheduled for 10:00 AM</div>
+                                </motion.div>
+                            )}
+                        </motion.div>
+
+                        {/* Label */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ delay: 0.5 }}
+                            className="text-xs text-zinc-500 uppercase tracking-widest"
+                        >
+                            Welfare Check In Progress
+                        </motion.div>
+
+                        {/* Auto-advance the call */}
+                        <CallSimulation
+                            onRinging={() => setCallStatus('ringing')}
+                            onConnected={() => setCallStatus('connected')}
+                            onEnded={() => {
+                                setCallStatus('ended');
+                                setTimeout(() => onContinue(), 2000);
+                            }}
+                        />
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </motion.div>
+    );
+};
+
+// Helper to drive call timing
+const CallSimulation: React.FC<{
+    onRinging: () => void;
+    onConnected: () => void;
+    onEnded: () => void;
+}> = ({ onRinging, onConnected, onEnded }) => {
+    useEffect(() => {
+        // Play ringing tone
+        const playRing = () => {
+            try {
+                const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                const ring = (time: number) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.value = 440;
+                    gain.gain.setValueAtTime(0.15, time);
+                    gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
+                    osc.start(time);
+                    osc.stop(time + 0.4);
+                };
+                ring(ctx.currentTime);
+                ring(ctx.currentTime + 0.6);
+                ring(ctx.currentTime + 1.8);
+                ring(ctx.currentTime + 2.4);
+            } catch (e) { /* silent */ }
+        };
+
+        onRinging();
+        playRing();
+        const t1 = setTimeout(() => onConnected(), 3500);
+        const t2 = setTimeout(() => onEnded(), 6500);
+        return () => { clearTimeout(t1); clearTimeout(t2); };
+    }, [onRinging, onConnected, onEnded]);
+    return null;
+};
+
+// ─────────────────────────────────────────────────────────
+// THE CLOSE — Act 4: Performance Showcase + 3-Second Reset
+// ─────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────
+// THE CLOSE — Act 4: Performance Showcase + 3-Second Reset
 // ─────────────────────────────────────────────────────────
 
 const TheClose: React.FC = () => {
-    const [showMonologue, setShowMonologue] = useState(false);
-    const [showExercise, setShowExercise] = useState(false);
+    const [phase, setPhase] = useState<'phone' | 'chat'>('phone');
+    const [notifTapped, setNotifTapped] = useState(false);
+    const [notifTapPos, setNotifTapPos] = useState<{ x: number; y: number } | null>(null);
+    const [showNotifCard, setShowNotifCard] = useState(false);
+    const [chatMessages, setChatMessages] = useState<Array<{
+        id: string;
+        role: 'nora' | 'athlete' | 'system';
+        text: string;
+        type?: 'drill-card' | 'progress-card';
+    }>>([]);
+    const [chatStep, setChatStep] = useState(0);
+    const [isNTyping, setIsNTyping] = useState(false);
     const [resetPhase, setResetPhase] = useState<
         'idle' | 'acknowledge' | 'release' | 'execute' | 'done'
     >('idle');
+    const [drillActive, setDrillActive] = useState(false);
+    const closeScrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        const t1 = setTimeout(() => setShowMonologue(true), 800);
-        const t2 = setTimeout(() => setShowExercise(true), 2000);
-        return () => {
-            clearTimeout(t1);
-            clearTimeout(t2);
-        };
+        const t = setTimeout(() => setShowNotifCard(true), 1500);
+        return () => clearTimeout(t);
     }, []);
+
+    useEffect(() => {
+        if (closeScrollRef.current) {
+            closeScrollRef.current.scrollTop = closeScrollRef.current.scrollHeight;
+        }
+    }, [chatMessages, isNTyping, drillActive, resetPhase]);
+
+    const addNoraMsg = useCallback((text: string, type?: 'drill-card' | 'progress-card') => {
+        setIsNTyping(true);
+        setTimeout(() => {
+            setIsNTyping(false);
+            setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'nora', text, type }]);
+        }, 1200);
+    }, []);
+
+    const advanceChat = useCallback((choice?: string) => {
+        const step = chatStep;
+        setChatStep(step + 1);
+
+        if (step === 0) {
+            addNoraMsg("Hey! 👋 Your coach assigned you the 3-Second Reset drill today. This is one of the most powerful mental recovery exercises in your program. Are you ready to jump in, or do you want me to walk you through the details first?");
+        } else if (step === 1 && choice === 'walk') {
+            setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'athlete', text: 'Walk me through it first.' }]);
+            setTimeout(() => {
+                addNoraMsg("The 3-Second Reset is designed to train your brain to recover from any negative moment — a bad play, a missed shot, an error — in just 3 seconds. Here's how it works:");
+            }, 300);
+        } else if (step === 2) {
+            setTimeout(() => {
+                addNoraMsg("Step 1: ACKNOWLEDGE — Name what happened. No judgment. Just recognition. \"Bad read. Interception.\"");
+                setTimeout(() => {
+                    addNoraMsg("Step 2: RELEASE — One sharp exhale. Drop your shoulders. Physically let it go. It's done.");
+                    setTimeout(() => {
+                        addNoraMsg("Step 3: RE-EXECUTE — Lock into the next play. What's YOUR job right now? Own it. \"Next play. I own the pocket.\"");
+                        setTimeout(() => {
+                            addNoraMsg("The goal is to compress your mental recovery time. Most athletes take 30-60 seconds to recover from a mistake. Elite athletes? Under 5 seconds. Ready to run it?", 'drill-card');
+                        }, 1400);
+                    }, 1400);
+                }, 1400);
+            }, 300);
+        } else if (step === 3 && choice === 'ready') {
+            setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'athlete', text: "Let's do it. I'm ready." }]);
+            setTimeout(() => {
+                addNoraMsg("Starting the 3-Second Reset now. Focus on each step as it appears...");
+                setTimeout(() => setDrillActive(true), 1500);
+            }, 300);
+        }
+    }, [chatStep, addNoraMsg]);
+
+    useEffect(() => {
+        if (phase === 'chat' && chatStep === 0) {
+            advanceChat();
+        }
+    }, [phase, chatStep, advanceChat]);
 
     const runResetExercise = () => {
         setResetPhase('acknowledge');
         setTimeout(() => setResetPhase('release'), 1500);
         setTimeout(() => setResetPhase('execute'), 3000);
-        setTimeout(() => setResetPhase('done'), 4500);
+        setTimeout(() => {
+            setResetPhase('done');
+            setTimeout(() => {
+                setDrillActive(false);
+                setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'system', text: '✓ 3-Second Reset Complete — 3.1s recovery time' }]);
+                setTimeout(() => {
+                    addNoraMsg("That was incredible. 3.1 seconds. You're consistently under 4 seconds now. Let me show you how far you've come over the past 90 days...", 'progress-card');
+                }, 800);
+            }, 1500);
+        }, 4500);
+    };
+
+    const closeResponses: Record<number, Array<{ label: string; value: string }>> = {
+        1: [
+            { label: 'Walk me through it first', value: 'walk' },
+            { label: "I'm ready, let's go", value: 'ready-now' },
+        ],
+        3: [
+            { label: "Let's do it. I'm ready.", value: 'ready' },
+        ],
     };
 
     return (
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="max-w-3xl mx-auto px-4 py-8 space-y-8"
+            className="h-full"
         >
-            {/* Title */}
-            <div className="text-center">
-                <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-800/60 border border-zinc-700/50 mb-4"
-                >
-                    <Brain className="w-4 h-4 text-[#E0FE10]" />
-                    <span className="text-sm text-zinc-300">The Close</span>
-                </motion.div>
-            </div>
-
-            {/* 3-Second Reset Exercise */}
-            <AnimatePresence>
-                {showExercise && (
+            <AnimatePresence mode="wait">
+                {/* PHONE NOTIFICATION */}
+                {phase === 'phone' && (
                     <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="rounded-2xl overflow-hidden"
-                        style={{
-                            background:
-                                'linear-gradient(135deg, rgba(245,158,11,0.06) 0%, rgba(224,254,16,0.04) 100%)',
-                            border: '1px solid rgba(245,158,11,0.2)',
-                        }}
+                        key="close-phone"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="flex flex-col items-center justify-center py-8"
                     >
-                        <div className="p-5">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center">
-                                    <RotateCcw className="w-5 h-5 text-amber-400" />
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-white text-lg">
-                                        The 3-Second Reset
-                                    </h3>
-                                    <p className="text-xs text-zinc-500">
-                                        Advanced Focus Exercise • Military Sniper Protocol
-                                    </p>
-                                </div>
-                            </div>
-
-                            <p className="text-sm text-zinc-300 leading-relaxed mb-4">
-                                When something goes wrong mid-competition, you have 3 seconds
-                                before your brain spirals. Train yourself to compress recovery
-                                from minutes to seconds.
-                            </p>
-
-                            {/* Overview Table */}
-                            <div className="rounded-xl overflow-hidden border border-zinc-700/40 mb-4">
-                                <div className="divide-y divide-zinc-800/80">
-                                    {[
-                                        {
-                                            label: 'When',
-                                            value:
-                                                'In real-time, during competition — the moment something goes wrong',
-                                        },
-                                        {
-                                            label: 'Focus',
-                                            value:
-                                                'Something just went wrong — recover NOW and dominate the next play',
-                                        },
-                                        {
-                                            label: 'Time',
-                                            value: '3 seconds (instant deployment)',
-                                        },
-                                        {
-                                            label: 'Skill',
-                                            value: 'Real-time cognitive recovery',
-                                        },
-                                        {
-                                            label: 'Analogy',
-                                            value:
-                                                "Like a fighter jet's automatic stabilization system — turbulence hits, it corrects instantly",
-                                        },
-                                    ].map((row) => (
-                                        <div key={row.label} className="flex">
-                                            <div className="w-20 shrink-0 px-3 py-2 bg-zinc-800/40">
-                                                <span className="text-[10px] font-bold text-zinc-400 uppercase">
-                                                    {row.label}
-                                                </span>
-                                            </div>
-                                            <div className="flex-1 px-3 py-2">
-                                                <span className="text-xs text-zinc-300 leading-relaxed">
-                                                    {row.value}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
+                        <motion.div
+                            initial={{ opacity: 0, y: 40 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.8, ease: 'easeOut' }}
+                            className="relative w-[340px] rounded-[40px] overflow-hidden border-2 border-green-500/20 shadow-2xl"
+                            style={{
+                                background: 'linear-gradient(180deg, #111113 0%, #0a0a0b 100%)',
+                                boxShadow: '0 0 60px rgba(34,197,94,0.1), 0 20px 40px rgba(0,0,0,0.5)',
+                            }}
+                        >
+                            <div className="flex items-center justify-between px-8 pt-4 pb-2">
+                                <span className="text-xs font-semibold text-white">T-Mobile</span>
+                                <div className="flex items-center gap-1">
+                                    <div className="w-4 h-2 rounded-sm border border-white/60 relative">
+                                        <div className="absolute inset-[1px] right-[2px] bg-green-400 rounded-[1px]" />
+                                    </div>
                                 </div>
                             </div>
-
-                            {/* Interactive Reset */}
-                            {resetPhase === 'idle' ? (
-                                <button
-                                    onClick={runResetExercise}
-                                    className="w-full py-3 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 font-bold hover:bg-amber-500/30 transition-colors"
-                                >
-                                    Run The 3-Second Reset →
-                                </button>
-                            ) : (
-                                <div className="space-y-3">
-                                    {/* Second 1: Acknowledge */}
+                            <div className="text-center py-10">
+                                <div className="text-zinc-500 text-xs uppercase tracking-widest mb-1">Saturday, March 2</div>
+                                <div className="text-6xl font-thin text-white tracking-tight">2:30</div>
+                                <div className="text-xs text-zinc-500 mt-2 font-medium uppercase tracking-wider">Pre-Game</div>
+                            </div>
+                            <AnimatePresence>
+                                {showNotifCard && (
                                     <motion.div
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{
-                                            opacity:
-                                                resetPhase === 'acknowledge' ||
-                                                    resetPhase === 'release' ||
-                                                    resetPhase === 'execute' ||
-                                                    resetPhase === 'done'
-                                                    ? 1
-                                                    : 0.3,
-                                            x: 0,
+                                        initial={{ opacity: 0, y: -60, scale: 0.9 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                                        onClick={(e) => {
+                                            if (notifTapped) return;
+                                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                            setNotifTapPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                                            setNotifTapped(true);
+                                            setTimeout(() => setPhase('chat'), 2500);
                                         }}
-                                        className={`p-3 rounded-xl border transition-all duration-500 ${resetPhase === 'acknowledge'
-                                            ? 'bg-red-500/10 border-red-500/30'
-                                            : 'bg-zinc-800/40 border-zinc-700/30'
-                                            }`}
+                                        className="mx-4 mb-6 rounded-2xl p-3.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-transform relative overflow-hidden"
+                                        style={{
+                                            background: 'rgba(34,197,94,0.08)',
+                                            backdropFilter: 'blur(40px)',
+                                            border: notifTapped ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(34,197,94,0.2)',
+                                        }}
                                     >
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center text-xs font-bold text-red-400">
-                                                1
+                                        {notifTapped && notifTapPos && (
+                                            <motion.div
+                                                initial={{ scale: 0, opacity: 0.8 }}
+                                                animate={{ scale: 6, opacity: 0 }}
+                                                transition={{ duration: 2.5, ease: 'easeOut' }}
+                                                className="absolute rounded-full pointer-events-none"
+                                                style={{
+                                                    width: 40, height: 40,
+                                                    left: notifTapPos.x - 20, top: notifTapPos.y - 20,
+                                                    background: 'radial-gradient(circle, rgba(34,197,94,0.6) 0%, rgba(34,197,94,0) 70%)',
+                                                    boxShadow: '0 0 30px rgba(34,197,94,0.4)',
+                                                }}
+                                            />
+                                        )}
+                                        <div className="flex items-start gap-3 relative z-10">
+                                            <div className="relative flex-shrink-0 mt-0.5">
+                                                <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/15 flex items-center justify-center">
+                                                    <Brain className="w-5 h-5 text-[#E0FE10]" />
+                                                </div>
                                             </div>
-                                            <span className="text-sm font-bold text-white">
-                                                ACKNOWLEDGE
-                                            </span>
-                                            {resetPhase === 'acknowledge' && (
-                                                <motion.span
-                                                    initial={{ opacity: 0 }}
-                                                    animate={{ opacity: 1 }}
-                                                    className="text-xs text-red-400 ml-auto"
-                                                >
-                                                    &quot;I missed. Bad play.&quot;
-                                                </motion.span>
-                                            )}
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center justify-between mb-0.5">
+                                                    <span className="text-[10px] font-bold text-[#E0FE10] uppercase tracking-wider">Nora — Mental Training</span>
+                                                    <span className="text-[10px] text-zinc-500">now</span>
+                                                </div>
+                                                <p className="text-xs font-bold text-white mb-0.5">Assigned Drill Ready</p>
+                                                <p className="text-[11px] text-zinc-300 leading-snug">Coach assigned you the 3-Second Reset drill. Complete by end of day. Tap to start.</p>
+                                            </div>
                                         </div>
                                     </motion.div>
+                                )}
+                            </AnimatePresence>
+                            <div className="text-center pb-6">
+                                <span className="text-[9px] text-green-400/40 uppercase tracking-widest">Mental Training • Assigned by Coach</span>
+                            </div>
+                        </motion.div>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 2 }} className="mt-6 text-center">
+                            <div className="text-xs text-zinc-500 uppercase tracking-widest">Athlete Experience — Assigned Mental Training</div>
+                        </motion.div>
+                    </motion.div>
+                )}
 
-                                    {/* Second 2: Release */}
-                                    <motion.div
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{
-                                            opacity:
-                                                resetPhase === 'release' ||
-                                                    resetPhase === 'execute' ||
-                                                    resetPhase === 'done'
-                                                    ? 1
-                                                    : 0.3,
-                                            x: 0,
-                                        }}
-                                        transition={{ delay: 0.1 }}
-                                        className={`p-3 rounded-xl border transition-all duration-500 ${resetPhase === 'release'
-                                            ? 'bg-amber-500/10 border-amber-500/30'
-                                            : 'bg-zinc-800/40 border-zinc-700/30'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full bg-amber-500/20 flex items-center justify-center text-xs font-bold text-amber-400">
-                                                2
-                                            </div>
-                                            <span className="text-sm font-bold text-white">
-                                                RELEASE
-                                            </span>
-                                            {resetPhase === 'release' && (
-                                                <motion.span
-                                                    initial={{ opacity: 0 }}
-                                                    animate={{ opacity: 1 }}
-                                                    className="text-xs text-amber-400 ml-auto"
-                                                >
-                                                    Sharp exhale. Drop shoulders. It&apos;s dead.
-                                                </motion.span>
-                                            )}
-                                        </div>
-                                    </motion.div>
+                {/* CHAT — matches Act 1 UI exactly */}
+                {phase === 'chat' && (
+                    <motion.div
+                        key="close-chat"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="h-full flex flex-col"
+                    >
+                        {/* Chat messages area — same as Act 1 */}
+                        <div
+                            ref={closeScrollRef}
+                            className="flex-1 overflow-y-auto"
+                            style={{ overscrollBehavior: 'contain' }}
+                        >
+                            <div className="max-w-3xl mx-auto px-4 py-8">
+                                <div className="space-y-6">
+                                    <AnimatePresence>
+                                        {chatMessages.map((m) => (
+                                            <motion.div
+                                                key={m.id}
+                                                initial={{ opacity: 0, y: 20 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ duration: 0.4 }}
+                                                className="flex gap-4 items-start"
+                                            >
+                                                {/* Nora Avatar — same as Act 1 */}
+                                                {m.role === 'nora' && (
+                                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#E0FE10]/30 to-[#E0FE10]/10 border border-[#E0FE10]/20 flex items-center justify-center flex-shrink-0 mt-1">
+                                                        <Brain className="w-3.5 h-3.5 text-[#E0FE10]" />
+                                                    </div>
+                                                )}
 
-                                    {/* Second 3: Re-Execute */}
-                                    <motion.div
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{
-                                            opacity:
-                                                resetPhase === 'execute' || resetPhase === 'done'
-                                                    ? 1
-                                                    : 0.3,
-                                            x: 0,
-                                        }}
-                                        transition={{ delay: 0.2 }}
-                                        className={`p-3 rounded-xl border transition-all duration-500 ${resetPhase === 'execute'
-                                            ? 'bg-green-500/10 border-green-500/30'
-                                            : 'bg-zinc-800/40 border-zinc-700/30'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-xs font-bold text-green-400">
-                                                3
-                                            </div>
-                                            <span className="text-sm font-bold text-white">
-                                                RE-EXECUTE
-                                            </span>
-                                            {resetPhase === 'execute' && (
-                                                <motion.span
-                                                    initial={{ opacity: 0 }}
-                                                    animate={{ opacity: 1 }}
-                                                    className="text-xs text-green-400 ml-auto"
-                                                >
-                                                    &quot;Next play, I attack.&quot;
-                                                </motion.span>
-                                            )}
-                                        </div>
-                                    </motion.div>
+                                                {/* Message bubble — same as Act 1 */}
+                                                <div className={`flex-1 ${m.role === 'athlete' ? 'flex justify-end' : m.role === 'system' ? 'flex justify-center' : ''}`}>
+                                                    {m.role === 'system' ? (
+                                                        <div className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 px-3 py-1.5 rounded-full font-medium">
+                                                            {m.text}
+                                                        </div>
+                                                    ) : (
+                                                        <div>
+                                                            <div
+                                                                className={`rounded-2xl px-4 py-3 max-w-[85%] ${m.role === 'athlete'
+                                                                        ? 'bg-[#E0FE10]/10 border border-[#E0FE10]/20 ml-auto'
+                                                                        : 'bg-zinc-800/60 border border-zinc-700/30'
+                                                                    }`}
+                                                            >
+                                                                {m.role === 'nora' && (
+                                                                    <div className="text-[10px] font-bold text-[#E0FE10]/70 uppercase tracking-wider mb-1">Nora</div>
+                                                                )}
+                                                                <p className={`text-sm leading-relaxed whitespace-pre-line ${m.role === 'athlete' ? 'text-[#E0FE10]/90' : 'text-zinc-200'
+                                                                    }`}>
+                                                                    {m.text}
+                                                                </p>
+                                                            </div>
 
-                                    {resetPhase === 'done' && (
+                                                            {/* Drill card inline */}
+                                                            {m.type === 'drill-card' && chatStep === 3 && !drillActive && resetPhase === 'idle' && (
+                                                                <motion.div
+                                                                    initial={{ opacity: 0, y: 10 }}
+                                                                    animate={{ opacity: 1, y: 0 }}
+                                                                    transition={{ delay: 0.5 }}
+                                                                    className="mt-2 rounded-xl border border-amber-500/20 p-3 max-w-[85%]"
+                                                                    style={{ background: 'rgba(245,158,11,0.06)' }}
+                                                                >
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <RotateCcw className="w-4 h-4 text-amber-400" />
+                                                                        <span className="text-xs font-bold text-white">3-Second Reset Drill</span>
+                                                                    </div>
+                                                                    <div className="text-[10px] text-zinc-500">Acknowledge → Release → Re-Execute</div>
+                                                                </motion.div>
+                                                            )}
+
+                                                            {/* Progress card inline */}
+                                                            {m.type === 'progress-card' && (
+                                                                <motion.div
+                                                                    initial={{ opacity: 0, y: 10 }}
+                                                                    animate={{ opacity: 1, y: 0 }}
+                                                                    transition={{ delay: 0.5 }}
+                                                                    className="mt-2 rounded-xl border border-green-500/20 p-4 space-y-3 max-w-[85%]"
+                                                                    style={{ background: 'rgba(34,197,94,0.04)' }}
+                                                                >
+                                                                    <div className="flex items-center gap-2 mb-2">
+                                                                        <Star className="w-4 h-4 text-green-400" />
+                                                                        <span className="text-xs font-bold text-white">90-Day Progress Report</span>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-2 gap-2">
+                                                                        {[
+                                                                            { label: 'Mental Score', value: '42 → 82', color: 'text-green-400', change: '+95%' },
+                                                                            { label: 'Recovery Time', value: '45s → 3.1s', color: 'text-green-400', change: '-93%' },
+                                                                            { label: 'Check-in Streak', value: '87 days', color: 'text-[#E0FE10]', change: '🔥' },
+                                                                            { label: 'Drills Completed', value: '156', color: 'text-purple-400', change: '' },
+                                                                        ].map((s) => (
+                                                                            <div key={s.label} className="rounded-lg bg-zinc-800/50 border border-zinc-700/20 p-2 text-center">
+                                                                                <div className={`text-sm font-bold ${s.color}`}>{s.value}</div>
+                                                                                <div className="text-[8px] text-zinc-500 uppercase">{s.label}</div>
+                                                                                {s.change && <div className={`text-[8px] ${s.color}`}>{s.change}</div>}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                    <div className="pt-2">
+                                                                        <div className="text-[9px] text-zinc-500 uppercase mb-1">Mental Performance Trend</div>
+                                                                        <div className="flex items-end gap-[3px] h-12">
+                                                                            {[42, 45, 48, 44, 52, 55, 60, 58, 65, 70, 74, 82].map((v, i) => (
+                                                                                <motion.div
+                                                                                    key={i}
+                                                                                    initial={{ height: 0 }}
+                                                                                    animate={{ height: `${(v / 100) * 100}%` }}
+                                                                                    transition={{ delay: i * 0.06, duration: 0.4 }}
+                                                                                    className={`flex-1 rounded-t ${i < 4 ? 'bg-zinc-600' : i < 8 ? 'bg-amber-400/70' : 'bg-green-400'}`}
+                                                                                />
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-3 gap-2 pt-1">
+                                                                        {[
+                                                                            { month: 'Month 1', status: 'Foundation', dot: 'bg-zinc-500' },
+                                                                            { month: 'Month 2', status: 'Building', dot: 'bg-amber-400' },
+                                                                            { month: 'Month 3', status: 'Game Ready', dot: 'bg-green-400' },
+                                                                        ].map((m2) => (
+                                                                            <div key={m2.month} className="text-center">
+                                                                                <div className="flex items-center justify-center gap-1">
+                                                                                    <div className={`w-1.5 h-1.5 rounded-full ${m2.dot}`} />
+                                                                                    <span className="text-[8px] text-zinc-500">{m2.month}</span>
+                                                                                </div>
+                                                                                <div className="text-[9px] text-zinc-300 font-medium">{m2.status}</div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </motion.div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {/* User Avatar — same as Act 1 */}
+                                                {m.role === 'athlete' && (
+                                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500/30 to-purple-500/20 border border-blue-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                                                        <span className="text-xs font-bold text-blue-300">TG</span>
+                                                    </div>
+                                                )}
+                                            </motion.div>
+                                        ))}
+                                    </AnimatePresence>
+
+                                    {/* Inline 3-Second Reset Drill */}
+                                    {drillActive && (
                                         <motion.div
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
-                                            className="text-center py-3"
+                                            className="max-w-3xl mx-auto rounded-xl border border-amber-500/20 p-4 space-y-3"
+                                            style={{ background: 'rgba(245,158,11,0.05)' }}
                                         >
-                                            <div className="text-[#E0FE10] font-bold text-lg">
-                                                Reset Complete ✓
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <RotateCcw className="w-4 h-4 text-amber-400" />
+                                                <span className="text-sm font-bold text-white">3-Second Reset</span>
                                             </div>
-                                            <p className="text-xs text-zinc-400 mt-1">
-                                                3 seconds. That&apos;s all it takes to go from
-                                                interception to touchdown drive.
-                                            </p>
+                                            {resetPhase === 'idle' ? (
+                                                <button
+                                                    onClick={runResetExercise}
+                                                    className="w-full py-2.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 font-bold text-sm hover:bg-amber-500/30 transition-colors"
+                                                >
+                                                    Begin Reset →
+                                                </button>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    <motion.div
+                                                        animate={{ opacity: ['acknowledge', 'release', 'execute', 'done'].includes(resetPhase) ? 1 : 0.3 }}
+                                                        className={`p-2.5 rounded-lg border transition-all duration-500 ${resetPhase === 'acknowledge' ? 'bg-red-500/10 border-red-500/30' : 'bg-zinc-800/40 border-zinc-700/30'}`}
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center text-[9px] font-bold text-red-400">1</div>
+                                                            <span className="text-xs font-bold text-white">ACKNOWLEDGE</span>
+                                                            {resetPhase === 'acknowledge' && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] text-red-400 ml-auto">&quot;Bad read. Interception.&quot;</motion.span>}
+                                                        </div>
+                                                    </motion.div>
+                                                    <motion.div
+                                                        animate={{ opacity: ['release', 'execute', 'done'].includes(resetPhase) ? 1 : 0.3 }}
+                                                        className={`p-2.5 rounded-lg border transition-all duration-500 ${resetPhase === 'release' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-zinc-800/40 border-zinc-700/30'}`}
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center text-[9px] font-bold text-amber-400">2</div>
+                                                            <span className="text-xs font-bold text-white">RELEASE</span>
+                                                            {resetPhase === 'release' && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] text-amber-400 ml-auto">Sharp exhale. Drop shoulders.</motion.span>}
+                                                        </div>
+                                                    </motion.div>
+                                                    <motion.div
+                                                        animate={{ opacity: ['execute', 'done'].includes(resetPhase) ? 1 : 0.3 }}
+                                                        className={`p-2.5 rounded-lg border transition-all duration-500 ${resetPhase === 'execute' ? 'bg-green-500/10 border-green-500/30' : 'bg-zinc-800/40 border-zinc-700/30'}`}
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-[9px] font-bold text-green-400">3</div>
+                                                            <span className="text-xs font-bold text-white">RE-EXECUTE</span>
+                                                            {resetPhase === 'execute' && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] text-green-400 ml-auto">&quot;Next play. Touchdown.&quot;</motion.span>}
+                                                        </div>
+                                                    </motion.div>
+                                                    {resetPhase === 'done' && (
+                                                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-1">
+                                                            <div className="text-[#E0FE10] font-bold text-sm">Reset Complete ✓ — 3.1s</div>
+                                                        </motion.div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </motion.div>
+                                    )}
+
+                                    {/* Typing indicator — same as Act 1 */}
+                                    {isNTyping && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className="flex gap-4 items-start"
+                                        >
+                                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#E0FE10]/30 to-[#E0FE10]/10 border border-[#E0FE10]/20 flex items-center justify-center">
+                                                <Brain className="w-3.5 h-3.5 text-[#E0FE10]" />
+                                            </div>
+                                            <div className="bg-zinc-800/60 border border-zinc-700/30 rounded-2xl px-4 py-3">
+                                                <div className="flex gap-1">
+                                                    <motion.div className="w-2 h-2 rounded-full bg-zinc-500" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: 0 }} />
+                                                    <motion.div className="w-2 h-2 rounded-full bg-zinc-500" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: 0.2 }} />
+                                                    <motion.div className="w-2 h-2 rounded-full bg-zinc-500" animate={{ opacity: [0.3, 1, 0.3] }} transition={{ duration: 1, repeat: Infinity, delay: 0.4 }} />
+                                                </div>
+                                            </div>
                                         </motion.div>
                                     )}
                                 </div>
-                            )}
+                            </div>
                         </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
 
-            {/* Monologue */}
-            <AnimatePresence>
-                {showMonologue && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.5 }}
-                        className="text-center space-y-6 pt-4"
-                    >
-                        <p className="text-lg text-zinc-200 leading-relaxed max-w-2xl mx-auto">
-                            &quot;When we think of the greatest athletes to ever live — the
-                            LeBron James, the Serena Williams, the Tom Bradys of the world —
-                            everyone will vouch for one common trait.&quot;
-                        </p>
-                        <p className="text-lg text-zinc-200 leading-relaxed max-w-2xl mx-auto">
-                            &quot;Their physical gifts were incredible. But their{' '}
-                            <span className="text-[#E0FE10] font-bold">minds</span>{' '}
-                            absolutely exceeded the fortitude of everyone else on the
-                            field.&quot;
-                        </p>
-                        <p className="text-lg text-zinc-200 leading-relaxed max-w-2xl mx-auto">
-                            &quot;In the NFL, every team is equipping their players with
-                            physical weapons — the best facilities, the best nutrition, the
-                            best recovery technology.&quot;
-                        </p>
-                        <motion.p
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 1 }}
-                            className="text-xl font-bold text-white max-w-2xl mx-auto pt-4"
-                        >
-                            &quot;
-                            <span className="text-[#E0FE10]">Pulse Check</span> is how the
-                            Patriots equip them with{' '}
-                            <span className="text-[#E0FE10]">mental ones</span>.&quot;
-                        </motion.p>
+                        {/* Input bar — same as Act 1 */}
+                        <div className="relative z-20 backdrop-blur-xl bg-zinc-900/40 border-t border-white/5 px-4 py-3">
+                            {/* Response Chips */}
+                            {closeResponses[chatStep] && !isNTyping && !drillActive && (
+                                <div className="max-w-3xl mx-auto mb-3">
+                                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Suggested Responses</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {closeResponses[chatStep].map((resp, idx) => (
+                                            <motion.button
+                                                key={idx}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: idx * 0.1 + 0.5 }}
+                                                onClick={() => advanceChat(resp.value)}
+                                                className="px-4 py-2.5 rounded-xl text-sm text-left bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:bg-[#E0FE10]/10 hover:border-[#E0FE10]/30 hover:text-[#E0FE10] transition-all duration-200 max-w-[90%]"
+                                            >
+                                                &quot;{resp.label}&quot;
+                                            </motion.button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {!closeResponses[chatStep] && !isNTyping && !drillActive && chatStep > 1 && chatStep < 3 && (
+                                <div className="max-w-3xl mx-auto mb-3">
+                                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Suggested Responses</div>
+                                    <motion.button
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: 1 }}
+                                        onClick={() => advanceChat()}
+                                        className="px-4 py-2.5 rounded-xl text-sm text-left bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:bg-[#E0FE10]/10 hover:border-[#E0FE10]/30 hover:text-[#E0FE10] transition-all duration-200"
+                                    >
+                                        &quot;Continue&quot;
+                                    </motion.button>
+                                </div>
+                            )}
+
+                            {/* Input field — same as Act 1 */}
+                            <div className="max-w-3xl mx-auto flex items-center gap-3">
+                                <div className="flex-1 relative">
+                                    <input
+                                        type="text"
+                                        placeholder="Type a response..."
+                                        disabled
+                                        className="w-full bg-zinc-800/60 border border-zinc-700/40 rounded-xl px-4 py-3 text-sm text-zinc-300 placeholder-zinc-500 focus:outline-none focus:border-[#E0FE10]/40 transition-colors"
+                                    />
+                                </div>
+                                <button className="p-3 rounded-xl bg-zinc-800/60 border border-zinc-700/40">
+                                    <Send className="w-4 h-4 text-zinc-500" />
+                                </button>
+                            </div>
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -1069,9 +1961,8 @@ const TheClose: React.FC = () => {
     );
 };
 
-// ─────────────────────────────────────────────────────────
-// MAIN DEMO PAGE
-// ─────────────────────────────────────────────────────────
+
+
 
 const PulseCheckDemo: React.FC = () => {
     // ── State ─────────────────────────────────────────────
@@ -1082,6 +1973,8 @@ const PulseCheckDemo: React.FC = () => {
     const [isTyping, setIsTyping] = useState(false);
     const [showBreathing, setShowBreathing] = useState(false);
     const [showNotification, setShowNotification] = useState(false);
+    const [introTapped, setIntroTapped] = useState(false);
+    const [tapPosition, setTapPosition] = useState<{ x: number; y: number } | null>(null);
     const scrollerRef = useRef<HTMLDivElement>(null);
 
     // Voice state
@@ -1545,17 +2438,38 @@ const PulseCheckDemo: React.FC = () => {
                                         initial={{ opacity: 0, y: -60 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         transition={{ delay: 1.5, duration: 0.5, type: 'spring', stiffness: 300, damping: 25 }}
-                                        onClick={() => {
-                                            setCurrentAct('act1');
+                                        onClick={(e) => {
+                                            if (introTapped) return;
+                                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                            setTapPosition({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                                            setIntroTapped(true);
+                                            setTimeout(() => setCurrentAct('act1'), 2500);
                                         }}
-                                        className="mx-4 mb-8 rounded-2xl p-3.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-transform"
+                                        className="mx-4 mb-8 rounded-2xl p-3.5 cursor-pointer hover:scale-[1.02] active:scale-[0.98] transition-transform relative overflow-hidden"
                                         style={{
                                             background: 'rgba(255,255,255,0.08)',
                                             backdropFilter: 'blur(40px)',
-                                            border: '1px solid rgba(255,255,255,0.12)',
+                                            border: introTapped ? '1px solid rgba(224,254,16,0.4)' : '1px solid rgba(255,255,255,0.12)',
                                         }}
                                     >
-                                        <div className="flex items-start gap-3">
+                                        {/* Tap ripple */}
+                                        {introTapped && tapPosition && (
+                                            <motion.div
+                                                initial={{ scale: 0, opacity: 0.8 }}
+                                                animate={{ scale: 6, opacity: 0 }}
+                                                transition={{ duration: 2.5, ease: 'easeOut' }}
+                                                className="absolute rounded-full pointer-events-none"
+                                                style={{
+                                                    width: 40,
+                                                    height: 40,
+                                                    left: tapPosition.x - 20,
+                                                    top: tapPosition.y - 20,
+                                                    background: 'radial-gradient(circle, rgba(224,254,16,0.5) 0%, rgba(224,254,16,0) 70%)',
+                                                    boxShadow: '0 0 30px rgba(224,254,16,0.4)',
+                                                }}
+                                            />
+                                        )}
+                                        <div className="flex items-start gap-3 relative z-10">
                                             <div className="w-10 h-10 rounded-xl bg-[#E0FE10]/15 flex items-center justify-center flex-shrink-0 mt-0.5">
                                                 <Brain className="w-5 h-5 text-[#E0FE10]" />
                                             </div>
@@ -1825,6 +2739,17 @@ const PulseCheckDemo: React.FC = () => {
                         {currentAct === 'act3' && (
                             <motion.div
                                 key="act3"
+                                initial={{ opacity: 0, x: 100 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="h-full overflow-y-auto"
+                            >
+                                <ClinicalEscalation onContinue={() => setCurrentAct('act4')} />
+                            </motion.div>
+                        )}
+
+                        {currentAct === 'act4' && (
+                            <motion.div
+                                key="act4"
                                 initial={{ opacity: 0, x: 100 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 className="h-full overflow-y-auto"
