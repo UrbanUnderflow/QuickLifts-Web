@@ -299,7 +299,117 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
             cleanupFns.push(() => simObserver.disconnect());
         }
 
+        // ── Box Breathing Exercise ──────────────────────────────────────
+        const bbReady = document.getElementById('bb-ready');
+        const bbActive = document.getElementById('bb-active');
+        const bbComplete = document.getElementById('bb-complete');
+        const bbStartBtn = document.getElementById('bb-start-btn');
+        const bbRestartBtn = document.getElementById('bb-restart-btn');
+
+        const phases = [
+            { name: 'Inhale', secs: 4, color: '#6A9AFA', circleClass: 'bb-inhale' },
+            { name: 'Hold', secs: 4, color: '#A05EF8', circleClass: 'bb-hold-in' },
+            { name: 'Exhale', secs: 4, color: '#00e5ff', circleClass: 'bb-exhale' },
+            { name: 'Hold', secs: 4, color: '#ffc107', circleClass: 'bb-hold-out' },
+        ];
+        const TOTAL_ROUNDS = 4;
+
+        let bbIntervalId: number | null = null;
+
+        const stopBreathing = () => {
+            if (bbIntervalId !== null) {
+                window.clearInterval(bbIntervalId);
+                bbIntervalId = null;
+            }
+        };
+
+        const showPanel = (panel: HTMLElement | null) => {
+            [bbReady, bbActive, bbComplete].forEach(p => {
+                if (p) p.style.display = p === panel ? 'block' : 'none';
+            });
+        };
+
+        const startBreathing = () => {
+            stopBreathing();
+            showPanel(bbActive);
+
+            const circle = document.getElementById('bb-circle');
+            const ring = document.getElementById('bb-ring');
+            const phaseLabel = document.getElementById('bb-phase-label');
+            const countEl = document.getElementById('bb-count');
+            const roundEl = document.getElementById('bb-round');
+            const pips = [0, 1, 2, 3].map(i => document.getElementById(`bb-pip-${i}`));
+
+            let round = 0;       // 0-indexed
+            let phaseIdx = 0;    // 0-3
+            let secondsLeft = phases[0].secs;
+
+            const applyPhase = (idx: number, rd: number) => {
+                const p = phases[idx];
+                if (phaseLabel) phaseLabel.textContent = p.name;
+                if (roundEl) roundEl.textContent = `Round ${rd + 1} of ${TOTAL_ROUNDS}`;
+
+                // Update circle appearance
+                if (circle) {
+                    circle.className = `bb-circle ${p.circleClass}`;
+                    (circle as HTMLElement).style.borderColor = p.color;
+                    (circle as HTMLElement).style.boxShadow = `0 0 40px ${p.color}30`;
+                }
+                if (ring) {
+                    (ring as HTMLElement).style.setProperty('--bb-color', p.color);
+                }
+
+                // Highlight active pip
+                pips.forEach((pip, i) => {
+                    if (!pip) return;
+                    pip.classList.toggle('bb-pip-active', i === idx);
+                    (pip as HTMLElement).style.background = i === idx ? p.color : '';
+                });
+            };
+
+            applyPhase(0, 0);
+            if (countEl) countEl.textContent = String(phases[0].secs);
+
+            bbIntervalId = window.setInterval(() => {
+                secondsLeft--;
+                if (countEl) countEl.textContent = String(secondsLeft);
+
+                if (secondsLeft <= 0) {
+                    phaseIdx++;
+                    if (phaseIdx >= phases.length) {
+                        phaseIdx = 0;
+                        round++;
+                        if (round >= TOTAL_ROUNDS) {
+                            // Done!
+                            stopBreathing();
+                            showPanel(bbComplete);
+                            return;
+                        }
+                    }
+                    secondsLeft = phases[phaseIdx].secs;
+                    applyPhase(phaseIdx, round);
+                    if (countEl) countEl.textContent = String(secondsLeft);
+                }
+            }, 1000);
+        };
+
+        if (bbStartBtn) {
+            const startFn = () => startBreathing();
+            bbStartBtn.addEventListener('click', startFn);
+            cleanupFns.push(() => bbStartBtn.removeEventListener('click', startFn));
+        }
+
+        if (bbRestartBtn) {
+            const restartFn = () => { showPanel(bbReady); stopBreathing(); };
+            bbRestartBtn.addEventListener('click', restartFn);
+            cleanupFns.push(() => bbRestartBtn.removeEventListener('click', restartFn));
+        }
+
+        cleanupFns.push(stopBreathing);
+        // ───────────────────────────────────────────────────────────────
+
         const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('.pc-landing a[href^="#"]'));
+
         const handlers: Array<{ el: HTMLAnchorElement; fn: (e: Event) => void }> = [];
 
         anchors.forEach((anchor) => {
@@ -387,6 +497,81 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                             <span className="terminal-title">PulseCheck · Daily Check-in</span>
                         </div>
                         <div className="terminal-body" id="pc-terminal-body"></div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Box Breathing Exercise */}
+            <section className="breathing" id="breathing">
+                <div className="breathing-inner">
+                    <div className="breathing-header reveal">
+                        <span className="section-label">🫁 Try It Now</span>
+                        <h2>Experience the reset. <em>In 64 seconds.</em></h2>
+                        <p>Box breathing is the same technique Navy SEALs use to regulate their nervous system under extreme stress. Four seconds in. Four seconds hold. Four seconds out. Four seconds hold. Elite athletes use it to restore focus in a single minute — PulseCheck coaches it automatically.</p>
+                    </div>
+
+                    {/* ── Ready State ── */}
+                    <div id="bb-ready" className="bb-panel reveal">
+                        <div className="bb-phase-grid">
+                            <div className="bb-phase-card">
+                                <div className="bb-phase-icon" style={{ background: 'rgba(106,154,250,0.12)', color: 'var(--blue)' }}>↑</div>
+                                <div className="bb-phase-name">Inhale</div>
+                                <div className="bb-phase-secs">4 sec</div>
+                            </div>
+                            <div className="bb-phase-card">
+                                <div className="bb-phase-icon" style={{ background: 'rgba(160,94,248,0.12)', color: 'var(--purple)' }}>■</div>
+                                <div className="bb-phase-name">Hold</div>
+                                <div className="bb-phase-secs">4 sec</div>
+                            </div>
+                            <div className="bb-phase-card">
+                                <div className="bb-phase-icon" style={{ background: 'rgba(0,229,255,0.12)', color: 'var(--cyan)' }}>↓</div>
+                                <div className="bb-phase-name">Exhale</div>
+                                <div className="bb-phase-secs">4 sec</div>
+                            </div>
+                            <div className="bb-phase-card">
+                                <div className="bb-phase-icon" style={{ background: 'rgba(255,193,7,0.12)', color: 'var(--amber)' }}>■</div>
+                                <div className="bb-phase-name">Hold</div>
+                                <div className="bb-phase-secs">4 sec</div>
+                            </div>
+                        </div>
+                        <div className="bb-fact">
+                            <span className="bb-fact-label">Used by</span>
+                            <span className="bb-fact-value">US Navy SEALs · Olympic Athletes · Elite Sports Programs</span>
+                        </div>
+                        <button id="bb-start-btn" className="btn-primary bb-cta-btn">
+                            Begin 4-Round Exercise →
+                        </button>
+                    </div>
+
+                    {/* ── Active State ── */}
+                    <div id="bb-active" className="bb-panel" style={{ display: 'none' }}>
+                        <div className="bb-round-badge" id="bb-round">Round 1 of 4</div>
+                        <div className="bb-circle-wrap">
+                            <div className="bb-ring" id="bb-ring">
+                                <div className="bb-circle" id="bb-circle">
+                                    <div className="bb-circle-phase" id="bb-phase-label">Inhale</div>
+                                    <div className="bb-circle-count" id="bb-count">4</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bb-pips">
+                            <div className="bb-pip" id="bb-pip-0" title="Inhale" />
+                            <div className="bb-pip" id="bb-pip-1" title="Hold" />
+                            <div className="bb-pip" id="bb-pip-2" title="Exhale" />
+                            <div className="bb-pip" id="bb-pip-3" title="Hold" />
+                        </div>
+                        <p className="bb-hint">Follow the circle — breathe with it.</p>
+                    </div>
+
+                    {/* ── Complete State ── */}
+                    <div id="bb-complete" className="bb-panel bb-complete-panel" style={{ display: 'none' }}>
+                        <div className="bb-done-icon">✓</div>
+                        <h3 className="bb-done-title">4 rounds complete.</h3>
+                        <p className="bb-done-copy">Notice the shift? That's your nervous system recalibrating. PulseCheck coaches this exact protocol — plus 12 others — automatically to your athletes based on their daily check-in and readiness score.</p>
+                        <div className="bb-done-ctas">
+                            <button id="bb-restart-btn" className="btn-secondary">↺ Try Again</button>
+                            <a href="#pilot" className="btn-primary">Bring This to My Program</a>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -1307,10 +1492,60 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .footer-subscribe-input button:hover { opacity: 0.9; }
               .pc-landing .footer-bottom { max-width: 1100px; margin: 48px auto 0; padding-top: 24px; border-top: 1px solid var(--border); text-align: center; font-size: 13px; color: var(--text-tertiary); }
 
+              /* ── Box Breathing Section ─────────────────────────────────── */
+              .pc-landing .breathing { padding: 120px 24px; position: relative; }
+              .pc-landing .breathing::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--border-light), transparent); }
+              .pc-landing .breathing-inner { max-width: 860px; margin: 0 auto; }
+              .pc-landing .breathing-header { text-align: center; margin-bottom: 56px; }
+              .pc-landing .breathing-header h2 em { font-style: italic; color: var(--blue); }
+              .pc-landing .breathing-header p { font-size: 17px; color: var(--text-secondary); max-width: 620px; margin: 0 auto; line-height: 1.75; }
+
+              /* Shared panel */
+              .pc-landing .bb-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 24px; padding: 48px 40px; text-align: center; }
+
+              /* Phase grid (ready state) */
+              .pc-landing .bb-phase-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
+              .pc-landing .bb-phase-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 14px; padding: 20px 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+              .pc-landing .bb-phase-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+              .pc-landing .bb-phase-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+              .pc-landing .bb-phase-secs { font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary); }
+
+              /* Fact bar */
+              .pc-landing .bb-fact { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 20px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 32px; flex-wrap: wrap; }
+              .pc-landing .bb-fact-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-tertiary); }
+              .pc-landing .bb-fact-value { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+              .pc-landing .bb-cta-btn { margin: 0 auto; }
+
+              /* Active state */
+              .pc-landing .bb-round-badge { display: inline-block; font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--blue); background: rgba(106,154,250,0.1); border: 1px solid rgba(106,154,250,0.2); border-radius: 100px; padding: 6px 16px; margin-bottom: 40px; }
+              .pc-landing .bb-circle-wrap { display: flex; align-items: center; justify-content: center; margin-bottom: 36px; }
+              .pc-landing .bb-ring { width: 240px; height: 240px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; --bb-color: #6A9AFA; }
+              .pc-landing .bb-circle { width: 180px; height: 180px; border-radius: 50%; border: 3px solid #6A9AFA; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; transition: transform 4s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.5s ease, box-shadow 0.5s ease; transform: scale(0.85); }
+              .pc-landing .bb-inhale   { transform: scale(1.15) !important; }
+              .pc-landing .bb-hold-in  { transform: scale(1.15) !important; }
+              .pc-landing .bb-exhale   { transform: scale(0.75) !important; }
+              .pc-landing .bb-hold-out { transform: scale(0.75) !important; }
+              .pc-landing .bb-circle-phase { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-secondary); }
+              .pc-landing .bb-circle-count { font-family: var(--font-display); font-size: 52px; font-weight: 400; color: var(--text-primary); line-height: 1; }
+              /* Phase pips */
+              .pc-landing .bb-pips { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
+              .pc-landing .bb-pip { width: 10px; height: 10px; border-radius: 50%; background: var(--border-light); transition: background 0.4s ease, transform 0.3s ease; }
+              .pc-landing .bb-pip-active { transform: scale(1.4); }
+              .pc-landing .bb-hint { font-size: 14px; color: var(--text-tertiary); font-style: italic; }
+
+              /* Complete state */
+              .pc-landing .bb-complete-panel { }
+              .pc-landing .bb-done-icon { width: 72px; height: 72px; border-radius: 50%; background: rgba(106,154,250,0.12); border: 2px solid rgba(106,154,250,0.3); display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 24px; color: var(--blue); }
+              .pc-landing .bb-done-title { font-family: var(--font-display); font-size: 32px; font-weight: 400; margin-bottom: 16px; }
+              .pc-landing .bb-done-copy { font-size: 16px; color: var(--text-secondary); max-width: 560px; margin: 0 auto 36px; line-height: 1.75; }
+              .pc-landing .bb-done-ctas { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+              /* ─────────────────────────────────────────────────────────── */
+
               @keyframes fadeUp {
                 from { opacity: 0; transform: translateY(20px); }
                 to { opacity: 1; transform: translateY(0); }
               }
+
 
               .pc-landing .reveal {
                 opacity: 0;
