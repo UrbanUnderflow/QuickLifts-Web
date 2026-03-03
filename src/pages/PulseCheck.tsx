@@ -1,6 +1,6 @@
 import type { NextPage } from 'next';
 import React, { useState, useEffect, useRef } from 'react';
-import { FaApple, FaCheckCircle, FaChartLine, FaBrain, FaHeart, FaRocket, FaShieldAlt, FaBed, FaMoon, FaSun, FaLightbulb, FaUtensils, FaCamera, FaFire, FaWeight, FaExclamationTriangle, FaWrench, FaEye, FaBullseye, FaLungs, FaPlay, FaDumbbell, FaTrophy, FaCalendarAlt, FaArrowUp, FaUserTie, FaClock, FaThumbsUp, FaThumbsDown, FaComments, FaClipboardList, FaRunning } from 'react-icons/fa';
+import { FaCheckCircle, FaChartLine, FaBrain, FaHeart, FaRocket, FaShieldAlt, FaBed, FaMoon, FaSun, FaLightbulb, FaUtensils, FaCamera, FaFire, FaWeight, FaExclamationTriangle, FaWrench, FaEye, FaBullseye, FaLungs, FaPlay, FaDumbbell, FaTrophy, FaCalendarAlt, FaArrowUp, FaUserTie, FaClock, FaThumbsUp, FaThumbsDown, FaComments, FaClipboardList } from 'react-icons/fa';
 import Footer from '../components/Footer/Footer';
 import PageHead from '../components/PageHead';
 import { PulseCheckWaitlistForm } from '../components/PulseCheckWaitlistForm';
@@ -11,7 +11,8 @@ import ConnectedCoachesBadge from '../components/pulsecheck/ConnectedCoachesBadg
 import NoraOnboarding from '../components/pulsecheck/NoraOnboarding';
 import ProfilePhoto from '../components/pulsecheck/ProfilePhoto';
 import SideNav from '../components/Navigation/SideNav';
-import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon } from '@heroicons/react/24/outline';
+import PulseCheckMarketingLanding from '../components/pulsecheck/PulseCheckMarketingLanding';
 
 const STORAGE_KEY_PC = 'pulsecheck_has_seen_marketing';
 const STORAGE_KEY_NORA_ONBOARDING = 'pulsecheck_has_seen_nora_onboarding';
@@ -1738,6 +1739,34 @@ const PulseCheckPage: NextPage = () => {
         );
     }
 
+    const useChromaticLanding = true;
+    if (useChromaticLanding) {
+        return (
+            <>
+                <PageHead
+                    metaData={{
+                        pageId: "pulse-check",
+                        pageTitle: "PulseCheck — The Mental Performance OS for Elite Programs",
+                        metaDescription: "PulseCheck gives coaches real-time readiness signals, intervention tools, and clinical safety nets before it shows on the scoreboard.",
+                        lastUpdated: new Date().toISOString()
+                    }}
+                    pageOgUrl="https://fitwithpulse.ai/pulse-check"
+                />
+                <PulseCheckMarketingLanding
+                    onJoinWaitlist={() => {
+                        setWaitlistUserType('athlete');
+                        setShowWaitlistForm(true);
+                    }}
+                />
+                <PulseCheckWaitlistForm
+                    isOpen={showWaitlistForm}
+                    onClose={() => setShowWaitlistForm(false)}
+                    userType={waitlistUserType}
+                />
+            </>
+        );
+    }
+
     return (
         <div className="min-h-screen bg-zinc-950 text-white font-avenir overflow-hidden">
             <style jsx>{customStyles}</style>
@@ -1775,15 +1804,36 @@ const PulseCheckPage: NextPage = () => {
                                 </span>
                             </div>
 
-                            <h1 className="text-6xl md:text-8xl font-bold tracking-tight mb-8">
+                            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-8">
                                 <span className="bg-gradient-to-r from-white via-zinc-100 to-zinc-300 bg-clip-text text-transparent">
                                     PulseCheck
                                 </span>
+                                <span className="block text-3xl md:text-5xl mt-3 text-[#E0FE10]">
+                                    The mental performance OS for elite programs
+                                </span>
                             </h1>
 
-                            <p className="text-xl md:text-2xl text-zinc-400 mb-12 leading-relaxed">
-                                AI Athlete Check-Ins • Coach Intelligence • Clinical Escalation
+                            <p className="text-xl md:text-2xl text-zinc-300 mb-3 leading-relaxed">
+                                We don't just tell you if athletes are physically ready.
                             </p>
+                            <p className="text-lg md:text-xl text-zinc-400 mb-10 leading-relaxed max-w-4xl mx-auto">
+                                We tell you whether they are mentally built to execute today—before it appears on the scoreboard.
+                            </p>
+
+                            <div className="flex flex-wrap items-center justify-center gap-3 mb-10">
+                                <span className="inline-flex items-center rounded-full bg-zinc-900/80 border border-zinc-800 px-4 py-2 text-sm text-zinc-200">
+                                    <FaBrain className="mr-2 h-4 w-4 text-[#E0FE10]" />
+                                    Always-on athlete check-ins
+                                </span>
+                                <span className="inline-flex items-center rounded-full bg-zinc-900/80 border border-zinc-800 px-4 py-2 text-sm text-zinc-200">
+                                    <FaChartLine className="mr-2 h-4 w-4 text-[#E0FE10]" />
+                                    Team-wide roster readiness radar
+                                </span>
+                                <span className="inline-flex items-center rounded-full bg-zinc-900/80 border border-zinc-800 px-4 py-2 text-sm text-zinc-200">
+                                    <FaShieldAlt className="mr-2 h-4 w-4 text-[#E0FE10]" />
+                                    Clinical escalation guardrails
+                                </span>
+                            </div>
 
                             {/* Typing Animation Container / Sleep Card / Nutrition Card */}
                             <div className="max-w-2xl mx-auto mb-12 relative">
@@ -1933,22 +1983,67 @@ const PulseCheckPage: NextPage = () => {
                             <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
                                 <button
                                     onClick={handleUseWebApp}
-                                    className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-zinc-900 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
-                                >
-                                    <span className="absolute -inset-1 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></span>
-                                    <span className="relative flex items-center">
-                                        Use Web App →
-                                    </span>
-                                </button>
-                                <a
-                                    href="https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
                                     className="inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-white bg-white/10 rounded-xl ring-1 ring-inset ring-white/20 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm"
                                 >
-                                    <FaApple className="mr-2 h-5 w-5" />
-                                    Download iOS App
+                                    Use Web App
+                                </button>
+                                <a
+                                    href="mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Pilot%20Inquiry"
+                                    className="inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-zinc-900 bg-zinc-100 rounded-xl shadow hover:shadow-lg transition-all duration-200"
+                                >
+                                    Request Department Pilot
                                 </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Conversion-first positioning section */}
+                <div className="py-16 sm:py-20 bg-zinc-950 border-y border-zinc-800/80">
+                    <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
+                        <div className="text-center mb-12">
+                            <p className="text-sm uppercase tracking-[0.2em] text-zinc-500">For Athletic Programs That Need Signal, Not Intuition</p>
+                            <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white mt-3">The 3-Pillar Mental Readiness Engine</h2>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="rounded-3xl bg-zinc-900/80 border border-zinc-800 p-7 backdrop-blur-sm">
+                                <div className="w-11 h-11 rounded-2xl bg-gradient-to-r from-[#E0FE10] to-lime-400 flex items-center justify-center mb-4">
+                                    <FaBrain className="h-5 w-5 text-zinc-900" />
+                                </div>
+                                <h3 className="text-2xl font-bold text-white mb-3">For Athletes</h3>
+                                <p className="text-zinc-400 mb-4">24/7 private, stigma-free AI support that turns check-ins into trainable habits.</p>
+                                <ul className="text-sm text-zinc-300 space-y-2">
+                                    <li>• Frictionless iMessage-style daily mental reps</li>
+                                    <li>• Real-time response to anxiety, fatigue, and focus drops</li>
+                                    <li>• Personalized drills like Box Breathing and 3-Second Reset</li>
+                                </ul>
+                            </div>
+
+                            <div className="rounded-3xl bg-zinc-900/80 border border-zinc-800 p-7 backdrop-blur-sm">
+                                <div className="w-11 h-11 rounded-2xl bg-gradient-to-r from-[#E0FE10] to-lime-400 flex items-center justify-center mb-4">
+                                    <FaChartLine className="h-5 w-5 text-zinc-900" />
+                                </div>
+                                <h3 className="text-2xl font-bold text-white mb-3">For Coaches</h3>
+                                <p className="text-zinc-400 mb-4">Team-level intelligence before the tape and before the locker room conversation.</p>
+                                <ul className="text-sm text-zinc-300 space-y-2">
+                                    <li>• Green/Yellow/Orange/Red roster map at a glance</li>
+                                    <li>• Actionable coaching recommendations by athlete</li>
+                                    <li>• Proactive alerts when performance risk rises</li>
+                                </ul>
+                            </div>
+
+                            <div className="rounded-3xl bg-zinc-900/80 border border-zinc-800 p-7 backdrop-blur-sm">
+                                <div className="w-11 h-11 rounded-2xl bg-gradient-to-r from-[#E0FE10] to-lime-400 flex items-center justify-center mb-4">
+                                    <FaShieldAlt className="h-5 w-5 text-zinc-900" />
+                                </div>
+                                <h3 className="text-2xl font-bold text-white mb-3">For Sports Medicine</h3>
+                                <p className="text-zinc-400 mb-4">Clinical handoff automation from routine performance coaching to safety.</p>
+                                <ul className="text-sm text-zinc-300 space-y-2">
+                                    <li>• Escalation triggers with objective context snapshots</li>
+                                    <li>• Restricted visibility on HIPAA-sensitive cases</li>
+                                    <li>• Secure handoff to AuntEdna for immediate follow-up</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -2088,240 +2183,110 @@ const PulseCheckPage: NextPage = () => {
                     </div>
                 </div>
 
-                {/* Sports Psychology Education Section - Simplified for Mobile */}
-                <div className="py-16 sm:py-24 lg:py-32 relative overflow-hidden">
-                    {/* Background Elements */}
+                {/* Sports Psychology Education Section - Scan-First Version */}
+                <div className="py-16 sm:py-24 lg:py-28 relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-purple-950/20 to-zinc-950"></div>
                     <div className="absolute inset-0">
                         <div className="absolute top-20 left-1/5 w-96 h-96 bg-purple-500/5 rounded-full filter blur-3xl animate-pulse"></div>
                         <div className="absolute bottom-20 right-1/5 w-80 h-80 bg-blue-500/5 rounded-full filter blur-3xl animate-pulse"></div>
-                        <div className="absolute top-1/3 right-1/3 w-64 h-64 bg-pink-500/5 rounded-full filter blur-3xl"></div>
                     </div>
 
-                    <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
-                        {/* Section Header */}
-                        <div className="text-center mb-12 lg:mb-20">
-                            <div className="inline-flex items-center gap-3 px-6 py-3 bg-purple-800/20 border border-purple-500/30 rounded-full mb-6 lg:mb-8">
-                                <FaBrain className="h-4 w-4 text-purple-400" />
-                                <span className="text-purple-300 text-sm font-medium">Sports Psychology in Your Pocket</span>
+                    <div className="relative max-w-6xl mx-auto px-6 lg:px-8">
+                        <div className="text-center mb-12 lg:mb-16">
+                            <div className="inline-flex items-center gap-3 px-5 py-2 bg-zinc-800/50 border border-zinc-700 rounded-full mb-6">
+                                <FaBrain className="h-4 w-4 text-purple-300" />
+                                <span className="text-purple-300 text-sm font-medium">Sports Psychology in Action</span>
                             </div>
 
-                            <h2 className="text-4xl sm:text-5xl lg:text-7xl font-bold text-white mb-6 lg:mb-8 tracking-tight">
+                            <h2 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white tracking-tight">
                                 The Mental Game
-                                <br />
-                                <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+                                <span className="block mt-2 bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
                                     Changes Everything
                                 </span>
                             </h2>
 
-                            <p className="text-lg lg:text-xl text-zinc-400 max-w-3xl mx-auto leading-relaxed mb-8 lg:mb-12">
-                                Sports psychology isn't just about managing anxiety. It's the science of optimizing your mind-body connection, confidence, and peak performance mindset.
+                            <p className="text-lg text-zinc-300 max-w-3xl mx-auto leading-relaxed mt-6">
+                                PulseCheck turns mental training into measurable advantage. One system, three outcomes.
                             </p>
-                        </div>
 
-                        {/* Complete Grid - All 6 Mental Game Areas */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 mb-12 lg:mb-20">
-                            {/* Mind-Muscle Connection */}
-                            <div className="group bg-gradient-to-br from-purple-900/20 to-purple-800/20 backdrop-blur-sm border border-purple-500/20 rounded-3xl p-6 lg:p-8 hover:border-purple-400/40 transition-all duration-300">
-                                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mb-4 lg:mb-6 group-hover:scale-110 transition-transform duration-300">
-                                    <FaBrain className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8">
+                                <div className="rounded-2xl bg-zinc-900/80 border border-zinc-800 p-4">
+                                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Outcome 1</p>
+                                    <p className="text-xl font-bold text-[#E0FE10] mt-2">Measure readiness with clarity.</p>
                                 </div>
-                                <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Mind-Muscle Connection</h3>
-                                <p className="text-zinc-400 leading-relaxed text-sm lg:text-base mb-4 lg:mb-6">
-                                    The neural pathway between your brain and muscles. Stronger connections mean better form, more efficient movement, and faster strength gains.
-                                </p>
-                                <div className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 lg:p-4">
-                                    <p className="text-purple-300 text-xs lg:text-sm">
-                                        <strong>Impact:</strong> Athletes with better mind-muscle awareness show 23% faster strength progression and 31% fewer form-related injuries.
-                                    </p>
+                                <div className="rounded-2xl bg-zinc-900/80 border border-zinc-800 p-4">
+                                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Outcome 2</p>
+                                    <p className="text-xl font-bold text-[#E0FE10] mt-2">Act before performance drops.</p>
                                 </div>
-                            </div>
-
-                            {/* Confidence & Performance */}
-                            <div className="group bg-gradient-to-br from-blue-900/20 to-blue-800/20 backdrop-blur-sm border border-blue-500/20 rounded-3xl p-6 lg:p-8 hover:border-blue-400/40 transition-all duration-300">
-                                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mb-4 lg:mb-6 group-hover:scale-110 transition-transform duration-300">
-                                    <FaTrophy className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
-                                </div>
-                                <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Confidence & Performance</h3>
-                                <p className="text-zinc-400 leading-relaxed text-sm lg:text-base mb-4 lg:mb-6">
-                                    Confidence directly correlates with performance outcomes. Athletes who visualize success activate the same neural pathways as actual execution.
-                                </p>
-                                <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 lg:p-4">
-                                    <p className="text-blue-300 text-xs lg:text-sm">
-                                        <strong>Impact:</strong> High-confidence athletes perform 15-20% better under pressure and recover 40% faster from setbacks.
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Food Psychology */}
-                            <div className="group bg-gradient-to-br from-green-900/20 to-green-800/20 backdrop-blur-sm border border-green-500/20 rounded-3xl p-6 lg:p-8 hover:border-green-400/40 transition-all duration-300">
-                                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center mb-4 lg:mb-6 group-hover:scale-110 transition-transform duration-300">
-                                    <FaUtensils className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
-                                </div>
-                                <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Food Psychology</h3>
-                                <p className="text-zinc-400 leading-relaxed text-sm lg:text-base mb-4 lg:mb-6">
-                                    Your relationship with food affects performance more than macros alone. Psychological eating patterns impact energy, recovery, and body composition.
-                                </p>
-                                <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 lg:p-4">
-                                    <p className="text-green-300 text-xs lg:text-sm">
-                                        <strong>Impact:</strong> Athletes with healthy food relationships maintain 25% more consistent energy levels and achieve body composition goals 3x faster.
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Training Motivation */}
-                            <div className="group bg-gradient-to-br from-orange-900/20 to-orange-800/20 backdrop-blur-sm border border-orange-500/20 rounded-3xl p-6 lg:p-8 hover:border-orange-400/40 transition-all duration-300">
-                                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center mb-4 lg:mb-6 group-hover:scale-110 transition-transform duration-300">
-                                    <FaRocket className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
-                                </div>
-                                <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Training Motivation</h3>
-                                <p className="text-zinc-400 leading-relaxed text-sm lg:text-base mb-4 lg:mb-6">
-                                    Intrinsic vs. extrinsic motivation determines long-term adherence. Understanding your "why" creates sustainable training habits.
-                                </p>
-                                <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3 lg:p-4">
-                                    <p className="text-orange-300 text-xs lg:text-sm">
-                                        <strong>Impact:</strong> Intrinsically motivated athletes train 67% more consistently and show 45% better long-term progress retention.
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Stress & Recovery */}
-                            <div className="group bg-gradient-to-br from-teal-900/20 to-teal-800/20 backdrop-blur-sm border border-teal-500/20 rounded-3xl p-6 lg:p-8 hover:border-teal-400/40 transition-all duration-300">
-                                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-teal-500 to-teal-600 rounded-2xl flex items-center justify-center mb-4 lg:mb-6 group-hover:scale-110 transition-transform duration-300">
-                                    <FaLungs className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
-                                </div>
-                                <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Stress & Recovery</h3>
-                                <p className="text-zinc-400 leading-relaxed text-sm lg:text-base mb-4 lg:mb-6">
-                                    Mental stress affects physical recovery. Learning stress management techniques improves sleep quality, HRV, and training adaptations.
-                                </p>
-                                <div className="bg-teal-500/10 border border-teal-500/20 rounded-xl p-3 lg:p-4">
-                                    <p className="text-teal-300 text-xs lg:text-sm">
-                                        <strong>Impact:</strong> Athletes with stress management skills recover 30% faster and show 22% better training adaptations.
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Competition Mindset */}
-                            <div className="group bg-gradient-to-br from-pink-900/20 to-pink-800/20 backdrop-blur-sm border border-pink-500/20 rounded-3xl p-6 lg:p-8 hover:border-pink-400/40 transition-all duration-300">
-                                <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-pink-500 to-pink-600 rounded-2xl flex items-center justify-center mb-4 lg:mb-6 group-hover:scale-110 transition-transform duration-300">
-                                    <FaBullseye className="h-6 w-6 lg:h-8 lg:w-8 text-white" />
-                                </div>
-                                <h3 className="text-xl lg:text-2xl font-bold text-white mb-3 lg:mb-4">Competition Mindset</h3>
-                                <p className="text-zinc-400 leading-relaxed text-sm lg:text-base mb-4 lg:mb-6">
-                                    Peak performance under pressure requires specific mental skills. Arousal regulation, focus control, and pre-performance routines are trainable.
-                                </p>
-                                <div className="bg-pink-500/10 border border-pink-500/20 rounded-xl p-3 lg:p-4">
-                                    <p className="text-pink-300 text-xs lg:text-sm">
-                                        <strong>Impact:</strong> Athletes with competition psychology training perform 18% better under pressure and experience 50% less performance anxiety.
-                                    </p>
+                                <div className="rounded-2xl bg-zinc-900/80 border border-zinc-800 p-4">
+                                    <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">Outcome 3</p>
+                                    <p className="text-xl font-bold text-[#E0FE10] mt-2">Protect your athletes, every time.</p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Value Proposition */}
-                        <div className="bg-gradient-to-br from-zinc-900/80 to-purple-950/40 backdrop-blur-sm border border-purple-500/20 rounded-3xl p-12 mb-20">
-                            <div className="text-center mb-12">
-                                <h3 className="text-3xl font-bold text-white mb-6">Sports Psychology in Your Pocket</h3>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                {/* Traditional Sports Psychology */}
-                                <div className="bg-zinc-800/50 border border-zinc-700 rounded-2xl p-6">
-                                    <h4 className="text-white font-semibold mb-4 flex items-center gap-3">
-                                        <FaUserTie className="h-5 w-5 text-zinc-400" />
-                                        Traditional Sports Psychology
-                                    </h4>
-                                    <ul className="space-y-3 text-zinc-400">
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-red-400 mt-1">×</span>
-                                            <span>$150-300 per session</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-red-400 mt-1">×</span>
-                                            <span>Limited availability</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-red-400 mt-1">×</span>
-                                            <span>Generic approaches</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-red-400 mt-1">×</span>
-                                            <span>No performance data integration</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-red-400 mt-1">×</span>
-                                            <span>Weekly or monthly sessions</span>
-                                        </li>
-                                    </ul>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                            <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-7">
+                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center mb-4">
+                                    <FaBrain className="h-5 w-5 text-white" />
                                 </div>
-
-                                {/* PulseCheck Sports Psychology */}
-                                <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-400/30 rounded-2xl p-6">
-                                    <h4 className="text-white font-semibold mb-4 flex items-center gap-3">
-                                        <img src="/app-logo.png" alt="Pulse" className="h-5 w-5" />
-                                        PulseCheck Sports Psychology
-                                    </h4>
-                                    <ul className="space-y-3 text-zinc-300">
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-[#E0FE10] mt-1">✓</span>
-                                            <span>24/7 availability</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-[#E0FE10] mt-1">✓</span>
-                                            <span>Personalized to your data</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-[#E0FE10] mt-1">✓</span>
-                                            <span>Evidence-based techniques</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-[#E0FE10] mt-1">✓</span>
-                                            <span>Integrated with performance metrics</span>
-                                        </li>
-                                        <li className="flex items-start gap-3">
-                                            <span className="text-[#E0FE10] mt-1">✓</span>
-                                            <span>Real-time support when you need it</span>
-                                        </li>
-                                    </ul>
+                                <h3 className="text-xl font-bold text-white">Daily Mental Conditioning</h3>
+                                <p className="text-zinc-400 mt-3">
+                                    A 2-minute daily check-in catches the subtle shifts before they become mistakes.
+                                </p>
+                                <div className="text-sm text-zinc-300 mt-5 border-l-2 border-[#E0FE10]/70 pl-4">
+                                    <p className="font-semibold text-white">Result</p>
+                                    <p className="text-zinc-300">Fewer mental crashes on high-pressure days.</p>
                                 </div>
                             </div>
 
-                            {/* Sample Conversations */}
-                            <div className="mt-12">
-                                <h4 className="text-white font-semibold text-center mb-8">Sample Sports Psychology Conversations</h4>
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    <div className="bg-zinc-800/30 rounded-2xl p-6">
-                                        <div className="flex items-start gap-4 mb-4">
-                                            <div className="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center flex-shrink-0">
-                                                <span className="text-zinc-300 text-xs font-semibold">You</span>
-                                            </div>
-                                            <p className="text-zinc-300">"I keep missing shots in games but hit them perfectly in practice"</p>
-                                        </div>
-                                        <div className="flex items-start gap-4">
-                                            <div className="w-8 h-8 bg-gradient-to-br from-purple-400 to-blue-400 rounded-full flex items-center justify-center flex-shrink-0">
-                                                <FaBrain className="h-4 w-4 text-white" />
-                                            </div>
-                                            <p className="text-zinc-300 text-sm leading-relaxed">
-                                                "Your practice shooting is 87% but drops to 62% in games - classic performance anxiety. Let's work on pre-shot routines and arousal regulation. Your Apple Watch data shows elevated heart rate 15 minutes before games, indicating anticipatory stress..."
-                                            </p>
-                                        </div>
+                            <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-7">
+                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-[#E0FE10] to-lime-400 flex items-center justify-center mb-4">
+                                    <FaChartLine className="h-5 w-5 text-zinc-900" />
+                                </div>
+                                <h3 className="text-xl font-bold text-white">Readiness Signals in Context</h3>
+                                <p className="text-zinc-400 mt-3">
+                                    Objective biometrics + check-in tone turn each athlete into a clear signal for coaching.
+                                </p>
+                                <div className="text-sm text-zinc-300 mt-5 border-l-2 border-[#E0FE10]/70 pl-4">
+                                    <p className="font-semibold text-white">Result</p>
+                                    <p className="text-zinc-300">Roster-level visibility on performance risk.</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-7">
+                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-r from-pink-500 to-purple-500 flex items-center justify-center mb-4">
+                                    <FaShieldAlt className="h-5 w-5 text-white" />
+                                </div>
+                                <h3 className="text-xl font-bold text-white">Safety-Native Escalation</h3>
+                                <p className="text-zinc-400 mt-3">
+                                    Severe mental stress is routed to clinical support with secure context and visibility controls.
+                                </p>
+                                <div className="text-sm text-zinc-300 mt-5 border-l-2 border-[#E0FE10]/70 pl-4">
+                                    <p className="font-semibold text-white">Result</p>
+                                    <p className="text-zinc-300">Faster, safer response when risk changes.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="rounded-3xl border border-zinc-800 bg-zinc-900/80 p-7 md:p-8">
+                            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] gap-6 items-center">
+                                <div className="text-center lg:text-left">
+                                    <p className="text-sm uppercase tracking-[0.22em] text-zinc-500">The Conversion Test</p>
+                                    <h3 className="text-2xl font-bold text-white mt-2">Does your team still rely on intuition at game time?</h3>
+                                </div>
+                                <div className="grid w-full grid-cols-3 gap-3 sm:gap-4">
+                                    <div className="min-w-0 bg-zinc-950/80 border border-zinc-700 rounded-xl p-3 text-center">
+                                        <p className="text-xs text-zinc-500">Traditional</p>
+                                        <p className="text-lg sm:text-xl xl:text-2xl leading-tight font-bold text-white mt-2 break-words">Reactive</p>
                                     </div>
-
-                                    <div className="bg-zinc-800/30 rounded-2xl p-6">
-                                        <div className="flex items-start gap-4 mb-4">
-                                            <div className="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center flex-shrink-0">
-                                                <span className="text-zinc-300 text-xs font-semibold">You</span>
-                                            </div>
-                                            <p className="text-zinc-300">"I can't stop thinking about food and it's affecting my training"</p>
-                                        </div>
-                                        <div className="flex items-start gap-4">
-                                            <div className="w-8 h-8 bg-gradient-to-br from-purple-400 to-blue-400 rounded-full flex items-center justify-center flex-shrink-0">
-                                                <FaBrain className="h-4 w-4 text-white" />
-                                            </div>
-                                            <p className="text-zinc-300 text-sm leading-relaxed">
-                                                "Your training intensity dropped 23% since restricting calories. Food preoccupation often signals inadequate fueling. Let's explore your relationship with food and develop mindful eating strategies that support both your goals and performance..."
-                                            </p>
-                                        </div>
+                                    <div className="min-w-0 bg-zinc-950/80 border border-zinc-700 rounded-xl p-3 text-center">
+                                        <p className="text-xs text-zinc-500">PulseCheck</p>
+                                        <p className="text-lg sm:text-xl xl:text-2xl leading-tight font-bold text-[#E0FE10] mt-2 break-words">Proactive</p>
+                                    </div>
+                                    <div className="min-w-0 bg-zinc-950/80 border border-zinc-700 rounded-xl p-3 text-center">
+                                        <p className="text-xs text-zinc-500">Result</p>
+                                        <p className="text-lg sm:text-xl xl:text-2xl leading-tight font-bold text-zinc-100 mt-2 break-words">Execution Wins</p>
                                     </div>
                                 </div>
                             </div>
@@ -2769,422 +2734,134 @@ const PulseCheckPage: NextPage = () => {
                     </div>
                 </div>
 
-                {/* Apple Watch + Pulse Integration Section */}
-                <div className="py-32 sm:py-40 relative overflow-hidden">
-                    {/* Background Elements */}
+                {/* Simulated Mental Game Section */}
+                <div className="py-24 sm:py-32 relative overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950"></div>
                     <div className="absolute inset-0">
-                        <div className="absolute top-20 left-1/4 w-96 h-96 bg-[#E0FE10]/5 rounded-full filter blur-3xl animate-pulse"></div>
-                        <div className="absolute bottom-20 right-1/4 w-80 h-80 bg-blue-500/5 rounded-full filter blur-3xl animate-pulse"></div>
-                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-purple-500/5 rounded-full filter blur-3xl"></div>
+                        <div className="absolute top-16 left-1/4 w-96 h-96 bg-[#E0FE10]/10 rounded-full filter blur-3xl"></div>
+                        <div className="absolute bottom-10 right-1/4 w-80 h-80 bg-blue-500/10 rounded-full filter blur-3xl"></div>
                     </div>
 
                     <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
-                        {/* Section Header */}
-                        <div className="text-center mb-20">
-                            <div className="inline-flex items-center gap-3 px-6 py-3 bg-zinc-800/50 border border-zinc-700 rounded-full mb-8">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-gradient-to-br from-zinc-300 to-zinc-500 rounded-lg flex items-center justify-center">
-                                        <FaApple className="h-4 w-4 text-zinc-900" />
-                                    </div>
-                                    <span className="text-zinc-300 text-sm font-medium">+</span>
-                                    <div className="w-8 h-8 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-lg flex items-center justify-center p-1">
-                                        <img src="/app-logo.png" alt="Pulse" className="h-4 w-4" />
-                                    </div>
-                                </div>
-                                <span className="text-zinc-300 text-sm font-medium">Apple Watch + Pulse Integration</span>
+                        <div className="text-center mb-14">
+                            <div className="inline-flex items-center gap-3 px-5 py-2 bg-zinc-900/70 border border-zinc-700 rounded-full mb-6">
+                                <FaPlay className="h-4 w-4 text-[#E0FE10]" />
+                                <span className="text-zinc-200 text-sm font-medium">Simulated Mental Game</span>
                             </div>
-
-                            <h2 className="text-5xl sm:text-7xl font-bold text-white mb-8 tracking-tight">
-                                Your Data Can Now
-                                <br />
-                                <span className="bg-gradient-to-r from-[#E0FE10] via-lime-400 to-green-400 bg-clip-text text-transparent">
-                                    Talk Back to You
+                            <h2 className="text-4xl sm:text-6xl font-bold text-white tracking-tight">
+                                Train The Mind
+                                <span className="block mt-2 bg-gradient-to-r from-[#E0FE10] via-lime-400 to-emerald-400 bg-clip-text text-transparent">
+                                    Before The Clutch Moment
                                 </span>
                             </h2>
-
-                            <p className="text-xl text-zinc-400 max-w-3xl mx-auto leading-relaxed mb-12">
-                                Apple Watch streams biometric data to Pulse, where we capture every lift, rep, and sport performance. PulseCheck then transforms this comprehensive athletic profile into intelligent conversations that explain what your data means for your performance.
+                            <p className="text-zinc-400 text-lg max-w-3xl mx-auto mt-6">
+                                Run pressure scenarios before game day. PulseCheck coaches breathing, attention control, and execution cues in the exact moments athletes usually unravel.
                             </p>
                         </div>
 
-                        {/* Main Integration Visual */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-20 items-center relative">
-                            {/* Flow Arrows - Hidden on mobile */}
-                            <div className="hidden lg:block absolute inset-0 pointer-events-none">
-                                {/* Arrow 1: Apple Watch → Pulse */}
-                                <div className="absolute top-1/2 left-1/3 transform -translate-y-1/2 -translate-x-4">
-                                    <div className="flex items-center">
-                                        <div className="w-12 h-px bg-gradient-to-r from-zinc-400 to-blue-400"></div>
-                                        <div className="w-0 h-0 border-l-4 border-l-blue-400 border-t-2 border-t-transparent border-b-2 border-b-transparent"></div>
+                        <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-6 mb-10">
+                            <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 md:p-8">
+                                <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-zinc-800/70 px-3 py-1.5 border border-zinc-700">
+                                        <FaClock className="h-3.5 w-3.5 text-[#E0FE10]" />
+                                        <span className="text-xs text-zinc-300 uppercase tracking-[0.15em]">Simulation State</span>
                                     </div>
-                                    <div className="text-center mt-2">
-                                        <span className="text-zinc-500 text-xs">Biometric Stream</span>
+                                    <div className="text-sm text-zinc-400">Q4 · 01:42 · Down 1</div>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-3 mb-6">
+                                    <div className="rounded-xl border border-zinc-700 bg-zinc-950/70 p-4 text-center">
+                                        <p className="text-xs text-zinc-500 uppercase tracking-[0.14em]">Pressure</p>
+                                        <p className="text-2xl font-bold text-orange-400 mt-1">87%</p>
+                                    </div>
+                                    <div className="rounded-xl border border-zinc-700 bg-zinc-950/70 p-4 text-center">
+                                        <p className="text-xs text-zinc-500 uppercase tracking-[0.14em]">Focus</p>
+                                        <p className="text-2xl font-bold text-blue-400 mt-1">62%</p>
+                                    </div>
+                                    <div className="rounded-xl border border-zinc-700 bg-zinc-950/70 p-4 text-center">
+                                        <p className="text-xs text-zinc-500 uppercase tracking-[0.14em]">Composure</p>
+                                        <p className="text-2xl font-bold text-[#E0FE10] mt-1">71%</p>
                                     </div>
                                 </div>
 
-                                {/* Arrow 2: Pulse → Pulse Check */}
-                                <div className="absolute top-1/2 right-1/3 transform -translate-y-1/2 translate-x-4">
-                                    <div className="flex items-center">
-                                        <div className="w-12 h-px bg-gradient-to-r from-blue-400 to-[#E0FE10]"></div>
-                                        <div className="w-0 h-0 border-l-4 border-l-[#E0FE10] border-t-2 border-t-transparent border-b-2 border-b-transparent"></div>
+                                <div className="space-y-4">
+                                    <div className="rounded-2xl border border-orange-400/30 bg-orange-500/10 p-4">
+                                        <p className="text-xs uppercase tracking-[0.16em] text-orange-300 mb-2">Trigger Event</p>
+                                        <p className="text-zinc-200">Missed two free throws, crowd gets loud, hands feel tight, self-talk turns negative.</p>
                                     </div>
-                                    <div className="text-center mt-2">
-                                        <span className="text-zinc-500 text-xs">AI Analysis</span>
+                                    <div className="rounded-2xl border border-blue-400/30 bg-blue-500/10 p-4">
+                                        <p className="text-xs uppercase tracking-[0.16em] text-blue-300 mb-2">Nora Prompt</p>
+                                        <p className="text-zinc-200">"Reset in 8 seconds: exhale long, eyes on rim center, cue: smooth follow-through."</p>
                                     </div>
-                                </div>
-                            </div>
-                            {/* Apple Watch Side */}
-                            <div className="group relative">
-                                <div className="absolute -inset-4 bg-gradient-to-r from-zinc-400 to-zinc-600 rounded-3xl blur opacity-20 group-hover:opacity-30 transition duration-1000"></div>
-                                <div className="relative bg-zinc-900/80 backdrop-blur-sm p-8 rounded-3xl border border-zinc-700">
-                                    <div className="text-center mb-6">
-                                        <div className="w-16 h-16 bg-gradient-to-br from-zinc-300 to-zinc-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                            <FaApple className="h-8 w-8 text-zinc-900" />
-                                        </div>
-                                        <h3 className="text-2xl font-bold text-white mb-2">Apple Watch</h3>
-                                        <p className="text-zinc-400 text-sm">Continuous Health Monitoring</p>
-                                    </div>
-
-                                    {/* Live Metrics */}
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <FaHeart className="h-4 w-4 text-red-400" />
-                                                <span className="text-zinc-300 text-sm">Heart Rate</span>
-                                            </div>
-                                            <span className="text-white font-semibold">78 BPM</span>
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <FaFire className="h-4 w-4 text-orange-400" />
-                                                <span className="text-zinc-300 text-sm">Active Calories</span>
-                                            </div>
-                                            <span className="text-white font-semibold">342 kcal</span>
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <FaDumbbell className="h-4 w-4 text-[#E0FE10]" />
-                                                <span className="text-zinc-300 text-sm">Workout Time</span>
-                                            </div>
-                                            <span className="text-white font-semibold">45 min</span>
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <FaBed className="h-4 w-4 text-blue-400" />
-                                                <span className="text-zinc-300 text-sm">Sleep Quality</span>
-                                            </div>
-                                            <span className="text-white font-semibold">Good</span>
-                                        </div>
+                                    <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4">
+                                        <p className="text-xs uppercase tracking-[0.16em] text-emerald-300 mb-2">Execution Result</p>
+                                        <p className="text-zinc-200">Athlete slows heart rate, blocks crowd noise, and commits to next-shot routine.</p>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Pulse App Section */}
-                            <div className="group relative">
-                                <div className="absolute -inset-4 bg-gradient-to-r from-blue-400 to-purple-500 rounded-3xl blur opacity-20 group-hover:opacity-30 transition duration-1000"></div>
-                                <div className="relative bg-zinc-900/80 backdrop-blur-sm p-8 rounded-3xl border border-blue-400/30">
-                                    <div className="text-center mb-6">
-                                        <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-purple-500 rounded-2xl flex items-center justify-center mx-auto mb-4 p-3">
-                                            <img src="/app-logo.png" alt="Pulse" className="h-10 w-10" />
+                            <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 md:p-8">
+                                <h3 className="text-2xl font-bold text-white mb-2">Mental Intervention Sequence</h3>
+                                <p className="text-zinc-400 text-sm mb-6">A repeatable workflow used in late-game stress spikes.</p>
+                                <div className="space-y-4">
+                                    <div className="flex items-start gap-3 p-3 rounded-xl bg-zinc-950/70 border border-zinc-800">
+                                        <div className="w-8 h-8 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center">
+                                            <FaExclamationTriangle className="h-4 w-4" />
                                         </div>
-                                        <h3 className="text-2xl font-bold text-white mb-2">Pulse App</h3>
-                                        <p className="text-zinc-400 text-sm">Athletic Performance Capture</p>
-                                    </div>
-
-                                    {/* Athletic Metrics */}
-                                    <div className="space-y-4">
-                                        <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <FaDumbbell className="h-4 w-4 text-blue-400" />
-                                                <span className="text-zinc-300 text-sm">Squat 1RM</span>
-                                            </div>
-                                            <span className="text-white font-semibold">285 lbs</span>
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <FaRunning className="h-4 w-4 text-purple-400" />
-                                                <span className="text-zinc-300 text-sm">Basketball FG%</span>
-                                            </div>
-                                            <span className="text-white font-semibold">67%</span>
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <FaChartLine className="h-4 w-4 text-green-400" />
-                                                <span className="text-zinc-300 text-sm">Training Load</span>
-                                            </div>
-                                            <span className="text-white font-semibold">High</span>
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <FaTrophy className="h-4 w-4 text-yellow-400" />
-                                                <span className="text-zinc-300 text-sm">Form Score</span>
-                                            </div>
-                                            <span className="text-white font-semibold">92/100</span>
+                                        <div>
+                                            <p className="text-white font-semibold">1. Detect The Spiral</p>
+                                            <p className="text-zinc-400 text-sm">Negative self-talk and rushed decision patterns are flagged instantly.</p>
                                         </div>
                                     </div>
-
-                                    {/* Data Flow Indicators */}
-                                    <div className="flex items-center justify-between mt-6 pt-4 border-t border-zinc-700">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 bg-zinc-400 rounded-full animate-pulse"></div>
-                                            <span className="text-zinc-400 text-xs">From Watch</span>
+                                    <div className="flex items-start gap-3 p-3 rounded-xl bg-zinc-950/70 border border-zinc-800">
+                                        <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                                            <FaBrain className="h-4 w-4" />
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-zinc-400 text-xs">To Analysis</span>
-                                            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
+                                        <div>
+                                            <p className="text-white font-semibold">2. Issue A Micro-Reset</p>
+                                            <p className="text-zinc-400 text-sm">Breath cadence and short cue are tailored to role and situation.</p>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
-
-                            {/* Pulse Check Side */}
-                            <div className="group relative">
-                                <div className="absolute -inset-4 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-3xl blur opacity-20 group-hover:opacity-30 transition duration-1000"></div>
-                                <div className="relative bg-zinc-900/80 backdrop-blur-sm p-8 rounded-3xl border border-[#E0FE10]/30">
-                                    <div className="text-center mb-6">
-                                        <div className="w-16 h-16 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-2xl flex items-center justify-center mx-auto mb-4 p-3">
-                                            <img src="/app-logo.png" alt="Pulse" className="h-10 w-10" />
+                                    <div className="flex items-start gap-3 p-3 rounded-xl bg-zinc-950/70 border border-zinc-800">
+                                        <div className="w-8 h-8 rounded-lg bg-[#E0FE10]/20 text-[#E0FE10] flex items-center justify-center">
+                                            <FaBullseye className="h-4 w-4" />
                                         </div>
-                                        <h3 className="text-2xl font-bold text-white mb-2">PulseCheck</h3>
-                                        <p className="text-zinc-400 text-sm">Athletic Performance Intelligence</p>
+                                        <div>
+                                            <p className="text-white font-semibold">3. Re-Attach To Task</p>
+                                            <p className="text-zinc-400 text-sm">Attention narrows to one controllable action for the next play.</p>
+                                        </div>
                                     </div>
-
-                                    {/* Sample Conversations */}
-                                    <div className="space-y-4">
-                                        <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-lg p-4">
-                                            <div className="flex items-start gap-3">
-                                                <div className="w-6 h-6 bg-[#E0FE10] rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                                                    <FaBrain className="h-3 w-3 text-zinc-900" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-zinc-300 text-sm leading-relaxed">
-                                                        "Your squat 1RM hit 285 lbs (from Pulse), but Apple Watch shows HRV dropped 12%. Strong gains, but your nervous system needs recovery time."
-                                                    </p>
-                                                </div>
-                                            </div>
+                                    <div className="flex items-start gap-3 p-3 rounded-xl bg-zinc-950/70 border border-zinc-800">
+                                        <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                                            <FaCheckCircle className="h-4 w-4" />
                                         </div>
-
-                                        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                                            <div className="flex items-start gap-3">
-                                                <div className="w-6 h-6 bg-blue-400 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                                                    <FaLightbulb className="h-3 w-3 text-zinc-900" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-zinc-300 text-sm leading-relaxed">
-                                                        "Your basketball FG% (67% in Pulse) plus Apple Watch cardio data shows peak performance Tuesday. Schedule skill work today, save intensity for Friday."
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
-                                            <div className="flex items-start gap-3">
-                                                <div className="w-6 h-6 bg-orange-400 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                                                    <FaFire className="h-3 w-3 text-zinc-900" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-zinc-300 text-sm leading-relaxed">
-                                                        "Your deadlift form score (92/100 in Pulse) improved 23% since mobility work. Apple Watch heart rate patterns confirm perfect movement efficiency."
-                                                    </p>
-                                                </div>
-                                            </div>
+                                        <div>
+                                            <p className="text-white font-semibold">4. Lock In Confidence</p>
+                                            <p className="text-zinc-400 text-sm">Immediate reinforcement makes the clutch routine more automatic next time.</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Pulse Data Collection Section */}
-                        <div className="bg-gradient-to-br from-zinc-900/80 to-zinc-950/80 backdrop-blur-sm border border-zinc-800 rounded-3xl p-12 mb-20">
-                            <div className="text-center mb-12">
-                                <div className="inline-flex items-center gap-3 px-4 py-2 bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-full mb-6">
-                                    <FaDumbbell className="h-4 w-4 text-[#E0FE10]" />
-                                    <span className="text-[#E0FE10] text-sm font-medium">Complete Athletic Profile</span>
-                                </div>
-                                <h3 className="text-3xl font-bold text-white mb-4">Pulse Knows Your Entire Athletic Story</h3>
-                                <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
-                                    Every workout, lift, sport, and biometric creates a comprehensive performance profile that PulseCheck uses to deliver personalized insights.
-                                </p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5">
+                                <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Scenario A</p>
+                                <h4 className="text-white font-semibold mt-2 mb-3">Free Throw Miss Streak</h4>
+                                <p className="text-zinc-400 text-sm">Skill: breath down-regulation + visual anchor.</p>
+                                <p className="text-[#E0FE10] text-sm mt-3">Result: faster emotional recovery between attempts.</p>
                             </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                {/* Strength Training */}
-                                <div className="group bg-zinc-800/40 rounded-2xl p-6 border border-zinc-700 hover:border-[#E0FE10]/30 transition-all duration-300">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                                        <FaDumbbell className="h-6 w-6 text-zinc-900" />
-                                    </div>
-                                    <h4 className="text-white font-semibold mb-3">Strength Training</h4>
-                                    <ul className="space-y-2 text-sm text-zinc-400">
-                                        <li>• Every rep & set logged</li>
-                                        <li>• Progressive overload tracking</li>
-                                        <li>• 1RM calculations</li>
-                                        <li>• Volume & intensity patterns</li>
-                                    </ul>
-                                </div>
-
-                                {/* Sports Performance */}
-                                <div className="group bg-zinc-800/40 rounded-2xl p-6 border border-zinc-700 hover:border-blue-400/30 transition-all duration-300">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                                        <FaRunning className="h-6 w-6 text-white" />
-                                    </div>
-                                    <h4 className="text-white font-semibold mb-3">Sports Metrics</h4>
-                                    <ul className="space-y-2 text-sm text-zinc-400">
-                                        <li>• Sport-specific performance</li>
-                                        <li>• Movement quality scores</li>
-                                        <li>• Skill progression tracking</li>
-                                        <li>• Competition readiness</li>
-                                    </ul>
-                                </div>
-
-                                {/* Biometrics */}
-                                <div className="group bg-zinc-800/40 rounded-2xl p-6 border border-zinc-700 hover:border-red-400/30 transition-all duration-300">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-red-400 to-red-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                                        <FaHeart className="h-6 w-6 text-white" />
-                                    </div>
-                                    <h4 className="text-white font-semibold mb-3">Apple Watch Data</h4>
-                                    <ul className="space-y-2 text-sm text-zinc-400">
-                                        <li>• Heart rate variability</li>
-                                        <li>• Sleep & recovery metrics</li>
-                                        <li>• Energy expenditure</li>
-                                        <li>• Stress indicators</li>
-                                    </ul>
-                                </div>
-
-                                {/* Training Load */}
-                                <div className="group bg-zinc-800/40 rounded-2xl p-6 border border-zinc-700 hover:border-purple-400/30 transition-all duration-300">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-purple-600 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                                        <FaChartLine className="h-6 w-6 text-white" />
-                                    </div>
-                                    <h4 className="text-white font-semibold mb-3">Training Load</h4>
-                                    <ul className="space-y-2 text-sm text-zinc-400">
-                                        <li>• Workout intensity</li>
-                                        <li>• Fatigue accumulation</li>
-                                        <li>• Recovery needs</li>
-                                        <li>• Periodization insights</li>
-                                    </ul>
-                                </div>
+                            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5">
+                                <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Scenario B</p>
+                                <h4 className="text-white font-semibold mt-2 mb-3">Opponent Momentum Run</h4>
+                                <p className="text-zinc-400 text-sm">Skill: cognitive reframing + next-play cue.</p>
+                                <p className="text-[#E0FE10] text-sm mt-3">Result: less panic decision-making under noise.</p>
                             </div>
-
-                            {/* Data Synthesis */}
-                            <div className="mt-12 text-center">
-                                <div className="max-w-4xl mx-auto">
-                                    <div className="flex items-center justify-center gap-4 mb-6">
-                                        <div className="h-px bg-gradient-to-r from-transparent via-zinc-600 to-transparent flex-1"></div>
-                                        <div className="flex items-center gap-2 px-4 py-2 bg-zinc-800/50 rounded-full">
-                                            <FaBrain className="h-4 w-4 text-[#E0FE10]" />
-                                            <span className="text-zinc-300 text-sm font-medium">AI Synthesis</span>
-                                        </div>
-                                        <div className="h-px bg-gradient-to-r from-transparent via-zinc-600 to-transparent flex-1"></div>
-                                    </div>
-                                    <p className="text-zinc-300 text-lg leading-relaxed">
-                                        PulseCheck synthesizes this massive dataset to understand your unique patterns, predict performance outcomes, and provide personalized recommendations that evolve with your training.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Feature Highlights */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
-                            <div className="group text-center">
-                                <div className="relative mb-6">
-                                    <div className="absolute inset-0 bg-gradient-to-r from-[#E0FE10]/20 to-lime-400/20 rounded-full blur-lg group-hover:blur-xl transition-all duration-500"></div>
-                                    <div className="relative w-20 h-20 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-full flex items-center justify-center mx-auto">
-                                        <FaEye className="h-8 w-8 text-zinc-900" />
-                                    </div>
-                                </div>
-                                <h3 className="text-xl font-bold text-white mb-4">Real-Time Analysis</h3>
-                                <p className="text-zinc-400 leading-relaxed">
-                                    Every metric is instantly analyzed for patterns, trends, and actionable insights. Your data never sleeps.
-                                </p>
-                            </div>
-
-                            <div className="group text-center">
-                                <div className="relative mb-6">
-                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-full blur-lg group-hover:blur-xl transition-all duration-500"></div>
-                                    <div className="relative w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center mx-auto">
-                                        <FaComments className="h-8 w-8 text-white" />
-                                    </div>
-                                </div>
-                                <h3 className="text-xl font-bold text-white mb-4">Natural Conversations</h3>
-                                <p className="text-zinc-400 leading-relaxed">
-                                    Ask questions in plain English. Get answers that understand context, history, and your unique goals.
-                                </p>
-                            </div>
-
-                            <div className="group text-center">
-                                <div className="relative mb-6">
-                                    <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-red-500/20 rounded-full blur-lg group-hover:blur-xl transition-all duration-500"></div>
-                                    <div className="relative w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center mx-auto">
-                                        <FaBullseye className="h-8 w-8 text-white" />
-                                    </div>
-                                </div>
-                                <h3 className="text-xl font-bold text-white mb-4">Personalized Guidance</h3>
-                                <p className="text-zinc-400 leading-relaxed">
-                                    Recommendations tailored to your training phase, recovery needs, and performance goals.
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Conversation Examples */}
-                        <div className="bg-zinc-900/60 backdrop-blur-sm border border-zinc-800 rounded-3xl p-12">
-                            <div className="text-center mb-12">
-                                <h3 className="text-3xl font-bold text-white mb-4">Ask Anything About Your Health</h3>
-                                <p className="text-zinc-400 text-lg">Your data understands context and responds with intelligence</p>
-                            </div>
-
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                <div className="space-y-6">
-                                    {/* Question 1 */}
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-10 h-10 bg-zinc-700 rounded-full flex items-center justify-center flex-shrink-0">
-                                            <span className="text-zinc-300 text-sm font-semibold">You</span>
-                                        </div>
-                                        <div className="bg-zinc-800/50 rounded-2xl p-4 flex-1">
-                                            <p className="text-zinc-300">"Why did my bench press strength drop this week?"</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-10 h-10 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-full flex items-center justify-center flex-shrink-0">
-                                            <FaBrain className="h-5 w-5 text-zinc-900" />
-                                        </div>
-                                        <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-2xl p-4 flex-1">
-                                            <p className="text-zinc-300 leading-relaxed">
-                                                "Your training volume increased 25% over 2 weeks while sleep quality dropped. Your nervous system needs recovery - reduce intensity by 20% for 3 days."
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-6">
-                                    {/* Question 2 */}
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-10 h-10 bg-zinc-700 rounded-full flex items-center justify-center flex-shrink-0">
-                                            <span className="text-zinc-300 text-sm font-semibold">You</span>
-                                        </div>
-                                        <div className="bg-zinc-800/50 rounded-2xl p-4 flex-1">
-                                            <p className="text-zinc-300">"How is my basketball shooting improving?"</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-10 h-10 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-full flex items-center justify-center flex-shrink-0">
-                                            <FaBrain className="h-5 w-5 text-zinc-900" />
-                                        </div>
-                                        <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-2xl p-4 flex-1">
-                                            <p className="text-zinc-300 leading-relaxed">
-                                                "Your 3-point percentage improved from 32% to 41% over 6 weeks. Your shooting consistency correlates with better sleep quality and lower training fatigue."
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5">
+                                <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">Scenario C</p>
+                                <h4 className="text-white font-semibold mt-2 mb-3">Overtime Final Possession</h4>
+                                <p className="text-zinc-400 text-sm">Skill: attentional narrowing + confidence script.</p>
+                                <p className="text-[#E0FE10] text-sm mt-3">Result: cleaner execution in decisive moments.</p>
                             </div>
                         </div>
                     </div>
