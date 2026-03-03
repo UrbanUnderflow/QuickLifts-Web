@@ -55,7 +55,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                     const freq = 0.003 + wave * 0.001;
                     const speed = time * (1 + wave * 0.3);
                     const alpha = 0.04 - wave * 0.012;
-                    ctx.strokeStyle = `rgba(200, 255, 0, ${alpha})`;
+                    ctx.strokeStyle = `rgba(106, 154, 250, ${alpha})`;
                     ctx.lineWidth = 1.5;
 
                     for (let x = 0; x < width; x += 2) {
@@ -68,7 +68,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
 
                 const pulseRadius = 200 + Math.sin(time * 2) * 80;
                 const gradient = ctx.createRadialGradient(width / 2, height * 0.4, 0, width / 2, height * 0.4, pulseRadius);
-                gradient.addColorStop(0, 'rgba(200,255,0,0.03)');
+                gradient.addColorStop(0, 'rgba(106,154,250,0.04)');
                 gradient.addColorStop(1, 'transparent');
                 ctx.fillStyle = gradient;
                 ctx.fillRect(0, 0, width, height);
@@ -103,12 +103,12 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 | { type: 'pause'; ms: number }
                 | { type: 'response' }
             > = [
-                { type: 'prompt', prefix: 'nora', text: 'What was the <span class="highlight">hardest mental moment</span> in yesterday\'s practice?', delay: 40 },
-                { type: 'pause', ms: 800 },
-                { type: 'prompt', prefix: 'athlete', text: 'Coach pulled me from the drill in front of everyone. Couldn\'t stop replaying it after.', delay: 30 },
-                { type: 'pause', ms: 600 },
-                { type: 'response' }
-            ];
+                    { type: 'prompt', prefix: 'nora', text: 'What was the <span class="highlight">hardest mental moment</span> in yesterday\'s practice?', delay: 40 },
+                    { type: 'pause', ms: 800 },
+                    { type: 'prompt', prefix: 'athlete', text: 'Coach pulled me from the drill in front of everyone. Couldn\'t stop replaying it after.', delay: 30 },
+                    { type: 'pause', ms: 600 },
+                    { type: 'response' }
+                ];
 
             let lineIdx = 0;
             let terminalStarted = false;
@@ -284,7 +284,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                             }
                             if (focusBar) {
                                 focusBar.style.width = '88%';
-                                focusBar.style.background = 'var(--lime)';
+                                focusBar.style.background = '#6A9AFA';
                             }
 
                             if (composure) composure.textContent = '91%';
@@ -352,7 +352,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                     The Complete Readiness Triad for Elite Programs
                 </div>
                 <h1>Your athletes are physically ready. <em>Are they mentally built to execute?</em></h1>
-                <p className="hero-sub">PulseCheck is the mental performance OS that gives coaches real-time readiness signals, intervention tools, and clinical safety nets — before it shows on the scoreboard.</p>
+                <p className="hero-sub">PulseCheck is the mental performance system that gives coaches real-time readiness signals, intervention tools, and clinical safety nets — before it shows on the scoreboard.</p>
                 <div className="hero-heartbeat" aria-hidden="true">
                     <svg viewBox="0 0 600 60" preserveAspectRatio="none">
                         <path className="heartbeat-glow" d="M0,30 L120,30 L145,30 L160,8 L175,52 L190,20 L205,38 L220,30 L340,30 L365,30 L380,8 L395,52 L410,20 L425,38 L440,30 L600,30" />
@@ -700,11 +700,15 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 --bg-secondary: #111215;
                 --bg-card: #16181c;
                 --bg-card-hover: #1c1f24;
-                --lime: #c8ff00;
-                --lime-dim: #c8ff0020;
-                --lime-mid: #c8ff0040;
+                --blue: #6A9AFA;
+                --blue-dim: #6A9AFA20;
+                --blue-mid: #6A9AFA40;
+                --purple: #A05EF8;
+                --purple-dim: #A05EF820;
+                --lime: #E0FE10;
+                --lime-dim: #E0FE1020;
+                --lime-mid: #E0FE1040;
                 --cyan: #00e5ff;
-                --purple: #b388ff;
                 --coral: #ff6b6b;
                 --amber: #ffc107;
                 --text-primary: #f0f0f2;
@@ -814,7 +818,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .nav-links a:hover { color: var(--text-primary); }
 
               .pc-landing .nav-cta {
-                background: var(--lime) !important;
+                background: linear-gradient(135deg, var(--blue), var(--purple)) !important;
                 color: var(--bg-primary) !important;
                 padding: 10px 24px !important;
                 border-radius: 8px;
@@ -834,6 +838,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 text-align: center;
                 padding: 140px 24px 80px;
                 position: relative;
+                overflow: hidden;
               }
 
               .pc-landing .hero::before {
@@ -841,7 +846,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 position: absolute;
                 top: -20%; left: 50%; transform: translateX(-50%);
                 width: 800px; height: 800px;
-                background: radial-gradient(ellipse, var(--lime-dim) 0%, transparent 70%);
+                background: radial-gradient(ellipse, var(--blue-dim) 0%, transparent 70%);
                 pointer-events: none;
               }
 
@@ -852,7 +857,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 transform: translate(-50%, -55%);
                 width: 900px;
                 height: 700px;
-                background: radial-gradient(ellipse, rgba(200,255,0,0.07) 0%, rgba(200,255,0,0.02) 40%, transparent 70%);
+                background: radial-gradient(ellipse, rgba(106,154,250,0.1) 0%, rgba(160,94,248,0.04) 40%, transparent 70%);
                 pointer-events: none;
                 animation: heroGlowPulse 4s ease-in-out infinite;
               }
@@ -879,13 +884,13 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
 
               .pc-landing .hero-badge-dot {
                 width: 6px; height: 6px;
-                background: var(--lime);
+                background: var(--blue);
                 border-radius: 50%;
                 animation: pulse-dot 2s ease infinite;
               }
 
               @keyframes pulse-dot {
-                0%, 100% { box-shadow: 0 0 0 0 var(--lime-mid); }
+                0%, 100% { box-shadow: 0 0 0 0 var(--blue-mid); }
                 50% { box-shadow: 0 0 0 6px transparent; }
               }
 
@@ -895,7 +900,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 line-height: 1.05;
                 font-weight: 400;
                 letter-spacing: -0.02em;
-                max-width: 900px;
+                max-width: 1100px;
                 margin-bottom: 28px;
                 opacity: 0;
                 animation: fadeUp 0.8s ease 0.4s forwards;
@@ -903,7 +908,12 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
 
               .pc-landing .hero h1 em {
                 font-style: italic;
-                color: var(--lime);
+                display: block;
+                background: linear-gradient(135deg, var(--blue), var(--purple));
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+                padding-right: 0.08em;
               }
 
               .pc-landing .hero-sub {
@@ -928,20 +938,20 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .hero-heartbeat svg { width: 100%; height: 100%; }
 
               .pc-landing .heartbeat-line {
-                stroke: var(--lime);
+                stroke: var(--blue);
                 stroke-width: 2;
                 fill: none;
                 stroke-dasharray: 1200;
                 stroke-dashoffset: 1200;
                 animation: drawHeartbeat 3s ease-in-out 1.4s forwards;
-                filter: drop-shadow(0 0 8px rgba(200,255,0,0.3));
+                filter: drop-shadow(0 0 8px rgba(106,154,250,0.5));
               }
 
               .pc-landing .heartbeat-glow {
-                stroke: var(--lime);
+                stroke: var(--purple);
                 stroke-width: 6;
                 fill: none;
-                opacity: 0.15;
+                opacity: 0.2;
                 stroke-dasharray: 1200;
                 stroke-dashoffset: 1200;
                 animation: drawHeartbeat 3s ease-in-out 1.4s forwards;
@@ -963,7 +973,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 display: inline-flex;
                 align-items: center;
                 gap: 10px;
-                background: var(--lime);
+                background: linear-gradient(135deg, var(--blue), var(--purple));
                 color: var(--bg-primary);
                 padding: 16px 32px;
                 border-radius: 12px;
@@ -977,7 +987,8 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
 
               .pc-landing .btn-primary:hover {
                 transform: translateY(-1px);
-                box-shadow: 0 8px 30px var(--lime-dim);
+                box-shadow: 0 8px 30px var(--blue-dim);
+                opacity: 0.92;
               }
 
               .pc-landing .btn-secondary {
@@ -1060,17 +1071,17 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .terminal-title { margin-left: 12px; font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary); }
               .pc-landing .terminal-body { padding: 24px; min-height: 200px; }
               .pc-landing .terminal-line { display: flex; gap: 12px; margin-bottom: 16px; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; }
-              .pc-landing .terminal-prompt { color: var(--lime); user-select: none; flex-shrink: 0; }
-              .pc-landing .terminal-prompt.athlete { color: var(--cyan); }
+              .pc-landing .terminal-prompt { color: var(--blue); user-select: none; flex-shrink: 0; }
+              .pc-landing .terminal-prompt.athlete { color: var(--purple); }
               .pc-landing .terminal-text { color: var(--text-secondary); }
               .pc-landing .terminal-text .highlight { color: var(--text-primary); }
-              .pc-landing .terminal-response { padding: 16px; background: rgba(200,255,0,0.04); border: 1px solid rgba(200,255,0,0.1); border-radius: 10px; margin-top: 8px; opacity: 0; transform: translateY(8px); }
+              .pc-landing .terminal-response { padding: 16px; background: rgba(106,154,250,0.04); border: 1px solid rgba(106,154,250,0.15); border-radius: 10px; margin-top: 8px; opacity: 0; transform: translateY(8px); }
               .pc-landing .terminal-response.show { opacity: 1; transform: translateY(0); transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
               .pc-landing .terminal-response p { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
-              .pc-landing .terminal-response .status { display: inline-flex; align-items: center; gap: 6px; color: var(--lime); font-weight: 500; margin-bottom: 8px; font-size: 12px; }
-              .pc-landing .terminal-response .response-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--lime); animation: pulse-dot 2s ease infinite; }
-              .pc-landing .terminal-response .response-highlight { color: var(--lime); }
-              .pc-landing .terminal-cursor { display: inline-block; width: 8px; height: 16px; background: var(--lime); animation: blink 1s step-end infinite; vertical-align: text-bottom; margin-left: 2px; }
+              .pc-landing .terminal-response .status { display: inline-flex; align-items: center; gap: 6px; color: var(--blue); font-weight: 500; margin-bottom: 8px; font-size: 12px; }
+              .pc-landing .terminal-response .response-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); animation: pulse-dot 2s ease infinite; }
+              .pc-landing .terminal-response .response-highlight { color: var(--purple); }
+              .pc-landing .terminal-cursor { display: inline-block; width: 8px; height: 16px; background: var(--blue); animation: blink 1s step-end infinite; vertical-align: text-bottom; margin-left: 2px; }
               @keyframes blink { 50% { opacity: 0; } }
 
               .pc-landing .problem,
@@ -1116,7 +1127,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 font-size: 12px;
                 text-transform: uppercase;
                 letter-spacing: 0.14em;
-                color: var(--lime);
+                color: var(--blue);
                 font-weight: 600;
                 margin-bottom: 24px;
                 font-family: var(--font-mono);
@@ -1138,7 +1149,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .problem p { font-size: 18px; color: var(--text-secondary); max-width: 600px; margin: 0 auto 64px; line-height: 1.75; }
               .pc-landing .problem-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: var(--border); border-radius: 16px; overflow: hidden; }
               .pc-landing .problem-stat { background: var(--bg-secondary); padding: 48px 32px; text-align: center; }
-              .pc-landing .problem-stat-number { font-family: var(--font-display); font-size: 52px; color: var(--lime); line-height: 1; margin-bottom: 12px; }
+              .pc-landing .problem-stat-number { font-family: var(--font-display); font-size: 52px; color: var(--blue); line-height: 1; margin-bottom: 12px; }
               .pc-landing .problem-stat-label { font-size: 14px; color: var(--text-secondary); max-width: 200px; margin: 0 auto; line-height: 1.5; }
 
               .pc-landing .simulation-inner,
@@ -1152,7 +1163,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .simulation-header h2 em,
               .pc-landing .pillars-header h2 em,
               .pc-landing .proof h2 em,
-              .pc-landing .conversion h2 em { font-style: italic; color: var(--lime); }
+              .pc-landing .conversion h2 em { font-style: italic; color: var(--blue); }
 
               .pc-landing .simulation-header p,
               .pc-landing .pillars-header p,
@@ -1168,7 +1179,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .sim-left { overflow: hidden; }
               .pc-landing .sim-status { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border); }
               .pc-landing .sim-status-left { display: flex; align-items: center; gap: 10px; }
-              .pc-landing .sim-status-dot { width: 8px; height: 8px; background: var(--lime); border-radius: 50%; animation: pulse-dot 2s ease infinite; }
+              .pc-landing .sim-status-dot { width: 8px; height: 8px; background: var(--blue); border-radius: 50%; animation: pulse-dot 2s ease infinite; }
               .pc-landing .sim-status-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary); font-weight: 500; }
               .pc-landing .sim-context { font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary); }
               .pc-landing .sim-meters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); }
@@ -1179,16 +1190,16 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .sim-meter-fill { height: 100%; border-radius: 2px; transition: width 1.5s ease, background 1s ease; position: absolute; left: 0; top: 0; }
               .pc-landing .meter-high { color: var(--coral); }
               .pc-landing .meter-mid { color: var(--amber); }
-              .pc-landing .meter-ok { color: var(--lime); }
+              .pc-landing .meter-ok { color: var(--blue); }
               .pc-landing .sim-flow { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
               .pc-landing .sim-flow-step { padding: 16px 20px; border-radius: 10px; border-left: 3px solid; opacity: 0; transform: translateX(-12px); transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
               .pc-landing .sim-flow-step.active { opacity: 1; transform: translateX(0); }
               .pc-landing .sim-flow-step.trigger { background: rgba(255,107,107,0.06); border-color: var(--coral); }
-              .pc-landing .sim-flow-step.prompt { background: rgba(200,255,0,0.04); border-color: var(--lime); }
+              .pc-landing .sim-flow-step.prompt { background: rgba(106,154,250,0.04); border-color: var(--blue); }
               .pc-landing .sim-flow-step.result { background: rgba(0,229,255,0.04); border-color: var(--cyan); }
               .pc-landing .sim-flow-step-label { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 6px; font-weight: 600; }
               .pc-landing .trigger .sim-flow-step-label { color: var(--coral); }
-              .pc-landing .prompt .sim-flow-step-label { color: var(--lime); }
+              .pc-landing .prompt .sim-flow-step-label { color: var(--blue); }
               .pc-landing .result .sim-flow-step-label { color: var(--cyan); }
               .pc-landing .sim-flow-step p { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
               .pc-landing .sim-right { padding: 32px; }
@@ -1200,31 +1211,31 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .intervention-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; }
               .pc-landing .intervention-icon.detect { background: rgba(255,107,107,0.12); }
               .pc-landing .intervention-icon.reset { background: rgba(0,229,255,0.12); }
-              .pc-landing .intervention-icon.reattach { background: rgba(200,255,0,0.12); }
-              .pc-landing .intervention-icon.lock { background: rgba(179,136,255,0.12); }
+              .pc-landing .intervention-icon.reattach { background: rgba(106,154,250,0.12); }
+              .pc-landing .intervention-icon.lock { background: rgba(160,94,248,0.12); }
               .pc-landing .intervention-content h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; color: var(--text-primary); }
               .pc-landing .intervention-content p { font-size: 13px; color: var(--text-tertiary); line-height: 1.5; }
 
               .pc-landing .pillars-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
               .pc-landing .pillar-card { padding: 36px 28px; transition: all 0.3s; position: relative; overflow: hidden; }
               .pc-landing .pillar-card::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
-              .pc-landing .pillar-card:nth-child(1)::after { background: var(--cyan); }
-              .pc-landing .pillar-card:nth-child(2)::after { background: var(--lime); }
-              .pc-landing .pillar-card:nth-child(3)::after { background: var(--purple); }
+              .pc-landing .pillar-card:nth-child(1)::after { background: var(--blue); }
+              .pc-landing .pillar-card:nth-child(2)::after { background: var(--purple); }
+              .pc-landing .pillar-card:nth-child(3)::after { background: var(--lime); }
               .pc-landing .pillar-card:hover { background: var(--bg-card-hover); border-color: var(--border-light); transform: translateY(-4px); }
               .pc-landing .pillar-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px; font-size: 22px; }
-              .pc-landing .pillar-card:nth-child(1) .pillar-icon { background: rgba(0,229,255,0.12); }
-              .pc-landing .pillar-card:nth-child(2) .pillar-icon { background: rgba(200,255,0,0.12); }
-              .pc-landing .pillar-card:nth-child(3) .pillar-icon { background: rgba(179,136,255,0.12); }
+              .pc-landing .pillar-card:nth-child(1) .pillar-icon { background: rgba(106,154,250,0.12); }
+              .pc-landing .pillar-card:nth-child(2) .pillar-icon { background: rgba(160,94,248,0.12); }
+              .pc-landing .pillar-card:nth-child(3) .pillar-icon { background: rgba(224,254,16,0.12); }
               .pc-landing .pillar-card h3 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
               .pc-landing .pillar-card .pillar-subtitle { font-size: 13px; color: var(--text-tertiary); font-family: var(--font-mono); margin-bottom: 16px; }
               .pc-landing .pillar-card > p { font-size: 14px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 24px; }
               .pc-landing .pillar-features { display: flex; flex-direction: column; gap: 10px; }
               .pc-landing .pillar-feature { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); }
               .pc-landing .pillar-feature-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
-              .pc-landing .pillar-card:nth-child(1) .pillar-feature-dot { background: var(--cyan); }
-              .pc-landing .pillar-card:nth-child(2) .pillar-feature-dot { background: var(--lime); }
-              .pc-landing .pillar-card:nth-child(3) .pillar-feature-dot { background: var(--purple); }
+              .pc-landing .pillar-card:nth-child(1) .pillar-feature-dot { background: var(--blue); }
+              .pc-landing .pillar-card:nth-child(2) .pillar-feature-dot { background: var(--purple); }
+              .pc-landing .pillar-card:nth-child(3) .pillar-feature-dot { background: var(--lime); }
 
               .pc-landing .proof-inner { max-width: 1000px; text-align: center; }
               .pc-landing .proof h2 { margin-bottom: 0; }
@@ -1250,12 +1261,12 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .workflow-card > p { font-size: 15px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 28px; }
               .pc-landing .workflow-features { display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; }
               .pc-landing .workflow-feature { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-secondary); }
-              .pc-landing .workflow-feature svg { flex-shrink: 0; color: var(--lime); }
+              .pc-landing .workflow-feature svg { flex-shrink: 0; color: var(--blue); }
               .pc-landing .mini-dash { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-top: 8px; }
               .pc-landing .mini-dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
               .pc-landing .mini-dash-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-              .pc-landing .mini-dash-live { font-family: var(--font-mono); font-size: 10px; color: var(--lime); display: flex; align-items: center; gap: 5px; }
-              .pc-landing .mini-dash-live::before { content: ''; width: 6px; height: 6px; background: var(--lime); border-radius: 50%; }
+              .pc-landing .mini-dash-live { font-family: var(--font-mono); font-size: 10px; color: var(--blue); display: flex; align-items: center; gap: 5px; }
+              .pc-landing .mini-dash-live::before { content: ''; width: 6px; height: 6px; background: var(--blue); border-radius: 50%; }
               .pc-landing .mini-dash-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
               .pc-landing .mini-stat { text-align: center; padding: 12px 8px; background: var(--bg-card); border-radius: 8px; }
               .pc-landing .mini-stat-value { font-size: 22px; font-weight: 700; }
@@ -1268,12 +1279,12 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .roster-name { font-weight: 500; font-size: 13px; }
               .pc-landing .roster-status { font-size: 11px; color: var(--text-tertiary); }
               .pc-landing .roster-score { font-family: var(--font-mono); font-weight: 600; font-size: 13px; }
-              .pc-landing .score-green { color: var(--lime); }
+              .pc-landing .score-green { color: var(--blue); }
               .pc-landing .score-yellow { color: #ffc107; }
               .pc-landing .score-red { color: var(--coral); }
 
               .pc-landing .conversion-inner { max-width: 760px; text-align: center; position: relative; }
-              .pc-landing .conversion-inner::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px; height: 400px; background: radial-gradient(ellipse, var(--lime-dim) 0%, transparent 70%); pointer-events: none; }
+              .pc-landing .conversion-inner::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px; height: 400px; background: radial-gradient(ellipse, var(--blue-dim) 0%, transparent 70%); pointer-events: none; }
               .pc-landing .conversion h2 { margin-bottom: 20px; position: relative; }
               .pc-landing .conversion > .conversion-inner > p { font-size: 18px; color: var(--text-secondary); max-width: 480px; margin: 0 auto 48px; line-height: 1.75; position: relative; }
               .pc-landing .conversion-ctas { display: flex; gap: 16px; justify-content: center; position: relative; margin-bottom: 48px; }
@@ -1290,9 +1301,9 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .footer-col a:hover { color: var(--text-primary); }
               .pc-landing .footer-subscribe-input { display: flex; gap: 8px; margin-top: 12px; }
               .pc-landing .footer-subscribe-input input { flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--text-primary); font-family: var(--font-body); outline: none; transition: border-color 0.2s; }
-              .pc-landing .footer-subscribe-input input:focus { border-color: var(--lime); }
+              .pc-landing .footer-subscribe-input input:focus { border-color: var(--blue); }
               .pc-landing .footer-subscribe-input input::placeholder { color: var(--text-tertiary); }
-              .pc-landing .footer-subscribe-input button { background: var(--lime); color: var(--bg-primary); border: none; border-radius: 8px; padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font-body); transition: opacity 0.2s; }
+               .pc-landing .footer-subscribe-input button { background: linear-gradient(135deg, var(--blue), var(--purple)); color: var(--bg-primary); border: none; border-radius: 8px; padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font-body); transition: opacity 0.2s; }
               .pc-landing .footer-subscribe-input button:hover { opacity: 0.9; }
               .pc-landing .footer-bottom { max-width: 1100px; margin: 48px auto 0; padding-top: 24px; border-top: 1px solid var(--border); text-align: center; font-size: 13px; color: var(--text-tertiary); }
 
