@@ -86,14 +86,14 @@ const PulseCheckPage: NextPage = () => {
     const [showCoachLogisticsCard, setShowCoachLogisticsCard] = useState(false);
     const [isAnimating, setIsAnimating] = useState(false);
     const [isReversing, setIsReversing] = useState(false);
-    
+
     // Waitlist form state
     const [showWaitlistForm, setShowWaitlistForm] = useState(false);
     const [waitlistUserType, setWaitlistUserType] = useState<'athlete' | 'coach' | undefined>(undefined);
 
     // Mobile PulseCheck header menu (mirrors desktop More menu)
     const [showMobileMoreMenu, setShowMobileMoreMenu] = useState(false);
-    
+
     const questions = [
         "What was my sleep like last night?",
         "Am I staying on track with my nutrition goals?",
@@ -165,8 +165,8 @@ const PulseCheckPage: NextPage = () => {
     // Check if user needs to see Nora onboarding (for logged-in users)
     useEffect(() => {
         if (currentUser && !showMarketing) {
-            const hasSeenNoraOnboarding = typeof window !== 'undefined' 
-                ? localStorage.getItem(STORAGE_KEY_NORA_ONBOARDING) 
+            const hasSeenNoraOnboarding = typeof window !== 'undefined'
+                ? localStorage.getItem(STORAGE_KEY_NORA_ONBOARDING)
                 : null;
             if (hasSeenNoraOnboarding !== 'true') {
                 setShowNoraOnboarding(true);
@@ -267,7 +267,7 @@ const PulseCheckPage: NextPage = () => {
                     // Start reverse morphing animation for sleep card
                     setIsReversing(true);
                     setShowSleepCard(false);
-                    
+
                     // Complete the reverse animation to typing interface
                     setTimeout(() => {
                         setIsAnimating(false);
@@ -280,7 +280,7 @@ const PulseCheckPage: NextPage = () => {
                     // Start reverse morphing animation for nutrition card
                     setIsReversing(true);
                     setShowNutritionCard(false);
-                    
+
                     // Complete the reverse animation to typing interface
                     setTimeout(() => {
                         setIsAnimating(false);
@@ -293,7 +293,7 @@ const PulseCheckPage: NextPage = () => {
                     // Start reverse morphing animation for breathing card
                     setIsReversing(true);
                     setShowBreathingCard(false);
-                    
+
                     // Complete the reverse animation to typing interface
                     setTimeout(() => {
                         setIsAnimating(false);
@@ -306,7 +306,7 @@ const PulseCheckPage: NextPage = () => {
                     // Start reverse morphing animation for workout card
                     setIsReversing(true);
                     setShowWorkoutCard(false);
-                    
+
                     // Complete the reverse animation to typing interface
                     setTimeout(() => {
                         setIsAnimating(false);
@@ -319,7 +319,7 @@ const PulseCheckPage: NextPage = () => {
                     // Start reverse morphing animation for progression card
                     setIsReversing(true);
                     setShowProgressionCard(false);
-                    
+
                     // Complete the reverse animation to typing interface
                     setTimeout(() => {
                         setIsAnimating(false);
@@ -332,7 +332,7 @@ const PulseCheckPage: NextPage = () => {
                     // Start reverse morphing animation for coach notify card
                     setIsReversing(true);
                     setShowCoachNotifyCard(false);
-                    
+
                     // Complete the reverse animation to typing interface
                     setTimeout(() => {
                         setIsAnimating(false);
@@ -345,7 +345,7 @@ const PulseCheckPage: NextPage = () => {
                     // Start reverse morphing animation for coach reasoning card
                     setIsReversing(true);
                     setShowCoachReasoningCard(false);
-                    
+
                     // Complete the reverse animation to typing interface
                     setTimeout(() => {
                         setIsAnimating(false);
@@ -358,7 +358,7 @@ const PulseCheckPage: NextPage = () => {
                     // Start reverse morphing animation for coach logistics card
                     setIsReversing(true);
                     setShowCoachLogisticsCard(false);
-                    
+
                     // Complete the reverse animation to typing interface
                     setTimeout(() => {
                         setIsAnimating(false);
@@ -379,13 +379,12 @@ const PulseCheckPage: NextPage = () => {
 
     // Sleep Card Component
     const SleepCard: React.FC = () => (
-        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${
-            isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
-        }`}>
+        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
+            }`}>
             <div className="relative bg-zinc-900/90 backdrop-blur-sm rounded-3xl p-8 ring-1 ring-teal-500/20 shadow-2xl transform transition-all duration-800 ease-out">
                 {/* Glow Effect */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-teal-500/20 to-teal-400/20 rounded-3xl blur opacity-75"></div>
-                
+
                 <div className={`relative transition-opacity duration-400 ${isReversing ? 'opacity-0' : 'opacity-100'}`}>
                     {/* Header */}
                     <div className="flex items-center justify-between mb-8">
@@ -405,7 +404,7 @@ const PulseCheckPage: NextPage = () => {
                                 <FaBed className="h-7 w-7 text-teal-400" />
                             </div>
                         </div>
-                        
+
                         <div className="flex-1">
                             <div className="text-3xl font-bold text-white mb-1">7h 30m</div>
                             <div className="text-zinc-400 text-sm">Total sleep time</div>
@@ -421,7 +420,7 @@ const PulseCheckPage: NextPage = () => {
                                 <div className="text-sm font-semibold text-white">10:30 PM</div>
                             </div>
                         </div>
-                        
+
                         <div className="flex items-center gap-3">
                             <div className="text-right">
                                 <div className="text-xs font-medium text-orange-400 mb-1">Wake Time</div>
@@ -469,13 +468,12 @@ const PulseCheckPage: NextPage = () => {
 
     // Nutrition Card Component
     const NutritionCard: React.FC = () => (
-        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${
-            isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
-        }`}>
+        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
+            }`}>
             <div className="relative bg-zinc-900/90 backdrop-blur-sm rounded-3xl p-8 ring-1 ring-yellow-400/20 shadow-2xl transform transition-all duration-800 ease-out">
                 {/* Glow Effect */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400/20 to-orange-400/20 rounded-3xl blur opacity-75"></div>
-                
+
                 <div className={`relative transition-opacity duration-400 ${isReversing ? 'opacity-0' : 'opacity-100'}`}>
                     {/* Header */}
                     <div className="flex items-center justify-between mb-8">
@@ -495,7 +493,7 @@ const PulseCheckPage: NextPage = () => {
                                 <FaUtensils className="h-7 w-7 text-green-400" />
                             </div>
                         </div>
-                        
+
                         <div className="flex-1">
                             <div className="text-xl font-bold text-white mb-1">Fueling Performance</div>
                             <div className="text-zinc-400 text-sm">Your nutrition is supporting your goals with balanced macros</div>
@@ -509,7 +507,7 @@ const PulseCheckPage: NextPage = () => {
                             <span className="text-sm font-semibold text-green-400">Foods You Ate Today</span>
                             <span className="ml-auto text-xs text-zinc-400">4 meals</span>
                         </div>
-                        
+
                         {/* Food Images Grid */}
                         <div className="grid grid-cols-4 gap-2 mb-3">
                             {/* Sample food images placeholders */}
@@ -526,7 +524,7 @@ const PulseCheckPage: NextPage = () => {
                                 <span className="text-xs">🍌</span>
                             </div>
                         </div>
-                        
+
                         {/* Meal Names */}
                         <div className="flex gap-2 flex-wrap">
                             <span className="px-2 py-1 bg-zinc-700/50 text-xs text-zinc-300 rounded border border-zinc-600">Breakfast Bowl</span>
@@ -550,7 +548,7 @@ const PulseCheckPage: NextPage = () => {
                             <FaWeight className="h-4 w-4 text-green-400" />
                             <span className="text-sm font-semibold text-green-400">Macronutrients</span>
                         </div>
-                        
+
                         <div className="grid grid-cols-3 gap-4">
                             {/* Carbohydrates */}
                             <div>
@@ -558,14 +556,14 @@ const PulseCheckPage: NextPage = () => {
                                 <div className="text-lg font-bold text-white">285g</div>
                                 <div className="text-xs text-zinc-400">46%</div>
                             </div>
-                            
+
                             {/* Protein */}
                             <div>
                                 <div className="text-xs font-medium text-teal-400 mb-1">Protein</div>
                                 <div className="text-lg font-bold text-white">165g</div>
                                 <div className="text-xs text-zinc-400">27%</div>
                             </div>
-                            
+
                             {/* Fat */}
                             <div>
                                 <div className="text-xs font-medium text-yellow-400 mb-1">Fat</div>
@@ -581,7 +579,7 @@ const PulseCheckPage: NextPage = () => {
                             <FaExclamationTriangle className="h-4 w-4 text-red-400" />
                             <span className="text-sm font-semibold text-red-400">Nutrient Alert</span>
                         </div>
-                        
+
                         <div className="flex items-center justify-between">
                             <div>
                                 <div className="text-sm font-medium text-white">Vitamin D</div>
@@ -597,12 +595,12 @@ const PulseCheckPage: NextPage = () => {
                             <FaWrench className="h-4 w-4 text-green-400" />
                             <span className="text-sm font-semibold text-green-400">Fix It</span>
                         </div>
-                        
+
                         <div className="mb-3">
                             <div className="text-xs text-green-400 mb-2">Vitamin D - LOW</div>
                             <div className="text-xs text-zinc-400 mb-2">Your current: 12 IU</div>
                         </div>
-                        
+
                         {/* Supplement Recommendations */}
                         <div className="grid grid-cols-2 gap-2">
                             <div className="p-2 bg-zinc-700/50 rounded-lg border border-zinc-600">
@@ -622,7 +620,7 @@ const PulseCheckPage: NextPage = () => {
                             <FaEye className="h-4 w-4 text-green-400" />
                             <span className="text-sm font-semibold text-green-400">Nutrition Analysis</span>
                         </div>
-                        
+
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <div className="text-xs text-zinc-400 mb-1">Macro Balance</div>
@@ -641,7 +639,7 @@ const PulseCheckPage: NextPage = () => {
                             <FaBrain className="h-4 w-4 text-purple-400" />
                             <span className="text-sm font-semibold text-purple-400">Mental Game</span>
                         </div>
-                        
+
                         <div className="mb-3">
                             <div className="text-xs text-purple-400 mb-2">Relationship with Food</div>
                             <div className="text-sm font-medium text-white mb-2">Balanced & Mindful</div>
@@ -649,7 +647,7 @@ const PulseCheckPage: NextPage = () => {
                                 You're maintaining a healthy relationship with food, viewing it as fuel rather than reward/punishment. No signs of restrictive or emotional eating patterns.
                             </div>
                         </div>
-                        
+
                         <div className="grid grid-cols-2 gap-3">
                             <div className="p-2 bg-zinc-800/60 rounded-lg">
                                 <div className="text-xs text-green-400 mb-1">Food Stress</div>
@@ -690,13 +688,12 @@ const PulseCheckPage: NextPage = () => {
 
     // Breathing Exercise Card Component
     const BreathingCard: React.FC = () => (
-        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${
-            isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
-        }`}>
+        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
+            }`}>
             <div className="relative bg-zinc-900/90 backdrop-blur-sm rounded-3xl p-8 ring-1 ring-blue-400/20 shadow-2xl transform transition-all duration-800 ease-out">
                 {/* Glow Effect */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-400/20 to-indigo-400/20 rounded-3xl blur opacity-75"></div>
-                
+
                 <div className={`relative transition-opacity duration-400 ${isReversing ? 'opacity-0' : 'opacity-100'}`}>
                     {/* Header */}
                     <div className="mb-8">
@@ -718,7 +715,7 @@ const PulseCheckPage: NextPage = () => {
                                     <FaLungs className="h-8 w-8 text-blue-400" />
                                 </div>
                             </div>
-                            
+
                             {/* Content */}
                             <div className="flex-1">
                                 <h4 className="text-lg font-semibold text-white mb-1">
@@ -731,7 +728,7 @@ const PulseCheckPage: NextPage = () => {
                                     Inhale 4s → Hold 7s → Exhale 8s
                                 </div>
                             </div>
-                            
+
                             {/* Play Button */}
                             <div className="flex-shrink-0">
                                 <div className="w-12 h-12 bg-blue-500/20 border border-blue-400/40 rounded-full flex items-center justify-center group-hover:bg-blue-500/30 transition-colors duration-300">
@@ -794,7 +791,7 @@ const PulseCheckPage: NextPage = () => {
                         <h5 className="text-sm font-semibold text-white mb-3">
                             Other Calming Techniques
                         </h5>
-                        
+
                         <div className="grid grid-cols-1 gap-2">
                             <button className="flex items-center justify-between p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/30 hover:bg-zinc-800/50 transition-colors duration-200 group">
                                 <div className="flex items-center gap-3">
@@ -805,7 +802,7 @@ const PulseCheckPage: NextPage = () => {
                                 </div>
                                 <span className="text-xs text-zinc-400 group-hover:text-zinc-300">5 min</span>
                             </button>
-                            
+
                             <button className="flex items-center justify-between p-3 bg-zinc-800/30 rounded-lg border border-zinc-700/30 hover:bg-zinc-800/50 transition-colors duration-200 group">
                                 <div className="flex items-center gap-3">
                                     <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
@@ -835,13 +832,12 @@ const PulseCheckPage: NextPage = () => {
 
     // Workout Analytics Card Component
     const WorkoutAnalyticsCard: React.FC = () => (
-        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${
-            isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
-        }`}>
+        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
+            }`}>
             <div className="relative bg-zinc-900/90 backdrop-blur-sm rounded-3xl p-8 ring-1 ring-purple-400/20 shadow-2xl transform transition-all duration-800 ease-out">
                 {/* Glow Effect */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-purple-400/20 to-pink-400/20 rounded-3xl blur opacity-75"></div>
-                
+
                 <div className={`relative transition-opacity duration-400 ${isReversing ? 'opacity-0' : 'opacity-100'}`}>
                     {/* Header */}
                     <div className="flex items-center justify-between mb-8">
@@ -862,7 +858,7 @@ const PulseCheckPage: NextPage = () => {
                                     <FaDumbbell className="h-8 w-8 text-purple-400" />
                                 </div>
                             </div>
-                            
+
                             <div className="flex-1">
                                 <div className="text-3xl font-bold text-white mb-1">315 lbs</div>
                                 <div className="text-zinc-400 text-sm mb-2">Your heaviest squat</div>
@@ -881,7 +877,7 @@ const PulseCheckPage: NextPage = () => {
                             <div className="text-2xl font-bold text-blue-400">24</div>
                             <div className="text-xs text-zinc-400">This month: 8</div>
                         </div>
-                        
+
                         <div className="p-4 bg-zinc-800/40 rounded-xl border border-zinc-700/50">
                             <div className="flex items-center gap-2 mb-2">
                                 <FaChartLine className="h-4 w-4 text-green-400" />
@@ -898,7 +894,7 @@ const PulseCheckPage: NextPage = () => {
                             <FaChartLine className="h-4 w-4 text-purple-400" />
                             Recent Progress (Last 6 Workouts)
                         </h5>
-                        
+
                         {/* Simple progress visualization */}
                         <div className="space-y-2">
                             {[
@@ -929,7 +925,7 @@ const PulseCheckPage: NextPage = () => {
                             <FaWeight className="h-4 w-4 text-orange-400" />
                             Strength Analysis
                         </h5>
-                        
+
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
                                 <span className="text-xs text-zinc-400">1RM Estimated:</span>
@@ -963,13 +959,12 @@ const PulseCheckPage: NextPage = () => {
 
     // Progression Prediction Card Component
     const ProgressionCard: React.FC = () => (
-        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${
-            isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
-        }`}>
+        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
+            }`}>
             <div className="relative bg-zinc-900/90 backdrop-blur-sm rounded-3xl p-8 ring-1 ring-emerald-400/20 shadow-2xl transform transition-all duration-800 ease-out">
                 {/* Glow Effect */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-emerald-400/20 to-teal-400/20 rounded-3xl blur opacity-75"></div>
-                
+
                 <div className={`relative transition-opacity duration-400 ${isReversing ? 'opacity-0' : 'opacity-100'}`}>
                     {/* Header */}
                     <div className="mb-8">
@@ -987,7 +982,7 @@ const PulseCheckPage: NextPage = () => {
                             <FaArrowUp className="h-5 w-5 text-emerald-400" />
                             Next Milestones
                         </h4>
-                        
+
                         <div className="space-y-4">
                             {[
                                 { milestone: '350 lbs', timeframe: '6-8 weeks', probability: 'High', color: 'text-green-400' },
@@ -1018,7 +1013,7 @@ const PulseCheckPage: NextPage = () => {
                             <FaRocket className="h-4 w-4 text-blue-400" />
                             Recommended Training Adjustments
                         </h5>
-                        
+
                         <div className="space-y-3">
                             <div className="flex items-start gap-3 p-3 bg-zinc-900/40 rounded-lg">
                                 <div className="w-6 h-6 bg-blue-500/20 rounded-full flex items-center justify-center mt-0.5">
@@ -1029,7 +1024,7 @@ const PulseCheckPage: NextPage = () => {
                                     <div className="text-xs text-zinc-400">Move from 2x to 3x per week for faster adaptation</div>
                                 </div>
                             </div>
-                            
+
                             <div className="flex items-start gap-3 p-3 bg-zinc-900/40 rounded-lg">
                                 <div className="w-6 h-6 bg-purple-500/20 rounded-full flex items-center justify-center mt-0.5">
                                     <span className="text-xs font-bold text-purple-400">2</span>
@@ -1039,7 +1034,7 @@ const PulseCheckPage: NextPage = () => {
                                     <div className="text-xs text-zinc-400">Build strength out of the hole for PR attempts</div>
                                 </div>
                             </div>
-                            
+
                             <div className="flex items-start gap-3 p-3 bg-zinc-900/40 rounded-lg">
                                 <div className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center mt-0.5">
                                     <span className="text-xs font-bold text-green-400">3</span>
@@ -1058,7 +1053,7 @@ const PulseCheckPage: NextPage = () => {
                             <FaChartLine className="h-4 w-4 text-emerald-400" />
                             Progression Confidence
                         </h5>
-                        
+
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <div className="text-xs text-zinc-400 mb-1">Consistency Score</div>
@@ -1088,13 +1083,12 @@ const PulseCheckPage: NextPage = () => {
 
     // Coach Notification Card Component
     const CoachNotifyCard: React.FC = () => (
-        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${
-            isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
-        }`}>
+        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
+            }`}>
             <div className="relative bg-zinc-900/90 backdrop-blur-sm rounded-3xl p-8 ring-1 ring-orange-400/20 shadow-2xl transform transition-all duration-800 ease-out">
                 {/* Glow Effect */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-orange-400/20 to-red-400/20 rounded-3xl blur opacity-75"></div>
-                
+
                 <div className={`relative transition-opacity duration-400 ${isReversing ? 'opacity-0' : 'opacity-100'}`}>
                     {/* Header */}
                     <div className="mb-8">
@@ -1139,7 +1133,7 @@ const PulseCheckPage: NextPage = () => {
                                 <p className="text-xs text-zinc-400">Strength & Conditioning Specialist</p>
                             </div>
                         </div>
-                        
+
                         <div className="grid grid-cols-2 gap-3 text-xs">
                             <div>
                                 <span className="text-zinc-400">Last Contact:</span>
@@ -1155,20 +1149,20 @@ const PulseCheckPage: NextPage = () => {
                     {/* Notification Options */}
                     <div className="mb-6 space-y-3">
                         <h5 className="text-sm font-semibold text-white">Notification Options</h5>
-                        
+
                         <button className="w-full p-4 bg-green-500/15 border border-green-500/30 rounded-xl hover:bg-green-500/20 transition-colors duration-200 group">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <FaThumbsUp className="h-5 w-5 text-green-400" />
                                     <div className="text-left">
-                                                                            <div className="text-sm font-medium text-white">Yes, reach out to Coach Calvin</div>
-                                    <div className="text-xs text-zinc-400">Share my stress patterns and recent data</div>
+                                        <div className="text-sm font-medium text-white">Yes, reach out to Coach Calvin</div>
+                                        <div className="text-xs text-zinc-400">Share my stress patterns and recent data</div>
                                     </div>
                                 </div>
                                 <div className="text-xs text-green-400 font-medium">Recommended</div>
                             </div>
                         </button>
-                        
+
                         <button className="w-full p-4 bg-zinc-800/40 border border-zinc-700/50 rounded-xl hover:bg-zinc-800/60 transition-colors duration-200">
                             <div className="flex items-center gap-3">
                                 <FaThumbsDown className="h-5 w-5 text-zinc-400" />
@@ -1223,13 +1217,12 @@ const PulseCheckPage: NextPage = () => {
 
     // Coach Reasoning Card Component
     const CoachReasoningCard: React.FC = () => (
-        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${
-            isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
-        }`}>
+        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
+            }`}>
             <div className="relative bg-zinc-900/90 backdrop-blur-sm rounded-3xl p-8 ring-1 ring-indigo-400/20 shadow-2xl transform transition-all duration-800 ease-out">
                 {/* Glow Effect */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-indigo-400/20 to-blue-400/20 rounded-3xl blur opacity-75"></div>
-                
+
                 <div className={`relative transition-opacity duration-400 ${isReversing ? 'opacity-0' : 'opacity-100'}`}>
                     {/* Header */}
                     <div className="mb-8">
@@ -1265,7 +1258,7 @@ const PulseCheckPage: NextPage = () => {
                             <FaBrain className="h-4 w-4 text-blue-400" />
                             Coach Calvin's Thought Process
                         </h5>
-                        
+
                         <div className="space-y-4">
                             <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-700/30">
                                 <h6 className="text-xs font-semibold text-blue-400 mb-2">1. Fatigue Management</h6>
@@ -1273,14 +1266,14 @@ const PulseCheckPage: NextPage = () => {
                                     "Your HRV has been declining for 10 days, and sleep quality dropped 15%. A deload prevents overreaching while maintaining neural efficiency through heavy singles."
                                 </p>
                             </div>
-                            
+
                             <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-700/30">
                                 <h6 className="text-xs font-semibold text-green-400 mb-2">2. Competition Preparation</h6>
                                 <p className="text-xs text-zinc-300 leading-relaxed">
                                     "With competition in 3 weeks, this deload ensures peak nervous system readiness. The reduced volume allows supercompensation while maintaining movement patterns."
                                 </p>
                             </div>
-                            
+
                             <div className="p-3 bg-zinc-900/50 rounded-lg border border-zinc-700/30">
                                 <h6 className="text-xs font-semibold text-purple-400 mb-2">3. Technical Refinement</h6>
                                 <p className="text-xs text-zinc-300 leading-relaxed">
@@ -1296,7 +1289,7 @@ const PulseCheckPage: NextPage = () => {
                             <FaChartLine className="h-4 w-4 text-emerald-400" />
                             Supporting Data Points
                         </h5>
-                        
+
                         <div className="grid grid-cols-1 gap-3">
                             <div className="flex items-center justify-between p-2 bg-zinc-900/40 rounded">
                                 <span className="text-xs text-zinc-400">Training Stress Score (7-day avg):</span>
@@ -1356,13 +1349,12 @@ const PulseCheckPage: NextPage = () => {
 
     // Coach Logistics Card Component
     const CoachLogisticsCard: React.FC = () => (
-        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${
-            isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
-        }`}>
+        <div className={`w-full max-w-2xl mx-auto transform transition-all duration-1000 ease-out ${isReversing ? 'animate-fadeOutScale' : 'animate-fadeInScale'
+            }`}>
             <div className="relative bg-zinc-900/90 backdrop-blur-sm rounded-3xl p-8 ring-1 ring-cyan-400/20 shadow-2xl transform transition-all duration-800 ease-out">
                 {/* Glow Effect */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-cyan-400/20 to-teal-400/20 rounded-3xl blur opacity-75"></div>
-                
+
                 <div className={`relative transition-opacity duration-400 ${isReversing ? 'opacity-0' : 'opacity-100'}`}>
                     {/* Header */}
                     <div className="mb-8">
@@ -1390,7 +1382,7 @@ const PulseCheckPage: NextPage = () => {
                             <FaClipboardList className="h-4 w-4 text-cyan-400" />
                             Full Competition Day Timeline
                         </h5>
-                        
+
                         <div className="space-y-3">
                             {[
                                 { time: '6:30 AM', event: 'Team Check-in', detail: 'Coach Calvin - Warm-up area', status: 'upcoming' },
@@ -1400,9 +1392,8 @@ const PulseCheckPage: NextPage = () => {
                                 { time: '10:30 AM', event: 'Competition Begins', detail: 'Men\'s Physique - First Call', status: 'competition' },
                             ].map((item, index) => (
                                 <div key={index} className="flex items-center gap-3 p-3 bg-zinc-900/40 rounded-lg">
-                                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${
-                                        item.status === 'competition' ? 'bg-orange-400' : 'bg-cyan-400'
-                                    }`}></div>
+                                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${item.status === 'competition' ? 'bg-orange-400' : 'bg-cyan-400'
+                                        }`}></div>
                                     <div className="flex-1">
                                         <div className="flex items-center justify-between">
                                             <span className="text-sm font-medium text-white">{item.event}</span>
@@ -1421,7 +1412,7 @@ const PulseCheckPage: NextPage = () => {
                             <FaCheckCircle className="h-4 w-4 text-green-400" />
                             Coach Calvin's Pre-Comp Checklist
                         </h5>
-                        
+
                         <div className="space-y-2">
                             {[
                                 'Competition tan applied (tonight)',
@@ -1543,13 +1534,12 @@ const PulseCheckPage: NextPage = () => {
                     ))}
                 </ul>
             </div>
-            <a 
-                href={buttonAction} 
-                className={`mt-8 block rounded-xl px-4 py-3 text-center text-sm font-semibold leading-6 transition-all duration-200 ${
-                    popular 
-                        ? 'bg-gradient-to-r from-[#E0FE10] to-lime-400 text-zinc-900 shadow-lg hover:shadow-xl hover:scale-105' 
-                        : 'bg-white/10 text-white ring-1 ring-inset ring-white/20 hover:bg-white/20'
-                }`}
+            <a
+                href={buttonAction}
+                className={`mt-8 block rounded-xl px-4 py-3 text-center text-sm font-semibold leading-6 transition-all duration-200 ${popular
+                    ? 'bg-gradient-to-r from-[#E0FE10] to-lime-400 text-zinc-900 shadow-lg hover:shadow-xl hover:scale-105'
+                    : 'bg-white/10 text-white ring-1 ring-inset ring-white/20 hover:bg-white/20'
+                    }`}
             >
                 {buttonText}
             </a>
@@ -1594,10 +1584,10 @@ const PulseCheckPage: NextPage = () => {
                     }}
                     pageOgUrl="https://fitwithpulse.ai/PulseCheck"
                 />
-                
+
                 {/* Side/Bottom Navigation */}
                 <SideNav onAbout={handleBackToMarketing} />
-                
+
                 {/* Main Content Area */}
                 <div className="md:ml-20 lg:ml-64 bg-[#0a0a0b] min-h-screen">
                     {/* Glassmorphic Header */}
@@ -1605,11 +1595,11 @@ const PulseCheckPage: NextPage = () => {
                         {/* Glass background */}
                         <div className="backdrop-blur-xl bg-zinc-900/60 border-b border-white/10">
                             {/* Chromatic reflection line */}
-                            <div 
+                            <div
                                 className="absolute top-0 left-0 right-0 h-[1px] opacity-40"
                                 style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.4), rgba(59,130,246,0.3), transparent)' }}
                             />
-                            
+
                             <div className="flex items-center justify-between px-6 py-3">
                                 <div className="flex items-center gap-3">
                                     {/* Desktop: PulseCheck with glow */}
@@ -1647,15 +1637,15 @@ const PulseCheckPage: NextPage = () => {
                                                 <div className="absolute mt-3 w-60 z-50">
                                                     {/* Glow effect */}
                                                     <div className="absolute -inset-1 bg-[#E0FE10]/10 rounded-2xl blur-xl" />
-                                                    
+
                                                     {/* Glass card */}
                                                     <div className="relative rounded-xl backdrop-blur-xl bg-zinc-900/90 border border-white/10 overflow-hidden">
                                                         {/* Chromatic top line */}
-                                                        <div 
+                                                        <div
                                                             className="absolute top-0 left-0 right-0 h-[1px] opacity-60"
                                                             style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.5), transparent)' }}
                                                         />
-                                                        
+
                                                         {/* App Switcher – go back to Pulse home */}
                                                         <button
                                                             onClick={() => {
@@ -1742,7 +1732,7 @@ const PulseCheckPage: NextPage = () => {
                         <Chat />
                     </div>
                 </div>
-                
+
                 <SignInModal isVisible={isSignInModalOpen} onClose={() => setIsSignInModalOpen(false)} />
             </>
         );
@@ -1754,13 +1744,13 @@ const PulseCheckPage: NextPage = () => {
             <PageHead
                 metaData={{
                     pageId: "pulse-check",
-                    pageTitle: "Pulse Check — Always-On Sport Psychology",
+                    pageTitle: "PulseCheck — Always-On Sport Psychology",
                     metaDescription: "Always-On Sport Psychology for Athletes & Their Coaches. Pair subjective mood with objective biometrics to unlock peak performance.",
                     lastUpdated: new Date().toISOString()
                 }}
                 pageOgUrl="https://fitwithpulse.ai/pulse-check"
             />
-            
+
             <main className="isolate">
                 {/* Hero Section */}
                 <div className="relative min-h-screen flex items-center justify-center px-6 sm:px-8" ref={heroRef}>
@@ -1771,30 +1761,30 @@ const PulseCheckPage: NextPage = () => {
                         <div className="absolute bottom-20 right-20 w-80 h-80 bg-lime-400/5 rounded-full filter blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
                         <div className="absolute top-1/2 left-1/3 w-64 h-64 bg-teal-400/5 rounded-full filter blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
                     </div>
-                    
+
                     {/* Grid Pattern */}
                     <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] bg-repeat opacity-5"></div>
-                    
+
                     {/* Hero Content */}
                     <div className="relative z-20 max-w-7xl mx-auto px-6 lg:px-8 text-center">
                         <div className="max-w-4xl mx-auto">
                             <div className="mb-8">
                                 <span className="inline-flex items-center rounded-full bg-gradient-to-r from-[#E0FE10]/10 to-lime-400/10 px-6 py-2 text-sm font-medium text-[#E0FE10] ring-1 ring-inset ring-[#E0FE10]/20 backdrop-blur">
-                                    <FaHeart className="mr-2 h-4 w-4" />
-                                    The Intelligent Layer between the Athletes & Coach
+                                    <FaShieldAlt className="mr-2 h-4 w-4" />
+                                    The Complete Readiness Triad for Elite Programs
                                 </span>
                             </div>
-                            
+
                             <h1 className="text-6xl md:text-8xl font-bold tracking-tight mb-8">
                                 <span className="bg-gradient-to-r from-white via-zinc-100 to-zinc-300 bg-clip-text text-transparent">
-                                    Pulse Check
+                                    PulseCheck
                                 </span>
                             </h1>
-                            
+
                             <p className="text-xl md:text-2xl text-zinc-400 mb-12 leading-relaxed">
-                                Optimize performance • Measure readiness • Understand your coach
+                                AI Athlete Check-Ins • Coach Intelligence • Clinical Escalation
                             </p>
-                            
+
                             {/* Typing Animation Container / Sleep Card / Nutrition Card */}
                             <div className="max-w-2xl mx-auto mb-12 relative">
                                 {showSleepCard ? (
@@ -1814,93 +1804,87 @@ const PulseCheckPage: NextPage = () => {
                                 ) : showCoachLogisticsCard ? (
                                     <CoachLogisticsCard />
                                 ) : (
-                                    <div className={`relative transition-all duration-800 ease-out ${
-                                        isAnimating ? 'transform scale-105 opacity-90' : 'transform scale-100 opacity-100'
-                                    } ${currentQuestionIndex > 0 ? 'animate-fadeInScale' : ''}`}>
-                                        <div className={`relative bg-zinc-900/80 backdrop-blur-sm p-8 ring-1 shadow-2xl transition-all duration-800 ease-out ${
-                                            isAnimating 
-                                                ? currentQuestionIndex === 0 
-                                                    ? 'ring-teal-500/30 rounded-3xl'
-                                                    : currentQuestionIndex === 1 
-                                                        ? 'ring-yellow-400/30 rounded-3xl'
-                                                        : currentQuestionIndex === 2
-                                                            ? 'ring-blue-400/30 rounded-3xl'
-                                                            : currentQuestionIndex === 3
-                                                                ? 'ring-purple-400/30 rounded-3xl'
-                                                                : 'ring-emerald-400/30 rounded-3xl'
-                                                : currentQuestionIndex === 1 
-                                                    ? 'ring-yellow-400/30 rounded-2xl' 
+                                    <div className={`relative transition-all duration-800 ease-out ${isAnimating ? 'transform scale-105 opacity-90' : 'transform scale-100 opacity-100'
+                                        } ${currentQuestionIndex > 0 ? 'animate-fadeInScale' : ''}`}>
+                                        <div className={`relative bg-zinc-900/80 backdrop-blur-sm p-8 ring-1 shadow-2xl transition-all duration-800 ease-out ${isAnimating
+                                            ? currentQuestionIndex === 0
+                                                ? 'ring-teal-500/30 rounded-3xl'
+                                                : currentQuestionIndex === 1
+                                                    ? 'ring-yellow-400/30 rounded-3xl'
                                                     : currentQuestionIndex === 2
-                                                        ? 'ring-blue-400/30 rounded-2xl'
+                                                        ? 'ring-blue-400/30 rounded-3xl'
                                                         : currentQuestionIndex === 3
-                                                            ? 'ring-purple-400/30 rounded-2xl'
-                                                            : currentQuestionIndex === 4
-                                                                ? 'ring-emerald-400/30 rounded-2xl'
-                                                                : 'ring-white/10 rounded-2xl'
-                                        }`}>
-                                            <div className={`absolute -inset-1 blur transition-all duration-800 ease-out ${
-                                                isAnimating 
-                                                    ? currentQuestionIndex === 0
-                                                        ? 'bg-gradient-to-r from-teal-500/20 to-teal-400/20 opacity-75 rounded-3xl'
-                                                        : currentQuestionIndex === 1
-                                                            ? 'bg-gradient-to-r from-yellow-400/20 to-orange-400/20 opacity-75 rounded-3xl'
-                                                            : currentQuestionIndex === 2
-                                                                ? 'bg-gradient-to-r from-blue-400/20 to-indigo-400/20 opacity-75 rounded-3xl'
-                                                                : currentQuestionIndex === 3
-                                                                    ? 'bg-gradient-to-r from-purple-400/20 to-pink-400/20 opacity-75 rounded-3xl'
-                                                                    : 'bg-gradient-to-r from-emerald-400/20 to-teal-400/20 opacity-75 rounded-3xl'
+                                                            ? 'ring-purple-400/30 rounded-3xl'
+                                                            : 'ring-emerald-400/30 rounded-3xl'
+                                            : currentQuestionIndex === 1
+                                                ? 'ring-yellow-400/30 rounded-2xl'
+                                                : currentQuestionIndex === 2
+                                                    ? 'ring-blue-400/30 rounded-2xl'
+                                                    : currentQuestionIndex === 3
+                                                        ? 'ring-purple-400/30 rounded-2xl'
+                                                        : currentQuestionIndex === 4
+                                                            ? 'ring-emerald-400/30 rounded-2xl'
+                                                            : 'ring-white/10 rounded-2xl'
+                                            }`}>
+                                            <div className={`absolute -inset-1 blur transition-all duration-800 ease-out ${isAnimating
+                                                ? currentQuestionIndex === 0
+                                                    ? 'bg-gradient-to-r from-teal-500/20 to-teal-400/20 opacity-75 rounded-3xl'
                                                     : currentQuestionIndex === 1
-                                                        ? 'bg-gradient-to-r from-yellow-400/20 to-orange-400/20 opacity-75 rounded-2xl'
+                                                        ? 'bg-gradient-to-r from-yellow-400/20 to-orange-400/20 opacity-75 rounded-3xl'
                                                         : currentQuestionIndex === 2
-                                                            ? 'bg-gradient-to-r from-blue-400/20 to-indigo-400/20 opacity-75 rounded-2xl'
+                                                            ? 'bg-gradient-to-r from-blue-400/20 to-indigo-400/20 opacity-75 rounded-3xl'
                                                             : currentQuestionIndex === 3
-                                                                ? 'bg-gradient-to-r from-purple-400/20 to-pink-400/20 opacity-75 rounded-2xl'
-                                                                : currentQuestionIndex === 4
-                                                                    ? 'bg-gradient-to-r from-emerald-400/20 to-teal-400/20 opacity-75 rounded-2xl'
-                                                                    : 'bg-gradient-to-r from-[#E0FE10]/20 to-lime-400/20 opacity-75 rounded-2xl'
-                                            }`}></div>
+                                                                ? 'bg-gradient-to-r from-purple-400/20 to-pink-400/20 opacity-75 rounded-3xl'
+                                                                : 'bg-gradient-to-r from-emerald-400/20 to-teal-400/20 opacity-75 rounded-3xl'
+                                                : currentQuestionIndex === 1
+                                                    ? 'bg-gradient-to-r from-yellow-400/20 to-orange-400/20 opacity-75 rounded-2xl'
+                                                    : currentQuestionIndex === 2
+                                                        ? 'bg-gradient-to-r from-blue-400/20 to-indigo-400/20 opacity-75 rounded-2xl'
+                                                        : currentQuestionIndex === 3
+                                                            ? 'bg-gradient-to-r from-purple-400/20 to-pink-400/20 opacity-75 rounded-2xl'
+                                                            : currentQuestionIndex === 4
+                                                                ? 'bg-gradient-to-r from-emerald-400/20 to-teal-400/20 opacity-75 rounded-2xl'
+                                                                : 'bg-gradient-to-r from-[#E0FE10]/20 to-lime-400/20 opacity-75 rounded-2xl'
+                                                }`}></div>
                                             <div className="relative">
-                                                <div className={`flex items-center mb-4 transition-all duration-500 ${
-                                                    isAnimating ? 'opacity-60 transform translate-y-1' : 'opacity-100 transform translate-y-0'
-                                                }`}>
+                                                <div className={`flex items-center mb-4 transition-all duration-500 ${isAnimating ? 'opacity-60 transform translate-y-1' : 'opacity-100 transform translate-y-0'
+                                                    }`}>
                                                     <div className="flex space-x-2">
                                                         <div className="w-3 h-3 bg-red-500 rounded-full"></div>
                                                         <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
                                                         <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                                                     </div>
-                                                    <span className="ml-4 text-sm text-zinc-500">Pulse Check</span>
+                                                    <span className="ml-4 text-sm text-zinc-500">PulseCheck</span>
                                                 </div>
-                                                <div className={`text-left transition-all duration-500 ${
-                                                    isAnimating ? 'opacity-40 transform translate-y-2' : 'opacity-100 transform translate-y-0'
-                                                }`}>
+                                                <div className={`text-left transition-all duration-500 ${isAnimating ? 'opacity-40 transform translate-y-2' : 'opacity-100 transform translate-y-0'
+                                                    }`}>
                                                     <p className="text-zinc-400 mb-2 text-sm">Daily Check-in</p>
                                                     <div className="font-mono text-lg md:text-xl text-white min-h-[2rem] flex items-center">
                                                         {typedText}
                                                         <span className="ml-1 animate-pulse">|</span>
                                                     </div>
                                                 </div>
-                                                
+
                                                 {/* Morphing Content - Shows during forward animation only */}
                                                 {isAnimating && !isReversing && (
                                                     <div className="absolute inset-0 flex items-center justify-center">
                                                         <div className="text-center transform transition-all duration-500 ease-out animate-fadeIn">
-                                                            <div className={`w-12 h-12 mx-auto mb-3 border-2 rounded-full flex items-center justify-center ${
-                                                                currentQuestionIndex === 0 
-                                                                    ? 'bg-teal-500/20 border-teal-500/40' 
-                                                                    : currentQuestionIndex === 1 
-                                                                        ? 'bg-green-500/20 border-green-500/40'
-                                                                        : currentQuestionIndex === 2
-                                                                            ? 'bg-blue-500/20 border-blue-500/40'
-                                                                            : currentQuestionIndex === 3
-                                                                                ? 'bg-purple-500/20 border-purple-500/40'
-                                                                                : currentQuestionIndex === 4
-                                                                                    ? 'bg-emerald-500/20 border-emerald-500/40'
-                                                                                    : currentQuestionIndex === 5
-                                                                                        ? 'bg-orange-500/20 border-orange-500/40'
-                                                                                        : currentQuestionIndex === 6
-                                                                                            ? 'bg-indigo-500/20 border-indigo-500/40'
-                                                                                            : 'bg-cyan-500/20 border-cyan-500/40'
-                                                            }`}>
+                                                            <div className={`w-12 h-12 mx-auto mb-3 border-2 rounded-full flex items-center justify-center ${currentQuestionIndex === 0
+                                                                ? 'bg-teal-500/20 border-teal-500/40'
+                                                                : currentQuestionIndex === 1
+                                                                    ? 'bg-green-500/20 border-green-500/40'
+                                                                    : currentQuestionIndex === 2
+                                                                        ? 'bg-blue-500/20 border-blue-500/40'
+                                                                        : currentQuestionIndex === 3
+                                                                            ? 'bg-purple-500/20 border-purple-500/40'
+                                                                            : currentQuestionIndex === 4
+                                                                                ? 'bg-emerald-500/20 border-emerald-500/40'
+                                                                                : currentQuestionIndex === 5
+                                                                                    ? 'bg-orange-500/20 border-orange-500/40'
+                                                                                    : currentQuestionIndex === 6
+                                                                                        ? 'bg-indigo-500/20 border-indigo-500/40'
+                                                                                        : 'bg-cyan-500/20 border-cyan-500/40'
+                                                                }`}>
                                                                 {currentQuestionIndex === 0 ? (
                                                                     <FaBed className="h-5 w-5 text-teal-400" />
                                                                 ) : currentQuestionIndex === 1 ? (
@@ -1920,9 +1904,9 @@ const PulseCheckPage: NextPage = () => {
                                                                 )}
                                                             </div>
                                                             <p className="text-white font-semibold text-sm opacity-80">
-                                                                {currentQuestionIndex === 0 
-                                                                    ? 'Reviewing your sleep story...' 
-                                                                    : currentQuestionIndex === 1 
+                                                                {currentQuestionIndex === 0
+                                                                    ? 'Reviewing your sleep story...'
+                                                                    : currentQuestionIndex === 1
                                                                         ? 'Looking at your nutrition journey...'
                                                                         : currentQuestionIndex === 2
                                                                             ? 'Finding calming techniques...'
@@ -1945,9 +1929,9 @@ const PulseCheckPage: NextPage = () => {
                                     </div>
                                 )}
                             </div>
-                            
+
                             <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-                                <button 
+                                <button
                                     onClick={handleUseWebApp}
                                     className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-zinc-900 bg-gradient-to-r from-[#E0FE10] to-lime-400 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105"
                                 >
@@ -1956,7 +1940,7 @@ const PulseCheckPage: NextPage = () => {
                                         Use Web App →
                                     </span>
                                 </button>
-                                <a 
+                                <a
                                     href="https://apps.apple.com/by/app/pulsecheck-mindset-coaching/id6747253393"
                                     target="_blank"
                                     rel="noopener noreferrer"
@@ -1979,7 +1963,7 @@ const PulseCheckPage: NextPage = () => {
                         <div className="absolute bottom-1/4 right-1/6 w-80 h-80 bg-blue-500/5 rounded-full filter blur-3xl animate-pulse"></div>
                         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-500/5 rounded-full filter blur-3xl"></div>
                     </div>
-                    
+
                     <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
                         {/* Section Header */}
                         <div className="text-center mb-12 lg:mb-20">
@@ -1997,7 +1981,7 @@ const PulseCheckPage: NextPage = () => {
 
                         {/* Performance Equation Visual - Consistent Card Sizes */}
                         <div className="flex flex-col items-center gap-6 lg:flex-row lg:justify-center lg:gap-8 mb-12 lg:mb-20">
-                            
+
                             {/* Mind + Physical */}
                             <div className="group relative w-full max-w-sm lg:w-64 lg:h-64">
                                 <div className="absolute -inset-4 bg-gradient-to-r from-[#E0FE10]/20 to-lime-400/20 rounded-3xl blur opacity-30 group-hover:opacity-50 transition duration-1000"></div>
@@ -2011,7 +1995,7 @@ const PulseCheckPage: NextPage = () => {
                                             <FaDumbbell className="h-6 w-6 text-zinc-900" />
                                         </div>
                                     </div>
-                                    <h3 className="text-xl font-bold text-white mb-2">Mind +<br/>Physical</h3>
+                                    <h3 className="text-xl font-bold text-white mb-2">Mind +<br />Physical</h3>
                                     <p className="text-zinc-400 text-sm">
                                         Sports psychology meets athletic performance data
                                     </p>
@@ -2031,7 +2015,7 @@ const PulseCheckPage: NextPage = () => {
                                     <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
                                         <FaRocket className="h-6 w-6 text-white" />
                                     </div>
-                                    <h3 className="text-xl font-bold text-white mb-2">AI<br/>Analysis</h3>
+                                    <h3 className="text-xl font-bold text-white mb-2">AI<br />Analysis</h3>
                                     <p className="text-zinc-400 text-sm">
                                         AI processes patterns, correlations, and insights
                                     </p>
@@ -2051,7 +2035,7 @@ const PulseCheckPage: NextPage = () => {
                                     <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
                                         <FaUserTie className="h-6 w-6 text-white" />
                                     </div>
-                                    <h3 className="text-xl font-bold text-white mb-2">Coach<br/>Wisdom</h3>
+                                    <h3 className="text-xl font-bold text-white mb-2">Coach<br />Wisdom</h3>
                                     <p className="text-zinc-400 text-sm">
                                         Expert guidance delivered with perfect timing
                                     </p>
@@ -2071,7 +2055,7 @@ const PulseCheckPage: NextPage = () => {
                                     <div className="w-16 h-16 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300">
                                         <FaTrophy className="h-8 w-8 text-zinc-900" />
                                     </div>
-                                    <h3 className="text-xl font-bold text-white mb-2">Peak<br/>Performance</h3>
+                                    <h3 className="text-xl font-bold text-white mb-2">Peak<br />Performance</h3>
                                     <p className="text-zinc-400 text-sm">
                                         Your absolute best, backed by science
                                     </p>
@@ -2113,7 +2097,7 @@ const PulseCheckPage: NextPage = () => {
                         <div className="absolute bottom-20 right-1/5 w-80 h-80 bg-blue-500/5 rounded-full filter blur-3xl animate-pulse"></div>
                         <div className="absolute top-1/3 right-1/3 w-64 h-64 bg-pink-500/5 rounded-full filter blur-3xl"></div>
                     </div>
-                    
+
                     <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
                         {/* Section Header */}
                         <div className="text-center mb-12 lg:mb-20">
@@ -2121,7 +2105,7 @@ const PulseCheckPage: NextPage = () => {
                                 <FaBrain className="h-4 w-4 text-purple-400" />
                                 <span className="text-purple-300 text-sm font-medium">Sports Psychology in Your Pocket</span>
                             </div>
-                            
+
                             <h2 className="text-4xl sm:text-5xl lg:text-7xl font-bold text-white mb-6 lg:mb-8 tracking-tight">
                                 The Mental Game
                                 <br />
@@ -2129,7 +2113,7 @@ const PulseCheckPage: NextPage = () => {
                                     Changes Everything
                                 </span>
                             </h2>
-                            
+
                             <p className="text-lg lg:text-xl text-zinc-400 max-w-3xl mx-auto leading-relaxed mb-8 lg:mb-12">
                                 Sports psychology isn't just about managing anxiety. It's the science of optimizing your mind-body connection, confidence, and peak performance mindset.
                             </p>
@@ -2271,11 +2255,11 @@ const PulseCheckPage: NextPage = () => {
                                     </ul>
                                 </div>
 
-                                {/* Pulse Check Sports Psychology */}
+                                {/* PulseCheck Sports Psychology */}
                                 <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-400/30 rounded-2xl p-6">
                                     <h4 className="text-white font-semibold mb-4 flex items-center gap-3">
                                         <img src="/app-logo.png" alt="Pulse" className="h-5 w-5" />
-                                        Pulse Check Sports Psychology
+                                        PulseCheck Sports Psychology
                                     </h4>
                                     <ul className="space-y-3 text-zinc-300">
                                         <li className="flex items-start gap-3">
@@ -2345,20 +2329,18 @@ const PulseCheckPage: NextPage = () => {
                     </div>
                 </div>
 
-                 {/* Coach-Athlete Layer Section */}
+                {/* Coach-Athlete Layer Section */}
                 <div className="relative py-24 sm:py-32">
                     <div className="absolute inset-0 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black"></div>
                     <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
                         {/* Section Header */}
                         <div className="text-center mb-16">
                             <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-                                The Intelligent 
-                                <span className="bg-gradient-to-r from-[#E0FE10] to-lime-400 bg-clip-text text-transparent"> Layer</span>
+                                Uniting the
+                                <span className="bg-gradient-to-r from-[#E0FE10] to-lime-400 bg-clip-text text-transparent"> Athletic Ecosystem</span>
                             </h2>
                             <p className="text-xl text-zinc-400 max-w-3xl mx-auto leading-relaxed">
-                                Pulse Check connects coaches and athletes through intelligent communication that optimizes performance. 
-                                By supporting routine questions, providing instant insights, and connecting you when human expertise is needed, 
-                                it analyzes mental readiness, workout results, and alignment patterns to ensure both sides perform at their best.
+                                PulseCheck isn't just a chatbot—it's a comprehensive platform replacing fragmented workflows with actionable intelligence. It provides friction-free journaling for athletes, prioritized visibility for coaches, and a reliable medical safety net for clinical escalations.
                             </p>
                         </div>
 
@@ -2370,9 +2352,9 @@ const PulseCheckPage: NextPage = () => {
                                     <div className="absolute inset-0 flex items-center justify-center">
                                         <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-[#E0FE10]/30 to-transparent"></div>
                                     </div>
-                                    
+
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
-                                        {/* Athlete */}
+                                        {/* Nora */}
                                         <div className="text-center">
                                             <div className="relative mb-6 mx-auto w-24 h-24">
                                                 <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-xl"></div>
@@ -2380,37 +2362,37 @@ const PulseCheckPage: NextPage = () => {
                                                     <FaRocket className="h-10 w-10 text-white" />
                                                 </div>
                                             </div>
-                                            <h3 className="text-xl font-bold text-white mb-2">Athlete</h3>
+                                            <h3 className="text-xl font-bold text-white mb-2">Athlete App (Nora)</h3>
                                             <p className="text-sm text-zinc-400">
-                                                Asks questions, shares data, receives immediate guidance
+                                                Frictionless SMS-style check-ins and actionable mental performance drills.
                                             </p>
                                         </div>
 
-                                        {/* Pulse Check Layer */}
+                                        {/* Coach Dashboard */}
                                         <div className="text-center">
                                             <div className="relative mb-6 mx-auto w-28 h-28">
                                                 <div className="absolute inset-0 bg-[#E0FE10]/20 rounded-full blur-xl animate-pulse"></div>
                                                 <div className="relative w-28 h-28 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-full flex items-center justify-center border-4 border-lime-300/50 shadow-2xl">
-                                                    <FaBrain className="h-12 w-12 text-zinc-900" />
+                                                    <FaChartLine className="h-12 w-12 text-zinc-900" />
                                                 </div>
                                             </div>
-                                            <h3 className="text-xl font-bold text-[#E0FE10] mb-2">Pulse Check</h3>
+                                            <h3 className="text-xl font-bold text-[#E0FE10] mb-2">Coach Dashboard</h3>
                                             <p className="text-sm text-zinc-400">
-                                                Intelligent filtering, instant insights, smart escalation
+                                                Team roster visibility, actionable briefings, and escalating concerns.
                                             </p>
                                         </div>
 
-                                        {/* Coach */}
+                                        {/* Aunt Edna */}
                                         <div className="text-center">
                                             <div className="relative mb-6 mx-auto w-24 h-24">
                                                 <div className="absolute inset-0 bg-purple-500/20 rounded-full blur-xl"></div>
                                                 <div className="relative w-24 h-24 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center border-2 border-purple-400/50">
-                                                    <FaUserTie className="h-10 w-10 text-white" />
+                                                    <FaShieldAlt className="h-10 w-10 text-white" />
                                                 </div>
                                             </div>
-                                            <h3 className="text-xl font-bold text-white mb-2">Coach</h3>
+                                            <h3 className="text-xl font-bold text-white mb-2">Clinical Safety (AuntEdna)</h3>
                                             <p className="text-sm text-zinc-400">
-                                                Receives only critical alerts, focuses on high-value coaching
+                                                Ensures HIPAA-compliant routing of critical medical or mental health issues.
                                             </p>
                                         </div>
                                     </div>
@@ -2427,10 +2409,10 @@ const PulseCheckPage: NextPage = () => {
                 <div className="py-24 sm:py-32 bg-zinc-900/50">
                     <div className="max-w-7xl mx-auto px-6 lg:px-8">
                         <div className="text-center mb-16">
-                             <h2 className="text-4xl font-bold tracking-tight text-white sm:text-5xl mb-4">Built for your workflow</h2>
-                             <p className="text-xl text-zinc-400 max-w-2xl mx-auto">The right experience, optimized for how you actually work.</p>
+                            <h2 className="text-4xl font-bold tracking-tight text-white sm:text-5xl mb-4">Built for your workflow</h2>
+                            <p className="text-xl text-zinc-400 max-w-2xl mx-auto">The right experience, optimized for how you actually work.</p>
                         </div>
-                        
+
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                             {/* For the Athlete */}
                             <div className="group relative">
@@ -2472,7 +2454,7 @@ const PulseCheckPage: NextPage = () => {
                                         <div className="relative w-full max-w-lg">
                                             {/* Glow Effect */}
                                             <div className="absolute -inset-1 bg-gradient-to-r from-[#E0FE10]/20 to-lime-400/20 rounded-3xl blur opacity-75"></div>
-                                            
+
                                             <div className="relative bg-zinc-900/90 backdrop-blur-sm rounded-3xl ring-1 ring-[#E0FE10]/20 shadow-2xl overflow-hidden h-[600px] flex flex-col">
                                                 {/* Dashboard Header */}
                                                 <div className="bg-gradient-to-r from-[#E0FE10] to-lime-400 p-4 flex-shrink-0">
@@ -2485,147 +2467,147 @@ const PulseCheckPage: NextPage = () => {
                                                     </div>
                                                 </div>
 
-                                            {/* Energy Balance Summary */}
-                                            <div className="p-4 border-b border-zinc-800 flex-shrink-0">
-                                                <div className="text-center mb-4">
-                                                    <div className="text-orange-400 text-2xl font-bold">-247 kcal</div>
-                                                    <div className="text-zinc-400 text-sm">Net Energy Balance</div>
-                                                    <div className="text-orange-400 text-xs font-medium mt-1">Fat Loss Mode 📉</div>
-                                                </div>
-                                                
-                                                {/* Energy In vs Out Visual */}
-                                                <div className="grid grid-cols-2 gap-4 mb-4">
-                                                    <div className="text-center">
-                                                        <div className="flex items-center justify-center mb-2">
-                                                            <FaUtensils className="h-4 w-4 text-blue-400 mr-2" />
-                                                            <span className="text-blue-400 text-sm font-medium">Calories In</span>
-                                                        </div>
-                                                        <div className="text-white text-lg font-bold">1,847</div>
-                                                        <div className="w-full h-2 bg-zinc-800 rounded-full mt-2">
-                                                            <div className="w-4/5 h-2 bg-blue-400 rounded-full"></div>
-                                                        </div>
+                                                {/* Energy Balance Summary */}
+                                                <div className="p-4 border-b border-zinc-800 flex-shrink-0">
+                                                    <div className="text-center mb-4">
+                                                        <div className="text-orange-400 text-2xl font-bold">-247 kcal</div>
+                                                        <div className="text-zinc-400 text-sm">Net Energy Balance</div>
+                                                        <div className="text-orange-400 text-xs font-medium mt-1">Fat Loss Mode 📉</div>
                                                     </div>
-                                                    <div className="text-center">
-                                                        <div className="flex items-center justify-center mb-2">
-                                                            <FaFire className="h-4 w-4 text-red-400 mr-2" />
-                                                            <span className="text-red-400 text-sm font-medium">Calories Out</span>
-                                                        </div>
-                                                        <div className="text-white text-lg font-bold">2,094</div>
-                                                        <div className="w-full h-2 bg-zinc-800 rounded-full mt-2">
-                                                            <div className="w-full h-2 bg-red-400 rounded-full"></div>
-                                                        </div>
-                                                        <div className="text-xs text-zinc-400 mt-1">
-                                                            <span className="text-orange-400">842</span> active + <span className="text-red-400">1,252</span> resting
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
 
-                                            {/* Heart Rate Insights */}
-                                            <div className="p-4 border-b border-zinc-800 flex-shrink-0">
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <div className="flex items-center space-x-2">
-                                                        <FaHeart className="h-4 w-4 text-[#E0FE10]" />
-                                                        <span className="text-white text-sm font-medium">Heart Rate Zones</span>
-                                                    </div>
-                                                    <span className="text-[#E0FE10] text-xs">78 avg bpm</span>
-                                                </div>
-                                                
-                                                {/* Zone Distribution */}
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-center space-x-2">
-                                                            <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
-                                                            <span className="text-zinc-300 text-xs">Fat Burn</span>
+                                                    {/* Energy In vs Out Visual */}
+                                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                                        <div className="text-center">
+                                                            <div className="flex items-center justify-center mb-2">
+                                                                <FaUtensils className="h-4 w-4 text-blue-400 mr-2" />
+                                                                <span className="text-blue-400 text-sm font-medium">Calories In</span>
+                                                            </div>
+                                                            <div className="text-white text-lg font-bold">1,847</div>
+                                                            <div className="w-full h-2 bg-zinc-800 rounded-full mt-2">
+                                                                <div className="w-4/5 h-2 bg-blue-400 rounded-full"></div>
+                                                            </div>
                                                         </div>
-                                                        <span className="text-blue-400 text-xs font-medium">42 min</span>
-                                                    </div>
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-center space-x-2">
-                                                            <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
-                                                            <span className="text-zinc-300 text-xs">Cardio</span>
+                                                        <div className="text-center">
+                                                            <div className="flex items-center justify-center mb-2">
+                                                                <FaFire className="h-4 w-4 text-red-400 mr-2" />
+                                                                <span className="text-red-400 text-sm font-medium">Calories Out</span>
+                                                            </div>
+                                                            <div className="text-white text-lg font-bold">2,094</div>
+                                                            <div className="w-full h-2 bg-zinc-800 rounded-full mt-2">
+                                                                <div className="w-full h-2 bg-red-400 rounded-full"></div>
+                                                            </div>
+                                                            <div className="text-xs text-zinc-400 mt-1">
+                                                                <span className="text-orange-400">842</span> active + <span className="text-red-400">1,252</span> resting
+                                                            </div>
                                                         </div>
-                                                        <span className="text-yellow-400 text-xs font-medium">28 min</span>
-                                                    </div>
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-center space-x-2">
-                                                            <div className="w-3 h-3 bg-red-400 rounded-full"></div>
-                                                            <span className="text-zinc-300 text-xs">Peak</span>
-                                                        </div>
-                                                        <span className="text-red-400 text-xs font-medium">12 min</span>
                                                     </div>
                                                 </div>
-                                            </div>
 
-                                            {/* Today's Achievements */}
-                                            <div className="p-4 border-b border-zinc-800 flex-shrink-0">
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <div className="flex items-center space-x-2">
-                                                        <FaTrophy className="h-4 w-4 text-yellow-400" />
-                                                        <span className="text-white text-sm font-medium">Achievements</span>
+                                                {/* Heart Rate Insights */}
+                                                <div className="p-4 border-b border-zinc-800 flex-shrink-0">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <div className="flex items-center space-x-2">
+                                                            <FaHeart className="h-4 w-4 text-[#E0FE10]" />
+                                                            <span className="text-white text-sm font-medium">Heart Rate Zones</span>
+                                                        </div>
+                                                        <span className="text-[#E0FE10] text-xs">78 avg bpm</span>
                                                     </div>
-                                                </div>
-                                                
-                                                <div className="grid grid-cols-3 gap-2">
-                                                    <div className="text-center p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                                                        <FaTrophy className="h-5 w-5 text-yellow-400 mx-auto mb-1" />
-                                                        <div className="text-yellow-400 text-xs font-medium">10K Steps</div>
-                                                        <div className="text-zinc-400 text-xs">Gold</div>
-                                                    </div>
-                                                    <div className="text-center p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                                                        <FaBullseye className="h-5 w-5 text-blue-400 mx-auto mb-1" />
-                                                        <div className="text-blue-400 text-xs font-medium">Deficit</div>
-                                                        <div className="text-zinc-400 text-xs">Goal</div>
-                                                    </div>
-                                                    <div className="text-center p-2 bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-lg">
-                                                        <FaLungs className="h-5 w-5 text-[#E0FE10] mx-auto mb-1" />
-                                                        <div className="text-[#E0FE10] text-xs font-medium">Zone 2</div>
-                                                        <div className="text-zinc-400 text-xs">Target</div>
-                                                    </div>
-                                                </div>
-                                            </div>
 
-                                            {/* AI Insights */}
-                                            <div className="p-4 flex-grow">
-                                                <div className="flex items-center justify-between mb-3">
-                                                    <div className="flex items-center space-x-2">
-                                                        <FaLightbulb className="h-4 w-4 text-yellow-400" />
-                                                        <span className="text-white text-sm font-medium">AI Insights</span>
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="space-y-3">
-                                                    <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-                                                        <div className="text-orange-400 text-xs font-medium mb-1">Energy Story</div>
-                                                        <div className="text-zinc-300 text-xs leading-relaxed">
-                                                            Perfect deficit for steady fat loss. This pace allows progress without metabolic slowdown.
+                                                    {/* Zone Distribution */}
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center space-x-2">
+                                                                <div className="w-3 h-3 bg-blue-400 rounded-full"></div>
+                                                                <span className="text-zinc-300 text-xs">Fat Burn</span>
+                                                            </div>
+                                                            <span className="text-blue-400 text-xs font-medium">42 min</span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center space-x-2">
+                                                                <div className="w-3 h-3 bg-yellow-400 rounded-full"></div>
+                                                                <span className="text-zinc-300 text-xs">Cardio</span>
+                                                            </div>
+                                                            <span className="text-yellow-400 text-xs font-medium">28 min</span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center space-x-2">
+                                                                <div className="w-3 h-3 bg-red-400 rounded-full"></div>
+                                                                <span className="text-zinc-300 text-xs">Peak</span>
+                                                            </div>
+                                                            <span className="text-red-400 text-xs font-medium">12 min</span>
                                                         </div>
                                                     </div>
-                                                    
-                                                    <div className="p-3 bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-lg">
-                                                        <div className="text-[#E0FE10] text-xs font-medium mb-1">Recovery Focus</div>
-                                                        <div className="text-zinc-300 text-xs leading-relaxed">
-                                                            Great Zone 2 work today. This builds your aerobic base and fat burning efficiency.
+                                                </div>
+
+                                                {/* Today's Achievements */}
+                                                <div className="p-4 border-b border-zinc-800 flex-shrink-0">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <div className="flex items-center space-x-2">
+                                                            <FaTrophy className="h-4 w-4 text-yellow-400" />
+                                                            <span className="text-white text-sm font-medium">Achievements</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        <div className="text-center p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                                            <FaTrophy className="h-5 w-5 text-yellow-400 mx-auto mb-1" />
+                                                            <div className="text-yellow-400 text-xs font-medium">10K Steps</div>
+                                                            <div className="text-zinc-400 text-xs">Gold</div>
+                                                        </div>
+                                                        <div className="text-center p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                                                            <FaBullseye className="h-5 w-5 text-blue-400 mx-auto mb-1" />
+                                                            <div className="text-blue-400 text-xs font-medium">Deficit</div>
+                                                            <div className="text-zinc-400 text-xs">Goal</div>
+                                                        </div>
+                                                        <div className="text-center p-2 bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-lg">
+                                                            <FaLungs className="h-5 w-5 text-[#E0FE10] mx-auto mb-1" />
+                                                            <div className="text-[#E0FE10] text-xs font-medium">Zone 2</div>
+                                                            <div className="text-zinc-400 text-xs">Target</div>
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
+
+                                                {/* AI Insights */}
+                                                <div className="p-4 flex-grow">
+                                                    <div className="flex items-center justify-between mb-3">
+                                                        <div className="flex items-center space-x-2">
+                                                            <FaLightbulb className="h-4 w-4 text-yellow-400" />
+                                                            <span className="text-white text-sm font-medium">AI Insights</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                                                            <div className="text-orange-400 text-xs font-medium mb-1">Energy Story</div>
+                                                            <div className="text-zinc-300 text-xs leading-relaxed">
+                                                                Perfect deficit for steady fat loss. This pace allows progress without metabolic slowdown.
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="p-3 bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-lg">
+                                                            <div className="text-[#E0FE10] text-xs font-medium mb-1">Recovery Focus</div>
+                                                            <div className="text-zinc-300 text-xs leading-relaxed">
+                                                                Great Zone 2 work today. This builds your aerobic base and fat burning efficiency.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             setWaitlistUserType('athlete');
                                             setShowWaitlistForm(true);
                                         }}
                                         className="flex items-center justify-center gap-3 rounded-xl bg-gradient-to-r from-[#E0FE10] to-lime-400 px-6 py-3 text-sm font-semibold text-zinc-900 hover:from-[#E0FE10]/90 hover:to-lime-400/90 transition-all shadow-lg hover:shadow-xl"
                                     >
-                                        <FaRocket className="h-5 w-5" /> 
+                                        <FaRocket className="h-5 w-5" />
                                         Join Waitlist
                                     </button>
                                 </div>
                             </div>
-                            
+
                             {/* For the Coach */}
                             <div className="group relative">
                                 <div className="absolute -inset-1 bg-gradient-to-r from-teal-400 to-blue-400 rounded-3xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
@@ -2662,7 +2644,7 @@ const PulseCheckPage: NextPage = () => {
                                         <div className="relative w-full max-w-lg">
                                             {/* Glow Effect */}
                                             <div className="absolute -inset-1 bg-gradient-to-r from-teal-400/20 to-blue-400/20 rounded-3xl blur opacity-75"></div>
-                                            
+
                                             <div className="relative bg-zinc-900/90 backdrop-blur-sm rounded-3xl ring-1 ring-teal-400/20 shadow-2xl overflow-hidden h-[600px] flex flex-col">
                                                 {/* Dashboard Header */}
                                                 <div className="bg-gradient-to-r from-teal-400 to-blue-400 p-4 flex-shrink-0">
@@ -2675,103 +2657,103 @@ const PulseCheckPage: NextPage = () => {
                                                     </div>
                                                 </div>
 
-                                            {/* Quick Stats */}
-                                            <div className="p-4 border-b border-zinc-800 flex-shrink-0">
-                                                <div className="grid grid-cols-3 gap-4">
-                                                    <div className="text-center">
-                                                        <div className="text-teal-400 text-xl font-bold">12</div>
-                                                        <div className="text-zinc-400 text-xs">Athletes</div>
-                                                    </div>
-                                                    <div className="text-center">
-                                                        <div className="text-yellow-400 text-xl font-bold">3</div>
-                                                        <div className="text-zinc-400 text-xs">Alerts</div>
-                                                    </div>
-                                                    <div className="text-center">
-                                                        <div className="text-green-400 text-xl font-bold">89%</div>
-                                                        <div className="text-zinc-400 text-xs">Readiness</div>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            {/* Athletes List */}
-                                            <div className="p-4 space-y-3 flex-grow overflow-y-auto">
-                                                {/* Athlete 1 - Alert */}
-                                                <div className="flex items-center justify-between p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                                                    <div className="flex items-center space-x-3">
-                                                        <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                                                            <span className="text-white text-xs font-bold">JS</span>
+                                                {/* Quick Stats */}
+                                                <div className="p-4 border-b border-zinc-800 flex-shrink-0">
+                                                    <div className="grid grid-cols-3 gap-4">
+                                                        <div className="text-center">
+                                                            <div className="text-teal-400 text-xl font-bold">12</div>
+                                                            <div className="text-zinc-400 text-xs">Athletes</div>
                                                         </div>
-                                                        <div>
-                                                            <div className="text-white text-sm font-medium">Jessica Smith</div>
-                                                            <div className="text-red-400 text-xs">High stress • Poor sleep</div>
+                                                        <div className="text-center">
+                                                            <div className="text-yellow-400 text-xl font-bold">3</div>
+                                                            <div className="text-zinc-400 text-xs">Alerts</div>
                                                         </div>
-                                                    </div>
-                                                    <div className="flex items-center space-x-2">
-                                                        <FaExclamationTriangle className="h-4 w-4 text-red-400" />
-                                                        <span className="text-red-400 text-xs font-medium">Alert</span>
+                                                        <div className="text-center">
+                                                            <div className="text-green-400 text-xl font-bold">89%</div>
+                                                            <div className="text-zinc-400 text-xs">Readiness</div>
+                                                        </div>
                                                     </div>
                                                 </div>
 
-                                                {/* Athlete 2 - Good */}
-                                                <div className="flex items-center justify-between p-3 bg-zinc-800/40 rounded-lg">
-                                                    <div className="flex items-center space-x-3">
-                                                        <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                                                            <span className="text-white text-xs font-bold">MJ</span>
+                                                {/* Athletes List */}
+                                                <div className="p-4 space-y-3 flex-grow overflow-y-auto">
+                                                    {/* Athlete 1 - Alert */}
+                                                    <div className="flex items-center justify-between p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+                                                                <span className="text-white text-xs font-bold">JS</span>
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-white text-sm font-medium">Jessica Smith</div>
+                                                                <div className="text-red-400 text-xs">High stress • Poor sleep</div>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <div className="text-white text-sm font-medium">Mike Johnson</div>
-                                                            <div className="text-green-400 text-xs">Ready • Good recovery</div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-green-400 text-xs font-medium">92%</div>
-                                                </div>
-
-                                                {/* Athlete 3 - Warning */}
-                                                <div className="flex items-center justify-between p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                                                    <div className="flex items-center space-x-3">
-                                                        <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
-                                                            <span className="text-white text-xs font-bold">AL</span>
-                                                        </div>
-                                                        <div>
-                                                            <div className="text-white text-sm font-medium">Alex Lee</div>
-                                                            <div className="text-yellow-400 text-xs">Fatigue trend • Monitor</div>
+                                                        <div className="flex items-center space-x-2">
+                                                            <FaExclamationTriangle className="h-4 w-4 text-red-400" />
+                                                            <span className="text-red-400 text-xs font-medium">Alert</span>
                                                         </div>
                                                     </div>
-                                                    <div className="text-yellow-400 text-xs font-medium">76%</div>
-                                                </div>
 
-                                                {/* Athlete 4 - Good */}
-                                                <div className="flex items-center justify-between p-3 bg-zinc-800/40 rounded-lg">
-                                                    <div className="flex items-center space-x-3">
-                                                        <div className="w-8 h-8 bg-teal-500 rounded-full flex items-center justify-center">
-                                                            <span className="text-white text-xs font-bold">SC</span>
+                                                    {/* Athlete 2 - Good */}
+                                                    <div className="flex items-center justify-between p-3 bg-zinc-800/40 rounded-lg">
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                                                                <span className="text-white text-xs font-bold">MJ</span>
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-white text-sm font-medium">Mike Johnson</div>
+                                                                <div className="text-green-400 text-xs">Ready • Good recovery</div>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <div className="text-white text-sm font-medium">Sarah Chen</div>
-                                                            <div className="text-teal-400 text-xs">Peak form • Competition ready</div>
-                                                        </div>
+                                                        <div className="text-green-400 text-xs font-medium">92%</div>
                                                     </div>
-                                                    <div className="text-teal-400 text-xs font-medium">96%</div>
-                                                </div>
-                                            </div>
 
-                                            {/* Quick Actions */}
-                                            <div className="p-4 border-t border-zinc-800 flex-shrink-0">
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <button className="flex items-center justify-center space-x-2 p-2 bg-teal-500/20 text-teal-400 rounded-lg text-xs font-medium hover:bg-teal-500/30 transition-colors">
-                                                        <FaComments className="h-3 w-3" />
-                                                        <span>Send Message</span>
-                                                    </button>
-                                                    <button className="flex items-center justify-center space-x-2 p-2 bg-blue-500/20 text-blue-400 rounded-lg text-xs font-medium hover:bg-blue-500/30 transition-colors">
-                                                        <FaChartLine className="h-3 w-3" />
-                                                        <span>View Reports</span>
-                                                    </button>
+                                                    {/* Athlete 3 - Warning */}
+                                                    <div className="flex items-center justify-between p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
+                                                                <span className="text-white text-xs font-bold">AL</span>
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-white text-sm font-medium">Alex Lee</div>
+                                                                <div className="text-yellow-400 text-xs">Fatigue trend • Monitor</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-yellow-400 text-xs font-medium">76%</div>
+                                                    </div>
+
+                                                    {/* Athlete 4 - Good */}
+                                                    <div className="flex items-center justify-between p-3 bg-zinc-800/40 rounded-lg">
+                                                        <div className="flex items-center space-x-3">
+                                                            <div className="w-8 h-8 bg-teal-500 rounded-full flex items-center justify-center">
+                                                                <span className="text-white text-xs font-bold">SC</span>
+                                                            </div>
+                                                            <div>
+                                                                <div className="text-white text-sm font-medium">Sarah Chen</div>
+                                                                <div className="text-teal-400 text-xs">Peak form • Competition ready</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-teal-400 text-xs font-medium">96%</div>
+                                                    </div>
                                                 </div>
-                                            </div>
+
+                                                {/* Quick Actions */}
+                                                <div className="p-4 border-t border-zinc-800 flex-shrink-0">
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <button className="flex items-center justify-center space-x-2 p-2 bg-teal-500/20 text-teal-400 rounded-lg text-xs font-medium hover:bg-teal-500/30 transition-colors">
+                                                            <FaComments className="h-3 w-3" />
+                                                            <span>Send Message</span>
+                                                        </button>
+                                                        <button className="flex items-center justify-center space-x-2 p-2 bg-blue-500/20 text-blue-400 rounded-lg text-xs font-medium hover:bg-blue-500/30 transition-colors">
+                                                            <FaChartLine className="h-3 w-3" />
+                                                            <span>View Reports</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={() => {
                                             setWaitlistUserType('coach');
                                             setShowWaitlistForm(true);
@@ -2796,7 +2778,7 @@ const PulseCheckPage: NextPage = () => {
                         <div className="absolute bottom-20 right-1/4 w-80 h-80 bg-blue-500/5 rounded-full filter blur-3xl animate-pulse"></div>
                         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-purple-500/5 rounded-full filter blur-3xl"></div>
                     </div>
-                    
+
                     <div className="relative max-w-7xl mx-auto px-6 lg:px-8">
                         {/* Section Header */}
                         <div className="text-center mb-20">
@@ -2812,7 +2794,7 @@ const PulseCheckPage: NextPage = () => {
                                 </div>
                                 <span className="text-zinc-300 text-sm font-medium">Apple Watch + Pulse Integration</span>
                             </div>
-                            
+
                             <h2 className="text-5xl sm:text-7xl font-bold text-white mb-8 tracking-tight">
                                 Your Data Can Now
                                 <br />
@@ -2820,9 +2802,9 @@ const PulseCheckPage: NextPage = () => {
                                     Talk Back to You
                                 </span>
                             </h2>
-                            
+
                             <p className="text-xl text-zinc-400 max-w-3xl mx-auto leading-relaxed mb-12">
-                                Apple Watch streams biometric data to Pulse, where we capture every lift, rep, and sport performance. Pulse Check then transforms this comprehensive athletic profile into intelligent conversations that explain what your data means for your performance.
+                                Apple Watch streams biometric data to Pulse, where we capture every lift, rep, and sport performance. PulseCheck then transforms this comprehensive athletic profile into intelligent conversations that explain what your data means for your performance.
                             </p>
                         </div>
 
@@ -2840,7 +2822,7 @@ const PulseCheckPage: NextPage = () => {
                                         <span className="text-zinc-500 text-xs">Biometric Stream</span>
                                     </div>
                                 </div>
-                                
+
                                 {/* Arrow 2: Pulse → Pulse Check */}
                                 <div className="absolute top-1/2 right-1/3 transform -translate-y-1/2 translate-x-4">
                                     <div className="flex items-center">
@@ -2863,7 +2845,7 @@ const PulseCheckPage: NextPage = () => {
                                         <h3 className="text-2xl font-bold text-white mb-2">Apple Watch</h3>
                                         <p className="text-zinc-400 text-sm">Continuous Health Monitoring</p>
                                     </div>
-                                    
+
                                     {/* Live Metrics */}
                                     <div className="space-y-4">
                                         <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
@@ -2873,7 +2855,7 @@ const PulseCheckPage: NextPage = () => {
                                             </div>
                                             <span className="text-white font-semibold">78 BPM</span>
                                         </div>
-                                        
+
                                         <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
                                             <div className="flex items-center gap-3">
                                                 <FaFire className="h-4 w-4 text-orange-400" />
@@ -2881,7 +2863,7 @@ const PulseCheckPage: NextPage = () => {
                                             </div>
                                             <span className="text-white font-semibold">342 kcal</span>
                                         </div>
-                                        
+
                                         <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
                                             <div className="flex items-center gap-3">
                                                 <FaDumbbell className="h-4 w-4 text-[#E0FE10]" />
@@ -2889,7 +2871,7 @@ const PulseCheckPage: NextPage = () => {
                                             </div>
                                             <span className="text-white font-semibold">45 min</span>
                                         </div>
-                                        
+
                                         <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
                                             <div className="flex items-center gap-3">
                                                 <FaBed className="h-4 w-4 text-blue-400" />
@@ -2912,7 +2894,7 @@ const PulseCheckPage: NextPage = () => {
                                         <h3 className="text-2xl font-bold text-white mb-2">Pulse App</h3>
                                         <p className="text-zinc-400 text-sm">Athletic Performance Capture</p>
                                     </div>
-                                    
+
                                     {/* Athletic Metrics */}
                                     <div className="space-y-4">
                                         <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
@@ -2922,7 +2904,7 @@ const PulseCheckPage: NextPage = () => {
                                             </div>
                                             <span className="text-white font-semibold">285 lbs</span>
                                         </div>
-                                        
+
                                         <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
                                             <div className="flex items-center gap-3">
                                                 <FaRunning className="h-4 w-4 text-purple-400" />
@@ -2930,7 +2912,7 @@ const PulseCheckPage: NextPage = () => {
                                             </div>
                                             <span className="text-white font-semibold">67%</span>
                                         </div>
-                                        
+
                                         <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
                                             <div className="flex items-center gap-3">
                                                 <FaChartLine className="h-4 w-4 text-green-400" />
@@ -2938,7 +2920,7 @@ const PulseCheckPage: NextPage = () => {
                                             </div>
                                             <span className="text-white font-semibold">High</span>
                                         </div>
-                                        
+
                                         <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
                                             <div className="flex items-center gap-3">
                                                 <FaTrophy className="h-4 w-4 text-yellow-400" />
@@ -2947,7 +2929,7 @@ const PulseCheckPage: NextPage = () => {
                                             <span className="text-white font-semibold">92/100</span>
                                         </div>
                                     </div>
-                                    
+
                                     {/* Data Flow Indicators */}
                                     <div className="flex items-center justify-between mt-6 pt-4 border-t border-zinc-700">
                                         <div className="flex items-center gap-2">
@@ -2956,7 +2938,7 @@ const PulseCheckPage: NextPage = () => {
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="text-zinc-400 text-xs">To Analysis</span>
-                                            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{animationDelay: '0.5s'}}></div>
+                                            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }}></div>
                                         </div>
                                     </div>
                                 </div>
@@ -2970,10 +2952,10 @@ const PulseCheckPage: NextPage = () => {
                                         <div className="w-16 h-16 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-2xl flex items-center justify-center mx-auto mb-4 p-3">
                                             <img src="/app-logo.png" alt="Pulse" className="h-10 w-10" />
                                         </div>
-                                        <h3 className="text-2xl font-bold text-white mb-2">Pulse Check</h3>
+                                        <h3 className="text-2xl font-bold text-white mb-2">PulseCheck</h3>
                                         <p className="text-zinc-400 text-sm">Athletic Performance Intelligence</p>
                                     </div>
-                                    
+
                                     {/* Sample Conversations */}
                                     <div className="space-y-4">
                                         <div className="bg-[#E0FE10]/10 border border-[#E0FE10]/20 rounded-lg p-4">
@@ -2988,7 +2970,7 @@ const PulseCheckPage: NextPage = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                        
+
                                         <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
                                             <div className="flex items-start gap-3">
                                                 <div className="w-6 h-6 bg-blue-400 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
@@ -3001,7 +2983,7 @@ const PulseCheckPage: NextPage = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                        
+
                                         <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
                                             <div className="flex items-start gap-3">
                                                 <div className="w-6 h-6 bg-orange-400 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
@@ -3028,7 +3010,7 @@ const PulseCheckPage: NextPage = () => {
                                 </div>
                                 <h3 className="text-3xl font-bold text-white mb-4">Pulse Knows Your Entire Athletic Story</h3>
                                 <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
-                                    Every workout, lift, sport, and biometric creates a comprehensive performance profile that Pulse Check uses to deliver personalized insights.
+                                    Every workout, lift, sport, and biometric creates a comprehensive performance profile that PulseCheck uses to deliver personalized insights.
                                 </p>
                             </div>
 
@@ -3102,7 +3084,7 @@ const PulseCheckPage: NextPage = () => {
                                         <div className="h-px bg-gradient-to-r from-transparent via-zinc-600 to-transparent flex-1"></div>
                                     </div>
                                     <p className="text-zinc-300 text-lg leading-relaxed">
-                                        Pulse Check synthesizes this massive dataset to understand your unique patterns, predict performance outcomes, and provide personalized recommendations that evolve with your training.
+                                        PulseCheck synthesizes this massive dataset to understand your unique patterns, predict performance outcomes, and provide personalized recommendations that evolve with your training.
                                     </p>
                                 </div>
                             </div>
@@ -3122,7 +3104,7 @@ const PulseCheckPage: NextPage = () => {
                                     Every metric is instantly analyzed for patterns, trends, and actionable insights. Your data never sleeps.
                                 </p>
                             </div>
-                            
+
                             <div className="group text-center">
                                 <div className="relative mb-6">
                                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-full blur-lg group-hover:blur-xl transition-all duration-500"></div>
@@ -3135,7 +3117,7 @@ const PulseCheckPage: NextPage = () => {
                                     Ask questions in plain English. Get answers that understand context, history, and your unique goals.
                                 </p>
                             </div>
-                            
+
                             <div className="group text-center">
                                 <div className="relative mb-6">
                                     <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-red-500/20 rounded-full blur-lg group-hover:blur-xl transition-all duration-500"></div>
@@ -3156,7 +3138,7 @@ const PulseCheckPage: NextPage = () => {
                                 <h3 className="text-3xl font-bold text-white mb-4">Ask Anything About Your Health</h3>
                                 <p className="text-zinc-400 text-lg">Your data understands context and responds with intelligence</p>
                             </div>
-                            
+
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                                 <div className="space-y-6">
                                     {/* Question 1 */}
@@ -3168,7 +3150,7 @@ const PulseCheckPage: NextPage = () => {
                                             <p className="text-zinc-300">"Why did my bench press strength drop this week?"</p>
                                         </div>
                                     </div>
-                                    
+
                                     <div className="flex items-start gap-4">
                                         <div className="w-10 h-10 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-full flex items-center justify-center flex-shrink-0">
                                             <FaBrain className="h-5 w-5 text-zinc-900" />
@@ -3180,7 +3162,7 @@ const PulseCheckPage: NextPage = () => {
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div className="space-y-6">
                                     {/* Question 2 */}
                                     <div className="flex items-start gap-4">
@@ -3191,7 +3173,7 @@ const PulseCheckPage: NextPage = () => {
                                             <p className="text-zinc-300">"How is my basketball shooting improving?"</p>
                                         </div>
                                     </div>
-                                    
+
                                     <div className="flex items-start gap-4">
                                         <div className="w-10 h-10 bg-gradient-to-br from-[#E0FE10] to-lime-400 rounded-full flex items-center justify-center flex-shrink-0">
                                             <FaBrain className="h-5 w-5 text-zinc-900" />
@@ -3225,10 +3207,10 @@ const PulseCheckPage: NextPage = () => {
                             </span>
                         </h2>
                         <p className="text-xl text-zinc-400 mb-12 max-w-2xl mx-auto leading-relaxed">
-                             Join athletes and coaches who are already using Pulse Check to gain the psychological edge in their training.
+                            Join athletes and coaches who are already using PulseCheck to gain the psychological edge in their training.
                         </p>
                         <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-                            <button 
+                            <button
                                 onClick={() => {
                                     setWaitlistUserType('athlete');
                                     setShowWaitlistForm(true);
@@ -3241,8 +3223,8 @@ const PulseCheckPage: NextPage = () => {
                                     Join Waitlist
                                 </span>
                             </button>
-                            <a 
-                                href="mailto:pulsefitnessapp@gmail.com" 
+                            <a
+                                href="mailto:pulsefitnessapp@gmail.com"
                                 className="inline-flex items-center justify-center px-10 py-4 text-lg font-semibold text-white hover:text-zinc-300 transition-colors"
                             >
                                 Contact for Pilot Program
@@ -3252,11 +3234,11 @@ const PulseCheckPage: NextPage = () => {
                     </div>
                 </div>
             </main>
-            
+
             <Footer />
-            
+
             {/* Waitlist Form Modal */}
-            <PulseCheckWaitlistForm 
+            <PulseCheckWaitlistForm
                 isOpen={showWaitlistForm}
                 onClose={() => setShowWaitlistForm(false)}
                 userType={waitlistUserType}
