@@ -1838,7 +1838,7 @@ const Discover: React.FC = () => {
                   className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-zinc-800 transition-colors"
                 >
                   <img
-                    src="/pulseCheckIcon.png"
+                    src="/pulsecheck-logo.svg"
                     alt="PulseCheck"
                     className="w-5 h-5"
                   />

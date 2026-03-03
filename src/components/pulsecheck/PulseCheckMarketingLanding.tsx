@@ -19,9 +19,68 @@ const CheckIcon: React.FC = () => (
 
 const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({ onJoinWaitlist }) => {
     useEffect(() => {
-        const reveals = Array.from(document.querySelectorAll<HTMLElement>('.pc-landing .reveal'));
+        const cleanupFns: Array<() => void> = [];
+        const timeoutIds: number[] = [];
+        const schedule = (fn: () => void, delayMs: number) => {
+            const id = window.setTimeout(fn, delayMs);
+            timeoutIds.push(id);
+            return id;
+        };
 
-        const observer = new IntersectionObserver(
+        // Animated pulse-wave canvas background.
+        const canvas = document.getElementById('pc-pulse-canvas') as HTMLCanvasElement | null;
+        const ctx = canvas?.getContext('2d') ?? null;
+        let rafId = 0;
+        if (canvas && ctx) {
+            let width = 0;
+            let height = 0;
+            let time = 0;
+
+            const resize = () => {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+            };
+            resize();
+            window.addEventListener('resize', resize);
+            cleanupFns.push(() => window.removeEventListener('resize', resize));
+
+            const draw = () => {
+                ctx.clearRect(0, 0, width, height);
+                time += 0.008;
+
+                for (let wave = 0; wave < 3; wave++) {
+                    ctx.beginPath();
+                    const baseY = height * 0.5;
+                    const amp = 40 + wave * 20;
+                    const freq = 0.003 + wave * 0.001;
+                    const speed = time * (1 + wave * 0.3);
+                    const alpha = 0.04 - wave * 0.012;
+                    ctx.strokeStyle = `rgba(200, 255, 0, ${alpha})`;
+                    ctx.lineWidth = 1.5;
+
+                    for (let x = 0; x < width; x += 2) {
+                        const y = baseY + Math.sin(x * freq + speed) * amp + Math.sin(x * freq * 2.3 + speed * 1.5) * (amp * 0.3);
+                        if (x === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.stroke();
+                }
+
+                const pulseRadius = 200 + Math.sin(time * 2) * 80;
+                const gradient = ctx.createRadialGradient(width / 2, height * 0.4, 0, width / 2, height * 0.4, pulseRadius);
+                gradient.addColorStop(0, 'rgba(200,255,0,0.03)');
+                gradient.addColorStop(1, 'transparent');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, width, height);
+
+                rafId = window.requestAnimationFrame(draw);
+            };
+            draw();
+            cleanupFns.push(() => window.cancelAnimationFrame(rafId));
+        }
+
+        const reveals = Array.from(document.querySelectorAll<HTMLElement>('.pc-landing .reveal'));
+        const revealObserver = new IntersectionObserver(
             (entries) => {
                 entries.forEach((entry) => {
                     if (entry.isIntersecting) {
@@ -32,7 +91,213 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
             { threshold: 0.1, rootMargin: '0px 0px -60px 0px' }
         );
 
-        reveals.forEach((el) => observer.observe(el));
+        reveals.forEach((el) => revealObserver.observe(el));
+        cleanupFns.push(() => revealObserver.disconnect());
+
+        // Terminal sequence that types itself.
+        const terminalWrap = document.getElementById('pc-terminal');
+        const terminalBody = document.getElementById('pc-terminal-body');
+        if (terminalWrap && terminalBody) {
+            const lines: Array<
+                | { type: 'prompt'; prefix: 'nora' | 'athlete'; text: string; delay: number }
+                | { type: 'pause'; ms: number }
+                | { type: 'response' }
+            > = [
+                { type: 'prompt', prefix: 'nora', text: 'What was the <span class="highlight">hardest mental moment</span> in yesterday\'s practice?', delay: 40 },
+                { type: 'pause', ms: 800 },
+                { type: 'prompt', prefix: 'athlete', text: 'Coach pulled me from the drill in front of everyone. Couldn\'t stop replaying it after.', delay: 30 },
+                { type: 'pause', ms: 600 },
+                { type: 'response' }
+            ];
+
+            let lineIdx = 0;
+            let terminalStarted = false;
+
+            const buildPartialHTML = (html: string, charCount: number) => {
+                let result = '';
+                let chars = 0;
+                let inTag = false;
+
+                for (let i = 0; i < html.length; i++) {
+                    if (html[i] === '<') {
+                        inTag = true;
+                        result += html[i];
+                        continue;
+                    }
+                    if (html[i] === '>') {
+                        inTag = false;
+                        result += html[i];
+                        continue;
+                    }
+                    if (inTag) {
+                        result += html[i];
+                        continue;
+                    }
+                    if (chars < charCount) {
+                        result += html[i];
+                        chars++;
+                    }
+                }
+                return result;
+            };
+
+            const typeText = (el: HTMLElement, html: string, charDelay: number, cb: () => void) => {
+                const tmp = document.createElement('div');
+                tmp.innerHTML = html;
+                const text = tmp.textContent ?? '';
+                let i = 0;
+
+                const tick = () => {
+                    if (i < text.length) {
+                        el.innerHTML = `${buildPartialHTML(html, i + 1)}<span class="terminal-cursor"></span>`;
+                        i++;
+                        schedule(tick, charDelay + Math.floor(Math.random() * 20));
+                    } else {
+                        el.querySelectorAll('.terminal-cursor').forEach((cursor) => cursor.remove());
+                        cb();
+                    }
+                };
+
+                tick();
+            };
+
+            const runTerminal = () => {
+                if (lineIdx >= lines.length) return;
+                const line = lines[lineIdx];
+                lineIdx++;
+
+                if (line.type === 'prompt') {
+                    const lineEl = document.createElement('div');
+                    lineEl.className = 'terminal-line';
+                    const promptEl = document.createElement('span');
+                    promptEl.className = 'terminal-prompt';
+                    if (line.prefix === 'athlete') promptEl.classList.add('athlete');
+                    promptEl.textContent = `${line.prefix} ›`;
+                    const textEl = document.createElement('span');
+                    textEl.className = 'terminal-text';
+
+                    lineEl.appendChild(promptEl);
+                    lineEl.appendChild(textEl);
+                    terminalBody.appendChild(lineEl);
+
+                    typeText(textEl, line.text, line.delay, () => schedule(runTerminal, 200));
+                    return;
+                }
+
+                if (line.type === 'pause') {
+                    schedule(runTerminal, line.ms);
+                    return;
+                }
+
+                const response = document.createElement('div');
+                response.className = 'terminal-response';
+                response.innerHTML = `
+                  <div class="status"><span class="response-dot"></span>NORA ANALYSIS</div>
+                  <p>Elevated rumination pattern detected. Readiness score adjusted. Coach briefing updated with context-appropriate framing. Suggested micro-drill: <span class="response-highlight">3-second reset protocol</span> before next session.</p>
+                `;
+                terminalBody.appendChild(response);
+                schedule(() => response.classList.add('show'), 60);
+            };
+
+            const terminalObserver = new IntersectionObserver(
+                (entries) => {
+                    entries.forEach((entry) => {
+                        if (!entry.isIntersecting || terminalStarted) return;
+                        terminalStarted = true;
+                        terminalWrap.classList.add('visible');
+                        schedule(runTerminal, 600);
+                    });
+                },
+                { threshold: 0.3 }
+            );
+            terminalObserver.observe(terminalWrap);
+            cleanupFns.push(() => terminalObserver.disconnect());
+        }
+
+        // Count-up stats when visible.
+        const statNumbers = Array.from(document.querySelectorAll<HTMLElement>('.pc-landing .problem-stat-number[data-count]'));
+        const countObserver = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    if (!entry.isIntersecting) return;
+                    const target = Number(entry.target.getAttribute('data-count') ?? '0');
+                    const suffix = entry.target.getAttribute('data-suffix') ?? '';
+                    const start = performance.now();
+                    const duration = 1500;
+
+                    const animate = (now: number) => {
+                        const progress = Math.min((now - start) / duration, 1);
+                        const eased = 1 - Math.pow(1 - progress, 3);
+                        const current = Math.round(eased * target);
+                        entry.target.textContent = `${current}${suffix}`;
+                        if (progress < 1) window.requestAnimationFrame(animate);
+                    };
+                    window.requestAnimationFrame(animate);
+                    countObserver.unobserve(entry.target);
+                });
+            },
+            { threshold: 0.5 }
+        );
+        statNumbers.forEach((el) => countObserver.observe(el));
+        cleanupFns.push(() => countObserver.disconnect());
+
+        // Simulation cascade + meter shifts.
+        const simCascade = document.getElementById('pc-sim-cascade');
+        if (simCascade) {
+            let simStarted = false;
+            const simObserver = new IntersectionObserver(
+                (entries) => {
+                    entries.forEach((entry) => {
+                        if (!entry.isIntersecting || simStarted) return;
+                        simStarted = true;
+
+                        ['pc-sim-s1', 'pc-sim-s2', 'pc-sim-s3'].forEach((id, idx) => {
+                            schedule(() => document.getElementById(id)?.classList.add('active'), 400 + idx * 600);
+                        });
+
+                        ['pc-int-1', 'pc-int-2', 'pc-int-3', 'pc-int-4'].forEach((id, idx) => {
+                            schedule(() => document.getElementById(id)?.classList.add('active'), 600 + idx * 400);
+                        });
+
+                        schedule(() => {
+                            const pressure = document.getElementById('pc-m-pressure');
+                            const focus = document.getElementById('pc-m-focus');
+                            const composure = document.getElementById('pc-m-composure');
+                            const pressureBar = document.getElementById('pc-bar-pressure');
+                            const focusBar = document.getElementById('pc-bar-focus');
+                            const composureBar = document.getElementById('pc-bar-composure');
+
+                            if (pressure) {
+                                pressure.textContent = '54%';
+                                pressure.classList.remove('meter-high');
+                                pressure.classList.add('meter-mid');
+                            }
+                            if (pressureBar) {
+                                pressureBar.style.width = '54%';
+                                pressureBar.style.background = 'var(--amber)';
+                            }
+
+                            if (focus) {
+                                focus.textContent = '88%';
+                                focus.classList.remove('meter-mid');
+                                focus.classList.add('meter-ok');
+                            }
+                            if (focusBar) {
+                                focusBar.style.width = '88%';
+                                focusBar.style.background = 'var(--lime)';
+                            }
+
+                            if (composure) composure.textContent = '91%';
+                            if (composureBar) composureBar.style.width = '91%';
+                        }, 2400);
+                    });
+                },
+                { threshold: 0.2 }
+            );
+
+            simObserver.observe(simCascade);
+            cleanupFns.push(() => simObserver.disconnect());
+        }
 
         const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('.pc-landing a[href^="#"]'));
         const handlers: Array<{ el: HTMLAnchorElement; fn: (e: Event) => void }> = [];
@@ -51,7 +316,8 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
         });
 
         return () => {
-            observer.disconnect();
+            cleanupFns.forEach((fn) => fn());
+            timeoutIds.forEach((id) => window.clearTimeout(id));
             handlers.forEach(({ el, fn }) => el.removeEventListener('click', fn));
         };
     }, []);
@@ -62,10 +328,12 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 <title>PulseCheck — The Mental Performance OS for Elite Programs</title>
             </Head>
 
+            <canvas id="pc-pulse-canvas" aria-hidden="true"></canvas>
+
             <nav>
                 <a href="#top" className="nav-logo">
                     <div className="nav-logo-icon">
-                        <PulseBoltIcon className="w-[18px] h-[18px]" />
+                        <img src="/pulsecheck-logo.svg" alt="" aria-hidden="true" className="nav-logo-mark" />
                     </div>
                     PulseCheck
                 </a>
@@ -78,12 +346,19 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
             </nav>
 
             <section className="hero">
+                <div className="hero-glow"></div>
                 <div className="hero-badge">
                     <span className="hero-badge-dot"></span>
                     The Complete Readiness Triad for Elite Programs
                 </div>
                 <h1>Your athletes are physically ready. <em>Are they mentally built to execute?</em></h1>
                 <p className="hero-sub">PulseCheck is the mental performance OS that gives coaches real-time readiness signals, intervention tools, and clinical safety nets — before it shows on the scoreboard.</p>
+                <div className="hero-heartbeat" aria-hidden="true">
+                    <svg viewBox="0 0 600 60" preserveAspectRatio="none">
+                        <path className="heartbeat-glow" d="M0,30 L120,30 L145,30 L160,8 L175,52 L190,20 L205,38 L220,30 L340,30 L365,30 L380,8 L395,52 L410,20 L425,38 L440,30 L600,30" />
+                        <path className="heartbeat-line" d="M0,30 L120,30 L145,30 L160,8 L175,52 L190,20 L205,38 L220,30 L340,30 L365,30 L380,8 L395,52 L410,20 L425,38 L440,30 L600,30" />
+                    </svg>
+                </div>
                 <div className="hero-ctas">
                     <a href="mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Pilot%20Inquiry" className="btn-primary">
                         <PulseBoltIcon className="w-4 h-4" />
@@ -103,7 +378,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
             </section>
 
             <section className="terminal-section">
-                <div className="terminal-wrapper">
+                <div className="terminal-wrapper" id="pc-terminal">
                     <div className="terminal">
                         <div className="terminal-header">
                             <div className="terminal-dot red"></div>
@@ -111,23 +386,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                             <div className="terminal-dot green"></div>
                             <span className="terminal-title">PulseCheck · Daily Check-in</span>
                         </div>
-                        <div className="terminal-body">
-                            <div className="terminal-line">
-                                <span className="terminal-prompt">nora ›</span>
-                                <span className="terminal-text">What was the <span className="highlight">hardest mental moment</span> in yesterday&apos;s practice?</span>
-                            </div>
-                            <div className="terminal-line">
-                                <span className="terminal-prompt">athlete ›</span>
-                                <span className="terminal-text">Coach pulled me from the drill in front of everyone. Couldn&apos;t stop replaying it after.<span className="terminal-cursor"></span></span>
-                            </div>
-                            <div className="terminal-response">
-                                <div className="status">
-                                    <PulseBoltIcon className="w-3 h-3" />
-                                    NORA ANALYSIS
-                                </div>
-                                <p>Elevated rumination pattern detected. Readiness score adjusted. Coach briefing updated with context-appropriate framing. Suggested micro-drill: 3-second reset protocol before next session.</p>
-                            </div>
-                        </div>
+                        <div className="terminal-body" id="pc-terminal-body"></div>
                     </div>
                 </div>
             </section>
@@ -140,15 +399,15 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 </div>
                 <div className="problem-stats reveal">
                     <div className="problem-stat">
-                        <div className="problem-stat-number">85%</div>
+                        <div className="problem-stat-number" data-count="85" data-suffix="%">0%</div>
                         <div className="problem-stat-label">of coaches say mental readiness impacts game-day performance</div>
                     </div>
                     <div className="problem-stat">
-                        <div className="problem-stat-number">0</div>
+                        <div className="problem-stat-number" data-count="0" data-suffix="">0</div>
                         <div className="problem-stat-label">tools currently measure it in real time for coaching staff</div>
                     </div>
                     <div className="problem-stat">
-                        <div className="problem-stat-number">2 min</div>
+                        <div className="problem-stat-number" data-count="2" data-suffix=" min">0 min</div>
                         <div className="problem-stat-label">daily check-in that captures what hours of observation miss</div>
                     </div>
                 </div>
@@ -173,27 +432,30 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                             <div className="sim-meters">
                                 <div className="sim-meter">
                                     <div className="sim-meter-label">Pressure</div>
-                                    <div className="sim-meter-value meter-high">87%</div>
+                                    <div className="sim-meter-value meter-high" id="pc-m-pressure">87%</div>
+                                    <div className="sim-meter-bar"><div className="sim-meter-fill" id="pc-bar-pressure" style={{ width: '87%', background: 'var(--coral)' }}></div></div>
                                 </div>
                                 <div className="sim-meter">
                                     <div className="sim-meter-label">Focus</div>
-                                    <div className="sim-meter-value meter-mid">62%</div>
+                                    <div className="sim-meter-value meter-mid" id="pc-m-focus">62%</div>
+                                    <div className="sim-meter-bar"><div className="sim-meter-fill" id="pc-bar-focus" style={{ width: '62%', background: 'var(--amber)' }}></div></div>
                                 </div>
                                 <div className="sim-meter">
                                     <div className="sim-meter-label">Composure</div>
-                                    <div className="sim-meter-value meter-ok">71%</div>
+                                    <div className="sim-meter-value meter-ok" id="pc-m-composure">71%</div>
+                                    <div className="sim-meter-bar"><div className="sim-meter-fill" id="pc-bar-composure" style={{ width: '71%', background: 'var(--lime)' }}></div></div>
                                 </div>
                             </div>
-                            <div className="sim-flow">
-                                <div className="sim-flow-step trigger">
+                            <div className="sim-flow" id="pc-sim-cascade">
+                                <div className="sim-flow-step trigger" id="pc-sim-s1">
                                     <div className="sim-flow-step-label">Trigger Event</div>
                                     <p>Missed two free throws, crowd gets loud, hands feel tight, self-talk turns negative.</p>
                                 </div>
-                                <div className="sim-flow-step prompt">
+                                <div className="sim-flow-step prompt" id="pc-sim-s2">
                                     <div className="sim-flow-step-label">Nora Prompt</div>
                                     <p>&quot;Reset in 8 seconds: exhale long, eyes on rim center, cue: smooth follow-through.&quot;</p>
                                 </div>
-                                <div className="sim-flow-step result">
+                                <div className="sim-flow-step result" id="pc-sim-s3">
                                     <div className="sim-flow-step-label">Execution Result</div>
                                     <p>Athlete slows heart rate, blocks crowd noise, and commits to next-shot routine.</p>
                                 </div>
@@ -203,28 +465,28 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                             <h3>Mental Intervention Sequence</h3>
                             <p>A repeatable workflow used in late-game stress spikes.</p>
                             <div className="intervention-steps">
-                                <div className="intervention-step">
+                                <div className="intervention-step" id="pc-int-1">
                                     <div className="intervention-icon detect">⚠</div>
                                     <div className="intervention-content">
                                         <h4>1. Detect the Spiral</h4>
                                         <p>Negative self-talk and rushed decision patterns are flagged instantly.</p>
                                     </div>
                                 </div>
-                                <div className="intervention-step">
+                                <div className="intervention-step" id="pc-int-2">
                                     <div className="intervention-icon reset">◉</div>
                                     <div className="intervention-content">
                                         <h4>2. Issue a Micro-Reset</h4>
                                         <p>Breath cadence and short cue are tailored to role and situation.</p>
                                     </div>
                                 </div>
-                                <div className="intervention-step">
+                                <div className="intervention-step" id="pc-int-3">
                                     <div className="intervention-icon reattach">◎</div>
                                     <div className="intervention-content">
                                         <h4>3. Re-Attach to Task</h4>
                                         <p>Attention narrows to one controllable action for the next play.</p>
                                     </div>
                                 </div>
-                                <div className="intervention-step">
+                                <div className="intervention-step" id="pc-int-4">
                                     <div className="intervention-icon lock">✦</div>
                                     <div className="intervention-content">
                                         <h4>4. Lock In Confidence</h4>
@@ -393,7 +655,9 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 <div className="footer-inner">
                     <div className="footer-brand">
                         <a href="#top" className="nav-logo" style={{ marginBottom: '4px' }}>
-                            <div className="nav-logo-icon"><PulseBoltIcon className="w-[18px] h-[18px]" /></div>
+                            <div className="nav-logo-icon">
+                                <img src="/pulsecheck-logo.svg" alt="" aria-hidden="true" className="nav-logo-mark" />
+                            </div>
                             PulseCheck
                         </a>
                         <p>Building the future of athletic mental performance through AI, sports psychology, and real-time intelligence.</p>
@@ -442,6 +706,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 --cyan: #00e5ff;
                 --purple: #b388ff;
                 --coral: #ff6b6b;
+                --amber: #ffc107;
                 --text-primary: #f0f0f2;
                 --text-secondary: #8a8d95;
                 --text-tertiary: #5a5d65;
@@ -478,6 +743,23 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 z-index: 9999;
               }
 
+              .pc-landing #pc-pulse-canvas {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 0;
+                pointer-events: none;
+                opacity: 0.6;
+              }
+
+              .pc-landing section,
+              .pc-landing footer {
+                position: relative;
+                z-index: 1;
+              }
+
               .pc-landing nav {
                 position: fixed;
                 top: 0; left: 0; right: 0;
@@ -504,9 +786,14 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
 
               .pc-landing .nav-logo-icon {
                 width: 32px; height: 32px;
-                background: var(--lime);
-                border-radius: 8px;
                 display: flex; align-items: center; justify-content: center;
+                flex-shrink: 0;
+              }
+
+              .pc-landing .nav-logo-mark {
+                width: 100%;
+                height: 100%;
+                display: block;
               }
 
               .pc-landing .nav-links {
@@ -556,6 +843,23 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 width: 800px; height: 800px;
                 background: radial-gradient(ellipse, var(--lime-dim) 0%, transparent 70%);
                 pointer-events: none;
+              }
+
+              .pc-landing .hero-glow {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -55%);
+                width: 900px;
+                height: 700px;
+                background: radial-gradient(ellipse, rgba(200,255,0,0.07) 0%, rgba(200,255,0,0.02) 40%, transparent 70%);
+                pointer-events: none;
+                animation: heroGlowPulse 4s ease-in-out infinite;
+              }
+
+              @keyframes heroGlowPulse {
+                0%, 100% { opacity: 0.8; transform: translate(-50%, -55%) scale(1); }
+                50% { opacity: 1; transform: translate(-50%, -55%) scale(1.08); }
               }
 
               .pc-landing .hero-badge {
@@ -612,12 +916,47 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 animation: fadeUp 0.8s ease 0.6s forwards;
               }
 
+              .pc-landing .hero-heartbeat {
+                width: 100%;
+                max-width: 600px;
+                margin: 0 auto 48px;
+                height: 60px;
+                opacity: 0;
+                animation: fadeUp 0.8s ease 0.9s forwards;
+              }
+
+              .pc-landing .hero-heartbeat svg { width: 100%; height: 100%; }
+
+              .pc-landing .heartbeat-line {
+                stroke: var(--lime);
+                stroke-width: 2;
+                fill: none;
+                stroke-dasharray: 1200;
+                stroke-dashoffset: 1200;
+                animation: drawHeartbeat 3s ease-in-out 1.4s forwards;
+                filter: drop-shadow(0 0 8px rgba(200,255,0,0.3));
+              }
+
+              .pc-landing .heartbeat-glow {
+                stroke: var(--lime);
+                stroke-width: 6;
+                fill: none;
+                opacity: 0.15;
+                stroke-dasharray: 1200;
+                stroke-dashoffset: 1200;
+                animation: drawHeartbeat 3s ease-in-out 1.4s forwards;
+              }
+
+              @keyframes drawHeartbeat {
+                to { stroke-dashoffset: 0; }
+              }
+
               .pc-landing .hero-ctas {
                 display: flex;
                 gap: 16px;
                 align-items: center;
                 opacity: 0;
-                animation: fadeUp 0.8s ease 0.8s forwards;
+                animation: fadeUp 0.8s ease 1.1s forwards;
               }
 
               .pc-landing .btn-primary {
@@ -666,7 +1005,7 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 align-items: center;
                 gap: 20px;
                 opacity: 0;
-                animation: fadeUp 0.8s ease 1s forwards;
+                animation: fadeUp 0.8s ease 1.3s forwards;
               }
 
               .pc-landing .hero-proof-label {
@@ -701,7 +1040,17 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
                 justify-content: center;
               }
 
-              .pc-landing .terminal-wrapper { max-width: 680px; width: 100%; opacity: 0; animation: fadeUp 0.8s ease 1.2s forwards; }
+              .pc-landing .terminal-wrapper {
+                max-width: 680px;
+                width: 100%;
+                opacity: 0;
+                transform: translateY(30px);
+              }
+              .pc-landing .terminal-wrapper.visible {
+                opacity: 1;
+                transform: translateY(0);
+                transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+              }
               .pc-landing .terminal { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,0.5), 0 0 0 1px var(--border); }
               .pc-landing .terminal-header { display: flex; align-items: center; gap: 8px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
               .pc-landing .terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
@@ -709,14 +1058,18 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .terminal-dot.yellow { background: #febc2e; }
               .pc-landing .terminal-dot.green { background: #28c840; }
               .pc-landing .terminal-title { margin-left: 12px; font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary); }
-              .pc-landing .terminal-body { padding: 24px; }
+              .pc-landing .terminal-body { padding: 24px; min-height: 200px; }
               .pc-landing .terminal-line { display: flex; gap: 12px; margin-bottom: 16px; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; }
               .pc-landing .terminal-prompt { color: var(--lime); user-select: none; flex-shrink: 0; }
+              .pc-landing .terminal-prompt.athlete { color: var(--cyan); }
               .pc-landing .terminal-text { color: var(--text-secondary); }
               .pc-landing .terminal-text .highlight { color: var(--text-primary); }
-              .pc-landing .terminal-response { padding: 16px; background: rgba(200,255,0,0.04); border: 1px solid rgba(200,255,0,0.1); border-radius: 10px; margin-top: 8px; }
+              .pc-landing .terminal-response { padding: 16px; background: rgba(200,255,0,0.04); border: 1px solid rgba(200,255,0,0.1); border-radius: 10px; margin-top: 8px; opacity: 0; transform: translateY(8px); }
+              .pc-landing .terminal-response.show { opacity: 1; transform: translateY(0); transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
               .pc-landing .terminal-response p { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
               .pc-landing .terminal-response .status { display: inline-flex; align-items: center; gap: 6px; color: var(--lime); font-weight: 500; margin-bottom: 8px; font-size: 12px; }
+              .pc-landing .terminal-response .response-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--lime); animation: pulse-dot 2s ease infinite; }
+              .pc-landing .terminal-response .response-highlight { color: var(--lime); }
               .pc-landing .terminal-cursor { display: inline-block; width: 8px; height: 16px; background: var(--lime); animation: blink 1s step-end infinite; vertical-align: text-bottom; margin-left: 2px; }
               @keyframes blink { 50% { opacity: 0; } }
 
@@ -821,12 +1174,15 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .sim-meters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); }
               .pc-landing .sim-meter { background: var(--bg-card); padding: 24px; text-align: center; }
               .pc-landing .sim-meter-label { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-tertiary); margin-bottom: 8px; }
-              .pc-landing .sim-meter-value { font-family: var(--font-display); font-size: 36px; font-weight: 400; }
+              .pc-landing .sim-meter-value { font-family: var(--font-display); font-size: 36px; font-weight: 400; transition: all 1s ease; }
+              .pc-landing .sim-meter-bar { width: 80%; height: 3px; margin: 12px auto 0; border-radius: 2px; background: var(--border); overflow: hidden; position: relative; }
+              .pc-landing .sim-meter-fill { height: 100%; border-radius: 2px; transition: width 1.5s ease, background 1s ease; position: absolute; left: 0; top: 0; }
               .pc-landing .meter-high { color: var(--coral); }
-              .pc-landing .meter-mid { color: #ffc107; }
+              .pc-landing .meter-mid { color: var(--amber); }
               .pc-landing .meter-ok { color: var(--lime); }
               .pc-landing .sim-flow { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
-              .pc-landing .sim-flow-step { padding: 16px 20px; border-radius: 10px; border-left: 3px solid; }
+              .pc-landing .sim-flow-step { padding: 16px 20px; border-radius: 10px; border-left: 3px solid; opacity: 0; transform: translateX(-12px); transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+              .pc-landing .sim-flow-step.active { opacity: 1; transform: translateX(0); }
               .pc-landing .sim-flow-step.trigger { background: rgba(255,107,107,0.06); border-color: var(--coral); }
               .pc-landing .sim-flow-step.prompt { background: rgba(200,255,0,0.04); border-color: var(--lime); }
               .pc-landing .sim-flow-step.result { background: rgba(0,229,255,0.04); border-color: var(--cyan); }
@@ -839,7 +1195,8 @@ const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({
               .pc-landing .sim-right h3 { font-family: var(--font-display); font-size: 28px; font-weight: 400; margin-bottom: 8px; }
               .pc-landing .sim-right > p { font-size: 14px; color: var(--text-tertiary); margin-bottom: 32px; }
               .pc-landing .intervention-steps { display: flex; flex-direction: column; gap: 20px; }
-              .pc-landing .intervention-step { display: flex; gap: 16px; align-items: flex-start; }
+              .pc-landing .intervention-step { display: flex; gap: 16px; align-items: flex-start; opacity: 0; transform: translateY(12px); }
+              .pc-landing .intervention-step.active { opacity: 1; transform: translateY(0); transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
               .pc-landing .intervention-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; }
               .pc-landing .intervention-icon.detect { background: rgba(255,107,107,0.12); }
               .pc-landing .intervention-icon.reset { background: rgba(0,229,255,0.12); }

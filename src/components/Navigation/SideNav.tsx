@@ -217,7 +217,7 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
               )}
               {/* Use the same PulseCheck branding for Coach pages (no coach-specific sidebar branding) */}
               <img 
-                src={usePulseCheckNav ? '/pulseCheckIcon.png' : '/pulse-logo-white.svg'} 
+                src={usePulseCheckNav ? '/pulsecheck-logo.svg' : '/pulse-logo-white.svg'} 
                 alt={usePulseCheckNav ? 'PulseCheck' : 'Pulse'} 
                 className="relative h-8 w-auto" 
               />
@@ -233,7 +233,7 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
               {/* Icon glow */}
               <div className="absolute -inset-2 bg-[#E0FE10]/20 rounded-full blur-lg opacity-0 group-hover:opacity-100 transition-opacity" />
               <img 
-                src={usePulseCheckNav ? '/pulseCheckIcon.png' : '/pulseIcon.png'} 
+                src={usePulseCheckNav ? '/pulsecheck-logo.svg' : '/pulseIcon.png'} 
                 alt={usePulseCheckNav ? 'PulseCheck' : 'Pulse'} 
                 className="relative w-10 h-10" 
               />
@@ -406,7 +406,7 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
                         >
                           <div className="relative">
                             <div className="absolute -inset-1 bg-[#E0FE10]/20 rounded-lg blur opacity-50" />
-                            <img src="/pulseCheckIcon.png" alt="PulseCheck" className="relative w-5 h-5" />
+                            <img src="/pulsecheck-logo.svg" alt="PulseCheck" className="relative w-5 h-5" />
                           </div>
                           <span className="font-medium">PulseCheck</span>
                         </motion.button>
@@ -442,7 +442,7 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
                         <div className="relative">
                           <div className="absolute -inset-1 bg-[#E0FE10]/20 rounded-lg blur opacity-50" />
                           <img 
-                            src={isPulseCheckPage ? '/pulseIcon.png' : '/pulseCheckIcon.png'} 
+                            src={isPulseCheckPage ? '/pulseIcon.png' : '/pulsecheck-logo.svg'} 
                             alt={isPulseCheckPage ? 'Pulse' : 'PulseCheck'} 
                             className="relative w-5 h-5" 
                           />
