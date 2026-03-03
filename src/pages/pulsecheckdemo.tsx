@@ -26,6 +26,11 @@ import {
     Pill,
     Building2,
     LogOut,
+    BarChart3,
+    ClipboardList,
+    Settings,
+    Calendar,
+    Flame,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────
@@ -481,307 +486,369 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
         <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="max-w-4xl mx-auto px-4 py-8 space-y-6"
+            className="flex h-full"
         >
-            {/* Dashboard Header */}
-            <div className="text-center mb-8">
-                <motion.div
-                    initial={{ opacity: 0, y: -20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-800/60 border border-zinc-700/50 mb-4"
-                >
-                    <Shield className="w-4 h-4 text-[#E0FE10]" />
-                    <span className="text-sm text-zinc-300">Coach Dashboard</span>
-                </motion.div>
-                <motion.h2
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="text-2xl font-bold text-white"
-                >
-                    Athlete Intelligence
-                </motion.h2>
-                <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.4 }}
-                    className="text-zinc-400 mt-1"
-                >
-                    Here&apos;s what your coaching staff receives
-                </motion.p>
-            </div>
+            {/* ── Coach Sidebar ── */}
+            <motion.aside
+                initial={{ x: -60, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                transition={{ delay: 0.2, duration: 0.5 }}
+                className="w-[240px] flex-shrink-0 border-r border-zinc-800/60 flex flex-col py-4 px-3"
+                style={{ background: 'linear-gradient(180deg, rgba(17,17,19,0.95) 0%, rgba(10,10,11,0.98) 100%)' }}
+            >
+                {/* Logo */}
+                <div className="flex items-center gap-2 px-2 mb-6">
+                    <div className="w-7 h-7 rounded-lg bg-[#E0FE10]/15 flex items-center justify-center">
+                        <Shield className="w-4 h-4 text-[#E0FE10]" />
+                    </div>
+                    <div>
+                        <div className="text-sm font-bold text-white">PulseCheck</div>
+                        <div className="text-[8px] text-zinc-500 uppercase tracking-widest">Coaching Platform</div>
+                    </div>
+                </div>
 
-            {/* Nora Alert Card */}
-            <AnimatePresence>
-                {showAlert && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 30, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        transition={{ duration: 0.5 }}
-                        className="rounded-2xl overflow-hidden"
-                        style={{
-                            background:
-                                'linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(239,68,68,0.05) 100%)',
-                            border: '1px solid rgba(249,115,22,0.25)',
-                        }}
-                    >
-                        <div className="p-5">
-                            <div className="flex items-start gap-3 mb-4">
-                                <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center flex-shrink-0">
-                                    <AlertTriangle className="w-5 h-5 text-orange-400" />
-                                </div>
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="font-bold text-white">
-                                            Nora Alert — Tremaine Grant
-                                        </h3>
-                                        <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
-                                            Elevated Anxiety
-                                        </span>
+                {/* Coach Profile */}
+                <div className="flex items-center gap-2.5 px-2 py-3 rounded-xl bg-zinc-800/30 border border-zinc-700/20 mb-5">
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#E0FE10]/30 to-green-500/20 flex items-center justify-center border border-[#E0FE10]/20">
+                        <span className="text-xs font-bold text-[#E0FE10]">CW</span>
+                    </div>
+                    <div>
+                        <div className="text-xs font-semibold text-white">Coach Williams</div>
+                        <div className="text-[9px] text-zinc-500">Head Performance Coach</div>
+                    </div>
+                </div>
+
+                {/* Nav Menu */}
+                <nav className="flex-1 space-y-0.5">
+                    {[
+                        { icon: Home, label: 'Home', active: false },
+                        { icon: Flame, label: 'Athlete Alerts', active: true, badge: '2' },
+                        { icon: Users, label: 'Team Roster', active: false },
+                        { icon: ClipboardList, label: 'Training Library', active: false },
+                        { icon: Calendar, label: 'Schedule', active: false },
+                        { icon: BarChart3, label: 'Reports', active: false },
+                        { icon: Settings, label: 'Settings', active: false },
+                    ].map((item) => (
+                        <div
+                            key={item.label}
+                            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm cursor-pointer transition-colors ${item.active
+                                ? 'bg-[#E0FE10]/10 text-[#E0FE10] font-medium'
+                                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
+                                }`}
+                        >
+                            <item.icon className="w-4 h-4" />
+                            <span>{item.label}</span>
+                            {item.badge && (
+                                <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/25 font-bold">
+                                    {item.badge}
+                                </span>
+                            )}
+                        </div>
+                    ))}
+                </nav>
+
+                {/* Logout */}
+                <div className="mt-auto pt-3 border-t border-zinc-800/60">
+                    <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-600 hover:text-zinc-400 cursor-pointer transition-colors">
+                        <LogOut className="w-4 h-4" />
+                        <span>Logout</span>
+                    </div>
+                </div>
+            </motion.aside>
+
+            {/* ── Main Content ── */}
+            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+                {/* Header breadcrumb */}
+                <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center justify-between"
+                >
+                    <div className="flex items-center gap-2 text-sm">
+                        <span className="text-zinc-500">Athlete Alerts</span>
+                        <ChevronRight className="w-3 h-3 text-zinc-600" />
+                        <span className="text-white font-medium">Game Day Overview</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25 font-bold">
+                            2 ALERTS
+                        </span>
+                        <span className="text-[10px] text-zinc-500">March 2, 2026 • 8:15 AM</span>
+                    </div>
+                </motion.div>
+
+                {/* Nora Alert Card */}
+                <AnimatePresence>
+                    {showAlert && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            transition={{ duration: 0.5 }}
+                            className="rounded-2xl overflow-hidden"
+                            style={{
+                                background:
+                                    'linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(239,68,68,0.05) 100%)',
+                                border: '1px solid rgba(249,115,22,0.25)',
+                            }}
+                        >
+                            <div className="p-5">
+                                <div className="flex items-start gap-3 mb-4">
+                                    <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+                                        <AlertTriangle className="w-5 h-5 text-orange-400" />
                                     </div>
-                                    <p className="text-xs text-zinc-500 mt-0.5">
-                                        Today at 8:15 AM • Game Day
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="font-bold text-white">
+                                                Nora Alert — Tremaine Grant
+                                            </h3>
+                                            <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                                                Elevated Anxiety
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-zinc-500 mt-0.5">
+                                            Today at 8:15 AM • Game Day
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <p className="text-sm text-zinc-300 leading-relaxed mb-4">
+                                    Tremaine is experiencing elevated game-day anxiety related to
+                                    season-ending pressure. I ran a Box Breathing protocol (4
+                                    rounds), but residual tension persists. His physical baseline is
+                                    excellent (RHR 42, HRV high, 8h sleep), so this appears to be{' '}
+                                    <span className="text-orange-400 font-semibold">
+                                        purely psychological
+                                    </span>
+                                    .
+                                </p>
+
+                                {/* Stats Row */}
+                                <div className="grid grid-cols-3 gap-3 mb-4">
+                                    {[
+                                        { label: 'RHR', value: '42 bpm', icon: Heart, color: '#EF4444' },
+                                        { label: 'HRV', value: 'High', icon: Activity, color: '#22C55E' },
+                                        { label: 'Sleep', value: '8h', icon: Brain, color: '#3B82F6' },
+                                    ].map((stat) => (
+                                        <div
+                                            key={stat.label}
+                                            className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 text-center"
+                                        >
+                                            <stat.icon
+                                                className="w-4 h-4 mx-auto mb-1"
+                                                style={{ color: stat.color }}
+                                            />
+                                            <div className="text-sm font-bold text-white">
+                                                {stat.value}
+                                            </div>
+                                            <div className="text-[10px] text-zinc-500 uppercase">
+                                                {stat.label}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/30 p-3">
+                                    <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1">
+                                        Recommendation
+                                    </div>
+                                    <p className="text-sm text-zinc-300">
+                                        Check in with Tremaine before the 10:00 AM competition prep
+                                        meeting. Monitor throughout the day in case escalation to
+                                        clinical support is needed.
                                     </p>
                                 </div>
                             </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
-                            <p className="text-sm text-zinc-300 leading-relaxed mb-4">
-                                Tremaine is experiencing elevated game-day anxiety related to
-                                season-ending pressure. I ran a Box Breathing protocol (4
-                                rounds), but residual tension persists. His physical baseline is
-                                excellent (RHR 42, HRV high, 8h sleep), so this appears to be{' '}
-                                <span className="text-orange-400 font-semibold">
-                                    purely psychological
-                                </span>
-                                .
-                            </p>
-
-                            {/* Stats Row */}
-                            <div className="grid grid-cols-3 gap-3 mb-4">
-                                {[
-                                    { label: 'RHR', value: '42 bpm', icon: Heart, color: '#EF4444' },
-                                    { label: 'HRV', value: 'High', icon: Activity, color: '#22C55E' },
-                                    { label: 'Sleep', value: '8h', icon: Brain, color: '#3B82F6' },
-                                ].map((stat) => (
-                                    <div
-                                        key={stat.label}
-                                        className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 text-center"
-                                    >
-                                        <stat.icon
-                                            className="w-4 h-4 mx-auto mb-1"
-                                            style={{ color: stat.color }}
-                                        />
-                                        <div className="text-sm font-bold text-white">
-                                            {stat.value}
-                                        </div>
-                                        <div className="text-[10px] text-zinc-500 uppercase">
-                                            {stat.label}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/30 p-3">
-                                <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1">
-                                    Recommendation
+                {/* Full Team Roster */}
+                <AnimatePresence>
+                    {showRoster && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.5 }}
+                        >
+                            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                                <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
+                                    Team Status Overview — All Athletes
+                                </h3>
+                                <div className="flex items-center gap-3 text-[11px]">
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" /> 19 Optimal</span>
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> 2 Flagged</span>
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" /> 1 Elevated</span>
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> 1 Escalated</span>
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-600 inline-block" /> 3 Pending</span>
                                 </div>
-                                <p className="text-sm text-zinc-300">
-                                    Check in with Tremaine before the 10:00 AM competition prep
-                                    meeting. Monitor throughout the day in case escalation to
-                                    clinical support is needed.
-                                </p>
                             </div>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
 
-            {/* Full Team Roster */}
-            <AnimatePresence>
-                {showRoster && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
-                    >
-                        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                            <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
-                                Team Roster — Game Day Status
-                            </h3>
-                            <div className="flex items-center gap-3 text-[11px]">
-                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" /> 19 Optimal</span>
-                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> 2 Flagged</span>
-                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" /> 1 Elevated</span>
-                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> 1 Escalated</span>
-                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-600 inline-block" /> 3 Pending</span>
-                            </div>
-                        </div>
-
-                        {/* Check-in progress */}
-                        <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 mb-3 flex items-center gap-4">
-                            <div className="text-sm text-zinc-300">
-                                <span className="text-white font-bold">22</span>/25 checked in
-                            </div>
-                            <div className="flex-1 h-2 bg-zinc-700/50 rounded-full overflow-hidden">
-                                <motion.div
-                                    initial={{ width: 0 }}
-                                    animate={{ width: '88%' }}
-                                    transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
-                                    className="h-full rounded-full"
-                                    style={{ background: 'linear-gradient(90deg, #22C55E, #E0FE10)' }}
-                                />
-                            </div>
-                            <div className="text-xs text-zinc-500">88%</div>
-                        </div>
-
-                        {/* Roster table */}
-                        <div className="rounded-xl border border-zinc-700/30 overflow-hidden">
-                            <div className="grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 text-[10px] font-bold text-zinc-500 uppercase tracking-wide px-3 py-2 bg-zinc-800/60 border-b border-zinc-700/30">
-                                <div>#</div>
-                                <div>Player</div>
-                                <div>Pos</div>
-                                <div>Status</div>
-                                <div className="text-right">Time</div>
-                            </div>
-                            <div className="max-h-[340px] overflow-y-auto">
-                                {roster.map((p, i) => (
+                            {/* Check-in progress */}
+                            <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 mb-3 flex items-center gap-4">
+                                <div className="text-sm text-zinc-300">
+                                    <span className="text-white font-bold">22</span>/25 checked in
+                                </div>
+                                <div className="flex-1 h-2 bg-zinc-700/50 rounded-full overflow-hidden">
                                     <motion.div
-                                        key={p.name}
-                                        initial={{ opacity: 0, x: -10 }}
+                                        initial={{ width: 0 }}
+                                        animate={{ width: '88%' }}
+                                        transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
+                                        className="h-full rounded-full"
+                                        style={{ background: 'linear-gradient(90deg, #22C55E, #E0FE10)' }}
+                                    />
+                                </div>
+                                <div className="text-xs text-zinc-500">88%</div>
+                            </div>
+
+                            {/* Roster table */}
+                            <div className="rounded-xl border border-zinc-700/30 overflow-hidden">
+                                <div className="grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 text-[10px] font-bold text-zinc-500 uppercase tracking-wide px-3 py-2 bg-zinc-800/60 border-b border-zinc-700/30">
+                                    <div>#</div>
+                                    <div>Player</div>
+                                    <div>Pos</div>
+                                    <div>Status</div>
+                                    <div className="text-right">Time</div>
+                                </div>
+                                <div className="max-h-[340px] overflow-y-auto">
+                                    {roster.map((p, i) => (
+                                        <motion.div
+                                            key={p.name}
+                                            initial={{ opacity: 0, x: -10 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            transition={{ delay: i * 0.03 }}
+                                            className={`grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 items-center px-3 py-2 border-b border-zinc-800/50 text-sm transition-colors ${p.hl ? 'bg-orange-500/5' : ''
+                                                } ${p.status === 'critical' ? 'cursor-pointer hover:bg-red-500/10' : 'hover:bg-zinc-800/40'
+                                                }`}
+                                            onClick={() => {
+                                                if (p.status === 'critical') {
+                                                    onContinue();
+                                                }
+                                            }}
+                                        >
+                                            <div className="text-zinc-500 font-mono text-xs">{p.num}</div>
+                                            <div className={`font-medium ${p.hl ? 'text-orange-400' : 'text-white'}`}>{p.name}</div>
+                                            <div className="text-zinc-500 text-xs">{p.pos}</div>
+                                            <div className="flex items-center gap-1.5">
+                                                <div className={`w-2 h-2 rounded-full shrink-0 ${statusDot(p.status)}`} />
+                                                <span className={`text-xs truncate ${statusColor(p.status)}`}>{p.text}</span>
+                                            </div>
+                                            <div className="flex items-center justify-end gap-1">
+                                                <span className="text-zinc-500 text-xs">{p.time}</span>
+                                                {p.status === 'critical' && (
+                                                    <ChevronRight className="w-3 h-3 text-red-400" />
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Assigned Mental Exercises */}
+                <AnimatePresence>
+                    {showExercises && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.5 }}
+                        >
+                            <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">
+                                Mental Training Assignments
+                            </h3>
+                            <div className="space-y-2">
+                                {exercises.map((ex, i) => (
+                                    <motion.div
+                                        key={ex.name}
+                                        initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: i * 0.03 }}
-                                        className={`grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 items-center px-3 py-2 border-b border-zinc-800/50 text-sm transition-colors ${p.hl ? 'bg-orange-500/5' : ''
-                                            } ${p.status === 'critical' ? 'cursor-pointer hover:bg-red-500/10' : 'hover:bg-zinc-800/40'
-                                            }`}
-                                        onClick={() => {
-                                            if (p.status === 'critical') {
-                                                onContinue();
-                                            }
-                                        }}
+                                        transition={{ delay: i * 0.15 }}
+                                        className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/40 border border-zinc-700/30 hover:bg-zinc-800/60 transition-colors"
                                     >
-                                        <div className="text-zinc-500 font-mono text-xs">{p.num}</div>
-                                        <div className={`font-medium ${p.hl ? 'text-orange-400' : 'text-white'}`}>{p.name}</div>
-                                        <div className="text-zinc-500 text-xs">{p.pos}</div>
-                                        <div className="flex items-center gap-1.5">
-                                            <div className={`w-2 h-2 rounded-full shrink-0 ${statusDot(p.status)}`} />
-                                            <span className={`text-xs truncate ${statusColor(p.status)}`}>{p.text}</span>
+                                        <div
+                                            className="w-9 h-9 rounded-lg flex items-center justify-center"
+                                            style={{ backgroundColor: `${ex.color}15` }}
+                                        >
+                                            <ex.icon
+                                                className="w-4 h-4"
+                                                style={{ color: ex.color }}
+                                            />
                                         </div>
-                                        <div className="flex items-center justify-end gap-1">
-                                            <span className="text-zinc-500 text-xs">{p.time}</span>
-                                            {p.status === 'critical' && (
-                                                <ChevronRight className="w-3 h-3 text-red-400" />
-                                            )}
+                                        <div className="flex-1">
+                                            <div className="text-sm font-medium text-white">
+                                                {ex.name}
+                                            </div>
+                                            <div className="text-xs text-zinc-500">{ex.category}</div>
                                         </div>
+                                        <span
+                                            className={`text-xs px-2 py-0.5 rounded-full ${ex.status === 'Completed'
+                                                ? 'bg-green-500/15 text-green-400 border border-green-500/25'
+                                                : ex.status === 'Assigned'
+                                                    ? 'bg-[#E0FE10]/10 text-[#E0FE10] border border-[#E0FE10]/25'
+                                                    : 'bg-zinc-700/40 text-zinc-400 border border-zinc-600/30'
+                                                }`}
+                                        >
+                                            {ex.status}
+                                        </span>
                                     </motion.div>
                                 ))}
                             </div>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
-            {/* Assigned Mental Exercises */}
-            <AnimatePresence>
-                {showExercises && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
-                    >
-                        <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">
-                            Mental Training Assignments
-                        </h3>
-                        <div className="space-y-2">
-                            {exercises.map((ex, i) => (
-                                <motion.div
-                                    key={ex.name}
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ delay: i * 0.15 }}
-                                    className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/40 border border-zinc-700/30 hover:bg-zinc-800/60 transition-colors"
-                                >
-                                    <div
-                                        className="w-9 h-9 rounded-lg flex items-center justify-center"
-                                        style={{ backgroundColor: `${ex.color}15` }}
-                                    >
-                                        <ex.icon
-                                            className="w-4 h-4"
-                                            style={{ color: ex.color }}
-                                        />
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="text-sm font-medium text-white">
-                                            {ex.name}
-                                        </div>
-                                        <div className="text-xs text-zinc-500">{ex.category}</div>
-                                    </div>
-                                    <span
-                                        className={`text-xs px-2 py-0.5 rounded-full ${ex.status === 'Completed'
-                                            ? 'bg-green-500/15 text-green-400 border border-green-500/25'
-                                            : ex.status === 'Assigned'
-                                                ? 'bg-[#E0FE10]/10 text-[#E0FE10] border border-[#E0FE10]/25'
-                                                : 'bg-zinc-700/40 text-zinc-400 border border-zinc-600/30'
-                                            }`}
-                                    >
-                                        {ex.status}
-                                    </span>
-                                </motion.div>
-                            ))}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* AuntEdna Clinical Handoff */}
-            <AnimatePresence>
-                {showHandoff && (
-                    <motion.div
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
-                        className="rounded-2xl bg-gradient-to-br from-purple-500/8 to-blue-500/5 border border-purple-500/20 p-5"
-                    >
-                        <div className="flex items-center gap-2 mb-3">
-                            <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                                <Shield className="w-4 h-4 text-purple-400" />
+                {/* AuntEdna Clinical Handoff */}
+                <AnimatePresence>
+                    {showHandoff && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.5 }}
+                            className="rounded-2xl bg-gradient-to-br from-purple-500/8 to-blue-500/5 border border-purple-500/20 p-5"
+                        >
+                            <div className="flex items-center gap-2 mb-3">
+                                <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                    <Shield className="w-4 h-4 text-purple-400" />
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-bold text-white">
+                                        Clinical Handoff Available
+                                    </h3>
+                                    <p className="text-xs text-zinc-500">
+                                        HIPAA-Compliant • AuntEdna Integration
+                                    </p>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="text-sm font-bold text-white">
-                                    Clinical Handoff Available
-                                </h3>
-                                <p className="text-xs text-zinc-500">
-                                    HIPAA-Compliant • AuntEdna Integration
-                                </p>
-                            </div>
-                        </div>
-                        <p className="text-sm text-zinc-300 leading-relaxed">
-                            If Nora detects that a player&apos;s anxiety is scaling into a
-                            clinical zone, Pulse automatically packages the full context —
-                            sleep data, HRV trends, chat sentiment analysis — and initiates a
-                            secure handoff to{' '}
-                            <span className="text-purple-400 font-semibold">AuntEdna</span>,
-                            the team&apos;s clinical mental health platform.
-                        </p>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                            <p className="text-sm text-zinc-300 leading-relaxed">
+                                If Nora detects that a player&apos;s anxiety is scaling into a
+                                clinical zone, Pulse automatically packages the full context —
+                                sleep data, HRV trends, chat sentiment analysis — and initiates a
+                                secure handoff to{' '}
+                                <span className="text-purple-400 font-semibold">AuntEdna</span>,
+                                the team&apos;s clinical mental health platform.
+                            </p>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
-            {/* Roster hint */}
-            <AnimatePresence>
-                {showRosterHint && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="flex justify-center pt-2"
-                    >
-                        <div className="flex items-center gap-2 text-xs text-red-400/80">
-                            <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-                            Click K. Thompson to explore clinical escalation
-                            <ChevronRight className="w-3 h-3" />
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+                {/* Roster hint */}
+                <AnimatePresence>
+                    {showRosterHint && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="flex justify-center pt-2"
+                        >
+                            <div className="flex items-center gap-2 text-xs text-red-400/80">
+                                <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                                Click K. Thompson to explore clinical escalation
+                                <ChevronRight className="w-3 h-3" />
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>{/* end main content */}
         </motion.div>
     );
 };
