@@ -843,8 +843,8 @@ const OutreachCampaignsPage: React.FC = () => {
                     {/* Toast Notification — always visible above scroll area */}
                     {toastMessage && (
                         <div className={`mx-6 mt-2 px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2 ${toastMessage.startsWith('✓')
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-red-500/10 text-red-400 border border-red-500/20'
                             }`}>
                             {toastMessage}
                         </div>
@@ -1681,9 +1681,16 @@ const OutreachCampaignsPage: React.FC = () => {
 
                                             {/* Status */}
                                             <td className="px-6 py-4">
-                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border border-current/20 whitespace-nowrap ${getStatusBadgeColor(camp.status)}`}>
-                                                    {formatStatus(camp.status)}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border border-current/20 whitespace-nowrap ${getStatusBadgeColor(camp.status)}`}>
+                                                        {formatStatus(camp.status)}
+                                                    </span>
+                                                    {camp.campaignActive && (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 uppercase">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Live
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 {/* Leads breakdown */}
                                                 <div className="flex items-center gap-2 mt-2 text-[10px]">
                                                     <span className="text-white">{camp.totalLeads?.toLocaleString()} total</span>

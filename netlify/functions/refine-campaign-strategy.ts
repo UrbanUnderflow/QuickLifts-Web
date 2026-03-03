@@ -1,4 +1,4 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
+import { Handler } from '@netlify/functions';
 import OpenAI from 'openai';
 
 const MAX_ARTIFACT_CHARS = 180000;
@@ -22,26 +22,54 @@ function parseJsonSafe(raw: string): any {
  * which the frontend can display and later "Apply" to repopulate
  * the email sequences / settings.
  */
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
+export const handler: Handler = async (event) => {
+    // Enable CORS
+    const headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Content-Type': 'application/json'
+    };
+
+    if (event.httpMethod === 'OPTIONS') {
+        return { statusCode: 200, headers, body: '' };
+    }
+
+    if (event.httpMethod !== 'POST') {
+        return {
+            statusCode: 405,
+            headers,
+            body: JSON.stringify({ error: 'Method not allowed' })
+        };
     }
 
     const apiKey = process.env.OPENAI_API_KEY || process.env.OPEN_AI_SECRET_KEY;
     if (!apiKey) {
-        return res.status(500).json({ error: 'OPENAI_API_KEY is not configured' });
-    }
-
-    const { artifact, prompt, campaignTitle } = req.body || {};
-
-    if (!artifact || typeof artifact !== 'string' || artifact.trim().length < 20) {
-        return res.status(400).json({ error: 'A valid strategy artifact is required' });
-    }
-    if (!prompt || typeof prompt !== 'string' || prompt.trim().length < 2) {
-        return res.status(400).json({ error: 'A prompt describing the changes is required' });
+        return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({ error: 'OPENAI_API_KEY is not configured' })
+        };
     }
 
     try {
+        const body = JSON.parse(event.body || '{}');
+        const { artifact, prompt, campaignTitle } = body;
+
+        if (!artifact || typeof artifact !== 'string' || artifact.trim().length < 20) {
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'A valid strategy artifact is required' })
+            };
+        }
+        if (!prompt || typeof prompt !== 'string' || prompt.trim().length < 2) {
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ error: 'A prompt describing the changes is required' })
+            };
+        }
+
         const openai = new OpenAI({ apiKey });
         const safeArtifact = artifact.slice(0, MAX_ARTIFACT_CHARS);
 
@@ -89,33 +117,43 @@ RULES for the artifact:
             // Fallback: treat entire response as artifact if JSON parsing failed
             const fallbackArtifact = raw.length > 20 ? raw : null;
             if (!fallbackArtifact) {
-                return res.status(422).json({
-                    error: 'OpenAI returned an empty or invalid response. Try a more specific prompt.'
-                });
+                return {
+                    statusCode: 422,
+                    headers,
+                    body: JSON.stringify({
+                        error: 'OpenAI returned an empty or invalid response. Try a more specific prompt.'
+                    })
+                };
             }
-            return res.status(200).json({
-                success: true,
-                artifact: fallbackArtifact,
-                summary: 'Changes applied to the strategy document.'
-            });
+            return {
+                statusCode: 200,
+                headers,
+                body: JSON.stringify({
+                    success: true,
+                    artifact: fallbackArtifact,
+                    summary: 'Changes applied to the strategy document.'
+                })
+            };
         }
 
-        return res.status(200).json({
-            success: true,
-            artifact: parsed.artifact,
-            summary: parsed.summary || 'Changes applied to the strategy document.'
-        });
+        return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+                success: true,
+                artifact: parsed.artifact,
+                summary: parsed.summary || 'Changes applied to the strategy document.'
+            })
+        };
 
     } catch (error: any) {
         console.error('[Refine Strategy] Error:', error);
-        return res.status(500).json({
-            error: error?.message || 'Failed to refine campaign strategy'
-        });
-    }
-}
-
-export const config = {
-    api: {
-        bodyParser: { sizeLimit: '4mb' }
+        return {
+            statusCode: 500,
+            headers,
+            body: JSON.stringify({
+                error: error?.message || 'Failed to refine campaign strategy'
+            })
+        };
     }
 };

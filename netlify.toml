@@ -43,6 +43,13 @@
   status = 200
   force = true
 
+# Campaign strategy refinement API → Netlify function (for 60s timeout support)
+[[redirects]]
+  from = "/api/outreach/refine-campaign-strategy"
+  to = "/.netlify/functions/refine-campaign-strategy"
+  status = 200
+  force = true
+
 
 # NOTE: Do NOT add SPA-style catch-all redirects like "/* → / 200" here.
 # The @netlify/plugin-nextjs plugin handles ALL Next.js routing automatically.
@@ -233,6 +240,10 @@
 
 [functions.revise-legal-document]
   timeout = 26
+
+# Campaign strategy refinement (OpenAI can take 20–40s for large strategy docs)
+[functions.refine-campaign-strategy]
+  timeout = 60
 
 # Review Automation Functions
 [functions.send-weekly-review-checkin]
