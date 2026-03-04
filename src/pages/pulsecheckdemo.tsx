@@ -73,7 +73,7 @@ const DEMO_SCRIPT: ScriptMessage[] = [
             'Your baseline looks great today. You had 8 hours of solid sleep, your Resting Heart Rate (RHR) is at 42 bpm, and your HRV baseline is high, indicating excellent central nervous system (CNS) recovery. Your body is primed for today.',
         delay: 1500,
     },
-    // User responds: "That's good to hear. Hey what time did Coach say to meet for competition prep today?"
+    // User responds with a reaction to the baseline data, then types their own question about the prep meeting
     {
         role: 'nora',
         content:
@@ -137,9 +137,9 @@ const SUGGESTED_RESPONSES: Record<number, string[]> = {
         "Honestly? I barely slept.",
     ],
     2: [
-        'That\'s good to hear. Hey what time did Coach say to meet for competition prep today?',
-        "Nice. When's the comp prep meeting?",
-        "Cool. Whatever. What time is the meeting?",
+        "That's good to hear. I needed that.",
+        "Nice, at least my body showed up today.",
+        "OK cool, that makes me feel a little better.",
     ],
     3: [
         "Cool. I'm not going to lie, I'm a little nervous about today's game.",
@@ -416,10 +416,10 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
             status: 'Assigned',
         },
         {
-            name: 'The 3-Second Reset',
+            name: 'The Kill Switch',
             category: 'Focus',
-            icon: RotateCcw,
-            color: '#F59E0B',
+            icon: Zap,
+            color: '#EF4444',
             status: 'Assigned',
         },
         {
@@ -1529,11 +1529,11 @@ const CallSimulation: React.FC<{
 };
 
 // ─────────────────────────────────────────────────────────
-// THE CLOSE — Act 4: Performance Showcase + 3-Second Reset
+// THE CLOSE — Act 4: Performance Showcase + The Kill Switch
 // ─────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────
-// THE CLOSE — Act 4: Performance Showcase + 3-Second Reset
+// THE CLOSE — Act 4: Performance Showcase + The Kill Switch
 // ─────────────────────────────────────────────────────────
 
 const TheClose: React.FC = () => {
@@ -1550,7 +1550,7 @@ const TheClose: React.FC = () => {
     const [chatStep, setChatStep] = useState(0);
     const [isNTyping, setIsNTyping] = useState(false);
     const [resetPhase, setResetPhase] = useState<
-        'idle' | 'acknowledge' | 'release' | 'execute' | 'done'
+        'idle' | 'lockIn' | 'disruption' | 'killSwitch' | 'done'
     >('idle');
     const [drillActive, setDrillActive] = useState(false);
     const closeScrollRef = useRef<HTMLDivElement>(null);
@@ -1579,21 +1579,21 @@ const TheClose: React.FC = () => {
         setChatStep(step + 1);
 
         if (step === 0) {
-            addNoraMsg("Hey! 👋 Your coach assigned you the 3-Second Reset drill today. This is one of the most powerful mental recovery exercises in your program. Are you ready to jump in, or do you want me to walk you through the details first?");
+            addNoraMsg("Hey! 👋 Your coach assigned you The Kill Switch today. This is the single most important mental recovery exercise in your program — it trains how fast you bounce back after something goes wrong. Ready to jump in, or do you want me to walk you through the details first?");
         } else if (step === 1 && choice === 'walk') {
             setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'athlete', text: 'Walk me through it first.' }]);
             setTimeout(() => {
-                addNoraMsg("The 3-Second Reset is designed to train your brain to recover from any negative moment — a bad play, a missed shot, an error — in just 3 seconds. Here's how it works:");
+                addNoraMsg("The Kill Switch trains your brain to recover from any disruption — a bad play, a missed shot, a mental error — as fast as possible. It simulates real pressure and measures your recovery speed. Here's how it works:");
             }, 300);
         } else if (step === 2) {
             setTimeout(() => {
-                addNoraMsg("Step 1: ACKNOWLEDGE — Name what happened. No judgment. Just recognition. \"Bad read. Interception.\"");
+                addNoraMsg("Phase 1: LOCK IN — You'll engage a focus task. Get in rhythm and stay locked.");
                 setTimeout(() => {
-                    addNoraMsg("Step 2: RELEASE — One sharp exhale. Drop your shoulders. Physically let it go. It's done.");
+                    addNoraMsg("Phase 2: DISRUPTION — Something will break your focus. A flash, a provocative message, chaos. Just like a bad play in a game.");
                     setTimeout(() => {
-                        addNoraMsg("Step 3: RE-EXECUTE — Lock into the next play. What's YOUR job right now? Own it. \"Next play. I own the pocket.\"");
+                        addNoraMsg("Phase 3: KILL SWITCH — Re-engage as fast as possible. We measure exactly how long it takes you to recover. That's your Kill Switch time.");
                         setTimeout(() => {
-                            addNoraMsg("The goal is to compress your mental recovery time. Most athletes take 30-60 seconds to recover from a mistake. Elite athletes? Under 5 seconds. Ready to run it?", 'drill-card');
+                            addNoraMsg("Most athletes take 30-60 seconds to recover from a mistake. Elite athletes? Under 3 seconds. Ready to train yours?", 'drill-card');
                         }, 1400);
                     }, 1400);
                 }, 1400);
@@ -1601,7 +1601,7 @@ const TheClose: React.FC = () => {
         } else if (step === 3 && choice === 'ready') {
             setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'athlete', text: "Let's do it. I'm ready." }]);
             setTimeout(() => {
-                addNoraMsg("Starting the 3-Second Reset now. Focus on each step as it appears...");
+                addNoraMsg("Starting The Kill Switch now. Lock in and stay focused...");
                 setTimeout(() => setDrillActive(true), 1500);
             }, 300);
         }
@@ -1614,16 +1614,16 @@ const TheClose: React.FC = () => {
     }, [phase, chatStep, advanceChat]);
 
     const runResetExercise = () => {
-        setResetPhase('acknowledge');
-        setTimeout(() => setResetPhase('release'), 1500);
-        setTimeout(() => setResetPhase('execute'), 3000);
+        setResetPhase('lockIn');
+        setTimeout(() => setResetPhase('disruption'), 2500);
+        setTimeout(() => setResetPhase('killSwitch'), 4000);
         setTimeout(() => {
             setResetPhase('done');
             setTimeout(() => {
                 setDrillActive(false);
-                setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'system', text: '✓ 3-Second Reset Complete — 3.1s recovery time' }]);
+                setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'system', text: '✓ Kill Switch Complete — 2.8s recovery time' }]);
                 setTimeout(() => {
-                    addNoraMsg("That was incredible. 3.1 seconds. You're consistently under 4 seconds now. Let me show you how far you've come over the past 90 days...", 'progress-card');
+                    addNoraMsg("That was incredible. 2.8 seconds. You're consistently under 3 seconds now — that's elite-level recovery. Let me show you how far you've come over the past 90 days...", 'progress-card');
                 }, 800);
             }, 1500);
         }, 4500);
@@ -1724,7 +1724,7 @@ const TheClose: React.FC = () => {
                                                     <span className="text-[10px] text-zinc-500">now</span>
                                                 </div>
                                                 <p className="text-xs font-bold text-white mb-0.5">Assigned Drill Ready</p>
-                                                <p className="text-[11px] text-zinc-300 leading-snug">Coach assigned you the 3-Second Reset drill. Complete by end of day. Tap to start.</p>
+                                                <p className="text-[11px] text-zinc-300 leading-snug">Coach assigned you The Kill Switch drill. Complete by end of day. Tap to start.</p>
                                             </div>
                                         </div>
                                     </motion.div>
@@ -1801,14 +1801,14 @@ const TheClose: React.FC = () => {
                                                                     initial={{ opacity: 0, y: 10 }}
                                                                     animate={{ opacity: 1, y: 0 }}
                                                                     transition={{ delay: 0.5 }}
-                                                                    className="mt-2 rounded-xl border border-amber-500/20 p-3 max-w-[85%]"
-                                                                    style={{ background: 'rgba(245,158,11,0.06)' }}
+                                                                    className="mt-2 rounded-xl border border-red-500/20 p-3 max-w-[85%]"
+                                                                    style={{ background: 'rgba(239,68,68,0.06)' }}
                                                                 >
                                                                     <div className="flex items-center gap-2 mb-1">
-                                                                        <RotateCcw className="w-4 h-4 text-amber-400" />
-                                                                        <span className="text-xs font-bold text-white">3-Second Reset Drill</span>
+                                                                        <Zap className="w-4 h-4 text-red-400" />
+                                                                        <span className="text-xs font-bold text-white">The Kill Switch</span>
                                                                     </div>
-                                                                    <div className="text-[10px] text-zinc-500">Acknowledge → Release → Re-Execute</div>
+                                                                    <div className="text-[10px] text-zinc-500">Lock In → Disruption → Kill Switch</div>
                                                                 </motion.div>
                                                             )}
 
@@ -1828,7 +1828,7 @@ const TheClose: React.FC = () => {
                                                                     <div className="grid grid-cols-2 gap-2">
                                                                         {[
                                                                             { label: 'Mental Score', value: '42 → 82', color: 'text-green-400', change: '+95%' },
-                                                                            { label: 'Recovery Time', value: '45s → 3.1s', color: 'text-green-400', change: '-93%' },
+                                                                            { label: 'Recovery Time', value: '45s → 2.8s', color: 'text-green-400', change: '-94%' },
                                                                             { label: 'Check-in Streak', value: '87 days', color: 'text-[#E0FE10]', change: '🔥' },
                                                                             { label: 'Drills Completed', value: '156', color: 'text-purple-400', change: '' },
                                                                         ].map((s) => (
@@ -1884,60 +1884,60 @@ const TheClose: React.FC = () => {
                                         ))}
                                     </AnimatePresence>
 
-                                    {/* Inline 3-Second Reset Drill */}
+                                    {/* Inline Kill Switch Drill */}
                                     {drillActive && (
                                         <motion.div
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
-                                            className="max-w-3xl mx-auto rounded-xl border border-amber-500/20 p-4 space-y-3"
-                                            style={{ background: 'rgba(245,158,11,0.05)' }}
+                                            className="max-w-3xl mx-auto rounded-xl border border-red-500/20 p-4 space-y-3"
+                                            style={{ background: 'rgba(239,68,68,0.05)' }}
                                         >
                                             <div className="flex items-center gap-2 mb-1">
-                                                <RotateCcw className="w-4 h-4 text-amber-400" />
-                                                <span className="text-sm font-bold text-white">3-Second Reset</span>
+                                                <Zap className="w-4 h-4 text-red-400" />
+                                                <span className="text-sm font-bold text-white">The Kill Switch</span>
                                             </div>
                                             {resetPhase === 'idle' ? (
                                                 <button
                                                     onClick={runResetExercise}
-                                                    className="w-full py-2.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 font-bold text-sm hover:bg-amber-500/30 transition-colors"
+                                                    className="w-full py-2.5 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-sm hover:bg-red-500/30 transition-colors"
                                                 >
                                                     Begin Reset →
                                                 </button>
                                             ) : (
                                                 <div className="space-y-2">
                                                     <motion.div
-                                                        animate={{ opacity: ['acknowledge', 'release', 'execute', 'done'].includes(resetPhase) ? 1 : 0.3 }}
-                                                        className={`p-2.5 rounded-lg border transition-all duration-500 ${resetPhase === 'acknowledge' ? 'bg-red-500/10 border-red-500/30' : 'bg-zinc-800/40 border-zinc-700/30'}`}
+                                                        animate={{ opacity: ['lockIn', 'disruption', 'killSwitch', 'done'].includes(resetPhase) ? 1 : 0.3 }}
+                                                        className={`p-2.5 rounded-lg border transition-all duration-500 ${resetPhase === 'lockIn' ? 'bg-[#E0FE10]/10 border-[#E0FE10]/30' : 'bg-zinc-800/40 border-zinc-700/30'}`}
                                                     >
                                                         <div className="flex items-center gap-2">
-                                                            <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center text-[9px] font-bold text-red-400">1</div>
-                                                            <span className="text-xs font-bold text-white">ACKNOWLEDGE</span>
-                                                            {resetPhase === 'acknowledge' && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] text-red-400 ml-auto">&quot;Bad read. Interception.&quot;</motion.span>}
+                                                            <div className="w-5 h-5 rounded-full bg-[#E0FE10]/20 flex items-center justify-center text-[9px] font-bold text-[#E0FE10]">1</div>
+                                                            <span className="text-xs font-bold text-white">LOCK IN</span>
+                                                            {resetPhase === 'lockIn' && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] text-[#E0FE10] ml-auto">Tapping in rhythm... focused</motion.span>}
                                                         </div>
                                                     </motion.div>
                                                     <motion.div
-                                                        animate={{ opacity: ['release', 'execute', 'done'].includes(resetPhase) ? 1 : 0.3 }}
-                                                        className={`p-2.5 rounded-lg border transition-all duration-500 ${resetPhase === 'release' ? 'bg-amber-500/10 border-amber-500/30' : 'bg-zinc-800/40 border-zinc-700/30'}`}
+                                                        animate={{ opacity: ['disruption', 'killSwitch', 'done'].includes(resetPhase) ? 1 : 0.3 }}
+                                                        className={`p-2.5 rounded-lg border transition-all duration-500 ${resetPhase === 'disruption' ? 'bg-red-500/10 border-red-500/30' : 'bg-zinc-800/40 border-zinc-700/30'}`}
                                                     >
                                                         <div className="flex items-center gap-2">
-                                                            <div className="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center text-[9px] font-bold text-amber-400">2</div>
-                                                            <span className="text-xs font-bold text-white">RELEASE</span>
-                                                            {resetPhase === 'release' && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] text-amber-400 ml-auto">Sharp exhale. Drop shoulders.</motion.span>}
+                                                            <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center text-[9px] font-bold text-red-400">2</div>
+                                                            <span className="text-xs font-bold text-white">DISRUPTION</span>
+                                                            {resetPhase === 'disruption' && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] text-red-400 ml-auto">⚡ "You missed it. Too slow."</motion.span>}
                                                         </div>
                                                     </motion.div>
                                                     <motion.div
-                                                        animate={{ opacity: ['execute', 'done'].includes(resetPhase) ? 1 : 0.3 }}
-                                                        className={`p-2.5 rounded-lg border transition-all duration-500 ${resetPhase === 'execute' ? 'bg-green-500/10 border-green-500/30' : 'bg-zinc-800/40 border-zinc-700/30'}`}
+                                                        animate={{ opacity: ['killSwitch', 'done'].includes(resetPhase) ? 1 : 0.3 }}
+                                                        className={`p-2.5 rounded-lg border transition-all duration-500 ${resetPhase === 'killSwitch' ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-zinc-800/40 border-zinc-700/30'}`}
                                                     >
                                                         <div className="flex items-center gap-2">
-                                                            <div className="w-5 h-5 rounded-full bg-green-500/20 flex items-center justify-center text-[9px] font-bold text-green-400">3</div>
-                                                            <span className="text-xs font-bold text-white">RE-EXECUTE</span>
-                                                            {resetPhase === 'execute' && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] text-green-400 ml-auto">&quot;Next play. Touchdown.&quot;</motion.span>}
+                                                            <div className="w-5 h-5 rounded-full bg-cyan-500/20 flex items-center justify-center text-[9px] font-bold text-cyan-400">3</div>
+                                                            <span className="text-xs font-bold text-white">KILL SWITCH</span>
+                                                            {resetPhase === 'killSwitch' && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] text-cyan-400 ml-auto">Re-engaged — 2.8s recovery ✓</motion.span>}
                                                         </div>
                                                     </motion.div>
                                                     {resetPhase === 'done' && (
                                                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-1">
-                                                            <div className="text-[#E0FE10] font-bold text-sm">Reset Complete ✓ — 3.1s</div>
+                                                            <div className="text-[#E0FE10] font-bold text-sm">Kill Switch Complete ✓ — 2.8s</div>
                                                         </motion.div>
                                                     )}
                                                 </div>
