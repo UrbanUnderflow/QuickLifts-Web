@@ -100,9 +100,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             await campRef.update({ deployStatus: 'deploying', deployError: admin.firestore.FieldValue.delete() });
 
             // Build Instantly sequence steps from our email plan
+            // In Instantly's model, a step's `delay` means "wait this long after the previous
+            // step before sending me". So Step 2's delay = Step 1's delayDays, Step 3's delay
+            // = Step 2's delayDays, etc. Step 1 always sends immediately (delay: 0).
             const instantlySteps = sequences.map((seq, index) => ({
                 type: 'email',
-                delay: seq.delayDays,
+                delay: index === 0 ? 0 : sequences[index - 1].delayDays,
                 delay_unit: 'days',
                 pre_delay_unit: 'days',
                 variants: [{

@@ -70,10 +70,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ error: 'Campaign has no settings configured' });
         }
 
-        // Build Instantly sequence steps from our email plan
+        // In Instantly's model, a step's `delay` means "wait this long after the previous
+        // step before sending me". So Step 2's delay = Step 1's delayDays, Step 3's delay
+        // = Step 2's delayDays, etc. Step 1 always sends immediately (delay: 0).
         const instantlySteps = sequences.map((seq, index) => ({
             type: 'email',
-            delay: index === 0 ? 0 : seq.delayDays,
+            delay: index === 0 ? 0 : sequences[index - 1].delayDays,
             delay_unit: 'days',
             variants: [{
                 subject: index === 0 ? seq.subject : '', // Only first email gets subject; rest are reply-thread

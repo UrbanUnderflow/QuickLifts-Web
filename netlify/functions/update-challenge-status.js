@@ -9,13 +9,13 @@ function determineChallengeStatus(challenge, now) {
 
   try {
     const currentTimestamp = Math.floor(now.getTime() / 1000);
-    
-    const startTimestamp = typeof challenge.startDate === 'number' ? 
-      challenge.startDate : 
+
+    const startTimestamp = typeof challenge.startDate === 'number' ?
+      challenge.startDate :
       Math.floor(new Date(challenge.startDate).getTime() / 1000);
-    
-    const endTimestamp = typeof challenge.endDate === 'number' ? 
-      challenge.endDate : 
+
+    const endTimestamp = typeof challenge.endDate === 'number' ?
+      challenge.endDate :
       Math.floor(new Date(challenge.endDate).getTime() / 1000);
 
     const normalizedNow = Math.floor(currentTimestamp / 86400) * 86400;
@@ -23,7 +23,7 @@ function determineChallengeStatus(challenge, now) {
     const normalizedEnd = Math.floor(endTimestamp / 86400) * 86400;
 
     let newStatus = null;
-    
+
     // Only set to active if current status is 'published'
     if (normalizedNow >= normalizedStart && normalizedNow <= normalizedEnd) {
       newStatus = challenge.status === 'published' ? 'active' : null;
@@ -32,9 +32,9 @@ function determineChallengeStatus(challenge, now) {
       }
     } else if (normalizedNow > normalizedEnd) {
       // We can complete any challenge that's past its end date, regardless of current status (unless already completed)
-       if (challenge.status !== 'completed') {
-           newStatus = 'completed';
-       }
+      if (challenge.status !== 'completed') {
+        newStatus = 'completed';
+      }
     }
 
     // Don't log if no status change is proposed
@@ -53,14 +53,14 @@ function determineChallengeStatus(challenge, now) {
 
 function logChallengeDetails(challenge, now, newStatus) {
   try {
-    const startDate = challenge.startDate ? 
-      new Date(typeof challenge.startDate === 'number' ? challenge.startDate * 1000 : challenge.startDate) : 
+    const startDate = challenge.startDate ?
+      new Date(typeof challenge.startDate === 'number' ? challenge.startDate * 1000 : challenge.startDate) :
       'undefined';
-    
-    const endDate = challenge.endDate ? 
-      new Date(typeof challenge.endDate === 'number' ? challenge.endDate * 1000 : challenge.endDate) : 
+
+    const endDate = challenge.endDate ?
+      new Date(typeof challenge.endDate === 'number' ? challenge.endDate * 1000 : challenge.endDate) :
       'undefined';
-    
+
     console.log(`Challenge Details:
       - Current Status: ${challenge.status}
       - Potential New Status: ${newStatus}
@@ -82,7 +82,7 @@ async function updateChallengeCollection(collectionName, now, testMode = false) 
 
   try {
     const snapshot = await db.collection(collectionName).get();
-    
+
     for (const doc of snapshot.docs) {
       const data = doc.data();
       if (!data.challenge) {
@@ -92,11 +92,11 @@ async function updateChallengeCollection(collectionName, now, testMode = false) 
 
       const currentStatus = data.challenge.status;
       const newStatus = determineChallengeStatus(data.challenge, now);
-      
+
       // Check if a valid new status was determined and it's different
       if (newStatus && newStatus !== currentStatus) {
         console.log(`${testMode ? '[TEST] Would update' : 'Updating'} ${collectionName}/${doc.id} from ${currentStatus} to ${newStatus}`);
-        
+
         // --- REMOVED call to handleStatusChange --- 
 
         // Add to proposed updates for logging the result
@@ -149,15 +149,16 @@ async function updateChallengeStatuses(testMode = false) {
   console.log(`Starting challenge status updates at: ${now.toISOString()} ${testMode ? '(TEST MODE)' : ''}`);
 
   try {
-    // Update both collections. The function now handles the batch internally.
-    const [sweatlistResults, userChallengeResults] = await Promise.all([
-      updateChallengeCollection('sweatlist-collection', now, testMode),
-      updateChallengeCollection('user-challenge', now, testMode)
-    ]);
+    // Only update the canonical sweatlist-collection.
+    // The syncChallengeToUserChallenges Firebase trigger will propagate status
+    // changes down to user-challenge docs automatically, and onChallengeStatusChange
+    // will send the "Challenge Complete!" notification exactly once per transition.
+    // Previously updating user-challenge here caused the notification to fire every
+    // day because the daily updatedAt write re-triggered onChallengeStatusChange.
+    const sweatlistResults = await updateChallengeCollection('sweatlist-collection', now, testMode);
 
     return {
       sweatlistCollection: sweatlistResults,
-      userChallengeCollection: userChallengeResults, // Changed key for clarity
       timestamp: Math.floor(now.getTime() / 1000),
       testMode
     };
@@ -174,15 +175,15 @@ exports.handler = async (event) => {
   }
 
   // Use event context if available (for scheduled functions)
-  const source = event.headers?.['x-netlify-event-source'] || 'manual'; 
+  const source = event.headers?.['x-netlify-event-source'] || 'manual';
   console.log(`Scheduled function update-challenge-status triggered via ${source}.`);
 
   try {
     // Scheduled functions don't have a body, testMode is always false
-    const testMode = false; 
-    
+    const testMode = false;
+
     console.log(`Running scheduled challenge status update (testMode=${testMode})`);
-    
+
     const result = await updateChallengeStatuses(testMode);
 
     // Log success
@@ -203,7 +204,7 @@ exports.handler = async (event) => {
     };
   } catch (error) {
     console.error('Error during scheduled challenge status update:', error);
-    
+
     // Return error status code
     return {
       statusCode: 500,
@@ -211,8 +212,8 @@ exports.handler = async (event) => {
         ...headers,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ 
-        success: false, 
+      body: JSON.stringify({
+        success: false,
         error: error.message || 'Unknown error during scheduled update.',
         timestamp: Math.floor(Date.now() / 1000)
       })
