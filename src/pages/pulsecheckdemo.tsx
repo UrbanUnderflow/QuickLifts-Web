@@ -2855,7 +2855,7 @@ const PulseCheckDemo: React.FC = () => {
                                 )}
                             </button>
 
-                            {/* Skip button — only during Act 1 / intro */}
+                            {/* Skip button — only during Act 1 */}
                             {currentAct === 'act1' && (
                                 <button
                                     onClick={() => {
