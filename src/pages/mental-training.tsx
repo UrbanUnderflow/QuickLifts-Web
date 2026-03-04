@@ -38,7 +38,7 @@ import {
   ExerciseCategory,
   AssignmentStatus,
 } from '../api/firebase/mentaltraining';
-import { ExerciseCard, ExercisePlayer, MentalProgressCard, exerciseRequiresWriting } from '../components/mentaltraining';
+import { ExerciseCard, ExercisePlayer, KillSwitchGame, MentalProgressCard, exerciseRequiresWriting } from '../components/mentaltraining';
 import { useRouter } from 'next/router';
 
 type TabType = 'today' | 'library' | 'history';
@@ -112,11 +112,11 @@ const MentalTrainingPage: React.FC = () => {
       router.push(`/PulseCheck?exercise=${encodeURIComponent(JSON.stringify(exercise))}`);
       return;
     }
-    
+
     setSelectedExercise(exercise);
     setSelectedAssignmentId(assignmentId);
   };
-  
+
   // Handle redirect to chat for writing exercises from ExercisePlayer
   const handleStartInChat = (exercise: MentalExercise) => {
     localStorage.setItem('pulsecheck_active_exercise', JSON.stringify(exercise));
@@ -231,11 +231,10 @@ const MentalTrainingPage: React.FC = () => {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2 rounded-lg font-medium capitalize transition-colors ${
-                  activeTab === tab
+                className={`px-4 py-2 rounded-lg font-medium capitalize transition-colors ${activeTab === tab
                     ? 'bg-[#E0FE10] text-black'
                     : 'text-zinc-400 hover:bg-zinc-800'
-                }`}
+                  }`}
               >
                 {tab === 'today' ? "Today's Training" : tab}
               </button>
@@ -337,11 +336,10 @@ const MentalTrainingPage: React.FC = () => {
                 <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
                   <button
                     onClick={() => setSelectedCategory('all')}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                      selectedCategory === 'all'
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${selectedCategory === 'all'
                         ? 'bg-[#E0FE10] text-black'
                         : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                    }`}
+                      }`}
                   >
                     All
                   </button>
@@ -349,11 +347,10 @@ const MentalTrainingPage: React.FC = () => {
                     <button
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                        selectedCategory === cat
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${selectedCategory === cat
                           ? 'bg-[#E0FE10] text-black'
                           : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                      }`}
+                        }`}
                     >
                       {getCategoryIcon(cat)}
                       <span>{getCategoryLabel(cat)}</span>
@@ -430,16 +427,28 @@ const MentalTrainingPage: React.FC = () => {
       {/* Exercise Player Modal */}
       <AnimatePresence>
         {selectedExercise && (
-          <ExercisePlayer
-            exercise={selectedExercise}
-            assignmentId={selectedAssignmentId}
-            onComplete={handleExerciseComplete}
-            onClose={() => {
-              setSelectedExercise(null);
-              setSelectedAssignmentId(undefined);
-            }}
-            onStartInChat={handleStartInChat}
-          />
+          selectedExercise.exerciseConfig.type === 'focus' &&
+            (selectedExercise.exerciseConfig.config as any)?.type === 'kill_switch' ? (
+            <KillSwitchGame
+              exercise={selectedExercise}
+              onComplete={handleExerciseComplete}
+              onClose={() => {
+                setSelectedExercise(null);
+                setSelectedAssignmentId(undefined);
+              }}
+            />
+          ) : (
+            <ExercisePlayer
+              exercise={selectedExercise}
+              assignmentId={selectedAssignmentId}
+              onComplete={handleExerciseComplete}
+              onClose={() => {
+                setSelectedExercise(null);
+                setSelectedAssignmentId(undefined);
+              }}
+              onStartInChat={handleStartInChat}
+            />
+          )
         )}
       </AnimatePresence>
     </div>

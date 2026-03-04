@@ -51,11 +51,12 @@ import {
 } from '../../api/firebase/mentaltraining';
 import CoachLayout from '../../components/CoachLayout';
 import Head from 'next/head';
-import { 
-  ExerciseCard, 
-  AssignExerciseModal, 
-  MentalProgressCard, 
-  ExercisePlayer, 
+import {
+  ExerciseCard,
+  AssignExerciseModal,
+  MentalProgressCard,
+  ExercisePlayer,
+  KillSwitchGame,
   exerciseRequiresWriting,
   RecommendationCard,
   CurriculumProgressCard,
@@ -79,18 +80,18 @@ type TabType = 'recommendations' | 'athletes' | 'exercises' | 'assignments';
 const CoachMentalTraining: React.FC = () => {
   const router = useRouter();
   const currentUser = useUser();
-  
+
   const [coachProfile, setCoachProfile] = useState<CoachModel | null>(null);
   const [athletes, setAthletes] = useState<AthleteWithProgress[]>([]);
   const [exercises, setExercises] = useState<MentalExercise[]>([]);
   const [recentAssignments, setRecentAssignments] = useState<ExerciseAssignment[]>([]);
-  
+
   // Curriculum state
   const [recommendations, setRecommendations] = useState<MentalRecommendation[]>([]);
   const [curriculumAssignments, setCurriculumAssignments] = useState<CurriculumAssignment[]>([]);
   const [generatingRecommendations, setGeneratingRecommendations] = useState(false);
   const [actioningRecommendation, setActioningRecommendation] = useState<string | null>(null);
-  
+
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -126,7 +127,7 @@ const CoachMentalTraining: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
       if (!currentUser?.id) return;
-      
+
       setLoading(true);
       try {
         // Get coach profile
@@ -136,7 +137,7 @@ const CoachMentalTraining: React.FC = () => {
         if (profile) {
           // Get connected athletes
           const connectedAthletes = await coachService.getConnectedAthletes(profile.id);
-          
+
           // Load progress for each athlete including curriculum data
           const athletesWithProgress: AthleteWithProgress[] = await Promise.all(
             connectedAthletes.map(async (athlete: any) => {
@@ -148,11 +149,11 @@ const CoachMentalTraining: React.FC = () => {
                   athleteProgressService.get(athleteId),
                   curriculumAssignmentService.getActiveForAthlete(athleteId),
                 ]);
-                
+
                 const pending = assignments.filter(
                   a => a.status === AssignmentStatus.Pending || a.status === AssignmentStatus.InProgress
                 ).length;
-                
+
                 const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
                 const completedThisWeek = assignments.filter(
                   a => a.status === AssignmentStatus.Completed && a.completedAt && a.completedAt > weekAgo
@@ -183,7 +184,7 @@ const CoachMentalTraining: React.FC = () => {
               }
             })
           );
-          
+
           setAthletes(athletesWithProgress);
 
           // Get recent assignments by this coach
@@ -407,9 +408,9 @@ const CoachMentalTraining: React.FC = () => {
   // Filter athletes
   const filteredAthletes = athletes.filter(
     a =>
-      (a.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        a.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        a.email?.toLowerCase().includes(searchQuery.toLowerCase()))
+    (a.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.email?.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   // Stats
@@ -465,7 +466,7 @@ const CoachMentalTraining: React.FC = () => {
   return (
     <CoachLayout>
       <Head><title>Mental Training | Coach Dashboard</title></Head>
-      
+
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
@@ -478,7 +479,7 @@ const CoachMentalTraining: React.FC = () => {
               Help your athletes build mental strength with Nora
             </p>
           </div>
-          
+
           <button
             onClick={handleAssignToAll}
             className="flex items-center gap-2 px-6 py-3 rounded-xl bg-[#E0FE10] text-black font-semibold hover:bg-[#c8e40e] transition-colors"
@@ -553,21 +554,19 @@ const CoachMentalTraining: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`relative px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${
-                activeTab === tab.id
+              className={`relative px-4 py-2 rounded-lg font-medium whitespace-nowrap transition-colors ${activeTab === tab.id
                   ? 'bg-[#E0FE10] text-black'
                   : 'text-zinc-400 hover:bg-zinc-800'
-              }`}
+                }`}
             >
               <span className="flex items-center gap-2">
                 {tab.id === 'recommendations' && <Sparkles className="w-4 h-4" />}
                 {tab.label}
                 {tab.badge > 0 && (
-                  <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${
-                    activeTab === tab.id
+                  <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${activeTab === tab.id
                       ? 'bg-black/20 text-black'
                       : 'bg-[#E0FE10] text-black'
-                  }`}>
+                    }`}>
                     {tab.badge}
                   </span>
                 )}
@@ -751,7 +750,7 @@ const CoachMentalTraining: React.FC = () => {
             <p className="text-zinc-400 mb-6">
               Browse the exercise library and assign exercises to your athletes.
             </p>
-            
+
             {exercises.length === 0 ? (
               <div className="text-center py-16">
                 <Brain className="w-16 h-16 mx-auto mb-4 text-zinc-600" />
@@ -915,19 +914,31 @@ const CoachMentalTraining: React.FC = () => {
 
       {/* Exercise Player (Preview Mode) */}
       {playingExercise && (
-        <ExercisePlayer
-          exercise={playingExercise}
-          onClose={() => setPlayingExercise(null)}
-          onComplete={(data) => {
-            console.log('Exercise preview completed:', data);
-            setPlayingExercise(null);
-          }}
-          onStartInChat={(exercise) => {
-            // For coaches previewing, redirect to PulseCheck chat with exercise
-            localStorage.setItem('pulsecheck_active_exercise', JSON.stringify(exercise));
-            router.push(`/PulseCheck?exercise=${encodeURIComponent(JSON.stringify(exercise))}`);
-          }}
-        />
+        playingExercise.exerciseConfig.type === 'focus' &&
+          (playingExercise.exerciseConfig.config as any)?.type === 'kill_switch' ? (
+          <KillSwitchGame
+            exercise={playingExercise}
+            onClose={() => setPlayingExercise(null)}
+            onComplete={(data) => {
+              console.log('Kill Switch preview completed:', data);
+              setPlayingExercise(null);
+            }}
+          />
+        ) : (
+          <ExercisePlayer
+            exercise={playingExercise}
+            onClose={() => setPlayingExercise(null)}
+            onComplete={(data) => {
+              console.log('Exercise preview completed:', data);
+              setPlayingExercise(null);
+            }}
+            onStartInChat={(exercise) => {
+              // For coaches previewing, redirect to PulseCheck chat with exercise
+              localStorage.setItem('pulsecheck_active_exercise', JSON.stringify(exercise));
+              router.push(`/PulseCheck?exercise=${encodeURIComponent(JSON.stringify(exercise))}`);
+            }}
+          />
+        )
       )}
 
       {/* Toast */}

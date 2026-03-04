@@ -33,6 +33,7 @@ import {
   BreathingPhase,
   ExerciseCompletion,
 } from '../../api/firebase/mentaltraining/types';
+import { KillSwitchGame } from './KillSwitchGame';
 
 // ============================================================================
 // TYPES
@@ -44,7 +45,7 @@ import {
  */
 export function exerciseRequiresWriting(exercise: MentalExercise): boolean {
   const { exerciseConfig } = exercise;
-  
+
   // Mindset exercises with journalRequired flag
   if (exerciseConfig.type === 'mindset') {
     const config = exerciseConfig.config;
@@ -52,7 +53,7 @@ export function exerciseRequiresWriting(exercise: MentalExercise): boolean {
     // Reframe and growth_mindset types benefit from writing
     if (config.type === 'reframe' || config.type === 'growth_mindset') return true;
   }
-  
+
   // Confidence exercises that require journaling
   if (exerciseConfig.type === 'confidence') {
     const config = exerciseConfig.config;
@@ -61,7 +62,7 @@ export function exerciseRequiresWriting(exercise: MentalExercise): boolean {
       return true;
     }
   }
-  
+
   return false;
 }
 
@@ -103,7 +104,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   const [postExerciseMood, setPostExerciseMood] = useState<number | undefined>();
   const [helpfulnessRating, setHelpfulnessRating] = useState<number | undefined>();
   const [soundEnabled, setSoundEnabled] = useState(true);
-  
+
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -332,7 +333,7 @@ const IntroScreen: React.FC<IntroScreenProps> = ({
 
     {/* Title */}
     <h1 className="text-3xl font-bold text-white mb-4">{exercise.name}</h1>
-    
+
     {/* Description */}
     <p className="text-lg text-white/70 mb-8 max-w-md mx-auto">
       {exercise.description}
@@ -460,6 +461,16 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
   }
 
   if (exercise.exerciseConfig.type === 'focus') {
+    // Kill Switch gets its own dedicated game component
+    if ((exercise.exerciseConfig.config as any)?.type === 'kill_switch') {
+      return (
+        <KillSwitchGame
+          exercise={exercise}
+          onComplete={(data) => onComplete()}
+          onClose={onPause}
+        />
+      );
+    }
     return (
       <FocusExercise
         config={exercise.exerciseConfig.config}
@@ -523,7 +534,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
 
   const practiceDuration = typeof config?.duration === 'number' ? config.duration : 60; // Practice duration in seconds
   const instructions: string[] = Array.isArray(config?.instructions) ? config.instructions.filter(Boolean) : [];
-  
+
   const [phase, setPhase] = useState<FocusPhase>('instructions');
   const [step, setStep] = useState(0);
   const [cueWord, setCueWord] = useState('');
@@ -534,7 +545,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
   const practiceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const getReadyTimerRef = useRef<NodeJS.Timeout | null>(null);
   const practiceStartedRef = useRef(false);
-  
+
   // Store onComplete in ref to avoid dependency issues
   const onCompleteRef = useRef(onComplete);
   useEffect(() => {
@@ -544,10 +555,10 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
   const safeTotalSteps = Math.max(1, instructions.length);
   const currentInstruction = instructions[step] || 'Keep your attention on the target.';
   const mode = config?.type || 'single_point';
-  
+
   // Determine if this exercise type uses cue word anchoring
   const usesCueWord = CUE_WORD_EXERCISE_TYPES.includes(mode);
-  
+
   // Rep-based practice: each rep is ~15 seconds of focus
   const repDuration = 15;
   const totalReps = Math.max(1, Math.ceil(practiceDuration / repDuration));
@@ -669,7 +680,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
       console.log(`[FocusExercise:${debugIdRef.current}] Timer CREATED`, {
         timerRef: !!practiceTimerRef.current,
       });
-      
+
       // Sanity check: if we don't see a tick within 1.5s, something is wrong
       const sanityTimer = setTimeout(() => {
         console.log(`[FocusExercise:${debugIdRef.current}] SANITY CHECK (1.5s)`, {
@@ -817,7 +828,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
     const isLastRep = currentRep >= totalReps;
     const isSecondToLastRep = currentRep === totalReps - 1;
     const isDistraction = mode === 'distraction';
-    
+
     // Different guidance for CUE WORD exercises vs REGULAR focus exercises
     if (usesCueWord) {
       // ========== CUE WORD ANCHORING EXERCISE ==========
@@ -849,7 +860,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
           technique: `In competition, just thinking "${word}" will instantly trigger this state.`
         };
       }
-      
+
       if (isLastRep) {
         return {
           title: 'EXERCISE COMPLETE',
@@ -857,7 +868,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
           technique: `Your anchor is set. In competition, just think "${word}" to trigger this state instantly.`
         };
       }
-      
+
       if (isSecondToLastRep) {
         return {
           title: 'FINAL STRETCH',
@@ -865,7 +876,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
           technique: 'You\'re building a permanent mental tool you can use for life.'
         };
       }
-      
+
       const sustainPhase = currentRep - 4;
       const sustainMessages = [
         {
@@ -899,7 +910,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
           technique: 'You\'re building a skill that will serve you in competition.'
         },
       ];
-      
+
       const messageIndex = (sustainPhase - 1) % sustainMessages.length;
       return sustainMessages[messageIndex];
     } else {
@@ -907,7 +918,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
       if (currentRep === 1) {
         return {
           title: 'SETTLE IN',
-          instruction: isDistraction 
+          instruction: isDistraction
             ? 'Find the target with soft eyes. Let it be the center of your world.'
             : 'Soften your gaze on the dot. Let your breathing slow naturally.',
           technique: 'This is the foundation—allow yourself to settle into stillness.'
@@ -938,7 +949,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
           technique: 'Notice how natural sustained attention can feel.'
         };
       }
-      
+
       if (isLastRep) {
         return {
           title: 'EXERCISE COMPLETE',
@@ -946,7 +957,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
           technique: 'This mental clarity is available to you anytime you practice.'
         };
       }
-      
+
       if (isSecondToLastRep) {
         return {
           title: 'FINAL STRETCH',
@@ -954,12 +965,12 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
           technique: 'Finishing strong builds mental discipline.'
         };
       }
-      
+
       const sustainPhase = currentRep - 4;
       const focusMessages = [
         {
           title: 'SUSTAIN YOUR ATTENTION',
-          instruction: isDistraction 
+          instruction: isDistraction
             ? 'Keep tracking the target. Your eyes and mind move together.'
             : 'Hold your gaze steady. Let thoughts pass like clouds.',
           technique: 'Each moment of sustained focus builds neural pathways.'
@@ -994,7 +1005,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
           technique: 'What you practice becomes who you are in competition.'
         }
       ];
-      
+
       const focusIndex = (sustainPhase - 1) % focusMessages.length;
       return focusMessages[focusIndex];
     }
@@ -1023,15 +1034,15 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
         </div>
 
         <h2 className="text-2xl font-bold text-white mb-3">Choose Your Anchor Word</h2>
-        
+
         {/* Explanation box */}
         <div className={`mb-6 p-4 rounded-2xl bg-white/5 border border-white/10 text-left`}>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-white/80 font-semibold text-sm">🧠 How Anchoring Works</span>
           </div>
           <p className="text-white/60 text-sm leading-relaxed">
-            Elite athletes use "anchoring" to trigger peak mental states on demand. You'll build 
-            a state of deep focus, then connect it to a cue word. Later, just saying this word 
+            Elite athletes use "anchoring" to trigger peak mental states on demand. You'll build
+            a state of deep focus, then connect it to a cue word. Later, just saying this word
             will instantly bring back the focused state.
           </p>
         </div>
@@ -1058,11 +1069,10 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
             <button
               key={word}
               onClick={() => setCueWord(word)}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                cueWord === word 
-                  ? `bg-gradient-to-r ${categoryColor} text-white` 
-                  : 'bg-white/5 text-white/60 hover:bg-white/10'
-              }`}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${cueWord === word
+                ? `bg-gradient-to-r ${categoryColor} text-white`
+                : 'bg-white/5 text-white/60 hover:bg-white/10'
+                }`}
             >
               {word}
             </button>
@@ -1074,11 +1084,10 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
           whileTap={{ scale: 0.98 }}
           onClick={handleCueWordSubmit}
           disabled={!cueWord.trim()}
-          className={`flex items-center justify-center gap-2 w-full px-6 py-4 rounded-xl font-semibold transition-opacity ${
-            cueWord.trim() 
-              ? `bg-gradient-to-r ${categoryColor} text-white` 
-              : 'bg-white/10 text-white/40 cursor-not-allowed'
-          }`}
+          className={`flex items-center justify-center gap-2 w-full px-6 py-4 rounded-xl font-semibold transition-opacity ${cueWord.trim()
+            ? `bg-gradient-to-r ${categoryColor} text-white`
+            : 'bg-white/10 text-white/40 cursor-not-allowed'
+            }`}
         >
           Continue with "{cueWord.toUpperCase() || '...'}"
           <ChevronRight className="w-5 h-5" />
@@ -1090,7 +1099,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
   // Get Ready Phase
   if (phase === 'getReady') {
     const isDistraction = mode === 'distraction';
-    
+
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
@@ -1119,7 +1128,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
                 {isDistraction ? 'Get ready to track the target' : 'Get ready to focus'}
               </p>
               <p className="text-white/40 text-sm">
-                {isDistraction 
+                {isDistraction
                   ? 'Follow the moving dot with soft, steady attention'
                   : 'Keep your attention centered on the dot'}
               </p>
@@ -1167,13 +1176,13 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
               Rep {currentRep} of {totalReps}
             </span>
           </div>
-          
+
           {usesCueWord && cueWord && (
             <span className={`px-3 py-1 rounded-full bg-gradient-to-r ${categoryColor} text-white font-bold text-xs`}>
               {cueWord.toUpperCase()}
             </span>
           )}
-          
+
           <div className="flex flex-col items-end">
             <span className="text-white text-2xl font-bold font-mono">{repSecondsRemaining}s</span>
             <span className="text-white/40 text-xs">this rep</span>
@@ -1673,9 +1682,8 @@ const BreathingExercise: React.FC<BreathingExerciseProps> = ({
         {Array.from({ length: totalCycles }).map((_, i) => (
           <div
             key={i}
-            className={`w-3 h-3 rounded-full transition-colors ${
-              i < displayState.cycle ? `bg-gradient-to-r ${categoryColor}` : 'bg-white/20'
-            }`}
+            className={`w-3 h-3 rounded-full transition-colors ${i < displayState.cycle ? `bg-gradient-to-r ${categoryColor}` : 'bg-white/20'
+              }`}
           />
         ))}
       </div>
@@ -1688,14 +1696,14 @@ const BreathingExercise: React.FC<BreathingExerciseProps> = ({
           transition={{ duration: currentPhase?.duration || 4, ease: 'easeInOut' }}
           className={`absolute inset-0 rounded-full bg-gradient-to-br ${categoryColor} opacity-20 blur-xl`}
         />
-        
+
         {/* Main circle */}
         <motion.div
           animate={{ scale: breathScale }}
           transition={{ duration: currentPhase?.duration || 4, ease: 'easeInOut' }}
           className={`absolute inset-4 rounded-full bg-gradient-to-br ${categoryColor} opacity-40`}
         />
-        
+
         {/* Inner circle with countdown */}
         <motion.div
           animate={{ scale: breathScale }}
@@ -1728,7 +1736,7 @@ const BreathingExercise: React.FC<BreathingExerciseProps> = ({
             <Pause className="w-6 h-6 text-white" />
           )}
         </motion.button>
-        
+
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
@@ -1774,7 +1782,7 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
   const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
   const [hasFinishedAllPrompts, setHasFinishedAllPrompts] = useState(false);
   const narrationRunIdRef = useRef(0);
-  
+
   const config = exercise.exerciseConfig.config as any;
   const prompts = Array.isArray(config?.prompts) ? config.prompts.filter(Boolean) : [];
   const safeTotalPrompts = Math.max(1, prompts.length);
@@ -1795,7 +1803,7 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
       setCurrentPromptIndex((prev) => prev + 1);
     }
   };
-  
+
   // Determine button text based on exercise type
   const getButtonText = () => {
     if (!isLastPrompt) return 'Next';
@@ -1969,7 +1977,7 @@ const CompletionScreen: React.FC<CompletionScreenProps> = ({
   onRate,
 }) => {
   const moodImproved = postExerciseMood && preExerciseMood && postExerciseMood > preExerciseMood;
-  
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -2004,7 +2012,7 @@ const CompletionScreen: React.FC<CompletionScreenProps> = ({
           <div className="text-2xl font-bold text-white">{formatTime(elapsedSeconds)}</div>
           <div className="text-sm text-white/60">Duration</div>
         </div>
-        
+
         {moodImproved && (
           <div className="text-center">
             <div className="text-2xl font-bold text-green-400">+{postExerciseMood! - preExerciseMood!}</div>
@@ -2015,7 +2023,7 @@ const CompletionScreen: React.FC<CompletionScreenProps> = ({
 
       {/* Rating prompt */}
       <p className="text-white/80 mb-4">How helpful was this exercise?</p>
-      
+
       <div className="flex justify-center gap-2 mb-8">
         {[1, 2, 3, 4, 5].map((rating) => (
           <motion.button

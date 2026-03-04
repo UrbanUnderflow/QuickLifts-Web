@@ -51,7 +51,7 @@ export interface VisualizationExerciseConfig {
 }
 
 export interface FocusExerciseConfig {
-  type: 'single_point' | 'distraction' | 'cue_word' | 'body_scan';
+  type: 'single_point' | 'distraction' | 'cue_word' | 'body_scan' | 'kill_switch';
   duration: number; // seconds
   progressionLevel: number; // 1-5
   instructions: string[];
