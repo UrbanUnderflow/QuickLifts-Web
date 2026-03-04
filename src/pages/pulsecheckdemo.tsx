@@ -31,6 +31,9 @@ import {
     Settings,
     Calendar,
     Flame,
+    Maximize2,
+    Minimize2,
+    X,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────
@@ -1609,6 +1612,7 @@ const TheClose: React.FC = () => {
         'idle' | 'lockIn' | 'disruption' | 'killSwitch' | 'done'
     >('idle');
     const [drillActive, setDrillActive] = useState(false);
+    const [gameExpanded, setGameExpanded] = useState(false);
     // Kill Switch game state
     const [ksPulseScale, setKsPulseScale] = useState(1);
     const [ksPulseActive, setKsPulseActive] = useState(false);
@@ -1801,6 +1805,7 @@ const TheClose: React.FC = () => {
         if (ksPulseTimerRef.current) clearInterval(ksPulseTimerRef.current);
         if (ksLockInTimerRef.current) clearInterval(ksLockInTimerRef.current);
         setDrillActive(false);
+        setGameExpanded(false);
         setResetPhase('idle');
         const avgTime = ksRoundTimes.length > 0
             ? (ksRoundTimes.reduce((a, b) => a + b, 0) / ksRoundTimes.length).toFixed(1)
@@ -2085,7 +2090,7 @@ const TheClose: React.FC = () => {
                                     </AnimatePresence>
 
                                     {/* Inline Kill Switch Drill — Full Interactive Game */}
-                                    {drillActive && (
+                                    {drillActive && !gameExpanded && (
                                         <motion.div
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
@@ -2135,6 +2140,14 @@ const TheClose: React.FC = () => {
                                                                     resetPhase === 'done' ? 'Complete' :
                                                                         `Round ${ksCurrentRound}`}
                                                     </span>
+                                                    {/* Expand to fullscreen */}
+                                                    <button
+                                                        onClick={() => setGameExpanded(true)}
+                                                        className="w-7 h-7 rounded-lg bg-zinc-800/60 border border-zinc-700/40 flex items-center justify-center hover:bg-zinc-700/60 hover:border-zinc-600/60 transition-all group"
+                                                        title="Expand to fullscreen"
+                                                    >
+                                                        <Maximize2 className="w-3.5 h-3.5 text-zinc-400 group-hover:text-white transition-colors" />
+                                                    </button>
                                                 </div>
                                             </div>
 
@@ -2346,6 +2359,204 @@ const TheClose: React.FC = () => {
                                         </motion.div>
                                     )}
 
+                                    {/* Fullscreen Game Overlay */}
+                                    {drillActive && gameExpanded && (
+                                        <AnimatePresence>
+                                            <motion.div
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                exit={{ opacity: 0 }}
+                                                className="fixed inset-0 z-[9999] flex flex-col"
+                                                style={{ background: 'linear-gradient(180deg, rgba(5,5,7,0.98) 0%, rgba(10,10,14,0.99) 100%)' }}
+                                            >
+                                                {/* Fullscreen header */}
+                                                <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/60">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-9 h-9 rounded-xl bg-red-500/15 flex items-center justify-center">
+                                                            <Zap className="w-5 h-5 text-red-400" />
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-base font-bold text-white">The Kill Switch</span>
+                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                <div className="flex gap-1.5">
+                                                                    {Array.from({ length: ksTotalRounds }).map((_, i) => (
+                                                                        <div
+                                                                            key={i}
+                                                                            className={`w-2 h-2 rounded-full transition-colors ${i < ksCurrentRound - 1 ? 'bg-[#E0FE10]' :
+                                                                                i === ksCurrentRound - 1 ? (resetPhase === 'disruption' ? 'bg-red-500 animate-pulse' : resetPhase === 'killSwitch' ? 'bg-cyan-400' : 'bg-[#E0FE10]') :
+                                                                                    'bg-white/20'
+                                                                                }`}
+                                                                        />
+                                                                    ))}
+                                                                </div>
+                                                                <span className={`text-[10px] font-bold uppercase tracking-wider ${resetPhase === 'lockIn' ? 'text-[#E0FE10]' :
+                                                                    resetPhase === 'disruption' ? 'text-red-400' :
+                                                                        resetPhase === 'killSwitch' ? 'text-cyan-400' : 'text-zinc-500'
+                                                                    }`}>
+                                                                    {resetPhase === 'lockIn' ? 'Lock In' :
+                                                                        resetPhase === 'disruption' ? 'Disruption!' :
+                                                                            resetPhase === 'killSwitch' ? 'Kill Switch' :
+                                                                                resetPhase === 'done' ? 'Complete' : `Round ${ksCurrentRound}`}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => setGameExpanded(false)}
+                                                        className="w-9 h-9 rounded-xl bg-zinc-800/60 border border-zinc-700/40 flex items-center justify-center hover:bg-zinc-700/60 hover:border-zinc-600/60 transition-all group"
+                                                        title="Exit fullscreen"
+                                                    >
+                                                        <Minimize2 className="w-4 h-4 text-zinc-400 group-hover:text-white transition-colors" />
+                                                    </button>
+                                                </div>
+
+                                                {/* Fullscreen game content */}
+                                                <div className="flex-1 flex items-center justify-center relative overflow-hidden">
+                                                    {/* Red flash overlay */}
+                                                    <AnimatePresence>
+                                                        {ksFlashActive && (
+                                                            <motion.div
+                                                                initial={{ opacity: 0 }}
+                                                                animate={{ opacity: 0.5 }}
+                                                                exit={{ opacity: 0 }}
+                                                                className="absolute inset-0 bg-red-500 z-40 pointer-events-none"
+                                                            />
+                                                        )}
+                                                    </AnimatePresence>
+
+                                                    <div className="w-full max-w-lg px-6 py-8 flex flex-col items-center justify-center relative z-10">
+                                                        {resetPhase === 'idle' ? (
+                                                            <div className="text-center space-y-6">
+                                                                <motion.div
+                                                                    className="mx-auto w-28 h-28 rounded-full bg-red-500/20 flex items-center justify-center"
+                                                                    animate={{ scale: [1, 1.05, 1] }}
+                                                                    transition={{ duration: 2, repeat: Infinity }}
+                                                                >
+                                                                    <Zap className="w-14 h-14 text-red-500" />
+                                                                </motion.div>
+                                                                <p className="text-zinc-400 text-base">{ksTotalRounds} rounds • Tap in rhythm • Recover fast</p>
+                                                                <button
+                                                                    onClick={runResetExercise}
+                                                                    className="px-10 py-4 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-bold text-base hover:from-red-400 hover:to-red-500 transition-all shadow-lg shadow-red-500/20"
+                                                                >
+                                                                    Begin Training →
+                                                                </button>
+                                                            </div>
+                                                        ) : ksRoundPhase === 'result' ? (
+                                                            <motion.div
+                                                                initial={{ opacity: 0, scale: 0.95 }}
+                                                                animate={{ opacity: 1, scale: 1 }}
+                                                                className="text-center space-y-5 w-full"
+                                                            >
+                                                                <div className="text-sm text-zinc-500 uppercase tracking-widest">Round {ksCurrentRound} of {ksTotalRounds}</div>
+                                                                <div className="text-6xl font-black text-[#E0FE10]">
+                                                                    {ksRecoveryTime !== null ? `${ksRecoveryTime.toFixed(1)}s` : '—'}
+                                                                </div>
+                                                                <div className="text-base text-zinc-400">Recovery Time</div>
+                                                                {ksRecoveryTime !== null && ksRecoveryTime < 3.0 && (
+                                                                    <div className="text-sm text-green-400 bg-green-500/10 border border-green-500/20 px-4 py-1.5 rounded-full inline-block">
+                                                                        🔥 Under 3 seconds — Elite level
+                                                                    </div>
+                                                                )}
+                                                                <button
+                                                                    onClick={advanceKsRound}
+                                                                    className="mt-4 px-8 py-3 rounded-xl bg-white/10 border border-white/20 text-white font-bold text-base hover:bg-white/15 transition-colors"
+                                                                >
+                                                                    {ksCurrentRound >= ksTotalRounds ? 'View Results' : 'Next Round →'}
+                                                                </button>
+                                                            </motion.div>
+                                                        ) : ksRoundPhase === 'summary' ? (
+                                                            <motion.div
+                                                                initial={{ opacity: 0, scale: 0.95 }}
+                                                                animate={{ opacity: 1, scale: 1 }}
+                                                                className="text-center space-y-5 w-full"
+                                                            >
+                                                                <div className="text-sm text-zinc-500 uppercase tracking-widest">Training Complete</div>
+                                                                <div className="text-3xl font-black text-[#E0FE10]">Kill Switch ✓</div>
+                                                                <div className="grid grid-cols-3 gap-3 mt-4">
+                                                                    {ksRoundTimes.map((t, i) => (
+                                                                        <div key={i} className="rounded-lg bg-zinc-800/60 border border-zinc-700/30 p-3 text-center">
+                                                                            <div className="text-[10px] text-zinc-500 uppercase">R{i + 1}</div>
+                                                                            <div className={`text-lg font-bold ${t < 3.0 ? 'text-green-400' : 'text-amber-400'}`}>{t.toFixed(1)}s</div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                                <div className="grid grid-cols-2 gap-3">
+                                                                    <div className="rounded-lg bg-zinc-800/40 border border-zinc-700/20 p-4 text-center">
+                                                                        <div className="text-2xl font-bold text-[#E0FE10]">
+                                                                            {ksRoundTimes.length > 0 ? (ksRoundTimes.reduce((a, b) => a + b, 0) / ksRoundTimes.length).toFixed(1) : '—'}s
+                                                                        </div>
+                                                                        <div className="text-[10px] text-zinc-500 uppercase">Avg Recovery</div>
+                                                                    </div>
+                                                                    <div className="rounded-lg bg-zinc-800/40 border border-zinc-700/20 p-4 text-center">
+                                                                        <div className="text-2xl font-bold text-green-400">
+                                                                            {ksRoundTimes.length > 0 ? Math.min(...ksRoundTimes).toFixed(1) : '—'}s
+                                                                        </div>
+                                                                        <div className="text-[10px] text-zinc-500 uppercase">Best Round</div>
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    onClick={finishKsDrill}
+                                                                    className="mt-3 px-10 py-4 rounded-xl bg-gradient-to-r from-[#E0FE10] to-[#c5dc0e] text-black font-bold text-base hover:from-[#d4ee14] hover:to-[#b8cf0d] transition-all"
+                                                                >
+                                                                    Done — View Progress
+                                                                </button>
+                                                            </motion.div>
+                                                        ) : (
+                                                            <div className="flex flex-col items-center gap-6 w-full">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className={`w-3 h-3 rounded-full ${resetPhase === 'lockIn' ? 'bg-[#E0FE10]' : resetPhase === 'disruption' ? 'bg-red-500 animate-pulse' : 'bg-cyan-400'}`} />
+                                                                    <span className={`text-sm font-bold tracking-widest uppercase ${resetPhase === 'lockIn' ? 'text-[#E0FE10]' : resetPhase === 'disruption' ? 'text-red-400' : 'text-cyan-400'}`}>
+                                                                        {resetPhase === 'lockIn' ? 'Lock In — Tap in rhythm' : resetPhase === 'disruption' ? 'Disruption!' : 'Kill Switch — Re-engage NOW'}
+                                                                    </span>
+                                                                </div>
+                                                                {resetPhase === 'disruption' ? (
+                                                                    <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center justify-center py-12">
+                                                                        <motion.p initial={{ scale: 0.5 }} animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 0.5 }} className="text-5xl font-black text-red-500 text-center">
+                                                                            {ksProvocMessage}
+                                                                        </motion.p>
+                                                                    </motion.div>
+                                                                ) : (
+                                                                    <div className="flex flex-col items-center gap-6 py-4">
+                                                                        {resetPhase === 'killSwitch' && (
+                                                                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-4 py-1.5 rounded-full">
+                                                                                ⏱ Recovery timer running...
+                                                                            </motion.div>
+                                                                        )}
+                                                                        <motion.button
+                                                                            onClick={handleKsTap}
+                                                                            animate={{ scale: ksPulseScale }}
+                                                                            transition={{ duration: 0.3, ease: 'easeInOut' }}
+                                                                            className="relative w-40 h-40 rounded-full flex items-center justify-center"
+                                                                        >
+                                                                            <div className={`absolute inset-0 rounded-full blur-xl transition-colors duration-300 ${resetPhase === 'killSwitch' ? 'bg-cyan-400/20' : 'bg-[#E0FE10]/15'}`} style={{ transform: `scale(${ksPulseScale * 1.3})` }} />
+                                                                            <div className={`absolute inset-0 rounded-full border-2 transition-colors duration-300 ${resetPhase === 'killSwitch' ? 'border-cyan-400/40' : 'border-[#E0FE10]/30'}`} />
+                                                                            <div className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 ${resetPhase === 'killSwitch' ? 'bg-gradient-to-br from-cyan-400 to-cyan-500' : 'bg-gradient-to-br from-[#E0FE10] to-[#c5dc0e]'}`}>
+                                                                                <div className="w-4 h-4 rounded-full bg-white" />
+                                                                            </div>
+                                                                        </motion.button>
+                                                                        {ksTapAccuracy.length > 0 && (
+                                                                            <div className="flex gap-1.5">
+                                                                                {ksTapAccuracy.slice(-8).map((acc, i) => (
+                                                                                    <div key={i} className={`w-2 h-2 rounded-full ${acc ? (resetPhase === 'killSwitch' ? 'bg-cyan-400' : 'bg-[#E0FE10]') : 'bg-red-500/50'}`} />
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                                {resetPhase === 'lockIn' && (
+                                                                    <div className="w-full max-w-sm h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                                                        <motion.div className="h-full bg-[#E0FE10]/40 rounded-full" animate={{ width: `${(ksLockInRemaining / 8) * 100}%` }} transition={{ duration: 0.2 }} />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        </AnimatePresence>
+                                    )}
+
                                     {/* Typing indicator — same as Act 1 */}
                                     {isNTyping && (
                                         <motion.div
@@ -2423,9 +2634,10 @@ const TheClose: React.FC = () => {
                             </div>
                         </div>
                     </motion.div>
-                )}
-            </AnimatePresence>
-        </motion.div>
+                )
+                }
+            </AnimatePresence >
+        </motion.div >
     );
 };
 
