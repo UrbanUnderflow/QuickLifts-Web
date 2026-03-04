@@ -43,11 +43,11 @@ function deepEqual(value1, value2) {
   if (typeof value1 === 'object' && typeof value2 === 'object') {
     const keys1 = Object.keys(value1);
     const keys2 = Object.keys(value2);
-    
+
     if (keys1.length !== keys2.length) {
       return false;
     }
-    
+
     for (const key of keys1) {
       if (!keys2.includes(key) || !deepEqual(value1[key], value2[key])) {
         return false;
@@ -69,7 +69,7 @@ function deepEqual(value1, value2) {
  */
 function getChangedFields(beforeObj, afterObj, fieldsToCheck, logPrefix = 'FieldComparison') {
   const changes = {};
-  
+
   if (!beforeObj || !afterObj) {
     console.log(`[${logPrefix}] Missing before or after object for comparison`);
     return changes;
@@ -78,13 +78,13 @@ function getChangedFields(beforeObj, afterObj, fieldsToCheck, logPrefix = 'Field
   for (const field of fieldsToCheck) {
     const beforeValue = beforeObj[field];
     const afterValue = afterObj[field];
-    
+
     if (!deepEqual(beforeValue, afterValue)) {
       changes[field] = {
         before: beforeValue,
         after: afterValue
       };
-      
+
       console.log(`[${logPrefix}] Field '${field}' changed:`, {
         before: beforeValue,
         after: afterValue
@@ -106,13 +106,13 @@ function getChangedFields(beforeObj, afterObj, fieldsToCheck, logPrefix = 'Field
 function hasAnyFieldChanged(beforeObj, afterObj, fieldsToCheck, logPrefix = 'FieldComparison') {
   const changes = getChangedFields(beforeObj, afterObj, fieldsToCheck, logPrefix);
   const hasChanges = Object.keys(changes).length > 0;
-  
+
   if (hasChanges) {
     console.log(`[${logPrefix}] ${Object.keys(changes).length} field(s) changed:`, Object.keys(changes));
   } else {
     console.log(`[${logPrefix}] No relevant fields changed`);
   }
-  
+
   return hasChanges;
 }
 
@@ -124,13 +124,13 @@ function hasAnyFieldChanged(beforeObj, afterObj, fieldsToCheck, logPrefix = 'Fie
  */
 function extractChangedValues(sourceObj, changes) {
   const updateData = {};
-  
+
   for (const field of Object.keys(changes)) {
     if (sourceObj[field] !== undefined) {
       updateData[field] = sourceObj[field];
     }
   }
-  
+
   return updateData;
 }
 
@@ -139,15 +139,17 @@ function extractChangedValues(sourceObj, changes) {
  */
 const CHALLENGE_SYNC_FIELDS = [
   'challengeType',
-  'dailyStepGoal', 
+  'dailyStepGoal',
   'totalStepGoal',
   'allowedMissedDays',
   'title',
-  'subtitle', 
+  'subtitle',
   'status',
   'startDate',
   'endDate',
-  'updatedAt',
+  // NOTE: 'updatedAt' intentionally excluded — it changes on every scheduled run
+  // and would cause syncChallengeToUserChallenges to cascade daily writes to all
+  // user-challenge docs, which re-fires onChallengeStatusChange unnecessarily.
   'durationInDays',
   'isChallengeEnded'
 ];
