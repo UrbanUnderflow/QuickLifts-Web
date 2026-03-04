@@ -2856,7 +2856,7 @@ const PulseCheckDemo: React.FC = () => {
                             </button>
 
                             {/* Skip button — only during Act 1 / intro */}
-                            {(currentAct === 'act1' || currentAct === 'intro') && (
+                            {currentAct === 'act1' && (
                                 <button
                                     onClick={() => {
                                         // Stop any TTS
