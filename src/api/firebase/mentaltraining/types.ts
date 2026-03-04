@@ -195,8 +195,61 @@ export interface ExerciseCompletion {
 }
 
 // ============================================================================
+// GAME LEVEL PROGRESS TYPES
+// ============================================================================
+
+/**
+ * TierSessionRecord — Record of a single session at a specific tier
+ * Used to track qualifying sessions for tier advancement
+ */
+export interface TierSessionRecord {
+  sessionDate: number;
+  tier: number;
+  avgRecoveryTime: number;
+  consistencyIndex: number;      // standard deviation of recovery times
+  resilienceScore: number;       // accuracy post-disruption vs pre-disruption (0-100)
+  metTarget: boolean;            // was recovery under the tier's target?
+  roundCount: number;
+}
+
+/**
+ * GameLevelProgress — Per-user, per-game level/tier progression
+ * Collection: game-level-progress/{userId}/games/{gameType}
+ * 
+ * This is game-agnostic infrastructure — any game with tiers/levels stores
+ * its progression data here. The gameType string identifies which game.
+ */
+export interface GameLevelProgress {
+  userId: string;
+  gameType: string;                    // 'kill_switch', etc.
+  currentTier: number;                 // 1-4 (tier number)
+  tierHistory: TierSessionRecord[];    // last N sessions at current tier (keep last 10)
+  totalSessions: number;
+  bestAvgRecoveryTime?: number;        // personal best across all sessions
+  lastPlayedAt: number;
+  unlockedTiers: number[];             // e.g. [1] → [1,2] → [1,2,3] → [1,2,3,4]
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * Advancement check result
+ */
+export interface TierAdvancementResult {
+  canAdvance: boolean;
+  nextTier: number | null;
+  qualifyingSessions: number;          // how many of last 3 qualify
+  requiredSessions: number;            // always 3
+  metTargetCount: number;
+  consistencyCount: number;
+  resilienceCount: number;
+  reasons: string[];                   // human-readable reasons for not advancing
+}
+
+// ============================================================================
 // STREAK & PROGRESS TYPES
 // ============================================================================
+
 
 /**
  * MentalTrainingStreak - User's streak and progress data

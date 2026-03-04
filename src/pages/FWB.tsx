@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import PageHead from '../components/PageHead';
-import Header from '../components/Header';
 import { GetServerSideProps } from 'next';
 import { adminMethods } from '../api/firebase/admin/methods';
 import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types';
@@ -12,10 +11,20 @@ interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpda
 
 interface FWBProps {
   metaData: SerializablePageMetaData | null;
+  ogMeta: {
+    title: string;
+    description: string;
+    image: string;
+    url: string;
+  };
 }
 
 const FWB_PASSCODE = 'BLACKJOY';
 const FWB_UNLOCK_KEY = 'fwb-unlocked';
+const FWB_OG_URL = 'https://fitwithpulse.ai/FWB';
+const FWB_OG_IMAGE = 'https://fitwithpulse.ai/fwb-hero-crew.png';
+const FWB_DEFAULT_TITLE = 'Frens With Benefits x Pulse';
+const FWB_DEFAULT_DESCRIPTION = 'A private proposal for Frens With Benefits to launch a branded digital community experience on Pulse.';
 
 const FWB = ({ metaData }: FWBProps) => {
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -111,8 +120,8 @@ const FWB = ({ metaData }: FWBProps) => {
       }}>
         <PageHead
           metaData={metaData}
-          pageOgUrl="https://fitwithpulse.ai/FWB"
-          pageOgImage="/pulse-logo.svg"
+          pageOgUrl={FWB_OG_URL}
+          pageOgImage="/fwb-hero-crew.png"
         />
         <link
           href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
@@ -210,8 +219,8 @@ const FWB = ({ metaData }: FWBProps) => {
     <>
       <PageHead
         metaData={metaData}
-        pageOgUrl="https://fitwithpulse.ai/FWB"
-        pageOgImage="/pulse-logo.svg"
+        pageOgUrl={FWB_OG_URL}
+        pageOgImage="/fwb-hero-crew.png"
       />
       <link
         href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
@@ -1942,9 +1951,24 @@ export const getServerSideProps: GetServerSideProps<FWBProps> = async (_context)
     };
   }
 
+  const ogTitle = rawMetaData?.ogTitle || rawMetaData?.pageTitle || FWB_DEFAULT_TITLE;
+  const ogDescription = rawMetaData?.ogDescription || rawMetaData?.metaDescription || FWB_DEFAULT_DESCRIPTION;
+  const ogUrl = rawMetaData?.ogUrl || FWB_OG_URL;
+
+  const rawOgImage = rawMetaData?.ogImage || rawMetaData?.twitterImage || FWB_OG_IMAGE;
+  const ogImage = rawOgImage.startsWith('http')
+    ? rawOgImage
+    : `https://fitwithpulse.ai${rawOgImage}`;
+
   return {
     props: {
       metaData: serializableMetaData,
+      ogMeta: {
+        title: ogTitle,
+        description: ogDescription,
+        image: ogImage,
+        url: ogUrl,
+      },
     },
   };
 };
