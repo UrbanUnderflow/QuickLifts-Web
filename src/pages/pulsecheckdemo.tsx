@@ -47,6 +47,7 @@ interface ScriptMessage {
     transitionTo?: DemoAct;
     autoAdvance?: boolean; // auto-advance to next message without user input
     autoAdvanceDelay?: number;
+    ttsSpeed?: number; // TTS playback speed (default 1.0)
 }
 
 interface ChatMsg {
@@ -65,6 +66,7 @@ const DEMO_SCRIPT: ScriptMessage[] = [
         role: 'nora',
         content: 'Hi Tremaine, today is game day. How are you feeling?',
         delay: 1000,
+        ttsSpeed: 0.85,
     },
     // User responds: "I feel okay, just trying to get locked in."
     {
@@ -142,9 +144,9 @@ const SUGGESTED_RESPONSES: Record<number, string[]> = {
         "OK cool, that makes me feel a little better.",
     ],
     3: [
-        "Cool. I'm not going to lie, I'm a little nervous about today's game.",
-        'Yeah… honestly I\'m kinda nervous about today.',
-        "I'm stressed. Like really stressed about today.",
+        "Perfect, 10 AM. That gives me time to get right.",
+        "Alright, I'll be there.",
+        "Ugh, 10 AM? That feels early on game day.",
     ],
     4: [
         "There's just a lot of pressure. If we lose today, our season is over. And I know there are scouts watching.",
@@ -857,6 +859,22 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
 // CLINICAL ESCALATION — Act 3
 // ─────────────────────────────────────────────────────────
 
+// ── Call Timer — live elapsed counter ────────────────────
+const CallTimer: React.FC = () => {
+    const [elapsed, setElapsed] = useState(0);
+    useEffect(() => {
+        const interval = setInterval(() => setElapsed((e) => e + 1), 1000);
+        return () => clearInterval(interval);
+    }, []);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    return (
+        <div className="text-sm text-green-400 font-medium">
+            Connected • {mins}:{secs.toString().padStart(2, '0')}
+        </div>
+    );
+};
+
 const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
     const [phase, setPhase] = useState<'phone' | 'clinicianView' | 'calling'>('phone');
     const [alertTapped, setAlertTapped] = useState(false);
@@ -1396,8 +1414,8 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        onClick={() => onContinue()}
-                        className="flex flex-col items-center justify-center py-16 space-y-6 cursor-pointer"
+                        onClick={() => { if (callStatus === 'ended') onContinue(); }}
+                        className={`flex flex-col items-center justify-center py-16 space-y-6 ${callStatus === 'ended' ? 'cursor-pointer' : ''}`}
                     >
                         {/* Phone UI */}
                         <motion.div
@@ -1415,15 +1433,15 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
 
                             {/* Status */}
                             <motion.div
-                                animate={{ opacity: [0.5, 1, 0.5] }}
+                                animate={{ opacity: callStatus === 'ringing' ? [0.5, 1, 0.5] : 1 }}
                                 transition={{ duration: 2, repeat: callStatus === 'ringing' ? Infinity : 0 }}
                                 className="mb-6"
                             >
                                 {callStatus === 'ringing' && (
-                                    <div className="text-sm text-green-400">Calling&hellip;</div>
+                                    <div className="text-sm text-[#E0FE10]">Calling&hellip;</div>
                                 )}
                                 {callStatus === 'connected' && (
-                                    <div className="text-sm text-green-400 font-medium">Connected • 0:03</div>
+                                    <CallTimer />
                                 )}
                                 {callStatus === 'ended' && (
                                     <div className="text-sm text-zinc-400">Call Ended</div>
@@ -1436,21 +1454,51 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                     <motion.div
                                         animate={{ scale: [1, 1.6, 1], opacity: [0.4, 0, 0.4] }}
                                         transition={{ duration: 1.5, repeat: Infinity }}
-                                        className="w-16 h-16 rounded-full bg-green-500/20 absolute"
+                                        className="w-16 h-16 rounded-full bg-[#E0FE10]/20 absolute"
                                     />
-                                    <div className="w-16 h-16 rounded-full bg-green-500/15 flex items-center justify-center">
-                                        <Volume2 className="w-6 h-6 text-green-400" />
+                                    <div className="w-16 h-16 rounded-full bg-[#E0FE10]/15 flex items-center justify-center">
+                                        <Volume2 className="w-6 h-6 text-[#E0FE10]" />
                                     </div>
                                 </div>
                             )}
 
+                            {/* Connected indicator — voice waveform */}
                             {callStatus === 'connected' && (
-                                <div className="flex justify-center">
+                                <div className="flex flex-col items-center gap-3 mb-4">
+                                    <motion.div
+                                        initial={{ scale: 0.8, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                    >
+                                        <div className="w-16 h-16 rounded-full bg-green-500/15 flex items-center justify-center border border-green-500/30 gap-[3px]">
+                                            {/* Voice bars */}
+                                            {[0.6, 1.0, 0.7, 0.9, 0.5].map((baseHeight, i) => (
+                                                <motion.div
+                                                    key={i}
+                                                    className="w-[3px] rounded-full bg-green-400"
+                                                    animate={{
+                                                        height: [
+                                                            `${baseHeight * 8}px`,
+                                                            `${baseHeight * 20}px`,
+                                                            `${baseHeight * 6}px`,
+                                                            `${baseHeight * 16}px`,
+                                                            `${baseHeight * 10}px`,
+                                                        ],
+                                                    }}
+                                                    transition={{
+                                                        duration: 0.8 + i * 0.15,
+                                                        repeat: Infinity,
+                                                        ease: 'easeInOut',
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                    </motion.div>
                                     <motion.div
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
+                                        transition={{ delay: 1 }}
                                     >
-                                        <div className="text-[10px] text-zinc-500 mt-2">&quot;Hey Doc, thanks for calling...&quot;</div>
+                                        <div className="text-[10px] text-zinc-500">&quot;Hey Doc, thanks for calling...&quot;</div>
                                     </motion.div>
                                 </div>
                             )}
@@ -1479,7 +1527,6 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                             onConnected={() => setCallStatus('connected')}
                             onEnded={() => {
                                 setCallStatus('ended');
-                                setTimeout(() => onContinue(), 2000);
                             }}
                         />
                     </motion.div>
@@ -1495,6 +1542,14 @@ const CallSimulation: React.FC<{
     onConnected: () => void;
     onEnded: () => void;
 }> = ({ onRinging, onConnected, onEnded }) => {
+    // Use refs to avoid re-running the effect when callbacks change
+    const onRingingRef = useRef(onRinging);
+    const onConnectedRef = useRef(onConnected);
+    const onEndedRef = useRef(onEnded);
+    onRingingRef.current = onRinging;
+    onConnectedRef.current = onConnected;
+    onEndedRef.current = onEnded;
+
     useEffect(() => {
         // Play ringing tone
         const playRing = () => {
@@ -1519,12 +1574,13 @@ const CallSimulation: React.FC<{
             } catch (e) { /* silent */ }
         };
 
-        onRinging();
+        onRingingRef.current();
         playRing();
-        const t1 = setTimeout(() => onConnected(), 3500);
-        const t2 = setTimeout(() => onEnded(), 6500);
+        const t1 = setTimeout(() => onConnectedRef.current(), 5000);
+        const t2 = setTimeout(() => onEndedRef.current(), 10000);
         return () => { clearTimeout(t1); clearTimeout(t2); };
-    }, [onRinging, onConnected, onEnded]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     return null;
 };
 
@@ -1553,6 +1609,23 @@ const TheClose: React.FC = () => {
         'idle' | 'lockIn' | 'disruption' | 'killSwitch' | 'done'
     >('idle');
     const [drillActive, setDrillActive] = useState(false);
+    // Kill Switch game state
+    const [ksPulseScale, setKsPulseScale] = useState(1);
+    const [ksPulseActive, setKsPulseActive] = useState(false);
+    const [ksTapAccuracy, setKsTapAccuracy] = useState<boolean[]>([]);
+    const ksExpectedTapRef = useRef<number>(0);
+    const ksPulseTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const ksLockInTimerRef = useRef<NodeJS.Timeout | null>(null);
+    const ksDisruptionEndRef = useRef<number>(0);
+    const ksRecoveryStartedRef = useRef(false);
+    const [ksRecoveryTime, setKsRecoveryTime] = useState<number | null>(null);
+    const [ksFlashActive, setKsFlashActive] = useState(false);
+    const [ksProvocMessage, setKsProvocMessage] = useState('');
+    const [ksLockInRemaining, setKsLockInRemaining] = useState(10);
+    const [ksCurrentRound, setKsCurrentRound] = useState(1);
+    const [ksRoundTimes, setKsRoundTimes] = useState<number[]>([]);
+    const [ksRoundPhase, setKsRoundPhase] = useState<'playing' | 'result' | 'summary'>('playing');
+    const ksTotalRounds = 3; // shorter for demo
     const closeScrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -1564,7 +1637,7 @@ const TheClose: React.FC = () => {
         if (closeScrollRef.current) {
             closeScrollRef.current.scrollTop = closeScrollRef.current.scrollHeight;
         }
-    }, [chatMessages, isNTyping, drillActive, resetPhase]);
+    }, [chatMessages, isNTyping, drillActive, resetPhase, ksPulseScale, ksFlashActive, ksRoundPhase]);
 
     const addNoraMsg = useCallback((text: string, type?: 'drill-card' | 'progress-card') => {
         setIsNTyping(true);
@@ -1613,21 +1686,148 @@ const TheClose: React.FC = () => {
         }
     }, [phase, chatStep, advanceChat]);
 
-    const runResetExercise = () => {
-        setResetPhase('lockIn');
-        setTimeout(() => setResetPhase('disruption'), 2500);
-        setTimeout(() => setResetPhase('killSwitch'), 4000);
-        setTimeout(() => {
-            setResetPhase('done');
+    const ksProvocMessages = [
+        'You missed it.',
+        'Too slow.',
+        "Everyone's watching.",
+        'That was ugly.',
+        'Wrong move.',
+        "You're falling behind.",
+        'Losing focus?',
+    ];
+
+    // Start the pulse animation for the focus task
+    const startKsPulse = useCallback(() => {
+        if (ksPulseTimerRef.current) clearInterval(ksPulseTimerRef.current);
+        setKsTapAccuracy([]);
+        ksPulseTimerRef.current = setInterval(() => {
+            ksExpectedTapRef.current = Date.now();
+            setKsPulseActive(true);
+            setKsPulseScale(1.3);
             setTimeout(() => {
-                setDrillActive(false);
-                setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'system', text: '✓ Kill Switch Complete — 2.8s recovery time' }]);
-                setTimeout(() => {
-                    addNoraMsg("That was incredible. 2.8 seconds. You're consistently under 3 seconds now — that's elite-level recovery. Let me show you how far you've come over the past 90 days...", 'progress-card');
-                }, 800);
-            }, 1500);
-        }, 4500);
+                setKsPulseScale(1);
+                setKsPulseActive(false);
+            }, 600);
+        }, 1200);
+    }, []);
+
+    // Trigger the disruption
+    const triggerKsDisruption = useCallback(() => {
+        setResetPhase('disruption');
+        if (ksPulseTimerRef.current) clearInterval(ksPulseTimerRef.current);
+        // Red flash
+        setKsFlashActive(true);
+        setTimeout(() => setKsFlashActive(false), 150);
+        setTimeout(() => setKsFlashActive(true), 300);
+        setTimeout(() => setKsFlashActive(false), 450);
+        // Provocative message
+        setKsProvocMessage(ksProvocMessages[Math.floor(Math.random() * ksProvocMessages.length)]);
+
+        // After disruption → kill switch phase
+        setTimeout(() => {
+            setResetPhase('killSwitch');
+            ksDisruptionEndRef.current = Date.now();
+            ksRecoveryStartedRef.current = false;
+            setKsTapAccuracy([]);
+            // Restart pulse
+            startKsPulse();
+        }, 2000);
+    }, [startKsPulse]);
+
+    // Start a round (lock in → disruption → kill switch)
+    const startKsRound = useCallback(() => {
+        setResetPhase('lockIn');
+        setKsRecoveryTime(null);
+        setKsTapAccuracy([]);
+        setKsRoundPhase('playing');
+        ksRecoveryStartedRef.current = false;
+
+        // Start pulse
+        startKsPulse();
+
+        // Lock-in countdown
+        const duration = 8; // seconds of lock-in before disruption
+        const startTime = Date.now();
+        setKsLockInRemaining(duration);
+        if (ksLockInTimerRef.current) clearInterval(ksLockInTimerRef.current);
+        ksLockInTimerRef.current = setInterval(() => {
+            const elapsed = (Date.now() - startTime) / 1000;
+            const remaining = duration - elapsed;
+            if (remaining <= 0) {
+                if (ksLockInTimerRef.current) clearInterval(ksLockInTimerRef.current);
+                ksLockInTimerRef.current = null;
+                triggerKsDisruption();
+            } else {
+                setKsLockInRemaining(remaining);
+            }
+        }, 100);
+    }, [startKsPulse, triggerKsDisruption]);
+
+    // Handle focus task tap
+    const handleKsTap = useCallback(() => {
+        const now = Date.now();
+        const diff = Math.abs(now - ksExpectedTapRef.current);
+        const accurate = diff < 400;
+        setKsTapAccuracy((prev) => [...prev, accurate]);
+
+        if (resetPhase === 'killSwitch' && !ksRecoveryStartedRef.current && accurate) {
+            ksRecoveryStartedRef.current = true;
+            const recoveryTime = Math.max(0.1, (now - ksDisruptionEndRef.current) / 1000);
+            setKsRecoveryTime(recoveryTime);
+            setKsRoundTimes((prev) => [...prev, recoveryTime]);
+            if (ksPulseTimerRef.current) clearInterval(ksPulseTimerRef.current);
+
+            // Show round result
+            setTimeout(() => {
+                setKsRoundPhase('result');
+            }, 800);
+        }
+    }, [resetPhase]);
+
+    // Advance to next round or show summary
+    const advanceKsRound = useCallback(() => {
+        if (ksCurrentRound >= ksTotalRounds) {
+            // All rounds done → summary
+            setKsRoundPhase('summary');
+            setResetPhase('done');
+        } else {
+            setKsCurrentRound((prev) => prev + 1);
+            startKsRound();
+        }
+    }, [ksCurrentRound, ksTotalRounds, startKsRound]);
+
+    // Finish the drill → post results to chat
+    const finishKsDrill = useCallback(() => {
+        if (ksPulseTimerRef.current) clearInterval(ksPulseTimerRef.current);
+        if (ksLockInTimerRef.current) clearInterval(ksLockInTimerRef.current);
+        setDrillActive(false);
+        setResetPhase('idle');
+        const avgTime = ksRoundTimes.length > 0
+            ? (ksRoundTimes.reduce((a, b) => a + b, 0) / ksRoundTimes.length).toFixed(1)
+            : '2.8';
+        const bestTime = ksRoundTimes.length > 0
+            ? Math.min(...ksRoundTimes).toFixed(1)
+            : '2.4';
+        setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'system', text: `✓ Kill Switch Complete — ${avgTime}s avg recovery (best: ${bestTime}s)` }]);
+        setTimeout(() => {
+            addNoraMsg(`That was incredible. ${avgTime} seconds average recovery across ${ksTotalRounds} rounds. You're consistently under 3 seconds now — that's elite-level recovery. Let me show you how far you've come over the past 90 days...`, 'progress-card');
+        }, 800);
+    }, [ksRoundTimes, ksTotalRounds, addNoraMsg]);
+
+    // Start the game (called when user clicks "Begin Training")
+    const runResetExercise = () => {
+        setKsCurrentRound(1);
+        setKsRoundTimes([]);
+        startKsRound();
     };
+
+    // Cleanup timers on unmount
+    useEffect(() => {
+        return () => {
+            if (ksPulseTimerRef.current) clearInterval(ksPulseTimerRef.current);
+            if (ksLockInTimerRef.current) clearInterval(ksLockInTimerRef.current);
+        };
+    }, []);
 
     const closeResponses: Record<number, Array<{ label: string; value: string }>> = {
         1: [
@@ -1884,64 +2084,265 @@ const TheClose: React.FC = () => {
                                         ))}
                                     </AnimatePresence>
 
-                                    {/* Inline Kill Switch Drill */}
+                                    {/* Inline Kill Switch Drill — Full Interactive Game */}
                                     {drillActive && (
                                         <motion.div
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
-                                            className="max-w-3xl mx-auto rounded-xl border border-red-500/20 p-4 space-y-3"
-                                            style={{ background: 'rgba(239,68,68,0.05)' }}
+                                            className="max-w-3xl mx-auto rounded-2xl border border-red-500/20 overflow-hidden relative"
+                                            style={{ background: 'rgba(10,10,11,0.95)' }}
                                         >
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <Zap className="w-4 h-4 text-red-400" />
-                                                <span className="text-sm font-bold text-white">The Kill Switch</span>
-                                            </div>
-                                            {resetPhase === 'idle' ? (
-                                                <button
-                                                    onClick={runResetExercise}
-                                                    className="w-full py-2.5 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-sm hover:bg-red-500/30 transition-colors"
-                                                >
-                                                    Begin Reset →
-                                                </button>
-                                            ) : (
-                                                <div className="space-y-2">
+                                            {/* Red flash overlay */}
+                                            <AnimatePresence>
+                                                {ksFlashActive && (
                                                     <motion.div
-                                                        animate={{ opacity: ['lockIn', 'disruption', 'killSwitch', 'done'].includes(resetPhase) ? 1 : 0.3 }}
-                                                        className={`p-2.5 rounded-lg border transition-all duration-500 ${resetPhase === 'lockIn' ? 'bg-[#E0FE10]/10 border-[#E0FE10]/30' : 'bg-zinc-800/40 border-zinc-700/30'}`}
-                                                    >
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-5 h-5 rounded-full bg-[#E0FE10]/20 flex items-center justify-center text-[9px] font-bold text-[#E0FE10]">1</div>
-                                                            <span className="text-xs font-bold text-white">LOCK IN</span>
-                                                            {resetPhase === 'lockIn' && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] text-[#E0FE10] ml-auto">Tapping in rhythm... focused</motion.span>}
-                                                        </div>
-                                                    </motion.div>
-                                                    <motion.div
-                                                        animate={{ opacity: ['disruption', 'killSwitch', 'done'].includes(resetPhase) ? 1 : 0.3 }}
-                                                        className={`p-2.5 rounded-lg border transition-all duration-500 ${resetPhase === 'disruption' ? 'bg-red-500/10 border-red-500/30' : 'bg-zinc-800/40 border-zinc-700/30'}`}
-                                                    >
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center text-[9px] font-bold text-red-400">2</div>
-                                                            <span className="text-xs font-bold text-white">DISRUPTION</span>
-                                                            {resetPhase === 'disruption' && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] text-red-400 ml-auto">⚡ "You missed it. Too slow."</motion.span>}
-                                                        </div>
-                                                    </motion.div>
-                                                    <motion.div
-                                                        animate={{ opacity: ['killSwitch', 'done'].includes(resetPhase) ? 1 : 0.3 }}
-                                                        className={`p-2.5 rounded-lg border transition-all duration-500 ${resetPhase === 'killSwitch' ? 'bg-cyan-500/10 border-cyan-500/30' : 'bg-zinc-800/40 border-zinc-700/30'}`}
-                                                    >
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-5 h-5 rounded-full bg-cyan-500/20 flex items-center justify-center text-[9px] font-bold text-cyan-400">3</div>
-                                                            <span className="text-xs font-bold text-white">KILL SWITCH</span>
-                                                            {resetPhase === 'killSwitch' && <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[10px] text-cyan-400 ml-auto">Re-engaged — 2.8s recovery ✓</motion.span>}
-                                                        </div>
-                                                    </motion.div>
-                                                    {resetPhase === 'done' && (
-                                                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-1">
-                                                            <div className="text-[#E0FE10] font-bold text-sm">Kill Switch Complete ✓ — 2.8s</div>
-                                                        </motion.div>
-                                                    )}
+                                                        initial={{ opacity: 0 }}
+                                                        animate={{ opacity: 0.5 }}
+                                                        exit={{ opacity: 0 }}
+                                                        className="absolute inset-0 bg-red-500 z-40 pointer-events-none rounded-2xl"
+                                                    />
+                                                )}
+                                            </AnimatePresence>
+
+                                            {/* Header */}
+                                            <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/60">
+                                                <div className="flex items-center gap-2">
+                                                    <Zap className="w-4 h-4 text-red-400" />
+                                                    <span className="text-sm font-bold text-white">The Kill Switch</span>
                                                 </div>
-                                            )}
+                                                <div className="flex items-center gap-3">
+                                                    {/* Round dots */}
+                                                    <div className="flex gap-1.5">
+                                                        {Array.from({ length: ksTotalRounds }).map((_, i) => (
+                                                            <div
+                                                                key={i}
+                                                                className={`w-2 h-2 rounded-full transition-colors ${i < ksCurrentRound - 1 ? 'bg-[#E0FE10]' :
+                                                                    i === ksCurrentRound - 1 ? (resetPhase === 'disruption' ? 'bg-red-500 animate-pulse' : resetPhase === 'killSwitch' ? 'bg-cyan-400' : 'bg-[#E0FE10]') :
+                                                                        'bg-white/20'
+                                                                    }`}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                    {/* Phase label */}
+                                                    <span className={`text-[10px] font-bold uppercase tracking-wider ${resetPhase === 'lockIn' ? 'text-[#E0FE10]' :
+                                                        resetPhase === 'disruption' ? 'text-red-400' :
+                                                            resetPhase === 'killSwitch' ? 'text-cyan-400' :
+                                                                'text-zinc-500'
+                                                        }`}>
+                                                        {resetPhase === 'lockIn' ? 'Lock In' :
+                                                            resetPhase === 'disruption' ? 'Disruption!' :
+                                                                resetPhase === 'killSwitch' ? 'Kill Switch' :
+                                                                    resetPhase === 'done' ? 'Complete' :
+                                                                        `Round ${ksCurrentRound}`}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Game Content */}
+                                            <div className="px-4 py-6 min-h-[260px] flex flex-col items-center justify-center relative z-10">
+                                                {resetPhase === 'idle' ? (
+                                                    /* Start Button */
+                                                    <div className="text-center space-y-4">
+                                                        <motion.div
+                                                            className="mx-auto w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center"
+                                                            animate={{ scale: [1, 1.05, 1] }}
+                                                            transition={{ duration: 2, repeat: Infinity }}
+                                                        >
+                                                            <Zap className="w-10 h-10 text-red-500" />
+                                                        </motion.div>
+                                                        <p className="text-zinc-400 text-sm">{ksTotalRounds} rounds • Tap in rhythm • Recover fast</p>
+                                                        <button
+                                                            onClick={runResetExercise}
+                                                            className="px-8 py-3 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white font-bold text-sm hover:from-red-400 hover:to-red-500 transition-all shadow-lg shadow-red-500/20"
+                                                        >
+                                                            Begin Training →
+                                                        </button>
+                                                    </div>
+
+                                                ) : ksRoundPhase === 'result' ? (
+                                                    /* Round Result */
+                                                    <motion.div
+                                                        initial={{ opacity: 0, scale: 0.95 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        className="text-center space-y-4 w-full max-w-sm"
+                                                    >
+                                                        <div className="text-xs text-zinc-500 uppercase tracking-widest">Round {ksCurrentRound} of {ksTotalRounds}</div>
+                                                        <div className="text-4xl font-black text-[#E0FE10]">
+                                                            {ksRecoveryTime !== null ? `${ksRecoveryTime.toFixed(1)}s` : '—'}
+                                                        </div>
+                                                        <div className="text-sm text-zinc-400">Recovery Time</div>
+                                                        {ksRecoveryTime !== null && ksRecoveryTime < 3.0 && (
+                                                            <div className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 px-3 py-1 rounded-full inline-block">
+                                                                🔥 Under 3 seconds — Elite level
+                                                            </div>
+                                                        )}
+                                                        <button
+                                                            onClick={advanceKsRound}
+                                                            className="mt-4 px-6 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white font-bold text-sm hover:bg-white/15 transition-colors"
+                                                        >
+                                                            {ksCurrentRound >= ksTotalRounds ? 'View Results' : 'Next Round →'}
+                                                        </button>
+                                                    </motion.div>
+
+                                                ) : ksRoundPhase === 'summary' ? (
+                                                    /* Summary */
+                                                    <motion.div
+                                                        initial={{ opacity: 0, scale: 0.95 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        className="text-center space-y-4 w-full max-w-sm"
+                                                    >
+                                                        <div className="text-xs text-zinc-500 uppercase tracking-widest">Training Complete</div>
+                                                        <div className="text-2xl font-black text-[#E0FE10]">Kill Switch ✓</div>
+
+                                                        {/* Round breakdown */}
+                                                        <div className="grid grid-cols-3 gap-2 mt-4">
+                                                            {ksRoundTimes.map((t, i) => (
+                                                                <div key={i} className="rounded-lg bg-zinc-800/60 border border-zinc-700/30 p-2 text-center">
+                                                                    <div className="text-[10px] text-zinc-500 uppercase">R{i + 1}</div>
+                                                                    <div className={`text-sm font-bold ${t < 3.0 ? 'text-green-400' : 'text-amber-400'}`}>
+                                                                        {t.toFixed(1)}s
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+
+                                                        {/* Stats */}
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div className="rounded-lg bg-zinc-800/40 border border-zinc-700/20 p-3 text-center">
+                                                                <div className="text-lg font-bold text-[#E0FE10]">
+                                                                    {ksRoundTimes.length > 0 ? (ksRoundTimes.reduce((a, b) => a + b, 0) / ksRoundTimes.length).toFixed(1) : '—'}s
+                                                                </div>
+                                                                <div className="text-[9px] text-zinc-500 uppercase">Avg Recovery</div>
+                                                            </div>
+                                                            <div className="rounded-lg bg-zinc-800/40 border border-zinc-700/20 p-3 text-center">
+                                                                <div className="text-lg font-bold text-green-400">
+                                                                    {ksRoundTimes.length > 0 ? Math.min(...ksRoundTimes).toFixed(1) : '—'}s
+                                                                </div>
+                                                                <div className="text-[9px] text-zinc-500 uppercase">Best Round</div>
+                                                            </div>
+                                                        </div>
+
+                                                        <button
+                                                            onClick={finishKsDrill}
+                                                            className="mt-2 px-8 py-3 rounded-xl bg-gradient-to-r from-[#E0FE10] to-[#c5dc0e] text-black font-bold text-sm hover:from-[#d4ee14] hover:to-[#b8cf0d] transition-all"
+                                                        >
+                                                            Done — View Progress
+                                                        </button>
+                                                    </motion.div>
+
+                                                ) : (
+                                                    /* Active Game — Lock In / Disruption / Kill Switch */
+                                                    <div className="flex flex-col items-center gap-4 w-full">
+                                                        {/* Phase indicator */}
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`w-2 h-2 rounded-full ${resetPhase === 'lockIn' ? 'bg-[#E0FE10]' :
+                                                                resetPhase === 'disruption' ? 'bg-red-500 animate-pulse' :
+                                                                    'bg-cyan-400'
+                                                                }`} />
+                                                            <span className={`text-xs font-bold tracking-widest uppercase ${resetPhase === 'lockIn' ? 'text-[#E0FE10]' :
+                                                                resetPhase === 'disruption' ? 'text-red-400' :
+                                                                    'text-cyan-400'
+                                                                }`}>
+                                                                {resetPhase === 'lockIn' ? 'Lock In — Tap in rhythm' :
+                                                                    resetPhase === 'disruption' ? 'Disruption!' :
+                                                                        'Kill Switch — Re-engage NOW'}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Disruption content OR Focus task */}
+                                                        {resetPhase === 'disruption' ? (
+                                                            <motion.div
+                                                                initial={{ scale: 0.5, opacity: 0 }}
+                                                                animate={{ scale: 1, opacity: 1 }}
+                                                                className="flex flex-col items-center justify-center py-8"
+                                                            >
+                                                                <motion.p
+                                                                    initial={{ scale: 0.5 }}
+                                                                    animate={{ scale: [1, 1.1, 1] }}
+                                                                    transition={{ duration: 0.5 }}
+                                                                    className="text-3xl font-black text-red-500 text-center"
+                                                                >
+                                                                    {ksProvocMessage}
+                                                                </motion.p>
+                                                                {/* Scramble circles */}
+                                                                <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl">
+                                                                    {Array.from({ length: 6 }).map((_, i) => (
+                                                                        <motion.div
+                                                                            key={i}
+                                                                            initial={{ opacity: 0 }}
+                                                                            animate={{ opacity: [0, 0.4, 0] }}
+                                                                            transition={{ duration: 1, delay: i * 0.1 }}
+                                                                            className="absolute rounded-full bg-red-500"
+                                                                            style={{
+                                                                                width: `${20 + Math.random() * 30}px`,
+                                                                                height: `${20 + Math.random() * 30}px`,
+                                                                                left: `${10 + Math.random() * 80}%`,
+                                                                                top: `${10 + Math.random() * 80}%`,
+                                                                            }}
+                                                                        />
+                                                                    ))}
+                                                                </div>
+                                                            </motion.div>
+                                                        ) : (
+                                                            /* Focus Task — Pulsing Circle */
+                                                            <div className="flex flex-col items-center gap-4 py-4">
+                                                                {resetPhase === 'killSwitch' && (
+                                                                    <motion.div
+                                                                        initial={{ opacity: 0 }}
+                                                                        animate={{ opacity: 1 }}
+                                                                        className="text-xs text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-3 py-1 rounded-full"
+                                                                    >
+                                                                        ⏱ Recovery timer running...
+                                                                    </motion.div>
+                                                                )}
+                                                                <motion.button
+                                                                    onClick={handleKsTap}
+                                                                    animate={{ scale: ksPulseScale }}
+                                                                    transition={{ duration: 0.3, ease: 'easeInOut' }}
+                                                                    className="relative w-28 h-28 rounded-full flex items-center justify-center"
+                                                                >
+                                                                    {/* Outer glow */}
+                                                                    <div
+                                                                        className={`absolute inset-0 rounded-full blur-xl transition-colors duration-300 ${resetPhase === 'killSwitch' ? 'bg-cyan-400/20' : 'bg-[#E0FE10]/15'
+                                                                            }`}
+                                                                        style={{ transform: `scale(${ksPulseScale * 1.3})` }}
+                                                                    />
+                                                                    {/* Ring */}
+                                                                    <div className={`absolute inset-0 rounded-full border-2 transition-colors duration-300 ${resetPhase === 'killSwitch' ? 'border-cyan-400/40' : 'border-[#E0FE10]/30'
+                                                                        }`} />
+                                                                    {/* Core */}
+                                                                    <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${resetPhase === 'killSwitch'
+                                                                        ? 'bg-gradient-to-br from-cyan-400 to-cyan-500'
+                                                                        : 'bg-gradient-to-br from-[#E0FE10] to-[#c5dc0e]'
+                                                                        }`}>
+                                                                        <div className="w-3 h-3 rounded-full bg-white" />
+                                                                    </div>
+                                                                </motion.button>
+
+                                                                {/* Accuracy dots */}
+                                                                {ksTapAccuracy.length > 0 && (
+                                                                    <div className="flex gap-1">
+                                                                        {ksTapAccuracy.slice(-8).map((acc, i) => (
+                                                                            <div key={i} className={`w-1.5 h-1.5 rounded-full ${acc ? (resetPhase === 'killSwitch' ? 'bg-cyan-400' : 'bg-[#E0FE10]') : 'bg-red-500/50'}`} />
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Lock-in timer bar */}
+                                                        {resetPhase === 'lockIn' && (
+                                                            <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                                                                <motion.div
+                                                                    className="h-full bg-[#E0FE10]/40 rounded-full"
+                                                                    animate={{ width: `${(ksLockInRemaining / 8) * 100}%` }}
+                                                                    transition={{ duration: 0.2 }}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </motion.div>
                                     )}
 
@@ -2070,7 +2471,7 @@ const PulseCheckDemo: React.FC = () => {
         const timer = setTimeout(async () => {
             setIsTyping(true);
             // Preload audio while "typing" indicator is showing
-            const playFn = await preloadAudio(firstMsg.content);
+            const playFn = await preloadAudio(firstMsg.content, firstMsg.ttsSpeed);
             setIsTyping(false);
             const msg: ChatMsg = {
                 id: 'msg-0',
@@ -2090,7 +2491,7 @@ const PulseCheckDemo: React.FC = () => {
     // Call this while typing indicator is showing → audio loads in background
     // When ready, show message and call play() simultaneously
     const preloadAudio = useCallback(
-        async (text: string): Promise<(() => void) | null> => {
+        async (text: string, speed?: number): Promise<(() => void) | null> => {
             if (!ttsEnabled || typeof window === 'undefined') return null;
 
             // Stop any currently playing audio
@@ -2099,6 +2500,8 @@ const PulseCheckDemo: React.FC = () => {
                 audioRef.current = null;
             }
 
+            const ttsSpeed = speed ?? 1.0;
+
             try {
                 const res = await fetch('/api/tts', {
                     method: 'POST',
@@ -2106,18 +2509,18 @@ const PulseCheckDemo: React.FC = () => {
                     body: JSON.stringify({
                         text,
                         voice: 'rachel',
-                        speed: 1.0,
+                        speed: ttsSpeed,
                     }),
                 });
 
                 if (!res.ok) {
                     console.warn('[TTS] TTS API failed, falling back to Web Speech API');
-                    return () => fallbackSpeak(text);
+                    return () => fallbackSpeak(text, ttsSpeed);
                 }
 
                 const data = await res.json();
                 if (!data.audio) {
-                    return () => fallbackSpeak(text);
+                    return () => fallbackSpeak(text, ttsSpeed);
                 }
 
                 // Decode base64 MP3 and prepare audio element (but don't play yet)
@@ -2141,22 +2544,22 @@ const PulseCheckDemo: React.FC = () => {
 
                 // Return a function that plays instantly when called
                 return () => {
-                    audio.play().catch(() => fallbackSpeak(text));
+                    audio.play().catch(() => fallbackSpeak(text, ttsSpeed));
                 };
             } catch (err) {
                 console.warn('[TTS] Error preloading TTS:', err);
-                return () => fallbackSpeak(text);
+                return () => fallbackSpeak(text, ttsSpeed);
             }
         },
         [ttsEnabled]
     );
 
     // Fallback to Web Speech API if TTS API fails
-    const fallbackSpeak = useCallback((text: string) => {
+    const fallbackSpeak = useCallback((text: string, speed?: number) => {
         if (!('speechSynthesis' in window)) return;
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.0;
+        utterance.rate = speed ?? 1.0;
         utterance.pitch = 1.0;
         const voices = window.speechSynthesis.getVoices();
         const preferred = voices.find(
@@ -2260,7 +2663,7 @@ const PulseCheckDemo: React.FC = () => {
                     setIsTyping(true);
 
                     // Preload audio WHILE typing indicator shows
-                    const playFn = await preloadAudio(nextScript.content);
+                    const playFn = await preloadAudio(nextScript.content, nextScript.ttsSpeed);
 
                     // Now reveal message and play audio simultaneously
                     setIsTyping(false);
@@ -2306,14 +2709,27 @@ const PulseCheckDemo: React.FC = () => {
     }, [input, advanceScript]);
 
     // ── Handle breathing complete ─────────────────────────
+    const breathingCompletedRef = useRef(false);
+
+    // Reset the guard whenever breathing starts
+    useEffect(() => {
+        if (showBreathing) {
+            breathingCompletedRef.current = false;
+        }
+    }, [showBreathing]);
+
     const handleBreathingComplete = useCallback(async () => {
+        // Guard: only process once per breathing exercise
+        if (breathingCompletedRef.current) return;
+        breathingCompletedRef.current = true;
+
         setShowBreathing(false);
         // Continue script — preload audio then show message + play together
         if (scriptIndex < DEMO_SCRIPT.length) {
             const nextScript = DEMO_SCRIPT[scriptIndex];
             if (nextScript.role === 'nora') {
                 setIsTyping(true);
-                const playFn = await preloadAudio(nextScript.content);
+                const playFn = await preloadAudio(nextScript.content, nextScript.ttsSpeed);
                 setIsTyping(false);
                 const msg: ChatMsg = {
                     id: `nora-${Date.now()}`,
@@ -2438,6 +2854,26 @@ const PulseCheckDemo: React.FC = () => {
                                     <MicOff className="w-4 h-4 text-zinc-500" />
                                 )}
                             </button>
+
+                            {/* Skip button — only during Act 1 / intro */}
+                            {(currentAct === 'act1' || currentAct === 'intro') && (
+                                <button
+                                    onClick={() => {
+                                        // Stop any TTS
+                                        if (audioRef.current) {
+                                            audioRef.current.pause();
+                                            audioRef.current = null;
+                                            setIsSpeaking(false);
+                                        }
+                                        window.speechSynthesis?.cancel();
+                                        setShowBreathing(false);
+                                        setCurrentAct('act2');
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg bg-zinc-800/60 border border-zinc-700/40 text-[10px] font-bold text-zinc-400 uppercase tracking-wider hover:bg-zinc-700/60 hover:text-zinc-300 transition-all"
+                                >
+                                    Skip to Dashboard →
+                                </button>
+                            )}
 
                             {/* Act indicator pills */}
                             <div className="flex gap-1 ml-3">

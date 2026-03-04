@@ -11,6 +11,7 @@ export * from './types';
 export { exerciseLibraryService } from './exerciseLibraryService';
 export { assignmentService } from './assignmentService';
 export { completionService } from './completionService';
+export { gameLevelProgressService } from './gameLevelProgressService';
 
 // Curriculum Services
 export { curriculumAssignmentService } from './curriculumAssignmentService';

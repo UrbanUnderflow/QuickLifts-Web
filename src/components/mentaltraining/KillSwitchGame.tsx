@@ -23,8 +23,14 @@ import {
     TrendingDown,
     Activity,
     Award,
+    Lock,
+    Unlock,
+    ArrowUp,
+    Trophy,
 } from 'lucide-react';
-import { MentalExercise } from '../../api/firebase/mentaltraining/types';
+import { MentalExercise, GameLevelProgress, TierAdvancementResult } from '../../api/firebase/mentaltraining/types';
+import { gameLevelProgressService } from '../../api/firebase/mentaltraining/gameLevelProgressService';
+import { useUser } from '../../hooks/useUser';
 
 // ============================================================================
 // TYPES
@@ -71,6 +77,20 @@ const TIER_CONFIG: Record<KillSwitchTier, {
         lockInDuration: 8,
         disruptionDuration: 1.5,
     },
+};
+
+const TIER_NUMBER_MAP: Record<number, KillSwitchTier> = {
+    1: 'foundation',
+    2: 'sharpening',
+    3: 'pressure',
+    4: 'elite',
+};
+
+const TIER_DISPLAY_NAMES: Record<number, string> = {
+    1: 'Foundation',
+    2: 'Sharpening',
+    3: 'Pressure',
+    4: 'Elite',
 };
 
 const PROVOCATIVE_MESSAGES = [
@@ -123,10 +143,17 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
     onComplete,
     onClose,
 }) => {
+    const currentUser = useUser();
+
     // Game state
     const [gameState, setGameState] = useState<GameState>('intro');
     const [currentRound, setCurrentRound] = useState(0);
-    const [currentTier] = useState<KillSwitchTier>('foundation');
+    const [currentTier, setCurrentTier] = useState<KillSwitchTier>('foundation');
+    const [tierNumber, setTierNumber] = useState(1);
+    const [levelProgress, setLevelProgress] = useState<GameLevelProgress | null>(null);
+    const [advancementResult, setAdvancementResult] = useState<TierAdvancementResult | null>(null);
+    const [showAdvancement, setShowAdvancement] = useState(false);
+    const [progressLoading, setProgressLoading] = useState(true);
     const tierConfig = TIER_CONFIG[currentTier];
     const totalRounds = tierConfig.roundCount;
 
@@ -171,6 +198,35 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
     // Mood
     const [preExerciseMood, setPreExerciseMood] = useState<number | undefined>();
     const [postExerciseMood, setPostExerciseMood] = useState<number | undefined>();
+
+    // Load user's tier progress from Firestore
+    useEffect(() => {
+        const loadProgress = async () => {
+            if (!currentUser?.id) {
+                setProgressLoading(false);
+                return;
+            }
+            try {
+                const progress = await gameLevelProgressService.getProgress(currentUser.id, 'kill_switch');
+                setLevelProgress(progress);
+                const tierKey = TIER_NUMBER_MAP[progress.currentTier] ?? 'foundation';
+                setCurrentTier(tierKey);
+                setTierNumber(progress.currentTier);
+            } catch (err) {
+                console.error('Failed to load tier progress:', err);
+            } finally {
+                setProgressLoading(false);
+            }
+        };
+        loadProgress();
+    }, [currentUser?.id]);
+
+    // Select a tier (from unlocked tiers)
+    const selectTier = useCallback((tier: number) => {
+        const tierKey = TIER_NUMBER_MAP[tier] ?? 'foundation';
+        setCurrentTier(tierKey);
+        setTierNumber(tier);
+    }, []);
 
     // Timers
     const gameTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -464,6 +520,37 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
 
     const totalElapsed = Math.round((Date.now() - sessionStartRef.current) / 1000);
 
+    // Save session progress to Firestore and check for advancement
+    const saveSessionProgress = useCallback(async () => {
+        if (!currentUser?.id || roundRecoveryTimes.length === 0) return;
+
+        const sessionRecord = {
+            sessionDate: Date.now(),
+            tier: tierNumber,
+            avgRecoveryTime: avgRecovery,
+            consistencyIndex: variance,
+            resilienceScore,
+            metTarget,
+            roundCount: roundRecoveryTimes.length,
+        };
+
+        try {
+            const result = await gameLevelProgressService.recordSession(
+                currentUser.id,
+                'kill_switch',
+                sessionRecord
+            );
+            setLevelProgress(result.progress);
+            setAdvancementResult(result.advancementResult);
+
+            if (result.advanced) {
+                setShowAdvancement(true);
+            }
+        } catch (err) {
+            console.error('Failed to save session progress:', err);
+        }
+    }, [currentUser?.id, tierNumber, avgRecovery, variance, resilienceScore, metTarget, roundRecoveryTimes]);
+
     // ============================================================================
     // RENDER HELPERS
     // ============================================================================
@@ -560,7 +647,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                             <motion.div
                                 initial={{ scale: 0.8 }}
                                 animate={{ scale: 1 }}
-                                className="mx-auto w-28 h-28 rounded-full bg-red-500/20 flex items-center justify-center mb-8 relative"
+                                className="mx-auto w-28 h-28 rounded-full bg-red-500/20 flex items-center justify-center mb-6 relative"
                             >
                                 <div className="absolute inset-0 rounded-full bg-red-500/10 blur-xl" />
                                 <Zap className="w-14 h-14 text-red-500 relative z-10" />
@@ -570,43 +657,86 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                                 THE KILL SWITCH
                             </h1>
                             <p className="text-red-400/80 font-medium mb-6">Mental Recovery Training</p>
-                            <p className="text-white/60 mb-8 leading-relaxed">
-                                Train the single most important mental skill in competitive athletics:
-                                how fast you recover after something goes wrong.
-                            </p>
 
-                            {/* How it works */}
-                            <div className="space-y-3 text-left mb-8">
-                                {[
-                                    { n: '1', t: 'Lock In', d: 'Complete a focus task', c: 'bg-[#E0FE10] text-black' },
-                                    { n: '2', t: 'Disruption', d: 'Something breaks your focus', c: 'bg-red-500 text-white' },
-                                    { n: '3', t: 'Kill Switch', d: 'Recover and re-engage FAST', c: 'bg-cyan-500 text-white' },
-                                ].map((s) => (
-                                    <div key={s.n} className="flex items-center gap-3">
-                                        <span className={`w-7 h-7 rounded-lg ${s.c} flex items-center justify-center text-sm font-bold flex-shrink-0`}>
-                                            {s.n}
-                                        </span>
-                                        <div>
-                                            <span className="text-white font-semibold text-sm">{s.t}</span>
-                                            <span className="text-white/40 text-sm"> — {s.d}</span>
-                                        </div>
-                                    </div>
-                                ))}
+                            {/* Tier selector */}
+                            <div className="mb-6">
+                                <p className="text-white/40 text-xs font-bold tracking-widest mb-3">SELECT TIER</p>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[1, 2, 3, 4].map((tier) => {
+                                        const unlocked = levelProgress?.unlockedTiers?.includes(tier) ?? tier === 1;
+                                        const selected = tierNumber === tier;
+                                        const tierTarget = [3.0, 2.0, 1.5, 1.0][tier - 1];
+                                        return (
+                                            <button
+                                                key={tier}
+                                                disabled={!unlocked}
+                                                onClick={() => unlocked && selectTier(tier)}
+                                                className={`relative p-3 rounded-xl border transition-all ${selected
+                                                    ? 'bg-red-500/20 border-red-500/60 ring-1 ring-red-500/30'
+                                                    : unlocked
+                                                        ? 'bg-white/5 border-white/10 hover:bg-white/10'
+                                                        : 'bg-white/2 border-white/5 opacity-40 cursor-not-allowed'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center justify-center mb-1">
+                                                    {unlocked ? (
+                                                        <span className={`text-lg font-black ${selected ? 'text-red-400' : 'text-white'}`}>{tier}</span>
+                                                    ) : (
+                                                        <Lock className="w-4 h-4 text-white/30" />
+                                                    )}
+                                                </div>
+                                                <p className={`text-[10px] font-medium ${selected ? 'text-red-400' : 'text-white/50'}`}>
+                                                    {TIER_DISPLAY_NAMES[tier]}
+                                                </p>
+                                                <p className="text-[9px] text-white/30 mt-0.5">
+                                                    &lt; {tierTarget}s
+                                                </p>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
 
-                            <div className="flex items-center justify-center gap-5 text-white/50 text-sm mb-8">
+                            {/* Progression info */}
+                            {levelProgress && levelProgress.totalSessions > 0 && (
+                                <div className="p-3 rounded-xl bg-white/3 border border-white/8 mb-6 text-left">
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="text-white/50">Sessions played</span>
+                                        <span className="text-white font-bold">{levelProgress.totalSessions}</span>
+                                    </div>
+                                    {levelProgress.bestAvgRecoveryTime && (
+                                        <div className="flex items-center justify-between text-sm mt-1.5">
+                                            <span className="text-white/50">Best avg recovery</span>
+                                            <span className="text-[#E0FE10] font-bold">{levelProgress.bestAvgRecoveryTime.toFixed(1)}s</span>
+                                        </div>
+                                    )}
+                                    {tierNumber < 4 && (
+                                        <div className="flex items-center justify-between text-sm mt-1.5">
+                                            <span className="text-white/50">Qualifying sessions</span>
+                                            <span className="text-white font-bold">
+                                                {levelProgress.tierHistory.filter(s => s.tier === tierNumber && s.metTarget).length}/3
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex items-center justify-center gap-5 text-white/50 text-sm mb-6">
                                 <span>2–4 min</span>
                                 <span>•</span>
                                 <span>{totalRounds} rounds</span>
+                                <span>•</span>
+                                <span>Target: &lt; {tierConfig.recoveryTarget}s</span>
                             </div>
 
                             <motion.button
                                 whileHover={{ scale: 1.03 }}
                                 whileTap={{ scale: 0.97 }}
                                 onClick={() => setGameState('preMood')}
-                                className="w-full py-4 rounded-2xl bg-gradient-to-r from-red-500 to-red-600 text-white font-bold text-lg shadow-lg shadow-red-500/20"
+                                disabled={progressLoading}
+                                className="w-full py-4 rounded-2xl bg-gradient-to-r from-red-500 to-red-600 text-white font-bold text-lg shadow-lg shadow-red-500/20 disabled:opacity-50"
                             >
-                                Begin Training
+                                {progressLoading ? 'Loading...' : 'Begin Training'}
                             </motion.button>
                         </motion.div>
                     )}
@@ -729,8 +859,8 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                                                                 borderColor: sequenceHighlight === idx ? '#E0FE10' : 'rgba(255,255,255,0.1)',
                                                             }}
                                                             className={`h-24 rounded-2xl border-2 transition-colors ${showingSequence
-                                                                    ? sequenceHighlight === idx ? 'bg-[#E0FE10]/40' : 'bg-white/5'
-                                                                    : sequenceInputs.includes(idx) ? 'bg-[#E0FE10]/20' : 'bg-white/5'
+                                                                ? sequenceHighlight === idx ? 'bg-[#E0FE10]/40' : 'bg-white/5'
+                                                                : sequenceInputs.includes(idx) ? 'bg-[#E0FE10]/20' : 'bg-white/5'
                                                                 }`}
                                                         />
                                                     ))}
@@ -932,6 +1062,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                                 whileTap={{ scale: 0.97 }}
                                 onClick={() => {
                                     if (isLastRound) {
+                                        saveSessionProgress();
                                         setGameState('postMood');
                                     } else {
                                         startNextRound();
@@ -1010,6 +1141,62 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                                 )}
                             </div>
 
+                            {/* Tier Advancement */}
+                            {showAdvancement && advancementResult?.nextTier && (
+                                <motion.div
+                                    initial={{ scale: 0.8, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    className="p-5 rounded-2xl bg-gradient-to-br from-[#E0FE10]/10 to-[#E0FE10]/5 border border-[#E0FE10]/30 mb-6 text-center"
+                                >
+                                    <Trophy className="w-10 h-10 text-[#E0FE10] mx-auto mb-2" />
+                                    <p className="text-[#E0FE10] text-lg font-black tracking-wider mb-1">TIER UP!</p>
+                                    <p className="text-white text-sm">
+                                        You unlocked <span className="font-bold text-[#E0FE10]">
+                                            {TIER_DISPLAY_NAMES[advancementResult.nextTier]}
+                                        </span>
+                                    </p>
+                                    <p className="text-white/40 text-xs mt-2">
+                                        Your consistency and recovery speed earned this promotion
+                                    </p>
+                                </motion.div>
+                            )}
+
+                            {/* Progression toward next tier */}
+                            {!showAdvancement && tierNumber < 4 && advancementResult && (
+                                <div className="p-4 rounded-2xl bg-white/3 border border-white/8 mb-6">
+                                    <p className="text-white/50 text-xs font-bold tracking-widest mb-3">
+                                        NEXT TIER: {TIER_DISPLAY_NAMES[tierNumber + 1]}
+                                    </p>
+                                    <div className="space-y-2">
+                                        {[
+                                            {
+                                                label: `Recovery < ${tierConfig.recoveryTarget}s`,
+                                                count: advancementResult.metTargetCount,
+                                                met: advancementResult.metTargetCount >= 2,
+                                            },
+                                            {
+                                                label: 'Consistency',
+                                                count: advancementResult.consistencyCount,
+                                                met: advancementResult.consistencyCount >= 2,
+                                            },
+                                            {
+                                                label: `Resilience ≥ 70%`,
+                                                count: advancementResult.resilienceCount,
+                                                met: advancementResult.resilienceCount >= 2,
+                                            },
+                                        ].map((req, i) => (
+                                            <div key={i} className="flex items-center justify-between text-sm">
+                                                <span className={req.met ? 'text-[#E0FE10]' : 'text-white/50'}>
+                                                    {req.met ? '✓' : '○'} {req.label}
+                                                </span>
+                                                <span className={`font-bold ${req.met ? 'text-[#E0FE10]' : 'text-white/40'}`}>
+                                                    {req.count}/3
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             {/* Metrics grid */}
                             <div className="grid grid-cols-2 gap-3 mb-6">
                                 {[
