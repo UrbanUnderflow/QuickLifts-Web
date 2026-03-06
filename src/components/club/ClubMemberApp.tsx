@@ -1,15 +1,18 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   FiActivity,
   FiArrowUpRight,
   FiCalendar,
+  FiCheck,
   FiImage,
   FiMapPin,
   FiMessageCircle,
   FiPlus,
   FiSend,
   FiUsers,
+  FiX,
 } from 'react-icons/fi';
 import PageHead from '../PageHead';
 import { ClubEvent, ClubFeatures, ClubMember } from '../../api/firebase/club/types';
@@ -183,7 +186,9 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [showCheckinModal, setShowCheckinModal] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const chatInputRef = useRef<HTMLInputElement>(null);
 
   const accent = ensureHexColor(clubData.accentColor);
   const accentHex = accent.replace('#', '');
@@ -196,6 +201,31 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
   const clubTypeLabel = clubData.clubType ? CLUB_TYPE_LABELS[clubData.clubType] || null : null;
   const shareUrl = `https://fitwithpulse.ai/club/${clubData.id}`;
   const features = new ClubFeatures(clubData.features || {});
+
+  // Detect checkedIn query param and show welcome modal
+  useEffect(() => {
+    if (router.query.checkedIn === 'true') {
+      setShowCheckinModal(true);
+      // Remove the query param from the URL without a re-render
+      const { checkedIn, ...rest } = router.query;
+      void router.replace(
+        { pathname: router.pathname, query: rest },
+        undefined,
+        { shallow: true }
+      );
+    }
+  }, [router]);
+
+  const handleIntroduceSelf = useCallback(() => {
+    const introTemplate = `Hey everyone! 👋 My name is [your name], I'm originally from [your city/country], and I'm passionate about [what drives you]. Excited to be here!`;
+    setNewMessage(introTemplate);
+    setShowCheckinModal(false);
+    setSelectedTab('pulse');
+    // Focus the chat input after a brief delay so the tab switch renders
+    setTimeout(() => {
+      chatInputRef.current?.focus();
+    }, 150);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -699,6 +729,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
                   />
 
                   <input
+                    ref={chatInputRef}
                     value={newMessage}
                     onChange={(event) => setNewMessage(event.target.value)}
                     onKeyDown={(event) => {
@@ -986,6 +1017,112 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
           </section>
         ) : null}
       </div>
+
+      {/* Check-in welcome modal */}
+      <AnimatePresence>
+        {showCheckinModal ? (
+          <motion.div
+            key="checkin-modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-md px-4"
+            onClick={() => setShowCheckinModal(false)}
+          >
+            <motion.div
+              key="checkin-modal-content"
+              initial={{ opacity: 0, scale: 0.92, y: 24 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 24 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-md rounded-[2rem] border border-white/12 bg-[#111113] shadow-[0_40px_120px_rgba(0,0,0,0.6)] overflow-hidden"
+            >
+              {/* Accent glow */}
+              <div
+                className="absolute -top-16 left-1/2 -translate-x-1/2 w-[22rem] h-[14rem] rounded-full blur-[100px] opacity-20"
+                style={{ backgroundColor: accent }}
+              />
+
+              {/* Close button */}
+              <button
+                onClick={() => setShowCheckinModal(false)}
+                className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 transition hover:bg-white/10 hover:text-white"
+                aria-label="Close"
+              >
+                <FiX className="text-lg" />
+              </button>
+
+              <div className="relative px-6 pt-10 pb-7 text-center">
+                {/* Success icon */}
+                <motion.div
+                  initial={{ scale: 0.7, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 260, damping: 22, delay: 0.1 }}
+                  className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full"
+                  style={{ backgroundColor: `${accent}1a`, boxShadow: `0 0 50px ${accent}30` }}
+                >
+                  <FiCheck className="text-3xl" style={{ color: accent }} />
+                </motion.div>
+
+                <h2 className="text-2xl font-black tracking-[-0.03em] text-white sm:text-3xl">
+                  You've checked in!
+                </h2>
+                <p className="mx-auto mt-3 max-w-xs text-[15px] leading-relaxed text-white/55">
+                  Welcome to <span className="font-semibold text-white/80">{clubData.name}</span>.
+                  Join the chat and introduce yourself to the club!
+                </p>
+
+                {/* Intro prompt card */}
+                <div
+                  className="mx-auto mt-6 max-w-sm rounded-2xl border border-white/8 p-5 text-left"
+                  style={{ backgroundColor: `${accent}08` }}
+                >
+                  <div
+                    className="mb-3 text-[11px] font-black uppercase tracking-[0.22em]"
+                    style={{ color: `${accent}cc` }}
+                  >
+                    Introduce Yourself
+                  </div>
+                  <ul className="space-y-2.5 text-sm leading-relaxed text-white/65">
+                    <li className="flex items-start gap-2.5">
+                      <span className="mt-0.5 text-base" style={{ color: accent }}>•</span>
+                      Say your <span className="font-semibold text-white/85">name</span>
+                    </li>
+                    <li className="flex items-start gap-2.5">
+                      <span className="mt-0.5 text-base" style={{ color: accent }}>•</span>
+                      Where you're <span className="font-semibold text-white/85">originally from</span>
+                    </li>
+                    <li className="flex items-start gap-2.5">
+                      <span className="mt-0.5 text-base" style={{ color: accent }}>•</span>
+                      What you're <span className="font-semibold text-white/85">passionate about</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* CTA buttons */}
+                <div className="mt-6 space-y-3">
+                  <button
+                    onClick={handleIntroduceSelf}
+                    className="w-full rounded-2xl px-5 py-4 text-sm font-black uppercase tracking-[0.14em] shadow-[0_18px_50px_rgba(0,0,0,0.25)] transition hover:scale-[1.01] active:scale-[0.99]"
+                    style={{ backgroundColor: accent, color: accentTextColor }}
+                  >
+                    Introduce Yourself in Chat
+                  </button>
+
+                  <button
+                    onClick={() => setShowCheckinModal(false)}
+                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-5 py-3.5 text-sm font-semibold text-white/60 transition hover:bg-white/10 hover:text-white/80"
+                  >
+                    Maybe Later
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 };

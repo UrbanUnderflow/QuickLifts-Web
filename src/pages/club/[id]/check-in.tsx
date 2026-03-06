@@ -241,8 +241,33 @@ const ClubCheckInPage: React.FC<ClubCheckInPageProps> = ({
     setCompletionContext(null);
     setFormError(null);
     setFieldErrors({});
-    setViewState('success');
-  }, [clubData, eventId]);
+
+    // Redirect to the club page with checkedIn flag so it shows the welcome modal
+    await router.push(`/club/${clubData.id}?checkedIn=true`);
+  }, [clubData, eventId, router]);
+
+  // Auto-check-in for already-authenticated users (e.g. re-scanning the QR code)
+  const autoCheckinHandledRef = useRef(false);
+
+  useEffect(() => {
+    if (autoCheckinHandledRef.current) {
+      return;
+    }
+
+    // Wait until we know whether a user is signed in
+    if (!currentUser?.id || !currentUser.username) {
+      return;
+    }
+
+    if (!clubData?.id) {
+      return;
+    }
+
+    // User is already signed in — skip the form and auto-complete check-in
+    autoCheckinHandledRef.current = true;
+
+    void finalizeSuccessfulCheckIn(currentUser);
+  }, [clubData?.id, currentUser, finalizeSuccessfulCheckIn]);
 
   useEffect(() => {
     if (viewState !== 'form' || authMode !== 'signup') {
@@ -675,7 +700,7 @@ const ClubCheckInPage: React.FC<ClubCheckInPageProps> = ({
                         />
                         <div>
                           <p className="text-sm text-zinc-400">Hosted by</p>
-                          <p className="font-semibold text-white">{creatorData.displayName || creatorData.username}</p>
+                          <p className="font-semibold text-white">@{creatorData.username || creatorData.displayName}</p>
                         </div>
                       </div>
                     )}
