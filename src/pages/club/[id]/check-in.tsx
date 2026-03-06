@@ -4,6 +4,9 @@ import { useRouter } from 'next/router';
 import {
   createUserWithEmailAndPassword,
   getRedirectResult,
+  OAuthProvider,
+  signInWithPopup,
+  browserPopupRedirectResolver,
 } from 'firebase/auth';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -525,10 +528,36 @@ const ClubCheckInPage: React.FC<ClubCheckInPageProps> = ({
     setIsSubmitting(true);
 
     try {
-      await authMethods.signInWithApple();
+      // Use popup instead of redirect — redirect breaks in QR-launched in-app browsers
+      const provider = new OAuthProvider('apple.com');
+      provider.addScope('email');
+      provider.addScope('name');
+
+      const result = await signInWithPopup(auth, provider, browserPopupRedirectResolver);
+
+      if (!result?.user) {
+        setFormError('Apple sign-in was cancelled.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const emailAddress = result.user.email || '';
+      const suggestedUsername = generateUsernameFromEmail(emailAddress || 'pulseuser');
+      const profileResult = await resolveCheckInUserProfile({
+        firebaseUser: result.user,
+        suggestedUsername,
+      });
+
+      if (profileResult.status === 'needs-username') {
+        queueCompletionStep(profileResult.email, 'Apple', profileResult.suggestedUsername);
+        return;
+      }
+
+      await finalizeSuccessfulCheckIn(profileResult.user);
     } catch (appleError) {
       console.error('[ClubCheckIn] Apple sign-in failed:', appleError);
       setFormError(getErrorMessage(appleError));
+    } finally {
       setIsSubmitting(false);
     }
   };
