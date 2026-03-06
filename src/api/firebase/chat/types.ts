@@ -18,6 +18,9 @@ export interface GroupMessage {
     mediaURL?: string | null;
     mediaType: MessageMediaType;
     gymName?: string | null;
+    recipientFcmTokens?: string[] | null;
+    visibility?: string | null;
+    visibleToUserId?: string | null;
 }
 
 export enum QuickMessage {
@@ -37,8 +40,31 @@ export const messageToFirestore = (message: Omit<GroupMessage, 'id'>) => {
     readBy: message.readBy,
     mediaURL: message.mediaURL || null,
     mediaType: message.mediaType,
-    gymName: message.gymName || null
+    gymName: message.gymName || null,
+    recipientFcmTokens: message.recipientFcmTokens || null,
+    visibility: message.visibility || 'public',
+    visibleToUserId: message.visibleToUserId || null,
   };
+};
+
+const toDate = (value: any): Date => {
+  if (!value) {
+    return new Date(0);
+  }
+
+  if (value instanceof Date) {
+    return value;
+  }
+
+  if (typeof value?.toDate === 'function') {
+    return value.toDate();
+  }
+
+  if (typeof value === 'number') {
+    return value > 1_000_000_000_000 ? new Date(value) : new Date(value * 1000);
+  }
+
+  return new Date(value);
 };
 
 // Deserialization function
@@ -47,9 +73,15 @@ export const firestoreToMessage = (id: string, data: any): GroupMessage => ({
   sender: data.sender,
   content: data.content,
   checkinId: data.checkinId || null,
-  timestamp: data.timestamp instanceof Date ? data.timestamp : new Date(data.timestamp),
-  readBy: data.readBy || {},
+  timestamp: toDate(data.timestamp),
+  readBy: Object.entries(data.readBy || {}).reduce<Record<string, Date>>((accumulator, [key, value]) => {
+    accumulator[key] = toDate(value);
+    return accumulator;
+  }, {}),
   mediaURL: data.mediaURL || null,
   mediaType: data.mediaType || MessageMediaType.None,
-  gymName: data.gymName || null
+  gymName: data.gymName || null,
+  recipientFcmTokens: Array.isArray(data.recipientFcmTokens) ? data.recipientFcmTokens : null,
+  visibility: data.visibility || 'public',
+  visibleToUserId: data.visibleToUserId || null,
 });
