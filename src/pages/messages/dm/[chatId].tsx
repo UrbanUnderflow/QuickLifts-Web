@@ -2,15 +2,16 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../../../hooks/useUser';
 import SideNav from '../../../components/Navigation/SideNav';
-import { Send, ArrowLeft, Image as ImageIcon } from 'lucide-react';
+import { Send, ArrowLeft, Image as ImageIcon, ClipboardList, CheckCircle, X } from 'lucide-react';
 import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, doc, getDoc, onSnapshot, updateDoc, writeBatch, limit } from 'firebase/firestore';
 import { db } from '../../../api/firebase/config';
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 import { userService } from '../../../api/firebase/user/service';
 import { workoutService } from '../../../api/firebase/workout/service';
+import { creatorPagesService, Survey, SurveyResponse, CLIENT_QUESTIONNAIRES_PAGE_SLUG } from '../../../api/firebase/creatorPages/service';
+import { SurveyTakingModal, SurveyResponsesModal } from '../../../components/Surveys';
 // import { Exercise } from '../../../api/firebase/exercise/types'; // Not required for flexible move search rendering
 import { Workout, Challenge } from '../../../api/firebase/workout/types';
-import { X } from 'lucide-react';
 
 interface ShortUser {
   id: string;
@@ -32,6 +33,13 @@ interface Message {
   mediaType?: string; // 'none' | 'image' | 'video' | 'workout'
   mediaURL?: string;
   peerChallengeData?: any;
+  questionnaireData?: {
+    surveyId: string;
+    surveyTitle: string;
+    surveyDescription?: string;
+    ownerUserId: string;
+    completedBy?: { [userId: string]: boolean };
+  };
 }
 
 interface DirectMessageConversation {
@@ -54,11 +62,20 @@ const DirectMessagePage: React.FC = () => {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showSendMenu, setShowSendMenu] = useState(false);
-  const [sendModalType, setSendModalType] = useState<'move' | 'stack' | 'round' | null>(null);
+  const [sendModalType, setSendModalType] = useState<'move' | 'stack' | 'round' | 'questionnaire' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const hasMarkedReadRef = useRef(false);
+
+  // Questionnaire state
+  const [questionnaires, setQuestionnaires] = useState<Survey[]>([]);
+  const [loadingQuestionnaires, setLoadingQuestionnaires] = useState(false);
+  const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const [viewingResponsesSurvey, setViewingResponsesSurvey] = useState<Survey | null>(null);
+  const [viewingResponses, setViewingResponses] = useState<SurveyResponse[]>([]);
+  const [loadingResponses, setLoadingResponses] = useState(false);
 
   // Auto-scroll to bottom when messages change
   const scrollToBottom = () => {
@@ -104,7 +121,7 @@ const DirectMessagePage: React.FC = () => {
     if (!chatId || typeof chatId !== 'string') return;
 
     console.log('[DM] Setting up real-time listener for chat:', chatId);
-    
+
     const messagesRef = collection(db, 'chats', chatId, 'messages');
     const messagesQuery = query(
       messagesRef,
@@ -131,7 +148,7 @@ const DirectMessagePage: React.FC = () => {
           peerChallengeData: data.peerChallengeData
         };
       });
-      
+
       setMessages(msgs);
       setLoading(false);
       // Mark unread as read for current user (once per load)
@@ -169,7 +186,7 @@ const DirectMessagePage: React.FC = () => {
 
     try {
       setSending(true);
-      
+
       // Add message to subcollection
       const messagesRef = collection(db, 'chats', chatId, 'messages');
       await addDoc(messagesRef, {
@@ -259,7 +276,7 @@ const DirectMessagePage: React.FC = () => {
     try {
       setSending(true);
       const messagesRef = collection(db, 'chats', chatId, 'messages');
-      
+
       const messageData: any = {
         senderId: currentUser.id,
         content: '',
@@ -322,7 +339,7 @@ const DirectMessagePage: React.FC = () => {
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
       <SideNav />
-      
+
       <div className="md:ml-20 lg:ml-64 flex-1 flex flex-col h-screen">
         {/* Header */}
         <div className="flex items-center gap-4 p-4 border-b border-zinc-800 bg-black sticky top-0 z-10">
@@ -332,7 +349,7 @@ const DirectMessagePage: React.FC = () => {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          
+
           {otherUser && (
             <>
               {otherUser.profileImage?.profileImageURL ? (
@@ -376,7 +393,7 @@ const DirectMessagePage: React.FC = () => {
                 const hasWorkout = message.workout;
                 const hasChallenge = message.peerChallengeData;
                 const hasRequest = message.request;
-                
+
                 return (
                   <div
                     key={message.id}
@@ -410,10 +427,10 @@ const DirectMessagePage: React.FC = () => {
                                 console.log('[DM Workout Click] Author field:', message.workout.author);
                                 console.log('[DM Workout Click] Workout ID:', message.workout.id);
                                 console.log('[DM Workout Click] Round Workout ID:', message.workout.roundWorkoutId);
-                                
+
                                 // The author field might be a user ID, so we need to fetch the username
                                 let username = message.workout.author;
-                                
+
                                 // Check if author is a user ID (contains letters and numbers, typically longer)
                                 if (username && username.length > 15 && !username.includes('_')) {
                                   console.log('[DM Workout Click] Author looks like user ID, fetching username...');
@@ -427,28 +444,26 @@ const DirectMessagePage: React.FC = () => {
                                     console.error('[DM Workout Click] Error fetching author user:', error);
                                   }
                                 }
-                                
+
                                 const workoutId = message.workout.roundWorkoutId || message.workout.id;
                                 const targetUrl = `/workout/${username}/${workoutId}`;
                                 console.log('[DM Workout Click] Final URL:', targetUrl);
                                 router.push(targetUrl);
                               }}
-                              className={`w-full py-3 px-4 rounded-lg font-semibold transition-all ${
-                                isCurrentUser
+                              className={`w-full py-3 px-4 rounded-lg font-semibold transition-all ${isCurrentUser
                                   ? 'bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700'
                                   : 'bg-black hover:bg-black/90 text-[#E0FE10]'
-                              }`}
+                                }`}
                             >
                               View Workout
                             </button>
                           </div>
                           {message.content && (
                             <div
-                              className={`rounded-2xl px-4 py-3 mt-2 ${
-                                isCurrentUser
+                              className={`rounded-2xl px-4 py-3 mt-2 ${isCurrentUser
                                   ? 'bg-[#E0FE10] text-black'
                                   : 'bg-zinc-800 text-white'
-                              }`}
+                                }`}
                             >
                               <p className="whitespace-pre-wrap break-words">{message.content}</p>
                             </div>
@@ -460,11 +475,10 @@ const DirectMessagePage: React.FC = () => {
                       ) : (
                         <div>
                           <div
-                            className={`rounded-2xl px-4 py-3 ${
-                              isCurrentUser
+                            className={`rounded-2xl px-4 py-3 ${isCurrentUser
                                 ? 'bg-[#E0FE10] text-black'
                                 : 'bg-zinc-800 text-white'
-                            }`}
+                              }`}
                           >
                             {/* Peer Challenge */}
                             {hasChallenge && (
@@ -478,7 +492,7 @@ const DirectMessagePage: React.FC = () => {
                                 </p>
                               </div>
                             )}
-                            
+
                             {/* Follow Request */}
                             {hasRequest && (
                               <div className="mb-2 p-3 rounded-lg bg-black/20 border border-white/10">
@@ -488,18 +502,18 @@ const DirectMessagePage: React.FC = () => {
                                 </div>
                               </div>
                             )}
-                            
+
                             {/* Image/Media */}
                             {message.mediaType === 'image' && message.mediaURL && (
                               <div className="mb-2">
-                                <img 
-                                  src={message.mediaURL} 
-                                  alt="Shared image" 
+                                <img
+                                  src={message.mediaURL}
+                                  alt="Shared image"
                                   className="rounded-lg max-w-full"
                                 />
                               </div>
                             )}
-                            
+
                             {/* Regular text content */}
                             {message.content && (
                               <p className="whitespace-pre-wrap break-words">{message.content}</p>
@@ -574,11 +588,10 @@ const DirectMessagePage: React.FC = () => {
               <button
                 onClick={handleSendMessage}
                 disabled={!newMessage.trim() || sending}
-                className={`p-3 rounded-full transition-colors flex-shrink-0 ${
-                  newMessage.trim() && !sending
+                className={`p-3 rounded-full transition-colors flex-shrink-0 ${newMessage.trim() && !sending
                     ? 'bg-[#E0FE10] text-black hover:bg-[#d0ee00]'
                     : 'bg-zinc-800 text-gray-500 cursor-not-allowed'
-                }`}
+                  }`}
               >
                 <Send className="w-5 h-5" />
               </button>
@@ -644,8 +657,8 @@ const DirectMessagePage: React.FC = () => {
                         </h3>
                         {sendModalType !== 'move' && (
                           <p className="text-sm text-gray-400">
-                            {sendModalType === 'stack' 
-                              ? `${item.exercises?.length || 0} exercises` 
+                            {sendModalType === 'stack'
+                              ? `${item.exercises?.length || 0} exercises`
                               : item.description}
                           </p>
                         )}

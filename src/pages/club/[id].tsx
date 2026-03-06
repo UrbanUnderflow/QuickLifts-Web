@@ -2,27 +2,12 @@ import { GetServerSideProps } from 'next';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import PageHead from '../../components/PageHead';
-import { clubService } from '../../api/firebase/club/service';
-import { workoutService } from '../../api/firebase/workout/service';
 import { FiShare2, FiUsers, FiMessageCircle, FiAward, FiActivity, FiCheckCircle, FiChevronDown } from 'react-icons/fi';
 import { motion, useInView } from 'framer-motion';
-
-interface RoundPreview {
-    id: string;
-    title: string;
-    subtitle: string;
-    workoutCount: number;
-    participantCount: number;
-    isActive: boolean;
-}
-
-interface ClubPageProps {
-    clubData?: any | null;
-    creatorData?: any | null;
-    totalWorkoutsCompleted?: number;
-    allRounds?: RoundPreview[];
-    error?: string | null;
-}
+import {
+    ClubLandingPageProps as ClubPageProps,
+    fetchClubLandingPageProps,
+} from '../../api/firebase/club/landingPage';
 
 // Club type display names
 const CLUB_TYPE_LABELS: Record<string, string> = {
@@ -622,120 +607,9 @@ const ClubPage: React.FC<ClubPageProps> = ({ clubData, creatorData, totalWorkout
 };
 
 export const getServerSideProps: GetServerSideProps<ClubPageProps> = async ({ params, res }) => {
-    try {
-        const id = params?.id as string;
-        if (!id) {
-            return { props: { error: 'Club ID is required' } };
-        }
-
-        res.setHeader(
-            'Cache-Control',
-            'public, s-maxage=30, stale-while-revalidate=59'
-        );
-
-        const club = await clubService.getClubById(id);
-        console.log(`[ClubLanding] Fetched club id=${id}, raw memberCount from Firestore: ${club?.memberCount}`);
-
-        if (!club) {
-            return { props: { error: 'Club not found' } };
-        }
-
-        // Debug: fetch actual members from clubMembers collection
-        try {
-            const actualMembers = await clubService.getClubMembers(club.id);
-            console.log(`[ClubLanding] Actual active members in clubMembers collection: ${actualMembers.length}`);
-            actualMembers.forEach((m, i) => {
-                console.log(`[ClubLanding]   member[${i}]: userId=${m.userId}, joinedVia=${m.joinedVia}, isActive=${m.isActive}`);
-            });
-            console.log(`[ClubLanding] MISMATCH CHECK: stored memberCount=${club.memberCount} vs actual members=${actualMembers.length}`);
-        } catch (e) {
-            console.error('[ClubLanding] Error fetching actual members for debug:', e);
-        }
-
-        const clubData = {
-            id: club.id,
-            name: club.name || '',
-            description: club.description || '',
-            coverImageURL: club.coverImageURL || null,
-            logoURL: club.logoURL || null,
-            creatorId: club.creatorId || '',
-            memberCount: club.memberCount || 1,
-            accentColor: club.accentColor || null,
-            tagline: club.tagline || null,
-            clubType: club.clubType || null,
-            landingPageConfig: club.landingPageConfig || null
-        };
-
-        let totalWorkoutsCompleted = 0;
-        let allRounds: RoundPreview[] = [];
-
-        try {
-            totalWorkoutsCompleted = await clubService.getTotalWorkoutsCompletedByMembers(club.id);
-        } catch (e) {
-            console.error('Error fetching total workouts for club:', e);
-        }
-
-        // Only show rounds that are explicitly linked to this club (matches iOS loadLinkedRounds)
-        const allRoundIds = club.linkedRoundIds || [];
-        if (allRoundIds.length > 0) {
-            try {
-                const collections = await Promise.all(
-                    allRoundIds.map(rid => workoutService.getCollectionById(rid).catch(() => null))
-                );
-                const valid = collections.filter((c): c is any => c !== null);
-
-                const participantCounts = await Promise.all(
-                    valid.map(col =>
-                        workoutService.fetchUserChallengesByChallengeId(col.id)
-                            .then(uc => uc.length)
-                            .catch(() => 0)
-                    )
-                );
-
-                const now = new Date();
-                allRounds = valid
-                    .map((col, i) => {
-                        const challenge = col.challenge;
-                        const endDate = challenge?.endDate ? new Date(challenge.endDate) : null;
-                        return {
-                            id: col.id,
-                            title: col.title || challenge?.title || 'Round',
-                            subtitle: col.subtitle || challenge?.subtitle || '',
-                            workoutCount: col.sweatlistIds?.length ?? 0,
-                            participantCount: participantCounts[i],
-                            isActive: endDate ? now <= endDate : true
-                        };
-                    })
-                    .sort((a, b) => {
-                        const aScore = a.participantCount + a.workoutCount;
-                        const bScore = b.participantCount + b.workoutCount;
-                        return bScore - aScore;
-                    });
-            } catch (e) {
-                console.error('Error fetching rounds for club:', e);
-            }
-        }
-
-        // Serialize creatorInfo to plain JSON (ShortUser is a class instance)
-        const creatorInfo = club.creatorInfo;
-        const creatorData = creatorInfo ? JSON.parse(JSON.stringify(creatorInfo.toDictionary ? creatorInfo.toDictionary() : creatorInfo)) : null;
-
-        return {
-            props: {
-                clubData,
-                creatorData,
-                totalWorkoutsCompleted,
-                allRounds
-            }
-        };
-    } catch (error) {
-        console.error('Error fetching club:', error);
-        return {
-            props: {
-                error: 'Failed to load club information'
-            }
-        };
-    }
+    const id = params?.id as string | undefined;
+    const props = await fetchClubLandingPageProps({ clubId: id, res });
+    return { props };
 };
 
 export default ClubPage;
