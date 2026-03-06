@@ -1,0 +1,991 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/router';
+import {
+  FiActivity,
+  FiArrowUpRight,
+  FiCalendar,
+  FiImage,
+  FiMapPin,
+  FiMessageCircle,
+  FiPlus,
+  FiSend,
+  FiUsers,
+} from 'react-icons/fi';
+import PageHead from '../PageHead';
+import { ClubEvent, ClubFeatures, ClubMember } from '../../api/firebase/club/types';
+import { clubService } from '../../api/firebase/club/service';
+import { clubChatService } from '../../api/firebase/club/chat';
+import { ClubLandingPageProps, RoundPreview } from '../../api/firebase/club/landingPage';
+import { ChatService } from '../../api/firebase/chat/service';
+import { GroupMessage, MessageMediaType } from '../../api/firebase/chat/types';
+import { User, userService } from '../../api/firebase/user';
+import {
+  CLUB_TYPE_LABELS,
+  deriveDarkBackground,
+  ensureHexColor,
+  formatCompactNumber,
+  getAccentTextColor,
+} from './theme';
+
+type ClubData = NonNullable<ClubLandingPageProps['clubData']>;
+type ClubTab = 'pulse' | 'members' | 'programs';
+
+interface ClubMemberAppProps {
+  clubData: ClubData;
+  creatorData?: ClubLandingPageProps['creatorData'];
+  currentUser: User;
+  totalWorkoutsCompleted?: number;
+  allRounds?: RoundPreview[];
+  isCreator?: boolean;
+  onLeave?: () => Promise<void> | void;
+  isLeaving?: boolean;
+}
+
+interface ConsolidatedClubMessage extends GroupMessage {
+  source: 'club' | 'round';
+  sourceRoundName?: string;
+}
+
+interface LeaderboardEntry {
+  member: ClubMember;
+  workoutCount: number;
+}
+
+const isMessageVisibleToUser = (message: GroupMessage, userId: string): boolean => {
+  if (!message.visibility || message.visibility === 'public') {
+    return true;
+  }
+
+  return message.visibleToUserId === userId;
+};
+
+const formatTime = (date: Date): string => {
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+};
+
+const formatEventWindow = (startDate: Date, endDate: Date): string => {
+  const dateFormatter = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+  const timeFormatter = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  return `${dateFormatter.format(startDate)} • ${timeFormatter.format(startDate)} - ${timeFormatter.format(endDate)}`;
+};
+
+const avatarForMember = (member: ClubMember): string => {
+  return (
+    member.userInfo?.profileImage?.profileImageURL ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(member.userInfo?.displayName || member.userInfo?.username || 'Pulse')}&background=111827&color=ffffff`
+  );
+};
+
+const MessageBubble: React.FC<{
+  accent: string;
+  currentUserId: string;
+  message: ConsolidatedClubMessage;
+}> = ({ accent, currentUserId, message }) => {
+  const isCurrentUser = message.sender.id === currentUserId;
+
+  const bubbleClasses = isCurrentUser
+    ? 'text-black'
+    : 'bg-white/5 text-white border border-white/6';
+
+  return (
+    <div className={`flex items-end gap-3 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+      {!isCurrentUser ? (
+        <img
+          src={
+            message.sender.profileImage?.profileImageURL ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(message.sender.displayName || message.sender.username || 'Pulse')}`
+          }
+          alt={message.sender.username}
+          className="h-9 w-9 rounded-full object-cover"
+        />
+      ) : null}
+
+      <div className={`max-w-[min(36rem,85vw)] ${isCurrentUser ? 'items-end' : 'items-start'} flex flex-col gap-2`}>
+        {message.source === 'round' && message.sourceRoundName ? (
+          <div className="pl-1 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: `${accent}b8` }}>
+            {message.sourceRoundName}
+          </div>
+        ) : null}
+
+        {!isCurrentUser ? (
+          <div className="pl-1 text-xs font-semibold" style={{ color: accent }}>
+            @{message.sender.username || message.sender.displayName}
+          </div>
+        ) : null}
+
+        <div
+          className={`overflow-hidden rounded-[1.25rem] px-4 py-3 shadow-[0_18px_60px_rgba(0,0,0,0.22)] ${bubbleClasses}`}
+          style={isCurrentUser ? { backgroundColor: accent } : undefined}
+        >
+          {message.mediaType === MessageMediaType.Image && message.mediaURL ? (
+            <div className="space-y-3">
+              <img src={message.mediaURL} alt="Club upload" className="max-h-80 w-full rounded-2xl object-cover" />
+              {message.content ? <p className="text-sm leading-6">{message.content}</p> : null}
+            </div>
+          ) : null}
+
+          {message.mediaType === MessageMediaType.Video && message.mediaURL ? (
+            <div className="space-y-3">
+              <video src={message.mediaURL} controls className="max-h-80 w-full rounded-2xl bg-black/40" />
+              {message.content ? <p className="text-sm leading-6">{message.content}</p> : null}
+            </div>
+          ) : null}
+
+          {message.mediaType === MessageMediaType.Audio && message.mediaURL ? (
+            <div className="space-y-3">
+              <audio controls src={message.mediaURL} className="w-full min-w-[16rem]" />
+              {message.content ? <p className="text-sm leading-6">{message.content}</p> : null}
+            </div>
+          ) : null}
+
+          {(message.mediaType === MessageMediaType.None || !message.mediaURL) && message.content ? (
+            <p className="text-sm leading-6">{message.content}</p>
+          ) : null}
+        </div>
+
+        <div className="pl-1 text-[11px] uppercase tracking-[0.18em] text-white/30">{formatTime(message.timestamp)}</div>
+      </div>
+    </div>
+  );
+};
+
+export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
+  clubData,
+  creatorData,
+  currentUser,
+  totalWorkoutsCompleted = 0,
+  allRounds = [],
+  isCreator = false,
+  onLeave,
+  isLeaving = false,
+}) => {
+  const router = useRouter();
+  const [selectedTab, setSelectedTab] = useState<ClubTab>('pulse');
+  const [members, setMembers] = useState<ClubMember[]>([]);
+  const [events, setEvents] = useState<ClubEvent[]>([]);
+  const [memberWorkoutCounts, setMemberWorkoutCounts] = useState<Record<string, number>>({});
+  const [clubMessages, setClubMessages] = useState<GroupMessage[]>([]);
+  const [roundMessages, setRoundMessages] = useState<Record<string, GroupMessage[]>>({});
+  const [isLoadingMembers, setIsLoadingMembers] = useState(true);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [newMessage, setNewMessage] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+
+  const accent = ensureHexColor(clubData.accentColor);
+  const accentHex = accent.replace('#', '');
+  const darkBg = useMemo(() => deriveDarkBackground(accentHex), [accentHex]);
+  const accentTextColor = useMemo(() => getAccentTextColor(accentHex), [accentHex]);
+  const heroImage =
+    clubData.coverImageURL ||
+    creatorData?.profileImage?.profileImageURL ||
+    'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=2070&auto=format&fit=crop';
+  const clubTypeLabel = clubData.clubType ? CLUB_TYPE_LABELS[clubData.clubType] || null : null;
+  const shareUrl = `https://fitwithpulse.ai/club/${clubData.id}`;
+  const features = new ClubFeatures(clubData.features || {});
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadMembers = async () => {
+      setIsLoadingMembers(true);
+      try {
+        const fetchedMembers = await clubService.getClubMembers(clubData.id);
+        if (!cancelled) {
+          setMembers(fetchedMembers.sort((left, right) => left.joinedAt.getTime() - right.joinedAt.getTime()));
+        }
+      } catch (error) {
+        console.error('[ClubMemberApp] Failed to load members:', error);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingMembers(false);
+        }
+      }
+    };
+
+    const loadEvents = async () => {
+      setIsLoadingEvents(true);
+      try {
+        const fetchedEvents = await clubService.getClubEvents(clubData.id);
+        if (!cancelled) {
+          setEvents(fetchedEvents);
+        }
+      } catch (error) {
+        console.error('[ClubMemberApp] Failed to load club events:', error);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingEvents(false);
+        }
+      }
+    };
+
+    loadMembers();
+    loadEvents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clubData.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!members.length) {
+      setMemberWorkoutCounts({});
+      return;
+    }
+
+    const loadWorkoutCounts = async () => {
+      try {
+        const counts = await userService.getWorkoutCounts(members.map((member) => member.userId));
+        if (!cancelled) {
+          setMemberWorkoutCounts(counts);
+        }
+      } catch (error) {
+        console.error('[ClubMemberApp] Failed to load member workout counts:', error);
+      }
+    };
+
+    loadWorkoutCounts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [members]);
+
+  useEffect(() => {
+    return clubChatService.subscribeToMessages(clubData.id, (messages) => {
+      setClubMessages(messages.filter((message) => isMessageVisibleToUser(message, currentUser.id)));
+    });
+  }, [clubData.id, currentUser.id]);
+
+  useEffect(() => {
+    if (!allRounds.length) {
+      setRoundMessages({});
+      return;
+    }
+
+    const unsubscribeByRound = allRounds.map((round) =>
+      ChatService.getInstance().subscribeToMessages(round.id, (messages) => {
+        setRoundMessages((previous) => ({
+          ...previous,
+          [round.id]: messages.filter((message) => isMessageVisibleToUser(message, currentUser.id)),
+        }));
+      })
+    );
+
+    return () => {
+      unsubscribeByRound.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [allRounds, currentUser.id]);
+
+  const consolidatedMessages = useMemo<ConsolidatedClubMessage[]>(() => {
+    const roundNameById = allRounds.reduce<Record<string, string>>((accumulator, round) => {
+      accumulator[round.id] = round.title;
+      return accumulator;
+    }, {});
+
+    const mergedMessages: ConsolidatedClubMessage[] = [
+      ...clubMessages.map((message) => ({
+        ...message,
+        source: 'club' as const,
+      })),
+      ...Object.entries(roundMessages).flatMap(([roundId, messages]) =>
+        messages.map((message) => ({
+          ...message,
+          source: 'round' as const,
+          sourceRoundName: roundNameById[roundId] || 'Program',
+        }))
+      ),
+    ];
+
+    return mergedMessages.sort((left, right) => left.timestamp.getTime() - right.timestamp.getTime());
+  }, [allRounds, clubMessages, roundMessages]);
+
+  const leaderboard = useMemo<LeaderboardEntry[]>(() => {
+    return members
+      .map((member) => ({
+        member,
+        workoutCount: memberWorkoutCounts[member.userId] || 0,
+      }))
+      .filter((entry) => entry.workoutCount > 0)
+      .sort((left, right) => right.workoutCount - left.workoutCount);
+  }, [memberWorkoutCounts, members]);
+
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('[ClubMemberApp] Failed to copy share link:', error);
+    }
+  };
+
+  const sendMessage = async (media?: { mediaType: MessageMediaType; mediaURL: string | null }) => {
+    const trimmedMessage = newMessage.trim();
+
+    if (!trimmedMessage && !media?.mediaURL) {
+      return;
+    }
+
+    setIsSendingMessage(true);
+    setSendError(null);
+
+    try {
+      const recipientTokens = members
+        .filter((member) => member.userId !== currentUser.id)
+        .map((member) => member.userInfo?.fcmToken)
+        .filter((token): token is string => Boolean(token));
+
+      const result = await clubChatService.sendMessage(clubData.id, {
+        sender: currentUser.toShortUser(),
+        content: trimmedMessage,
+        checkinId: null,
+        timestamp: new Date(),
+        readBy: { [currentUser.id]: new Date() },
+        mediaURL: media?.mediaURL || null,
+        mediaType: media?.mediaType || MessageMediaType.None,
+        gymName: null,
+        recipientFcmTokens: recipientTokens,
+        visibility: 'public',
+        visibleToUserId: null,
+      });
+
+      if (!result) {
+        throw new Error('Could not send message.');
+      }
+
+      setNewMessage('');
+    } catch (error) {
+      console.error('[ClubMemberApp] Failed to send message:', error);
+      setSendError(error instanceof Error ? error.message : 'Could not send message.');
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
+
+  const handleUploadChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    const mediaType = file.type.startsWith('image/')
+      ? MessageMediaType.Image
+      : file.type.startsWith('video/')
+        ? MessageMediaType.Video
+        : file.type.startsWith('audio/')
+          ? MessageMediaType.Audio
+          : null;
+
+    if (!mediaType) {
+      setSendError('Only image, video, or audio files are supported.');
+      event.target.value = '';
+      return;
+    }
+
+    setIsUploadingMedia(true);
+    setSendError(null);
+
+    try {
+      const mediaURL = await clubChatService.uploadMedia(clubData.id, file, mediaType);
+      if (!mediaURL) {
+        throw new Error('Could not upload media.');
+      }
+
+      await sendMessage({ mediaType, mediaURL });
+    } catch (error) {
+      console.error('[ClubMemberApp] Failed to upload media:', error);
+      setSendError(error instanceof Error ? error.message : 'Could not upload media.');
+    } finally {
+      setIsUploadingMedia(false);
+      event.target.value = '';
+    }
+  };
+
+  const activeMemberCount = members.filter((member) => member.isActive).length || clubData.memberCount || 0;
+  const totalProgramCount = allRounds.length + events.length;
+  const creatorAvatar =
+    creatorData?.profileImage?.profileImageURL ||
+    clubData.logoURL ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(creatorData?.displayName || creatorData?.username || clubData.name)}`;
+
+  return (
+    <div className="min-h-screen overflow-y-auto font-sans text-white" style={{ backgroundColor: darkBg }}>
+      <PageHead
+        pageOgUrl={shareUrl}
+        metaData={{
+          pageId: clubData.id,
+          pageTitle: `${clubData.name} | Pulse Club`,
+          metaDescription: clubData.description || `Member view for ${clubData.name}.`,
+          ogTitle: `${clubData.name} | Pulse Club`,
+          ogDescription: clubData.description || `Member view for ${clubData.name}.`,
+          ogImage: heroImage,
+          ogUrl: shareUrl,
+          twitterTitle: `${clubData.name} | Pulse Club`,
+          twitterDescription: clubData.description || `Member view for ${clubData.name}.`,
+          twitterImage: heroImage,
+          lastUpdated: new Date().toISOString(),
+        }}
+        pageOgImage={heroImage}
+      />
+
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div
+          className="absolute left-[-8%] top-[-12%] h-[32rem] w-[32rem] rounded-full opacity-[0.11] blur-[120px]"
+          style={{ backgroundColor: accent }}
+        />
+        <div
+          className="absolute bottom-[-8%] right-[-10%] h-[28rem] w-[28rem] rounded-full opacity-[0.09] blur-[120px]"
+          style={{ backgroundColor: accent }}
+        />
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.7) 1px, transparent 0)',
+            backgroundSize: '18px 18px',
+          }}
+        />
+      </div>
+
+      <div className="relative z-10 mx-auto max-w-6xl px-4 pb-24 pt-4 sm:px-6">
+        <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/15 shadow-[0_24px_120px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+          <div className="relative min-h-[31rem] overflow-hidden">
+            <div className="absolute inset-0">
+              <img src={heroImage} alt={clubData.name} className="h-full w-full object-cover" />
+              <div className="absolute inset-0 opacity-20 mix-blend-overlay" style={{ backgroundColor: accent }} />
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `linear-gradient(to bottom, rgba(0,0,0,0.52), transparent 24%, rgba(0,0,0,0.12) 40%, ${darkBg} 92%)`,
+                }}
+              />
+              <div
+                className="absolute bottom-[-8rem] left-1/2 h-[20rem] w-[42rem] -translate-x-1/2 rounded-full opacity-[0.18] blur-[120px]"
+                style={{ backgroundColor: accent }}
+              />
+            </div>
+
+            <div className="relative flex min-h-[31rem] flex-col justify-between p-6 sm:p-8">
+              <div className="flex items-start justify-between gap-4">
+                <button
+                  onClick={() => router.back()}
+                  className="rounded-full border border-white/15 bg-black/35 px-4 py-2 text-sm font-semibold text-white/80 transition hover:bg-black/55 hover:text-white"
+                >
+                  Back
+                </button>
+                <div className="flex items-center gap-3">
+                  {clubTypeLabel ? (
+                    <div
+                      className="rounded-full border px-4 py-2 text-xs font-black uppercase tracking-[0.22em] backdrop-blur-md"
+                      style={{ borderColor: `${accent}4f`, color: accent, backgroundColor: `${accent}18` }}
+                    >
+                      {clubTypeLabel}
+                    </div>
+                  ) : null}
+                  <div className="hidden rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/70 sm:block">
+                    Member View
+                  </div>
+                </div>
+              </div>
+
+              <div className="max-w-4xl">
+                <div className="mb-4 flex items-center gap-3 text-sm text-white/70">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/30 px-3 py-1.5 backdrop-blur-md">
+                    <span className="h-2.5 w-2.5 animate-pulse rounded-full" style={{ backgroundColor: accent }} />
+                    Live now
+                  </span>
+                  <span>@{clubData.creatorInfo?.username || creatorData?.username}</span>
+                  <span className="text-white/25">•</span>
+                  <span>{formatCompactNumber(clubData.memberCount || activeMemberCount)} members</span>
+                </div>
+
+                <h1 className="text-4xl font-black uppercase tracking-[-0.04em] text-white drop-shadow-2xl sm:text-6xl">
+                  {clubData.name}
+                </h1>
+
+                {clubData.tagline ? (
+                  <p className="mt-3 text-base font-medium italic text-white/72 sm:text-lg">{clubData.tagline}</p>
+                ) : null}
+              </div>
+
+              <div className="grid gap-5 lg:grid-cols-[1.8fr_1fr]">
+                <div className="rounded-[1.35rem] border border-white/10 bg-black/30 p-4 backdrop-blur-md sm:p-5">
+                  <div className="flex items-start gap-4">
+                    <img src={creatorAvatar} alt={clubData.name} className="h-12 w-12 rounded-2xl object-cover shadow-lg" />
+                    <div>
+                      <div className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: `${accent}cc` }}>
+                        About The Club
+                      </div>
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-white/72 sm:text-[15px]">
+                        {clubData.description || 'A persistent Pulse crew built around programs, accountability, and chat.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+                  {isCreator ? (
+                    <>
+                      <button
+                        onClick={() => router.push(`/club-studio?clubId=${clubData.id}`)}
+                        className="rounded-2xl px-5 py-3 text-sm font-black uppercase tracking-[0.18em] shadow-[0_18px_40px_rgba(0,0,0,0.22)] transition hover:scale-[1.01]"
+                        style={{ backgroundColor: accent, color: accentTextColor }}
+                      >
+                        Manage Club
+                      </button>
+                      <button
+                        onClick={() => router.push('/create-round')}
+                        className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white/85 transition hover:bg-white/10"
+                      >
+                        Create Program
+                      </button>
+                    </>
+                  ) : null}
+
+                  <button
+                    onClick={handleShare}
+                    className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white/85 transition hover:bg-white/10"
+                  >
+                    {copied ? 'Copied' : 'Share'}
+                  </button>
+
+                  {!isCreator && onLeave ? (
+                    <button
+                      onClick={() => onLeave()}
+                      disabled={isLeaving}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white/85 transition hover:bg-white/10 disabled:opacity-60"
+                    >
+                      {isLeaving ? 'Leaving...' : 'Leave Club'}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 border-t border-white/8 px-4 py-4 sm:grid-cols-3 sm:px-6">
+            {[
+              { label: 'Members', value: activeMemberCount },
+              { label: 'Workouts', value: totalWorkoutsCompleted },
+              { label: 'Programs', value: totalProgramCount },
+            ].map((stat) => (
+              <div
+                key={stat.label}
+                className="rounded-2xl border border-white/6 bg-white/[0.03] px-4 py-4 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+              >
+                <div className="text-2xl font-black" style={{ color: accent }}>
+                  {stat.value}
+                </div>
+                <div className="mt-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-white/35">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="sticky top-0 z-30 mt-5 border-b border-white/8 bg-[rgba(10,12,10,0.82)] backdrop-blur-xl">
+          <div className="grid grid-cols-3 gap-0 px-1">
+            {([
+              { id: 'pulse', label: 'Pulse' },
+              { id: 'members', label: 'Members' },
+              { id: 'programs', label: 'Programs' },
+            ] as const).map((tab) => {
+              const isActive = selectedTab === tab.id;
+
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setSelectedTab(tab.id)}
+                  className="relative px-4 py-4 text-center text-[11px] font-black uppercase tracking-[0.24em] transition"
+                  style={{ color: isActive ? accent : 'rgba(255,255,255,0.38)' }}
+                >
+                  {tab.label}
+                  <span
+                    className="absolute inset-x-4 bottom-0 h-0.5 rounded-full transition"
+                    style={{
+                      backgroundColor: isActive ? accent : 'transparent',
+                      boxShadow: isActive ? `0 0 18px ${accent}` : 'none',
+                    }}
+                  />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {selectedTab === 'pulse' ? (
+          <section className="pb-8 pt-6">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: `${accent}c5` }}>
+                  Recent Pulse
+                </div>
+                <h2 className="mt-1 text-2xl font-black tracking-[-0.03em] text-white">Club Chat + Program Feed</h2>
+              </div>
+              <div className="hidden rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/45 sm:block">
+                {consolidatedMessages.length} messages
+              </div>
+            </div>
+
+            <div className="rounded-[1.6rem] border border-white/8 bg-black/18 shadow-[0_24px_90px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+              <div className="max-h-[34rem] space-y-5 overflow-y-auto px-4 py-5 sm:px-5">
+                {consolidatedMessages.length === 0 ? (
+                  <div className="flex min-h-[20rem] flex-col items-center justify-center gap-4 text-center">
+                    <div
+                      className="flex h-24 w-24 items-center justify-center rounded-full border border-white/10 text-4xl"
+                      style={{ backgroundColor: `${accent}12`, color: accent }}
+                    >
+                      <FiMessageCircle />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black tracking-[-0.03em] text-white">No pulse yet</h3>
+                      <p className="mt-2 max-w-md text-sm leading-6 text-white/45">
+                        Start the conversation. Club messages and linked round chat roll into the same feed here.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  consolidatedMessages.map((message) => (
+                    <MessageBubble
+                      key={`${message.source}-${message.id}`}
+                      accent={accent}
+                      currentUserId={currentUser.id}
+                      message={message}
+                    />
+                  ))
+                )}
+              </div>
+
+              <div className="border-t border-white/8 bg-black/20 p-4">
+                {sendError ? (
+                  <div className="mb-3 rounded-2xl border border-red-500/20 bg-red-500/8 px-4 py-3 text-sm text-red-100">
+                    {sendError}
+                  </div>
+                ) : null}
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => uploadInputRef.current?.click()}
+                    disabled={isSendingMessage || isUploadingMedia}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full shadow-[0_12px_30px_rgba(0,0,0,0.26)] transition disabled:opacity-60"
+                    style={{ backgroundColor: accent, color: accentTextColor }}
+                    aria-label="Upload media"
+                  >
+                    {isUploadingMedia ? <FiImage className="animate-pulse" /> : <FiPlus />}
+                  </button>
+
+                  <input
+                    ref={uploadInputRef}
+                    type="file"
+                    accept="image/*,video/*,audio/*"
+                    className="hidden"
+                    onChange={handleUploadChange}
+                  />
+
+                  <input
+                    value={newMessage}
+                    onChange={(event) => setNewMessage(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        void sendMessage();
+                      }
+                    }}
+                    placeholder="Message the club..."
+                    className="h-12 flex-1 rounded-full border border-white/8 bg-white/5 px-5 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/18"
+                  />
+
+                  <button
+                    onClick={() => void sendMessage()}
+                    disabled={isSendingMessage || isUploadingMedia || (!newMessage.trim() && !uploadInputRef.current?.files?.length)}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:opacity-50"
+                    aria-label="Send message"
+                  >
+                    {isSendingMessage ? <FiActivity className="animate-spin" /> : <FiSend />}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {selectedTab === 'members' ? (
+          <section className="pb-10 pt-6">
+            <div className="mb-4">
+              <div className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: `${accent}c5` }}>
+                Members
+              </div>
+              <h2 className="mt-1 text-2xl font-black tracking-[-0.03em] text-white">Crew Roster</h2>
+            </div>
+
+            {features.workoutLeaderboardEnabled && leaderboard.length > 0 ? (
+              <div className="mb-6 rounded-[1.6rem] border border-white/8 bg-black/18 p-5 backdrop-blur-xl">
+                <div className="mb-4 flex items-center gap-3">
+                  <div
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl"
+                    style={{ backgroundColor: `${accent}16`, color: accent }}
+                  >
+                    <FiActivity />
+                  </div>
+                  <div>
+                    <div className="text-[11px] font-black uppercase tracking-[0.24em] text-white/35">Leaderboard</div>
+                    <div className="text-lg font-black tracking-[-0.03em] text-white">Most workouts completed</div>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  {leaderboard.slice(0, 3).map((entry, index) => (
+                    <div key={entry.member.id} className="rounded-2xl border border-white/8 bg-white/[0.03] p-4 text-center">
+                      <div className="text-xs font-black uppercase tracking-[0.24em]" style={{ color: accent }}>
+                        #{index + 1}
+                      </div>
+                      <img src={avatarForMember(entry.member)} alt={entry.member.userInfo.username} className="mx-auto mt-3 h-14 w-14 rounded-full object-cover" />
+                      <div className="mt-3 text-sm font-bold text-white">{entry.member.userInfo.displayName || entry.member.userInfo.username}</div>
+                      <div className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">@{entry.member.userInfo.username}</div>
+                      <div className="mt-4 text-2xl font-black" style={{ color: accent }}>
+                        {entry.workoutCount}
+                      </div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/35">Workouts</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="rounded-[1.6rem] border border-white/8 bg-black/18 p-4 backdrop-blur-xl sm:p-5">
+              {isLoadingMembers ? (
+                <div className="flex min-h-[18rem] items-center justify-center">
+                  <div
+                    className="h-12 w-12 animate-spin rounded-full border-2 border-transparent"
+                    style={{ borderTopColor: accent, borderRightColor: accent }}
+                  />
+                </div>
+              ) : members.length === 0 ? (
+                <div className="flex min-h-[18rem] flex-col items-center justify-center gap-4 text-center">
+                  <div
+                    className="flex h-24 w-24 items-center justify-center rounded-full border border-white/10 text-4xl"
+                    style={{ backgroundColor: `${accent}12`, color: accent }}
+                  >
+                    <FiUsers />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black tracking-[-0.03em] text-white">No members yet</h3>
+                    <p className="mt-2 max-w-md text-sm leading-6 text-white/45">
+                      New members will appear here as soon as they join the club.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {members.map((member) => (
+                    <button
+                      key={member.id}
+                      onClick={() => {
+                        if (member.userInfo.username) {
+                          router.push(`/profile/${member.userInfo.username}`);
+                        }
+                      }}
+                      className="flex w-full items-center gap-4 rounded-2xl border border-white/6 bg-white/[0.03] px-4 py-4 text-left transition hover:border-white/12 hover:bg-white/[0.05]"
+                    >
+                      <img src={avatarForMember(member)} alt={member.userInfo.username} className="h-12 w-12 rounded-full object-cover" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-bold text-white">
+                          {member.userInfo.displayName || member.userInfo.username}
+                        </div>
+                        <div className="truncate text-xs uppercase tracking-[0.18em] text-white/35">@{member.userInfo.username || 'member'}</div>
+                      </div>
+                      <div className="hidden text-right sm:block">
+                        <div className="text-lg font-black" style={{ color: accent }}>
+                          {memberWorkoutCounts[member.userId] || 0}
+                        </div>
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/30">Workouts</div>
+                      </div>
+                      <div
+                        className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em]"
+                        style={{ color: member.joinedVia === 'creator' ? accent : 'rgba(255,255,255,0.58)' }}
+                      >
+                        {member.joinedVia === 'creator' ? 'Host' : 'Member'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        ) : null}
+
+        {selectedTab === 'programs' ? (
+          <section className="pb-10 pt-6">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: `${accent}c5` }}>
+                  Programs
+                </div>
+                <h2 className="mt-1 text-2xl font-black tracking-[-0.03em] text-white">Challenges and IRL Events</h2>
+              </div>
+
+              {isCreator ? (
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => router.push('/create-round')}
+                    className="rounded-2xl px-4 py-3 text-sm font-black uppercase tracking-[0.18em] shadow-[0_18px_40px_rgba(0,0,0,0.22)] transition"
+                    style={{ backgroundColor: accent, color: accentTextColor }}
+                  >
+                    Create Program
+                  </button>
+                  <button
+                    onClick={() => router.push(`/club-studio?clubId=${clubData.id}`)}
+                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white/85 transition hover:bg-white/10"
+                  >
+                    Manage Club
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mb-5 rounded-[1.6rem] border border-white/8 bg-black/18 p-5 backdrop-blur-xl">
+              <div className="flex items-center gap-4">
+                <div
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl"
+                  style={{ backgroundColor: `${accent}14`, color: accent }}
+                >
+                  <FiActivity />
+                </div>
+                <div>
+                  <div className="text-[11px] font-black uppercase tracking-[0.24em] text-white/35">Programs</div>
+                  <div className="text-lg font-black tracking-[-0.03em] text-white">
+                    {totalProgramCount} live assets across challenges and events
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {events.map((event) => (
+                <div
+                  key={event.id}
+                  className="rounded-[1.6rem] border border-white/8 bg-black/18 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl"
+                >
+                  <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <span
+                          className="rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em]"
+                          style={{ backgroundColor: `${accent}14`, color: accent }}
+                        >
+                          Event
+                        </span>
+                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-white/55">
+                          {event.isUpcoming ? 'Upcoming' : 'Completed'}
+                        </span>
+                      </div>
+                      <h3 className="text-2xl font-black tracking-[-0.03em] text-white">{event.title || 'Club Event'}</h3>
+                      {event.description ? <p className="mt-3 max-w-2xl text-sm leading-6 text-white/55">{event.description}</p> : null}
+
+                      <div className="mt-4 flex flex-col gap-2 text-sm text-white/55">
+                        <div className="flex items-center gap-2">
+                          <FiCalendar style={{ color: accent }} />
+                          <span>{formatEventWindow(event.startDate, event.endDate)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <FiMapPin style={{ color: accent }} />
+                          <span>{event.displayLocation}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => router.push(`/club/${clubData.id}/check-in?eventId=${event.id}`)}
+                      className="flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-black uppercase tracking-[0.18em] shadow-[0_18px_40px_rgba(0,0,0,0.22)] transition"
+                      style={{ backgroundColor: accent, color: accentTextColor }}
+                    >
+                      {event.isUpcoming ? 'Check In' : 'View Event'}
+                      <FiArrowUpRight />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {allRounds.map((round) => (
+                <button
+                  key={round.id}
+                  onClick={() => router.push(`/round/${round.id}`)}
+                  className="w-full rounded-[1.6rem] border border-white/8 bg-black/18 p-5 text-left shadow-[0_18px_60px_rgba(0,0,0,0.16)] transition hover:border-white/12 hover:bg-black/24"
+                >
+                  <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <span
+                          className="rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em]"
+                          style={{ backgroundColor: `${accent}14`, color: accent }}
+                        >
+                          Program
+                        </span>
+                        {clubData.pinnedRoundIds?.includes(round.id) ? (
+                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-white/60">
+                            Pinned
+                          </span>
+                        ) : null}
+                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-white/55">
+                          {round.isActive ? 'Active' : 'Completed'}
+                        </span>
+                      </div>
+                      <h3 className="text-2xl font-black tracking-[-0.03em] text-white">{round.title}</h3>
+                      {round.subtitle ? <p className="mt-3 max-w-2xl text-sm leading-6 text-white/55">{round.subtitle}</p> : null}
+                      <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-white/60">
+                          {round.workoutCount} workout{round.workoutCount !== 1 ? 's' : ''}
+                        </span>
+                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-white/60">
+                          {round.participantCount} participant{round.participantCount !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.18em]" style={{ color: accent }}>
+                      Open
+                      <FiArrowUpRight />
+                    </div>
+                  </div>
+                </button>
+              ))}
+
+              {!isLoadingEvents && !events.length && !allRounds.length ? (
+                <div className="rounded-[1.6rem] border border-white/8 bg-black/18 p-10 text-center backdrop-blur-xl">
+                  <div
+                    className="mx-auto flex h-24 w-24 items-center justify-center rounded-full border border-white/10 text-4xl"
+                    style={{ backgroundColor: `${accent}12`, color: accent }}
+                  >
+                    <FiCalendar />
+                  </div>
+                  <h3 className="mt-5 text-xl font-black tracking-[-0.03em] text-white">No programs yet</h3>
+                  <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-white/45">
+                    {isCreator
+                      ? 'Create a program or link an existing round to start filling out the club.'
+                      : 'The host has not linked any programs yet.'}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+      </div>
+    </div>
+  );
+};

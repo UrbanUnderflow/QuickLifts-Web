@@ -13,7 +13,7 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from '../config';
-import { Club, ClubMember } from './types';
+import { Club, ClubEvent, ClubMember } from './types';
 import { ShortUser, userService } from '../user';
 import { workoutService } from '../workout/service';
 import { dateToUnixTimestamp } from '../../../utils/formatDate';
@@ -227,6 +227,23 @@ class ClubService {
 
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => new ClubMember({ id: doc.id, ...doc.data() }));
+  }
+
+  /**
+   * Fetches all club events for a club, sorted to match iOS.
+   */
+  async getClubEvents(clubId: string): Promise<ClubEvent[]> {
+    const snapshot = await getDocs(collection(db, 'clubEventCheckins', clubId, 'events'));
+
+    return snapshot.docs
+      .map(doc => new ClubEvent({ id: doc.id, ...doc.data() }))
+      .sort((left, right) => {
+        if (left.isUpcoming !== right.isUpcoming) {
+          return left.isUpcoming ? -1 : 1;
+        }
+
+        return left.startDate.getTime() - right.startDate.getTime();
+      });
   }
 
   /**

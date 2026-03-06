@@ -1,5 +1,6 @@
 import { workoutService } from '../workout/service';
 import { clubService } from './service';
+import { ClubFeatures } from './types';
 
 export interface RoundPreview {
   id: string;
@@ -64,8 +65,12 @@ export const fetchClubLandingPageProps = async ({
       coverImageURL: club.coverImageURL || null,
       logoURL: club.logoURL || null,
       creatorId: club.creatorId || '',
+      creatorInfo: club.creatorInfo ? club.creatorInfo.toDictionary() : null,
       memberCount: club.memberCount || 1,
       accentColor: club.accentColor || null,
+      secondaryColor: club.secondaryColor || null,
+      pinnedRoundIds: club.pinnedRoundIds || [],
+      features: club.features ? club.features.toDictionary() : new ClubFeatures().toDictionary(),
       tagline: club.tagline || null,
       clubType: club.clubType || null,
       landingPageConfig: club.landingPageConfig || null,
