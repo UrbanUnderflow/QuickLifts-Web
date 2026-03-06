@@ -91,12 +91,28 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/round-invitation', '/round', '/round-library', '/profile', '/challenge', '/review', '/programming', '/press', '/100trainers', '/MoveAndFuelATL', '/investor', '/invest', '/connect', '/coach-invite', '/research', '/onboarding', '/legal-doc', '/pulsecheck'
   ].map(pattern => pattern.toLowerCase());
 
+  const isPublicClubPath = (path: string) => {
+    const raw = (path || '').split('?')[0].split('#')[0] || '/';
+    const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
+    return /^\/club\/[^/]+$/.test(normalizedPath);
+  };
+
+  const isClubCheckInPath = (path: string) => {
+    const raw = (path || '').split('?')[0].split('#')[0] || '/';
+    const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
+    return /^\/club\/[^/]+\/check-in$/.test(normalizedPath);
+  };
+
   const isPublicRoute = (path: string) => {
     // Normalize: prefer asPath, strip query/hash, lowercase, remove trailing slash
     const raw = (path || '').split('?')[0].split('#')[0] || '/';
     // Preserve root "/" when trimming the trailing slash so home stays public
     const normalizedPath = (raw === '/' ? '/' : raw.replace(/\/$/, '')).toLowerCase();
     const segments = normalizedPath.split('/').filter(Boolean);
+
+    if (isPublicClubPath(normalizedPath) || isClubCheckInPath(normalizedPath)) {
+      return true;
+    }
 
     // IMPORTANT: press upload is an internal/admin-only tool. Treat it as protected even though
     // other /press routes are public marketing/press-kit pages.
@@ -289,8 +305,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
             // force the registration modal regardless of route visibility.
             if (activeUser && (!activeUser.username || activeUser.username.trim() === '')) {
               // Do NOT block public creator landing pages
-              if (isCreatorLandingPath(router.asPath || router.pathname)) {
-                console.log('[AuthWrapper] Authenticated but missing username on public landing page. Not showing modal.');
+              if (isCreatorLandingPath(router.asPath || router.pathname) || isClubCheckInPath(router.asPath || router.pathname)) {
+                console.log('[AuthWrapper] Authenticated but missing username on public landing/check-in page. Not showing modal.');
                 setShowSignInModal(false);
                 dispatch(setLoading(false));
                 setAuthChecked(true);

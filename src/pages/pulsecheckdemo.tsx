@@ -135,41 +135,68 @@ const DEMO_SCRIPT: ScriptMessage[] = [
 // SUGGESTED RESPONSE CHIPS
 // ─────────────────────────────────────────────────────────
 
-const SUGGESTED_RESPONSES: Record<number, string[]> = {
+type ResponseSentiment = 'positive' | 'neutral' | 'negative';
+
+interface SuggestedResponse {
+    text: string;
+    sentiment: ResponseSentiment;
+}
+
+const sentimentStyles = (sentiment: ResponseSentiment) => {
+    switch (sentiment) {
+        case 'positive':
+            return {
+                base: 'bg-emerald-500/8 border-emerald-500/25 text-emerald-300',
+                hover: 'hover:bg-emerald-500/15 hover:border-emerald-500/40 hover:text-emerald-200',
+            };
+        case 'neutral':
+            return {
+                base: 'bg-slate-500/8 border-slate-500/25 text-slate-300',
+                hover: 'hover:bg-slate-500/15 hover:border-slate-500/40 hover:text-slate-200',
+            };
+        case 'negative':
+            return {
+                base: 'bg-red-500/8 border-red-500/25 text-red-300',
+                hover: 'hover:bg-red-500/15 hover:border-red-500/40 hover:text-red-200',
+            };
+    }
+};
+
+const SUGGESTED_RESPONSES: Record<number, SuggestedResponse[]> = {
     1: [
-        'I feel okay, just trying to get locked in.',
-        "Eh, I don't know. Just woke up.",
-        "Honestly? I barely slept.",
+        { text: 'I feel okay, just trying to get locked in.', sentiment: 'positive' },
+        { text: "Eh, I don't know. Just woke up.", sentiment: 'neutral' },
+        { text: "Honestly? I barely slept.", sentiment: 'negative' },
     ],
     2: [
-        "That's good to hear. I needed that.",
-        "Nice, at least my body showed up today.",
-        "OK cool, that makes me feel a little better.",
+        { text: "That's good to hear. I needed that.", sentiment: 'positive' },
+        { text: "Nice, at least my body showed up today.", sentiment: 'neutral' },
+        { text: "Numbers are cool, but I still don't feel right.", sentiment: 'negative' },
     ],
     3: [
-        "Perfect, 10 AM. That gives me time to get right.",
-        "Alright, I'll be there.",
-        "Ugh, 10 AM? That feels early on game day.",
+        { text: "Perfect, 10 AM. That gives me time to get right.", sentiment: 'positive' },
+        { text: "Alright, I'll be there.", sentiment: 'neutral' },
+        { text: "Ugh, 10 AM? That feels early on game day.", sentiment: 'negative' },
     ],
     4: [
-        "There's just a lot of pressure. If we lose today, our season is over. And I know there are scouts watching.",
-        "I don't know, everything just feels like it's on the line today.",
-        "I feel like I'm going to let everyone down.",
+        { text: "I mean, the pressure is there, but I've been here before. I'll figure it out.", sentiment: 'positive' },
+        { text: "I don't know, everything just feels like it's on the line today.", sentiment: 'neutral' },
+        { text: "I feel like I'm going to let everyone down.", sentiment: 'negative' },
     ],
     5: [
-        "Sure, let's do it.",
-        "I guess I'll try it.",
-        "I don't know if that'll help, but fine.",
+        { text: "Sure, let's do it.", sentiment: 'positive' },
+        { text: "I guess I'll try it.", sentiment: 'neutral' },
+        { text: "I don't know if that'll help, but fine.", sentiment: 'negative' },
     ],
     7: [
-        "I feel a lot better actually.",
-        'A little better, but still tense.',
-        "I'm still feeling pretty anxious.",
+        { text: "I feel a lot better actually.", sentiment: 'positive' },
+        { text: 'A little better, but still tense.', sentiment: 'neutral' },
+        { text: "I'm still feeling pretty anxious.", sentiment: 'negative' },
     ],
     8: [
-        'Sure, go ahead and let Coach know.',
-        "Yeah, that's fine. Let him know.",
-        "Do you have to? I don't want him to think I can't handle it.",
+        { text: 'Sure, go ahead and let Coach know.', sentiment: 'positive' },
+        { text: "Yeah, that's fine. Let him know.", sentiment: 'neutral' },
+        { text: "Do you have to? I don't want him to think I can't handle it.", sentiment: 'negative' },
     ],
 };
 
@@ -1834,13 +1861,13 @@ const TheClose: React.FC = () => {
         };
     }, []);
 
-    const closeResponses: Record<number, Array<{ label: string; value: string }>> = {
+    const closeResponses: Record<number, Array<{ label: string; value: string; sentiment: ResponseSentiment }>> = {
         1: [
-            { label: 'Walk me through it first', value: 'walk' },
-            { label: "I'm ready, let's go", value: 'ready-now' },
+            { label: 'Walk me through it first', value: 'walk', sentiment: 'neutral' },
+            { label: "I'm ready, let's go", value: 'ready-now', sentiment: 'positive' },
         ],
         3: [
-            { label: "Let's do it. I'm ready.", value: 'ready' },
+            { label: "Let's do it. I'm ready.", value: 'ready', sentiment: 'positive' },
         ],
     };
 
@@ -2585,27 +2612,30 @@ const TheClose: React.FC = () => {
                             {/* Response Chips */}
                             {closeResponses[chatStep] && !isNTyping && !drillActive && (
                                 <div className="max-w-3xl mx-auto mb-3">
-                                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Suggested Responses</div>
+                                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Quick Reply</div>
                                     <div className="flex flex-wrap gap-2">
-                                        {closeResponses[chatStep].map((resp, idx) => (
-                                            <motion.button
-                                                key={idx}
-                                                initial={{ opacity: 0, y: 10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: idx * 0.1 + 0.5 }}
-                                                onClick={() => advanceChat(resp.value)}
-                                                className="px-4 py-2.5 rounded-xl text-sm text-left bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:bg-[#E0FE10]/10 hover:border-[#E0FE10]/30 hover:text-[#E0FE10] transition-all duration-200 max-w-[90%]"
-                                            >
-                                                &quot;{resp.label}&quot;
-                                            </motion.button>
-                                        ))}
+                                        {closeResponses[chatStep].map((resp, idx) => {
+                                            const styles = sentimentStyles(resp.sentiment);
+                                            return (
+                                                <motion.button
+                                                    key={idx}
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    transition={{ delay: idx * 0.1 + 0.5 }}
+                                                    onClick={() => advanceChat(resp.value)}
+                                                    className={`px-4 py-2.5 rounded-xl text-sm text-left border transition-all duration-200 max-w-[90%] ${styles.base} ${styles.hover}`}
+                                                >
+                                                    &quot;{resp.label}&quot;
+                                                </motion.button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
 
                             {!closeResponses[chatStep] && !isNTyping && !drillActive && chatStep > 1 && chatStep < 3 && (
                                 <div className="max-w-3xl mx-auto mb-3">
-                                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Suggested Responses</div>
+                                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Quick Reply</div>
                                     <motion.button
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
@@ -3362,23 +3392,26 @@ const PulseCheckDemo: React.FC = () => {
                                     {/* Response Chips */}
                                     {SUGGESTED_RESPONSES[scriptIndex] && !showBreathing && !isTyping && (
                                         <div className="max-w-3xl mx-auto mb-3">
-                                            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Suggested Responses</div>
+                                            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Quick Reply</div>
                                             <div className="flex flex-wrap gap-2">
-                                                {SUGGESTED_RESPONSES[scriptIndex].map((suggestion, idx) => (
-                                                    <motion.button
-                                                        key={idx}
-                                                        initial={{ opacity: 0, y: 10 }}
-                                                        animate={{ opacity: 1, y: 0 }}
-                                                        transition={{ delay: idx * 0.1 + 0.5 }}
-                                                        onClick={() => {
-                                                            setInput('');
-                                                            advanceScript(suggestion);
-                                                        }}
-                                                        className="px-4 py-2.5 rounded-xl text-sm text-left bg-zinc-800/60 border border-zinc-700/40 text-zinc-300 hover:bg-[#E0FE10]/10 hover:border-[#E0FE10]/30 hover:text-[#E0FE10] transition-all duration-200 max-w-[90%]"
-                                                    >
-                                                        &quot;{suggestion}&quot;
-                                                    </motion.button>
-                                                ))}
+                                                {SUGGESTED_RESPONSES[scriptIndex].map((suggestion, idx) => {
+                                                    const styles = sentimentStyles(suggestion.sentiment);
+                                                    return (
+                                                        <motion.button
+                                                            key={idx}
+                                                            initial={{ opacity: 0, y: 10 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            transition={{ delay: idx * 0.1 + 0.5 }}
+                                                            onClick={() => {
+                                                                setInput('');
+                                                                advanceScript(suggestion.text);
+                                                            }}
+                                                            className={`px-4 py-2.5 rounded-xl text-sm text-left border transition-all duration-200 max-w-[90%] ${styles.base} ${styles.hover}`}
+                                                        >
+                                                            &quot;{suggestion.text}&quot;
+                                                        </motion.button>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}
