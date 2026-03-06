@@ -14,6 +14,7 @@ import {
   FiUsers,
   FiX,
 } from 'react-icons/fi';
+import { FaApple, FaGooglePlay } from 'react-icons/fa';
 import PageHead from '../PageHead';
 import { ClubEvent, ClubFeatures, ClubMember } from '../../api/firebase/club/types';
 import { clubService } from '../../api/firebase/club/service';
@@ -29,6 +30,7 @@ import {
   formatCompactNumber,
   getAccentTextColor,
 } from './theme';
+import { platformDetection, appLinks } from '../../utils/platformDetection';
 
 type ClubData = NonNullable<ClubLandingPageProps['clubData']>;
 type ClubTab = 'pulse' | 'members' | 'programs';
@@ -187,6 +189,8 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
   const [sendError, setSendError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showCheckinModal, setShowCheckinModal] = useState(false);
+  const [showAppBanner, setShowAppBanner] = useState(false);
+  const [detectedPlatform, setDetectedPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
 
@@ -215,6 +219,20 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
       );
     }
   }, [router]);
+
+  // Detect platform on mount for app download banner
+  useEffect(() => {
+    const platform = platformDetection.getPlatform();
+    if (platform !== 'desktop') {
+      setDetectedPlatform(platform);
+      try {
+        const dismissed = sessionStorage.getItem(`pulse_app_banner_${clubData.id}`);
+        if (!dismissed) {
+          setShowAppBanner(true);
+        }
+      } catch { /* SSR / privacy mode */ }
+    }
+  }, [clubData.id]);
 
   const handleIntroduceSelf = useCallback(() => {
     const introTemplate = `Hey everyone! 👋 My name is [your name], I'm originally from [your city/country], and I'm passionate about [what drives you]. Excited to be here!`;
@@ -494,6 +512,71 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
           }}
         />
       </div>
+
+      {/* Detect platform on mount for app download banner */}
+      {/* (handled by useEffect below) */}
+
+      <AnimatePresence>
+        {showAppBanner && detectedPlatform !== 'desktop' ? (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="relative z-20 overflow-hidden"
+          >
+            <div
+              className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6"
+              style={{ backgroundColor: `${accent}18`, borderBottom: `1px solid ${accent}30` }}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: `${accent}25` }}
+                >
+                  {detectedPlatform === 'ios' ? (
+                    <FaApple className="text-lg" style={{ color: accent }} />
+                  ) : (
+                    <FaGooglePlay className="text-sm" style={{ color: accent }} />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-white truncate">
+                    Get the Pulse App
+                  </p>
+                  <p className="text-xs text-white/50 truncate">
+                    Download for the best experience
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={detectedPlatform === 'ios' ? appLinks.appStoreUrl : appLinks.playStoreUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.12em] transition hover:scale-[1.02]"
+                  style={{ backgroundColor: accent, color: accentTextColor }}
+                >
+                  Download
+                </a>
+                <button
+                  onClick={() => {
+                    setShowAppBanner(false);
+                    try {
+                      sessionStorage.setItem(`pulse_app_banner_${clubData.id}`, 'dismissed');
+                    } catch { /* ignore */ }
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-white/40 transition hover:bg-white/10 hover:text-white/70"
+                  aria-label="Dismiss"
+                >
+                  <FiX className="text-sm" />
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <div className="relative z-10 mx-auto max-w-6xl px-4 pb-24 pt-4 sm:px-6">
         <section className="overflow-hidden rounded-[2rem] border border-white/10 bg-black/15 shadow-[0_24px_120px_rgba(0,0,0,0.28)] backdrop-blur-xl">
