@@ -347,13 +347,14 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
 
   const leaderboard = useMemo<LeaderboardEntry[]>(() => {
     return members
+      .filter((member) => member.userId !== clubData.creatorId)
       .map((member) => ({
         member,
         workoutCount: memberWorkoutCounts[member.userId] || 0,
       }))
       .filter((entry) => entry.workoutCount > 0)
       .sort((left, right) => right.workoutCount - left.workoutCount);
-  }, [memberWorkoutCounts, members]);
+  }, [clubData.creatorId, memberWorkoutCounts, members]);
 
   const handleShare = async () => {
     try {
@@ -824,7 +825,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {members.map((member) => (
+                  {members.filter((member) => member.userId !== clubData.creatorId).map((member) => (
                     <button
                       key={member.id}
                       onClick={() => {
