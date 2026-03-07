@@ -11,6 +11,7 @@ export interface ParsedClubMemberOrigin {
   key: string;
   label: string;
   roundId?: string;
+  eventId?: string;
 }
 
 export function parseClubMemberOrigin(joinedVia?: string | null): ParsedClubMemberOrigin {
@@ -33,7 +34,14 @@ export function parseClubMemberOrigin(joinedVia?: string | null): ParsedClubMemb
   }
 
   if (value.startsWith('event-checkin')) {
-    return { category: 'event-checkin', key: 'event-checkin', label: 'Event QR Check-in' };
+    const parts = value.split(':');
+    const eventId = parts.length > 1 ? parts[1] : undefined;
+    return {
+      category: 'event-checkin',
+      key: value,
+      label: 'Event QR Check-in',
+      eventId
+    };
   }
 
   return {
@@ -47,11 +55,18 @@ export function parseClubMemberOrigin(joinedVia?: string | null): ParsedClubMemb
 export function getClubMemberOriginDisplayLabel(
   origin: ParsedClubMemberOrigin | string | null | undefined,
   roundNameCache: Record<string, string> = {},
-  options: { includeRoundPrefix?: boolean } = {}
+  options: { includeRoundPrefix?: boolean; eventNameCache?: Record<string, string> } = {}
 ): string {
   const parsed = typeof origin === 'string' || !origin
     ? parseClubMemberOrigin(origin)
     : origin;
+
+  if (parsed.category === 'event-checkin' && parsed.eventId) {
+    const resolvedEventName = options.eventNameCache?.[parsed.eventId];
+    if (resolvedEventName) {
+      return `Event: ${resolvedEventName}`;
+    }
+  }
 
   if (parsed.category !== 'round' || !parsed.roundId) {
     return parsed.label;
