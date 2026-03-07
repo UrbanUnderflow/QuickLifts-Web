@@ -277,6 +277,10 @@
   # Runs every 30 minutes and sends challenge-ending reminders at ~72h and ~24h remaining.
   schedule = "*/30 * * * *"
 
+[functions.schedule-irl-event-analytics-report-email]
+  # Runs every 30 minutes and sends host-facing IRL event reports ~1 hour after an event ends.
+  schedule = "*/30 * * * *"
+
 [functions.schedule-inactivity-winback-email]
   # Runs every 30 minutes and sends inactivity winback emails at ~3/7/14 days.
   schedule = "*/30 * * * *"

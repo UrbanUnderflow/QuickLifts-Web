@@ -58,6 +58,7 @@ export default function ClubAnalytics() {
     const [showAllMembers, setShowAllMembers] = useState(false);
     const [originFilter, setOriginFilter] = useState('all');
     const [roundNameCache, setRoundNameCache] = useState<Record<string, string>>({});
+    const [eventNameCache, setEventNameCache] = useState<Record<string, string>>({});
 
     useEffect(() => {
         if (authLoading) return;
@@ -78,6 +79,13 @@ export default function ClubAnalytics() {
 
                 const fetchedMembers = await clubService.getClubMembers(fetchedClub.id);
                 setMembers(fetchedMembers);
+
+                const fetchedEvents = await clubService.getClubEvents(fetchedClub.id);
+                const eventMap: Record<string, string> = {};
+                for (const event of fetchedEvents) {
+                    eventMap[event.id] = event.title || event.id;
+                }
+                setEventNameCache(eventMap);
 
                 const sevenDaysAgoDate = new Date();
                 sevenDaysAgoDate.setDate(sevenDaysAgoDate.getDate() - 7);
@@ -220,7 +228,7 @@ export default function ClubAnalytics() {
 
         for (const member of sortedMembers) {
             const parsedOrigin = parseClubMemberOrigin(member.joinedVia);
-            const label = getClubMemberOriginDisplayLabel(parsedOrigin, roundNameCache);
+            const label = getClubMemberOriginDisplayLabel(parsedOrigin, roundNameCache, { eventNameCache });
             const existingOrigin = groupedOrigins.get(parsedOrigin.key);
 
             if (existingOrigin) {
@@ -249,7 +257,7 @@ export default function ClubAnalytics() {
                 return left.label.localeCompare(right.label);
             })
         ];
-    }, [roundNameCache, sortedMembers]);
+    }, [roundNameCache, eventNameCache, sortedMembers]);
 
     const filteredMembers = useMemo(() => {
         if (originFilter === 'all') {
@@ -461,7 +469,8 @@ export default function ClubAnalytics() {
                             {sortedMembers.slice(0, 5).map((member, index) => {
                                 const parsedOrigin = parseClubMemberOrigin(member.joinedVia);
                                 const originLabel = getClubMemberOriginDisplayLabel(parsedOrigin, roundNameCache, {
-                                    includeRoundPrefix: false
+                                    includeRoundPrefix: false,
+                                    eventNameCache
                                 });
                                 const originColor = originColors[parsedOrigin.category] || originColors.unknown;
                                 const displayName = member.userInfo?.displayName || member.userInfo?.username || 'Member';
@@ -550,8 +559,8 @@ export default function ClubAnalytics() {
                                                     key={option.key}
                                                     onClick={() => setOriginFilter(option.key)}
                                                     className={`rounded-full border px-3 py-2 text-sm font-semibold transition-colors ${isActive
-                                                            ? 'border-purple-400/60 bg-purple-500/15 text-purple-200'
-                                                            : 'border-white/10 bg-white/[0.03] text-gray-400 hover:border-white/20 hover:text-white'
+                                                        ? 'border-purple-400/60 bg-purple-500/15 text-purple-200'
+                                                        : 'border-white/10 bg-white/[0.03] text-gray-400 hover:border-white/20 hover:text-white'
                                                         }`}
                                                 >
                                                     {option.label} ({option.count})
@@ -588,7 +597,7 @@ export default function ClubAnalytics() {
                                     <div className="space-y-3">
                                         {filteredMembers.map((member) => {
                                             const parsedOrigin = parseClubMemberOrigin(member.joinedVia);
-                                            const originLabel = getClubMemberOriginDisplayLabel(parsedOrigin, roundNameCache);
+                                            const originLabel = getClubMemberOriginDisplayLabel(parsedOrigin, roundNameCache, { eventNameCache });
                                             const originColor = originColors[parsedOrigin.category] || originColors.unknown;
                                             const displayName = member.userInfo?.displayName || member.userInfo?.username || 'Member';
                                             const username = member.userInfo?.username ? `@${member.userInfo.username}` : 'No username';

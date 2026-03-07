@@ -103,6 +103,14 @@ const SEQUENCES: SequenceRow[] = [
     templateDocId: 'challenge-ending-soon-v1',
   },
   {
+    id: 'irl-event-analytics-report-v1',
+    name: 'IRL Event Analytics Report',
+    trigger: '~1 hour after IRL event ends',
+    defaultSubject: 'Your {{eventTitle}} analytics report',
+    functionPath: '/.netlify/functions/send-irl-event-analytics-report-email',
+    templateDocId: 'irl-event-analytics-report-v1',
+  },
+  {
     id: 'inactivity-winback-v1',
     name: 'Inactivity Winback',
     trigger: '3d, 7d, and 14d since last meaningful activity',
