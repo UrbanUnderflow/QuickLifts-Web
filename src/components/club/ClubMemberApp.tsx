@@ -21,6 +21,7 @@ import { ClubEvent, ClubFeatures, ClubMember } from '../../api/firebase/club/typ
 import { clubService } from '../../api/firebase/club/service';
 import { clubChatService } from '../../api/firebase/club/chat';
 import { ClubLandingPageProps, RoundPreview } from '../../api/firebase/club/landingPage';
+import { getClubMemberOriginDisplayLabel, parseClubMemberOrigin } from '../../api/firebase/club/origin';
 import { ChatService } from '../../api/firebase/chat/service';
 import { GroupMessage, MessageMediaType } from '../../api/firebase/chat/types';
 import { User, userService } from '../../api/firebase/user';
@@ -173,42 +174,14 @@ interface MemberOriginSectionProps {
   members: ClubMember[];
   clubData: ClubData;
   accent: string;
-  accentTextColor: string;
   roundNameCache: Record<string, string>;
   setRoundNameCache: React.Dispatch<React.SetStateAction<Record<string, string>>>;
-}
-
-/** Parse joinedVia into a human-readable label and category */
-function parseOrigin(joinedVia: string): { category: string; label: string; roundId?: string } {
-  if (!joinedVia || joinedVia === 'unknown') {
-    return { category: 'unknown', label: 'Unknown' };
-  }
-
-  if (joinedVia === 'creator') {
-    return { category: 'creator', label: 'Host' };
-  }
-
-  if (joinedVia === 'manual') {
-    return { category: 'manual', label: 'Manual Add' };
-  }
-
-  if (joinedVia === 'backfill') {
-    return { category: 'backfill', label: 'Backfill' };
-  }
-
-  if (joinedVia.startsWith('event-checkin')) {
-    return { category: 'event-checkin', label: 'Event QR Check-in' };
-  }
-
-  // If it's not a known keyword, treat it as a round ID
-  return { category: 'round', label: joinedVia, roundId: joinedVia };
 }
 
 const MemberOriginSection: React.FC<MemberOriginSectionProps> = ({
   members,
   clubData,
   accent,
-  accentTextColor,
   roundNameCache,
   setRoundNameCache,
 }) => {
@@ -223,7 +196,7 @@ const MemberOriginSection: React.FC<MemberOriginSectionProps> = ({
     const roundIds = new Set<string>();
 
     for (const member of filteredMembers) {
-      const { roundId } = parseOrigin(member.joinedVia);
+      const { roundId } = parseClubMemberOrigin(member.joinedVia);
       if (roundId && !roundNameCache[roundId]) {
         roundIds.add(roundId);
       }
@@ -266,16 +239,9 @@ const MemberOriginSection: React.FC<MemberOriginSectionProps> = ({
     const groups: Record<string, { label: string; members: ClubMember[] }> = {};
 
     for (const member of filteredMembers) {
-      const parsed = parseOrigin(member.joinedVia);
-      let displayLabel = parsed.label;
-
-      if (parsed.category === 'round' && parsed.roundId) {
-        displayLabel = roundNameCache[parsed.roundId]
-          ? `Round: ${roundNameCache[parsed.roundId]}`
-          : `Round: ${parsed.roundId.substring(0, 8)}...`;
-      }
-
-      const key = parsed.category === 'round' && parsed.roundId ? `round:${parsed.roundId}` : parsed.category;
+      const parsed = parseClubMemberOrigin(member.joinedVia);
+      const displayLabel = getClubMemberOriginDisplayLabel(parsed, roundNameCache);
+      const key = parsed.key;
 
       if (!groups[key]) {
         groups[key] = { label: displayLabel, members: [] };
@@ -381,14 +347,10 @@ const MemberOriginSection: React.FC<MemberOriginSectionProps> = ({
               {filteredMembers
                 .sort((a, b) => (b.joinedAt?.getTime?.() || 0) - (a.joinedAt?.getTime?.() || 0))
                 .map((member) => {
-                  const parsed = parseOrigin(member.joinedVia);
-                  let displayLabel = parsed.label;
-
-                  if (parsed.category === 'round' && parsed.roundId) {
-                    displayLabel = roundNameCache[parsed.roundId]
-                      ? roundNameCache[parsed.roundId]
-                      : `${parsed.roundId.substring(0, 8)}...`;
-                  }
+                  const parsed = parseClubMemberOrigin(member.joinedVia);
+                  const displayLabel = getClubMemberOriginDisplayLabel(parsed, roundNameCache, {
+                    includeRoundPrefix: false,
+                  });
 
                   const color = parsed.category === 'round' ? categoryColors.round : (categoryColors[parsed.category] || accent);
 
@@ -1369,14 +1331,13 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
 
         {/* Analytics / Member Origin (creator only) */}
         {selectedTab === 'analytics' && isCreator ? (
-          <MemberOriginSection
-            members={members}
-            clubData={clubData}
-            accent={accent}
-            accentTextColor={accentTextColor}
-            roundNameCache={roundNameCache}
-            setRoundNameCache={setRoundNameCache}
-          />
+            <MemberOriginSection
+              members={members}
+              clubData={clubData}
+              accent={accent}
+              roundNameCache={roundNameCache}
+              setRoundNameCache={setRoundNameCache}
+            />
         ) : null}
       </div>
 
