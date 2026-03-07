@@ -3,11 +3,23 @@ import { db } from '../config';
 import { User } from '../user';
 import { clubService } from './service';
 
+interface CheckinAttribution {
+  /** ID of the user who shared the QR code / link */
+  referredBy?: string | null;
+  /** How the user authenticated: 'apple' | 'email-signup' | 'email-signin' | 'existing' */
+  authMethod?: string | null;
+  /** Always 'web' for this flow */
+  platform?: string;
+  /** Raw user-agent string for device analytics */
+  userAgent?: string | null;
+}
+
 interface RecordClubEventCheckinArgs {
   clubId: string;
   eventId?: string | null;
   user: User;
   source?: string;
+  attribution?: CheckinAttribution;
 }
 
 export const recordClubEventCheckin = async ({
@@ -15,6 +27,7 @@ export const recordClubEventCheckin = async ({
   eventId,
   user,
   source = 'event-checkin',
+  attribution,
 }: RecordClubEventCheckinArgs): Promise<void> => {
   if (!eventId) {
     return;
@@ -51,6 +64,14 @@ export const recordClubEventCheckin = async ({
     updatedAt: serverTimestamp(),
   };
 
+  // Attribution fields for analytics
+  if (attribution) {
+    checkinPayload.referredBy = attribution.referredBy || null;
+    checkinPayload.authMethod = attribution.authMethod || null;
+    checkinPayload.platform = attribution.platform || 'web';
+    checkinPayload.userAgent = attribution.userAgent || null;
+  }
+
   if (!checkinSnapshot.exists()) {
     checkinPayload.checkedInAt = serverTimestamp();
     checkinPayload.createdAt = serverTimestamp();
@@ -66,12 +87,20 @@ export const completeClubEventCheckin = async ({
   clubId,
   eventId,
   user,
+  attribution,
 }: RecordClubEventCheckinArgs): Promise<void> => {
-  await clubService.joinClub(clubId, user.id, user.toShortUser(), 'event-checkin');
+  // Build a joinedVia string that encodes the source for membership analytics
+  const joinedVia = attribution?.referredBy
+    ? `event-checkin:${attribution.referredBy}`
+    : 'event-checkin';
+
+  await clubService.joinClub(clubId, user.id, user.toShortUser(), joinedVia);
   await recordClubEventCheckin({
     clubId,
     eventId,
     user,
     source: 'event-checkin',
+    attribution,
   });
 };
+

@@ -161,6 +161,10 @@ const ClubCheckInPage: React.FC<ClubCheckInPageProps> = ({
   const router = useRouter();
   const currentUser = useUser();
   const redirectHandledRef = useRef(false);
+  const authMethodRef = useRef<string>('unknown');
+
+  // Capture the sharedBy param from the URL for attribution tracking
+  const sharedBy = typeof router.query.sharedBy === 'string' ? router.query.sharedBy : null;
 
   const [viewState, setViewState] = useState<ViewState>('form');
   const [authMode, setAuthMode] = useState<AuthMode>('signup');
@@ -230,15 +234,23 @@ const ClubCheckInPage: React.FC<ClubCheckInPageProps> = ({
     setViewState('complete-profile');
   }, []);
 
-  const finalizeSuccessfulCheckIn = useCallback(async (user: User) => {
+  const finalizeSuccessfulCheckIn = useCallback(async (user: User, authMethod?: string) => {
     if (!clubData?.id) {
       throw new Error('Club not found.');
     }
+
+    const attribution = {
+      referredBy: sharedBy,
+      authMethod: authMethod || authMethodRef.current || 'unknown',
+      platform: 'web' as const,
+      userAgent: typeof window !== 'undefined' ? window.navigator.userAgent : null,
+    };
 
     await completeClubEventCheckin({
       clubId: clubData.id,
       eventId,
       user,
+      attribution,
     });
 
     setCompletionContext(null);
@@ -247,7 +259,7 @@ const ClubCheckInPage: React.FC<ClubCheckInPageProps> = ({
 
     // Redirect to the club page with checkedIn flag so it shows the welcome modal
     await router.push(`/club/${clubData.id}?checkedIn=true`);
-  }, [clubData, eventId, router]);
+  }, [clubData, eventId, router, sharedBy]);
 
   // Auto-check-in for already-authenticated users (e.g. re-scanning the QR code)
   const autoCheckinHandledRef = useRef(false);
@@ -269,7 +281,7 @@ const ClubCheckInPage: React.FC<ClubCheckInPageProps> = ({
     // User is already signed in — skip the form and auto-complete check-in
     autoCheckinHandledRef.current = true;
 
-    void finalizeSuccessfulCheckIn(currentUser);
+    void finalizeSuccessfulCheckIn(currentUser, 'existing');
   }, [clubData?.id, currentUser, finalizeSuccessfulCheckIn]);
 
   useEffect(() => {
@@ -364,7 +376,7 @@ const ClubCheckInPage: React.FC<ClubCheckInPageProps> = ({
           return;
         }
 
-        await finalizeSuccessfulCheckIn(profileResult.user);
+        await finalizeSuccessfulCheckIn(profileResult.user, 'apple');
       } catch (redirectError) {
         console.error('[ClubCheckIn] Apple redirect completion failed:', redirectError);
         if (isMounted) {
@@ -467,7 +479,7 @@ const ClubCheckInPage: React.FC<ClubCheckInPageProps> = ({
         return;
       }
 
-      await finalizeSuccessfulCheckIn(profileResult.user);
+      await finalizeSuccessfulCheckIn(profileResult.user, 'email-signup');
     } catch (signUpError) {
       console.error('[ClubCheckIn] Sign-up failed:', signUpError);
       if (createdAuthUser && getErrorMessage(signUpError) === 'That username is already taken. Pick another one.') {
@@ -514,7 +526,7 @@ const ClubCheckInPage: React.FC<ClubCheckInPageProps> = ({
         return;
       }
 
-      await finalizeSuccessfulCheckIn(profileResult.user);
+      await finalizeSuccessfulCheckIn(profileResult.user, 'email-signin');
     } catch (signInError) {
       console.error('[ClubCheckIn] Sign-in failed:', signInError);
       setFormError(getErrorMessage(signInError));
@@ -553,7 +565,7 @@ const ClubCheckInPage: React.FC<ClubCheckInPageProps> = ({
         return;
       }
 
-      await finalizeSuccessfulCheckIn(profileResult.user);
+      await finalizeSuccessfulCheckIn(profileResult.user, 'apple');
     } catch (appleError) {
       console.error('[ClubCheckIn] Apple sign-in failed:', appleError);
       setFormError(getErrorMessage(appleError));
@@ -592,7 +604,7 @@ const ClubCheckInPage: React.FC<ClubCheckInPageProps> = ({
         return;
       }
 
-      await finalizeSuccessfulCheckIn(profileResult.user);
+      await finalizeSuccessfulCheckIn(profileResult.user, completionContext?.providerLabel === 'Apple' ? 'apple' : 'email-signup');
     } catch (completionError) {
       console.error('[ClubCheckIn] Profile completion failed:', completionError);
       setFormError(getErrorMessage(completionError));

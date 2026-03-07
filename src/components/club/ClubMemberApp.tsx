@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   FiActivity,
   FiArrowUpRight,
+  FiBarChart2,
   FiCalendar,
   FiCheck,
   FiImage,
@@ -31,9 +32,11 @@ import {
   getAccentTextColor,
 } from './theme';
 import { platformDetection, appLinks } from '../../utils/platformDetection';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../api/firebase/config';
 
 type ClubData = NonNullable<ClubLandingPageProps['clubData']>;
-type ClubTab = 'pulse' | 'members' | 'programs';
+type ClubTab = 'pulse' | 'members' | 'programs' | 'analytics';
 
 interface ClubMemberAppProps {
   clubData: ClubData;
@@ -164,6 +167,267 @@ const MessageBubble: React.FC<{
   );
 };
 
+/* ─── Member Origin Analytics Section ─────────────────────────────── */
+
+interface MemberOriginSectionProps {
+  members: ClubMember[];
+  clubData: ClubData;
+  accent: string;
+  accentTextColor: string;
+  roundNameCache: Record<string, string>;
+  setRoundNameCache: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+}
+
+/** Parse joinedVia into a human-readable label and category */
+function parseOrigin(joinedVia: string): { category: string; label: string; roundId?: string } {
+  if (!joinedVia || joinedVia === 'unknown') {
+    return { category: 'unknown', label: 'Unknown' };
+  }
+
+  if (joinedVia === 'creator') {
+    return { category: 'creator', label: 'Host' };
+  }
+
+  if (joinedVia === 'manual') {
+    return { category: 'manual', label: 'Manual Add' };
+  }
+
+  if (joinedVia === 'backfill') {
+    return { category: 'backfill', label: 'Backfill' };
+  }
+
+  if (joinedVia.startsWith('event-checkin')) {
+    return { category: 'event-checkin', label: 'Event QR Check-in' };
+  }
+
+  // If it's not a known keyword, treat it as a round ID
+  return { category: 'round', label: joinedVia, roundId: joinedVia };
+}
+
+const MemberOriginSection: React.FC<MemberOriginSectionProps> = ({
+  members,
+  clubData,
+  accent,
+  accentTextColor,
+  roundNameCache,
+  setRoundNameCache,
+}) => {
+  // Exclude the creator from analytics
+  const filteredMembers = useMemo(
+    () => members.filter((m) => m.userId !== clubData.creatorId),
+    [members, clubData.creatorId]
+  );
+
+  // Resolve all unique round IDs to names
+  useEffect(() => {
+    const roundIds = new Set<string>();
+
+    for (const member of filteredMembers) {
+      const { roundId } = parseOrigin(member.joinedVia);
+      if (roundId && !roundNameCache[roundId]) {
+        roundIds.add(roundId);
+      }
+    }
+
+    if (roundIds.size === 0) return;
+
+    let cancelled = false;
+
+    const fetchRoundNames = async () => {
+      const updates: Record<string, string> = {};
+
+      await Promise.all(
+        [...roundIds].map(async (id) => {
+          try {
+            const snap = await getDoc(doc(db, 'rounds', id));
+            if (snap.exists()) {
+              const data = snap.data();
+              updates[id] = data.name || data.title || id;
+            } else {
+              updates[id] = id; // fallback to ID
+            }
+          } catch {
+            updates[id] = id;
+          }
+        })
+      );
+
+      if (!cancelled) {
+        setRoundNameCache((prev) => ({ ...prev, ...updates }));
+      }
+    };
+
+    void fetchRoundNames();
+    return () => { cancelled = true; };
+  }, [filteredMembers, roundNameCache, setRoundNameCache]);
+
+  // Build analytics data
+  const originData = useMemo(() => {
+    const groups: Record<string, { label: string; members: ClubMember[] }> = {};
+
+    for (const member of filteredMembers) {
+      const parsed = parseOrigin(member.joinedVia);
+      let displayLabel = parsed.label;
+
+      if (parsed.category === 'round' && parsed.roundId) {
+        displayLabel = roundNameCache[parsed.roundId]
+          ? `Round: ${roundNameCache[parsed.roundId]}`
+          : `Round: ${parsed.roundId.substring(0, 8)}...`;
+      }
+
+      const key = parsed.category === 'round' && parsed.roundId ? `round:${parsed.roundId}` : parsed.category;
+
+      if (!groups[key]) {
+        groups[key] = { label: displayLabel, members: [] };
+      }
+
+      groups[key].members.push(member);
+    }
+
+    return Object.entries(groups)
+      .map(([key, value]) => ({
+        key,
+        label: value.label,
+        count: value.members.length,
+        members: value.members,
+        percentage: filteredMembers.length > 0 ? Math.round((value.members.length / filteredMembers.length) * 100) : 0,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [filteredMembers, roundNameCache]);
+
+  const categoryColors: Record<string, string> = {
+    'event-checkin': '#22d3ee',     // cyan
+    round: '#a78bfa',          // purple
+    manual: '#f59e0b',         // amber
+    backfill: '#6b7280',       // gray
+    unknown: '#6b7280',
+    creator: accent,
+  };
+
+  const getColor = (key: string) => {
+    if (key.startsWith('round:')) return categoryColors.round;
+    return categoryColors[key] || accent;
+  };
+
+  return (
+    <section className="pb-10 pt-6">
+      <div className="mb-5 flex items-center gap-3">
+        <div
+          className="flex h-11 w-11 items-center justify-center rounded-2xl"
+          style={{ backgroundColor: `${accent}16`, color: accent }}
+        >
+          <FiBarChart2 />
+        </div>
+        <div>
+          <div className="text-[11px] font-black uppercase tracking-[0.24em] text-white/35">Insights</div>
+          <div className="text-lg font-black tracking-[-0.03em] text-white">Member Origin</div>
+        </div>
+      </div>
+
+      {filteredMembers.length === 0 ? (
+        <div className="flex min-h-[12rem] flex-col items-center justify-center gap-4 rounded-[1.6rem] border border-white/8 bg-black/18 p-6 text-center backdrop-blur-xl">
+          <FiUsers className="text-3xl text-white/20" />
+          <p className="text-sm text-white/45">No member data to analyze yet.</p>
+        </div>
+      ) : (
+        <>
+          {/* Summary breakdown */}
+          <div className="mb-5 space-y-3 rounded-[1.6rem] border border-white/8 bg-black/18 p-5 backdrop-blur-xl">
+            <div className="mb-3 text-[11px] font-black uppercase tracking-[0.22em] text-white/40">
+              Acquisition Breakdown
+            </div>
+
+            {/* Horizontal bar chart */}
+            <div className="flex h-4 w-full overflow-hidden rounded-full">
+              {originData.map((entry) => (
+                <div
+                  key={entry.key}
+                  className="h-full transition-all"
+                  style={{
+                    width: `${entry.percentage}%`,
+                    backgroundColor: getColor(entry.key),
+                    minWidth: entry.percentage > 0 ? '4px' : '0',
+                  }}
+                  title={`${entry.label}: ${entry.count} (${entry.percentage}%)`}
+                />
+              ))}
+            </div>
+
+            {/* Legend */}
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {originData.map((entry) => (
+                <div key={entry.key} className="flex items-center gap-3 rounded-xl border border-white/6 bg-white/[0.02] px-3 py-2.5">
+                  <div
+                    className="h-3 w-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: getColor(entry.key) }}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm text-white/70">{entry.label}</span>
+                  <span className="shrink-0 text-sm font-bold" style={{ color: getColor(entry.key) }}>
+                    {entry.count}
+                  </span>
+                  <span className="shrink-0 text-xs text-white/35">{entry.percentage}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Detailed member table */}
+          <div className="rounded-[1.6rem] border border-white/8 bg-black/18 p-5 backdrop-blur-xl">
+            <div className="mb-4 text-[11px] font-black uppercase tracking-[0.22em] text-white/40">
+              Member Details ({filteredMembers.length})
+            </div>
+
+            <div className="space-y-2">
+              {filteredMembers
+                .sort((a, b) => (b.joinedAt?.getTime?.() || 0) - (a.joinedAt?.getTime?.() || 0))
+                .map((member) => {
+                  const parsed = parseOrigin(member.joinedVia);
+                  let displayLabel = parsed.label;
+
+                  if (parsed.category === 'round' && parsed.roundId) {
+                    displayLabel = roundNameCache[parsed.roundId]
+                      ? roundNameCache[parsed.roundId]
+                      : `${parsed.roundId.substring(0, 8)}...`;
+                  }
+
+                  const color = parsed.category === 'round' ? categoryColors.round : (categoryColors[parsed.category] || accent);
+
+                  return (
+                    <div
+                      key={member.id}
+                      className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5"
+                    >
+                      <img
+                        src={
+                          member.userInfo.profileImage?.profileImageURL ||
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(member.userInfo.username || 'M')}&background=222&color=fff&size=40`
+                        }
+                        alt={member.userInfo.username}
+                        className="h-9 w-9 shrink-0 rounded-full object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold text-white">@{member.userInfo.username || 'unknown'}</div>
+                        <div className="text-[11px] text-white/35">
+                          {member.joinedAt ? member.joinedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                        </div>
+                      </div>
+                      <div
+                        className="shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em]"
+                        style={{ borderColor: `${color}40`, color, backgroundColor: `${color}12` }}
+                      >
+                        {displayLabel}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
+        </>
+      )}
+    </section>
+  );
+};
+
 export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
   clubData,
   creatorData,
@@ -191,6 +455,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
   const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [showAppBanner, setShowAppBanner] = useState(false);
   const [detectedPlatform, setDetectedPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
+  const [roundNameCache, setRoundNameCache] = useState<Record<string, string>>({});
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const chatInputRef = useRef<HTMLInputElement>(null);
 
@@ -714,11 +979,12 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
         </section>
 
         <div className="sticky top-0 z-30 mt-5 border-b border-white/8 bg-[rgba(10,12,10,0.82)] backdrop-blur-xl">
-          <div className="grid grid-cols-3 gap-0 px-1">
+          <div className={`grid gap-0 px-1 ${isCreator ? 'grid-cols-4' : 'grid-cols-3'}`}>
             {([
               { id: 'pulse', label: 'Pulse' },
               { id: 'members', label: 'Members' },
               { id: 'programs', label: 'Programs' },
+              ...(isCreator ? [{ id: 'analytics' as const, label: 'Insights' }] : []),
             ] as const).map((tab) => {
               const isActive = selectedTab === tab.id;
 
@@ -1099,6 +1365,18 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
               ) : null}
             </div>
           </section>
+        ) : null}
+
+        {/* Analytics / Member Origin (creator only) */}
+        {selectedTab === 'analytics' && isCreator ? (
+          <MemberOriginSection
+            members={members}
+            clubData={clubData}
+            accent={accent}
+            accentTextColor={accentTextColor}
+            roundNameCache={roundNameCache}
+            setRoundNameCache={setRoundNameCache}
+          />
         ) : null}
       </div>
 
