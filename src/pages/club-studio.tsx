@@ -164,6 +164,14 @@ const ManageClubDashboard = ({ club, setClub }: { club: Club, setClub: (c: Club)
         try {
             const members = await clubService.getClubMembers(club.id);
             setClubMembers(members);
+
+            // Self-heal member count if it drifts
+            if (members.length !== club.memberCount) {
+                const newCount = members.length;
+                club.memberCount = newCount;
+                setClub({ ...club } as Club);
+                clubService.syncMemberCount(club.id, newCount).catch(console.error);
+            }
         } catch (error) {
             console.error("Failed to load members:", error);
         } finally {

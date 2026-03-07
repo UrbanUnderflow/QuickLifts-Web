@@ -48,6 +48,7 @@ export interface SurveyResponse {
   surveyId: string;
   respondentName?: string;
   respondentEmail?: string;
+  instanceId?: string;
   answers: { [questionId: string]: string | number | string[] };
   createdAt?: any;
 }
@@ -99,7 +100,7 @@ export interface CreatorLandingPage {
   createdAt?: any;
 }
 
-export interface SaveLandingPageInput extends Partial<Omit<CreatorLandingPage, 'userId'|'username'|'slug'>> {
+export interface SaveLandingPageInput extends Partial<Omit<CreatorLandingPage, 'userId' | 'username' | 'slug'>> {
   slug: string;
 }
 
@@ -110,12 +111,12 @@ export const creatorPagesService = {
     const sanitizedSlug = (input.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
     if (!sanitizedSlug) throw new Error('Page name (slug) is required');
     const ref = doc(db, ROOT, userId, 'pages', sanitizedSlug);
-    
+
     // Check if page already exists to preserve createdAt and existing sponsor logos when not provided
     const existingDoc = await getDoc(ref);
     const isNewPage = !existingDoc.exists();
     const existingData = existingDoc.exists() ? (existingDoc.data() as CreatorLandingPage) : undefined;
-    
+
     const payload: CreatorLandingPage = {
       slug: sanitizedSlug,
       userId,
@@ -135,9 +136,9 @@ export const creatorPagesService = {
       ctaTextColor: input.ctaTextColor || '#000000',
       updatedAt: serverTimestamp(),
       // Only set createdAt and viewCount on new pages
-      ...(isNewPage ? { 
+      ...(isNewPage ? {
         createdAt: serverTimestamp(),
-        viewCount: 0 
+        viewCount: 0
       } : {}),
     };
     await setDoc(ref, payload, { merge: true });
@@ -155,10 +156,10 @@ export const creatorPagesService = {
     const ref = doc(db, ROOT, userId, 'pages', slug);
     const snap = await getDoc(ref);
     if (!snap.exists()) return;
-    
+
     const currentData = snap.data() as CreatorLandingPage;
     const newViewCount = (currentData.viewCount || 0) + 1;
-    
+
     await setDoc(ref, {
       viewCount: newViewCount,
       updatedAt: serverTimestamp(),
@@ -176,7 +177,7 @@ export const creatorPagesService = {
   // Survey methods
   async saveSurvey(userId: string, pageSlug: string, survey: Omit<Survey, 'id' | 'userId' | 'pageSlug' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<string> {
     const surveysRef = collection(db, ROOT, userId, 'pages', pageSlug, 'surveys');
-    
+
     if (survey.id) {
       // Update existing survey
       const surveyRef = doc(surveysRef, survey.id);
@@ -235,25 +236,29 @@ export const creatorPagesService = {
     return newResponseRef.id;
   },
 
-  async getSurveyResponses(userId: string, pageSlug: string, surveyId: string): Promise<SurveyResponse[]> {
+  async getSurveyResponses(userId: string, pageSlug: string, surveyId: string, instanceId?: string): Promise<SurveyResponse[]> {
     const responsesRef = collection(db, ROOT, userId, 'pages', pageSlug, 'surveys', surveyId, 'responses');
     const q = query(responsesRef, orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
+    let responses = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
     } as SurveyResponse));
+    if (instanceId) {
+      responses = responses.filter(r => r.instanceId === instanceId);
+    }
+    return responses;
   },
 
   // Check-in methods
   async checkInAttendee(
-    userId: string, 
-    pageSlug: string, 
+    userId: string,
+    pageSlug: string,
     waitlistEntryId: string,
     checkInData: Omit<CheckInRecord, 'id' | 'checkedInAt'>
   ): Promise<string> {
     console.log('[CheckIn Service] Starting check-in:', { userId, pageSlug, waitlistEntryId });
-    
+
     try {
       // Build check-in payload, excluding undefined values (Firestore doesn't allow undefined)
       const checkInPayload: Record<string, any> = {
@@ -336,7 +341,7 @@ export const creatorPagesService = {
     const waitlistRef = collection(db, ROOT, userId, 'waitlist');
     const q = query(waitlistRef, orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
-    
+
     return snapshot.docs
       .map(doc => ({
         id: doc.id,

@@ -21,6 +21,14 @@ export interface GroupMessage {
   recipientFcmTokens?: string[] | null;
   visibility?: string | null;
   visibleToUserId?: string | null;
+  questionnaireData?: {
+    surveyId: string;
+    surveyTitle: string;
+    surveyDescription?: string;
+    ownerUserId: string;
+    instanceId?: string;
+    completedBy?: { [userId: string]: boolean };
+  } | null;
 }
 
 export enum QuickMessage {
@@ -59,6 +67,7 @@ export const messageToFirestore = (message: Omit<GroupMessage, 'id'>) => {
     recipientFcmTokens: message.recipientFcmTokens || null,
     visibility: message.visibility || 'public',
     visibleToUserId: message.visibleToUserId || null,
+    questionnaireData: message.questionnaireData || null,
   };
 };
 
@@ -99,4 +108,5 @@ export const firestoreToMessage = (id: string, data: any): GroupMessage => ({
   recipientFcmTokens: Array.isArray(data.recipientFcmTokens) ? data.recipientFcmTokens : null,
   visibility: data.visibility || 'public',
   visibleToUserId: data.visibleToUserId || null,
+  questionnaireData: data.questionnaireData || null,
 });

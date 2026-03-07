@@ -24,6 +24,9 @@ import { ClubLandingPageProps, RoundPreview } from '../../api/firebase/club/land
 import { getClubMemberOriginDisplayLabel, parseClubMemberOrigin } from '../../api/firebase/club/origin';
 import { ChatService } from '../../api/firebase/chat/service';
 import { GroupMessage, MessageMediaType } from '../../api/firebase/chat/types';
+import { creatorPagesService, Survey, SurveyResponse, CLIENT_QUESTIONNAIRES_PAGE_SLUG } from '../../api/firebase/creatorPages/service';
+import SurveyTakingModal from '../Surveys/SurveyTakingModal';
+import SurveyResponsesModal from '../Surveys/SurveyResponsesModal';
 import { User, userService } from '../../api/firebase/user';
 import {
   CLUB_TYPE_LABELS,
@@ -99,7 +102,9 @@ const MessageBubble: React.FC<{
   accent: string;
   currentUserId: string;
   message: ConsolidatedClubMessage;
-}> = ({ accent, currentUserId, message }) => {
+  onOpenQuestionnaire?: (surveyId: string, ownerId: string, messageId: string) => void;
+  onOpenResponses?: (surveyId: string, ownerId: string, instanceId?: string) => void;
+}> = ({ accent, currentUserId, message, onOpenQuestionnaire, onOpenResponses }) => {
   const isCurrentUser = message.sender.id === currentUserId;
 
   const bubbleClasses = isCurrentUser
@@ -157,9 +162,38 @@ const MessageBubble: React.FC<{
             </div>
           ) : null}
 
-          {(message.mediaType === MessageMediaType.None || !message.mediaURL) && message.content ? (
+          {(message.mediaType === MessageMediaType.None || !message.mediaURL) && message.content && !message.questionnaireData ? (
             <p className="text-sm leading-6">{message.content}</p>
           ) : null}
+
+          {message.questionnaireData && (
+            <div className={`space-y-3 p-1`}>
+              <div className="flex items-center gap-2 mb-2">
+                <svg className={`w-5 h-5 ${isCurrentUser ? 'text-black/70' : 'text-[#E0FE10]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg>
+                <span className="font-bold text-xs tracking-wider uppercase opacity-80">Questionnaire</span>
+              </div>
+              <h4 className="text-base font-bold leading-tight">{message.questionnaireData.surveyTitle}</h4>
+              {message.questionnaireData.surveyDescription ? (
+                <p className={`text-sm ${isCurrentUser ? 'text-black/80' : 'text-white/80'}`}>{message.questionnaireData.surveyDescription}</p>
+              ) : null}
+              {message.questionnaireData.completedBy && message.questionnaireData.completedBy[currentUserId] ? (
+                <button
+                  onClick={() => onOpenResponses?.(message.questionnaireData!.surveyId, message.questionnaireData!.ownerUserId, message.questionnaireData!.instanceId)}
+                  className={`mt-3 w-full rounded-xl py-2.5 text-sm font-bold shadow-md transition-transform hover:scale-[1.02] flex items-center justify-center gap-2 ${isCurrentUser ? 'bg-black text-[#E0FE10]' : 'bg-[#E0FE10] text-black'}`}
+                >
+                  <FiCheck className="text-lg" /> Completed - View Answers
+                </button>
+              ) : (
+                <button
+                  onClick={() => onOpenQuestionnaire?.(message.questionnaireData!.surveyId, message.questionnaireData!.ownerUserId, message.id)}
+                  className={`mt-3 w-full rounded-xl py-2.5 text-sm font-bold shadow-md transition-transform hover:scale-[1.02] ${isCurrentUser ? 'bg-black text-white' : 'bg-white text-black'}`}
+                  style={isCurrentUser ? undefined : { backgroundColor: accent, color: '#000' }}
+                >
+                  Complete Questionnaire
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="pl-1 text-[11px] uppercase tracking-[0.18em] text-white/30">{formatTime(message.timestamp)}</div>
@@ -432,6 +466,60 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
   const clubTypeLabel = clubData.clubType ? CLUB_TYPE_LABELS[clubData.clubType] || null : null;
   const shareUrl = `https://fitwithpulse.ai/club/${clubData.id}`;
   const features = new ClubFeatures(clubData.features || {});
+
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showQuestionnaireModal, setShowQuestionnaireModal] = useState(false);
+  const [clubQuestionnaires, setClubQuestionnaires] = useState<Survey[]>([]);
+  const [isLoadingQuestionnaires, setIsLoadingQuestionnaires] = useState(false);
+
+  const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const [viewingResponsesSurvey, setViewingResponsesSurvey] = useState<Survey | null>(null);
+  const [viewingResponses, setViewingResponses] = useState<SurveyResponse[]>([]);
+  const [loadingResponses, setLoadingResponses] = useState(false);
+
+  const [selectedSurveyForSending, setSelectedSurveyForSending] = useState<Survey | null>(null);
+  const [surveyIdentifier, setSurveyIdentifier] = useState('');
+
+  const [surveysCache, setSurveysCache] = useState<Record<string, Survey>>({});
+
+  const handleOpenQuestionnaire = async (surveyId: string, ownerId: string, messageId: string) => {
+    let survey = surveysCache[surveyId];
+    if (!survey) {
+      const fetched = await creatorPagesService.getSurveyById(ownerId, CLIENT_QUESTIONNAIRES_PAGE_SLUG, surveyId);
+      if (fetched) {
+        setSurveysCache(prev => ({ ...prev, [surveyId]: fetched }));
+        survey = fetched;
+      }
+    }
+    if (survey) {
+      setActiveSurvey(survey);
+      setActiveMessageId(messageId);
+    }
+  };
+
+  const handleOpenResponses = async (surveyId: string, ownerId: string, instanceId?: string) => {
+    let survey = surveysCache[surveyId];
+    if (!survey) {
+      const fetched = await creatorPagesService.getSurveyById(ownerId, CLIENT_QUESTIONNAIRES_PAGE_SLUG, surveyId);
+      if (fetched) {
+        setSurveysCache(prev => ({ ...prev, [surveyId]: fetched }));
+        survey = fetched;
+      }
+    }
+    if (survey) {
+      setViewingResponsesSurvey(survey);
+      setLoadingResponses(true);
+      try {
+        const resps = await creatorPagesService.getSurveyResponses(ownerId, CLIENT_QUESTIONNAIRES_PAGE_SLUG, surveyId, instanceId);
+        setViewingResponses(resps);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoadingResponses(false);
+      }
+    }
+  };
 
   // Detect checkedIn query param and show welcome modal
   useEffect(() => {
@@ -994,15 +1082,57 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
                 ) : null}
 
                 <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => uploadInputRef.current?.click()}
-                    disabled={isSendingMessage || isUploadingMedia}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full shadow-[0_12px_30px_rgba(0,0,0,0.26)] transition disabled:opacity-60"
-                    style={{ backgroundColor: accent, color: accentTextColor }}
-                    aria-label="Upload media"
-                  >
-                    {isUploadingMedia ? <FiImage className="animate-pulse" /> : <FiPlus />}
-                  </button>
+                  <div className="relative">
+                    <button
+                      onClick={() => {
+                        if (isCreator) {
+                          setShowPlusMenu(!showPlusMenu);
+                        } else {
+                          uploadInputRef.current?.click();
+                        }
+                      }}
+                      disabled={isSendingMessage || isUploadingMedia}
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full shadow-[0_12px_30px_rgba(0,0,0,0.26)] transition disabled:opacity-60"
+                      style={{ backgroundColor: accent, color: accentTextColor }}
+                      aria-label="Upload media"
+                    >
+                      {isUploadingMedia ? <FiImage className="animate-pulse" /> : <FiPlus />}
+                    </button>
+                    {showPlusMenu && isCreator && (
+                      <div className="absolute bottom-14 left-0 w-56 rounded-2xl border border-white/10 bg-[#121212] shadow-2xl overflow-hidden z-50">
+                        <button
+                          onClick={() => {
+                            setShowPlusMenu(false);
+                            uploadInputRef.current?.click();
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors"
+                        >
+                          <FiImage className="text-lg opacity-80" /> Send Media
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setShowPlusMenu(false);
+                            setShowQuestionnaireModal(true);
+                            setIsLoadingQuestionnaires(true);
+                            try {
+                              const surveys = await creatorPagesService.getSurveys(currentUser.id, CLIENT_QUESTIONNAIRES_PAGE_SLUG);
+                              setClubQuestionnaires(surveys);
+                              const cache = { ...surveysCache };
+                              surveys.forEach(s => cache[s.id] = s);
+                              setSurveysCache(cache);
+                            } catch (e) {
+                              console.error(e);
+                            } finally {
+                              setIsLoadingQuestionnaires(false);
+                            }
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors border-t border-white/5"
+                        >
+                          <svg className="w-[18px] h-[18px] opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg> Send Questionnaire
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
                   <input
                     ref={uploadInputRef}
@@ -1056,10 +1186,12 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
                 ) : (
                   consolidatedMessages.map((message) => (
                     <MessageBubble
-                      key={`${message.source}-${message.id}`}
-                      accent={accent}
-                      currentUserId={currentUser.id}
+                      key={message.id}
                       message={message}
+                      currentUserId={currentUser.id}
+                      accent={accent}
+                      onOpenQuestionnaire={handleOpenQuestionnaire}
+                      onOpenResponses={handleOpenResponses}
                     />
                   ))
                 )}
@@ -1331,13 +1463,13 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
 
         {/* Analytics / Member Origin (creator only) */}
         {selectedTab === 'analytics' && isCreator ? (
-            <MemberOriginSection
-              members={members}
-              clubData={clubData}
-              accent={accent}
-              roundNameCache={roundNameCache}
-              setRoundNameCache={setRoundNameCache}
-            />
+          <MemberOriginSection
+            members={members}
+            clubData={clubData}
+            accent={accent}
+            roundNameCache={roundNameCache}
+            setRoundNameCache={setRoundNameCache}
+          />
         ) : null}
       </div>
 
@@ -1446,6 +1578,181 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      {/* Questionnaires modal */}
+      <AnimatePresence>
+        {showQuestionnaireModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-[#121212] border border-white/10 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]"
+            >
+              <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white">Send Questionnaire</h3>
+                <button onClick={() => setShowQuestionnaireModal(false)} className="p-2 -mr-2 text-white/50 hover:text-white transition-colors">
+                  <FiX />
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto flex-1">
+                {isLoadingQuestionnaires ? (
+                  <div className="py-8 text-center text-white/50 animate-pulse">Loading questionnaires...</div>
+                ) : clubQuestionnaires.length === 0 ? (
+                  <div className="py-8 text-center text-white/50">
+                    <div className="text-4xl mb-3 opacity-30">📋</div>
+                    No questionnaires found. Create one in your dashboard first.
+                  </div>
+                ) : selectedSurveyForSending ? (
+                  <div className="space-y-4 animate-fadeIn">
+                    <button onClick={() => setSelectedSurveyForSending(null)} className="text-white/50 text-sm flex items-center gap-1 hover:text-white transition-colors">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg> Back to list
+                    </button>
+                    <div>
+                      <div className="font-bold text-white mb-2">{selectedSurveyForSending.title}</div>
+                      <label className="block text-sm text-white/70 mb-2">Identifier (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Event Name, Date, etc."
+                        value={surveyIdentifier}
+                        onChange={e => setSurveyIdentifier(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-[#E0FE10] focus:outline-none transition-colors"
+                      />
+                      <p className="text-xs text-white/40 mt-2">Adding an identifier helps you separate responses from different events or dates. Each time a unique identifier is used, it tracks completions uniquely.</p>
+                    </div>
+                    <button
+                      disabled={isSendingMessage}
+                      onClick={async () => {
+                        setShowQuestionnaireModal(false);
+                        setIsSendingMessage(true);
+                        setSendError(null);
+                        try {
+                          const recipientTokens = members
+                            .filter((member) => member.userId !== currentUser.id)
+                            .map((member) => member.userInfo?.fcmToken)
+                            .filter((token): token is string => Boolean(token));
+
+                          await clubChatService.sendMessage(clubData.id, {
+                            sender: currentUser.toShortUser(),
+                            content: `Please complete this questionnaire: ${selectedSurveyForSending.title}`,
+                            checkinId: null,
+                            timestamp: new Date(),
+                            readBy: { [currentUser.id]: new Date() },
+                            mediaURL: null,
+                            mediaType: MessageMediaType.None,
+                            gymName: null,
+                            recipientFcmTokens: recipientTokens,
+                            visibility: 'public',
+                            visibleToUserId: null,
+                            questionnaireData: {
+                              surveyId: selectedSurveyForSending.id,
+                              surveyTitle: selectedSurveyForSending.title,
+                              surveyDescription: selectedSurveyForSending.description,
+                              ownerUserId: currentUser.id,
+                              instanceId: surveyIdentifier.trim() || undefined,
+                            }
+                          });
+                        } catch (e: any) {
+                          console.error(e);
+                          setSendError(e.message || 'Failed to send questionnaire');
+                        } finally {
+                          setIsSendingMessage(false);
+                          setSelectedSurveyForSending(null);
+                          setSurveyIdentifier('');
+                        }
+                      }}
+                      className="w-full rounded-xl py-3 font-bold bg-[#E0FE10] text-black hover:bg-[#d0ee00] transition-colors disabled:opacity-50"
+                    >
+                      {isSendingMessage ? 'Sending...' : 'Send to Club'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {clubQuestionnaires.map(survey => (
+                      <button
+                        key={survey.id}
+                        onClick={() => {
+                          setSelectedSurveyForSending(survey);
+                          setSurveyIdentifier('');
+                        }}
+                        className="w-full text-left p-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 transition-colors group"
+                      >
+                        <div className="font-bold text-white mb-1">{survey.title}</div>
+                        <div className="text-sm text-white/50 line-clamp-2">{survey.description || 'No description'}</div>
+                        <div className="mt-3 text-xs font-bold uppercase tracking-wider text-[#E0FE10] opacity-0 group-hover:opacity-100 transition-opacity">
+                          Select →
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Complete Questionnaire Modal */}
+      {activeSurvey && (
+        <SurveyTakingModal
+          isOpen={!!activeSurvey}
+          onClose={() => {
+            setActiveSurvey(null);
+            setActiveMessageId(null);
+          }}
+          survey={activeSurvey}
+          onSubmit={async (answers, respondentName, respondentEmail) => {
+            if (!activeSurvey || !activeMessageId) return;
+            const msgToUpdate = consolidatedMessages.find(m => m.id === activeMessageId);
+            const instanceId = msgToUpdate?.questionnaireData?.instanceId;
+
+            await creatorPagesService.submitSurveyResponse(
+              activeSurvey.userId,
+              activeSurvey.pageSlug,
+              activeSurvey.id,
+              {
+                respondentName: respondentName || currentUser.displayName || currentUser.username,
+                respondentEmail: respondentEmail || currentUser.email,
+                instanceId,
+                answers,
+              }
+            );
+
+            if (msgToUpdate && msgToUpdate.source === 'club' && msgToUpdate.questionnaireData) {
+              const updatedQuestionnaireData = {
+                ...msgToUpdate.questionnaireData,
+                completedBy: {
+                  ...(msgToUpdate.questionnaireData.completedBy || {}),
+                  [currentUser.id]: true
+                }
+              };
+
+              try {
+                const { doc, updateDoc } = await import('firebase/firestore');
+                const { db } = await import('../../api/firebase/config');
+                const msgRef = doc(db, 'clubs', clubData.id, 'messages', msgToUpdate.id);
+                await updateDoc(msgRef, { questionnaireData: updatedQuestionnaireData });
+              } catch (e) {
+                console.error('Failed to update message completion state:', e);
+              }
+            }
+
+            setActiveSurvey(null);
+            setActiveMessageId(null);
+          }}
+        />
+      )}
+
+      {/* View Questionnaire Responses Modal */}
+      {viewingResponsesSurvey && (
+        <SurveyResponsesModal
+          isOpen={!!viewingResponsesSurvey}
+          onClose={() => setViewingResponsesSurvey(null)}
+          survey={viewingResponsesSurvey}
+          responses={viewingResponses}
+          loading={loadingResponses}
+        />
+      )}
     </div>
   );
 };
