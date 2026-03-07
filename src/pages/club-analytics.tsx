@@ -115,7 +115,8 @@ export default function ClubAnalytics() {
         const missingRoundIds = Array.from(new Set(
             members
                 .map((member) => parseClubMemberOrigin(member.joinedVia).roundId)
-                .filter((roundId): roundId is string => Boolean(roundId) && !roundNameCache[roundId])
+                .filter((roundId): roundId is string => typeof roundId === 'string')
+                .filter((roundId) => !roundNameCache[roundId])
         ));
 
         if (missingRoundIds.length === 0) {
@@ -548,11 +549,10 @@ export default function ClubAnalytics() {
                                                 <button
                                                     key={option.key}
                                                     onClick={() => setOriginFilter(option.key)}
-                                                    className={`rounded-full border px-3 py-2 text-sm font-semibold transition-colors ${
-                                                        isActive
+                                                    className={`rounded-full border px-3 py-2 text-sm font-semibold transition-colors ${isActive
                                                             ? 'border-purple-400/60 bg-purple-500/15 text-purple-200'
                                                             : 'border-white/10 bg-white/[0.03] text-gray-400 hover:border-white/20 hover:text-white'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {option.label} ({option.count})
                                                 </button>
