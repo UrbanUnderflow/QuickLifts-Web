@@ -216,6 +216,17 @@ class ClubService {
   }
 
   /**
+   * Syncs the member count for a club to a specific value
+   */
+  async syncMemberCount(clubId: string, count: number): Promise<void> {
+    const clubRef = doc(this.clubsCollection, clubId);
+    await updateDoc(clubRef, {
+      memberCount: count
+    });
+    console.log(`[ClubService] Synced member count to ${count} for club ${clubId}`);
+  }
+
+  /**
    * Fetches all active members of a club
    */
   async getClubMembers(clubId: string): Promise<ClubMember[]> {
