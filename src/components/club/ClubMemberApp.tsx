@@ -1760,12 +1760,12 @@ return (
     )}
 
     {/* View Questionnaire Responses Modal */}
-    {viewingResponsesSurvey && (
+    {activeSurveyForAnswers && (
       <SurveyResponsesModal
-        isOpen={!!viewingResponsesSurvey}
-        onClose={() => setViewingResponsesSurvey(null)}
-        survey={viewingResponsesSurvey}
-        responses={viewingResponses}
+        isOpen={!!activeSurveyForAnswers}
+        onClose={() => setActiveSurveyForAnswers(null)}
+        survey={activeSurveyForAnswers}
+        responses={activeSurveyResponses}
         loading={loadingResponses}
       />
     )}
