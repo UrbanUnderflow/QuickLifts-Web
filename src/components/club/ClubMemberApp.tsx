@@ -517,11 +517,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
 
     const finalMerged = Object.values(dedup);
 
-    return finalMerged.sort((a, b) => {
-      const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : a.timestamp?.toMillis ? a.timestamp.toMillis() : 0;
-      const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : b.timestamp?.toMillis ? b.timestamp.toMillis() : 0;
-      return timeA - timeB; // Oldest first for chat flow
-    });
+    return finalMerged.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()); // Oldest first for chat flow
   }, [clubMessages, roundMessages, allRounds]);
 
   // Effect to update activeMessage if the underlying message changes
@@ -703,29 +699,6 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
       unsubscribeByRound.forEach((unsubscribe) => unsubscribe());
     };
   }, [allRounds, currentUser.id]);
-
-  const consolidatedMessages = useMemo<ConsolidatedClubMessage[]>(() => {
-    const roundNameById = allRounds.reduce<Record<string, string>>((accumulator, round) => {
-      accumulator[round.id] = round.title;
-      return accumulator;
-    }, {});
-
-    const mergedMessages: ConsolidatedClubMessage[] = [
-      ...clubMessages.map((message) => ({
-        ...message,
-        source: 'club' as const,
-      })),
-      ...Object.entries(roundMessages).flatMap(([roundId, messages]) =>
-        messages.map((message) => ({
-          ...message,
-          source: 'round' as const,
-          sourceRoundName: roundNameById[roundId] || 'Program',
-        }))
-      ),
-    ];
-
-    return mergedMessages.sort((left, right) => right.timestamp.getTime() - left.timestamp.getTime());
-  }, [allRounds, clubMessages, roundMessages]);
 
   const leaderboard = useMemo<LeaderboardEntry[]>(() => {
     return members
@@ -1757,7 +1730,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
             const ownerId = activeMessage.questionnaireData?.ownerUserId || clubData.creatorId;
             const pageSlug = activeSurvey.pageSlug || CLIENT_QUESTIONNAIRES_PAGE_SLUG;
 
-            const newResponseId = await creatorPagesService.submitSurveyResponse(
+            await creatorPagesService.submitSurveyResponse(
               ownerId,
               pageSlug,
               activeSurvey.id,
@@ -1774,7 +1747,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
               if (activeMessage && currentUser) {
                 // If it successfully completes, update message in firestore
                 const updatedCompletedBy = { ...(activeMessage.questionnaireData?.completedBy || {}) };
-                updatedCompletedBy[currentUser.id] = newResponseId;
+                updatedCompletedBy[currentUser.id] = true;
 
                 // Then fetch the message ref
                 const { doc, updateDoc } = await import('firebase/firestore');
