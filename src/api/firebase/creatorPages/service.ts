@@ -221,6 +221,28 @@ export const creatorPagesService = {
     } as Survey));
   },
 
+  async getAllSurveys(userId: string): Promise<Survey[]> {
+    const pagesRef = collection(db, ROOT, userId, 'pages');
+    const pagesSnap = await getDocs(pagesRef);
+    const pageSlugs = new Set(pagesSnap.docs.map(d => d.id));
+    pageSlugs.add(CLIENT_QUESTIONNAIRES_PAGE_SLUG);
+
+    const allSurveys: Survey[] = [];
+    for (const slug of Array.from(pageSlugs)) {
+      const surveysForPage = await this.getSurveys(userId, slug);
+      allSurveys.push(...surveysForPage);
+    }
+
+    // Sort by createdAt descending
+    allSurveys.sort((a, b) => {
+      const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+      const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+      return bTime - aTime;
+    });
+
+    return allSurveys;
+  },
+
   async getSurveyById(userId: string, pageSlug: string, surveyId: string): Promise<Survey | null> {
     const surveyRef = doc(db, ROOT, userId, 'pages', pageSlug, 'surveys', surveyId);
     const snap = await getDoc(surveyRef);

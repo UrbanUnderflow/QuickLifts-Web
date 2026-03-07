@@ -26,6 +26,7 @@ export interface GroupMessage {
     surveyTitle: string;
     surveyDescription?: string;
     ownerUserId: string;
+    pageSlug?: string;
     instanceId?: string;
     completedBy?: { [userId: string]: boolean };
   } | null;
