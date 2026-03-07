@@ -625,7 +625,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
       ),
     ];
 
-    return mergedMessages.sort((left, right) => left.timestamp.getTime() - right.timestamp.getTime());
+    return mergedMessages.sort((left, right) => right.timestamp.getTime() - left.timestamp.getTime());
   }, [allRounds, clubMessages, roundMessages]);
 
   const leaderboard = useMemo<LeaderboardEntry[]>(() => {
@@ -1024,35 +1024,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
             </div>
 
             <div className="rounded-[1.6rem] border border-white/8 bg-black/18 shadow-[0_24px_90px_rgba(0,0,0,0.18)] backdrop-blur-xl">
-              <div className="max-h-[34rem] space-y-5 overflow-y-auto px-4 py-5 sm:px-5">
-                {consolidatedMessages.length === 0 ? (
-                  <div className="flex min-h-[20rem] flex-col items-center justify-center gap-4 text-center">
-                    <div
-                      className="flex h-24 w-24 items-center justify-center rounded-full border border-white/10 text-4xl"
-                      style={{ backgroundColor: `${accent}12`, color: accent }}
-                    >
-                      <FiMessageCircle />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-black tracking-[-0.03em] text-white">No pulse yet</h3>
-                      <p className="mt-2 max-w-md text-sm leading-6 text-white/45">
-                        Start the conversation. Club messages and linked round chat roll into the same feed here.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  consolidatedMessages.map((message) => (
-                    <MessageBubble
-                      key={`${message.source}-${message.id}`}
-                      accent={accent}
-                      currentUserId={currentUser.id}
-                      message={message}
-                    />
-                  ))
-                )}
-              </div>
-
-              <div className="border-t border-white/8 bg-black/20 p-4">
+              <div className="border-b border-white/8 bg-black/20 p-4">
                 {sendError ? (
                   <div className="mb-3 rounded-2xl border border-red-500/20 bg-red-500/8 px-4 py-3 text-sm text-red-100">
                     {sendError}
@@ -1101,6 +1073,34 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
                     {isSendingMessage ? <FiActivity className="animate-spin" /> : <FiSend />}
                   </button>
                 </div>
+              </div>
+
+              <div className="max-h-[34rem] space-y-5 overflow-y-auto px-4 py-5 sm:px-5">
+                {consolidatedMessages.length === 0 ? (
+                  <div className="flex min-h-[20rem] flex-col items-center justify-center gap-4 text-center">
+                    <div
+                      className="flex h-24 w-24 items-center justify-center rounded-full border border-white/10 text-4xl"
+                      style={{ backgroundColor: `${accent}12`, color: accent }}
+                    >
+                      <FiMessageCircle />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black tracking-[-0.03em] text-white">No pulse yet</h3>
+                      <p className="mt-2 max-w-md text-sm leading-6 text-white/45">
+                        Start the conversation. Club messages and linked round chat roll into the same feed here.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  consolidatedMessages.map((message) => (
+                    <MessageBubble
+                      key={`${message.source}-${message.id}`}
+                      accent={accent}
+                      currentUserId={currentUser.id}
+                      message={message}
+                    />
+                  ))
+                )}
               </div>
             </div>
           </section>
