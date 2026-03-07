@@ -409,8 +409,17 @@ const DraftReviewPage: React.FC = () => {
       
       const formattedContent = `${sectionPrefixes[section]} ${content}`;
       
-      // Add the context to weekly context (positional params: content, source)
-      await reviewContextService.addWeeklyContext(formattedContent, 'manual');
+      // Store draft edits against the draft's month so regeneration uses the correct context.
+      await reviewContextService.addWeeklyContext(
+        formattedContent,
+        'manual',
+        undefined,
+        {
+          year,
+          month,
+          weekNumber: 0,
+        }
+      );
       
       // Regenerate the draft with the new context
       const updatedDraft = await reviewContextService.generateDraftFromContext(year, month);
@@ -429,7 +438,6 @@ const DraftReviewPage: React.FC = () => {
   // Check if sections need more context
   const needsMetricsContext = draft?.metrics.every(m => m.currentValue === 0) ?? false;
   const needsLookingAheadContext = draft?.lookingAhead?.some(item => item.includes('[Add') || item.includes('upcoming priorities')) ?? false;
-  const needsHighlightsContext = (draft?.featuredHighlights.length ?? 0) === 0;
   const needsBusinessContext = (draft?.businessHighlights.length ?? 0) === 0;
   const needsProductContext = (draft?.productHighlights.length ?? 0) === 0;
 
@@ -788,4 +796,3 @@ const DraftReviewPage: React.FC = () => {
 };
 
 export default DraftReviewPage;
-

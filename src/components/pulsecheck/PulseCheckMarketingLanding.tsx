@@ -1,1579 +1,1220 @@
-import React, { useEffect } from 'react';
-import Head from 'next/head';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 
-type PulseCheckMarketingLandingProps = {
-    onJoinWaitlist: () => void;
-};
+type Props = { onJoinWaitlist: () => void };
 
-const PulseBoltIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-    </svg>
-);
+// Lerp helper
+const lerp = (a: number, b: number, t: number) => a + (b - a) * Math.max(0, Math.min(1, t));
 
-const CheckIcon: React.FC = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
-        <polyline points="20 6 9 17 4 12" />
-    </svg>
-);
+const PulseCheckMarketingLanding: React.FC<Props> = ({ onJoinWaitlist }) => {
+  const [scrollY, setScrollY] = useState(0);
+  const [activeTab, setActiveTab] = useState<'preflight' | 'game' | 'coach' | 'clinical'>('preflight');
+  const heroRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
+  const currentScrollRef = useRef(0);
+  const targetScrollRef = useRef(0);
 
-const PulseCheckMarketingLanding: React.FC<PulseCheckMarketingLandingProps> = ({ onJoinWaitlist }) => {
-    useEffect(() => {
-        const cleanupFns: Array<() => void> = [];
-        const timeoutIds: number[] = [];
-        const schedule = (fn: () => void, delayMs: number) => {
-            const id = window.setTimeout(fn, delayMs);
-            timeoutIds.push(id);
-            return id;
-        };
+  // RAF loop — parallax + phone drift only (bg is now threshold-triggered)
+  const tick = useCallback(() => {
+    targetScrollRef.current = window.scrollY;
+    currentScrollRef.current = lerp(currentScrollRef.current, targetScrollRef.current, 0.06);
+    const s = currentScrollRef.current;
+    setScrollY(s);
 
-        // Animated pulse-wave canvas background.
-        const canvas = document.getElementById('pc-pulse-canvas') as HTMLCanvasElement | null;
-        const ctx = canvas?.getContext('2d') ?? null;
-        let rafId = 0;
-        if (canvas && ctx) {
-            let width = 0;
-            let height = 0;
-            let time = 0;
+    const wrapper = wrapperRef.current;
+    if (wrapper) {
+      // Parallax on hero float cards
+      const parallaxAmt = s * 0.25;
+      const cards = wrapper.querySelectorAll<HTMLElement>('.pc2-float-card--tl, .pc2-float-card--r, .pc2-float-card--bl');
+      cards.forEach((card, i) => {
+        const dir = i % 2 === 0 ? -1 : 1;
+        card.style.transform = `translateY(${parallaxAmt * 0.12 * dir * (i + 1)}px)`;
+      });
+      // Hero phone subtle drift up
+      const phone = wrapper.querySelector<HTMLElement>('.pc2-phone');
+      if (phone) phone.style.transform = `translateY(${-s * 0.08}px)`;
+    }
 
-            const resize = () => {
-                width = canvas.width = window.innerWidth;
-                height = canvas.height = window.innerHeight;
-            };
-            resize();
-            window.addEventListener('resize', resize);
-            cleanupFns.push(() => window.removeEventListener('resize', resize));
+    rafRef.current = requestAnimationFrame(tick);
+  }, [])
 
-            const draw = () => {
-                ctx.clearRect(0, 0, width, height);
-                time += 0.008;
+  useEffect(() => {
+    rafRef.current = requestAnimationFrame(tick);
+    const wrapper = wrapperRef.current;
 
-                for (let wave = 0; wave < 3; wave++) {
-                    ctx.beginPath();
-                    const baseY = height * 0.5;
-                    const amp = 40 + wave * 20;
-                    const freq = 0.003 + wave * 0.001;
-                    const speed = time * (1 + wave * 0.3);
-                    const alpha = 0.04 - wave * 0.012;
-                    ctx.strokeStyle = `rgba(106, 154, 250, ${alpha})`;
-                    ctx.lineWidth = 1.5;
+    // ── Threshold-triggered background morph ─────────────────────────────────
+    // The CSS transition on `background` runs at its own fixed speed (500ms)
+    // the instant a [data-bg] section crosses the 15% visibility threshold.
+    // This decouples the color change from scroll speed entirely.
+    const DARK_BG = 'rgb(6,6,8)';
+    const LIGHT_BG = 'rgb(242,242,248)';
 
-                    for (let x = 0; x < width; x += 2) {
-                        const y = baseY + Math.sin(x * freq + speed) * amp + Math.sin(x * freq * 2.3 + speed * 1.5) * (amp * 0.3);
-                        if (x === 0) ctx.moveTo(x, y);
-                        else ctx.lineTo(x, y);
-                    }
-                    ctx.stroke();
-                }
-
-                const pulseRadius = 200 + Math.sin(time * 2) * 80;
-                const gradient = ctx.createRadialGradient(width / 2, height * 0.4, 0, width / 2, height * 0.4, pulseRadius);
-                gradient.addColorStop(0, 'rgba(106,154,250,0.04)');
-                gradient.addColorStop(1, 'transparent');
-                ctx.fillStyle = gradient;
-                ctx.fillRect(0, 0, width, height);
-
-                rafId = window.requestAnimationFrame(draw);
-            };
-            draw();
-            cleanupFns.push(() => window.cancelAnimationFrame(rafId));
-        }
-
-        const reveals = Array.from(document.querySelectorAll<HTMLElement>('.pc-landing .reveal'));
-        const revealObserver = new IntersectionObserver(
-            (entries) => {
-                entries.forEach((entry) => {
-                    if (entry.isIntersecting) {
-                        entry.target.classList.add('visible');
-                    }
-                });
-            },
-            { threshold: 0.1, rootMargin: '0px 0px -60px 0px' }
-        );
-
-        reveals.forEach((el) => revealObserver.observe(el));
-        cleanupFns.push(() => revealObserver.disconnect());
-
-        // Terminal sequence that types itself.
-        const terminalWrap = document.getElementById('pc-terminal');
-        const terminalBody = document.getElementById('pc-terminal-body');
-        if (terminalWrap && terminalBody) {
-            const lines: Array<
-                | { type: 'prompt'; prefix: 'nora' | 'athlete'; text: string; delay: number }
-                | { type: 'pause'; ms: number }
-                | { type: 'response' }
-            > = [
-                    { type: 'prompt', prefix: 'nora', text: 'What was the <span class="highlight">hardest mental moment</span> in yesterday\'s practice?', delay: 40 },
-                    { type: 'pause', ms: 800 },
-                    { type: 'prompt', prefix: 'athlete', text: 'Coach pulled me from the drill in front of everyone. Couldn\'t stop replaying it after.', delay: 30 },
-                    { type: 'pause', ms: 600 },
-                    { type: 'response' }
-                ];
-
-            let lineIdx = 0;
-            let terminalStarted = false;
-
-            const buildPartialHTML = (html: string, charCount: number) => {
-                let result = '';
-                let chars = 0;
-                let inTag = false;
-
-                for (let i = 0; i < html.length; i++) {
-                    if (html[i] === '<') {
-                        inTag = true;
-                        result += html[i];
-                        continue;
-                    }
-                    if (html[i] === '>') {
-                        inTag = false;
-                        result += html[i];
-                        continue;
-                    }
-                    if (inTag) {
-                        result += html[i];
-                        continue;
-                    }
-                    if (chars < charCount) {
-                        result += html[i];
-                        chars++;
-                    }
-                }
-                return result;
-            };
-
-            const typeText = (el: HTMLElement, html: string, charDelay: number, cb: () => void) => {
-                const tmp = document.createElement('div');
-                tmp.innerHTML = html;
-                const text = tmp.textContent ?? '';
-                let i = 0;
-
-                const tick = () => {
-                    if (i < text.length) {
-                        el.innerHTML = `${buildPartialHTML(html, i + 1)}<span class="terminal-cursor"></span>`;
-                        i++;
-                        schedule(tick, charDelay + Math.floor(Math.random() * 20));
-                    } else {
-                        el.querySelectorAll('.terminal-cursor').forEach((cursor) => cursor.remove());
-                        cb();
-                    }
-                };
-
-                tick();
-            };
-
-            const runTerminal = () => {
-                if (lineIdx >= lines.length) return;
-                const line = lines[lineIdx];
-                lineIdx++;
-
-                if (line.type === 'prompt') {
-                    const lineEl = document.createElement('div');
-                    lineEl.className = 'terminal-line';
-                    const promptEl = document.createElement('span');
-                    promptEl.className = 'terminal-prompt';
-                    if (line.prefix === 'athlete') promptEl.classList.add('athlete');
-                    promptEl.textContent = `${line.prefix} ›`;
-                    const textEl = document.createElement('span');
-                    textEl.className = 'terminal-text';
-
-                    lineEl.appendChild(promptEl);
-                    lineEl.appendChild(textEl);
-                    terminalBody.appendChild(lineEl);
-
-                    typeText(textEl, line.text, line.delay, () => schedule(runTerminal, 200));
-                    return;
-                }
-
-                if (line.type === 'pause') {
-                    schedule(runTerminal, line.ms);
-                    return;
-                }
-
-                const response = document.createElement('div');
-                response.className = 'terminal-response';
-                response.innerHTML = `
-                  <div class="status"><span class="response-dot"></span>NORA ANALYSIS</div>
-                  <p>Elevated rumination pattern detected. Readiness score adjusted. Coach briefing updated with context-appropriate framing. Suggested micro-drill: <span class="response-highlight">3-second reset protocol</span> before next session.</p>
-                `;
-                terminalBody.appendChild(response);
-                schedule(() => response.classList.add('show'), 60);
-            };
-
-            const terminalObserver = new IntersectionObserver(
-                (entries) => {
-                    entries.forEach((entry) => {
-                        if (!entry.isIntersecting || terminalStarted) return;
-                        terminalStarted = true;
-                        terminalWrap.classList.add('visible');
-                        schedule(runTerminal, 600);
-                    });
-                },
-                { threshold: 0.3 }
-            );
-            terminalObserver.observe(terminalWrap);
-            cleanupFns.push(() => terminalObserver.disconnect());
-        }
-
-        // Count-up stats when visible.
-        const statNumbers = Array.from(document.querySelectorAll<HTMLElement>('.pc-landing .problem-stat-number[data-count]'));
-        const countObserver = new IntersectionObserver(
-            (entries) => {
-                entries.forEach((entry) => {
-                    if (!entry.isIntersecting) return;
-                    const target = Number(entry.target.getAttribute('data-count') ?? '0');
-                    const suffix = entry.target.getAttribute('data-suffix') ?? '';
-                    const start = performance.now();
-                    const duration = 1500;
-
-                    const animate = (now: number) => {
-                        const progress = Math.min((now - start) / duration, 1);
-                        const eased = 1 - Math.pow(1 - progress, 3);
-                        const current = Math.round(eased * target);
-                        entry.target.textContent = `${current}${suffix}`;
-                        if (progress < 1) window.requestAnimationFrame(animate);
-                    };
-                    window.requestAnimationFrame(animate);
-                    countObserver.unobserve(entry.target);
-                });
-            },
-            { threshold: 0.5 }
-        );
-        statNumbers.forEach((el) => countObserver.observe(el));
-        cleanupFns.push(() => countObserver.disconnect());
-
-        // Simulation cascade + meter shifts.
-        const simCascade = document.getElementById('pc-sim-cascade');
-        if (simCascade) {
-            let simStarted = false;
-            const simObserver = new IntersectionObserver(
-                (entries) => {
-                    entries.forEach((entry) => {
-                        if (!entry.isIntersecting || simStarted) return;
-                        simStarted = true;
-
-                        ['pc-sim-s1', 'pc-sim-s2', 'pc-sim-s3'].forEach((id, idx) => {
-                            schedule(() => document.getElementById(id)?.classList.add('active'), 400 + idx * 600);
-                        });
-
-                        ['pc-int-1', 'pc-int-2', 'pc-int-3', 'pc-int-4'].forEach((id, idx) => {
-                            schedule(() => document.getElementById(id)?.classList.add('active'), 600 + idx * 400);
-                        });
-
-                        schedule(() => {
-                            const pressure = document.getElementById('pc-m-pressure');
-                            const focus = document.getElementById('pc-m-focus');
-                            const composure = document.getElementById('pc-m-composure');
-                            const pressureBar = document.getElementById('pc-bar-pressure');
-                            const focusBar = document.getElementById('pc-bar-focus');
-                            const composureBar = document.getElementById('pc-bar-composure');
-
-                            if (pressure) {
-                                pressure.textContent = '54%';
-                                pressure.classList.remove('meter-high');
-                                pressure.classList.add('meter-mid');
-                            }
-                            if (pressureBar) {
-                                pressureBar.style.width = '54%';
-                                pressureBar.style.background = 'var(--amber)';
-                            }
-
-                            if (focus) {
-                                focus.textContent = '88%';
-                                focus.classList.remove('meter-mid');
-                                focus.classList.add('meter-ok');
-                            }
-                            if (focusBar) {
-                                focusBar.style.width = '88%';
-                                focusBar.style.background = '#6A9AFA';
-                            }
-
-                            if (composure) composure.textContent = '91%';
-                            if (composureBar) composureBar.style.width = '91%';
-                        }, 2400);
-                    });
-                },
-                { threshold: 0.2 }
-            );
-
-            simObserver.observe(simCascade);
-            cleanupFns.push(() => simObserver.disconnect());
-        }
-
-        // ── Box Breathing Exercise ──────────────────────────────────────
-        const bbReady = document.getElementById('bb-ready');
-        const bbActive = document.getElementById('bb-active');
-        const bbComplete = document.getElementById('bb-complete');
-        const bbStartBtn = document.getElementById('bb-start-btn');
-        const bbRestartBtn = document.getElementById('bb-restart-btn');
-
-        const phases = [
-            { name: 'Inhale', secs: 4, color: '#6A9AFA', circleClass: 'bb-inhale' },
-            { name: 'Hold', secs: 4, color: '#A05EF8', circleClass: 'bb-hold-in' },
-            { name: 'Exhale', secs: 4, color: '#00e5ff', circleClass: 'bb-exhale' },
-            { name: 'Hold', secs: 4, color: '#ffc107', circleClass: 'bb-hold-out' },
-        ];
-        const TOTAL_ROUNDS = 4;
-
-        let bbIntervalId: number | null = null;
-
-        const stopBreathing = () => {
-            if (bbIntervalId !== null) {
-                window.clearInterval(bbIntervalId);
-                bbIntervalId = null;
-            }
-        };
-
-        const showPanel = (panel: HTMLElement | null) => {
-            [bbReady, bbActive, bbComplete].forEach(p => {
-                if (p) p.style.display = p === panel ? 'block' : 'none';
-            });
-        };
-
-        const startBreathing = () => {
-            stopBreathing();
-            showPanel(bbActive);
-
-            const circle = document.getElementById('bb-circle');
-            const ring = document.getElementById('bb-ring');
-            const phaseLabel = document.getElementById('bb-phase-label');
-            const countEl = document.getElementById('bb-count');
-            const roundEl = document.getElementById('bb-round');
-            const pips = [0, 1, 2, 3].map(i => document.getElementById(`bb-pip-${i}`));
-
-            let round = 0;       // 0-indexed
-            let phaseIdx = 0;    // 0-3
-            let secondsLeft = phases[0].secs;
-
-            const applyPhase = (idx: number, rd: number) => {
-                const p = phases[idx];
-                if (phaseLabel) phaseLabel.textContent = p.name;
-                if (roundEl) roundEl.textContent = `Round ${rd + 1} of ${TOTAL_ROUNDS}`;
-
-                // Update circle appearance
-                if (circle) {
-                    circle.className = `bb-circle ${p.circleClass}`;
-                    (circle as HTMLElement).style.borderColor = p.color;
-                    (circle as HTMLElement).style.boxShadow = `0 0 40px ${p.color}30`;
-                }
-                if (ring) {
-                    (ring as HTMLElement).style.setProperty('--bb-color', p.color);
-                }
-
-                // Highlight active pip
-                pips.forEach((pip, i) => {
-                    if (!pip) return;
-                    pip.classList.toggle('bb-pip-active', i === idx);
-                    (pip as HTMLElement).style.background = i === idx ? p.color : '';
-                });
-            };
-
-            applyPhase(0, 0);
-            if (countEl) countEl.textContent = String(phases[0].secs);
-
-            bbIntervalId = window.setInterval(() => {
-                secondsLeft--;
-                if (countEl) countEl.textContent = String(secondsLeft);
-
-                if (secondsLeft <= 0) {
-                    phaseIdx++;
-                    if (phaseIdx >= phases.length) {
-                        phaseIdx = 0;
-                        round++;
-                        if (round >= TOTAL_ROUNDS) {
-                            // Done!
-                            stopBreathing();
-                            showPanel(bbComplete);
-                            return;
-                        }
-                    }
-                    secondsLeft = phases[phaseIdx].secs;
-                    applyPhase(phaseIdx, round);
-                    if (countEl) countEl.textContent = String(secondsLeft);
-                }
-            }, 1000);
-        };
-
-        if (bbStartBtn) {
-            const startFn = () => startBreathing();
-            bbStartBtn.addEventListener('click', startFn);
-            cleanupFns.push(() => bbStartBtn.removeEventListener('click', startFn));
-        }
-
-        if (bbRestartBtn) {
-            const restartFn = () => { showPanel(bbReady); stopBreathing(); };
-            bbRestartBtn.addEventListener('click', restartFn);
-            cleanupFns.push(() => bbRestartBtn.removeEventListener('click', restartFn));
-        }
-
-        cleanupFns.push(stopBreathing);
-        // ───────────────────────────────────────────────────────────────
-
-        const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('.pc-landing a[href^="#"]'));
-
-        const handlers: Array<{ el: HTMLAnchorElement; fn: (e: Event) => void }> = [];
-
-        anchors.forEach((anchor) => {
-            const fn = (e: Event) => {
-                const href = anchor.getAttribute('href');
-                if (!href || href.length < 2) return;
-                const target = document.querySelector<HTMLElement>(href);
-                if (!target) return;
-                e.preventDefault();
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            };
-            anchor.addEventListener('click', fn);
-            handlers.push({ el: anchor, fn });
+    // Track which section is most in-view so rapid scroll picks correctly
+    const visibilityMap = new Map<Element, number>();
+    const bgObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            visibilityMap.set(e.target, e.intersectionRatio);
+          } else {
+            visibilityMap.delete(e.target);
+          }
         });
-
-        return () => {
-            cleanupFns.forEach((fn) => fn());
-            timeoutIds.forEach((id) => window.clearTimeout(id));
-            handlers.forEach(({ el, fn }) => el.removeEventListener('click', fn));
-        };
-    }, []);
-
-    return (
-        <div className="pc-landing" id="top">
-            <Head>
-                <title>PulseCheck — The Mental Performance OS for Elite Programs</title>
-            </Head>
-
-            <canvas id="pc-pulse-canvas" aria-hidden="true"></canvas>
-
-            <nav>
-                <a href="#top" className="nav-logo">
-                    <div className="nav-logo-icon">
-                        <img src="/pulsecheck-logo.svg" alt="" aria-hidden="true" className="nav-logo-mark" />
-                    </div>
-                    PulseCheck
-                </a>
-                <div className="nav-links">
-                    <a href="#how-it-works">How It Works</a>
-                    <a href="#platform">Platform</a>
-                    <a href="#proof">Results</a>
-                    <a href="#pilot" className="nav-cta">Request Pilot</a>
-                </div>
-            </nav>
-
-            <section className="hero">
-                <div className="hero-glow"></div>
-                <div className="hero-badge">
-                    <span className="hero-badge-dot"></span>
-                    The Complete Readiness Triad for Elite Programs
-                </div>
-                <h1>Your athletes are physically ready. <em>Are they mentally built to execute?</em></h1>
-                <p className="hero-sub">PulseCheck is the mental performance system that gives coaches real-time readiness signals, intervention tools, and clinical safety nets — before it shows on the scoreboard.</p>
-                <div className="hero-heartbeat" aria-hidden="true">
-                    <svg viewBox="0 0 600 60" preserveAspectRatio="none">
-                        <path className="heartbeat-glow" d="M0,30 L120,30 L145,30 L160,8 L175,52 L190,20 L205,38 L220,30 L340,30 L365,30 L380,8 L395,52 L410,20 L425,38 L440,30 L600,30" />
-                        <path className="heartbeat-line" d="M0,30 L120,30 L145,30 L160,8 L175,52 L190,20 L205,38 L220,30 L340,30 L365,30 L380,8 L395,52 L410,20 L425,38 L440,30 L600,30" />
-                    </svg>
-                </div>
-                <div className="hero-ctas">
-                    <a href="mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Pilot%20Inquiry" className="btn-primary">
-                        <PulseBoltIcon className="w-4 h-4" />
-                        Request Department Pilot
-                    </a>
-                    <a href="#how-it-works" className="btn-secondary">See How It Works →</a>
-                </div>
-                <div className="hero-proof">
-                    <span className="hero-proof-label">Trusted by forward-thinking programs</span>
-                    <div className="hero-proof-logos">
-                        <span className="proof-logo">ACC</span>
-                        <span className="proof-logo">LAUNCH</span>
-                        <span className="proof-logo">FOUNDER UNIVERSITY</span>
-                        <span className="proof-logo">COOLEY LLP</span>
-                    </div>
-                </div>
-            </section>
-
-            <section className="terminal-section">
-                <div className="terminal-wrapper" id="pc-terminal">
-                    <div className="terminal">
-                        <div className="terminal-header">
-                            <div className="terminal-dot red"></div>
-                            <div className="terminal-dot yellow"></div>
-                            <div className="terminal-dot green"></div>
-                            <span className="terminal-title">PulseCheck · Daily Check-in</span>
-                        </div>
-                        <div className="terminal-body" id="pc-terminal-body"></div>
-                    </div>
-                </div>
-            </section>
-
-            {/* Box Breathing Exercise */}
-            <section className="breathing" id="breathing">
-                <div className="breathing-inner">
-                    <div className="breathing-header reveal">
-                        <span className="section-label">🫁 Try It Now</span>
-                        <h2>Experience the reset. <em>In 64 seconds.</em></h2>
-                        <p>Box breathing is the same technique Navy SEALs use to regulate their nervous system under extreme stress. Four seconds in. Four seconds hold. Four seconds out. Four seconds hold. Elite athletes use it to restore focus in a single minute — PulseCheck coaches it automatically.</p>
-                    </div>
-
-                    {/* ── Ready State ── */}
-                    <div id="bb-ready" className="bb-panel reveal">
-                        <div className="bb-phase-grid">
-                            <div className="bb-phase-card">
-                                <div className="bb-phase-icon" style={{ background: 'rgba(106,154,250,0.12)', color: 'var(--blue)' }}>↑</div>
-                                <div className="bb-phase-name">Inhale</div>
-                                <div className="bb-phase-secs">4 sec</div>
-                            </div>
-                            <div className="bb-phase-card">
-                                <div className="bb-phase-icon" style={{ background: 'rgba(160,94,248,0.12)', color: 'var(--purple)' }}>■</div>
-                                <div className="bb-phase-name">Hold</div>
-                                <div className="bb-phase-secs">4 sec</div>
-                            </div>
-                            <div className="bb-phase-card">
-                                <div className="bb-phase-icon" style={{ background: 'rgba(0,229,255,0.12)', color: 'var(--cyan)' }}>↓</div>
-                                <div className="bb-phase-name">Exhale</div>
-                                <div className="bb-phase-secs">4 sec</div>
-                            </div>
-                            <div className="bb-phase-card">
-                                <div className="bb-phase-icon" style={{ background: 'rgba(255,193,7,0.12)', color: 'var(--amber)' }}>■</div>
-                                <div className="bb-phase-name">Hold</div>
-                                <div className="bb-phase-secs">4 sec</div>
-                            </div>
-                        </div>
-                        <div className="bb-fact">
-                            <span className="bb-fact-label">Used by</span>
-                            <span className="bb-fact-value">US Navy SEALs · Olympic Athletes · Elite Sports Programs</span>
-                        </div>
-                        <button id="bb-start-btn" className="btn-primary bb-cta-btn">
-                            Begin 4-Round Exercise →
-                        </button>
-                    </div>
-
-                    {/* ── Active State ── */}
-                    <div id="bb-active" className="bb-panel" style={{ display: 'none' }}>
-                        <div className="bb-round-badge" id="bb-round">Round 1 of 4</div>
-                        <div className="bb-circle-wrap">
-                            <div className="bb-ring" id="bb-ring">
-                                <div className="bb-circle" id="bb-circle">
-                                    <div className="bb-circle-phase" id="bb-phase-label">Inhale</div>
-                                    <div className="bb-circle-count" id="bb-count">4</div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="bb-pips">
-                            <div className="bb-pip" id="bb-pip-0" title="Inhale" />
-                            <div className="bb-pip" id="bb-pip-1" title="Hold" />
-                            <div className="bb-pip" id="bb-pip-2" title="Exhale" />
-                            <div className="bb-pip" id="bb-pip-3" title="Hold" />
-                        </div>
-                        <p className="bb-hint">Follow the circle — breathe with it.</p>
-                    </div>
-
-                    {/* ── Complete State ── */}
-                    <div id="bb-complete" className="bb-panel bb-complete-panel" style={{ display: 'none' }}>
-                        <div className="bb-done-icon">✓</div>
-                        <h3 className="bb-done-title">4 rounds complete.</h3>
-                        <p className="bb-done-copy">Notice the shift? That's your nervous system recalibrating. PulseCheck coaches this exact protocol — plus 12 others — automatically to your athletes based on their daily check-in and readiness score.</p>
-                        <div className="bb-done-ctas">
-                            <button id="bb-restart-btn" className="btn-secondary">↺ Try Again</button>
-                            <a href="#pilot" className="btn-primary">Bring This to My Program</a>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section className="problem" id="how-it-works">
-                <div className="problem-inner reveal">
-                    <span className="section-label">⚡ The Invisible Gap</span>
-                    <h2>Mental performance is the last unquantified variable in elite athletics</h2>
-                    <p>Coaches track every rep, every split, every calorie. But the factor that determines execution under pressure — the mind — is still managed by gut feel.</p>
-                </div>
-                <div className="problem-stats reveal">
-                    <div className="problem-stat">
-                        <div className="problem-stat-number" data-count="85" data-suffix="%">0%</div>
-                        <div className="problem-stat-label">of coaches say mental readiness impacts game-day performance</div>
-                    </div>
-                    <div className="problem-stat">
-                        <div className="problem-stat-number" data-count="0" data-suffix="">0</div>
-                        <div className="problem-stat-label">tools currently measure it in real time for coaching staff</div>
-                    </div>
-                    <div className="problem-stat">
-                        <div className="problem-stat-number" data-count="2" data-suffix=" min">0 min</div>
-                        <div className="problem-stat-label">daily check-in that captures what hours of observation miss</div>
-                    </div>
-                </div>
-            </section>
-
-            <section className="simulation" id="simulation">
-                <div className="simulation-inner">
-                    <div className="simulation-header reveal">
-                        <span className="section-label">▶ Simulated Mental Game</span>
-                        <h2>Train the mind <em>before the clutch moment</em></h2>
-                        <p>Run pressure scenarios before game day. PulseCheck coaches breathing, attention control, and execution cues in the exact moments athletes unravel.</p>
-                    </div>
-                    <div className="sim-grid reveal">
-                        <div className="sim-left">
-                            <div className="sim-status">
-                                <div className="sim-status-left">
-                                    <div className="sim-status-dot"></div>
-                                    <span className="sim-status-label">Simulation State</span>
-                                </div>
-                                <span className="sim-context">Q4 · 01:42 · Down 1</span>
-                            </div>
-                            <div className="sim-meters">
-                                <div className="sim-meter">
-                                    <div className="sim-meter-label">Pressure</div>
-                                    <div className="sim-meter-value meter-high" id="pc-m-pressure">87%</div>
-                                    <div className="sim-meter-bar"><div className="sim-meter-fill" id="pc-bar-pressure" style={{ width: '87%', background: 'var(--coral)' }}></div></div>
-                                </div>
-                                <div className="sim-meter">
-                                    <div className="sim-meter-label">Focus</div>
-                                    <div className="sim-meter-value meter-mid" id="pc-m-focus">62%</div>
-                                    <div className="sim-meter-bar"><div className="sim-meter-fill" id="pc-bar-focus" style={{ width: '62%', background: 'var(--amber)' }}></div></div>
-                                </div>
-                                <div className="sim-meter">
-                                    <div className="sim-meter-label">Composure</div>
-                                    <div className="sim-meter-value meter-ok" id="pc-m-composure">71%</div>
-                                    <div className="sim-meter-bar"><div className="sim-meter-fill" id="pc-bar-composure" style={{ width: '71%', background: 'var(--lime)' }}></div></div>
-                                </div>
-                            </div>
-                            <div className="sim-flow" id="pc-sim-cascade">
-                                <div className="sim-flow-step trigger" id="pc-sim-s1">
-                                    <div className="sim-flow-step-label">Trigger Event</div>
-                                    <p>Missed two free throws, crowd gets loud, hands feel tight, self-talk turns negative.</p>
-                                </div>
-                                <div className="sim-flow-step prompt" id="pc-sim-s2">
-                                    <div className="sim-flow-step-label">Nora Prompt</div>
-                                    <p>&quot;Reset in 8 seconds: exhale long, eyes on rim center, cue: smooth follow-through.&quot;</p>
-                                </div>
-                                <div className="sim-flow-step result" id="pc-sim-s3">
-                                    <div className="sim-flow-step-label">Execution Result</div>
-                                    <p>Athlete slows heart rate, blocks crowd noise, and commits to next-shot routine.</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="sim-right">
-                            <h3>Mental Intervention Sequence</h3>
-                            <p>A repeatable workflow used in late-game stress spikes.</p>
-                            <div className="intervention-steps">
-                                <div className="intervention-step" id="pc-int-1">
-                                    <div className="intervention-icon detect">⚠</div>
-                                    <div className="intervention-content">
-                                        <h4>1. Detect the Spiral</h4>
-                                        <p>Negative self-talk and rushed decision patterns are flagged instantly.</p>
-                                    </div>
-                                </div>
-                                <div className="intervention-step" id="pc-int-2">
-                                    <div className="intervention-icon reset">◉</div>
-                                    <div className="intervention-content">
-                                        <h4>2. Issue a Micro-Reset</h4>
-                                        <p>Breath cadence and short cue are tailored to role and situation.</p>
-                                    </div>
-                                </div>
-                                <div className="intervention-step" id="pc-int-3">
-                                    <div className="intervention-icon reattach">◎</div>
-                                    <div className="intervention-content">
-                                        <h4>3. Re-Attach to Task</h4>
-                                        <p>Attention narrows to one controllable action for the next play.</p>
-                                    </div>
-                                </div>
-                                <div className="intervention-step" id="pc-int-4">
-                                    <div className="intervention-icon lock">✦</div>
-                                    <div className="intervention-content">
-                                        <h4>4. Lock In Confidence</h4>
-                                        <p>Immediate reinforcement makes the clutch routine more automatic next time.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section className="pillars" id="platform">
-                <div className="pillars-inner">
-                    <div className="pillars-header reveal">
-                        <span className="section-label">⬡ The 3-Pillar Engine</span>
-                        <h2>One platform, <em>three surfaces</em></h2>
-                        <p>For athletic programs that need signal, not intuition. Each pillar serves a different stakeholder with the right intelligence at the right time.</p>
-                    </div>
-                    <div className="pillars-grid reveal">
-                        <div className="pillar-card">
-                            <div className="pillar-icon">💬</div>
-                            <h3>Nora</h3>
-                            <div className="pillar-subtitle">For Athletes</div>
-                            <p>24/7 private, stigma-free AI support that turns daily check-ins into trainable mental habits.</p>
-                            <div className="pillar-features">
-                                <div className="pillar-feature"><div className="pillar-feature-dot"></div>Frictionless iMessage-style daily mental reps</div>
-                                <div className="pillar-feature"><div className="pillar-feature-dot"></div>Real-time response to anxiety, fatigue &amp; focus drops</div>
-                                <div className="pillar-feature"><div className="pillar-feature-dot"></div>Personalized drills like Box Breathing &amp; 3-Second Reset</div>
-                                <div className="pillar-feature"><div className="pillar-feature-dot"></div>Privacy-first design — athletes control visibility</div>
-                            </div>
-                        </div>
-                        <div className="pillar-card">
-                            <div className="pillar-icon">📊</div>
-                            <h3>Coach Dashboard</h3>
-                            <div className="pillar-subtitle">For Coaches</div>
-                            <p>Actionable intelligence before the tape and before the locker room conversation.</p>
-                            <div className="pillar-features">
-                                <div className="pillar-feature"><div className="pillar-feature-dot"></div>Green/Yellow/Orange/Red roster map at a glance</div>
-                                <div className="pillar-feature"><div className="pillar-feature-dot"></div>Actionable coaching recommendations by athlete</div>
-                                <div className="pillar-feature"><div className="pillar-feature-dot"></div>Proactive alerts when performance risk rises</div>
-                                <div className="pillar-feature"><div className="pillar-feature-dot"></div>Exportable reports &amp; analytics</div>
-                            </div>
-                        </div>
-                        <div className="pillar-card">
-                            <div className="pillar-icon">🛡</div>
-                            <h3>Clinical Oversight</h3>
-                            <div className="pillar-subtitle">Powered by Aunt Edna</div>
-                            <p>Clinical handoff automation from routine performance coaching to safety when it matters most.</p>
-                            <div className="pillar-features">
-                                <div className="pillar-feature"><div className="pillar-feature-dot"></div>Escalation triggers with objective context snapshots</div>
-                                <div className="pillar-feature"><div className="pillar-feature-dot"></div>HIPAA-sensitive case handling</div>
-                                <div className="pillar-feature"><div className="pillar-feature-dot"></div>Restricted visibility controls</div>
-                                <div className="pillar-feature"><div className="pillar-feature-dot"></div>Secure handoff to clinical staff for immediate follow-up</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section className="proof" id="proof">
-                <div className="proof-inner">
-                    <div className="reveal">
-                        <h2>Built with coaches. Validated by athletes.</h2>
-                    </div>
-                </div>
-            </section>
-
-            <section className="workflow">
-                <div className="workflow-inner">
-                    <div className="workflow-header reveal">
-                        <h2>Built for your workflow</h2>
-                        <p>The right experience, optimized for how you actually work.</p>
-                    </div>
-                    <div className="workflow-grid reveal">
-                        <div className="workflow-card">
-                            <div className="workflow-card-icon">💙</div>
-                            <h3>For Athletes</h3>
-                            <p>Native integration with your existing Pulse app. No friction, maximum insight.</p>
-                            <div className="workflow-features">
-                                <div className="workflow-feature"><CheckIcon /> Seamless HealthKit sync</div>
-                                <div className="workflow-feature"><CheckIcon /> Instant workout history &amp; PR analysis</div>
-                                <div className="workflow-feature"><CheckIcon /> Comprehensive technique explanations</div>
-                                <div className="workflow-feature"><CheckIcon /> Smart push notifications</div>
-                                <div className="workflow-feature"><CheckIcon /> Privacy-first design</div>
-                            </div>
-                        </div>
-
-                        <div className="workflow-card">
-                            <div className="workflow-card-icon">📈</div>
-                            <h3>For Coaches</h3>
-                            <p>Comprehensive web dashboard built for managing teams and making data-driven decisions.</p>
-                            <div className="workflow-features">
-                                <div className="workflow-feature"><CheckIcon /> Team Pulse Board overview</div>
-                                <div className="workflow-feature"><CheckIcon /> Proactive intervention alerts</div>
-                                <div className="workflow-feature"><CheckIcon /> Exportable reports &amp; analytics</div>
-                                <div className="workflow-feature"><CheckIcon /> Real-time athlete alerts</div>
-                            </div>
-                            <div className="mini-dash">
-                                <div className="mini-dash-header">
-                                    <span className="mini-dash-title">🏋️ Team Pulse Board</span>
-                                    <span className="mini-dash-live">Live</span>
-                                </div>
-                                <div className="mini-dash-stats">
-                                    <div className="mini-stat"><div className="mini-stat-value">12</div><div className="mini-stat-label">Athletes</div></div>
-                                    <div className="mini-stat"><div className="mini-stat-value score-yellow">3</div><div className="mini-stat-label">Alerts</div></div>
-                                    <div className="mini-stat"><div className="mini-stat-value score-green">89%</div><div className="mini-stat-label">Readiness</div></div>
-                                </div>
-                                <div className="mini-roster">
-                                    <div className="roster-row">
-                                        <div className="roster-left">
-                                            <div className="roster-avatar" style={{ background: 'var(--coral)' }}>JS</div>
-                                            <div className="roster-info">
-                                                <span className="roster-name">Jessica Smith</span>
-                                                <span className="roster-status">High stress · Poor sleep</span>
-                                            </div>
-                                        </div>
-                                        <span className="roster-score score-red">⚠ Alert</span>
-                                    </div>
-                                    <div className="roster-row">
-                                        <div className="roster-left">
-                                            <div className="roster-avatar" style={{ background: 'var(--lime)' }}>MJ</div>
-                                            <div className="roster-info">
-                                                <span className="roster-name">Mike Johnson</span>
-                                                <span className="roster-status">Ready · Good recovery</span>
-                                            </div>
-                                        </div>
-                                        <span className="roster-score score-green">92%</span>
-                                    </div>
-                                    <div className="roster-row">
-                                        <div className="roster-left">
-                                            <div className="roster-avatar" style={{ background: 'var(--cyan)' }}>AL</div>
-                                            <div className="roster-info">
-                                                <span className="roster-name">Alex Lee</span>
-                                                <span className="roster-status">Fatigue trend · Monitor</span>
-                                            </div>
-                                        </div>
-                                        <span className="roster-score score-yellow">76%</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <section className="conversion" id="pilot">
-                <div className="conversion-inner">
-                    <div className="reveal">
-                        <span className="section-label">🚀 Get Started</span>
-                        <h2>Ready to see what your athletes <em>aren&apos;t telling you?</em></h2>
-                        <p>Join the programs already using PulseCheck to turn mental readiness from a blind spot into a competitive advantage.</p>
-                        <div className="conversion-ctas">
-                            <a href="mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Pilot%20Inquiry" className="btn-primary" style={{ fontSize: '16px', padding: '18px 36px' }}>
-                                <PulseBoltIcon className="w-4 h-4" />
-                                Request Department Pilot
-                            </a>
-                            <button type="button" className="btn-secondary" onClick={onJoinWaitlist}>Join Waitlist →</button>
-                        </div>
-                        <p className="conversion-note">Free pilot for qualifying D1 programs · No commitment required</p>
-                    </div>
-                </div>
-            </section>
-
-            <footer>
-                <div className="footer-inner">
-                    <div className="footer-brand">
-                        <a href="#top" className="nav-logo" style={{ marginBottom: '4px' }}>
-                            <div className="nav-logo-icon">
-                                <img src="/pulsecheck-logo.svg" alt="" aria-hidden="true" className="nav-logo-mark" />
-                            </div>
-                            PulseCheck
-                        </a>
-                        <p>Building the future of athletic mental performance through AI, sports psychology, and real-time intelligence.</p>
-                        <div className="footer-socials">
-                            <a href="#top" className="footer-social">𝕏</a>
-                            <a href="#top" className="footer-social">in</a>
-                            <a href="#top" className="footer-social">ig</a>
-                            <a href="#top" className="footer-social">▶</a>
-                        </div>
-                    </div>
-                    <div className="footer-col">
-                        <h4>Product</h4>
-                        <a href="#top">For Athletes</a>
-                        <a href="#top">For Coaches</a>
-                        <a href="#top">Clinical Safety</a>
-                        <a href="#top">Research</a>
-                    </div>
-                    <div className="footer-col">
-                        <h4>Company</h4>
-                        <a href="#top">About</a>
-                        <a href="#top">Press Kit</a>
-                        <a href="#top">Privacy</a>
-                        <a href="#top">Terms</a>
-                    </div>
-                    <div className="footer-col">
-                        <h4>Stay Connected</h4>
-                        <p style={{ fontSize: '14px', color: 'var(--text-tertiary)', marginBottom: '12px' }}>Get updates on new features, community challenges, and athlete content.</p>
-                        <div className="footer-subscribe-input">
-                            <input type="email" placeholder="you@program.edu" />
-                            <button type="button">Subscribe</button>
-                        </div>
-                    </div>
-                </div>
-                <div className="footer-bottom">© 2026 Pulse Intelligence Labs, Inc. All rights reserved.</div>
-            </footer>
-
-            <style>{`
-              :root {
-                --bg-primary: #0a0b0d;
-                --bg-secondary: #111215;
-                --bg-card: #16181c;
-                --bg-card-hover: #1c1f24;
-                --blue: #6A9AFA;
-                --blue-dim: #6A9AFA20;
-                --blue-mid: #6A9AFA40;
-                --purple: #A05EF8;
-                --purple-dim: #A05EF820;
-                --lime: #E0FE10;
-                --lime-dim: #E0FE1020;
-                --lime-mid: #E0FE1040;
-                --cyan: #00e5ff;
-                --coral: #ff6b6b;
-                --amber: #ffc107;
-                --text-primary: #f0f0f2;
-                --text-secondary: #8a8d95;
-                --text-tertiary: #5a5d65;
-                --border: #1e2028;
-                --border-light: #2a2d35;
-                --font-display: 'HK Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                --font-body: 'HK Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-              }
-
-              .pc-landing * { margin: 0; padding: 0; box-sizing: border-box; }
-
-              html {
-                scroll-behavior: smooth;
-                scrollbar-width: thin;
-                scrollbar-color: var(--border-light) var(--bg-primary);
-              }
-
-              body {
-                font-family: var(--font-body);
-                background: var(--bg-primary);
-                color: var(--text-primary);
-                line-height: 1.6;
-                overflow-x: hidden;
-                -webkit-font-smoothing: antialiased;
-              }
-
-              body::before {
-                content: '';
-                position: fixed;
-                top: 0; left: 0; width: 100%; height: 100%;
-                background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-                pointer-events: none;
-                z-index: 9999;
-              }
-
-              .pc-landing #pc-pulse-canvas {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                z-index: 0;
-                pointer-events: none;
-                opacity: 0.6;
-              }
-
-              .pc-landing section,
-              .pc-landing footer {
-                position: relative;
-                z-index: 1;
-              }
-
-              .pc-landing nav {
-                position: fixed;
-                top: 0; left: 0; right: 0;
-                z-index: 100;
-                padding: 20px 48px;
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                backdrop-filter: blur(20px);
-                background: rgba(10,11,13,0.8);
-                border-bottom: 1px solid var(--border);
-              }
-
-              .pc-landing .nav-logo {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                font-family: var(--font-body);
-                font-weight: 700;
-                font-size: 18px;
-                text-decoration: none;
-                color: var(--text-primary);
-              }
-
-              .pc-landing .nav-logo-icon {
-                width: 32px; height: 32px;
-                display: flex; align-items: center; justify-content: center;
-                flex-shrink: 0;
-              }
-
-              .pc-landing .nav-logo-mark {
-                width: 100%;
-                height: 100%;
-                display: block;
-              }
-
-              .pc-landing .nav-links {
-                display: flex;
-                align-items: center;
-                gap: 36px;
-              }
-
-              .pc-landing .nav-links a {
-                color: var(--text-secondary);
-                text-decoration: none;
-                font-size: 14px;
-                font-weight: 500;
-                transition: color 0.2s;
-                letter-spacing: 0.01em;
-              }
-
-              .pc-landing .nav-links a:hover { color: var(--text-primary); }
-
-              .pc-landing .nav-cta {
-                background: linear-gradient(135deg, var(--blue), var(--purple)) !important;
-                color: var(--bg-primary) !important;
-                padding: 10px 24px !important;
-                border-radius: 8px;
-                font-weight: 600 !important;
-                font-size: 14px !important;
-                transition: opacity 0.2s !important;
-              }
-
-              .pc-landing .nav-cta:hover { opacity: 0.9; }
-
-              .pc-landing .hero {
-                min-height: 100vh;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                text-align: center;
-                padding: 140px 24px 80px;
-                position: relative;
-                overflow: hidden;
-              }
-
-              .pc-landing .hero::before {
-                content: '';
-                position: absolute;
-                top: -20%; left: 50%; transform: translateX(-50%);
-                width: 800px; height: 800px;
-                background: radial-gradient(ellipse, var(--blue-dim) 0%, transparent 70%);
-                pointer-events: none;
-              }
-
-              .pc-landing .hero-glow {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -55%);
-                width: 900px;
-                height: 700px;
-                background: radial-gradient(ellipse, rgba(106,154,250,0.1) 0%, rgba(160,94,248,0.04) 40%, transparent 70%);
-                pointer-events: none;
-                animation: heroGlowPulse 4s ease-in-out infinite;
-              }
-
-              @keyframes heroGlowPulse {
-                0%, 100% { opacity: 0.8; transform: translate(-50%, -55%) scale(1); }
-                50% { opacity: 1; transform: translate(-50%, -55%) scale(1.08); }
-              }
-
-              .pc-landing .hero-badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                padding: 8px 18px;
-                border: 1px solid var(--border-light);
-                border-radius: 100px;
-                font-size: 13px;
-                font-weight: 500;
-                color: var(--text-secondary);
-                margin-bottom: 32px;
-                opacity: 0;
-                animation: fadeUp 0.8s ease 0.2s forwards;
-              }
-
-              .pc-landing .hero-badge-dot {
-                width: 6px; height: 6px;
-                background: var(--blue);
-                border-radius: 50%;
-                animation: pulse-dot 2s ease infinite;
-              }
-
-              @keyframes pulse-dot {
-                0%, 100% { box-shadow: 0 0 0 0 var(--blue-mid); }
-                50% { box-shadow: 0 0 0 6px transparent; }
-              }
-
-              .pc-landing .hero h1 {
-                font-family: var(--font-display);
-                font-size: clamp(48px, 7vw, 88px);
-                line-height: 1.05;
-                font-weight: 400;
-                letter-spacing: -0.02em;
-                max-width: 1100px;
-                margin-bottom: 28px;
-                opacity: 0;
-                animation: fadeUp 0.8s ease 0.4s forwards;
-              }
-
-              .pc-landing .hero h1 em {
-                font-style: italic;
-                display: block;
-                background: linear-gradient(135deg, var(--blue), var(--purple));
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                background-clip: text;
-                padding-right: 0.08em;
-              }
-
-              .pc-landing .hero-sub {
-                font-size: 19px;
-                color: var(--text-secondary);
-                max-width: 560px;
-                line-height: 1.7;
-                margin-bottom: 48px;
-                opacity: 0;
-                animation: fadeUp 0.8s ease 0.6s forwards;
-              }
-
-              .pc-landing .hero-heartbeat {
-                width: 100%;
-                max-width: 600px;
-                margin: 0 auto 48px;
-                height: 60px;
-                opacity: 0;
-                animation: fadeUp 0.8s ease 0.9s forwards;
-              }
-
-              .pc-landing .hero-heartbeat svg { width: 100%; height: 100%; }
-
-              .pc-landing .heartbeat-line {
-                stroke: var(--blue);
-                stroke-width: 2;
-                fill: none;
-                stroke-dasharray: 1200;
-                stroke-dashoffset: 1200;
-                animation: drawHeartbeat 3s ease-in-out 1.4s forwards;
-                filter: drop-shadow(0 0 8px rgba(106,154,250,0.5));
-              }
-
-              .pc-landing .heartbeat-glow {
-                stroke: var(--purple);
-                stroke-width: 6;
-                fill: none;
-                opacity: 0.2;
-                stroke-dasharray: 1200;
-                stroke-dashoffset: 1200;
-                animation: drawHeartbeat 3s ease-in-out 1.4s forwards;
-              }
-
-              @keyframes drawHeartbeat {
-                to { stroke-dashoffset: 0; }
-              }
-
-              .pc-landing .hero-ctas {
-                display: flex;
-                gap: 16px;
-                align-items: center;
-                opacity: 0;
-                animation: fadeUp 0.8s ease 1.1s forwards;
-              }
-
-              .pc-landing .btn-primary {
-                display: inline-flex;
-                align-items: center;
-                gap: 10px;
-                background: linear-gradient(135deg, var(--blue), var(--purple));
-                color: var(--bg-primary);
-                padding: 16px 32px;
-                border-radius: 12px;
-                font-weight: 600;
-                font-size: 15px;
-                text-decoration: none;
-                transition: all 0.25s;
-                border: none;
-                cursor: pointer;
-              }
-
-              .pc-landing .btn-primary:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 8px 30px var(--blue-dim);
-                opacity: 0.92;
-              }
-
-              .pc-landing .btn-secondary {
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                color: var(--text-secondary);
-                padding: 16px 28px;
-                font-weight: 500;
-                font-size: 15px;
-                text-decoration: none;
-                transition: color 0.2s;
-                border: 1px solid var(--border);
-                border-radius: 12px;
-                background: transparent;
-                cursor: pointer;
-              }
-
-              .pc-landing .btn-secondary:hover { color: var(--text-primary); border-color: var(--border-light); }
-
-              .pc-landing .hero-proof {
-                margin-top: 72px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 20px;
-                opacity: 0;
-                animation: fadeUp 0.8s ease 1.3s forwards;
-              }
-
-              .pc-landing .hero-proof-label {
-                font-size: 12px;
-                text-transform: uppercase;
-                letter-spacing: 0.12em;
-                color: var(--text-tertiary);
-                font-weight: 600;
-              }
-
-              .pc-landing .hero-proof-logos {
-                display: flex;
-                gap: 48px;
-                align-items: center;
-              }
-
-              .pc-landing .proof-logo {
-                font-family: var(--font-body);
-                font-weight: 700;
-                font-size: 15px;
-                color: var(--text-tertiary);
-                letter-spacing: 0.05em;
-                opacity: 0.6;
-                transition: opacity 0.2s;
-              }
-
-              .pc-landing .proof-logo:hover { opacity: 1; }
-
-              .pc-landing .terminal-section {
-                padding: 40px 24px 120px;
-                display: flex;
-                justify-content: center;
-              }
-
-              .pc-landing .terminal-wrapper {
-                max-width: 680px;
-                width: 100%;
-                opacity: 0;
-                transform: translateY(30px);
-              }
-              .pc-landing .terminal-wrapper.visible {
-                opacity: 1;
-                transform: translateY(0);
-                transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-              }
-              .pc-landing .terminal { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: 0 24px 80px rgba(0,0,0,0.5), 0 0 0 1px var(--border); }
-              .pc-landing .terminal-header { display: flex; align-items: center; gap: 8px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
-              .pc-landing .terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
-              .pc-landing .terminal-dot.red { background: #ff5f57; }
-              .pc-landing .terminal-dot.yellow { background: #febc2e; }
-              .pc-landing .terminal-dot.green { background: #28c840; }
-              .pc-landing .terminal-title { margin-left: 12px; font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary); }
-              .pc-landing .terminal-body { padding: 24px; min-height: 200px; }
-              .pc-landing .terminal-line { display: flex; gap: 12px; margin-bottom: 16px; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; }
-              .pc-landing .terminal-prompt { color: var(--blue); user-select: none; flex-shrink: 0; }
-              .pc-landing .terminal-prompt.athlete { color: var(--purple); }
-              .pc-landing .terminal-text { color: var(--text-secondary); }
-              .pc-landing .terminal-text .highlight { color: var(--text-primary); }
-              .pc-landing .terminal-response { padding: 16px; background: rgba(106,154,250,0.04); border: 1px solid rgba(106,154,250,0.15); border-radius: 10px; margin-top: 8px; opacity: 0; transform: translateY(8px); }
-              .pc-landing .terminal-response.show { opacity: 1; transform: translateY(0); transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
-              .pc-landing .terminal-response p { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); line-height: 1.7; }
-              .pc-landing .terminal-response .status { display: inline-flex; align-items: center; gap: 6px; color: var(--blue); font-weight: 500; margin-bottom: 8px; font-size: 12px; }
-              .pc-landing .terminal-response .response-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); animation: pulse-dot 2s ease infinite; }
-              .pc-landing .terminal-response .response-highlight { color: var(--purple); }
-              .pc-landing .terminal-cursor { display: inline-block; width: 8px; height: 16px; background: var(--blue); animation: blink 1s step-end infinite; vertical-align: text-bottom; margin-left: 2px; }
-              @keyframes blink { 50% { opacity: 0; } }
-
-              .pc-landing .problem,
-              .pc-landing .simulation,
-              .pc-landing .pillars,
-              .pc-landing .workflow,
-              .pc-landing .conversion { padding: 120px 24px; }
-
-              .pc-landing .proof { padding: 120px 24px; position: relative; background: var(--bg-secondary); }
-
-              .pc-landing .problem,
-              .pc-landing .simulation,
-              .pc-landing .pillars,
-              .pc-landing .proof,
-              .pc-landing .workflow,
-              .pc-landing .conversion { position: relative; }
-
-              .pc-landing .simulation::before,
-              .pc-landing .pillars::before,
-              .pc-landing .proof::before,
-              .pc-landing .workflow::before,
-              .pc-landing .conversion::before {
-                content: '';
-                position: absolute;
-                top: 0; left: 0; right: 0;
-                height: 1px;
-                background: linear-gradient(90deg, transparent, var(--border-light), transparent);
-              }
-
-              .pc-landing .problem-inner,
-              .pc-landing .simulation-inner,
-              .pc-landing .pillars-inner,
-              .pc-landing .proof-inner,
-              .pc-landing .workflow-inner,
-              .pc-landing .conversion-inner { max-width: 1100px; margin: 0 auto; }
-
-              .pc-landing .problem-inner { max-width: 800px; text-align: center; }
-
-              .pc-landing .section-label {
-                display: inline-flex;
-                align-items: center;
-                gap: 8px;
-                font-size: 12px;
-                text-transform: uppercase;
-                letter-spacing: 0.14em;
-                color: var(--blue);
-                font-weight: 600;
-                margin-bottom: 24px;
-                font-family: var(--font-mono);
-              }
-
-              .pc-landing .problem h2,
-              .pc-landing .simulation-header h2,
-              .pc-landing .pillars-header h2,
-              .pc-landing .proof h2,
-              .pc-landing .workflow-header h2,
-              .pc-landing .conversion h2 {
-                font-family: var(--font-display);
-                font-size: clamp(36px, 4.5vw, 56px);
-                line-height: 1.15;
-                font-weight: 400;
-              }
-
-              .pc-landing .problem h2 { margin-bottom: 24px; }
-              .pc-landing .problem p { font-size: 18px; color: var(--text-secondary); max-width: 600px; margin: 0 auto 64px; line-height: 1.75; }
-              .pc-landing .problem-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; background: var(--border); border-radius: 16px; overflow: hidden; }
-              .pc-landing .problem-stat { background: var(--bg-secondary); padding: 48px 32px; text-align: center; }
-              .pc-landing .problem-stat-number { font-family: var(--font-display); font-size: 52px; color: var(--blue); line-height: 1; margin-bottom: 12px; }
-              .pc-landing .problem-stat-label { font-size: 14px; color: var(--text-secondary); max-width: 200px; margin: 0 auto; line-height: 1.5; }
-
-              .pc-landing .simulation-inner,
-              .pc-landing .pillars-inner,
-              .pc-landing .workflow-inner { max-width: 1100px; }
-
-              .pc-landing .simulation-header,
-              .pc-landing .pillars-header,
-              .pc-landing .workflow-header { text-align: center; margin-bottom: 64px; }
-
-              .pc-landing .simulation-header h2 em,
-              .pc-landing .pillars-header h2 em,
-              .pc-landing .proof h2 em,
-              .pc-landing .conversion h2 em { font-style: italic; color: var(--blue); }
-
-              .pc-landing .simulation-header p,
-              .pc-landing .pillars-header p,
-              .pc-landing .workflow-header p { font-size: 17px; color: var(--text-secondary); max-width: 550px; margin: 0 auto; line-height: 1.7; }
-
-              .pc-landing .sim-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; }
-              .pc-landing .sim-left,
-              .pc-landing .sim-right,
-              .pc-landing .pillar-card,
-              .pc-landing .testimonial,
-              .pc-landing .workflow-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; }
-
-              .pc-landing .sim-left { overflow: hidden; }
-              .pc-landing .sim-status { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; border-bottom: 1px solid var(--border); }
-              .pc-landing .sim-status-left { display: flex; align-items: center; gap: 10px; }
-              .pc-landing .sim-status-dot { width: 8px; height: 8px; background: var(--blue); border-radius: 50%; animation: pulse-dot 2s ease infinite; }
-              .pc-landing .sim-status-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-secondary); font-weight: 500; }
-              .pc-landing .sim-context { font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary); }
-              .pc-landing .sim-meters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); }
-              .pc-landing .sim-meter { background: var(--bg-card); padding: 24px; text-align: center; }
-              .pc-landing .sim-meter-label { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-tertiary); margin-bottom: 8px; }
-              .pc-landing .sim-meter-value { font-family: var(--font-display); font-size: 36px; font-weight: 400; transition: all 1s ease; }
-              .pc-landing .sim-meter-bar { width: 80%; height: 3px; margin: 12px auto 0; border-radius: 2px; background: var(--border); overflow: hidden; position: relative; }
-              .pc-landing .sim-meter-fill { height: 100%; border-radius: 2px; transition: width 1.5s ease, background 1s ease; position: absolute; left: 0; top: 0; }
-              .pc-landing .meter-high { color: var(--coral); }
-              .pc-landing .meter-mid { color: var(--amber); }
-              .pc-landing .meter-ok { color: var(--blue); }
-              .pc-landing .sim-flow { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
-              .pc-landing .sim-flow-step { padding: 16px 20px; border-radius: 10px; border-left: 3px solid; opacity: 0; transform: translateX(-12px); transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
-              .pc-landing .sim-flow-step.active { opacity: 1; transform: translateX(0); }
-              .pc-landing .sim-flow-step.trigger { background: rgba(255,107,107,0.06); border-color: var(--coral); }
-              .pc-landing .sim-flow-step.prompt { background: rgba(106,154,250,0.04); border-color: var(--blue); }
-              .pc-landing .sim-flow-step.result { background: rgba(0,229,255,0.04); border-color: var(--cyan); }
-              .pc-landing .sim-flow-step-label { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 6px; font-weight: 600; }
-              .pc-landing .trigger .sim-flow-step-label { color: var(--coral); }
-              .pc-landing .prompt .sim-flow-step-label { color: var(--blue); }
-              .pc-landing .result .sim-flow-step-label { color: var(--cyan); }
-              .pc-landing .sim-flow-step p { font-size: 14px; color: var(--text-secondary); line-height: 1.6; }
-              .pc-landing .sim-right { padding: 32px; }
-              .pc-landing .sim-right h3 { font-family: var(--font-display); font-size: 28px; font-weight: 400; margin-bottom: 8px; }
-              .pc-landing .sim-right > p { font-size: 14px; color: var(--text-tertiary); margin-bottom: 32px; }
-              .pc-landing .intervention-steps { display: flex; flex-direction: column; gap: 20px; }
-              .pc-landing .intervention-step { display: flex; gap: 16px; align-items: flex-start; opacity: 0; transform: translateY(12px); }
-              .pc-landing .intervention-step.active { opacity: 1; transform: translateY(0); transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
-              .pc-landing .intervention-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 16px; }
-              .pc-landing .intervention-icon.detect { background: rgba(255,107,107,0.12); }
-              .pc-landing .intervention-icon.reset { background: rgba(0,229,255,0.12); }
-              .pc-landing .intervention-icon.reattach { background: rgba(106,154,250,0.12); }
-              .pc-landing .intervention-icon.lock { background: rgba(160,94,248,0.12); }
-              .pc-landing .intervention-content h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; color: var(--text-primary); }
-              .pc-landing .intervention-content p { font-size: 13px; color: var(--text-tertiary); line-height: 1.5; }
-
-              .pc-landing .pillars-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-              .pc-landing .pillar-card { padding: 36px 28px; transition: all 0.3s; position: relative; overflow: hidden; }
-              .pc-landing .pillar-card::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
-              .pc-landing .pillar-card:nth-child(1)::after { background: var(--blue); }
-              .pc-landing .pillar-card:nth-child(2)::after { background: var(--purple); }
-              .pc-landing .pillar-card:nth-child(3)::after { background: var(--lime); }
-              .pc-landing .pillar-card:hover { background: var(--bg-card-hover); border-color: var(--border-light); transform: translateY(-4px); }
-              .pc-landing .pillar-icon { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px; font-size: 22px; }
-              .pc-landing .pillar-card:nth-child(1) .pillar-icon { background: rgba(106,154,250,0.12); }
-              .pc-landing .pillar-card:nth-child(2) .pillar-icon { background: rgba(160,94,248,0.12); }
-              .pc-landing .pillar-card:nth-child(3) .pillar-icon { background: rgba(224,254,16,0.12); }
-              .pc-landing .pillar-card h3 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
-              .pc-landing .pillar-card .pillar-subtitle { font-size: 13px; color: var(--text-tertiary); font-family: var(--font-mono); margin-bottom: 16px; }
-              .pc-landing .pillar-card > p { font-size: 14px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 24px; }
-              .pc-landing .pillar-features { display: flex; flex-direction: column; gap: 10px; }
-              .pc-landing .pillar-feature { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); }
-              .pc-landing .pillar-feature-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
-              .pc-landing .pillar-card:nth-child(1) .pillar-feature-dot { background: var(--blue); }
-              .pc-landing .pillar-card:nth-child(2) .pillar-feature-dot { background: var(--purple); }
-              .pc-landing .pillar-card:nth-child(3) .pillar-feature-dot { background: var(--lime); }
-
-              .pc-landing .proof-inner { max-width: 1000px; text-align: center; }
-              .pc-landing .proof h2 { margin-bottom: 0; }
-              .pc-landing .testimonials { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; text-align: left; }
-              .pc-landing .testimonial { padding: 36px; transition: all 0.3s; }
-              .pc-landing .testimonial:hover { border-color: var(--border-light); }
-              .pc-landing .testimonial-quote { font-size: 16px; line-height: 1.75; color: var(--text-secondary); margin-bottom: 24px; font-style: italic; }
-              .pc-landing .testimonial-author { display: flex; align-items: center; gap: 14px; }
-              .pc-landing .testimonial-avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; color: var(--bg-primary); }
-              .pc-landing .testimonial:nth-child(1) .testimonial-avatar { background: var(--cyan); }
-              .pc-landing .testimonial:nth-child(2) .testimonial-avatar { background: var(--lime); }
-              .pc-landing .testimonial:nth-child(3) .testimonial-avatar { background: var(--purple); }
-              .pc-landing .testimonial:nth-child(4) .testimonial-avatar { background: var(--coral); }
-              .pc-landing .testimonial-name { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
-              .pc-landing .testimonial-role { font-size: 13px; color: var(--text-tertiary); }
-
-              .pc-landing .workflow-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
-              .pc-landing .workflow-card { padding: 40px 36px; position: relative; overflow: hidden; }
-              .pc-landing .workflow-card-icon { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px; font-size: 24px; }
-              .pc-landing .workflow-card:nth-child(1) .workflow-card-icon { background: rgba(0,229,255,0.12); }
-              .pc-landing .workflow-card:nth-child(2) .workflow-card-icon { background: rgba(200,255,0,0.12); }
-              .pc-landing .workflow-card h3 { font-size: 24px; font-weight: 600; margin-bottom: 12px; }
-              .pc-landing .workflow-card > p { font-size: 15px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 28px; }
-              .pc-landing .workflow-features { display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; }
-              .pc-landing .workflow-feature { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-secondary); }
-              .pc-landing .workflow-feature svg { flex-shrink: 0; color: var(--blue); }
-              .pc-landing .mini-dash { background: var(--bg-primary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-top: 8px; }
-              .pc-landing .mini-dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-              .pc-landing .mini-dash-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-              .pc-landing .mini-dash-live { font-family: var(--font-mono); font-size: 10px; color: var(--blue); display: flex; align-items: center; gap: 5px; }
-              .pc-landing .mini-dash-live::before { content: ''; width: 6px; height: 6px; background: var(--blue); border-radius: 50%; }
-              .pc-landing .mini-dash-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
-              .pc-landing .mini-stat { text-align: center; padding: 12px 8px; background: var(--bg-card); border-radius: 8px; }
-              .pc-landing .mini-stat-value { font-size: 22px; font-weight: 700; }
-              .pc-landing .mini-stat-label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
-              .pc-landing .mini-roster { display: flex; flex-direction: column; gap: 8px; }
-              .pc-landing .roster-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg-card); border-radius: 8px; font-size: 13px; }
-              .pc-landing .roster-left { display: flex; align-items: center; gap: 10px; }
-              .pc-landing .roster-avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: var(--bg-primary); }
-              .pc-landing .roster-info { display: flex; flex-direction: column; }
-              .pc-landing .roster-name { font-weight: 500; font-size: 13px; }
-              .pc-landing .roster-status { font-size: 11px; color: var(--text-tertiary); }
-              .pc-landing .roster-score { font-family: var(--font-mono); font-weight: 600; font-size: 13px; }
-              .pc-landing .score-green { color: var(--blue); }
-              .pc-landing .score-yellow { color: #ffc107; }
-              .pc-landing .score-red { color: var(--coral); }
-
-              .pc-landing .conversion-inner { max-width: 760px; text-align: center; position: relative; }
-              .pc-landing .conversion-inner::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px; height: 400px; background: radial-gradient(ellipse, var(--blue-dim) 0%, transparent 70%); pointer-events: none; }
-              .pc-landing .conversion h2 { margin-bottom: 20px; position: relative; }
-              .pc-landing .conversion > .conversion-inner > p { font-size: 18px; color: var(--text-secondary); max-width: 480px; margin: 0 auto 48px; line-height: 1.75; position: relative; }
-              .pc-landing .conversion-ctas { display: flex; gap: 16px; justify-content: center; position: relative; margin-bottom: 48px; }
-              .pc-landing .conversion-note { font-size: 13px; color: var(--text-tertiary); position: relative; }
-
-              .pc-landing footer { padding: 80px 48px 40px; border-top: 1px solid var(--border); }
-              .pc-landing .footer-inner { max-width: 1100px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr 1fr 1.5fr; gap: 48px; }
-              .pc-landing .footer-brand p { font-size: 14px; color: var(--text-tertiary); margin-top: 16px; line-height: 1.6; max-width: 280px; }
-              .pc-landing .footer-socials { display: flex; gap: 12px; margin-top: 20px; }
-              .pc-landing .footer-social { width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--text-tertiary); text-decoration: none; font-size: 14px; transition: all 0.2s; }
-              .pc-landing .footer-social:hover { border-color: var(--border-light); color: var(--text-primary); }
-              .pc-landing .footer-col h4 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); margin-bottom: 20px; }
-              .pc-landing .footer-col a { display: block; color: var(--text-secondary); text-decoration: none; font-size: 14px; margin-bottom: 12px; transition: color 0.2s; }
-              .pc-landing .footer-col a:hover { color: var(--text-primary); }
-              .pc-landing .footer-subscribe-input { display: flex; gap: 8px; margin-top: 12px; }
-              .pc-landing .footer-subscribe-input input { flex: 1; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--text-primary); font-family: var(--font-body); outline: none; transition: border-color 0.2s; }
-              .pc-landing .footer-subscribe-input input:focus { border-color: var(--blue); }
-              .pc-landing .footer-subscribe-input input::placeholder { color: var(--text-tertiary); }
-               .pc-landing .footer-subscribe-input button { background: linear-gradient(135deg, var(--blue), var(--purple)); color: var(--bg-primary); border: none; border-radius: 8px; padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font-body); transition: opacity 0.2s; }
-              .pc-landing .footer-subscribe-input button:hover { opacity: 0.9; }
-              .pc-landing .footer-bottom { max-width: 1100px; margin: 48px auto 0; padding-top: 24px; border-top: 1px solid var(--border); text-align: center; font-size: 13px; color: var(--text-tertiary); }
-
-              /* ── Box Breathing Section ─────────────────────────────────── */
-              .pc-landing .breathing { padding: 120px 24px; position: relative; }
-              .pc-landing .breathing::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--border-light), transparent); }
-              .pc-landing .breathing-inner { max-width: 860px; margin: 0 auto; }
-              .pc-landing .breathing-header { text-align: center; margin-bottom: 56px; }
-              .pc-landing .breathing-header h2 em { font-style: italic; color: var(--blue); }
-              .pc-landing .breathing-header p { font-size: 17px; color: var(--text-secondary); max-width: 620px; margin: 0 auto; line-height: 1.75; }
-
-              /* Shared panel */
-              .pc-landing .bb-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 24px; padding: 48px 40px; text-align: center; }
-
-              /* Phase grid (ready state) */
-              .pc-landing .bb-phase-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px; }
-              .pc-landing .bb-phase-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 14px; padding: 20px 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-              .pc-landing .bb-phase-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
-              .pc-landing .bb-phase-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-              .pc-landing .bb-phase-secs { font-family: var(--font-mono); font-size: 12px; color: var(--text-tertiary); }
-
-              /* Fact bar */
-              .pc-landing .bb-fact { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 20px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 32px; flex-wrap: wrap; }
-              .pc-landing .bb-fact-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-tertiary); }
-              .pc-landing .bb-fact-value { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
-              .pc-landing .bb-cta-btn { margin: 0 auto; }
-
-              /* Active state */
-              .pc-landing .bb-round-badge { display: inline-block; font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--blue); background: rgba(106,154,250,0.1); border: 1px solid rgba(106,154,250,0.2); border-radius: 100px; padding: 6px 16px; margin-bottom: 40px; }
-              .pc-landing .bb-circle-wrap { display: flex; align-items: center; justify-content: center; margin-bottom: 36px; }
-              .pc-landing .bb-ring { width: 240px; height: 240px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; --bb-color: #6A9AFA; }
-              .pc-landing .bb-circle { width: 180px; height: 180px; border-radius: 50%; border: 3px solid #6A9AFA; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; transition: transform 4s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.5s ease, box-shadow 0.5s ease; transform: scale(0.85); }
-              .pc-landing .bb-inhale   { transform: scale(1.15) !important; }
-              .pc-landing .bb-hold-in  { transform: scale(1.15) !important; }
-              .pc-landing .bb-exhale   { transform: scale(0.75) !important; }
-              .pc-landing .bb-hold-out { transform: scale(0.75) !important; }
-              .pc-landing .bb-circle-phase { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--text-secondary); }
-              .pc-landing .bb-circle-count { font-family: var(--font-display); font-size: 52px; font-weight: 400; color: var(--text-primary); line-height: 1; }
-              /* Phase pips */
-              .pc-landing .bb-pips { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
-              .pc-landing .bb-pip { width: 10px; height: 10px; border-radius: 50%; background: var(--border-light); transition: background 0.4s ease, transform 0.3s ease; }
-              .pc-landing .bb-pip-active { transform: scale(1.4); }
-              .pc-landing .bb-hint { font-size: 14px; color: var(--text-tertiary); font-style: italic; }
-
-              /* Complete state */
-              .pc-landing .bb-complete-panel { }
-              .pc-landing .bb-done-icon { width: 72px; height: 72px; border-radius: 50%; background: rgba(106,154,250,0.12); border: 2px solid rgba(106,154,250,0.3); display: flex; align-items: center; justify-content: center; font-size: 30px; margin: 0 auto 24px; color: var(--blue); }
-              .pc-landing .bb-done-title { font-family: var(--font-display); font-size: 32px; font-weight: 400; margin-bottom: 16px; }
-              .pc-landing .bb-done-copy { font-size: 16px; color: var(--text-secondary); max-width: 560px; margin: 0 auto 36px; line-height: 1.75; }
-              .pc-landing .bb-done-ctas { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
-              /* ─────────────────────────────────────────────────────────── */
-
-              @keyframes fadeUp {
-                from { opacity: 0; transform: translateY(20px); }
-                to { opacity: 1; transform: translateY(0); }
-              }
-
-
-              .pc-landing .reveal {
-                opacity: 0;
-                transform: translateY(30px);
-                transition: all 0.7s cubic-bezier(0.16, 1, 0.3, 1);
-              }
-
-              .pc-landing .reveal.visible {
-                opacity: 1;
-                transform: translateY(0);
-              }
-
-              @media (max-width: 900px) {
-                .pc-landing nav { padding: 16px 24px; }
-                .pc-landing .nav-links a:not(.nav-cta) { display: none; }
-                .pc-landing .problem-stats { grid-template-columns: 1fr; }
-                .pc-landing .sim-grid { grid-template-columns: 1fr; }
-                .pc-landing .pillars-grid { grid-template-columns: 1fr; }
-                .pc-landing .testimonials { grid-template-columns: 1fr; }
-                .pc-landing .workflow-grid { grid-template-columns: 1fr; }
-                .pc-landing .footer-inner { grid-template-columns: 1fr 1fr; gap: 36px; }
-                .pc-landing .hero-proof-logos { flex-wrap: wrap; justify-content: center; gap: 28px; }
-                .pc-landing .hero-ctas,
-                .pc-landing .conversion-ctas { flex-direction: column; align-items: stretch; }
-              }
-            `}</style>
-        </div>
+        if (!wrapper) return;
+        // Pick the most-visible section as the authoritative one
+        let dominant: Element | null = null;
+        let best = 0;
+        visibilityMap.forEach((ratio, el) => {
+          if (ratio > best) { best = ratio; dominant = el; }
+        });
+        if (dominant) {
+          const isLight = (dominant as HTMLElement).dataset.bg === 'light';
+          wrapper.style.setProperty('--pc2-bg', isLight ? LIGHT_BG : DARK_BG);
+          wrapper.style.setProperty('--pc2-nav-dark', isLight ? '1' : '0');
+        }
+      },
+      { threshold: [0, 0.15, 0.5, 1.0] }
     );
+    document.querySelectorAll<HTMLElement>('[data-bg]').forEach(el => bgObserver.observe(el));
+
+    // ── Staggered reveal ────────────────────────────────────────────────────
+    const io = new IntersectionObserver(
+      (entries) => entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('pc2-visible');
+          io.unobserve(e.target);
+        }
+      }),
+      { threshold: 0.08, rootMargin: '0px 0px -40px 0px' }
+    );
+    document.querySelectorAll('.pc2-reveal').forEach(el => io.observe(el));
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      io.disconnect();
+      bgObserver.disconnect();
+    };
+  }, [tick]);
+
+  const navScrolled = scrollY > 60;
+
+  return (
+    <div className="pc2" ref={wrapperRef} style={{ '--pc2-bg': 'rgb(6,6,8)', '--pc2-nav-dark': '0' } as React.CSSProperties}>
+      {/* ── NAV ── */}
+      <nav className={`pc2-nav ${navScrolled ? 'pc2-nav--scrolled' : ''}`}>
+        <a href="#top" className="pc2-logo">
+          <img src="/pulsecheck-logo.svg" alt="PulseCheck" className="pc2-logo-img" />
+          PulseCheck
+        </a>
+        <div className="pc2-nav-links">
+          <a href="#nora">Nora AI</a>
+          <a href="#coach">Coach Dashboard</a>
+          <a href="#clinical">Clinical Safety</a>
+          <a href="#pilot" className="pc2-nav-cta">Request Pilot</a>
+        </div>
+      </nav>
+
+      {/* ── HERO — dark ── */}
+      <section className="pc2-hero" id="top" ref={heroRef} data-bg="dark">
+        <div className="pc2-hero-glow" />
+        <div className="pc2-hero-inner">
+          <div className="pc2-hero-text">
+            <div className="pc2-badge">
+              <span className="pc2-badge-dot" />
+              Mental Performance OS for Elite Programs
+            </div>
+            <h1 className="pc2-h1">
+              Your athletes are physically ready.<br />
+              <em>Are they mentally built to execute?</em>
+            </h1>
+            <p className="pc2-hero-sub">
+              PulseCheck turns a 2-minute daily check-in into real-time readiness intelligence — for athletes, coaches, and clinical staff.
+            </p>
+            <div className="pc2-hero-ctas">
+              <a href="mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Pilot%20Inquiry" className="pc2-btn-primary">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
+                Request Department Pilot
+              </a>
+              <a href="#nora" className="pc2-btn-secondary">See How It Works →</a>
+            </div>
+            <div className="pc2-hero-proof">
+              <span className="pc2-proof-label">Trusted by forward-thinking programs</span>
+              <div className="pc2-proof-logos">
+                {['ACC', 'LAUNCH', 'FOUNDER UNIVERSITY', 'COOLEY LLP'].map(l => (
+                  <span key={l} className="pc2-proof-logo">{l}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Phone + floating cards */}
+          <div className="pc2-hero-visual">
+            {/* Floating card — Reaction Time (top, slightly left of phone) */}
+            <div className="pc2-float-card pc2-float-card--tl">
+              <div className="pc2-fc-icon" style={{ background: 'rgba(160,94,248,0.15)', color: '#A05EF8', position: 'relative', overflow: 'hidden' }}>
+                ⚡
+                <span className="pc2-fc-ping" />
+              </div>
+              <div>
+                <strong>Reaction Time Test</strong>
+                <span>Optimal response · <span className="pc2-ticker">0.24s</span></span>
+                <div className="pc2-fc-bar-wrap">
+                  <div className="pc2-fc-bar" style={{ background: 'linear-gradient(90deg,#A05EF8,#6A9AFA)', animationDelay: '0s' }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Floating card — Focus Score (right, overlapping phone) */}
+            <div className="pc2-float-card pc2-float-card--r">
+              <div className="pc2-fc-ring-wrap">
+                <svg viewBox="0 0 44 44" width="44" height="44" className="pc2-fc-ring-svg">
+                  <circle cx="22" cy="22" r="17" stroke="rgba(160,94,248,0.18)" strokeWidth="4" fill="none" />
+                  <circle cx="22" cy="22" r="17" stroke="#A05EF8" strokeWidth="4" fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray="106.8"
+                    className="pc2-fc-ring-arc"
+                  />
+                </svg>
+                <span className="pc2-fc-ring-label">94</span>
+              </div>
+              <div>
+                <strong>Focus Score</strong>
+                <span className="pc2-fc-elite">Elite Zone ↑</span>
+              </div>
+            </div>
+
+            {/* Floating card — Box Breathing (bottom left) */}
+            <div className="pc2-float-card pc2-float-card--bl">
+              <div className="pc2-fc-breath-wrap">
+                <div className="pc2-fc-breath-ring" />
+                <span className="pc2-fc-breath-icon">🫁</span>
+              </div>
+              <div>
+                <strong>Box Breathing</strong>
+                <span>Stress <span className="pc2-stress-down">↓ 18%</span> · Complete</span>
+                <div className="pc2-fc-bar-wrap" style={{ marginTop: '5px' }}>
+                  <div className="pc2-fc-bar" style={{ background: 'linear-gradient(90deg,#22D3EE,#6A9AFA)', width: '100%', animationDelay: '0.4s' }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Floating card — NEW: Readiness Score (left middle, between TL and BL) */}
+            <div className="pc2-float-card pc2-float-card--ml">
+              <div className="pc2-fc-icon" style={{ background: 'rgba(34,197,94,0.12)', color: '#22C55E', position: 'relative', overflow: 'hidden' }}>
+                📈
+              </div>
+              <div>
+                <strong>Readiness Score</strong>
+                <span>Today · <span style={{ color: '#22C55E', fontWeight: 600 }}>91 / 100</span></span>
+                <div style={{ display: 'flex', gap: 3, marginTop: 6 }}>
+                  {[1, 1, 1, 1, 0.6, 0.3, 0.2, 0.15, 0.1].map((h, i) => (
+                    <div key={i} style={{
+                      width: 4, borderRadius: 3,
+                      height: `${8 + h * 14}px`,
+                      background: h > 0.5 ? '#22C55E' : 'rgba(255,255,255,0.12)',
+                      animation: `pcBarH 1.6s cubic-bezier(0.22,1,0.36,1) ${1.8 + i * 0.07}s both`
+                    }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Phone frame */}
+            <div className="pc2-phone">
+              <div className="pc2-phone-notch" />
+              <div className="pc2-phone-screen">
+                {/* App header */}
+                <div className="pc2-app-header">
+                  <div className="pc2-app-logo">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="#E0FE10" strokeWidth="2.5" width="14" height="14"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
+                    PulseCheck
+                  </div>
+                  <div className="pc2-app-live">● LIVE</div>
+                </div>
+
+                {/* ── Animated chat sequence ────────────────────────── */}
+                {/* Step 1: Nora opens (0s) */}
+                <div className="pc2-chat-bubble pc2-chat-nora pc2-seq" style={{ animationDelay: '0.2s' }}>
+                  Hi Tremaine 👋 Today is game day. How are you feeling?
+                </div>
+                {/* Step 2: Athlete replies uneasy (0.9s) */}
+                <div className="pc2-chat-bubble pc2-chat-user pc2-seq" style={{ animationDelay: '0.9s' }}>
+                  I'm feeling <em>really uneasy</em> about today's game. Nervous, can't focus.
+                </div>
+                {/* Step 3: Nora detects elevated stress (1.8s) */}
+                <div className="pc2-chat-bubble pc2-chat-nora pc2-seq" style={{ animationDelay: '1.8s' }}>
+                  <span style={{ color: '#F97316', fontWeight: 600 }}>⚠ Elevated cortisol pattern detected.</span> HRV dipped 14%. Let's reset your nervous system right now.
+                </div>
+                {/* Step 4: Nora prescribes Box Breathing (2.8s) */}
+                <div className="pc2-chat-bubble pc2-chat-nora pc2-seq pc2-chat-action" style={{ animationDelay: '2.8s' }}>
+                  <div style={{ fontWeight: 700, marginBottom: 4, color: '#A05EF8' }}>🫁 Box Breathing · 4 rounds</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6 }}>Inhale 4s · Hold 4s · Exhale 4s · Hold 4s<br />Used by Navy SEALs to lower acute stress</div>
+                  <button className="pc2-chat-btn">Start Now →</button>
+                </div>
+
+                {/* Step 5: Box Breathing HUD (4.0s) */}
+                <div className="pc2-breath-hud pc2-seq" style={{ animationDelay: '4.0s' }}>
+                  <div className="pc2-breath-ring-outer">
+                    <div className="pc2-breath-ring-inner" />
+                    <span className="pc2-breath-phase">Inhale</span>
+                  </div>
+                  <div className="pc2-breath-stats">
+                    <span className="pc2-breath-stat"><span style={{ color: '#A05EF8' }}>HRV</span> recovering</span>
+                    <span className="pc2-breath-stat"><span style={{ color: '#22C55E' }}>Stress</span> ↓ 18%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab bar like Flighty */}
+        <div className="pc2-tabbar">
+          {([['preflight', '🧠 Nora Check-in'], ['game', '⚡ Simulations'], ['coach', '📊 Coach View'], ['clinical', '🛡 Clinical Safety']] as const).map(([k, label]) => (
+            <button key={k} className={`pc2-tab ${activeTab === k ? 'pc2-tab--active' : ''}`}
+              onClick={() => { setActiveTab(k); document.getElementById(k === 'preflight' ? 'nora' : k === 'game' ? 'sims' : k === 'coach' ? 'coach' : 'clinical')?.scrollIntoView({ behavior: 'smooth' }); }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      {/* ── SECTION 1 — light — Nora AI ── */}
+      <section className="pc2-section pc2-section--light" id="nora" data-bg="light">
+        <div className="pc2-section-inner pc2-section-inner--flip">
+          <div className="pc2-section-text pc2-reveal">
+            <span className="pc2-section-label" style={{ color: '#A05EF8', background: 'rgba(160,94,248,0.08)' }}>💬 Nora AI Companion</span>
+            <h2 className="pc2-h2">An always-on mental performance<br /><em>conversation.</em></h2>
+            <p className="pc2-section-sub">Nora runs a frictionless 2-minute daily check-in via iMessage-style chat. She reads biometric context from HealthKit, asks targeted questions, and responds with clinically grounded mental performance drills — all in real time.</p>
+            <ul className="pc2-checklist">
+              {['Frictionless iMessage-style daily mental reps', 'Real-time response to anxiety, fatigue & focus drops', 'Personalized drills: Box Breathing, Kill Switch, 3-Second Reset', 'Privacy-first — athletes control their coach visibility'].map(t => (
+                <li key={t}><span className="pc2-check">✓</span>{t}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="pc2-section-visual pc2-reveal">
+            {/* Full chat mockup */}
+            <div className="pc2-mockup pc2-mockup--chat">
+              <div className="pc2-mockup-bar">
+                <div className="pc2-mockup-dots"><span /><span /><span /></div>
+                <span className="pc2-mockup-title">Nora · Daily Check-in</span>
+              </div>
+              <div className="pc2-chat-log">
+                <div className="pc2-cl-nora">Hi Tremaine, today is game day. How are you feeling?</div>
+                <div className="pc2-cl-user">I feel okay, just trying to get locked in.</div>
+                <div className="pc2-cl-nora">Your baseline looks great today. RHR at 42 bpm, HRV is high — excellent CNS recovery. Your body is primed for today.</div>
+                <div className="pc2-cl-user">I'm not going to lie, I'm a little nervous about today.</div>
+                <div className="pc2-cl-nora">Talk to me. What feels different about today?</div>
+                <div className="pc2-cl-user">Everything just feels like it's on the line.</div>
+                <div className="pc2-cl-nora">OK. Let's slow it down. I want to run you through Box Breathing — the same technique Navy SEALs use during acute stress. Ready?</div>
+                <div className="pc2-cl-system">
+                  <span>🫁</span> Box Breathing · 4 Rounds Complete
+                  <div className="pc2-cl-metrics">
+                    <span>HR ↓ 72→58 bpm</span>
+                    <span>HRV ↑ +12</span>
+                    <span>Calm ↑ 85</span>
+                  </div>
+                </div>
+                <div className="pc2-cl-nora">Great work. How are you feeling now?</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── SECTION 2 — off-white — Simulations ── */}
+      <section className="pc2-section pc2-section--offwhite" id="sims" data-bg="light">
+        <div className="pc2-section-inner">
+          <div className="pc2-section-text pc2-reveal">
+            <span className="pc2-section-label" style={{ color: '#A05EF8', background: 'rgba(160,94,248,0.08)' }}>▶ Mental Simulations</span>
+            <h2 className="pc2-h2">Train the mind <em>before</em><br />the clutch moment.</h2>
+            <p className="pc2-section-sub">Run pressure scenarios before game day. PulseCheck coaches breathing, attention control, and execution cues in the exact moments athletes unravel.</p>
+            <div className="pc2-sim-steps">
+              {[
+                { icon: '⚠', color: '#FF6B6B', label: 'Trigger', text: 'Missed two free throws. Crowd gets loud. Self-talk turns negative.' },
+                { icon: '◉', color: '#6A9AFA', label: 'Nora Prompt', text: '"Reset in 8 seconds: exhale long, eyes on rim center, cue: smooth follow-through."' },
+                { icon: '✦', color: '#A05EF8', label: 'Execution', text: 'Athlete slows heart rate, blocks crowd noise, commits to next-shot routine.' },
+              ].map(s => (
+                <div key={s.label} className="pc2-sim-step" style={{ borderLeftColor: s.color }}>
+                  <div className="pc2-sim-step-icon" style={{ background: `${s.color}18`, color: s.color }}>{s.icon}</div>
+                  <div><strong style={{ color: s.color }}>{s.label}</strong><p>{s.text}</p></div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="pc2-section-visual pc2-reveal">
+            <div className="pc2-mockup pc2-mockup--sim">
+              <div className="pc2-mockup-bar">
+                <div className="pc2-mockup-dots"><span /><span /><span /></div>
+                <span className="pc2-mockup-title">Simulation State · Q4 01:42 · Down 1</span>
+              </div>
+              <div className="pc2-sim-meters">
+                {[{ label: 'Pressure', val: 87, color: '#FF6B6B' }, { label: 'Focus', val: 62, color: '#ffc107' }, { label: 'Composure', val: 71, color: '#6A9AFA' }].map(m => (
+                  <div key={m.label} className="pc2-sim-meter">
+                    <div className="pc2-sm-label">{m.label}</div>
+                    <div className="pc2-sm-val" style={{ color: m.color }}>{m.val}%</div>
+                    <div className="pc2-sm-bar"><div className="pc2-sm-fill" style={{ width: `${m.val}%`, background: m.color }} /></div>
+                  </div>
+                ))}
+              </div>
+              <div className="pc2-sim-interventions">
+                {[{ i: '⚠', c: '#FF6B6B', t: 'Detect the Spiral', s: 'Negative self-talk flagged' },
+                { i: '◉', c: '#22D3EE', t: 'Issue Micro-Reset', s: 'Breath cadence + short cue' },
+                { i: '◎', c: '#6A9AFA', t: 'Re-Attach to Task', s: 'Attention narrows to one action' },
+                { i: '✦', c: '#A05EF8', t: 'Lock In Confidence', s: 'Reinforcement makes it automatic' },
+                ].map(s => (
+                  <div key={s.t} className="pc2-intervention">
+                    <div className="pc2-int-icon" style={{ background: `${s.c}14`, color: s.c }}>{s.i}</div>
+                    <div><strong>{s.t}</strong><span>{s.s}</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── SECTION 3 — light — Coach Dashboard ── */}
+      <section className="pc2-section pc2-section--light" id="coach" data-bg="light">
+        <div className="pc2-section-inner pc2-section-inner--flip">
+          <div className="pc2-section-text pc2-reveal">
+            <span className="pc2-section-label" style={{ color: '#A05EF8', background: 'rgba(160,94,248,0.08)' }}>📊 Coach Intelligence</span>
+            <h2 className="pc2-h2">Team-wide readiness.<br /><em>Before the tape.</em></h2>
+            <p className="pc2-section-sub">The Coach Dashboard gives staff a real-time roster map — Green/Yellow/Orange/Red — with actionable briefings and proactive alerts before athletes even step on the field.</p>
+            <ul className="pc2-checklist">
+              {['Green/Yellow/Orange/Red roster map at a glance', 'Nora-generated briefing per athlete before each session', 'Proactive alerts when performance risk rises', 'Exportable reports & trend analytics'].map(t => (
+                <li key={t}><span className="pc2-check">✓</span>{t}</li>
+              ))}
+            </ul>
+          </div>
+          <div className="pc2-section-visual pc2-reveal">
+            <div className="pc2-mockup pc2-mockup--dashboard">
+              <div className="pc2-mockup-bar">
+                <div className="pc2-mockup-dots"><span /><span /><span /></div>
+                <span className="pc2-mockup-title">PulseCheck · Coach Dashboard · Game Day</span>
+              </div>
+              {/* Alert card */}
+              <div className="pc2-dash-alert">
+                <div className="pc2-dash-alert-icon">⚠</div>
+                <div>
+                  <strong>Nora Alert — T. Grant · Elevated Anxiety</strong>
+                  <p>Physical baseline excellent (RHR 42, 8h sleep). Residual game-day anxiety. Box Breathing completed. Recommend pre-game check-in.</p>
+                </div>
+              </div>
+              {/* Roster */}
+              <div className="pc2-dash-label">Team Status · 22/25 Checked In</div>
+              <div className="pc2-roster">
+                {[
+                  { n: 'T. Grant', p: 'DB', s: 'elevated', t: 'Elevated Anxiety' },
+                  { n: 'K. Thompson', p: 'LB', s: 'critical', t: 'Escalated — Clinical' },
+                  { n: 'J. Rodriguez', p: 'QB', s: 'optimal', t: 'Game Ready' },
+                  { n: 'M. Williams', p: 'WR', s: 'optimal', t: 'Optimal' },
+                  { n: 'D. Okafor', p: 'DT', s: 'warning', t: 'Low Sleep 4.5h' },
+                  { n: 'E. Campbell', p: 'OT', s: 'nocheckin', t: 'No Check-in' },
+                ].map(r => (
+                  <div key={r.n} className={`pc2-roster-row ${r.s === 'critical' ? 'pc2-roster-row--critical' : ''}`}>
+                    <div className={`pc2-roster-dot pc2-roster-dot--${r.s}`} />
+                    <span className="pc2-roster-name">{r.n}</span>
+                    <span className="pc2-roster-pos">{r.p}</span>
+                    <span className={`pc2-roster-status pc2-roster-status--${r.s}`}>{r.t}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── SECTION 4 — dark — Clinical Safety ── */}
+      <section className="pc2-section pc2-section--dark" id="clinical" data-bg="dark">
+        <div className="pc2-section-inner">
+          <div className="pc2-section-text pc2-reveal">
+            <span className="pc2-section-label" style={{ color: '#A05EF8', background: 'rgba(160,94,248,0.08)' }}>🛡 Clinical Safety Net</span>
+            <h2 className="pc2-h2 pc2-h2--light">When it matters most,<br /><em>the system escalates.</em></h2>
+            <p className="pc2-section-sub pc2-section-sub--light">When Nora detects clinical-level distress, PulseCheck automatically packages the full context — biometrics, chat sentiment, trend data — and initiates a secure, HIPAA-compliant handoff to AuntEdna, your clinical mental health platform.</p>
+            <ul className="pc2-checklist pc2-checklist--dark">
+              {['Critical alerts bypass Do Not Disturb on clinician devices', 'Full context snapshot: sleep, HRV, chat sentiment', 'Restricted visibility — HIPAA-sensitive case handling', 'Secure handoff to clinical staff for immediate follow-up'].map(t => (
+                <li key={t}><span className="pc2-check" style={{ color: '#A05EF8' }}>✓</span><span style={{ color: '#a1a1aa' }}>{t}</span></li>
+              ))}
+            </ul>
+          </div>
+          <div className="pc2-section-visual pc2-reveal">
+            <div className="pc2-mockup pc2-mockup--clinical">
+              <div className="pc2-mockup-bar pc2-mockup-bar--dark">
+                <div className="pc2-mockup-dots"><span /><span /><span /></div>
+                <span className="pc2-mockup-title pc2-mockup-title--dark pc2-auntedna-title">
+                  Clinical handoff <strong>Powered by AuntEdna</strong>
+                </span>
+              </div>
+              <div className="pc2-clinical-alert">
+                <div className="pc2-ca-header">
+                  <div className="pc2-ca-icon">🔴</div>
+                  <div>
+                    <strong>⚠ Critical Alert</strong>
+                    <span>K. Thompson #52 · Flagged for immediate attention</span>
+                  </div>
+                  <span className="pc2-ca-time">now</span>
+                </div>
+                <p>Critical Alert — Bypasses Do Not Disturb</p>
+              </div>
+              <div className="pc2-clinical-profile">
+                <div className="pc2-cp-avatar">#52</div>
+                <div>
+                  <strong>K. Thompson</strong>
+                  <span>Linebacker · Junior · 21 yrs</span>
+                </div>
+                <span className="pc2-cp-badge">CRITICAL</span>
+              </div>
+              <div className="pc2-clinical-stats">
+                {[{ l: 'Risk Level', v: 'Critical', c: '#EF4444' }, { l: 'Sleep', v: '3.2h', c: '#F97316' }, { l: 'HRV', v: '↓ Low', c: '#EF4444' }, { l: 'Sentiment', v: 'Distress', c: '#A05EF8' }].map(s => (
+                  <div key={s.l} className="pc2-cstat">
+                    <div className="pc2-cstat-val" style={{ color: s.c }}>{s.v}</div>
+                    <div className="pc2-cstat-label">{s.l}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="pc2-clinical-briefing">
+                <strong>Nora Briefing</strong>
+                <p>Thompson reported acute hopelessness following in-practice injury. Sentiment scoring indicates depression-adjacent language. Sleep has degraded over 5 days (avg 3.2h). Clinical intervention recommended immediately.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── STATS — dark ── */}
+      <section className="pc2-stats">
+        {[{ v: '85%', l: 'of coaches say mental readiness impacts performance' }, { v: '2 min', l: 'daily check-in that captures what hours of observation miss' }, { v: '0', l: 'tools currently measure it in real time for coaching staff' }].map(s => (
+          <div key={s.l} className="pc2-stat">
+            <div className="pc2-stat-val">{s.v}</div>
+            <div className="pc2-stat-label">{s.l}</div>
+          </div>
+        ))}
+      </section>
+
+      {/* ── CTA ── */}
+      <section className="pc2-cta" id="pilot">
+        <div className="pc2-cta-glow" />
+        <div className="pc2-cta-inner">
+          <h2 className="pc2-cta-h2">Ready to see what your athletes <em>aren't telling you?</em></h2>
+          <p>Join the programs using PulseCheck to turn mental readiness from a blind spot into a competitive advantage.</p>
+          <div className="pc2-cta-actions">
+            <a href="mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Pilot%20Inquiry" className="pc2-btn-primary">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
+              Request Department Pilot
+            </a>
+            <button className="pc2-btn-secondary" onClick={onJoinWaitlist}>Join Waitlist →</button>
+          </div>
+          <p className="pc2-cta-note">Free pilot for qualifying D1 programs · No commitment required</p>
+        </div>
+      </section>
+
+      {/* ── FOOTER ── */}
+      <footer className="pc2-footer">
+        <div className="pc2-footer-inner">
+          <div>
+            <div className="pc2-logo" style={{ marginBottom: 12 }}>
+              <div className="pc2-logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg></div>
+              PulseCheck
+            </div>
+            <p style={{ fontSize: 14, color: '#5a5d65', maxWidth: 260, lineHeight: 1.6 }}>The mental performance OS for elite athletic programs.</p>
+          </div>
+          <div className="pc2-footer-col"><h4>Product</h4><a href="#nora">For Athletes</a><a href="#coach">For Coaches</a><a href="#clinical">Clinical Safety</a></div>
+          <div className="pc2-footer-col"><h4>Company</h4><a href="#top">About</a><a href="#top">Privacy</a><a href="#top">Terms</a></div>
+        </div>
+        <div className="pc2-footer-bottom">© 2026 Pulse Intelligence Labs, Inc. All rights reserved.</div>
+      </footer>
+
+      <style>{`/* ============================================================
+         PULSECHECK v2 — Scroll-Driven Dynamic Styles
+         All section backgrounds are TRANSPARENT so --pc2-bg flows
+         underneath them like a single continuous canvas.
+         ============================================================ */
+
+        .pc2 {
+          font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+          -webkit-font-smoothing: antialiased;
+          background: var(--pc2-bg, rgb(6,6,8));
+          color: #111;
+          overflow-x: hidden;
+          /* 500ms ease: runs at full speed the instant the IO threshold fires */
+          transition: background 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .pc2 *, .pc2 *::before, .pc2 *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        /* ── NAV ── */
+        .pc2-nav {
+          position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 22px 56px;
+          transition: padding 0.4s cubic-bezier(0.16,1,0.3,1),
+                      background 0.5s cubic-bezier(0.16,1,0.3,1),
+                      border-color 0.5s;
+        }
+        /* JS sets --pc2-nav-dark; use it to blend nav glass */
+        .pc2-nav--scrolled {
+          background: rgba(255,255,255,calc(var(--pc2-nav-dark,0) * 0.88 + (1 - var(--pc2-nav-dark,0)) * 0.08));
+          backdrop-filter: blur(24px) saturate(180%);
+          -webkit-backdrop-filter: blur(24px) saturate(180%);
+          border-bottom: 1px solid rgba(255,255,255,calc(0.1 - var(--pc2-nav-dark,0) * 0.06));
+          padding: 14px 56px;
+          box-shadow: 0 1px 0 rgba(0,0,0,calc(var(--pc2-nav-dark,0) * 0.08));
+        }
+        .pc2-logo {
+          display: flex; align-items: center; gap: 10px;
+          font-weight: 700; font-size: 18px; text-decoration: none;
+          /* Blend white→dark as nav-dark progresses */
+          color: rgb(
+            calc(255 - var(--pc2-nav-dark,0) * 249),
+            calc(255 - var(--pc2-nav-dark,0) * 249),
+            calc(255 - var(--pc2-nav-dark,0) * 247)
+          );
+          transition: color 0.4s;
+        }
+        .pc2-logo-icon {
+          width: 32px; height: 32px; background: rgba(224,254,16,0.15);
+          border-radius: 8px; display: flex; align-items: center; justify-content: center;
+        }
+        .pc2-logo-img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+        .pc2-logo-icon svg { width: 16px; height: 16px; stroke: #A05EF8; }
+        .pc2-nav-links { display: flex; align-items: center; gap: 32px; }
+        .pc2-nav-links a {
+          text-decoration: none; font-size: 14px; font-weight: 500;
+          transition: color 0.5s;
+          color: rgba(
+            calc(255 - var(--pc2-nav-dark,0) * 199),
+            calc(255 - var(--pc2-nav-dark,0) * 199),
+            calc(255 - var(--pc2-nav-dark,0) * 199),
+            0.75
+          );
+        }
+        .pc2-nav-links a:hover { opacity: 1; }
+        .pc2-nav-cta {
+          background: linear-gradient(135deg,#6A9AFA,#A05EF8) !important;
+          color: #fff !important; padding: 9px 20px !important;
+          border-radius: 8px; font-weight: 600 !important;
+          opacity: 1 !important;
+          box-shadow: 0 4px 20px rgba(106,154,250,0.3);
+        }
+
+        /* ── HERO ── */
+        .pc2-hero {
+          min-height: 100vh;
+          /* Transparent so --pc2-bg shows through, but keep the radial glows */
+          background: transparent;
+          position: relative; overflow: hidden;
+          display: flex; flex-direction: column;
+        }
+        /* Keep the dark radial glows always — they look fine even as page lightens because
+           they fade out naturally when background reaches white */
+        .pc2-hero::before {
+          content: '';
+          position: absolute; top: -20%; left: 50%; transform: translateX(-50%);
+          width: 1100px; height: 800px;
+          background: radial-gradient(ellipse, rgba(106,154,250,0.09) 0%, transparent 65%);
+          pointer-events: none;
+        }
+        .pc2-hero-glow {
+          position: absolute; top: 38%; left: 50%;
+          transform: translate(-50%,-50%);
+          width: 1000px; height: 700px;
+          background: radial-gradient(ellipse,
+            rgba(106,154,250,0.07) 0%,
+            rgba(160,94,248,0.04) 40%,
+            transparent 70%);
+          pointer-events: none;
+          animation: pcGlowPulse 5s ease-in-out infinite;
+        }
+        @keyframes pcGlowPulse {
+          0%,100% { opacity:0.8; transform:translate(-50%,-50%) scale(1); }
+          50%      { opacity:1;   transform:translate(-50%,-50%) scale(1.08); }
+        }
+        .pc2-hero-inner {
+          flex: 1; max-width: 1280px; margin: 0 auto; width: 100%;
+          padding: 140px 56px 60px;
+          display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center;
+        }
+
+        /* BADGE */
+        .pc2-badge {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 7px 16px;
+          border: 1px solid rgba(255,255,255,0.1); border-radius: 100px;
+          font-size: 12px; color: #aaa;
+          margin-bottom: 28px;
+          opacity: 0; animation: pcFadeUp 0.8s ease 0.2s forwards;
+          backdrop-filter: blur(8px);
+        }
+        .pc2-badge-dot {
+          width: 6px; height: 6px; background: #6A9AFA; border-radius: 50%;
+          animation: pcPulseDot 2s ease infinite;
+        }
+        @keyframes pcPulseDot {
+          0%,100% { box-shadow: 0 0 0 0 rgba(106,154,250,0.5); }
+          50%      { box-shadow: 0 0 0 7px transparent; }
+        }
+
+        /* HEADLINE */
+        .pc2-h1 {
+          font-size: clamp(38px,4.5vw,64px); line-height: 1.06;
+          font-weight: 700; letter-spacing: -0.03em; color: #fff;
+          margin-bottom: 24px;
+          opacity: 0; animation: pcFadeUp 0.9s cubic-bezier(0.16,1,0.3,1) 0.4s forwards;
+        }
+        .pc2-h1 em {
+          font-style: italic;
+          background: linear-gradient(135deg,#6A9AFA,#A05EF8);
+          -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+        .pc2-hero-sub {
+          font-size: 18px; color: rgba(255,255,255,0.55); line-height: 1.75;
+          margin-bottom: 40px; max-width: 480px;
+          opacity: 0; animation: pcFadeUp 0.9s cubic-bezier(0.16,1,0.3,1) 0.55s forwards;
+        }
+        .pc2-hero-ctas {
+          display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 52px;
+          opacity: 0; animation: pcFadeUp 0.9s cubic-bezier(0.16,1,0.3,1) 0.7s forwards;
+        }
+        .pc2-btn-primary {
+          display: inline-flex; align-items: center; gap: 8px;
+          background: linear-gradient(135deg,#6A9AFA,#A05EF8);
+          color: #fff; padding: 14px 28px; border-radius: 12px;
+          font-weight: 600; font-size: 15px; text-decoration: none;
+          border: none; cursor: pointer;
+          box-shadow: 0 4px 24px rgba(106,154,250,0.35);
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .pc2-btn-primary:hover { transform:translateY(-2px); box-shadow:0 10px 36px rgba(106,154,250,0.4); }
+        .pc2-btn-primary svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .pc2-btn-secondary {
+          display: inline-flex; align-items: center; gap: 8px;
+          color: rgba(255,255,255,0.6); background: transparent;
+          padding: 14px 24px; border: 1px solid rgba(255,255,255,0.15);
+          border-radius: 12px; font-size: 15px; font-weight: 500;
+          text-decoration: none; cursor: pointer;
+          transition: color 0.2s, border-color 0.2s;
+        }
+        .pc2-btn-secondary:hover { color:#fff; border-color:rgba(255,255,255,0.35); }
+        .pc2-hero-proof {
+          opacity: 0; animation: pcFadeUp 0.9s cubic-bezier(0.16,1,0.3,1) 0.9s forwards;
+        }
+        .pc2-proof-label {
+          display: block; font-size: 11px; text-transform: uppercase;
+          letter-spacing: 0.12em; color: rgba(255,255,255,0.3); margin-bottom: 14px;
+        }
+        .pc2-proof-logos { display: flex; gap: 32px; flex-wrap: wrap; }
+        .pc2-proof-logo {
+          font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+          color: rgba(255,255,255,0.22);
+        }
+
+        /* HERO VISUAL */
+        .pc2-hero-visual {
+          position: relative; display: flex; justify-content: center; align-items: center;
+          opacity: 0; animation: pcFadeUp 1.1s cubic-bezier(0.16,1,0.3,1) 0.5s forwards;
+          /* Allow cards to bleed outside without clipping */
+          overflow: visible;
+          /* Reduced padding — cards are now close to phone so don't need as much room */
+          padding: 60px 120px;
+        }
+        /* Phone */
+        .pc2-phone {
+          width: 300px; height: 620px;
+          background: linear-gradient(180deg,#111214 0%,#0c0d0f 100%);
+          border-radius: 44px;
+          border: 1.5px solid rgba(255,255,255,0.1);
+          box-shadow:
+            0 0 0 1px rgba(255,255,255,0.04),
+            0 40px 80px rgba(0,0,0,0.7),
+            inset 0 1px 0 rgba(255,255,255,0.08);
+          position: relative; overflow: hidden; z-index: 2;
+          will-change: transform;
+        }
+        .pc2-phone-notch {
+          width: 100px; height: 28px; background: #111214;
+          border-radius: 0 0 18px 18px;
+          position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 3;
+        }
+
+        .pc2-app-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+        .pc2-app-logo { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#fff; }
+        .pc2-app-live { font-size:9px; color:#22C55E; font-weight:700; letter-spacing:0.07em; animation: pcPulseDot 2s ease infinite; }
+        .pc2-chat-bubble { padding:10px 14px; border-radius:16px; font-size:11px; line-height:1.5; margin-bottom:8px; max-width:85%; }
+        .pc2-chat-nora { background:rgba(106,154,250,0.12); color:#c0d0f0; border-bottom-left-radius:4px; }
+        .pc2-chat-user { background:rgba(224,254,16,0.1); color:#d0f0a0; border-bottom-right-radius:4px; align-self:flex-end; margin-left:auto; }
+        .pc2-bio-row { display:flex; gap:6px; margin-top:8px; }
+        .pc2-bio-chip { font-size:9px; padding:4px 8px; border-radius:20px; border:1px solid; color:#aaa; display:flex; align-items:center; gap:4px; }
+
+        /* ── Animated chat sequence inside phone ── */
+        /* Phone screen scrolls down as the conversation grows */
+        .pc2-phone-screen {
+          position: absolute; inset: 12px 8px 8px;
+          border-radius: 34px; overflow: hidden;
+          background: #0a0b0e;
+          display: flex; flex-direction: column;
+          padding: 36px 16px 16px;
+          /* Auto-scroll to bottom as messages appear */
+          justify-content: flex-end;
+        }
+        /* Each message fades + slides up in sequence */
+        .pc2-seq {
+          opacity: 0;
+          animation: pcSeqIn 0.55s cubic-bezier(0.16,1,0.3,1) forwards;
+        }
+        @keyframes pcSeqIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to   { opacity: 1; transform: none; }
+        }
+        /* Action card bubble (contains breathing prescription) */
+        .pc2-chat-action {
+          background: rgba(160,94,248,0.08) !important;
+          border: 1px solid rgba(160,94,248,0.2);
+          border-radius: 14px !important;
+          padding: 10px 13px !important;
+          margin-bottom: 8px;
+        }
+        /* "Start Now" button inside chat */
+        .pc2-chat-btn {
+          display: inline-block; margin-top: 8px;
+          background: #A05EF8; color: #fff; border: none;
+          border-radius: 8px; padding: 5px 12px;
+          font-size: 10px; font-weight: 700; cursor: pointer;
+          letter-spacing: 0.03em;
+        }
+
+        /* ── Box Breathing HUD (Step 5) ── */
+        .pc2-breath-hud {
+          display: flex; align-items: center; gap: 12px;
+          background: rgba(160,94,248,0.06);
+          border: 1px solid rgba(160,94,248,0.18);
+          border-radius: 14px; padding: 10px 12px;
+          margin-top: 4px;
+        }
+        .pc2-breath-ring-outer {
+          position: relative; width: 46px; height: 46px;
+          flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+        }
+        .pc2-breath-ring-outer::before {
+          content: ''; position: absolute; inset: 0;
+          border-radius: 50%;
+          border: 3px solid rgba(160,94,248,0.15);
+        }
+        .pc2-breath-ring-inner {
+          position: absolute; inset: 0; border-radius: 50%;
+          border: 3px solid #A05EF8;
+          animation: pcBreath 4s ease-in-out 4.2s infinite alternate;
+          transform: scale(0.55);
+        }
+        @keyframes pcBreath {
+          0%   { transform: scale(0.55); opacity: 0.5; border-color: #A05EF8; }
+          50%  { transform: scale(1);    opacity: 1;   border-color: #A05EF8; }
+          100% { transform: scale(0.55); opacity: 0.5; border-color: #22C55E; }
+        }
+        .pc2-breath-phase {
+          position: absolute; font-size: 8px; font-weight: 700;
+          color: #A05EF8; letter-spacing: 0.05em;
+          animation: pcBreathLabel 4s ease-in-out 4.2s infinite alternate;
+        }
+        @keyframes pcBreathLabel {
+          0%,49% { content: 'Inhale'; color: #A05EF8; }
+          50%,100% { color: #22C55E; }
+        }
+        .pc2-breath-stats { display: flex; flex-direction: column; gap: 4px; }
+        .pc2-breath-stat { font-size: 9px; color: rgba(255,255,255,0.5); }
+
+        /* ── Readiness bar chart sparkline ── */
+        @keyframes pcBarH {
+          from { opacity: 0; transform: scaleY(0); }
+          to   { opacity: 1; transform: scaleY(1); }
+        }
+
+        /* Float cards — JS drives the translateY via inline style; base position only here */
+        .pc2-float-card {
+          position: absolute;
+          background: rgba(14,16,22,0.65);
+          backdrop-filter: blur(32px) saturate(180%);
+          -webkit-backdrop-filter: blur(32px) saturate(180%);
+          border: 1px solid rgba(255,255,255,0.09);
+          border-radius: 18px; padding: 13px 18px;
+          display: flex; align-items: center; gap: 13px;
+          box-shadow: 0 24px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.07);
+          z-index: 10; white-space: nowrap;
+          will-change: transform;
+          /* Subtle entrance */
+          opacity: 0; animation: pcFadeUp 1.2s cubic-bezier(0.16,1,0.3,1) forwards;
+        }
+        .pc2-float-card strong { display:block; font-size:13px; color:#fff; font-weight:600; }
+        .pc2-float-card span { font-size:11px; color:rgba(255,255,255,0.45); }
+        .pc2-fc-icon { width:40px; height:40px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+        /* Reaction Time — top, sitting just above the upper edge of the phone */
+        .pc2-float-card--tl { top: -18px;   left: -120px; animation-delay: 0.9s; }
+        /* Focus Score — right side, pulled in so it doesn't clip the viewport */
+        .pc2-float-card--r  { top: 36%;    right: -60px; animation-delay: 1.15s; }
+        /* Readiness Score — left middle, between TL and BL */
+        .pc2-float-card--ml { top: 42%;    left: -120px; animation-delay: 1.3s; }
+        /* Box Breathing — bottom-left, raised to stay within the viewport */
+        .pc2-float-card--bl { bottom: 130px; left: -115px; animation-delay: 1.55s; }
+
+        /* ── Card: animated progress bar ── */
+        .pc2-fc-bar-wrap { height:3px; background:rgba(255,255,255,0.08); border-radius:4px; margin-top:7px; width:130px; overflow:hidden; }
+        .pc2-fc-bar { height:100%; border-radius:4px; width:0%; animation: pcBarFill 2s cubic-bezier(0.22,1,0.36,1) 1.8s forwards; }
+        @keyframes pcBarFill { to { width:78%; } }
+
+        /* ── Card: ping dot ── */
+        .pc2-fc-ping {
+          position:absolute; top:5px; right:5px;
+          width:7px; height:7px; border-radius:50%; background:#A05EF8;
+          animation: pcPingDot 2s ease-in-out infinite;
+        }
+        @keyframes pcPingDot {
+          0%,100% { box-shadow:0 0 0 0 rgba(160,94,248,0.7); }
+          50%      { box-shadow:0 0 0 5px rgba(160,94,248,0); }
+        }
+
+        /* ── Card: focus ring ── */
+        .pc2-fc-ring-wrap { position:relative; width:44px; height:44px; flex-shrink:0; }
+        .pc2-fc-ring-svg  { position:absolute; top:0; left:0; transform:rotate(-90deg); }
+        .pc2-fc-ring-arc  {
+          stroke-dashoffset: 106.8;
+          animation: pcRingFill 2.2s cubic-bezier(0.22,1,0.36,1) 1.9s forwards;
+        }
+        @keyframes pcRingFill { to { stroke-dashoffset: 12; } }
+        .pc2-fc-ring-label {
+          position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+          font-size:13px; font-weight:700; color:#A05EF8;
+        }
+        .pc2-fc-elite { font-size:11px; color:#A05EF8; display:block; margin-top:2px; font-weight:500; }
+
+        /* ── Card: breathing ring ── */
+        .pc2-fc-breath-wrap { position:relative; width:40px; height:40px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+        .pc2-fc-breath-ring {
+          position:absolute; inset:0; border-radius:50%;
+          border:2px solid rgba(34,211,238,0.4);
+          animation: pcBreath 4s ease-in-out infinite;
+        }
+        @keyframes pcBreath {
+          0%,100% { transform:scale(1);   box-shadow: 0 0 0 0   rgba(34,211,238,0.3); border-color:rgba(34,211,238,0.4); }
+          50%      { transform:scale(1.28); box-shadow: 0 0 16px 4px rgba(34,211,238,0.15); border-color:rgba(34,211,238,0.85); }
+        }
+        .pc2-fc-breath-icon { font-size:18px; position:relative; z-index:1; }
+        .pc2-stress-down { color:#22D3EE; font-weight:600; }
+
+        @keyframes pcFadeUp {
+          from { opacity:0; transform:translateY(22px); }
+          to   { opacity:1; transform:translateY(0); }
+        }
+
+        /* ── TAB BAR ── */
+        .pc2-tabbar {
+          display: flex; align-items: center; justify-content: center;
+          gap: 6px; padding: 24px 24px 32px;
+          position: relative; z-index: 5;
+        }
+        .pc2-tab {
+          display: inline-flex; align-items: center; gap: 6px;
+          padding: 10px 20px;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 100px; color: rgba(255,255,255,0.55);
+          font-size: 13px; font-weight: 500; cursor: pointer;
+          transition: all 0.25s cubic-bezier(0.16,1,0.3,1);
+        }
+        .pc2-tab:hover { background:rgba(255,255,255,0.09); color:#fff; }
+        .pc2-tab--active {
+          background: rgba(106,154,250,0.15);
+          border-color: rgba(106,154,250,0.35); color: #6A9AFA;
+          box-shadow: 0 0 20px rgba(106,154,250,0.12);
+        }
+
+        /* ── SECTIONS ──
+           All sections are transparent — the morph lives on .pc2 background.
+           We keep very subtle local tints so content remains legible regardless
+           of what the bg is doing. */
+        .pc2-section { padding: 110px 56px; position: relative; }
+
+        /* Light sections get a faint translucent white "card" feel during dark phase */
+        .pc2-section--light::before,
+        .pc2-section--offwhite::before {
+          content: '';
+          position: absolute; inset: 0;
+          background: rgba(255,255,255,0.55);
+          backdrop-filter: blur(0px);
+          pointer-events: none;
+          z-index: 0;
+        }
+        /* Top gradient bleed — dark section bleeds UP into light */
+        .pc2-section--light::after {
+          content: '';
+          position: absolute; top: -80px; left: 0; right: 0; height: 80px;
+          background: linear-gradient(to bottom, transparent, rgba(255,255,255,0.55));
+          pointer-events: none; z-index: 0;
+        }
+        .pc2-section--offwhite::before { background: rgba(246,247,250,0.55); }
+        .pc2-section--offwhite::after {
+          content: '';
+          position: absolute; top: -80px; left: 0; right: 0; height: 80px;
+          background: linear-gradient(to bottom, transparent, rgba(246,247,250,0.55));
+          pointer-events: none; z-index: 0;
+        }
+        /* Dark section re-darkens — gradient from previous light section */
+        .pc2-section--dark::before {
+          content: '';
+          position: absolute; top: -100px; left: 0; right: 0; height: 100px;
+          background: linear-gradient(to bottom, transparent, rgba(6,6,8,0.6));
+          pointer-events: none; z-index: 0;
+        }
+        .pc2-section-inner {
+          max-width: 1200px; margin: 0 auto;
+          display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center;
+          position: relative; z-index: 1;
+        }
+        .pc2-section-inner--flip .pc2-section-text { order:2; }
+        .pc2-section-inner--flip .pc2-section-visual { order:1; }
+
+        /* Section typography */
+        .pc2-section-label {
+          display: inline-block; padding: 5px 12px;
+          background: rgba(160,94,248,0.08); border-radius: 20px;
+          font-size: 11px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.1em; margin-bottom: 20px;
+        }
+        .pc2-h2 {
+          font-size: clamp(30px,3.2vw,50px); line-height: 1.1; font-weight: 700;
+          letter-spacing: -0.025em; color: #111; margin-bottom: 20px;
+        }
+        .pc2-h2 em { font-style:italic; color:#A05EF8; }
+        .pc2-h2--light { color:#fff; }
+        .pc2-h2--light em {
+          background: linear-gradient(135deg,#A05EF8,#6A9AFA);
+          -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+        }
+        .pc2-section-sub { font-size:17px; color:#555; line-height:1.75; margin-bottom:32px; }
+        .pc2-section-sub--light { color:rgba(255,255,255,0.55); }
+        .pc2-checklist { list-style:none; display:flex; flex-direction:column; gap:13px; }
+        .pc2-checklist li { display:flex; align-items:flex-start; gap:10px; font-size:15px; color:#333; line-height:1.55; }
+        .pc2-checklist--dark li { color:rgba(255,255,255,0.6); }
+        .pc2-check { font-size:14px; color:#A05EF8; font-weight:700; flex-shrink:0; margin-top:2px; }
+
+        /* ── REVEAL SYSTEM ── (spring feel) */
+        .pc2-reveal {
+          opacity: 0;
+          transform: translateY(36px) scale(0.98);
+          transition:
+            opacity 0.85s cubic-bezier(0.16,1,0.3,1),
+            transform 0.85s cubic-bezier(0.16,1,0.3,1);
+        }
+        /* Stagger siblings automatically */
+        .pc2-reveal:nth-child(2) { transition-delay: 0.1s; }
+        .pc2-reveal:nth-child(3) { transition-delay: 0.2s; }
+        .pc2-visible { opacity:1; transform:translateY(0) scale(1); }
+
+        /* ── MOCKUPS ── */
+        .pc2-mockup {
+          background: rgba(255,255,255,0.92);
+          border: 1px solid rgba(200,205,215,0.6);
+          border-radius: 18px; overflow: hidden;
+          box-shadow:
+            0 2px 0 rgba(255,255,255,0.8) inset,
+            0 24px 64px rgba(0,0,0,0.10),
+            0 4px 16px rgba(0,0,0,0.06);
+          backdrop-filter: blur(12px);
+        }
+        .pc2-mockup-bar {
+          display:flex; align-items:center; gap:8px;
+          padding:12px 18px; border-bottom:1px solid rgba(0,0,0,0.06);
+          background: rgba(250,251,253,0.9);
+        }
+        .pc2-mockup-dots { display:flex; gap:6px; }
+        .pc2-mockup-dots span { width:11px; height:11px; border-radius:50%; }
+        .pc2-mockup-dots span:nth-child(1){background:#ff5f57;} .pc2-mockup-dots span:nth-child(2){background:#febc2e;} .pc2-mockup-dots span:nth-child(3){background:#28c840;}
+        .pc2-mockup-title { font-size:11px; color:#bbb; margin-left:6px; font-family:ui-monospace,monospace; }
+        .pc2-mockup-bar--dark { background:rgba(17,18,21,0.95); border-bottom-color:rgba(255,255,255,0.05); }
+        .pc2-mockup-title--dark { color:#444; }
+        .pc2-mockup--clinical { background:rgba(10,10,14,0.95); border-color:rgba(255,255,255,0.05); }
+
+        /* Chat log */
+        .pc2-chat-log { padding:20px; display:flex; flex-direction:column; gap:10px; }
+        .pc2-cl-nora,.pc2-cl-user,.pc2-cl-system { padding:11px 15px; border-radius:14px; font-size:13px; line-height:1.55; max-width:82%; }
+        .pc2-cl-nora { background:#f0f4ff; color:#2a3550; border-bottom-left-radius:4px; }
+        .pc2-cl-user { background:#edfff4; color:#1a3326; border-bottom-right-radius:4px; align-self:flex-end; margin-left:auto; }
+        .pc2-cl-system {
+          background: linear-gradient(135deg,rgba(224,254,16,0.05),rgba(34,211,238,0.05));
+          border:1px solid rgba(224,254,16,0.18); color:#444;
+          align-self:stretch; max-width:100%;
+          display:flex; flex-direction:column; gap:8px;
+          border-radius:12px;
+        }
+        .pc2-cl-system span:first-child { font-size:18px; }
+        .pc2-cl-metrics { display:flex; gap:10px; flex-wrap:wrap; }
+        .pc2-cl-metrics span { font-size:11px; color:#6A9AFA; font-weight:600; background:rgba(106,154,250,0.1); padding:3px 9px; border-radius:20px; }
+
+        /* Sim steps */
+        .pc2-sim-steps { display:flex; flex-direction:column; gap:16px; margin-top:8px; }
+        .pc2-sim-step { display:flex; align-items:flex-start; gap:14px; padding:14px 16px; border-left:3px solid; border-radius:0 12px 12px 0; background:rgba(0,0,0,0.015); }
+        .pc2-sim-step-icon { width:38px; height:38px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0; }
+        .pc2-sim-step strong { display:block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px; }
+        .pc2-sim-step p { font-size:13px; color:#555; line-height:1.55; }
+
+        /* Sim mockup internals */
+        .pc2-sim-meters { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:#e8eaee; }
+        .pc2-sim-meter { background:#fff; padding:18px 14px; text-align:center; }
+        .pc2-sm-label { font-size:10px; text-transform:uppercase; letter-spacing:0.08em; color:#aaa; margin-bottom:6px; }
+        .pc2-sm-val { font-size:30px; font-weight:700; margin-bottom:10px; }
+        .pc2-sm-bar { height:3px; background:#f0f0f0; border-radius:2px; overflow:hidden; }
+        .pc2-sm-fill { height:100%; border-radius:2px; }
+        .pc2-sim-interventions { padding:16px; display:flex; flex-direction:column; gap:12px; }
+        .pc2-intervention { display:flex; align-items:flex-start; gap:12px; }
+        .pc2-int-icon { width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+        .pc2-intervention strong { display:block; font-size:13px; font-weight:600; color:#111; margin-bottom:2px; }
+        .pc2-intervention span { font-size:12px; color:#777; }
+
+        /* Dashboard mockup */
+        .pc2-dash-alert { display:flex; align-items:flex-start; gap:12px; padding:14px 16px; margin:16px; border-radius:12px; background:rgba(249,115,22,0.05); border:1px solid rgba(249,115,22,0.2); }
+        .pc2-dash-alert-icon { font-size:20px; flex-shrink:0; }
+        .pc2-dash-alert strong { display:block; font-size:13px; color:#111; margin-bottom:4px; }
+        .pc2-dash-alert p { font-size:12px; color:#666; line-height:1.5; }
+        .pc2-dash-label { font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:#aaa; padding:0 16px 10px; font-weight:700; }
+        .pc2-roster { padding:0 16px 16px; display:flex; flex-direction:column; gap:4px; }
+        .pc2-roster-row { display:grid; grid-template-columns:12px 1fr 40px 1fr; gap:10px; align-items:center; padding:8px 10px; border-radius:8px; font-size:12px; transition:background 0.15s; }
+        .pc2-roster-row:hover { background:rgba(0,0,0,0.025); }
+        .pc2-roster-row--critical { background:rgba(239,68,68,0.04); }
+        .pc2-roster-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+        .pc2-roster-dot--optimal{background:#22C55E;}
+        .pc2-roster-dot--warning{background:#F59E0B;}
+        .pc2-roster-dot--elevated{background:#F97316;}
+        .pc2-roster-dot--critical{background:#EF4444; animation:pcPulseDot 1.5s ease infinite;}
+        .pc2-roster-dot--nocheckin{background:#71717a;}
+        .pc2-roster-name { font-weight:600; color:#111; }
+        .pc2-roster-pos  { color:#bbb; font-size:11px; }
+        .pc2-roster-status { font-size:11px; }
+        .pc2-roster-status--optimal{color:#22C55E;}
+        .pc2-roster-status--warning{color:#F59E0B;}
+        .pc2-roster-status--elevated{color:#F97316;}
+        .pc2-roster-status--critical{color:#EF4444;font-weight:700;}
+        .pc2-roster-status--nocheckin{color:#71717a;}
+
+        /* Clinical mockup */
+        .pc2-clinical-alert { margin:14px; padding:14px; border-radius:13px; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25); }
+        .pc2-ca-header { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+        .pc2-ca-icon { font-size:16px; }
+        .pc2-ca-header strong { font-size:13px; color:#f87171; display:block; }
+        .pc2-ca-header span { font-size:11px; color:#666; }
+        .pc2-ca-time { margin-left:auto; font-size:10px; color:#555; }
+        .pc2-clinical-alert p { font-size:10px; color:#EF4444; text-transform:uppercase; letter-spacing:0.1em; opacity:0.65; }
+        .pc2-clinical-profile { display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid rgba(255,255,255,0.05); }
+        .pc2-cp-avatar { width:44px; height:44px; border-radius:12px; background:rgba(239,68,68,0.15); display:flex; align-items:center; justify-content:center; font-weight:700; color:#f87171; font-size:14px; }
+        .pc2-clinical-profile strong { display:block; font-size:14px; color:#fff; }
+        .pc2-clinical-profile span { font-size:11px; color:#555; }
+        .pc2-cp-badge { margin-left:auto; font-size:10px; padding:3px 10px; border-radius:20px; background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3); font-weight:700; animation:pcPulseDot 1.5s ease infinite; }
+        .pc2-clinical-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:rgba(255,255,255,0.05); }
+        .pc2-cstat { background:rgba(10,11,14,0.95); padding:14px 12px; text-align:center; }
+        .pc2-cstat-val { font-size:21px; font-weight:700; margin-bottom:4px; }
+        .pc2-cstat-label { font-size:10px; color:#444; text-transform:uppercase; letter-spacing:0.07em; }
+        .pc2-clinical-briefing { margin:14px; padding:14px; border-radius:11px; background:rgba(147,51,234,0.08); border:1px solid rgba(147,51,234,0.2); }
+        .pc2-clinical-briefing strong { display:block; font-size:11px; color:#A05EF8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:8px; }
+        .pc2-clinical-briefing p { font-size:12px; color:#777; line-height:1.65; }
+
+        /* STATS */
+        .pc2-stats {
+          display: grid; grid-template-columns: repeat(3,1fr);
+          gap: 1px; background: rgba(255,255,255,0.05);
+          position: relative; z-index: 1;
+        }
+        .pc2-stat { padding:64px 40px; text-align:center; }
+        .pc2-stat-val { font-size:54px; font-weight:700; color:#6A9AFA; line-height:1; margin-bottom:16px; letter-spacing:-0.02em; }
+        .pc2-stat-label { font-size:14px; color:rgba(255,255,255,0.35); max-width:220px; margin:0 auto; line-height:1.6; }
+
+        /* CTA */
+        .pc2-cta {
+          padding: 130px 56px; text-align: center; position: relative; overflow: hidden;
+        }
+        .pc2-cta-glow {
+          position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+          width:800px; height:600px;
+          background:radial-gradient(ellipse,rgba(106,154,250,0.08) 0%,rgba(160,94,248,0.04) 40%,transparent 70%);
+          pointer-events:none; animation:pcGlowPulse 5s ease-in-out infinite;
+        }
+        .pc2-cta-inner { position:relative; max-width:680px; margin:0 auto; }
+        .pc2-cta-h2 { font-size:clamp(30px,4vw,54px); font-weight:700; color:#fff; line-height:1.1; letter-spacing:-0.025em; margin-bottom:20px; }
+        .pc2-cta-h2 em { font-style:italic; background:linear-gradient(135deg,#6A9AFA,#A05EF8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+        .pc2-cta p { font-size:18px; color:rgba(255,255,255,0.45); margin-bottom:40px; line-height:1.75; }
+        .pc2-cta-actions { display:flex; justify-content:center; gap:12px; flex-wrap:wrap; margin-bottom:24px; }
+        .pc2-cta-note { font-size:13px; color:rgba(255,255,255,0.25); }
+
+        /* FOOTER */
+        .pc2-footer { padding:72px 56px 40px; border-top:1px solid rgba(255,255,255,0.05); }
+        .pc2-footer-inner { max-width:1100px; margin:0 auto; display:grid; grid-template-columns:2fr 1fr 1fr; gap:48px; margin-bottom:48px; }
+        .pc2-footer-col h4 { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:rgba(255,255,255,0.25); margin-bottom:16px; }
+        .pc2-footer-col a { display:block; font-size:14px; color:rgba(255,255,255,0.35); text-decoration:none; margin-bottom:10px; transition:color 0.2s; }
+        .pc2-footer-col a:hover { color:rgba(255,255,255,0.7); }
+        .pc2-footer-bottom { max-width:1100px; margin:0 auto; padding-top:24px; border-top:1px solid rgba(255,255,255,0.05); font-size:13px; color:rgba(255,255,255,0.2); text-align:center; }
+
+        /* RESPONSIVE */
+        @media(max-width:1100px){
+          .pc2-hero-inner{grid-template-columns:1fr;gap:40px;padding:120px 32px 80px;}
+          /* Show phone stacked below text — hide only the side float cards */
+          .pc2-hero-visual{
+            display:flex;
+            justify-content:center;
+            padding:0;
+            /* Extra bottom space for the Box Breathing card that hugs the bottom */
+            margin-bottom:60px;
+          }
+          /* Hide all side float cards on mobile — they'd overflow */
+          .pc2-float-card--tl,
+          .pc2-float-card--r,
+          .pc2-float-card--ml,
+          .pc2-float-card--bl { display: none; }
+          /* Scale phone to fit narrower viewport */
+          .pc2-phone { width:260px; height:540px; }
+          .pc2-section-inner{grid-template-columns:1fr;}
+          .pc2-section-inner--flip .pc2-section-text,.pc2-section-inner--flip .pc2-section-visual{order:unset;}
+          .pc2-stats{grid-template-columns:1fr;}
+          .pc2-footer-inner{grid-template-columns:1fr 1fr;}
+        }
+        @media(max-width:700px){
+          .pc2-nav{padding:14px 20px;}
+          .pc2-nav--scrolled{padding:12px 20px;}
+          .pc2-nav-links a:not(.pc2-nav-cta){display:none;}
+          .pc2-section{padding:80px 24px;}
+          .pc2-hero-inner{padding:90px 24px 60px;}
+          /* Even smaller phone on tiny screens */
+          .pc2-phone { width:220px; height:460px; }
+          .pc2-tabbar{flex-wrap:wrap; gap:6px;}
+          .pc2-cta{padding:90px 24px;}
+          .pc2-footer{padding:48px 24px 32px;}
+          .pc2-footer-inner{grid-template-columns:1fr;gap:32px;}
+        }
+        .pc2-auntedna-title {
+          font-size: 12px !important;
+          font-weight: 500;
+          color: rgba(180,140,255,0.9) !important;
+          letter-spacing: 0.03em;
+          animation: pcAuntEdnaGlow 3s ease-in-out infinite;
+        }
+        .pc2-auntedna-title strong {
+          font-weight: 700;
+          color: #C084FC;
+        }
+        @keyframes pcAuntEdnaGlow {
+          0%,100% {
+            text-shadow:
+              0 0 6px rgba(192,132,252,0.4),
+              0 0 14px rgba(160,94,248,0.2);
+            opacity: 0.85;
+          }
+          50% {
+            text-shadow:
+              0 0 10px rgba(192,132,252,0.9),
+              0 0 24px rgba(160,94,248,0.55),
+              0 0 40px rgba(106,154,250,0.2);
+            opacity: 1;
+          }
+        }
+      `}</style>
+    </div>
+  );
 };
 
 export default PulseCheckMarketingLanding;

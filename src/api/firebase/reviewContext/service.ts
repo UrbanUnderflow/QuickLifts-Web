@@ -24,9 +24,7 @@ import {
   ReviewContextSummary,
   ReviewHighlight,
   ReviewMetric,
-  getCurrentWeekOfMonth,
-  getCurrentMonthYear,
-  getMonthYearFromDate
+  getCurrentWeekOfMonth
 } from './types';
 
 class ReviewContextService {
@@ -65,13 +63,25 @@ class ReviewContextService {
   async addWeeklyContext(
     content: string,
     source: 'email' | 'manual',
-    emailSubject?: string
+    emailSubject?: string,
+    options?: {
+      year?: number;
+      month?: number;
+      weekNumber?: number;
+    }
   ): Promise<WeeklyContext> {
     try {
       const now = new Date();
-      const weekNumber = getCurrentWeekOfMonth(); // Week of the month (1-5)
-      const year = now.getFullYear();
-      const month = now.getMonth() + 1;
+      const year = options?.year ?? now.getFullYear();
+      const month = options?.month ?? now.getMonth() + 1;
+      const isCurrentMonth =
+        year === now.getFullYear() &&
+        month === now.getMonth() + 1;
+      const weekNumber =
+        options?.weekNumber ??
+        (isCurrentMonth
+          ? getCurrentWeekOfMonth()
+          : await this.getNextWeekNumberForMonth(year, month));
 
       const contextRef = doc(collection(db, this.weeklyContextCollection));
       
@@ -94,6 +104,37 @@ class ReviewContextService {
       return context;
     } catch (error) {
       console.error('[ReviewContextService] Error adding weekly context:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find the next available week number for a month when backfilling context.
+   */
+  private async getNextWeekNumberForMonth(year: number, month: number): Promise<number> {
+    try {
+      const contextRef = collection(db, this.weeklyContextCollection);
+      const q = query(
+        contextRef,
+        where('year', '==', year),
+        where('month', '==', month)
+      );
+
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
+        return 1;
+      }
+
+      const maxWeekNumber = querySnapshot.docs.reduce((max, snapshot) => {
+        const data = snapshot.data();
+        const candidate = typeof data.weekNumber === 'number' ? data.weekNumber : 0;
+        return Math.max(max, candidate);
+      }, 0);
+
+      return maxWeekNumber + 1;
+    } catch (error) {
+      console.error('[ReviewContextService] Error computing next week number:', error);
       throw error;
     }
   }
@@ -832,4 +873,3 @@ Return ONLY valid JSON, no markdown or explanation.`;
 }
 
 export const reviewContextService = ReviewContextService.getInstance();
-
