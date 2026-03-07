@@ -1332,7 +1332,7 @@ const Create: React.FC = () => {
       borderColor: 'border-cyan-500/30',
       iconBg: 'bg-cyan-500/20',
       iconColor: 'text-cyan-400',
-      action: () => setShowPageModal(true),
+      action: () => router.push('/manage-landing-pages'),
     },
     {
       id: 'questionnaires',

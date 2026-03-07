@@ -166,6 +166,12 @@ export const creatorPagesService = {
     }, { merge: true });
   },
 
+  async getAllPages(userId: string): Promise<CreatorLandingPage[]> {
+    const pagesRef = collection(db, ROOT, userId, 'pages');
+    const snapshot = await getDocs(pagesRef);
+    return snapshot.docs.map(doc => doc.data() as CreatorLandingPage);
+  },
+
   async findUserIdByUsername(username: string): Promise<string | null> {
     const users = collection(db, 'users');
     const q = query(users, where('username', '==', username));
