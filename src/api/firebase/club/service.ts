@@ -247,6 +247,30 @@ class ClubService {
   }
 
   /**
+   * Fetches all check-in documents for a specific event.
+   */
+  async getEventCheckins(clubId: string, eventId: string): Promise<any[]> {
+    const snapshot = await getDocs(
+      collection(db, 'clubEventCheckins', clubId, 'events', eventId, 'checkins')
+    );
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  }
+
+  /**
+   * Fetches check-in counts for all events in a club.
+   * Returns a map of eventId → attendee list.
+   */
+  async getAllEventCheckins(clubId: string, eventIds: string[]): Promise<Record<string, any[]>> {
+    const result: Record<string, any[]> = {};
+    await Promise.all(
+      eventIds.map(async (eventId) => {
+        result[eventId] = await this.getEventCheckins(clubId, eventId);
+      })
+    );
+    return result;
+  }
+
+  /**
    * Returns the sum of completed workouts by all active club members.
    * Uses each user's workoutCount when present; falls back to subcollection count for users without it (e.g. before backfill).
    */
