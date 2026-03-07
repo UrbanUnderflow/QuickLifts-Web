@@ -41,12 +41,15 @@ const ReviewTracker: React.FC = () => {
   // UI State
   const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonthYear());
   const [showAddContext, setShowAddContext] = useState(false);
+  const [showCreateMonthReview, setShowCreateMonthReview] = useState(false);
   const [newContextContent, setNewContextContent] = useState('');
+  const [monthReviewContext, setMonthReviewContext] = useState('');
   const [editingContext, setEditingContext] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set([getCurrentMonthYear()]));
   const [selectedDraft, setSelectedDraft] = useState<DraftReview | null>(null);
   const [savingContext, setSavingContext] = useState(false);
+  const [creatingMonthReview, setCreatingMonthReview] = useState(false);
   const [generatingDraft, setGeneratingDraft] = useState(false);
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
 
@@ -58,7 +61,7 @@ const ReviewTracker: React.FC = () => {
   // Handle URL parameters (from email link)
   useEffect(() => {
     if (router.isReady) {
-      const { action, week, month, year } = router.query;
+      const { action } = router.query;
       if (action === 'add') {
         setShowAddContext(true);
         // Clear the URL params without navigation
@@ -79,19 +82,19 @@ const ReviewTracker: React.FC = () => {
 
       try {
         contextsData = await reviewContextService.fetchAllWeeklyContext();
-      } catch (e) {
+      } catch (_error) {
         console.log('Weekly contexts fetch failed, using empty array');
       }
 
       try {
         draftsData = await reviewContextService.fetchAllDrafts();
-      } catch (e) {
+      } catch (_error) {
         console.log('Drafts fetch failed, using empty array');
       }
 
       try {
         summariesData = await reviewContextService.getReviewSummaries();
-      } catch (e) {
+      } catch (_error) {
         console.log('Summaries fetch failed, using empty array');
       }
 
@@ -104,6 +107,11 @@ const ReviewTracker: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const closeCreateMonthReviewModal = () => {
+    setShowCreateMonthReview(false);
+    setMonthReviewContext('');
   };
 
   // Add new context
@@ -141,7 +149,7 @@ const ReviewTracker: React.FC = () => {
 
   // Delete context
   const handleDeleteContext = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this weekly context?')) return;
+    if (!confirm('Are you sure you want to delete this context entry?')) return;
     
     try {
       await reviewContextService.deleteWeeklyContext(id);
@@ -177,8 +185,59 @@ const ReviewTracker: React.FC = () => {
       router.push(`/review/draft/${draft.id}`);
     } catch (err: any) {
       console.error('Error generating draft:', err);
-      setError(err?.message || 'Failed to generate draft. Make sure you have weekly updates for this month.');
+      setError(err?.message || 'Failed to generate draft. Make sure you have context for this month.');
       setGeneratingDraft(false);
+    }
+  };
+
+  const handleCreateMonthReview = async () => {
+    if (!selectedMonth || !monthReviewContext.trim()) return;
+
+    let savedMonthYear: string | null = null;
+
+    try {
+      setCreatingMonthReview(true);
+      setError(null);
+
+      const [year, month] = selectedMonth.split('-').map(Number);
+
+      if (!year || !month) {
+        throw new Error('Select a valid month before creating a review.');
+      }
+
+      await reviewContextService.addWeeklyContext(
+        monthReviewContext.trim(),
+        'manual',
+        undefined,
+        {
+          year,
+          month,
+          weekNumber: 0,
+        }
+      );
+
+      savedMonthYear = selectedMonth;
+      closeCreateMonthReviewModal();
+
+      const draft = await reviewContextService.generateDraftFromContext(year, month);
+      router.push(`/review/draft/${draft.id}`);
+    } catch (err: any) {
+      console.error('Error creating month review:', err);
+
+      if (savedMonthYear) {
+        const monthYear = savedMonthYear;
+        setExpandedMonths((prev) => new Set(prev).add(monthYear));
+        await loadData();
+        setError(
+          `${getMonthLabel(monthYear)} context was saved, but the draft could not be generated automatically. ${
+            err?.message || 'Retry from that month below.'
+          }`
+        );
+      } else {
+        setError(err?.message || 'Failed to create month review');
+      }
+    } finally {
+      setCreatingMonthReview(false);
     }
   };
 
@@ -229,7 +288,15 @@ const ReviewTracker: React.FC = () => {
   // Get contexts for a specific month
   const getContextsForMonth = (monthYear: string): WeeklyContext[] => {
     const [year, month] = monthYear.split('-').map(Number);
-    return weeklyContexts.filter(ctx => ctx.year === year && ctx.month === month);
+    return weeklyContexts
+      .filter(ctx => ctx.year === year && ctx.month === month)
+      .sort((a, b) => {
+        if (a.weekNumber !== b.weekNumber) {
+          return a.weekNumber - b.weekNumber;
+        }
+
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      });
   };
 
   // Get draft for a specific month
@@ -253,6 +320,14 @@ const ReviewTracker: React.FC = () => {
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'];
     return `${monthNames[parseInt(month) - 1]} ${year}`;
+  };
+
+  const getContextCountLabel = (count: number): string => {
+    return `${count} context entr${count === 1 ? 'y' : 'ies'}`;
+  };
+
+  const getContextLabel = (context: WeeklyContext): string => {
+    return context.weekNumber === 0 ? 'Month context' : `Week ${context.weekNumber}`;
   };
 
   // Get status badge
@@ -285,7 +360,7 @@ const ReviewTracker: React.FC = () => {
       return (
         <span className="flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs">
           <Clock size={12} />
-          {summary.weekCount} weeks
+          {summary.weekCount} entr{summary.weekCount === 1 ? 'y' : 'ies'}
         </span>
       );
     }
@@ -307,12 +382,12 @@ const ReviewTracker: React.FC = () => {
         {/* Header */}
         <div className="border-b border-gray-800 bg-[#161b22]">
           <div className="max-w-6xl mx-auto px-6 py-8">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h1 className="text-2xl font-bold mb-2">Review Progress Tracker</h1>
                 <p className="text-gray-400">Track weekly progress and manage monthly reviews</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <button
                   onClick={() => handleGenerateDraft(getCurrentMonthYear())}
                   disabled={generatingDraft || weeklyContexts.filter(ctx => {
@@ -334,6 +409,17 @@ const ReviewTracker: React.FC = () => {
                   )}
                 </button>
                 <button
+                  onClick={() => {
+                    setSelectedMonth(getCurrentMonthYear());
+                    setMonthReviewContext('');
+                    setShowCreateMonthReview(true);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#1a1e24] border border-gray-700 text-gray-100 rounded-lg font-medium hover:border-gray-500 hover:bg-[#20252d] transition-colors"
+                >
+                  <Calendar size={18} />
+                  Create Month Review
+                </button>
+                <button
                   onClick={() => setShowAddContext(true)}
                   className="flex items-center gap-2 px-4 py-2 bg-[#d7ff00] text-black rounded-lg font-medium hover:bg-[#c4ec00] transition-colors"
                 >
@@ -351,7 +437,7 @@ const ReviewTracker: React.FC = () => {
               </div>
               <div className="flex items-center gap-2 px-3 py-1.5 bg-[#1a1e24] rounded-lg border border-gray-700">
                 <FileText size={14} className="text-blue-400" />
-                <span className="text-gray-300">{weeklyContexts.length} weekly update{weeklyContexts.length !== 1 ? 's' : ''}</span>
+                <span className="text-gray-300">{getContextCountLabel(weeklyContexts.length)}</span>
               </div>
               
               {/* Quick Email Actions */}
@@ -518,6 +604,76 @@ const ReviewTracker: React.FC = () => {
             </div>
           )}
 
+          {/* Create Month Review Modal */}
+          {showCreateMonthReview && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-[#161b22] rounded-xl border border-gray-700 p-6 w-full max-w-2xl mx-4">
+                <h2 className="text-xl font-semibold mb-2">Create Month Review</h2>
+                <p className="text-gray-400 text-sm mb-5">
+                  Pick a month to backfill, paste the context you want included, and generate a draft review from it.
+                </p>
+
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="month-review-month" className="block text-sm font-medium text-gray-300 mb-2">
+                      Month
+                    </label>
+                    <input
+                      id="month-review-month"
+                      type="month"
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      className="w-full bg-[#0d1117] border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#d7ff00]"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="month-review-context" className="block text-sm font-medium text-gray-300 mb-2">
+                      Monthly context
+                    </label>
+                    <textarea
+                      id="month-review-context"
+                      value={monthReviewContext}
+                      onChange={(e) => setMonthReviewContext(e.target.value)}
+                      placeholder="Add the raw notes for that month: wins, metrics, launches, customer feedback, blockers, and what mattered most."
+                      className="w-full h-56 bg-[#0d1117] border border-gray-700 rounded-lg p-4 text-white placeholder-gray-500 resize-none focus:outline-none focus:border-[#d7ff00]"
+                      autoFocus
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Tip: rough bullets are fine. Include numbers, product launches, partnerships, and anything you want the AI draft to pull through.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    onClick={closeCreateMonthReviewModal}
+                    className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCreateMonthReview}
+                    disabled={!selectedMonth || !monthReviewContext.trim() || creatingMonthReview}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {creatingMonthReview ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={16} />
+                        Create Draft Review
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Draft Preview Modal */}
           {selectedDraft && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
@@ -571,13 +727,26 @@ const ReviewTracker: React.FC = () => {
                 <div className="text-center py-12">
                   <FileText size={48} className="mx-auto text-gray-600 mb-4" />
                   <p className="text-gray-400 mb-4">No review data yet</p>
-                  <button
-                    onClick={() => setShowAddContext(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-[#d7ff00] text-black rounded-lg font-medium"
-                  >
-                    <Plus size={18} />
-                    Add your first weekly update
-                  </button>
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      onClick={() => setShowAddContext(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#d7ff00] text-black rounded-lg font-medium"
+                    >
+                      <Plus size={18} />
+                      Add your first weekly update
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedMonth(getCurrentMonthYear());
+                        setMonthReviewContext('');
+                        setShowCreateMonthReview(true);
+                      }}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#1a1e24] border border-gray-700 text-white rounded-lg font-medium hover:border-gray-500 hover:bg-[#20252d] transition-colors"
+                    >
+                      <Calendar size={18} />
+                      Create Month Review
+                    </button>
+                  </div>
                 </div>
               ) : (
                 summaries.map((summary) => {
@@ -602,7 +771,7 @@ const ReviewTracker: React.FC = () => {
                           <div>
                             <h3 className="font-semibold text-lg">{getMonthLabel(summary.monthYear)}</h3>
                             <p className="text-sm text-gray-400">
-                              {summary.weekCount} weekly update{summary.weekCount !== 1 ? 's' : ''}
+                              {getContextCountLabel(summary.weekCount)}
                             </p>
                           </div>
                         </div>
@@ -623,7 +792,7 @@ const ReviewTracker: React.FC = () => {
                           {contexts.length > 0 ? (
                             <div className="space-y-3 mb-4">
                               <h4 className="text-sm font-medium text-gray-400 uppercase tracking-wide">
-                                Weekly Updates
+                                Context Entries
                               </h4>
                               {contexts.map((ctx) => (
                                 <div
@@ -634,7 +803,7 @@ const ReviewTracker: React.FC = () => {
                                     <div className="flex-grow">
                                       <div className="flex items-center gap-2 mb-2">
                                         <span className="text-xs px-2 py-0.5 bg-gray-800 rounded text-gray-400">
-                                          Week {ctx.weekNumber}
+                                          {getContextLabel(ctx)}
                                         </span>
                                         <span className="text-xs text-gray-500">
                                           {ctx.source === 'email' ? (
@@ -706,7 +875,7 @@ const ReviewTracker: React.FC = () => {
                               ))}
                             </div>
                           ) : (
-                            <p className="text-gray-500 text-sm mb-4">No weekly updates for this month</p>
+                            <p className="text-gray-500 text-sm mb-4">No context for this month</p>
                           )}
 
                           {/* Draft Section */}
@@ -760,7 +929,7 @@ const ReviewTracker: React.FC = () => {
                               </button>
                             ) : (
                               <p className="text-gray-500 text-sm">
-                                Add weekly updates to generate a draft review
+                                Add context to generate a draft review
                               </p>
                             )}
                           </div>
@@ -779,4 +948,3 @@ const ReviewTracker: React.FC = () => {
 };
 
 export default ReviewTracker;
-

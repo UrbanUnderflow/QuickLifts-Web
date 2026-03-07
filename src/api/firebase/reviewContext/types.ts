@@ -2,7 +2,7 @@
 
 export interface WeeklyContextData {
   id: string;
-  weekNumber: number; // 1-52
+  weekNumber: number; // 0 for month-level backfill, otherwise week of month
   year: number;
   month: number; // 1-12
   content: string;
@@ -308,4 +308,3 @@ export const getMonthYearFromDate = (date: Date): string => {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   return `${year}-${month}`;
 };
-
