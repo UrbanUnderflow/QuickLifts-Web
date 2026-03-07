@@ -1151,7 +1151,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({ onJoinWaitlist }) => {
         .pc2-footer-bottom { max-width:1100px; margin:0 auto; padding-top:24px; border-top:1px solid rgba(255,255,255,0.05); font-size:13px; color:rgba(255,255,255,0.2); text-align:center; }
 
         /* RESPONSIVE */
-        @media(max-width:1100px){
+        @media(max-width:900px){
           .pc2-hero-inner{grid-template-columns:1fr;gap:40px;padding:120px 32px 80px;}
           /* Show phone stacked below text — hide only the side float cards */
           .pc2-hero-visual{
