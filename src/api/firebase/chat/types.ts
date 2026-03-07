@@ -9,35 +9,50 @@ export enum MessageMediaType {
 }
 
 export interface GroupMessage {
-    id: string;
-    sender: ShortUser;
-    content: string;
-    checkinId?: string | null;
-    timestamp: Date;
-    readBy: Record<string, Date>;
-    mediaURL?: string | null;
-    mediaType: MessageMediaType;
-    gymName?: string | null;
-    recipientFcmTokens?: string[] | null;
-    visibility?: string | null;
-    visibleToUserId?: string | null;
+  id: string;
+  sender: ShortUser;
+  content: string;
+  checkinId?: string | null;
+  timestamp: Date;
+  readBy: Record<string, Date>;
+  mediaURL?: string | null;
+  mediaType: MessageMediaType;
+  gymName?: string | null;
+  recipientFcmTokens?: string[] | null;
+  visibility?: string | null;
+  visibleToUserId?: string | null;
 }
 
 export enum QuickMessage {
-    Encourage = '💪 Keep it up!',
-    Congrats = '🎉 Great work!',
-    Support = 'You\'ve got this!',
-    Thanks = 'Thank you!',
+  Encourage = '💪 Keep it up!',
+  Congrats = '🎉 Great work!',
+  Support = 'You\'ve got this!',
+  Thanks = 'Thank you!',
 }
 
 // Update serialization function to handle input without 'id'
 export const messageToFirestore = (message: Omit<GroupMessage, 'id'>) => {
+  // Convert sender class instance to a plain object so Firestore can serialize it
+  const senderData =
+    typeof (message.sender as any)?.toDictionary === 'function'
+      ? (message.sender as any).toDictionary()
+      : message.sender;
+
+  // Convert readBy Date values to plain objects Firestore can handle
+  const readByData = Object.entries(message.readBy || {}).reduce<Record<string, any>>(
+    (acc, [key, value]) => {
+      acc[key] = value;
+      return acc;
+    },
+    {}
+  );
+
   return {
-    sender: message.sender,
+    sender: senderData,
     content: message.content,
     checkinId: message.checkinId || null,
     timestamp: message.timestamp,
-    readBy: message.readBy,
+    readBy: readByData,
     mediaURL: message.mediaURL || null,
     mediaType: message.mediaType,
     gymName: message.gymName || null,
