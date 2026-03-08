@@ -14,6 +14,8 @@ import {
   query,
   where,
   getDocs,
+  limit,
+  orderBy,
 } from 'firebase/firestore';
 import {
   AthleteMentalProgress,
@@ -23,8 +25,14 @@ import {
   athleteProgressFromFirestore,
   athleteProgressToFirestore,
 } from './types';
+import { bootstrapTaxonomyProfile, deriveTaxonomyProfile, prescribeNextSession } from './taxonomyProfileService';
+import { TaxonomyModifier } from './taxonomy';
 
 const COLLECTION = 'athlete-mental-progress';
+
+function humanizeTaxonomyLabel(value: string): string {
+  return value.split('_').join(' ');
+}
 
 // ============================================================================
 // MPR CALCULATION
@@ -149,6 +157,10 @@ export const athleteProgressService = {
       totalAssignmentsCompleted: 0,
       currentStreak: 0,
       longestStreak: 0,
+      taxonomyProfile: bootstrapTaxonomyProfile(),
+      activeProgram: prescribeNextSession({ profile: bootstrapTaxonomyProfile() }),
+      lastProfileSyncAt: now,
+      profileVersion: 'taxonomy-v1',
       createdAt: now,
       updatedAt: now,
     };
@@ -171,8 +183,6 @@ export const athleteProgressService = {
     };
 
     const mprScore = calculateInitialMPR(fullAssessment);
-    const recommendedPathway = determinePathway(fullAssessment);
-
     // Get or create progress
     let progress = await this.get(athleteId);
     if (!progress) {
@@ -187,6 +197,12 @@ export const athleteProgressService = {
       mprLastCalculated: now,
       currentPathway: MentalPathway.Foundation, // Always start with foundation
       pathwayStep: 0,
+      taxonomyProfile: bootstrapTaxonomyProfile(fullAssessment),
+      activeProgram: prescribeNextSession({
+        profile: bootstrapTaxonomyProfile(fullAssessment),
+      }),
+      lastProfileSyncAt: now,
+      profileVersion: 'taxonomy-v1',
       updatedAt: now,
     };
 
@@ -274,6 +290,60 @@ export const athleteProgressService = {
       activeAssignmentExerciseName: exerciseName,
       updatedAt: Date.now(),
     });
+  },
+
+  /**
+   * Recompute the athlete's taxonomy profile from baseline, check-ins, and sim sessions.
+   * This is the canonical profile/program sync used by the new Pulse Check system.
+   */
+  async syncTaxonomyProfile(athleteId: string): Promise<AthleteMentalProgress> {
+    let progress = await this.get(athleteId);
+    if (!progress) {
+      progress = await this.initialize(athleteId);
+    }
+
+    const [checkInsSnap, simSessionsSnap] = await Promise.all([
+      getDocs(
+        query(
+          collection(db, 'mental-check-ins', athleteId, 'check-ins'),
+          orderBy('createdAt', 'desc'),
+          limit(20)
+        )
+      ),
+      getDocs(
+        query(
+          collection(db, 'sim-sessions', athleteId, 'sessions'),
+          orderBy('createdAt', 'desc'),
+          limit(30)
+        )
+      ),
+    ]);
+
+    const checkIns = checkInsSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as any) }));
+    const simSessions = simSessionsSnap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as any) }));
+
+    const taxonomyProfile = deriveTaxonomyProfile({
+      baselineAssessment: progress.baselineAssessment,
+      checkIns,
+      simSessions,
+    });
+    const latestCheckIn = checkIns[0];
+    const activeProgram = prescribeNextSession({
+      profile: taxonomyProfile,
+      checkInState: latestCheckIn?.taxonomyState,
+    });
+    const now = Date.now();
+
+    const updates: Partial<AthleteMentalProgress> = {
+      taxonomyProfile,
+      activeProgram,
+      lastProfileSyncAt: now,
+      profileVersion: 'taxonomy-v1',
+      updatedAt: now,
+    };
+
+    await updateDoc(doc(db, COLLECTION, athleteId), updates);
+    return { ...progress, ...updates };
   },
 
   /**
@@ -421,5 +491,18 @@ export const athleteProgressService = {
     } else {
       return { level: 'Elite', description: 'Automatic & adaptive' };
     }
+  },
+
+  getTaxonomyHeadline(progress?: AthleteMentalProgress | null): string {
+    if (!progress?.taxonomyProfile) {
+      return 'Profile still calibrating.';
+    }
+
+    const profile = progress.taxonomyProfile;
+    const strongest = profile.strongestSkills[0] ? humanizeTaxonomyLabel(profile.strongestSkills[0]) : undefined;
+    const weakest = profile.weakestSkills[0] ? humanizeTaxonomyLabel(profile.weakestSkills[0]) : undefined;
+    const readiness = profile.modifierScores[TaxonomyModifier.Readiness];
+
+    return `Strongest: ${strongest || 'n/a'} • Bottleneck: ${weakest || 'n/a'} • Readiness ${Math.round(readiness)}/100`;
   },
 };

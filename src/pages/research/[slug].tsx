@@ -327,6 +327,7 @@ interface DynamicArticle {
   readTime: string;
   featured: boolean;
   featuredImage?: string;
+  contentType?: 'article' | 'white-paper';
   status: string;
   createdAt: string | null;
   updatedAt: string | null;
@@ -347,8 +348,447 @@ interface ResearchArticlePageProps {
   ogMeta: OgMeta;
 }
 
+// ─── White Paper Renderer ───────────────────────────────────────────
+const WhitePaperContent: React.FC<{ article: DynamicArticle }> = ({ article }) => {
+  const [showToc, setShowToc] = useState(false);
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  };
+
+  // Shared inline markdown parser
+  const parseInline = (text: string): React.ReactNode[] => {
+    const parts: React.ReactNode[] = [];
+    const re = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(\[(.+?)\]\((.+?)\))/g;
+    let last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) parts.push(text.substring(last, m.index));
+      if (m[1]) parts.push(<strong key={m.index} className="font-semibold text-stone-900">{m[2]}</strong>);
+      else if (m[3]) parts.push(<em key={m.index}>{m[4]}</em>);
+      else if (m[5]) parts.push(<a key={m.index} href={m[7]} className="text-blue-700 underline decoration-blue-300 hover:decoration-blue-700 transition-colors" target="_blank" rel="noopener noreferrer">{m[6]}</a>);
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) parts.push(text.substring(last));
+    return parts.length > 0 ? parts : [text];
+  };
+
+  // Build TOC from content headings
+  const buildToc = (content: string) => {
+    const toc: { id: string; label: string; level: number }[] = [];
+    const lines = content.split('\n');
+    for (const line of lines) {
+      const t = line.trim();
+      if (t.startsWith('## ')) {
+        const heading = t.substring(3).trim();
+        const id = heading.toLowerCase().replace(/[^a-z0-9.\s-]/g, '').replace(/\s+/g, '-');
+        toc.push({ id, label: heading, level: 2 });
+      } else if (t.startsWith('# ')) {
+        const heading = t.substring(2).trim();
+        const id = heading.toLowerCase().replace(/[^a-z0-9.\s-]/g, '').replace(/\s+/g, '-');
+        toc.push({ id, label: heading, level: 1 });
+      }
+    }
+    return toc;
+  };
+
+  // Render content in white-paper style
+  const renderWhitePaperContent = (content: string): React.ReactNode[] => {
+    // Split on custom block tokens first
+    const blockRegex = /:::(abstract|references|blocks|callout|stat)\n([\s\S]*?):::/g;
+    const segments: { type: string; content: string }[] = [];
+    let last = 0, m;
+    while ((m = blockRegex.exec(content)) !== null) {
+      if (m.index > last) segments.push({ type: 'text', content: content.substring(last, m.index) });
+      segments.push({ type: m[1], content: m[2].trim() });
+      last = m.index + m[0].length;
+    }
+    if (last < content.length) segments.push({ type: 'text', content: content.substring(last) });
+
+    const nodes: React.ReactNode[] = [];
+
+    segments.forEach((seg, si) => {
+      // Abstract block
+      if (seg.type === 'abstract') {
+        nodes.push(
+          <div key={`abstract-${si}`} className="my-10 border border-stone-300 rounded-xl overflow-hidden">
+            <div className="bg-stone-100 border-b border-stone-300 px-6 py-3">
+              <p className="text-xs font-bold uppercase tracking-widest text-stone-500">Abstract</p>
+            </div>
+            <div className="px-6 py-6">
+              <p className="text-base text-stone-700 leading-[1.9]" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+                {parseInline(seg.content)}
+              </p>
+            </div>
+          </div>
+        );
+        return;
+      }
+
+      // References block
+      if (seg.type === 'references') {
+        const refs = seg.content.split('\n').filter(l => l.trim());
+        nodes.push(
+          <div key={`refs-${si}`} className="mt-16 pt-10 border-t-2 border-stone-300">
+            <h2 className="text-lg font-bold text-stone-900 mb-6 uppercase tracking-widest" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+              References
+            </h2>
+            <ol className="space-y-3 list-none">
+              {refs.map((ref, ri) => (
+                <li key={ri} className="flex gap-3 text-sm text-stone-600 leading-relaxed" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+                  <span className="flex-shrink-0 text-stone-400 font-mono text-xs pt-0.5">[{ri + 1}]</span>
+                  <span>{parseInline(ref.replace(/^\[\d+\]\s*/, ''))}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        );
+        return;
+      }
+
+      // Callout block (reuse standard style)
+      if (seg.type === 'callout') {
+        nodes.push(
+          <div key={`callout-${si}`} className="relative my-10 p-6 rounded-xl border border-stone-200 bg-stone-50">
+            <div className="absolute top-0 left-0 w-1 h-full rounded-l-xl bg-stone-400" />
+            <p className="text-base text-stone-700 leading-[1.85] italic pl-4" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+              {parseInline(seg.content)}
+            </p>
+          </div>
+        );
+        return;
+      }
+
+      // Stat block
+      if (seg.type === 'stat') {
+        const lines = seg.content.split('\n').filter(l => l.trim());
+        nodes.push(
+          <div key={`stat-${si}`} className="my-10 flex items-center gap-6 p-6 rounded-xl bg-stone-900 text-white">
+            <span className="text-5xl font-bold tracking-tight" style={{ color: '#E0FE10' }}>{lines[0]}</span>
+            <p className="text-base text-stone-300 leading-relaxed">{parseInline(lines.slice(1).join(' '))}</p>
+          </div>
+        );
+        return;
+      }
+
+      // Text segments — parse LINE BY LINE so heading and body are always separate
+      // This is robust regardless of whether blank lines exist after headings
+      const lines = seg.content.split('\n');
+      let pendingParaLines: string[] = [];
+
+      const flushPara = (keyPrefix: string, idx: number) => {
+        if (pendingParaLines.length === 0) return;
+        const combined = pendingParaLines.join('\n').trim();
+        pendingParaLines = [];
+        if (!combined) return;
+
+        // Split accumulated paragraph text on double-newlines (in case they exist)
+        const subParas = combined.split('\n\n').filter(p => p.trim());
+        subParas.forEach((sub, spi) => {
+          const t = sub.trim();
+          if (!t) return;
+          const key = `${keyPrefix}-flush-${idx}-${spi}`;
+
+          if (t.startsWith('> ')) {
+            nodes.push(
+              <blockquote key={key} className="border-l-4 border-stone-400 pl-5 my-6 py-1">
+                <p className="text-base text-stone-600 leading-[1.85] italic" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+                  {parseInline(t.substring(2))}
+                </p>
+              </blockquote>
+            );
+            return;
+          }
+
+          if (t.startsWith('- ')) {
+            const items = t.split('\n').filter(l => l.startsWith('- '));
+            nodes.push(
+              <ul key={key} className="list-disc ml-6 space-y-2 mb-6 text-base text-stone-700 leading-[1.85]" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+                {items.map((item, ii) => <li key={ii}>{parseInline(item.substring(2))}</li>)}
+              </ul>
+            );
+            return;
+          }
+
+          nodes.push(
+            <p key={key} className="text-base text-stone-700 leading-[1.9] mb-5" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+              {parseInline(t)}
+            </p>
+          );
+        });
+      };
+
+      lines.forEach((rawLine, li) => {
+        const line = rawLine.trim();
+        const key = `${si}-${li}`;
+
+        // Level-1 section heading
+        if (line.startsWith('# ')) {
+          flushPara(`${si}`, li);
+          const headingText = line.substring(2).trim();
+          // Only the first line of this heading (ignore any continuation)
+          const singleLine = headingText.split('\n')[0].trim();
+          const id = singleLine.toLowerCase().replace(/[^a-z0-9.\s-]/g, '').replace(/\s+/g, '-');
+          nodes.push(
+            <div key={key} id={id} className="scroll-mt-20 mt-14 mb-6">
+              <h2
+                className="text-2xl font-bold text-stone-900 leading-tight tracking-tight"
+                style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
+              >
+                {parseInline(singleLine)}
+              </h2>
+              <div className="mt-3 h-px bg-stone-300 w-full" />
+            </div>
+          );
+          return;
+        }
+
+        // Level-2 sub-section heading
+        if (line.startsWith('## ')) {
+          flushPara(`${si}`, li);
+          const headingText = line.substring(3).trim();
+          const singleLine = headingText.split('\n')[0].trim();
+          const id = singleLine.toLowerCase().replace(/[^a-z0-9.\s-]/g, '').replace(/\s+/g, '-');
+          nodes.push(
+            <h3
+              key={key}
+              id={id}
+              className="scroll-mt-20 mt-10 mb-3 text-lg font-semibold text-stone-700 leading-snug tracking-tight"
+              style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
+            >
+              {parseInline(singleLine)}
+            </h3>
+          );
+          return;
+        }
+
+        // Accumulate into current paragraph
+        pendingParaLines.push(rawLine);
+      });
+
+      // Flush any remaining paragraph lines
+      flushPara(`${si}`, lines.length);
+    });
+
+    return nodes;
+  };
+
+  const tocItems = buildToc(article.content);
+  const hasToc = tocItems.length > 0;
+  const pubDate = formatDate(article.publishedAt || article.createdAt);
+
+  return (
+    <>
+      <ReadingProgress />
+      <div className="min-h-screen bg-[#FAFAF8]">
+        {/* Nav */}
+        <nav className="sticky top-0 z-50 bg-[#FAFAF8]/90 backdrop-blur-md border-b border-stone-200/60">
+          <div className="max-w-5xl mx-auto px-6 md:px-8">
+            <div className="flex items-center justify-between h-14">
+              <Link href="/research" className="flex items-center gap-3 group">
+                <img src="/pulse-logo.svg" alt="Pulse" className="h-7" />
+                <span className="text-sm text-stone-400 font-medium group-hover:text-stone-600 transition-colors">Research</span>
+              </Link>
+              <div className="flex items-center gap-4">
+                {hasToc && (
+                  <button onClick={() => setShowToc(!showToc)} className="lg:hidden text-sm text-stone-500 hover:text-stone-900 transition-colors">
+                    Contents
+                  </button>
+                )}
+                <Link href="/research" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">All articles</Link>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        {/* Mobile TOC */}
+        {hasToc && showToc && (
+          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="lg:hidden sticky top-14 z-40 bg-[#FAFAF8] border-b border-stone-200 shadow-sm">
+            <div className="max-w-5xl mx-auto px-6 py-4">
+              <nav className="flex flex-col gap-1.5">
+                {tocItems.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setShowToc(false);
+                      const el = document.getElementById(item.id);
+                      if (el) {
+                        const navOffset = 110;
+                        const top = el.getBoundingClientRect().top + window.scrollY - navOffset;
+                        window.scrollTo({ top, behavior: 'smooth' });
+                      }
+                    }}
+                    className={`text-left text-sm py-1 transition-colors cursor-pointer ${item.level === 2 ? 'pl-3 text-stone-400 hover:text-stone-700' : 'text-stone-500 hover:text-stone-900 font-medium'}`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </nav>
+            </div>
+          </motion.div>
+        )}
+
+        {/* White Paper Cover */}
+        <header className="border-b border-stone-200 bg-white">
+          <div className="max-w-3xl mx-auto px-6 md:px-8 py-14 md:py-20 text-center">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-stone-100 border border-stone-200 mb-8">
+              <span className="text-xs font-semibold uppercase tracking-widest text-stone-500">White Paper</span>
+              <span className="w-1 h-1 rounded-full bg-stone-400" />
+              <span className="text-xs text-stone-400">{article.category}</span>
+            </div>
+
+            {/* Title */}
+            <h1
+              className="text-3xl md:text-4xl lg:text-[2.6rem] font-bold text-stone-900 leading-[1.12] tracking-tight mb-5"
+              style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
+            >
+              {article.title}
+            </h1>
+
+            {/* Subtitle */}
+            {article.subtitle && (
+              <p className="text-base md:text-lg text-stone-500 leading-relaxed mb-8 max-w-2xl mx-auto">
+                {article.subtitle}
+              </p>
+            )}
+
+            {/* Divider line */}
+            <div className="w-16 h-px bg-stone-300 mx-auto mb-8" />
+
+            {/* Meta */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 text-sm text-stone-500">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs font-bold text-[#E0FE10]">{article.author.charAt(0).toUpperCase()}</span>
+                </div>
+                <span className="font-medium text-stone-700">{article.author}</span>
+                {article.authorTitle && <span className="text-stone-400">· {article.authorTitle}</span>}
+              </div>
+              {pubDate && (
+                <>
+                  <span className="hidden sm:inline text-stone-300">·</span>
+                  <span>{pubDate}</span>
+                </>
+              )}
+              <span className="hidden sm:inline text-stone-300">·</span>
+              <span>{article.readTime}</span>
+            </div>
+          </div>
+        </header>
+
+        {/* Body */}
+        <div className="max-w-5xl mx-auto px-6 md:px-8 py-12">
+          <div className="flex gap-12 lg:gap-16">
+            {/* Desktop TOC Sidebar */}
+            {hasToc && (
+              <aside className="hidden lg:block w-52 flex-shrink-0">
+                <div className="sticky top-24">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-4">Contents</p>
+                  <nav className="flex flex-col gap-0.5">
+                    {tocItems.map(item => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          const el = document.getElementById(item.id);
+                          if (el) {
+                            const navOffset = 72;
+                            const top = el.getBoundingClientRect().top + window.scrollY - navOffset;
+                            window.scrollTo({ top, behavior: 'smooth' });
+                          }
+                        }}
+                        className={`text-left transition-colors py-1 leading-snug cursor-pointer ${item.level === 2
+                          ? 'pl-3 text-[12px] text-stone-400 hover:text-stone-700'
+                          : 'text-[12px] text-stone-500 hover:text-stone-900 font-medium'
+                          }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </nav>
+                </div>
+              </aside>
+            )}
+
+            {/* Main Content */}
+            <motion.article
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5 }}
+              className={`flex-1 min-w-0 ${hasToc ? '' : 'max-w-3xl mx-auto'}`}
+            >
+              {/* Excerpt / lead */}
+              {article.excerpt && (
+                <p className="text-lg text-stone-600 leading-[1.85] mb-10 font-medium border-b border-stone-200 pb-10" style={{ fontFamily: "'Georgia', 'Times New Roman', serif" }}>
+                  {article.excerpt}
+                </p>
+              )}
+
+              {renderWhitePaperContent(article.content)}
+
+              {/* Author footer */}
+              <div className="mt-16 pt-10 border-t border-stone-200">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-full bg-stone-900 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm font-bold text-[#E0FE10]">{article.author.charAt(0).toUpperCase()}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-stone-900 mb-0.5" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+                      {article.author}
+                    </p>
+                    <p className="text-sm text-stone-500 leading-relaxed" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+                      {article.authorTitle || 'Researcher for Pulse Intelligence Labs.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Back link */}
+              <div className="mt-10 mb-24">
+                <Link href="/research" className="inline-flex items-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                  </svg>
+                  Back to all research
+                </Link>
+              </div>
+            </motion.article>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <footer className="border-t border-stone-200 bg-[#FAFAF8]">
+          <div className="max-w-5xl mx-auto px-6 md:px-8 py-10">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div>
+                <img src="/pulse-logo.svg" alt="Pulse" className="h-6 mb-3" />
+                <p className="text-sm text-stone-400">© {new Date().getFullYear()} Pulse Intelligence Labs, Inc.</p>
+              </div>
+              <div className="flex items-center gap-6">
+                <Link href="/" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">Home</Link>
+                <Link href="/research" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">Research</Link>
+                <Link href="/about" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">About</Link>
+                <a href="mailto:pulsefitnessapp@gmail.com" className="text-sm text-stone-500 hover:text-stone-900 transition-colors">Contact</a>
+              </div>
+            </div>
+          </div>
+        </footer>
+      </div>
+    </>
+  );
+};
+
 // ─── Dynamic Article Renderer ──────────────────────────────────────
 const DynamicArticleContent: React.FC<{ article: DynamicArticle }> = ({ article }) => {
+  // Dispatch to white paper renderer when appropriate
+  if (article.contentType === 'white-paper') {
+    return <WhitePaperContent article={article} />;
+  }
+  return <StandardArticleContent article={article} />;
+};
+
+// ─── Standard Article Renderer ─────────────────────────────────────
+const StandardArticleContent: React.FC<{ article: DynamicArticle }> = ({ article }) => {
   const [showToc, setShowToc] = useState(false);
 
   // Generate table of contents from # headings in content

@@ -22,14 +22,14 @@ import {
     Shield,
     TrendingDown,
     Activity,
-    Award,
     Lock,
-    Unlock,
-    ArrowUp,
     Trophy,
 } from 'lucide-react';
 import { MentalExercise, GameLevelProgress, TierAdvancementResult } from '../../api/firebase/mentaltraining/types';
 import { gameLevelProgressService } from '../../api/firebase/mentaltraining/gameLevelProgressService';
+import { simSessionService } from '../../api/firebase/mentaltraining/simSessionService';
+import { athleteProgressService } from '../../api/firebase/mentaltraining/athleteProgressService';
+import { DurationMode, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
 import { useUser } from '../../hooks/useUser';
 
 // ============================================================================
@@ -160,11 +160,8 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
     // Phase state
     const [phase, setPhase] = useState<GamePhase>('lockIn');
     const [lockInRemaining, setLockInRemaining] = useState(tierConfig.lockInDuration);
-    const [disruptionType, setDisruptionType] = useState<DisruptionType>('visual');
-
     // Focus task state
     const [pulseScale, setPulseScale] = useState(1);
-    const [pulseActive, setPulseActive] = useState(false);
     const [tapAccuracy, setTapAccuracy] = useState<boolean[]>([]);
     const expectedTapTimeRef = useRef<number>(0);
 
@@ -265,11 +262,9 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
         if (pulseTimerRef.current) clearInterval(pulseTimerRef.current);
         pulseTimerRef.current = setInterval(() => {
             expectedTapTimeRef.current = Date.now();
-            setPulseActive(true);
             setPulseScale(1.3);
             setTimeout(() => {
                 setPulseScale(1);
-                setPulseActive(false);
             }, 600);
         }, 1200);
     }, []);
@@ -334,7 +329,6 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
 
         // Apply disruption
         const dt = selectDisruption();
-        setDisruptionType(dt);
 
         if (dt === 'visual' || dt === 'combined') {
             setFlashActive(true);
@@ -524,6 +518,22 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
     const saveSessionProgress = useCallback(async () => {
         if (!currentUser?.id || roundRecoveryTimes.length === 0) return;
 
+        const durationMode =
+            totalElapsed >= 300 ? DurationMode.ExtendedStressTest :
+            totalElapsed >= 150 ? DurationMode.StandardRep :
+            DurationMode.QuickProbe;
+        const normalizedScore = Math.max(
+            0,
+            Math.min(
+                100,
+                Math.round(
+                    ((Math.max(0, 100 - avgRecovery * 22) * 0.6) +
+                        (Math.max(0, 100 - variance * 40) * 0.2) +
+                        (resilienceScore * 0.2)) * 10
+                ) / 10
+            )
+        );
+
         const sessionRecord = {
             sessionDate: Date.now(),
             tier: tierNumber,
@@ -535,11 +545,47 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
         };
 
         try {
-            const result = await gameLevelProgressService.recordSession(
-                currentUser.id,
-                'kill_switch',
-                sessionRecord
-            );
+            const [result] = await Promise.all([
+                gameLevelProgressService.recordSession(
+                    currentUser.id,
+                    'kill_switch',
+                    sessionRecord
+                ),
+                simSessionService.recordSession({
+                    userId: currentUser.id,
+                    simId: 'kill_switch',
+                    simName: 'The Kill Switch',
+                    legacyExerciseId: exercise.id,
+                    sessionType: avgRecovery <= tierConfig.recoveryTarget ? SessionType.TrainingRep : SessionType.Reassessment,
+                    durationMode,
+                    durationSeconds: totalElapsed,
+                    coreMetricName: 'recovery_time',
+                    coreMetricValue: avgRecovery,
+                    supportingMetrics: {
+                        recovery_trend: delta,
+                        disruption_resilience_score: resilienceScore,
+                        consistency_index: variance,
+                        worst_to_best_delta: delta,
+                        best_recovery: bestRecovery,
+                        worst_recovery: worstRecovery,
+                        tier: tierNumber,
+                    },
+                    normalizedScore,
+                    targetSkills: [
+                        TaxonomySkill.ErrorRecoverySpeed,
+                        TaxonomySkill.AttentionalShifting,
+                        TaxonomySkill.PressureStability,
+                    ],
+                    pressureTypes: [
+                        PressureType.Visual,
+                        PressureType.Evaluative,
+                        PressureType.CompoundingError,
+                    ],
+                    createdAt: Date.now(),
+                }),
+            ]);
+
+            await athleteProgressService.syncTaxonomyProfile(currentUser.id);
             setLevelProgress(result.progress);
             setAdvancementResult(result.advancementResult);
 
@@ -549,7 +595,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
         } catch (err) {
             console.error('Failed to save session progress:', err);
         }
-    }, [currentUser?.id, tierNumber, avgRecovery, variance, resilienceScore, metTarget, roundRecoveryTimes]);
+    }, [currentUser?.id, tierNumber, avgRecovery, variance, resilienceScore, metTarget, roundRecoveryTimes, totalElapsed, delta, bestRecovery, worstRecovery, exercise.id, tierConfig.recoveryTarget]);
 
     // ============================================================================
     // RENDER HELPERS

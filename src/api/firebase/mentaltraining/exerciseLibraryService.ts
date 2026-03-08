@@ -27,6 +27,7 @@ import {
   exerciseFromFirestore,
   exerciseToFirestore,
 } from './types';
+import { getSimSpec, getSimSpecByLegacyExerciseId } from './taxonomy';
 
 const COLLECTION = 'mental-exercises';
 
@@ -165,6 +166,28 @@ export const exerciseLibraryService = {
 // ============================================================================
 
 const now = Date.now();
+
+function taxonomyFields(simIdOrExerciseId: string) {
+  const simSpec = getSimSpec(simIdOrExerciseId) ?? getSimSpecByLegacyExerciseId(simIdOrExerciseId);
+  if (!simSpec) return {};
+
+  return {
+    simSpecId: simSpec.id,
+    taxonomy: {
+      primaryPillar: simSpec.primaryPillar,
+      secondaryPillar: simSpec.secondaryPillar,
+      targetSkills: simSpec.targetSkills,
+      pressureTypes: simSpec.pressureTypes,
+      coreMetric: simSpec.coreMetric,
+      supportingMetrics: simSpec.supportingMetrics,
+      evidenceStatus: simSpec.evidenceStatus,
+      prescriptionRoles: simSpec.prescriptionRoles,
+      scientificBasis: simSpec.scientificBasis,
+      transferHypothesis: simSpec.transferHypothesis,
+      validationPlan: simSpec.validationPlan,
+    },
+  };
+}
 
 const SEEDED_EXERCISES: MentalExercise[] = [
   // -------------------------------------------------------------------------
@@ -1111,6 +1134,197 @@ const SEEDED_EXERCISES: MentalExercise[] = [
     iconName: 'zap',
     isActive: true,
     sortOrder: 23,
+    ...taxonomyFields('focus-3-second-reset'),
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'focus-noise-gate',
+    name: 'Noise Gate',
+    description: 'Train selective attention by locking onto the live signal while visual and audio clutter compete for your focus.',
+    category: ExerciseCategory.Focus,
+    difficulty: ExerciseDifficulty.Intermediate,
+    durationMinutes: 3,
+    exerciseConfig: {
+      type: 'focus',
+      config: {
+        type: 'distraction',
+        duration: 180,
+        progressionLevel: 2,
+        instructions: ['Filter noise, ignore decoys, and hold the right cue under clutter.'],
+      },
+    },
+    benefits: [
+      'Improves cue filtering under clutter',
+      'Builds tolerance for audio and visual distraction',
+      'Sharpens selective attention under time pressure',
+    ],
+    bestFor: ['crowd noise', 'visual clutter', 'distraction control', 'recognition speed'],
+    origin: 'Built from attention-systems research and sport concentration training used to help athletes ignore bait, clutter, and crowd noise.',
+    neuroscience: 'Noise Gate targets the attentional selection network by forcing the brain to preserve task-relevant information while suppressing distractors. Repeated reps should reduce the performance cost of irrelevant cues.',
+    overview: {
+      when: 'Before noisy competition environments or when athletes are losing the right cue to clutter',
+      focus: 'Selective attention under distraction',
+      timeScale: '2-4 minutes',
+      skill: 'Holding the live signal while noise rises',
+      analogy: 'Like tuning a radio until only the station you need comes through clearly',
+    },
+    iconName: 'radio',
+    isActive: true,
+    sortOrder: 24,
+    ...taxonomyFields('focus-noise-gate'),
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'decision-brake-point',
+    name: 'Brake Point',
+    description: 'Train impulse control by cancelling the wrong move fast enough to avoid compounding the mistake.',
+    category: ExerciseCategory.Focus,
+    difficulty: ExerciseDifficulty.Intermediate,
+    durationMinutes: 3,
+    exerciseConfig: {
+      type: 'focus',
+      config: {
+        type: 'cue_word',
+        duration: 150,
+        progressionLevel: 2,
+        instructions: ['Read go / no-go conflict quickly and brake before the false move completes.'],
+      },
+    },
+    benefits: [
+      'Reduces impulsive errors',
+      'Improves cancellation speed',
+      'Builds cleaner response inhibition under pressure',
+    ],
+    bestFor: ['fake-outs', 'false starts', 'impulsive decisions', 'decision control'],
+    origin: 'Grounded in executive-function research on inhibitory control and adapted for pressure-heavy sport decisions.',
+    neuroscience: 'Brake Point targets inhibitory control by training rapid suppression of prepotent responses before error cascades can form.',
+    overview: {
+      when: 'When athletes are overcommitting, biting on fakes, or false-starting',
+      focus: 'Stopping the wrong action fast',
+      timeScale: '2-3 minutes',
+      skill: 'Response inhibition',
+      analogy: 'Like hitting the brakes before a skid turns into a crash',
+    },
+    iconName: 'octagon-x',
+    isActive: true,
+    sortOrder: 25,
+    ...taxonomyFields('decision-brake-point'),
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'decision-signal-window',
+    name: 'Signal Window',
+    description: 'Compress the decision window and force the athlete to choose the real cue before the opportunity disappears.',
+    category: ExerciseCategory.Focus,
+    difficulty: ExerciseDifficulty.Intermediate,
+    durationMinutes: 3,
+    exerciseConfig: {
+      type: 'focus',
+      config: {
+        type: 'single_point',
+        duration: 165,
+        progressionLevel: 2,
+        instructions: ['Pick the live signal, reject decoys, and decide before the window closes.'],
+      },
+    },
+    benefits: [
+      'Improves read-and-react speed',
+      'Sharpens cue discrimination',
+      'Reduces decoy susceptibility',
+    ],
+    bestFor: ['tight reads', 'recognition speed', 'ambiguous cues', 'decision clarity'],
+    origin: 'Inspired by perceptual-cognitive training work on cue discrimination and fast decision-making.',
+    neuroscience: 'Signal Window forces faster cue selection under ambiguity, strengthening the link between selective attention and decisive action.',
+    overview: {
+      when: 'For athletes who know what to do but do not read it fast enough',
+      focus: 'Correct reads under tight time pressure',
+      timeScale: '2-3 minutes',
+      skill: 'Cue discrimination',
+      analogy: 'Like catching the green light before it turns red',
+    },
+    iconName: 'scan-eye',
+    isActive: true,
+    sortOrder: 26,
+    ...taxonomyFields('decision-signal-window'),
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'decision-sequence-shift',
+    name: 'Sequence Shift',
+    description: 'Force quick adaptation when rules or priorities change mid-rep so the athlete can re-stabilize without freezing.',
+    category: ExerciseCategory.Focus,
+    difficulty: ExerciseDifficulty.Advanced,
+    durationMinutes: 3,
+    exerciseConfig: {
+      type: 'focus',
+      config: {
+        type: 'distraction',
+        duration: 180,
+        progressionLevel: 3,
+        instructions: ['Hold the sequence, update the rule, and keep executing after the switch.'],
+      },
+    },
+    benefits: [
+      'Improves working-memory updating',
+      'Builds faster re-stabilization after rule changes',
+      'Strengthens mental flexibility',
+    ],
+    bestFor: ['audibles', 'assignment changes', 'install work', 'rule switching'],
+    origin: 'Grounded in executive-function research on updating and attentional shifting.',
+    neuroscience: 'Sequence Shift recruits working-memory updating and attentional shifting so athletes can preserve structure even when instructions change mid-flow.',
+    overview: {
+      when: 'When athletes struggle after audibles, changed assignments, or late instructions',
+      focus: 'Maintaining execution through rule change',
+      timeScale: '3 minutes',
+      skill: 'Working-memory updating',
+      analogy: 'Like changing lanes at speed without losing control of the car',
+    },
+    iconName: 'shuffle',
+    isActive: true,
+    sortOrder: 27,
+    ...taxonomyFields('decision-sequence-shift'),
+    createdAt: now,
+    updatedAt: now,
+  },
+  {
+    id: 'focus-endurance-lock',
+    name: 'Endurance Lock',
+    description: 'Extended focus rep designed to expose late-session lapses, variance, and fatigue-driven decision decay.',
+    category: ExerciseCategory.Focus,
+    difficulty: ExerciseDifficulty.Advanced,
+    durationMinutes: 6,
+    exerciseConfig: {
+      type: 'focus',
+      config: {
+        type: 'single_point',
+        duration: 360,
+        progressionLevel: 4,
+        instructions: ['Stay locked in as time-on-task accumulates and the rep gets mentally heavier.'],
+      },
+    },
+    benefits: [
+      'Reveals fatigability',
+      'Measures late-session sharpness',
+      'Builds sustained attention under accumulating load',
+    ],
+    bestFor: ['late-game focus', 'fatigability', 'consistency', 'extended reps'],
+    origin: 'Built from concentration training and mental-fatigue literature on time-on-task breakdown.',
+    neuroscience: 'Endurance Lock turns duration into the stressor. It measures how quickly performance decays as cognitive load accumulates.',
+    overview: {
+      when: 'Periodic stress tests and high-value reassessment days',
+      focus: 'Degradation slope over time',
+      timeScale: '5-8 minutes',
+      skill: 'Sustained attention under fatigue',
+      analogy: 'Like checking whether your mechanics still hold in the fourth quarter',
+    },
+    iconName: 'timer-reset',
+    isActive: true,
+    sortOrder: 28,
+    ...taxonomyFields('focus-endurance-lock'),
     createdAt: now,
     updatedAt: now,
   },

@@ -28,6 +28,10 @@ import {
 } from '../../api/firebase/mentaltraining/types';
 import { athleteProgressService } from '../../api/firebase/mentaltraining';
 
+function humanizeTaxonomyLabel(value: string): string {
+  return value.split('_').join(' ');
+}
+
 interface RecommendationCardProps {
   recommendation: MentalRecommendation;
   athleteName?: string;
@@ -135,6 +139,8 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
               <p className="text-sm text-zinc-400">
                 {recommendation.pathway === MentalPathway.Foundation
                   ? 'Starting foundation training'
+                  : recommendation.programRecommendation
+                  ? `${humanizeTaxonomyLabel(recommendation.programRecommendation.sessionType)} • ${humanizeTaxonomyLabel(recommendation.programRecommendation.durationMode)}`
                   : `${pathwayName} • Step ${recommendation.pathwayStep}`}
               </p>
             </div>
@@ -179,6 +185,22 @@ export const RecommendationCard: React.FC<RecommendationCardProps> = ({
                 <span className="capitalize">{exercise.difficulty}</span>
                 <span>•</span>
                 <span className="capitalize">{exercise.category}</span>
+              </div>
+            )}
+
+            {exercise?.taxonomy && (
+              <div className="flex flex-wrap gap-2 mt-3 text-[11px]">
+                <span className="px-2 py-1 rounded-full bg-zinc-700 text-zinc-200 capitalize">
+                  {exercise.taxonomy.primaryPillar}
+                </span>
+                {exercise.taxonomy.secondaryPillar && (
+                  <span className="px-2 py-1 rounded-full bg-zinc-700 text-zinc-200 capitalize">
+                    {exercise.taxonomy.secondaryPillar}
+                  </span>
+                )}
+                <span className="px-2 py-1 rounded-full bg-[#E0FE10]/10 text-[#E0FE10] capitalize">
+                  {exercise.taxonomy.targetSkills[0] ? humanizeTaxonomyLabel(exercise.taxonomy.targetSkills[0]) : null}
+                </span>
               </div>
             )}
           </div>

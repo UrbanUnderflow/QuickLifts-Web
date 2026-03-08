@@ -64,6 +64,7 @@ interface ResearchArticle {
     readTime: string;
     featured: boolean;
     featuredImage?: string;
+    contentType?: 'article' | 'white-paper';
     status: 'draft' | 'published' | 'archived';
     createdAt: Timestamp;
     updatedAt: Timestamp;
@@ -219,6 +220,7 @@ const ResearchArticlesAdmin: React.FC = () => {
         content: '',
         featuredImage: '',
         featured: false,
+        contentType: 'article' as 'article' | 'white-paper',
     });
 
     // Visual enhancements state
@@ -334,6 +336,7 @@ const ResearchArticlesAdmin: React.FC = () => {
             content: '',
             featuredImage: '',
             featured: false,
+            contentType: 'article' as 'article' | 'white-paper',
         });
     };
 
@@ -354,6 +357,7 @@ const ResearchArticlesAdmin: React.FC = () => {
             content: article.content,
             featuredImage: article.featuredImage || '',
             featured: article.featured,
+            contentType: (article.contentType || 'article') as 'article' | 'white-paper',
         });
         setSelectedArticle(article);
         setIsEditing(true);
@@ -374,6 +378,7 @@ const ResearchArticlesAdmin: React.FC = () => {
                 content: selectedArticle.content,
                 featuredImage: selectedArticle.featuredImage || '',
                 featured: selectedArticle.featured,
+                contentType: (selectedArticle.contentType || 'article') as 'article' | 'white-paper',
             });
         } else {
             resetForm();
@@ -406,6 +411,7 @@ const ResearchArticlesAdmin: React.FC = () => {
                     readTime,
                     featured: formData.featured,
                     featuredImage: formData.featuredImage,
+                    contentType: formData.contentType,
                     status: publish ? 'published' : 'draft',
                     createdAt: now,
                     updatedAt: now,
@@ -426,6 +432,7 @@ const ResearchArticlesAdmin: React.FC = () => {
                     readTime,
                     featured: formData.featured,
                     featuredImage: formData.featuredImage,
+                    contentType: formData.contentType,
                     updatedAt: now,
                     ...(publish && selectedArticle.status !== 'published'
                         ? { status: 'published', publishedAt: now }
@@ -567,6 +574,125 @@ const ResearchArticlesAdmin: React.FC = () => {
             textarea.focus();
             textarea.setSelectionRange(start + cursorOffset, end + cursorOffset);
         }, 0);
+    };
+
+    // ─── Format as White Paper ─────────────────────────────────────
+    const handleFormatAsWhitePaper = () => {
+        const raw = formData.content;
+        if (!raw.trim()) {
+            showMessage('error', 'No content to format.');
+            return;
+        }
+
+        const lines = raw.split('\n');
+        const output: string[] = [];
+        let inAbstract = false;
+        let inReferences = false;
+        let abstractLines: string[] = [];
+        let referencesLines: string[] = [];
+        let i = 0;
+
+        while (i < lines.length) {
+            const line = lines[i];
+            const trimmed = line.trim();
+
+            // Detect "Abstract" standalone heading
+            if (/^abstract$/i.test(trimmed)) {
+                inAbstract = true;
+                abstractLines = [];
+                i++;
+                continue;
+            }
+
+            // Detect References standalone heading
+            if (/^references$/i.test(trimmed)) {
+                if (inAbstract) {
+                    output.push(':::abstract');
+                    output.push(abstractLines.join('\n').trim());
+                    output.push(':::');
+                    output.push('');
+                    inAbstract = false;
+                }
+                inReferences = true;
+                referencesLines = [];
+                i++;
+                continue;
+            }
+
+            // Detect top-level numbered sections: "1. Title" or "1 Title"
+            const sectionMatch = trimmed.match(/^(\d+)\.?\s+(.+)$/);
+            // Detect sub-sections: "2.1 Title" or "2.1. Title"
+            const subsectionMatch = trimmed.match(/^(\d+\.\d+)\.?\s+(.+)$/);
+
+            if (inAbstract) {
+                // If we hit a numbered section, close abstract
+                if (sectionMatch || subsectionMatch) {
+                    output.push(':::abstract');
+                    output.push(abstractLines.join('\n').trim());
+                    output.push(':::');
+                    output.push('');
+                    inAbstract = false;
+                    // Don't increment i — reprocess current line
+                    continue;
+                }
+                abstractLines.push(trimmed);
+                i++;
+                continue;
+            }
+
+            if (inReferences) {
+                referencesLines.push(trimmed);
+                i++;
+                continue;
+            }
+
+            // Sub-section heading (check before section since it's more specific)
+            if (subsectionMatch) {
+                output.push('');
+                output.push(`## ${subsectionMatch[1]} ${subsectionMatch[2]}`);
+                output.push(''); // blank line after so body text is a separate paragraph
+                i++;
+                continue;
+            }
+
+            // Top-level section heading
+            if (sectionMatch) {
+                output.push('');
+                output.push(`# ${sectionMatch[1]}. ${sectionMatch[2]}`);
+                output.push(''); // blank line after so body text is a separate paragraph
+                i++;
+                continue;
+            }
+
+            // Regular line
+            output.push(trimmed);
+            i++;
+        }
+
+        // Close references
+        if (inReferences && referencesLines.length > 0) {
+            output.push('');
+            output.push(':::references');
+            output.push(referencesLines.filter(l => l).join('\n'));
+            output.push(':::');
+        }
+
+        // Collapse multiple blank lines
+        const collapsed: string[] = [];
+        let prevBlank = false;
+        for (const l of output) {
+            const isBlank = l.trim() === '';
+            if (isBlank && prevBlank) continue;
+            collapsed.push(l);
+            prevBlank = isBlank;
+        }
+
+        setFormData(prev => ({
+            ...prev,
+            content: collapsed.join('\n'),
+            contentType: 'white-paper',
+        }));
+        showMessage('success', 'Content formatted as White Paper!');
     };
 
     // ─── Auto-Enhance: scan content for visual opportunities ────────
@@ -789,6 +915,7 @@ const ResearchArticlesAdmin: React.FC = () => {
                                                         content: article.content,
                                                         featuredImage: article.featuredImage || '',
                                                         featured: article.featured,
+                                                        contentType: (article.contentType || 'article') as 'article' | 'white-paper',
                                                     });
                                                 }}
                                             />
@@ -890,6 +1017,17 @@ const ResearchArticlesAdmin: React.FC = () => {
                                                     ))}
                                                 </select>
                                             </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-stone-500 mb-1.5">Content Type</label>
+                                                <select
+                                                    value={formData.contentType}
+                                                    onChange={(e) => setFormData({ ...formData, contentType: e.target.value as 'article' | 'white-paper' })}
+                                                    className="w-full px-3 py-2 rounded-lg border border-stone-200 text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-stone-900/10 focus:border-stone-400 bg-white"
+                                                >
+                                                    <option value="article">Article</option>
+                                                    <option value="white-paper">White Paper</option>
+                                                </select>
+                                            </div>
                                             <div className="col-span-2 md:col-span-1">
                                                 <label className="block text-xs font-medium text-stone-500 mb-1.5">Featured Image</label>
                                                 <div className="space-y-2">
@@ -970,21 +1108,37 @@ const ResearchArticlesAdmin: React.FC = () => {
 
                                         {/* Content Editor */}
                                         <div>
-                                            <label className="block text-xs font-medium text-stone-500 mb-1.5">Content</label>
+                                            <div className="flex items-center justify-between mb-1.5">
+                                                <label className="block text-xs font-medium text-stone-500">Content</label>
+                                                {formData.contentType === 'white-paper' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleFormatAsWhitePaper}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors shadow-sm"
+                                                    >
+                                                        <Sparkles className="w-3 h-3" />
+                                                        Format as White Paper
+                                                    </button>
+                                                )}
+                                            </div>
                                             <div className="border border-stone-200 rounded-lg overflow-hidden">
                                                 <EditorToolbar onAction={handleToolbarAction} />
                                                 <textarea
                                                     id="content-editor"
                                                     value={formData.content}
                                                     onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                                                    placeholder="Write your article content here... Use Markdown for formatting."
+                                                    placeholder={formData.contentType === 'white-paper'
+                                                        ? 'Paste your white paper text here, then click "Format as White Paper" to auto-structure it...'
+                                                        : 'Write your article content here... Use Markdown for formatting.'}
                                                     rows={20}
                                                     className="w-full px-4 py-4 text-stone-900 text-base leading-relaxed focus:outline-none resize-none bg-white font-mono text-sm"
                                                     style={{ fontFamily: "'SF Mono', 'Monaco', 'Menlo', monospace" }}
                                                 />
                                             </div>
                                             <p className="mt-2 text-xs text-stone-400">
-                                                Supports Markdown. Use toolbar for headers, quotes, lists, and <strong>visual blocks</strong> (amber icons).
+                                                {formData.contentType === 'white-paper'
+                                                    ? 'Paste raw white paper text and click "Format as White Paper" to auto-detect Abstract, numbered sections, sub-sections, and References.'
+                                                    : 'Supports Markdown. Use toolbar for headers, quotes, lists, and visual blocks (amber icons).'}
                                             </p>
                                         </div>
 
