@@ -24,7 +24,6 @@ import {
   CurriculumAssignment,
   CurriculumAssignmentStatus,
   DailyCompletion,
-  MentalExercise,
   MentalPathway,
   AssignmentSource,
   curriculumAssignmentFromFirestore,
@@ -104,6 +103,7 @@ export const curriculumAssignmentService = {
       coachId,
       exerciseId,
       exercise,
+      simSpecId: exercise.simSpecId,
       recommendationId,
       source: AssignmentSource.Coach,
       durationDays,
@@ -309,7 +309,7 @@ export const curriculumAssignmentService = {
 
     // Recalculate progress
     const updated = await this.updateProgress(assignmentId);
-    const { completionRate, completedDays, targetDays } = updated;
+    const { completionRate } = updated;
 
     const now = Date.now();
 
@@ -329,7 +329,7 @@ export const curriculumAssignmentService = {
       await updateDoc(doc(db, COLLECTION, assignmentId), {
         status: CurriculumAssignmentStatus.Extended,
         endDate: newEndDate,
-        targetDays: targetDays + 7,
+        targetDays: updated.targetDays + 7,
         extendedCount: updated.extendedCount + 1,
         updatedAt: now,
       });

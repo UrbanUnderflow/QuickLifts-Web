@@ -11,7 +11,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  setDoc,
   updateDoc,
   query,
   where,
@@ -25,8 +24,6 @@ import {
   MentalPathway,
   RecommendationConfidence,
   RecommendationStatus,
-  MentalExercise,
-  AthleteMentalProgress,
   PathwayDefinition,
   recommendationFromFirestore,
   recommendationToFirestore,
@@ -34,6 +31,7 @@ import {
 import { exerciseLibraryService } from './exerciseLibraryService';
 import { athleteProgressService } from './athleteProgressService';
 import { curriculumAssignmentService } from './curriculumAssignmentService';
+import { getSimSpec } from './taxonomy';
 
 const COLLECTION = 'mental-recommendations';
 
@@ -63,9 +61,9 @@ const PATHWAY_SEQUENCES: Record<MentalPathway, { exerciseId: string; name: strin
     { exerciseId: 'breathing-recovery', name: 'Recovery Breathing' },
   ],
   [MentalPathway.FocusMastery]: [
-    { exerciseId: 'focus-single-point', name: 'Single-Point Focus' },
-    { exerciseId: 'focus-cue-word', name: 'Cue Word Anchoring' },
-    { exerciseId: 'focus-distraction', name: 'Distraction Training' },
+    { exerciseId: 'focus-noise-gate', name: 'Noise Gate' },
+    { exerciseId: 'decision-signal-window', name: 'Signal Window' },
+    { exerciseId: 'decision-sequence-shift', name: 'Sequence Shift' },
   ],
   [MentalPathway.ConfidenceResilience]: [
     { exerciseId: 'confidence-evidence', name: 'Evidence Journal' },
@@ -73,13 +71,14 @@ const PATHWAY_SEQUENCES: Record<MentalPathway, { exerciseId: string; name: strin
     { exerciseId: 'mindset-growth', name: 'Growth Mindset Self-Talk' },
   ],
   [MentalPathway.PressurePerformance]: [
-    { exerciseId: 'mindset-reframe-nerves', name: 'Nerves → Excitement Reframe' },
-    { exerciseId: 'mindset-process-focus', name: 'Process Focus Training' },
-    { exerciseId: 'visualization-adversity', name: 'Adversity Response Imagery' },
+    { exerciseId: 'focus-3-second-reset', name: 'The Kill Switch' },
+    { exerciseId: 'decision-brake-point', name: 'Brake Point' },
+    { exerciseId: 'focus-endurance-lock', name: 'Endurance Lock' },
   ],
   [MentalPathway.EliteRefinement]: [
     // Elite athletes rotate through advanced versions
-    { exerciseId: 'visualization-competition', name: 'Competition Walkthrough' },
+    { exerciseId: 'decision-sequence-shift', name: 'Sequence Shift' },
+    { exerciseId: 'focus-endurance-lock', name: 'Endurance Lock' },
   ],
 };
 
@@ -165,6 +164,16 @@ export const recommendationService = {
       // But for auto-triggers, wait for assessment
       return null;
     }
+
+    const activeProgram = progress.activeProgram;
+    if (activeProgram?.recommendedLegacyExerciseId) {
+      const simSpec = getSimSpec(activeProgram.recommendedSimId);
+      pathway = progress.currentPathway;
+      pathwayStep = Math.max(progress.pathwayStep, 1);
+      exerciseId = activeProgram.recommendedLegacyExerciseId;
+      exerciseName = simSpec?.name || 'Pulse Check Sim';
+      confidence = RecommendationConfidence.High;
+    } else
 
     // Rule 2: If foundation not complete, recommend foundation exercises
     if (!progress.foundationComplete) {
@@ -261,6 +270,7 @@ export const recommendationService = {
       isFoundation,
       previousExerciseName
     );
+    const finalReason = activeProgram?.rationale || reason;
 
     // Create recommendation
     const now = Date.now();
@@ -269,7 +279,8 @@ export const recommendationService = {
       coachId,
       exerciseId,
       exercise: exercise || undefined,
-      reason,
+      programRecommendation: progress.activeProgram,
+      reason: finalReason,
       confidence,
       pathway,
       pathwayStep: isFoundation ? 0 : pathwayStep,
@@ -438,14 +449,14 @@ export const recommendationService = {
         name: 'Focus Mastery',
         description: 'For athletes whose primary challenge is concentration',
         exerciseSequence: [
-          { step: 1, exerciseId: 'focus-single-point', exerciseName: 'Single-Point Focus', weeksRange: '5-6', isFoundation: true, isApplication: false },
-          { step: 2, exerciseId: 'focus-cue-word', exerciseName: 'Cue Word Anchoring', weeksRange: '7-8', isFoundation: true, isApplication: true },
-          { step: 3, exerciseId: 'focus-distraction', exerciseName: 'Distraction Training', weeksRange: '9-10', isFoundation: false, isApplication: true },
+          { step: 1, exerciseId: 'focus-noise-gate', exerciseName: 'Noise Gate', weeksRange: '5-6', isFoundation: true, isApplication: false },
+          { step: 2, exerciseId: 'decision-signal-window', exerciseName: 'Signal Window', weeksRange: '7-8', isFoundation: true, isApplication: true },
+          { step: 3, exerciseId: 'decision-sequence-shift', exerciseName: 'Sequence Shift', weeksRange: '9-10', isFoundation: false, isApplication: true },
         ],
         graduationCriteria: [
-          'Has 2-3 established cue words',
-          'Can focus for 3 min with distractions',
-          'Uses cue words automatically in competition',
+          'Shows lower distractor cost under clutter',
+          'Makes faster correct reads in compressed windows',
+          'Re-stabilizes after rule changes without freezing',
         ],
       },
       {
@@ -468,14 +479,14 @@ export const recommendationService = {
         name: 'Pressure Performance',
         description: 'For athletes who underperform when it matters most',
         exerciseSequence: [
-          { step: 1, exerciseId: 'mindset-reframe-nerves', exerciseName: 'Nerves → Excitement Reframe', weeksRange: '5-6', isFoundation: true, isApplication: false },
-          { step: 2, exerciseId: 'mindset-process-focus', exerciseName: 'Process Focus Training', weeksRange: '7-8', isFoundation: true, isApplication: true },
-          { step: 3, exerciseId: 'visualization-adversity', exerciseName: 'Adversity Response Imagery', weeksRange: '9-10', isFoundation: false, isApplication: true },
+          { step: 1, exerciseId: 'focus-3-second-reset', exerciseName: 'The Kill Switch', weeksRange: '5-6', isFoundation: true, isApplication: false },
+          { step: 2, exerciseId: 'decision-brake-point', exerciseName: 'Brake Point', weeksRange: '7-8', isFoundation: true, isApplication: true },
+          { step: 3, exerciseId: 'focus-endurance-lock', exerciseName: 'Endurance Lock', weeksRange: '9-10', isFoundation: false, isApplication: true },
         ],
         graduationCriteria: [
-          'Can reframe nerves as excitement',
-          'Has clear process cues for competition',
-          'Completes full comp prep for 2 events',
+          'Resets faster after disruption',
+          'Cancels impulsive actions more cleanly',
+          'Maintains sharper execution late in the session',
         ],
       },
     ];

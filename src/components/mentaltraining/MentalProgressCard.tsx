@@ -20,16 +20,25 @@ import {
   Star,
 } from 'lucide-react';
 import { MentalTrainingStreak, ExerciseCategory } from '../../api/firebase/mentaltraining/types';
+import type { ProgramPrescription, TaxonomyProfile } from '../../api/firebase/mentaltraining/taxonomy';
+
+function humanizeTaxonomyLabel(value: string): string {
+  return value.split('_').join(' ');
+}
 
 interface MentalProgressCardProps {
   streak: MentalTrainingStreak;
   averageReadiness?: { average: number; trend: 'up' | 'down' | 'stable' };
+  taxonomyProfile?: TaxonomyProfile;
+  activeProgram?: ProgramPrescription;
   compact?: boolean;
 }
 
 export const MentalProgressCard: React.FC<MentalProgressCardProps> = ({
   streak,
   averageReadiness,
+  taxonomyProfile,
+  activeProgram,
   compact = false,
 }) => {
   const getCategoryIcon = (category: ExerciseCategory) => {
@@ -53,7 +62,7 @@ export const MentalProgressCard: React.FC<MentalProgressCardProps> = ({
 
   if (compact) {
     return (
-      <div className="flex items-center gap-4 p-4 rounded-xl bg-zinc-800/50 border border-zinc-700/50">
+      <div className="flex flex-wrap items-center gap-4 p-4 rounded-xl bg-zinc-800/50 border border-zinc-700/50">
         {/* Streak */}
         <div className="flex items-center gap-2">
           <Flame className={`w-5 h-5 ${streak.currentStreak > 0 ? 'text-orange-400' : 'text-zinc-500'}`} />
@@ -78,6 +87,40 @@ export const MentalProgressCard: React.FC<MentalProgressCardProps> = ({
               <p className="text-xl font-bold text-white">{averageReadiness.average}</p>
               {getTrendIcon()}
               <p className="text-xs text-zinc-400">readiness</p>
+            </div>
+          </>
+        )}
+
+        {taxonomyProfile && (
+          <>
+            <div className="w-px h-10 bg-zinc-700" />
+            <div>
+              <p className="text-xl font-bold text-white">{Math.round(taxonomyProfile.overallScore)}</p>
+              <p className="text-xs text-zinc-400">Pulse Check score</p>
+            </div>
+          </>
+        )}
+
+        {taxonomyProfile?.weakestSkills[0] && (
+          <>
+            <div className="w-px h-10 bg-zinc-700" />
+            <div>
+              <p className="text-sm font-semibold text-white capitalize">
+                {humanizeTaxonomyLabel(taxonomyProfile.weakestSkills[0])}
+              </p>
+              <p className="text-xs text-zinc-400">current bottleneck</p>
+            </div>
+          </>
+        )}
+
+        {activeProgram && (
+          <>
+            <div className="w-px h-10 bg-zinc-700" />
+            <div>
+              <p className="text-sm font-semibold text-white capitalize">
+                {humanizeTaxonomyLabel(activeProgram.recommendedSimId)}
+              </p>
+              <p className="text-xs text-zinc-400">next sim</p>
             </div>
           </>
         )}
@@ -143,6 +186,45 @@ export const MentalProgressCard: React.FC<MentalProgressCardProps> = ({
           <p className="text-sm text-zinc-400">Best Streak</p>
         </motion.div>
       </div>
+
+      {taxonomyProfile && (
+        <div className="px-6 pb-6">
+          <h4 className="text-sm font-medium text-zinc-400 mb-3">Taxonomy Profile</h4>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-3 rounded-xl bg-zinc-800 text-center">
+              <p className="text-xs text-zinc-500 mb-1">Overall</p>
+              <p className="text-2xl font-bold text-white">{Math.round(taxonomyProfile.overallScore)}</p>
+            </div>
+            {Object.entries(taxonomyProfile.pillarScores).map(([pillar, score]) => (
+              <div key={pillar} className="p-3 rounded-xl bg-zinc-800 text-center">
+                <p className="text-xs text-zinc-500 mb-1 capitalize">{pillar}</p>
+                <p className="text-2xl font-bold text-white">{Math.round(score)}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 grid md:grid-cols-2 gap-3">
+            <div className="p-3 rounded-xl bg-zinc-800">
+              <p className="text-xs text-zinc-500 mb-1">Strongest</p>
+              <p className="text-white capitalize">{taxonomyProfile.strongestSkills[0] ? humanizeTaxonomyLabel(taxonomyProfile.strongestSkills[0]) : 'Calibrating'}</p>
+            </div>
+            <div className="p-3 rounded-xl bg-zinc-800">
+              <p className="text-xs text-zinc-500 mb-1">Bottleneck</p>
+              <p className="text-white capitalize">{taxonomyProfile.weakestSkills[0] ? humanizeTaxonomyLabel(taxonomyProfile.weakestSkills[0]) : 'Calibrating'}</p>
+            </div>
+          </div>
+
+          {activeProgram && (
+            <div className="mt-3 p-3 rounded-xl bg-[#E0FE10]/10 border border-[#E0FE10]/20">
+              <p className="text-xs text-[#E0FE10] mb-1">Nora Program Direction</p>
+              <p className="text-white capitalize">
+                {humanizeTaxonomyLabel(activeProgram.recommendedSimId)} • {humanizeTaxonomyLabel(activeProgram.sessionType)}
+              </p>
+              <p className="text-zinc-400 text-sm mt-1">{activeProgram.rationale}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Category Breakdown */}
       {Object.keys(streak.categoryCompletions).length > 0 && (

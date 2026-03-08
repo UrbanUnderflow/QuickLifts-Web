@@ -234,6 +234,9 @@
   # Unified sentiment analysis for web and iOS
   timeout = 30
 
+[functions.cleanup-vision-pro-trial-sessions]
+  schedule = "*/15 * * * *"
+
 # Legal document generation (OpenAI can take 15–30s for long documents)
 [functions.generate-legal-document]
   timeout = 26

@@ -16,12 +16,9 @@ import {
   Eye,
   Target,
   Star,
-  Flame,
-  Clock,
   CheckCircle,
   ChevronRight,
   Calendar,
-  Filter,
   Award,
 } from 'lucide-react';
 import { useUser } from '../hooks/useUser';
@@ -31,10 +28,12 @@ import {
   exerciseLibraryService,
   assignmentService,
   completionService,
+  athleteProgressService,
   MentalExercise,
   ExerciseAssignment,
   ExerciseCompletion,
   MentalTrainingStreak,
+  AthleteMentalProgress,
   ExerciseCategory,
   AssignmentStatus,
 } from '../api/firebase/mentaltraining';
@@ -57,6 +56,7 @@ const MentalTrainingPage: React.FC = () => {
   const [completions, setCompletions] = useState<ExerciseCompletion[]>([]);
   const [streak, setStreak] = useState<MentalTrainingStreak | null>(null);
   const [averageReadiness, setAverageReadiness] = useState<{ average: number; trend: 'up' | 'down' | 'stable' } | undefined>();
+  const [athleteProgress, setAthleteProgress] = useState<AthleteMentalProgress | null>(null);
 
   // Exercise player
   const [selectedExercise, setSelectedExercise] = useState<MentalExercise | null>(null);
@@ -69,15 +69,17 @@ const MentalTrainingPage: React.FC = () => {
 
       setLoading(true);
       try {
-        const [exerciseData, progressData] = await Promise.all([
+        const [exerciseData, progressData, athleteProfile] = await Promise.all([
           exerciseLibraryService.getAll(),
           completionService.getProgressSummary(currentUser.id),
+          athleteProgressService.syncTaxonomyProfile(currentUser.id).catch(() => athleteProgressService.get(currentUser.id)),
         ]);
 
         setExercises(exerciseData);
         setStreak(progressData.streak);
         setCompletions(progressData.recentCompletions);
         setAverageReadiness(progressData.averageReadiness);
+        setAthleteProgress(athleteProfile || null);
 
         // Load assignments separately
         const assignmentData = await assignmentService.getPendingForAthlete(currentUser.id);
@@ -144,13 +146,15 @@ const MentalTrainingPage: React.FC = () => {
       });
 
       // Refresh data
-      const [newStreak, newCompletions] = await Promise.all([
+      const [newStreak, newCompletions, refreshedProgress] = await Promise.all([
         completionService.getStreak(currentUser.id),
         completionService.getCompletions(currentUser.id, 10),
+        athleteProgressService.syncTaxonomyProfile(currentUser.id).catch(() => athleteProgress),
       ]);
 
       setStreak(newStreak);
       setCompletions(newCompletions);
+      setAthleteProgress(refreshedProgress || null);
 
       // Remove from assignments if applicable
       if (selectedAssignmentId) {
@@ -210,7 +214,7 @@ const MentalTrainingPage: React.FC = () => {
               Mental Training
             </h1>
             <p className="text-zinc-400">
-              Train your mind like you train your body
+              Pulse Check trains measurable execution under pressure
             </p>
           </div>
 
@@ -220,6 +224,8 @@ const MentalTrainingPage: React.FC = () => {
               <MentalProgressCard
                 streak={streak}
                 averageReadiness={averageReadiness}
+                taxonomyProfile={athleteProgress?.taxonomyProfile}
+                activeProgram={athleteProgress?.activeProgram}
                 compact
               />
             </div>

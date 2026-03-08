@@ -35,6 +35,8 @@ import {
   checkInToFirestore,
 } from './types';
 import { assignmentService } from './assignmentService';
+import { athleteProgressService } from './athleteProgressService';
+import { buildTaxonomyCheckInState } from './taxonomyProfileService';
 
 const COMPLETIONS_ROOT = 'mental-exercise-completions';
 const STREAKS_COLLECTION = 'mental-training-streaks';
@@ -396,6 +398,7 @@ export const completionService = {
     stressLevel,
     sleepQuality,
     notes,
+    taxonomyState,
   }: {
     userId: string;
     type: CheckInType;
@@ -405,9 +408,11 @@ export const completionService = {
     stressLevel?: number;
     sleepQuality?: number;
     notes?: string;
+    taxonomyState?: MentalCheckIn['taxonomyState'];
   }): Promise<string> {
     const now = Date.now();
     const today = new Date().toISOString().split('T')[0];
+    const priorProfile = await athleteProgressService.get(userId);
 
     const checkIn: Omit<MentalCheckIn, 'id'> = {
       userId,
@@ -418,12 +423,22 @@ export const completionService = {
       stressLevel,
       sleepQuality,
       notes,
+      taxonomyState: taxonomyState ?? buildTaxonomyCheckInState({
+        readinessScore,
+        energyLevel,
+        stressLevel,
+        sleepQuality,
+        moodWord,
+        priorProfile: priorProfile?.taxonomyProfile,
+      }),
       createdAt: now,
       date: today,
     };
 
     const checkInsRef = collection(db, CHECKINS_ROOT, userId, 'check-ins');
     const docRef = await addDoc(checkInsRef, checkInToFirestore(checkIn as MentalCheckIn));
+
+    await athleteProgressService.syncTaxonomyProfile(userId);
 
     return docRef.id;
   },

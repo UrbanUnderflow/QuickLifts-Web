@@ -30,6 +30,10 @@ import {
 } from '../../api/firebase/mentaltraining/types';
 import { athleteProgressService } from '../../api/firebase/mentaltraining';
 
+function humanizeTaxonomyLabel(value: string): string {
+  return value.split('_').join(' ');
+}
+
 interface CurriculumProgressCardProps {
   assignment: CurriculumAssignment;
   athleteProgress?: AthleteMentalProgress;
@@ -72,7 +76,7 @@ const getCategoryColor = (category?: ExerciseCategory) => {
 };
 
 const getStatusInfo = (assignment: CurriculumAssignment) => {
-  const { status, completionRate, currentDayNumber, targetDays } = assignment;
+  const { status, completionRate } = assignment;
 
   switch (status) {
     case CurriculumAssignmentStatus.Active:
@@ -249,6 +253,27 @@ export const CurriculumProgressCard: React.FC<CurriculumProgressCardProps> = ({
                 <span className="text-white font-medium">{athleteProgress?.mprScore}</span>
               </div>
             )}
+          </div>
+        )}
+
+        {athleteProgress?.taxonomyProfile && (
+          <div className="mt-3 pt-3 border-t border-zinc-700/30 grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs text-zinc-500 mb-1">Strongest Skill</p>
+              <p className="text-sm text-zinc-200 capitalize">
+                {athleteProgress.taxonomyProfile.strongestSkills[0]
+                  ? humanizeTaxonomyLabel(athleteProgress.taxonomyProfile.strongestSkills[0])
+                  : 'Calibrating'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-zinc-500 mb-1">Current Bottleneck</p>
+              <p className="text-sm text-zinc-200 capitalize">
+                {athleteProgress.taxonomyProfile.weakestSkills[0]
+                  ? humanizeTaxonomyLabel(athleteProgress.taxonomyProfile.weakestSkills[0])
+                  : 'Calibrating'}
+              </p>
+            </div>
           </div>
         )}
 

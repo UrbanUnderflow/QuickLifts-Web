@@ -4,6 +4,17 @@
  * Core data models for exercises, assignments, completions, streaks, and check-ins.
  */
 
+import type {
+  PressureType,
+  ProgramPrescription,
+  SimEvidenceStatus,
+  SimPrescriptionRole,
+  TaxonomyCheckInState,
+  TaxonomyPillar,
+  TaxonomyProfile,
+  TaxonomySkill,
+} from './taxonomy';
+
 // ============================================================================
 // EXERCISE TYPES
 // ============================================================================
@@ -104,6 +115,20 @@ export interface MentalExercise {
   iconName: string;
   isActive: boolean;
   sortOrder: number;
+  simSpecId?: string;
+  taxonomy?: {
+    primaryPillar: TaxonomyPillar;
+    secondaryPillar?: TaxonomyPillar;
+    targetSkills: TaxonomySkill[];
+    pressureTypes: PressureType[];
+    coreMetric: string;
+    supportingMetrics: string[];
+    evidenceStatus: SimEvidenceStatus;
+    prescriptionRoles: SimPrescriptionRole[];
+    scientificBasis: string;
+    transferHypothesis: string;
+    validationPlan: string;
+  };
   createdAt: number; // Unix timestamp
   updatedAt: number;
 }
@@ -325,6 +350,7 @@ export interface MentalCheckIn {
   // Follow-up
   suggestedExerciseId?: string;
   exerciseCompleted?: boolean;
+  taxonomyState?: TaxonomyCheckInState;
 
   createdAt: number;
   date: string; // YYYY-MM-DD for grouping
@@ -491,6 +517,7 @@ export interface MentalRecommendation {
   coachId: string;
   exerciseId: string;
   exercise?: MentalExercise; // Denormalized
+  programRecommendation?: ProgramPrescription;
 
   // Recommendation details
   reason: string;
@@ -542,6 +569,7 @@ export interface CurriculumAssignment {
   coachId: string;
   exerciseId: string;
   exercise?: MentalExercise; // Denormalized
+  simSpecId?: string;
 
   // Source tracking
   recommendationId?: string; // If created from a recommendation
@@ -614,6 +642,10 @@ export interface AthleteMentalProgress {
   // Active assignment tracking
   activeAssignmentId?: string;
   activeAssignmentExerciseName?: string;
+  taxonomyProfile?: TaxonomyProfile;
+  activeProgram?: ProgramPrescription;
+  lastProfileSyncAt?: number;
+  profileVersion?: string;
 
   createdAt: number;
   updatedAt: number;
@@ -642,7 +674,7 @@ export interface PathwayDefinition {
 // ============================================================================
 
 export function exerciseToFirestore(exercise: MentalExercise): Record<string, any> {
-  return {
+  const data: Record<string, any> = {
     name: exercise.name,
     description: exercise.description,
     category: exercise.category,
@@ -660,6 +692,15 @@ export function exerciseToFirestore(exercise: MentalExercise): Record<string, an
     createdAt: exercise.createdAt,
     updatedAt: exercise.updatedAt,
   };
+
+  if (exercise.simSpecId) {
+    data.simSpecId = exercise.simSpecId;
+  }
+  if (exercise.taxonomy) {
+    data.taxonomy = exercise.taxonomy;
+  }
+
+  return data;
 }
 
 export function exerciseFromFirestore(id: string, data: Record<string, any>): MentalExercise {
@@ -679,6 +720,8 @@ export function exerciseFromFirestore(id: string, data: Record<string, any>): Me
     iconName: data.iconName || 'brain',
     isActive: data.isActive ?? true,
     sortOrder: data.sortOrder || 0,
+    simSpecId: data.simSpecId,
+    taxonomy: data.taxonomy,
     createdAt: data.createdAt || Date.now(),
     updatedAt: data.updatedAt || Date.now(),
   };
@@ -814,6 +857,7 @@ export function checkInToFirestore(checkIn: MentalCheckIn): Record<string, any> 
     notes: checkIn.notes,
     suggestedExerciseId: checkIn.suggestedExerciseId,
     exerciseCompleted: checkIn.exerciseCompleted,
+    taxonomyState: checkIn.taxonomyState,
     createdAt: checkIn.createdAt,
     date: checkIn.date,
   };
@@ -832,6 +876,7 @@ export function checkInFromFirestore(id: string, data: Record<string, any>): Men
     notes: data.notes,
     suggestedExerciseId: data.suggestedExerciseId,
     exerciseCompleted: data.exerciseCompleted,
+    taxonomyState: data.taxonomyState,
     createdAt: data.createdAt || Date.now(),
     date: data.date || new Date().toISOString().split('T')[0],
   };
@@ -864,6 +909,9 @@ export function recommendationToFirestore(rec: MentalRecommendation): Record<str
   if (rec.coachOverrideReason) {
     data.coachOverrideReason = rec.coachOverrideReason;
   }
+  if (rec.programRecommendation) {
+    data.programRecommendation = rec.programRecommendation;
+  }
 
   return data;
 }
@@ -880,6 +928,7 @@ export function recommendationFromFirestore(id: string, data: Record<string, any
     pathway: data.pathway || MentalPathway.Foundation,
     pathwayStep: data.pathwayStep || 1,
     triggerType: data.triggerType || 'manual_request',
+    programRecommendation: data.programRecommendation,
     previousAssignmentId: data.previousAssignmentId,
     status: data.status || RecommendationStatus.Pending,
     coachOverrideReason: data.coachOverrideReason,
@@ -922,6 +971,9 @@ export function curriculumAssignmentToFirestore(assignment: CurriculumAssignment
   if (assignment.recommendationId) {
     data.recommendationId = assignment.recommendationId;
   }
+  if (assignment.simSpecId) {
+    data.simSpecId = assignment.simSpecId;
+  }
 
   return data;
 }
@@ -933,6 +985,7 @@ export function curriculumAssignmentFromFirestore(id: string, data: Record<strin
     coachId: data.coachId || '',
     exerciseId: data.exerciseId || '',
     exercise: data.exercise ? exerciseFromFirestore(data.exerciseId, data.exercise) : undefined,
+    simSpecId: data.simSpecId,
     recommendationId: data.recommendationId,
     source: data.source || AssignmentSource.Coach,
     durationDays: data.durationDays || 14,
@@ -1014,6 +1067,18 @@ export function athleteProgressToFirestore(progress: AthleteMentalProgress): Rec
   if (progress.activeAssignmentExerciseName) {
     data.activeAssignmentExerciseName = progress.activeAssignmentExerciseName;
   }
+  if (progress.taxonomyProfile) {
+    data.taxonomyProfile = progress.taxonomyProfile;
+  }
+  if (progress.activeProgram) {
+    data.activeProgram = progress.activeProgram;
+  }
+  if (typeof progress.lastProfileSyncAt === 'number') {
+    data.lastProfileSyncAt = progress.lastProfileSyncAt;
+  }
+  if (progress.profileVersion) {
+    data.profileVersion = progress.profileVersion;
+  }
 
   return data;
 }
@@ -1038,6 +1103,10 @@ export function athleteProgressFromFirestore(athleteId: string, data: Record<str
     longestStreak: data.longestStreak || 0,
     activeAssignmentId: data.activeAssignmentId,
     activeAssignmentExerciseName: data.activeAssignmentExerciseName,
+    taxonomyProfile: data.taxonomyProfile,
+    activeProgram: data.activeProgram,
+    lastProfileSyncAt: data.lastProfileSyncAt,
+    profileVersion: data.profileVersion,
     createdAt: data.createdAt || Date.now(),
     updatedAt: data.updatedAt || Date.now(),
   };
