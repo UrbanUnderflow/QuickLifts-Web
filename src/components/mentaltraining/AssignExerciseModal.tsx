@@ -12,7 +12,6 @@ import {
   Check,
   Clock,
   Calendar,
-  Repeat,
   Send,
   Wind,
   Eye,
@@ -22,10 +21,10 @@ import {
   Users,
 } from 'lucide-react';
 import {
-  MentalExercise,
+  SimModule,
   ExerciseCategory,
 } from '../../api/firebase/mentaltraining/types';
-import { exerciseLibraryService, assignmentService } from '../../api/firebase/mentaltraining';
+import { simModuleLibraryService, assignmentService } from '../../api/firebase/mentaltraining';
 import { ExerciseCard } from './ExerciseCard';
 
 interface Athlete {
@@ -57,13 +56,13 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
   onAssignmentComplete,
 }) => {
   const [step, setStep] = useState<Step>('select-exercise');
-  const [exercises, setExercises] = useState<MentalExercise[]>([]);
+  const [exercises, setExercises] = useState<SimModule[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ExerciseCategory | 'all'>('all');
   
   // Selection state
-  const [selectedExercise, setSelectedExercise] = useState<MentalExercise | null>(null);
+  const [selectedExercise, setSelectedExercise] = useState<SimModule | null>(null);
   const [selectedAthleteIds, setSelectedAthleteIds] = useState<string[]>(
     preSelectedAthleteId ? [preSelectedAthleteId] : []
   );
@@ -72,8 +71,6 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
   const [scheduledTime, setScheduledTime] = useState<'morning' | 'pre-workout' | 'post-workout' | 'evening' | undefined>();
   const [dueDate, setDueDate] = useState<string>('');
   const [reason, setReason] = useState('');
-  const [isRecurring, setIsRecurring] = useState(false);
-  
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,7 +81,7 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
     const loadExercises = async () => {
       setLoading(true);
       try {
-        const data = await exerciseLibraryService.getAll();
+        const data = await simModuleLibraryService.getAll();
         setExercises(data);
       } catch (err) {
         console.error('Failed to load exercises:', err);
@@ -148,7 +145,6 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
       setScheduledTime(undefined);
       setDueDate('');
       setReason('');
-      setIsRecurring(false);
     } catch (err: any) {
       setError(err.message || 'Failed to assign exercise');
     } finally {
@@ -214,9 +210,9 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-zinc-800">
             <div>
-              <h2 className="text-xl font-bold text-white">Assign Mental Exercise</h2>
+              <h2 className="text-xl font-bold text-white">Assign Sim Module</h2>
               <p className="text-sm text-zinc-400 mt-1">
-                {step === 'select-exercise' && 'Choose an exercise to assign'}
+                {step === 'select-exercise' && 'Choose a sim module to assign'}
                 {step === 'select-athletes' && 'Select athletes'}
                 {step === 'configure' && 'Configure assignment'}
                 {step === 'confirm' && 'Review and confirm'}

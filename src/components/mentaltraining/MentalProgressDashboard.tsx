@@ -24,13 +24,11 @@ import {
   Target,
   Star,
   Calendar,
-  CheckCircle,
   BarChart3,
 } from 'lucide-react';
 import {
   MentalTrainingStreak,
-  ExerciseCompletion,
-  MentalCheckIn,
+  SimCompletion,
   ExerciseCategory,
   completionService,
 } from '../../api/firebase/mentaltraining';
@@ -43,8 +41,7 @@ export const MentalProgressDashboard: React.FC<MentalProgressDashboardProps> = (
   userId,
 }) => {
   const [streak, setStreak] = useState<MentalTrainingStreak | null>(null);
-  const [completions, setCompletions] = useState<ExerciseCompletion[]>([]);
-  const [checkIns, setCheckIns] = useState<MentalCheckIn[]>([]);
+  const [completions, setCompletions] = useState<SimCompletion[]>([]);
   const [averageReadiness, setAverageReadiness] = useState<{
     average: number;
     trend: 'up' | 'down' | 'stable';
@@ -64,10 +61,6 @@ export const MentalProgressDashboard: React.FC<MentalProgressDashboardProps> = (
         setStreak(streakData);
         setCompletions(completionsData);
         setAverageReadiness(avgReadiness);
-
-        // Load recent check-ins
-        const checkInsData = await completionService.getCheckIns(userId, 14);
-        setCheckIns(checkInsData);
       } catch (err) {
         console.error('Failed to load progress data:', err);
       } finally {
@@ -147,13 +140,6 @@ export const MentalProgressDashboard: React.FC<MentalProgressDashboardProps> = (
         }))
         .sort((a, b) => b.count - a.count)
     : [];
-
-  // Group completions by day for activity calendar
-  const completionsByDay = completions.reduce((acc, c) => {
-    const date = new Date(c.completedAt).toDateString();
-    acc[date] = (acc[date] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
 
   if (loading) {
     return (

@@ -9,17 +9,20 @@ export * from './types';
 export * from './taxonomy';
 
 // Services
-export { exerciseLibraryService } from './exerciseLibraryService';
-export { assignmentService } from './assignmentService';
-export { completionService } from './completionService';
+export { exerciseLibraryService, simModuleLibraryService } from './exerciseLibraryService';
+export { assignmentService, assignmentService as simAssignmentService } from './assignmentService';
+export { completionService, completionService as simCompletionService } from './completionService';
 export { gameLevelProgressService } from './gameLevelProgressService';
 export { simSessionService } from './simSessionService';
 export {
+  VISION_PRO_SIM_ASSIGNMENTS_COLLECTION,
   visionProTrialService,
   VISION_PRO_CURRICULUM_ASSIGNMENTS_COLLECTION,
   VISION_PRO_LEGACY_ASSIGNMENTS_COLLECTION,
 } from './visionProTrialService';
 export { buildTaxonomyCheckInState, bootstrapTaxonomyProfile, deriveTaxonomyProfile, prescribeNextSession, calculateTransferGap } from './taxonomyProfileService';
+export * from './collections';
+export { simVariantRegistryService, buildSimVariantId } from './variantRegistryService';
 
 // Curriculum Services
 export { curriculumAssignmentService } from './curriculumAssignmentService';

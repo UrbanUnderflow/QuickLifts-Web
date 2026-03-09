@@ -25,7 +25,7 @@ import {
     Lock,
     Trophy,
 } from 'lucide-react';
-import { MentalExercise, GameLevelProgress, TierAdvancementResult } from '../../api/firebase/mentaltraining/types';
+import { SimModule, GameLevelProgress, TierAdvancementResult } from '../../api/firebase/mentaltraining/types';
 import { gameLevelProgressService } from '../../api/firebase/mentaltraining/gameLevelProgressService';
 import { simSessionService } from '../../api/firebase/mentaltraining/simSessionService';
 import { athleteProgressService } from '../../api/firebase/mentaltraining/athleteProgressService';
@@ -124,7 +124,7 @@ const MOODS = [
 // ============================================================================
 
 interface KillSwitchGameProps {
-    exercise: MentalExercise;
+    exercise: SimModule;
     onComplete: (data: {
         durationSeconds: number;
         preExerciseMood?: number;

@@ -22,6 +22,13 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'hunter-world-handbook', label: 'Hunter World Handbook', description: 'Leveling, class mechanics, and creator ecosystem chapter.' },
     { id: 'risks-gaps', label: 'Risks and Gaps', description: 'Current known risk posture and mitigations.' },
     { id: 'glossary', label: 'Glossary', description: 'Shared language for cross-functional alignment.' },
+    { id: 'simulation-taxonomy', label: 'Simulation Taxonomy', description: 'PulseCheck mental performance pillars, skills, sims, and scoring.' },
+    { id: 'sim-family-tree', label: 'Sim Family Tree', description: 'Locked families, candidates, variants, and hybrid modules.' },
+    { id: 'promotion-protocol', label: 'Promotion Protocol', description: 'How new sim families are proposed, evaluated, and promoted.' },
+    { id: 'sim-spec-standards', label: 'Spec Standards', description: 'Shared measurement precision, fail conditions, trial rules, and validation roadmap.' },
+    { id: 'variant-registry', label: 'Variant Registry', description: 'Exhaustive inventory of all named variants with spec status tracking.' },
+    { id: 'sim-family-specs', label: 'Sim FamilySpecs', description: 'Complete specifications for each simulation family.' },
+    { id: 'athlete-journey', label: 'Athlete Journey', description: 'Recommended entry, progression, and system flow for athlete adoption.' },
   ],
   executiveSummary: {
     mission:

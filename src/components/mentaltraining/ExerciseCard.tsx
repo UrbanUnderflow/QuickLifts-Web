@@ -18,10 +18,10 @@ import {
   FlaskConical,
   Shield,
 } from 'lucide-react';
-import { MentalExercise, ExerciseCategory } from '../../api/firebase/mentaltraining/types';
+import { SimModule, ExerciseCategory } from '../../api/firebase/mentaltraining/types';
 
 interface ExerciseCardProps {
-  exercise: MentalExercise;
+  exercise: SimModule;
   onClick?: () => void;
   onAssign?: () => void;
   onPlay?: () => void;

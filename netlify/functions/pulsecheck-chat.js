@@ -66,7 +66,7 @@ function shouldUseSmartNoon(text) {
 
 async function getActiveMentalAssignments(db, userId) {
   const snap = await db
-    .collection('mental-exercise-assignments')
+    .collection('sim-assignments')
     .where('athleteUserId', '==', userId)
     .where('status', 'in', ['pending', 'in_progress'])
     .limit(5)
@@ -1363,5 +1363,4 @@ async function notifyCoachForEscalation(db, escalationId, userId, tier) {
 
   return { success: true, coachId: targetCoachId };
 }
-
 

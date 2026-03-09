@@ -34,13 +34,18 @@ import {
   checkInFromFirestore,
   checkInToFirestore,
 } from './types';
+import {
+  SIM_CHECKINS_ROOT,
+  SIM_COMPLETIONS_ROOT,
+  SIM_STREAKS_COLLECTION,
+} from './collections';
 import { assignmentService } from './assignmentService';
 import { athleteProgressService } from './athleteProgressService';
 import { buildTaxonomyCheckInState } from './taxonomyProfileService';
 
-const COMPLETIONS_ROOT = 'mental-exercise-completions';
-const STREAKS_COLLECTION = 'mental-training-streaks';
-const CHECKINS_ROOT = 'mental-check-ins';
+const COMPLETIONS_ROOT = SIM_COMPLETIONS_ROOT;
+const STREAKS_COLLECTION = SIM_STREAKS_COLLECTION;
+const CHECKINS_ROOT = SIM_CHECKINS_ROOT;
 
 // ============================================================================
 // COMPLETION SERVICE

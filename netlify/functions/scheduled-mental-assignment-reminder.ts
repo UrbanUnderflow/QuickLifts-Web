@@ -172,7 +172,7 @@ export const handler: Handler = async () => {
 
     // Fetch active assignments (pending or in_progress)
     const assignmentsSnap = await db
-      .collection('mental-exercise-assignments')
+      .collection('sim-assignments')
       .where('athleteUserId', '==', userId)
       .where('status', 'in', ['pending', 'in_progress'])
       .get();
@@ -186,7 +186,7 @@ export const handler: Handler = async () => {
 
     // Check for any completion today tied to an active assignment
     const completionsSnap = await db
-      .collection('mental-exercise-completions')
+      .collection('sim-completions')
       .doc(userId)
       .collection('completions')
       .where('completedAt', '>=', startUtcMs)
@@ -277,4 +277,3 @@ export const handler: Handler = async () => {
     }),
   };
 };
-

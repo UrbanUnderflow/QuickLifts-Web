@@ -3,8 +3,8 @@ const { initializeFirebaseAdmin } = require('./config/firebase');
 
 const COLLECTION = 'vision-pro-trial-sessions';
 const USERS_COLLECTION = 'users';
-const EXERCISES_COLLECTION = 'mental-exercises';
-const LEGACY_ASSIGNMENTS_COLLECTION = 'mental-exercise-assignments';
+const EXERCISES_COLLECTION = 'sim-modules';
+const LEGACY_ASSIGNMENTS_COLLECTION = 'sim-assignments';
 const CURRICULUM_ASSIGNMENTS_COLLECTION = 'mental-curriculum-assignments';
 const CURRICULUM_DAILY_COMPLETIONS_SUBCOLLECTION = 'daily-completions';
 const SIM_SESSIONS_COLLECTION = 'sim-sessions';

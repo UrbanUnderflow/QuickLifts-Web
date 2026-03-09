@@ -618,7 +618,7 @@
       ]
     },
     {
-      "collectionGroup": "mental-exercise-assignments",
+      "collectionGroup": "sim-assignments",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -632,7 +632,7 @@
       ]
     },
     {
-      "collectionGroup": "mental-exercises",
+      "collectionGroup": "sim-modules",
       "queryScope": "COLLECTION",
       "fields": [
         {
