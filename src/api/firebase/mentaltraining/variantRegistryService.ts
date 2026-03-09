@@ -20,6 +20,18 @@ import {
 export type SimVariantSpecStatus = 'needs-spec' | 'in-progress' | 'complete' | 'not-required';
 export type SimVariantFamilyStatus = 'locked' | 'candidate';
 export type SimVariantMode = 'branch' | 'library' | 'hybrid';
+export type SimVariantArchetype =
+  | 'baseline'
+  | 'trial'
+  | 'short_daily'
+  | 'visual_channel'
+  | 'audio_channel'
+  | 'combined_channel'
+  | 'cognitive_pressure'
+  | 'sport_context'
+  | 'immersive'
+  | 'fatigue_load'
+  | 'decoy_discrimination';
 
 export interface SimVariantSeed {
   name: string;
@@ -47,9 +59,39 @@ export interface SimVariantModuleDraft {
   sortOrder: number;
 }
 
+export interface SimVariantLockedSpec {
+  fixedTier: string;
+  fixedDuration: string;
+  targetSessionStructure: string;
+  buildVersionPolicy: string;
+  seedPolicy: string;
+  modifierProfile: string;
+  environmentRequirements: string;
+  fixedProfileDetails: string;
+  validResponseRule: string;
+  artifactFloorRule: string;
+  maxWindowRule: string;
+  failedRoundRule: string;
+  falseStartRule: string;
+  validSessionRule: string;
+  partialSessionRule: string;
+  invalidSessionRule: string;
+  dropoutRule: string;
+  retryRule: string;
+  transferMetricDefinition: string;
+  transferMetricReporting: string;
+  validationStage: string;
+  nextValidationMilestone: string;
+  motorBaselineRule: string;
+  deviceCovariateRule: string;
+  exportRequirements: string;
+}
+
 export interface SimVariantRecord extends SimVariantSeed {
   id: string;
   specRaw?: string;
+  archetypeOverride?: SimVariantArchetype;
+  lockedSpec?: SimVariantLockedSpec;
   runtimeConfig?: Record<string, any>;
   moduleDraft?: SimVariantModuleDraft;
   publishedModuleId?: string;
@@ -92,6 +134,8 @@ function variantFromFirestore(id: string, data: Record<string, any>): SimVariant
     specStatus: data.specStatus || 'needs-spec',
     priority: data.priority || 'medium',
     specRaw: data.specRaw || '',
+    archetypeOverride: data.archetypeOverride || undefined,
+    lockedSpec: data.lockedSpec || undefined,
     runtimeConfig: data.runtimeConfig || undefined,
     moduleDraft: data.moduleDraft || undefined,
     publishedModuleId: data.publishedModuleId || undefined,
@@ -110,6 +154,8 @@ function variantToFirestore(record: SimVariantRecord): Record<string, any> {
     specStatus: record.specStatus,
     priority: record.priority,
     specRaw: record.specRaw || '',
+    archetypeOverride: record.archetypeOverride || null,
+    lockedSpec: record.lockedSpec || null,
     runtimeConfig: record.runtimeConfig || null,
     moduleDraft: record.moduleDraft || null,
     publishedModuleId: record.publishedModuleId || null,
