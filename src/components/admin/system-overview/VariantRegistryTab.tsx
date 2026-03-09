@@ -38,9 +38,11 @@ import {
     type MentalExercise,
 } from '../../../api/firebase/mentaltraining';
 import {
+    type SimVariantArchetype,
     buildSimVariantId,
     type SimVariantHistoryEntry,
     type SimVariantFamilyStatus,
+    type SimVariantLockedSpec,
     type SimVariantMode,
     type SimVariantModuleDraft,
     type SimVariantRecord,
@@ -52,7 +54,7 @@ import {
 type SpecStatus = SimVariantSpecStatus;
 type FamilyStatus = SimVariantFamilyStatus;
 type VariantMode = SimVariantMode;
-type VariantEntry = SimVariantSeed;
+type VariantEntry = SimVariantSeed & Partial<Pick<SimVariantRecord, 'lockedSpec'>>;
 
 interface ParsedSpec {
     coreIdentity: string;
@@ -66,6 +68,20 @@ interface ParsedSpec {
     rawSections: { heading: string; content: string }[];
 }
 
+interface SpecAuditFinding {
+    severity: 'error' | 'warning';
+    code: string;
+    message: string;
+}
+
+interface SpecAuditReport {
+    status: 'pass' | 'pass_with_warnings' | 'needs_input';
+    score: number;
+    findings: SpecAuditFinding[];
+    autoFixes: string[];
+    fixedRaw: string;
+}
+
 interface FamilySpecBase {
     mechanism: string;
     coreMetric: string;
@@ -77,6 +93,7 @@ interface FamilySpecBase {
 }
 
 interface VariantTheme {
+    archetype: SimVariantArchetype;
     variantType: string;
     purpose: string;
     expectedBenefit: string;
@@ -89,6 +106,38 @@ interface VariantTheme {
     trialMode: string[];
     buildNotes: string[];
     boundarySafeguards: string[];
+}
+
+interface VariantArchetypeProfile {
+    label: string;
+    variantType: string;
+    purpose: string;
+    expectedBenefit: string;
+    bestUse: string[];
+    changes: string[];
+    athleteFlow: string[];
+    scoringNotes: string[];
+    artifactRisks: string[];
+    buildNotes: string[];
+    runtimeDefaults: {
+        feedbackMode: 'coached' | 'suppressed';
+        adaptiveDifficulty: boolean;
+        emphasis: string[];
+        analyticsFocus: string[];
+    };
+}
+
+interface VariantProfileOverride {
+    purpose?: string;
+    expectedBenefit?: string;
+    bestUse?: string[];
+    changes?: string[];
+    athleteFlow?: string[];
+    scoringNotes?: string[];
+    artifactRisks?: string[];
+    buildNotes?: string[];
+    runtimeDefaults?: Partial<VariantArchetypeProfile['runtimeDefaults']>;
+    durationMinutes?: number;
 }
 
 /* ---- STATUS CONFIG ---- */
@@ -590,6 +639,409 @@ function parseVariantSpec(raw: string): ParsedSpec {
     };
 }
 
+function normalizeSpecText(raw: string) {
+    return raw
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+function dedupeBulletLines(raw: string) {
+    const lines = raw.split('\n');
+    const seen = new Set<string>();
+    let removed = 0;
+    const nextLines = lines.filter((line) => {
+        const trimmed = line.trim();
+        if (!trimmed.match(/^-\s+/)) {
+            return true;
+        }
+        const key = trimmed.toLowerCase();
+        if (seen.has(key)) {
+            removed += 1;
+            return false;
+        }
+        seen.add(key);
+        return true;
+    });
+    return {
+        raw: nextLines.join('\n'),
+        removed,
+    };
+}
+
+function buildExpectedSectionLabels(variant: VariantEntry) {
+    if (isTrialVariant(variant)) {
+        return [
+            '1. Core Identity',
+            '2. Variant Rationale',
+            '3. Fixed Trial Protocol',
+            '4. Family Inheritance vs Variant Changes',
+            '5. Athlete Experience Flow',
+            '6. Measurement Precision and Scoring Rules',
+            '7. Transfer Metric and Reporting',
+            '8. Session Validity, Retry, and Dropout Rules',
+            '9. Mode Behavior',
+            '10. Research Alignment and Validation Status',
+            '11. Build and Data Export Requirements',
+            '12. Governing Documents',
+            '13. Boundary Safeguards',
+            '14. Variant Readiness Checklist',
+        ];
+    }
+
+    return [
+        '1. Core Identity',
+        '2. Why This Variant Exists',
+        '3. Archetype Packaging Defaults',
+        '4. Family Inheritance vs Variant Changes',
+        '5. Athlete Experience Flow',
+        '6. Measurement and Scoring Notes',
+        '7. Mode Behavior',
+        '8. Build and Implementation Notes',
+        '9. Governing Documents',
+        '10. Boundary Safeguards',
+        '11. Variant Readiness Checklist',
+    ];
+}
+
+function includesAnyPhrase(lowerRaw: string, phrases: string[]) {
+    return phrases.some((phrase) => lowerRaw.includes(phrase.toLowerCase()));
+}
+
+function pushArchetypeRequirementFinding(
+    findings: SpecAuditFinding[],
+    lowerRaw: string,
+    code: string,
+    message: string,
+    phrases: string[]
+) {
+    if (!includesAnyPhrase(lowerRaw, phrases)) {
+        findings.push({
+            severity: 'warning',
+            code,
+            message,
+        });
+    }
+}
+
+function runNonTrialArchetypeAudit(variant: VariantEntry, lowerRaw: string, findings: SpecAuditFinding[]) {
+    const archetype = resolveVariantArchetype(variant);
+
+    pushArchetypeRequirementFinding(
+        findings,
+        lowerRaw,
+        'missing_archetype_label',
+        `Non-trial spec should explicitly name the resolved archetype (${ARCHETYPE_LABELS[archetype]}).`,
+        [`Archetype: ${ARCHETYPE_LABELS[archetype]}`]
+    );
+
+    pushArchetypeRequirementFinding(
+        findings,
+        lowerRaw,
+        'missing_runtime_emphasis',
+        'Non-trial spec should include runtime emphasis so packaging is not purely narrative.',
+        ['runtime emphasis:']
+    );
+
+    pushArchetypeRequirementFinding(
+        findings,
+        lowerRaw,
+        'missing_analytics_focus',
+        'Non-trial spec should include analytics focus so the module is measurable, not just described.',
+        ['analytics focus:']
+    );
+
+    pushArchetypeRequirementFinding(
+        findings,
+        lowerRaw,
+        'missing_feedback_default',
+        'Non-trial spec should document default feedback mode and adaptation behavior.',
+        ['default feedback mode is', 'adaptive difficulty is']
+    );
+
+    switch (archetype) {
+        case 'short_daily':
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'short_daily_missing_daily_packaging',
+                'Short-daily variants should explicitly frame daily compliance or quick-repeat packaging.',
+                ['high-compliance daily', 'daily completion', 'quick, high-compliance daily rep', 'short session length']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'short_daily_missing_trend_guidance',
+                'Short-daily variants should emphasize trend language over heavy benchmark interpretation.',
+                ['trend language', 'trend over single-session volatility', 'trend rather than', 'daily trend']
+            );
+            break;
+        case 'visual_channel':
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'visual_channel_missing_channel_definition',
+                'Visual-channel variants should explicitly describe visual interference or clutter as the pressure source.',
+                ['visual interference', 'visual clutter', 'peripheral', 'visual presentation']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'visual_channel_missing_artifact_risk',
+                'Visual-channel variants should document display-specific artifact risks.',
+                ['display lag', 'contrast issues', 'peripheral scaling', 'screen gets noisier']
+            );
+            break;
+        case 'audio_channel':
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'audio_channel_missing_channel_definition',
+                'Audio-channel variants should explicitly describe sound-driven interference.',
+                ['audio interference', 'crowd', 'commentary', 'whistle', 'sound design']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'audio_channel_missing_artifact_risk',
+                'Audio-channel variants should document routing, latency, or hardware risks.',
+                ['audio routing', 'latency', 'hardware', 'volume spikes']
+            );
+            break;
+        case 'combined_channel':
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'combined_channel_missing_overlap_logic',
+                'Combined-channel variants should explicitly describe layered or overlapping pressure channels.',
+                ['multiple channels', 'layered channels', 'channel overlap', 'overlap timing']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'combined_channel_missing_channel_analytics',
+                'Combined-channel variants should include per-channel or overlap-tagged analytics language.',
+                ['per-channel', 'overlap context', 'channel overlap', 'unlabeled event stream']
+            );
+            break;
+        case 'cognitive_pressure':
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'cognitive_pressure_missing_pressure_definition',
+                'Cognitive-pressure variants should name provocation, ambiguity, or evaluative load explicitly.',
+                ['provocation', 'ambiguity', 'evaluative', 'psychologically loaded', 'mental rather than purely sensory']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'cognitive_pressure_missing_guardrails',
+                'Cognitive-pressure variants should include guardrails so pressure does not drift into a different task.',
+                ['same family task', 'same core task', 'tight guardrails', 'not confusing']
+            );
+            break;
+        case 'sport_context':
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'sport_context_missing_framing',
+                'Sport-context variants should explicitly describe sport-native or game-day framing.',
+                ['sport-native', 'sport-specific', 'game-day relevance', 'sport-recognizable']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'sport_context_missing_boundary',
+                'Sport-context variants should explicitly protect against sport wrapper drift changing the family mechanism.',
+                ['mechanism and metric remain unchanged', 'without changing core scoring logic', 'without changing the parent-family mechanism', 'without changing the family score architecture']
+            );
+            break;
+        case 'immersive':
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'immersive_missing_fidelity_definition',
+                'Immersive variants should explicitly describe environmental fidelity or spatial context.',
+                ['immersive environment', 'environmental fidelity', 'spatial', 'device context', 'higher-fidelity pressure']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'immersive_missing_artifact_risk',
+                'Immersive variants should document calibration, motion comfort, or rendering risks.',
+                ['device calibration', 'motion comfort', 'rendering lag', 'second task']
+            );
+            break;
+        case 'fatigue_load':
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'fatigue_missing_load_progression',
+                'Fatigue-load variants should explicitly describe accumulation, late-session load, or deterioration.',
+                ['load accumulation', 'late-session', 'fatigue', 'late-round pressure']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'fatigue_missing_segmented_analysis',
+                'Fatigue-load variants should separate early, middle, and late performance rather than one flat summary.',
+                ['early, middle, and late behavior', 'early-mid-late comparisons', 'late-session deterioration', 'degradation']
+            );
+            break;
+        case 'decoy_discrimination':
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'decoy_missing_decoy_definition',
+                'Decoy/discrimination variants should explicitly describe false triggers or near-target cues.',
+                ['decoy', 'false trigger', 'near-target', 'false starts']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'decoy_missing_decoy_analytics',
+                'Decoy/discrimination variants should explicitly tag decoy-driven errors in analytics.',
+                ['decoy-triggered errors', 'false-start / decoy error rates', 'discrimination quality', 'classify decoy']
+            );
+            break;
+        case 'baseline':
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'baseline_missing_packaging_specificity',
+                'Baseline variants should still document concrete packaging defaults so the spec does not stay generic.',
+                ['recommended session length defaults to', 'family-consistent presentation', 'variant-specific tags']
+            );
+            break;
+        default:
+            break;
+    }
+}
+
+function applySpecAutoFixes(variant: VariantEntry, raw: string) {
+    let next = normalizeSpecText(raw);
+    const autoFixes: string[] = [];
+
+    if (next.includes('device type')) {
+        next = next.replace(/device type/gi, 'device class');
+        autoFixes.push('Normalized "device type" to "device class".');
+    }
+
+    if (isTrialVariant(variant) && next.includes('for the full 12 minutes session')) {
+        next = next.replace(/for the full (\d+) minutes session/gi, 'for the full $1-minute session');
+        autoFixes.push('Normalized fixed-duration session phrasing.');
+    }
+
+    if (isTrialVariant(variant) && next.includes('Keep environment requirements fixed per assessment point')) {
+        next = next.replace(
+            /Keep environment requirements fixed per assessment point/gi,
+            'Keep environment requirements standardized and logged across all comparison points for the same protocol version'
+        );
+        autoFixes.push('Tightened environment consistency wording for Trial protocol.');
+    }
+
+    const deduped = dedupeBulletLines(next);
+    next = deduped.raw;
+    if (deduped.removed > 0) {
+        autoFixes.push(`Removed ${deduped.removed} duplicate bullet line${deduped.removed === 1 ? '' : 's'}.`);
+    }
+
+    return {
+        fixedRaw: normalizeSpecText(next),
+        autoFixes,
+    };
+}
+
+function runSpecAuditPipeline(variant: VariantEntry, raw: string): SpecAuditReport {
+    const { fixedRaw, autoFixes } = applySpecAutoFixes(variant, raw);
+    const findings: SpecAuditFinding[] = [];
+    const expectedSections = buildExpectedSectionLabels(variant);
+    const parsed = parseVariantSpec(fixedRaw);
+    const normalizedHeadings = parsed.rawSections.map((section) => section.heading.trim());
+    const lowerRaw = fixedRaw.toLowerCase();
+    const lockedSpec = ensureLockedSpec(variant);
+
+    expectedSections.forEach((heading) => {
+        if (!normalizedHeadings.some((value) => value.toLowerCase() === heading.toLowerCase())) {
+            findings.push({
+                severity: 'error',
+                code: 'missing_section',
+                message: `Missing required section: ${heading}.`,
+            });
+        }
+    });
+
+    if (isTrialVariant(variant) && lockedSpec) {
+        const requiredTrialPhrases = [
+            lockedSpec.fixedTier.toLowerCase(),
+            lockedSpec.fixedDuration.toLowerCase(),
+            lockedSpec.targetSessionStructure.toLowerCase(),
+            'transfer gap',
+            'build version',
+            'device class',
+        ];
+
+        requiredTrialPhrases.forEach((phrase) => {
+            if (!lowerRaw.includes(phrase)) {
+                findings.push({
+                    severity: 'error',
+                    code: 'missing_trial_protocol_detail',
+                    message: `Trial spec is missing a required protocol detail: "${phrase}".`,
+                });
+            }
+        });
+
+        if (!lowerRaw.includes('75% valid outcomes') || !lowerRaw.includes('50–74% valid outcomes') || !lowerRaw.includes('20% false starts')) {
+            findings.push({
+                severity: 'error',
+                code: 'validity_threshold_mismatch',
+                message: 'Trial validity thresholds do not fully reflect the Addendum-aligned valid / partial / invalid rules.',
+            });
+        }
+    }
+
+    if (lowerRaw.includes('device type')) {
+        findings.push({
+            severity: 'warning',
+            code: 'terminology_mismatch',
+            message: 'Use "device class" consistently instead of mixing "device type" and "device class".',
+        });
+    }
+
+    ['roughly', 'typically', 'generally'].forEach((term) => {
+        if (lowerRaw.includes(term)) {
+            findings.push({
+                severity: 'warning',
+                code: 'vague_language',
+                message: `Spec still contains vague language: "${term}".`,
+            });
+        }
+    });
+
+    if (!isTrialVariant(variant)) {
+        runNonTrialArchetypeAudit(variant, lowerRaw, findings);
+    }
+
+    const errorCount = findings.filter((finding) => finding.severity === 'error').length;
+    const warningCount = findings.filter((finding) => finding.severity === 'warning').length;
+    const score = Math.max(0, 100 - (errorCount * 20) - (warningCount * 5));
+    const status: SpecAuditReport['status'] = errorCount > 0
+        ? 'needs_input'
+        : warningCount > 0
+            ? 'pass_with_warnings'
+            : 'pass';
+
+    return {
+        status,
+        score,
+        findings,
+        autoFixes,
+        fixedRaw,
+    };
+}
+
 function mapPriority(priority: VariantEntry['priority']) {
     if (priority === 'high') return 'P0';
     if (priority === 'medium') return 'P1';
@@ -604,22 +1056,57 @@ function mapVariantStatus(variant: VariantEntry) {
     return 'Draft Auto-Generated';
 }
 
-function inferVariantTheme(variant: VariantEntry): VariantTheme {
-    const name = variant.name.toLowerCase();
-    const familyBase = FAMILY_SPEC_BASES[variant.family];
+const ARCHETYPE_LABELS: Record<SimVariantArchetype, string> = {
+    baseline: 'Baseline Variant',
+    trial: 'Trial Variant',
+    short_daily: 'Short Daily Variant',
+    visual_channel: 'Visual Channel Variant',
+    audio_channel: 'Audio Channel Variant',
+    combined_channel: 'Combined Channel Variant',
+    cognitive_pressure: 'Cognitive Pressure Variant',
+    sport_context: 'Sport Context Variant',
+    immersive: 'Immersive Variant',
+    fatigue_load: 'Fatigue Load Variant',
+    decoy_discrimination: 'Decoy / Discrimination Variant',
+};
 
-    const genericTheme: VariantTheme = {
+function resolveVariantArchetype(variant: VariantEntry): SimVariantArchetype {
+    if (variant.archetypeOverride) {
+        return variant.archetypeOverride;
+    }
+
+    const name = variant.name.toLowerCase();
+    if (name.includes('short daily')) return 'short_daily';
+    if (name.includes('extended trial') || name.includes('trial-only') || name.includes('field-read trial')) return 'trial';
+    if (name.includes('immersive') || name.includes('chamber') || name.includes('tunnel')) return 'immersive';
+    if (name.includes('sport') || name.includes('playbook') || name.includes('pre-shot') || name.includes('field-read')) return 'sport_context';
+    if (name.includes('visual') || name.includes('clutter') || name.includes('spotlight') || name.includes('peripheral')) return 'visual_channel';
+    if (name.includes('audio') || name.includes('crowd') || name.includes('whistle') || name.includes('commentary')) return 'audio_channel';
+    if (name.includes('combined') || name.includes('mixed') || name.includes('multi-source') || name.includes('dual-channel') || name.includes('overload')) return 'combined_channel';
+    if (name.includes('cognitive') || name.includes('provocation') || name.includes('ambiguous') || name.includes('confidence') || name.includes('late reveal')) return 'cognitive_pressure';
+    if (name.includes('fatigue') || name.includes('late') || name.includes('long') || name.includes('burn') || name.includes('endurance')) return 'fatigue_load';
+    if (name.includes('false') || name.includes('fakeout') || name.includes('decoy') || name.includes('bait') || name.includes('go/no-go')) return 'decoy_discrimination';
+    return 'baseline';
+}
+
+function buildArchetypeProfile(
+    variant: VariantEntry,
+    familyBase: FamilySpecBase | undefined,
+    archetype: SimVariantArchetype
+): VariantArchetypeProfile {
+    const defaultProfile: VariantArchetypeProfile = {
+        label: ARCHETYPE_LABELS[archetype],
         variantType: variant.mode === 'library' ? 'Library variant' : variant.mode === 'hybrid' ? 'Hybrid / trial expression' : 'Branch variant',
         purpose: `This variant applies a distinct expression of ${variant.family} while preserving the family mechanism of ${familyBase?.mechanism ?? 'the parent simulation'}.`,
         expectedBenefit: 'Create a buildable draft that localizes the family to a clearer use case without changing the underlying cognitive target.',
         bestUse: [
             `the athlete needs a more specific expression of ${variant.family} without leaving the family boundary`,
-            'Nora wants a draftable variant that can later be tightened with authored implementation details',
+            'the registry should be able to generate a build-ready draft without manual pre-authoring',
             'the program needs variety, localization, or packaging changes more than a brand-new family',
         ],
         changes: [
             'surface framing, pacing, and context can shift while the family mechanism remains unchanged',
-            'variant packaging should make the athlete experience feel distinct without creating a new taxonomy object',
+            'variant packaging should feel distinct without creating a new taxonomy object',
             'all scoring stays anchored to the parent family metric unless the family spec explicitly allows a tagged breakdown',
         ],
         athleteFlow: [
@@ -636,258 +1123,967 @@ function inferVariantTheme(variant: VariantEntry): VariantTheme {
             'variant-specific presentation changes may create UI or interpretation artifacts if the family mechanic is not kept clear',
             'very fast responses below the addendum floor should be tagged as motor artifacts rather than interpreted cognitively',
         ],
-        trainingMode: [...(familyBase?.trainingModeDefaults ?? ['show feedback according to the parent family defaults'])],
-        trialMode: [...(familyBase?.trialModeDefaults ?? ['standardize conditions and suppress intra-session feedback for comparison use'])],
         buildNotes: [
             'Keep naming, analytics keys, and admin labels aligned with the registry entry.',
+            `Mark this variant as archetype ${ARCHETYPE_LABELS[archetype]} so generation and runtime config stay aligned.`,
             'Store variant assignment, family, mode, and any variant-specific tags in the session record.',
-            'Use this draft as a first-pass authored spec, not as the final implementation contract.',
         ],
+        runtimeDefaults: {
+            feedbackMode: variant.mode === 'hybrid' ? 'suppressed' : 'coached',
+            adaptiveDifficulty: variant.mode !== 'hybrid',
+            emphasis: ['family-consistent presentation'],
+            analyticsFocus: [familyBase?.coreMetric ?? 'family metric'],
+        },
+    };
+
+    let baseProfile: VariantArchetypeProfile;
+
+    switch (archetype) {
+        case 'short_daily':
+            baseProfile = {
+                ...defaultProfile,
+                variantType: 'Duration variant',
+                purpose: `This variant compresses ${variant.family} into the fastest useful daily rep while preserving ${familyBase?.mechanism ?? 'the core family mechanic'}.`,
+                expectedBenefit: 'Increase compliance, repetition frequency, and low-friction daily usage.',
+                bestUse: [
+                    'Nora wants the highest-probability daily completion format',
+                    'the athlete benefits from consistent exposure more than an extended benchmark session',
+                    'the program needs a default daily package with minimal startup friction',
+                ],
+                changes: [
+                    'session length is shortened and round count is reduced',
+                    'difficulty should stay useful but not so punishing that compliance drops',
+                    'the variant optimizes for repeatability and habit formation rather than exhaustive assessment',
+                ],
+                athleteFlow: [
+                    'Entry framing should signal that this is a quick, high-compliance daily rep.',
+                    'The athlete should move into the family loop with minimal setup and minimal instruction overhead.',
+                    'Exit feedback should be compact and motivational, with trend language over heavy analysis.',
+                ],
+                scoringNotes: [
+                    `${familyBase?.coreMetric ?? 'The family metric'} remains unchanged; the variant only changes packaging and exposure length.`,
+                    'Low trial count means summary views should emphasize median, consistency, and trend rather than over-reading one outlier.',
+                ],
+                artifactRisks: [
+                    'short sessions are unusually sensitive to one anomalous round or false start',
+                    'aggressive pre-emption can look like improvement unless false starts are logged clearly',
+                ],
+                runtimeDefaults: {
+                    feedbackMode: 'coached',
+                    adaptiveDifficulty: true,
+                    emphasis: ['high-compliance daily packaging', 'short session length'],
+                    analyticsFocus: [familyBase?.coreMetric ?? 'family metric', 'trend over single-session volatility'],
+                },
+            };
+            break;
+        case 'trial':
+            baseProfile = {
+                ...defaultProfile,
+                variantType: 'Trial variant',
+                purpose: `This variant packages ${variant.family} as a standardized comparison-grade assessment while preserving ${familyBase?.mechanism ?? 'the family mechanism'}.`,
+                expectedBenefit: 'Support research use, baseline/post comparisons, and cleaner benchmarking.',
+                bestUse: [
+                    'the program needs a fixed assessment rather than an adaptive training rep',
+                    'results will be compared across time points, cohorts, or formal trial conditions',
+                    'Nora wants a version that exposes deterioration, pressure effects, or standardized performance under controlled settings',
+                ],
+                changes: [
+                    'duration expands into a comparison-grade session structure',
+                    'difficulty, schedule, and modifier profile are fixed instead of adapting live',
+                    'feedback is delayed until the end of the session',
+                ],
+                athleteFlow: [
+                    'Entry framing should set expectations without coaching away the challenge.',
+                    'The athlete should complete the full fixed protocol before any performance summary appears.',
+                    'Exit output should prioritize standardized reporting and comparison-friendly summaries.',
+                ],
+                scoringNotes: [
+                    `${familyBase?.coreMetric ?? 'The family metric'} remains the headline measure, with trial-specific breakdowns treated as secondary analytics.`,
+                    'Failed rounds, invalid trials, and environment/device metadata should be exported separately rather than flattened into the top-line result.',
+                ],
+                artifactRisks: [
+                    'dropout, device changes, and environmental inconsistency can invalidate comparison quality',
+                    'feedback leakage or adaptive behavior mid-session undermines trial standardization',
+                ],
+                runtimeDefaults: {
+                    feedbackMode: 'suppressed',
+                    adaptiveDifficulty: false,
+                    emphasis: ['standardized protocol', 'non-adaptive assessment'],
+                    analyticsFocus: [familyBase?.coreMetric ?? 'family metric', 'Transfer Gap', 'session validity'],
+                },
+            };
+            break;
+        case 'immersive':
+            baseProfile = {
+                ...defaultProfile,
+                variantType: 'Immersive variant',
+                purpose: `This variant raises transfer fidelity by expressing ${variant.family} inside a more immersive environment while keeping ${familyBase?.mechanism ?? 'the same family mechanic'} intact.`,
+                expectedBenefit: 'Increase realism, transfer credibility, and environmental specificity.',
+                bestUse: [
+                    'the athlete needs a more embodied or environmental version of the family challenge',
+                    'the program wants higher-fidelity pressure without changing the family score architecture',
+                    'the build roadmap includes platform-specific immersive hardware or richer scene presentation',
+                ],
+                changes: [
+                    'environmental presentation, spatial cues, and atmosphere become more prominent',
+                    'pressure comes from immersion and contextual fidelity rather than a rule change',
+                    'analytics should capture immersion-specific state and device context',
+                ],
+                artifactRisks: [
+                    'device calibration, motion comfort, or rendering lag can distort the cognitive signal',
+                    'immersive presentation can accidentally add a second task if visual design is not tightly bounded',
+                ],
+                runtimeDefaults: {
+                    feedbackMode: variant.mode === 'hybrid' ? 'suppressed' : 'coached',
+                    adaptiveDifficulty: true,
+                    emphasis: ['immersion', 'spatial/environmental fidelity'],
+                    analyticsFocus: [familyBase?.coreMetric ?? 'family metric', 'device context'],
+                },
+            };
+            break;
+        case 'sport_context':
+            baseProfile = {
+                ...defaultProfile,
+                variantType: 'Sport-context variant',
+                purpose: `This variant localizes ${variant.family} to a sport-recognizable situation without changing the parent-family mechanism.`,
+                expectedBenefit: 'Increase transfer credibility, coach intuitiveness, and athlete buy-in.',
+                bestUse: [
+                    'the athlete or coach responds better to sport-native framing than abstract drills',
+                    'the program wants stronger game-day relevance without changing core scoring logic',
+                    'Nora needs a version that is easier to explain in team or sport-specific language',
+                ],
+                changes: [
+                    'stimulus framing, copy, and environmental cues become sport-specific',
+                    'the family mechanism and metric remain unchanged beneath the sport wrapper',
+                    'variant assets should support transfer without introducing sport-specific rule drift',
+                ],
+                runtimeDefaults: {
+                    feedbackMode: 'coached',
+                    adaptiveDifficulty: true,
+                    emphasis: ['sport-native framing', 'transfer credibility'],
+                    analyticsFocus: [familyBase?.coreMetric ?? 'family metric', 'context tags'],
+                },
+            };
+            break;
+        case 'visual_channel':
+            baseProfile = {
+                ...defaultProfile,
+                variantType: 'Visual-channel variant',
+                purpose: `This variant emphasizes visual interference inside ${variant.family} while preserving the parent-family mechanism.`,
+                expectedBenefit: 'Target visual-channel vulnerability and make the pressure source immediately legible.',
+                bestUse: [
+                    'the athlete loses stability under visual clutter, peripheral bait, or screen-based interference',
+                    'Nora wants a clear visual-channel expression before layering in more channels',
+                    'the program needs a highly legible variant for visual attentional stress',
+                ],
+                changes: [
+                    'pressure is carried primarily through visual presentation rather than audio or cognitive provocation',
+                    'density, salience, and peripheral competition can scale by tier',
+                    'the target rule should remain clear even when the screen gets noisier',
+                ],
+                artifactRisks: [
+                    'overdesigned clutter can blur the live cue and accidentally change the task itself',
+                    'display lag, peripheral scaling, or contrast issues can distort difficulty',
+                ],
+                runtimeDefaults: {
+                    feedbackMode: 'coached',
+                    adaptiveDifficulty: true,
+                    emphasis: ['visual interference', 'salience and clutter'],
+                    analyticsFocus: [familyBase?.coreMetric ?? 'family metric', 'visual channel performance'],
+                },
+            };
+            break;
+        case 'audio_channel':
+            baseProfile = {
+                ...defaultProfile,
+                variantType: 'Audio-channel variant',
+                purpose: `This variant emphasizes auditory interference inside ${variant.family} while preserving the parent-family mechanism.`,
+                expectedBenefit: 'Target noise-heavy performance breakdowns and improve transfer to loud environments.',
+                bestUse: [
+                    'the athlete is vulnerable to crowd, whistle, commentary, or startle-like sound environments',
+                    'Nora wants a sport-realistic audio-pressure version of the same family challenge',
+                    'the program needs channel-specific variety without changing task identity',
+                ],
+                changes: [
+                    'pressure is carried primarily through sound design and timing unpredictability',
+                    'visual presentation stays relatively stable so the channel emphasis remains auditory',
+                    'audio intensity and overlap should scale without becoming a second rule system',
+                ],
+                artifactRisks: [
+                    'audio routing, latency, or inconsistent hardware can distort the challenge',
+                    'volume spikes can create hardware artifacts that look cognitive if they are not logged',
+                ],
+                runtimeDefaults: {
+                    feedbackMode: 'coached',
+                    adaptiveDifficulty: true,
+                    emphasis: ['audio interference', 'timing unpredictability'],
+                    analyticsFocus: [familyBase?.coreMetric ?? 'family metric', 'audio channel performance'],
+                },
+            };
+            break;
+        case 'combined_channel':
+            baseProfile = {
+                ...defaultProfile,
+                variantType: 'Combined-channel variant',
+                purpose: `This variant layers multiple pressure channels at once while staying inside ${variant.family}.`,
+                expectedBenefit: 'Bridge clean single-channel work into higher-load, competition-like complexity.',
+                bestUse: [
+                    'the athlete handles isolated pressure but destabilizes when multiple channels compete simultaneously',
+                    'Nora wants a higher-load expression without promoting to a new family',
+                    'the program is preparing the athlete for immersive, sport-context, or trial-layer work',
+                ],
+                changes: [
+                    'multiple channels can overlap or stagger while the family mechanism remains the same',
+                    'analytics should log per-channel and overlap context rather than flattening everything into one unlabeled event stream',
+                    'difficulty should feel harder because of layered pressure, not because the task identity changed',
+                ],
+                artifactRisks: [
+                    'channel overlap can inflate random taps or rushed decisions if trigger-type tagging is missing',
+                    'timing misalignment across channels can create artificial difficulty spikes',
+                ],
+                runtimeDefaults: {
+                    feedbackMode: variant.mode === 'hybrid' ? 'suppressed' : 'coached',
+                    adaptiveDifficulty: true,
+                    emphasis: ['layered channels', 'overlap timing'],
+                    analyticsFocus: [familyBase?.coreMetric ?? 'family metric', 'per-channel context'],
+                },
+            };
+            break;
+        case 'cognitive_pressure':
+            baseProfile = {
+                ...defaultProfile,
+                variantType: 'Cognitive-pressure variant',
+                purpose: `This variant adds interpretive or psychological load to ${variant.family} without replacing the core family mechanism.`,
+                expectedBenefit: 'Train stability when pressure arrives through thought disruption, self-talk, ambiguity, or evaluation rather than pure sensory noise.',
+                bestUse: [
+                    'the athlete destabilizes under provocations, uncertainty, or evaluative messaging',
+                    'Nora wants the pressure channel to feel mental rather than purely sensory',
+                    'the program needs a more psychologically realistic expression of the same core task',
+                ],
+                changes: [
+                    'pressure comes from language, ambiguity, reveal timing, or psychologically loaded cues',
+                    'the athlete should still be solving the same family task underneath the provocation',
+                    'copy and pacing need tight guardrails so pressure stays sharp but not confusing',
+                ],
+                runtimeDefaults: {
+                    feedbackMode: 'coached',
+                    adaptiveDifficulty: true,
+                    emphasis: ['provocation', 'ambiguity', 'evaluative load'],
+                    analyticsFocus: [familyBase?.coreMetric ?? 'family metric', 'message condition tags'],
+                },
+            };
+            break;
+        case 'fatigue_load':
+            baseProfile = {
+                ...defaultProfile,
+                variantType: 'Fatigue-load variant',
+                purpose: `This variant expresses ${variant.family} under accumulating fatigue or late-session load while preserving the parent mechanism.`,
+                expectedBenefit: 'Expose deterioration patterns and late-session breakdowns that shorter reps can miss.',
+                bestUse: [
+                    'the athlete looks stable early but loses control late',
+                    'Nora needs a version that highlights fatigue sensitivity instead of fresh-state performance',
+                    'the program wants clearer late-session differentiation without changing the family task',
+                ],
+                changes: [
+                    'session pacing, duration, or late-round pressure are increased',
+                    'analysis should separate early, middle, and late behavior rather than relying on one average',
+                    'difficulty should rise through load accumulation, not by rewriting the task',
+                ],
+                runtimeDefaults: {
+                    feedbackMode: variant.mode === 'hybrid' ? 'suppressed' : 'coached',
+                    adaptiveDifficulty: true,
+                    emphasis: ['load accumulation', 'late-session degradation'],
+                    analyticsFocus: [familyBase?.coreMetric ?? 'family metric', 'early-mid-late comparisons'],
+                },
+            };
+            break;
+        case 'decoy_discrimination':
+            baseProfile = {
+                ...defaultProfile,
+                variantType: 'Discrimination / decoy variant',
+                purpose: `This variant sharpens response control inside ${variant.family} by making the athlete resist convincing false triggers.`,
+                expectedBenefit: 'Improve discrimination quality and reduce false starts or decoy-driven mistakes.',
+                bestUse: [
+                    'the athlete is vulnerable to decoys, false starts, or convincing near-target signals',
+                    'Nora needs a stricter response-control expression of the family task',
+                    'the program wants to stress discrimination without changing the family score model',
+                ],
+                changes: [
+                    'decoy quality, false triggers, or near-correct cues become the main pressure source',
+                    'the real cue must stay definable so the variant remains measurable and fair',
+                    'analytics should classify decoy-triggered errors explicitly',
+                ],
+                runtimeDefaults: {
+                    feedbackMode: 'coached',
+                    adaptiveDifficulty: true,
+                    emphasis: ['decoys', 'false-trigger resistance'],
+                    analyticsFocus: [familyBase?.coreMetric ?? 'family metric', 'false-start / decoy error rates'],
+                },
+            };
+            break;
+        case 'baseline':
+        default:
+            baseProfile = defaultProfile;
+            break;
+    }
+
+    const override = getVariantSpecificProfileOverride(variant, archetype);
+    if (!override) {
+        return baseProfile;
+    }
+
+    return {
+        ...baseProfile,
+        purpose: override.purpose ?? baseProfile.purpose,
+        expectedBenefit: override.expectedBenefit ?? baseProfile.expectedBenefit,
+        bestUse: override.bestUse ?? baseProfile.bestUse,
+        changes: override.changes ?? baseProfile.changes,
+        athleteFlow: override.athleteFlow ?? baseProfile.athleteFlow,
+        scoringNotes: override.scoringNotes ?? baseProfile.scoringNotes,
+        artifactRisks: override.artifactRisks ?? baseProfile.artifactRisks,
+        buildNotes: override.buildNotes ?? baseProfile.buildNotes,
+        runtimeDefaults: {
+            ...baseProfile.runtimeDefaults,
+            ...(override.runtimeDefaults ?? {}),
+        },
+    };
+}
+
+function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: SimVariantArchetype): VariantProfileOverride | null {
+    const name = variant.name.toLowerCase();
+
+    if (variant.family === 'The Kill Switch') {
+        if (name.includes('visual disruption')) {
+            return {
+                purpose: 'This variant expresses Kill Switch through screen-based visual interruptions while preserving the same disruption -> reset -> re-engagement mechanic.',
+                expectedBenefit: 'Surface visual-triggered reset speed and make recovery breakdowns legible under visual chaos.',
+                bestUse: [
+                    'the athlete loses composure when the screen flashes, scrambles, or visually collapses',
+                    'the program needs a clean visual-channel version before moving to combined-channel pressure',
+                    'Nora wants a highly legible reset drill for web and phone delivery',
+                ],
+                runtimeDefaults: {
+                    emphasis: ['screen flashes', 'target disappearance', 'layout scramble'],
+                    analyticsFocus: ['Recovery Time', 'visual-trigger false starts', 'first-post-reset accuracy'],
+                },
+                durationMinutes: 5,
+            };
+        }
+
+        if (name.includes('audio disruption')) {
+            return {
+                purpose: 'This variant expresses Kill Switch through crowd, whistle, buzzer, and startle-like sound disruptions while preserving the same recovery mechanic.',
+                expectedBenefit: 'Train reset speed in loud sport-like environments and reveal audio-triggered recovery breakdowns.',
+                bestUse: [
+                    'the athlete destabilizes under crowd, whistle, or buzzer conditions',
+                    'the program wants a sport-native audio-pressure version of Kill Switch',
+                    'Nora needs an assignment that feels closer to live game noise than abstract visual disruption',
+                ],
+                runtimeDefaults: {
+                    emphasis: ['crowd noise', 'whistle/buzzer timing', 'audio startle events'],
+                    analyticsFocus: ['Recovery Time', 'audio-trigger false starts', 'pressure stability under sound'],
+                },
+                durationMinutes: 5,
+            };
+        }
+
+        if (name.includes('cognitive-provocation')) {
+            return {
+                purpose: 'This variant expresses Kill Switch through provocative language, evaluative cues, and psychological disruption without changing the reset mechanic.',
+                expectedBenefit: 'Reveal whether the athlete can recover when disruption arrives through thought and self-talk rather than pure sensory noise.',
+                bestUse: [
+                    'the athlete spirals after mistakes, criticism, or ambiguity',
+                    'the program wants the pressure channel to feel mental rather than sensory',
+                    'Nora needs a version that targets evaluative threat and internal disruption directly',
+                ],
+                runtimeDefaults: {
+                    emphasis: ['provocative copy', 'evaluative cues', 'psychological interruption'],
+                    analyticsFocus: ['Recovery Time', 'pressure stability under provocation', 'post-provocation first accuracy'],
+                },
+                durationMinutes: 5,
+            };
+        }
+
+        if (name.includes('combined-channel')) {
+            return {
+                purpose: 'This variant layers visual, audio, and cognitive disruptions together while preserving the same Kill Switch reset target.',
+                expectedBenefit: 'Bridge single-channel reset work into competition-like stacked pressure without promoting to a new family.',
+                bestUse: [
+                    'the athlete handles isolated resets but breaks down when channels stack together',
+                    'the program needs a higher-load branch before moving to formal Trial or immersive work',
+                    'Nora wants the default advanced Kill Switch branch for pressure-combination training',
+                ],
+                runtimeDefaults: {
+                    emphasis: ['multi-channel overlap', 'stacked disruption timing', 'pressure layering'],
+                    analyticsFocus: ['Recovery Time', 'overlap-condition recovery', 'channel-tagged false starts'],
+                },
+                durationMinutes: 5,
+            };
+        }
+
+        if (name.includes('sport-context')) {
+            return {
+                purpose: 'This variant expresses Kill Switch in recognizable sport situations so the athlete experiences the reset mechanic inside game-like framing.',
+                expectedBenefit: 'Increase transfer credibility and coach/athlete buy-in without changing the family scoring model.',
+                bestUse: [
+                    'the athlete responds better to sport-native framing than abstract drills',
+                    'the coach wants the reset language to map directly to game situations',
+                    'Nora needs an assignment that feels closer to film room or sideline context',
+                ],
+                runtimeDefaults: {
+                    emphasis: ['sport-context cues', 'game-like reset moments', 'transfer framing'],
+                    analyticsFocus: ['Recovery Time', 'context-tagged performance', 'coach-facing transfer notes'],
+                },
+                durationMinutes: 5,
+            };
+        }
+
+        if (name.includes('immersive reset chamber')) {
+            return {
+                purpose: 'This variant raises Kill Switch transfer fidelity through immersive environmental presentation while keeping the same reset target and scoring model.',
+                expectedBenefit: 'Test whether reset speed survives richer perceptual pressure and more embodied presentation.',
+                bestUse: [
+                    'the athlete needs a higher-fidelity pre-field reset check',
+                    'the roadmap includes Vision Pro or immersive hardware support',
+                    'the program wants an environment-heavy version before sport-field trials',
+                ],
+                runtimeDefaults: {
+                    emphasis: ['spatial disruption', 'environmental fidelity', 'immersive reset context'],
+                    analyticsFocus: ['Recovery Time', 'device/environment context', 'transfer readiness'],
+                },
+                durationMinutes: 6,
+            };
+        }
+    }
+
+    if (variant.family === 'Noise Gate') {
+        if (name.includes('visual clutter')) {
+            return {
+                purpose: 'This variant expresses Noise Gate through heavy visual clutter while preserving the same selective-attention mechanic.',
+                expectedBenefit: 'Strengthen filtering under screen noise, motion clutter, and peripheral competition.',
+                runtimeDefaults: {
+                    emphasis: ['visual clutter', 'peripheral competition', 'screen noise density'],
+                    analyticsFocus: ['Distractor Cost', 'visual-channel miss rate', 'target retention under clutter'],
+                },
+                durationMinutes: 5,
+            };
+        }
+
+        if (name.includes('crowd-noise')) {
+            return {
+                purpose: 'This variant expresses Noise Gate through crowd, commentary, and environmental sound while preserving the same target-selection rule.',
+                expectedBenefit: 'Improve signal retention in loud competitive environments.',
+                runtimeDefaults: {
+                    emphasis: ['crowd audio', 'commentary overlap', 'sound-pressure filtering'],
+                    analyticsFocus: ['Distractor Cost', 'audio-channel interference', 'clean-target retention'],
+                },
+                durationMinutes: 5,
+            };
+        }
+
+        if (name.includes('mixed-channel')) {
+            return {
+                purpose: 'This variant stacks visual and audio distractors inside Noise Gate while preserving the same target-filtering mechanic.',
+                expectedBenefit: 'Bridge single-channel filtering into layered noise conditions that feel closer to competition.',
+                runtimeDefaults: {
+                    emphasis: ['visual + audio overlap', 'channel-stacked distractors', 'layered filtering'],
+                    analyticsFocus: ['Distractor Cost', 'overlap-condition errors', 'channel-tagged misses'],
+                },
+                durationMinutes: 5,
+            };
+        }
+
+        if (name.includes('peripheral bait')) {
+            return {
+                purpose: 'This variant stresses Noise Gate through peripheral lure stimuli that compete for attention while the true target remains central.',
+                expectedBenefit: 'Reduce peripheral bait errors and improve discipline around the live cue.',
+                runtimeDefaults: {
+                    emphasis: ['peripheral lure cues', 'attention bait', 'central-target discipline'],
+                    analyticsFocus: ['Distractor Cost', 'peripheral bait error rate', 'target-lock consistency'],
+                },
+                durationMinutes: 5,
+            };
+        }
+
+        if (name.includes('fatigue-state')) {
+            return {
+                purpose: 'This variant expresses Noise Gate under accumulating fatigue so filtering can be measured late, not just fresh.',
+                expectedBenefit: 'Expose deterioration in selective attention that only shows up under load accumulation.',
+                runtimeDefaults: {
+                    emphasis: ['late-session filtering', 'fatigue accumulation', 'signal retention under load'],
+                    analyticsFocus: ['Distractor Cost', 'early-mid-late filtering drift', 'fatigue-sensitive miss patterns'],
+                },
+                durationMinutes: 6,
+            };
+        }
+
+        if (name.includes('immersive crowd tunnel')) {
+            return {
+                purpose: 'This variant raises Noise Gate transfer fidelity through immersive crowd and tunnel-like environmental presentation while preserving the same filtering task.',
+                expectedBenefit: 'Test whether filtering strength survives richer audio-visual stadium conditions.',
+                runtimeDefaults: {
+                    emphasis: ['immersive crowd field', 'spatialized noise', 'environmental filtering'],
+                    analyticsFocus: ['Distractor Cost', 'device/environment context', 'transfer readiness under crowd fidelity'],
+                },
+                durationMinutes: 6,
+            };
+        }
+    }
+
+    if (variant.family === 'Brake Point') {
+        if (name.includes('go/no-go')) {
+            return {
+                runtimeDefaults: {
+                    emphasis: ['clean go/no-go inhibition', 'stop timing', 'motor restraint'],
+                    analyticsFocus: ['Stop Latency', 'false-start rate', 'clean inhibition commits'],
+                },
+                durationMinutes: 5,
+            };
+        }
+        if (name.includes('high-stakes inhibition')) {
+            return {
+                runtimeDefaults: {
+                    emphasis: ['stakes messaging', 'urgent stop demands', 'pressure-tagged inhibition'],
+                    analyticsFocus: ['Stop Latency', 'pressure-stratified inhibition', 'high-stakes false starts'],
+                },
+                durationMinutes: 5,
+            };
+        }
+    }
+
+    if (variant.family === 'Signal Window') {
+        if (name.includes('shot-clock')) {
+            return {
+                runtimeDefaults: {
+                    emphasis: ['shrinking decision window', 'visible urgency', 'late-read pressure'],
+                    analyticsFocus: ['Read Accuracy', 'late-window decisions', 'time-pressure misses'],
+                },
+                durationMinutes: 5,
+            };
+        }
+        if (name.includes('rapid recognition')) {
+            return {
+                runtimeDefaults: {
+                    emphasis: ['fast cue recognition', 'compressed window', 'quick commit'],
+                    analyticsFocus: ['Read Accuracy', 'recognition speed', 'first-commit quality'],
+                },
+                durationMinutes: 5,
+            };
+        }
+    }
+
+    if (variant.family === 'Endurance Lock') {
+        if (name.includes('sustained-focus')) {
+            return {
+                runtimeDefaults: {
+                    emphasis: ['stable long focus', 'attention maintenance', 'late-session clean execution'],
+                    analyticsFocus: ['Degradation Slope', 'block stability', 'late-session deterioration'],
+                },
+                durationMinutes: 6,
+            };
+        }
+        if (name.includes('late-pressure')) {
+            return {
+                runtimeDefaults: {
+                    emphasis: ['late-session pressure', 'fatigue plus stakes', 'finish-phase control'],
+                    analyticsFocus: ['Degradation Slope', 'late-block pressure sensitivity', 'finish-phase breakdown rate'],
+                },
+                durationMinutes: 6,
+            };
+        }
+    }
+
+    return archetype === 'baseline' ? null : null;
+}
+
+function inferVariantTheme(variant: VariantEntry): VariantTheme {
+    const familyBase = FAMILY_SPEC_BASES[variant.family];
+    const archetype = resolveVariantArchetype(variant);
+    const profile = buildArchetypeProfile(variant, familyBase, archetype);
+
+    return {
+        archetype,
+        variantType: profile.variantType,
+        purpose: profile.purpose,
+        expectedBenefit: profile.expectedBenefit,
+        bestUse: profile.bestUse,
+        changes: profile.changes,
+        athleteFlow: profile.athleteFlow,
+        scoringNotes: profile.scoringNotes,
+        artifactRisks: profile.artifactRisks,
+        trainingMode: [...(familyBase?.trainingModeDefaults ?? ['show feedback according to the parent family defaults'])],
+        trialMode: [...(familyBase?.trialModeDefaults ?? ['standardize conditions and suppress intra-session feedback for comparison use'])],
+        buildNotes: profile.buildNotes,
         boundarySafeguards: [
             `Do not violate the family boundary: ${familyBase?.boundaryRule ?? 'the parent family rules still govern'}.`,
             'If the variant starts producing a different mechanism or divergent score logic, flag it for promotion review rather than extending the variant.',
         ],
     };
+}
 
-    if (name.includes('short daily')) {
-        return {
-            ...genericTheme,
-            variantType: 'Duration variant',
-            purpose: `This variant compresses ${variant.family} into the fastest useful daily rep while preserving ${familyBase?.mechanism ?? 'the core family mechanic'}.`,
-            expectedBenefit: 'Increase compliance, repetition frequency, and low-friction daily usage.',
-            bestUse: [
-                'Nora wants the highest-probability daily completion format',
-                'the athlete benefits from consistent exposure more than an extended benchmark session',
-                'the program needs a default daily package with minimal startup friction',
-            ],
-            changes: [
-                'session length is shortened and round count is reduced',
-                'difficulty should stay useful but not so punishing that compliance drops',
-                'the variant optimizes for repeatability and habit formation rather than exhaustive assessment',
-            ],
-            athleteFlow: [
-                'Entry framing should signal that this is a quick, high-compliance daily rep.',
-                'The athlete should move into the family loop with minimal setup and minimal instruction overhead.',
-                'Exit feedback should be compact and motivational, with trend language over heavy analysis.',
-            ],
-            scoringNotes: [
-                `${familyBase?.coreMetric ?? 'The family metric'} remains unchanged; the variant only changes packaging and exposure length.`,
-                'Low trial count means summary views should emphasize median, consistency, and trend rather than over-reading one outlier.',
-            ],
-            artifactRisks: [
-                'short sessions are unusually sensitive to one anomalous round or false start',
-                'aggressive pre-emption can look like improvement unless false starts are logged clearly',
-            ],
-        };
+function isTrialVariant(variant: VariantEntry) {
+    return resolveVariantArchetype(variant) === 'trial';
+}
+
+function getTrialDurationLabel(variant: VariantEntry) {
+    switch (variant.family) {
+        case 'Brake Point':
+            return '10 minutes';
+        case 'Endurance Lock':
+            return '18 minutes';
+        default:
+            return '12 minutes';
+    }
+}
+
+function buildDefaultLockedSpec(variant: VariantEntry): SimVariantLockedSpec | undefined {
+    if (!isTrialVariant(variant)) {
+        return undefined;
     }
 
-    if (name.includes('extended trial') || name.includes('trial-only') || name.includes('field-read trial')) {
-        return {
-            ...genericTheme,
-            variantType: 'Trial variant',
-            purpose: `This variant packages ${variant.family} as a standardized comparison-grade assessment while preserving ${familyBase?.mechanism ?? 'the family mechanism'}.`,
-            expectedBenefit: 'Support research use, baseline/post comparisons, and cleaner benchmarking.',
-            bestUse: [
-                'the program needs a fixed assessment rather than an adaptive training rep',
-                'results will be compared across time points, cohorts, or formal trial conditions',
-                'Nora wants a version that exposes deterioration, pressure effects, or standardized performance under controlled settings',
-            ],
-            changes: [
-                'duration expands into a comparison-grade session structure',
-                'difficulty, schedule, and modifier profile are fixed instead of adapting live',
-                'feedback is delayed until the end of the session',
-            ],
-            athleteFlow: [
-                'Entry framing should set expectations without coaching away the challenge.',
-                'The athlete should complete the full fixed protocol before any performance summary appears.',
-                'Exit output should prioritize standardized reporting and comparison-friendly summaries.',
-            ],
-            scoringNotes: [
-                `${familyBase?.coreMetric ?? 'The family metric'} remains the headline measure, with trial-specific breakdowns treated as secondary analytics.`,
-                'Failed rounds, invalid trials, and environment/device metadata should be exported separately rather than flattened into the top-line result.',
-            ],
-            artifactRisks: [
-                'dropout, device changes, and environmental inconsistency can invalidate comparison quality',
-                'feedback leakage or adaptive behavior mid-session undermines trial standardization',
-            ],
-        };
+    const duration = getTrialDurationLabel(variant);
+    const generic: SimVariantLockedSpec = {
+        fixedTier: 'Tier 3',
+        fixedDuration: duration,
+        targetSessionStructure: variant.family === 'Endurance Lock' ? '6 fixed pacing blocks' : '60 fixed rounds',
+        buildVersionPolicy: 'Record the exact build version and preserve it across Baseline, Post-Training, and Retention comparisons.',
+        seedPolicy: 'Use one fixed documented seed / schedule per protocol version and preserve it across Baseline, Post-Training, and Retention comparisons.',
+        modifierProfile: 'Use a fixed Tier 3 modifier profile with no intra-session adaptation.',
+        environmentRequirements: 'Keep environment requirements fixed across all comparison points for the same protocol version, including device class, audio route, and any room/setup constraints.',
+        fixedProfileDetails: 'Use the family-standard Trial profile and preserve the same task mapping throughout the session.',
+        validResponseRule: 'Parent-family valid response rules remain locked for this Trial variant.',
+        artifactFloorRule: 'Any response faster than 150 ms is flagged as a motor artifact and excluded from the headline metric.',
+        maxWindowRule: 'Use the parent-family Tier 3 maximum response window with no adaptive changes.',
+        failedRoundRule: 'No valid response inside the maximum window is scored as a failed round at the capped value and exported separately.',
+        falseStartRule: 'False starts must be logged separately and excluded from the headline metric.',
+        validSessionRule: 'Valid session = at least 75% valid outcomes and fewer than 20% false starts.',
+        partialSessionRule: 'Partial session = 50–74% valid outcomes and fewer than or equal to 20% false starts.',
+        invalidSessionRule: 'Invalid session = fewer than 50% valid outcomes or more than 20% false starts.',
+        dropoutRule: 'Trial-mode dropout is classified using Addendum validity rules: if the athlete exits after completing at least 50% of the session and still meets validity / false-start thresholds, mark Partial; otherwise mark Invalid. Preserve the dropout flag in all cases.',
+        retryRule: 'Maximum 2 retries per assessment point. If all attempts are invalid, record missing trial data rather than substituting a partial benchmark.',
+        transferMetricDefinition: 'Transfer Gap = the difference between daily-training family performance and standardized Trial performance for the same athlete.',
+        transferMetricReporting: 'Report Transfer Gap beside the headline metric and trial-specific deterioration / condition-stratified views, not as a standalone score.',
+        validationStage: 'Stage 1 Mechanism-Support',
+        nextValidationMilestone: 'Stage 2 Internal Reliability',
+        motorBaselineRule: 'Require a standardized warm-up / motor-baseline capture before the assessment and preserve completion state in metadata.',
+        deviceCovariateRule: 'Log device class and treat it as a covariate in research export and analysis.',
+        exportRequirements: 'Export exact build version, timestamps, condition tags, validity status, artifacts, device/environment metadata, and per-round or per-block trial outcomes in a stable schema.',
+    };
+
+    switch (variant.family) {
+        case 'The Kill Switch':
+            return {
+                ...generic,
+                modifierProfile: 'Use one fixed documented Kill Switch Tier 3 protocol bundle: sequence-memory focus task, combined disruption emphasis, and evaluative threat / consequence / ambiguity held constant across the full session.',
+                fixedProfileDetails: 'Do not swap task mappings, disruption channels, or modifier intensities within-session; the full Tier 3 protocol bundle remains constant for every comparison point.',
+                validResponseRule: 'Valid re-engagement requires two consecutive correct responses on the refocused task.',
+                maxWindowRule: 'Tier 3 maximum recovery window is 1.5 seconds.',
+                falseStartRule: 'False start = any input during the disruption phase before the reset signal.',
+                transferMetricDefinition: 'Transfer Gap = the difference between adaptive daily-training Recovery Time and standardized Trial Recovery Time for the same athlete.',
+                exportRequirements: 'Export exact build version, disruption type, per-round Recovery Time, false starts, motor artifacts, failed-round markers, session validity status, device/environment metadata, and modifier tags in a stable schema.',
+            };
+        case 'Noise Gate':
+            return {
+                ...generic,
+                targetSessionStructure: '60 fixed rounds',
+                fixedProfileDetails: 'Use the standardized Tier 3 Noise Gate profile with fixed distractor density, overlap schedule, and channel stack.',
+                validResponseRule: 'Valid target recovery requires one committed correct response while distractors remain irrelevant.',
+                falseStartRule: 'False start = response to distractor stimuli or non-target noise.',
+            };
+        case 'Brake Point':
+            return {
+                ...generic,
+                targetSessionStructure: '175 fixed trials',
+                fixedProfileDetails: 'Use the standardized Tier 3 Brake Point profile with fixed stop-signal timing, distribution, and 175 total trials.',
+                validResponseRule: 'Valid inhibition requires one committed stop inside the standardized stop window.',
+                falseStartRule: 'False start = response before the Go stimulus or outside the valid stop window.',
+            };
+        case 'Signal Window':
+            return {
+                ...generic,
+                targetSessionStructure: '60 fixed reads',
+                fixedProfileDetails: 'Use the standardized Tier 3 Signal Window profile with fixed cue window, ambiguity tier, and presentation order.',
+                validResponseRule: 'Valid read requires one committed correct response inside the standardized cue window.',
+                falseStartRule: 'False start = response before display onset or before the valid cue window opens.',
+            };
+        case 'Sequence Shift':
+            return {
+                ...generic,
+                targetSessionStructure: '60 fixed shift opportunities',
+                fixedProfileDetails: 'Use the standardized Tier 3 Sequence Shift profile with fixed rule-change schedule, change frequency, and response windows.',
+                validResponseRule: 'Valid post-shift recovery requires one correct response after the active rule changes.',
+                falseStartRule: 'False start = response to the previous rule after the change signal or before the new valid window opens.',
+            };
+        case 'Endurance Lock':
+            return {
+                ...generic,
+                fixedProfileDetails: 'Use the standardized Tier 3 Endurance Lock pacing block with fixed duration, block structure, and fatigue-load profile.',
+                validResponseRule: 'Usable Endurance Lock performance is evaluated in rolling blocks rather than single reset events.',
+                maxWindowRule: 'Continuous-task validity follows the family block thresholds rather than a single reset window.',
+                falseStartRule: 'False start is not the primary issue; unusable block segments and dropout handling govern validity.',
+            };
+        default:
+            return generic;
+    }
+}
+
+function ensureLockedSpec(variant: VariantEntry) {
+    return variant.lockedSpec ?? buildDefaultLockedSpec(variant);
+}
+
+function getTrialProtocolNotes(variant: VariantEntry) {
+    const lockedSpec = ensureLockedSpec(variant);
+    if (!lockedSpec) return [];
+
+    return [
+        `Assessment tier is locked at ${lockedSpec.fixedTier} for the full ${lockedSpec.fixedDuration.replace(' minutes', '-minute')} session.`,
+        `Target session structure is locked at ${lockedSpec.targetSessionStructure}.`,
+        lockedSpec.buildVersionPolicy,
+        lockedSpec.seedPolicy,
+        lockedSpec.modifierProfile,
+        lockedSpec.environmentRequirements,
+        lockedSpec.fixedProfileDetails,
+    ];
+}
+
+function getMeasurementPrecisionNotes(variant: VariantEntry) {
+    const lockedSpec = ensureLockedSpec(variant);
+    const notes = lockedSpec
+        ? [
+            lockedSpec.validResponseRule,
+            lockedSpec.artifactFloorRule,
+            lockedSpec.maxWindowRule,
+            lockedSpec.failedRoundRule,
+            lockedSpec.falseStartRule,
+        ]
+        : [
+            'The parent-family measurement rules remain locked and govern valid response definitions, artifact thresholds, and failed-trial handling.',
+            'Any response faster than 150 ms is flagged as a motor artifact and excluded from the headline metric.',
+        ];
+
+    if (variant.family === 'The Kill Switch') {
+        notes.push('Attentional Shifting scoring remains multi-source, combining re-engagement latency with first-post-reset accuracy exactly as defined in the Kill Switch family spec.');
+        notes.push('Pressure Stability scoring remains modifier-stratified, comparing baseline versus pressure conditions exactly as defined in the Kill Switch family spec.');
+        notes.push('Trial reporting should emphasize Recovery Time, Recovery Trend, modifier-stratified Pressure Stability, fail rate, and within-session deterioration.');
     }
 
-    if (name.includes('immersive') || name.includes('chamber') || name.includes('tunnel')) {
-        return {
-            ...genericTheme,
-            variantType: 'Immersive variant',
-            purpose: `This variant raises transfer fidelity by expressing ${variant.family} inside a more immersive environment while keeping ${familyBase?.mechanism ?? 'the same family mechanic'} intact.`,
-            expectedBenefit: 'Increase realism, transfer credibility, and environmental specificity.',
-            bestUse: [
-                'the athlete needs a more embodied or environmental version of the family challenge',
-                'the program wants higher-fidelity pressure without changing the family score architecture',
-                'the build roadmap includes platform-specific immersive hardware or richer scene presentation',
-            ],
-            changes: [
-                'environmental presentation, spatial cues, and atmosphere become more prominent',
-                'pressure comes from immersion and contextual fidelity rather than a rule change',
-                'analytics should capture immersion-specific state and device context',
-            ],
-            artifactRisks: [
-                'device calibration, motion comfort, or rendering lag can distort the cognitive signal',
-                'immersive presentation can accidentally add a second task if visual design is not tightly bounded',
-            ],
-        };
+    return notes;
+}
+
+function getTransferMetricNotes(variant: VariantEntry, familyBase?: FamilySpecBase) {
+    const lockedSpec = ensureLockedSpec(variant);
+    const coreMetric = familyBase?.coreMetric ?? 'the parent-family metric';
+
+    if (lockedSpec) {
+        return [
+            lockedSpec.transferMetricDefinition,
+            'Small Transfer Gap suggests the skill is internalizing across contexts; large Transfer Gap suggests the athlete improves in drill conditions more than in assessment conditions.',
+            lockedSpec.transferMetricReporting,
+        ];
     }
 
-    if (name.includes('sport') || name.includes('playbook') || name.includes('pre-shot') || name.includes('field-read')) {
-        return {
-            ...genericTheme,
-            variantType: 'Sport-context variant',
-            purpose: `This variant localizes ${variant.family} to a sport-recognizable situation without changing the parent-family mechanism.`,
-            expectedBenefit: 'Increase transfer credibility, coach intuitiveness, and athlete buy-in.',
-            bestUse: [
-                'the athlete or coach responds better to sport-native framing than abstract drills',
-                'the program wants stronger game-day relevance without changing core scoring logic',
-                'Nora needs a version that is easier to explain in team or sport-specific language',
-            ],
-            changes: [
-                'stimulus framing, copy, and environmental cues become sport-specific',
-                'the family mechanism and metric remain unchanged beneath the sport wrapper',
-                'variant assets should support transfer without introducing sport-specific rule drift',
-            ],
-        };
+    return [
+        `Primary trial-layer comparison metric is the Transfer Gap between daily-training ${coreMetric} and standardized Trial ${coreMetric}.`,
+        'Small Transfer Gap suggests the skill is internalizing across contexts; large Transfer Gap suggests the athlete improves in drill conditions more than in assessment conditions.',
+        `Transfer Gap should be reported beside the headline ${coreMetric} and any trial-specific deterioration or condition-stratified views.`,
+    ];
+}
+
+function getSessionValidityNotes(variant: VariantEntry) {
+    const lockedSpec = ensureLockedSpec(variant);
+    if (!lockedSpec) {
+        return [
+            'Valid session = at least 75% valid outcomes and fewer than 20% false starts.',
+            'Partial session = 50–74% valid outcomes and fewer than or equal to 20% false starts.',
+            'Invalid session = fewer than 50% valid outcomes or more than 20% false starts.',
+            'Any Trial-mode dropout is marked invalid and preserved in the data log.',
+            'Maximum 2 retries per assessment point.',
+        ];
     }
 
-    if (name.includes('visual') || name.includes('clutter') || name.includes('spotlight') || name.includes('peripheral')) {
-        return {
-            ...genericTheme,
-            variantType: 'Visual-channel variant',
-            purpose: `This variant emphasizes visual interference inside ${variant.family} while preserving the parent-family mechanism.`,
-            expectedBenefit: 'Target visual-channel vulnerability and make the pressure source immediately legible.',
-            bestUse: [
-                'the athlete loses stability under visual clutter, peripheral bait, or screen-based interference',
-                'Nora wants a clear visual-channel expression before layering in more channels',
-                'the program needs a highly legible variant for visual attentional stress',
-            ],
-            changes: [
-                'pressure is carried primarily through visual presentation rather than audio or cognitive provocation',
-                'density, salience, and peripheral competition can scale by tier',
-                'the target rule should remain clear even when the screen gets noisier',
-            ],
-            artifactRisks: [
-                'overdesigned clutter can blur the live cue and accidentally change the task itself',
-                'display lag, peripheral scaling, or contrast issues can distort difficulty',
-            ],
-        };
+    return [
+        lockedSpec.validSessionRule,
+        lockedSpec.partialSessionRule,
+        lockedSpec.invalidSessionRule,
+        lockedSpec.dropoutRule,
+        lockedSpec.retryRule,
+        'Excessive false starts, device interruption, or environment breaks should be explicitly tagged as the invalidation cause.',
+    ];
+}
+
+function getTrialModeSection() {
+    return [
+        'Training Mode (reference only, not default assignment):',
+        '- Treat this configuration as a benchmark packaging if it is surfaced outside formal trials.',
+        '- Do not use it as the adaptive daily-driver variant.',
+        '- Coaching interpretation should compare against prior standardized assessments rather than daily trend feedback.',
+        'Trial Mode (operational mode):',
+        '- Suppress all intra-session scores, streaks, and round-level feedback.',
+        '- Require the athlete to complete the full fixed protocol before any performance summary appears.',
+        '- Lock build version, seed/schedule, modifier profile, and environment metadata for comparison-safe reporting.',
+    ];
+}
+
+function getResearchAlignmentNotes(variant: VariantEntry) {
+    const lockedSpec = ensureLockedSpec(variant);
+    const baseNotes = lockedSpec
+        ? [
+            `Validation status: ${lockedSpec.validationStage}.`,
+            `Next milestone: ${lockedSpec.nextValidationMilestone}.`,
+            lockedSpec.motorBaselineRule,
+            lockedSpec.deviceCovariateRule,
+        ]
+        : [
+            'Validation status: Stage 1 Mechanism-Support.',
+            'Next milestone: Stage 2 Internal Reliability with test-retest stability at or above acceptable thresholds.',
+            'Session metadata must capture device type, audio route, and warm-up / motor-baseline completion for response-time interpretation.',
+            'In research export and analysis, device class should be treated as a covariate rather than assumed to be behaviorally neutral.',
+        ];
+
+    if (variant.family === 'The Kill Switch') {
+        return [
+            ...baseNotes,
+            'The family is grounded in attentional shifting, inhibitory control, and pressure-stability literature; the Trial variant should preserve that evidence chain rather than introduce a new mechanism.',
+        ];
     }
 
-    if (name.includes('audio') || name.includes('crowd') || name.includes('whistle') || name.includes('commentary')) {
-        return {
-            ...genericTheme,
-            variantType: 'Audio-channel variant',
-            purpose: `This variant emphasizes auditory interference inside ${variant.family} while preserving the parent-family mechanism.`,
-            expectedBenefit: 'Target noise-heavy performance breakdowns and improve transfer to loud environments.',
-            bestUse: [
-                'the athlete is vulnerable to crowd, whistle, commentary, or startle-like sound environments',
-                'Nora wants a sport-realistic audio-pressure version of the same family challenge',
-                'the program needs channel-specific variety without changing task identity',
-            ],
-            changes: [
-                'pressure is carried primarily through sound design and timing unpredictability',
-                'visual presentation stays relatively stable so the channel emphasis remains auditory',
-                'audio intensity and overlap should scale without becoming a second rule system',
-            ],
-            artifactRisks: [
-                'audio routing, latency, or inconsistent hardware can distort the challenge',
-                'volume spikes can create hardware artifacts that look cognitive if they are not logged',
-            ],
-        };
+    return baseNotes;
+}
+
+function getTrialBuildNotes(variant: VariantEntry) {
+    const lockedSpec = ensureLockedSpec(variant);
+    return [
+        'Use a fixed version identifier and keep the standardized configuration visible in admin / research tooling, not in the athlete-facing UI.',
+        lockedSpec?.exportRequirements ?? 'Export round- or block-level timestamps, condition tags, artifact flags, session validity status, and environment metadata in a stable schema.',
+        'Store exact build version, seed, modifier profile, device class, audio route, and any trial-specific context tags in the session record.',
+    ];
+}
+
+function buildGeneratedTrialVariantSpec(variant: VariantEntry, familyBase: FamilySpecBase | undefined, theme: VariantTheme, today: string) {
+    return [
+        '1. Core Identity',
+        `Variant Name: ${variant.name}`,
+        `Parent Family: ${variant.family}`,
+        'Variant Type: Trial variant',
+        `Registry Mode: ${MODE_CONFIG[variant.mode].label}`,
+        `Family Status: ${variant.familyStatus === 'locked' ? 'Locked Family' : 'Candidate Family'}`,
+        `Status: ${mapVariantStatus(variant)}`,
+        `Build Priority: ${mapPriority(variant.priority)}`,
+        'Version: v0.2',
+        `Generated On: ${today}`,
+        '',
+        '2. Variant Rationale',
+        `Purpose: ${theme.purpose}`,
+        `Expected Benefit: ${theme.expectedBenefit}`,
+        'When Nora Should Assign:',
+        ...theme.bestUse.map((item) => `- ${item}`),
+        '',
+        '3. Fixed Trial Protocol',
+        ...getTrialProtocolNotes(variant).map((item) => `- ${item}`),
+        '',
+        '4. Family Inheritance vs Variant Changes',
+        `Inherited from ${variant.family} and the Sim Specification Standards Addendum:`,
+        `- Core mechanism remains ${familyBase?.mechanism ?? 'defined by the parent family spec'}.`,
+        `- Core metric remains ${familyBase?.coreMetric ?? 'the parent family metric'}.`,
+        `- Primary skill targets remain ${familyBase?.skillTargets ?? 'the parent family skill architecture'}.`,
+        ...(variant.family === 'The Kill Switch'
+            ? [
+                '- Attentional Shifting scoring remains multi-source, combining re-engagement latency with first-post-reset accuracy exactly as defined in the Kill Switch family spec.',
+                '- Pressure Stability scoring remains modifier-stratified, comparing baseline versus pressure conditions exactly as defined in the Kill Switch family spec.',
+            ]
+            : []),
+        `- Boundary rule remains ${familyBase?.boundaryRule ?? 'governed by the parent family spec'}.`,
+        'What changes in this variant:',
+        ...theme.changes.map((item) => `- ${item}`),
+        '',
+        '5. Athlete Experience Flow',
+        ...theme.athleteFlow.map((item) => `- ${item}`),
+        '',
+        '6. Measurement Precision and Scoring Rules',
+        ...getMeasurementPrecisionNotes(variant).map((item) => `- ${item}`),
+        '',
+        '7. Transfer Metric and Reporting',
+        ...getTransferMetricNotes(variant, familyBase).map((item) => `- ${item}`),
+        '',
+        '8. Session Validity, Retry, and Dropout Rules',
+        ...getSessionValidityNotes(variant).map((item) => `- ${item}`),
+        '',
+        '9. Mode Behavior',
+        ...getTrialModeSection(),
+        '',
+        '10. Research Alignment and Validation Status',
+        ...getResearchAlignmentNotes(variant).map((item) => `- ${item}`),
+        '',
+        '11. Build and Data Export Requirements',
+        ...getTrialBuildNotes(variant).map((item) => `- ${item}`),
+        '',
+        '12. Governing Documents',
+        ...(familyBase?.governingDocs ?? [
+            'Sim Specification Standards Addendum (v2)',
+            `${variant.family} Family Spec`,
+            'Sim Family Tree v2',
+            'Sim Family Promotion Protocol v2.1',
+        ]).map((item) => `- ${item}`),
+        '- When variant wording conflicts with trial standardization rules, the Sim Specification Standards Addendum governs first.',
+        '',
+        '13. Boundary Safeguards',
+        ...theme.boundarySafeguards.map((item) => `- ${item}`),
+        '',
+        '14. Variant Readiness Checklist',
+        '- [ ] Fixed Tier / duration / seed / modifier profile locked for the assessment protocol',
+        '- [ ] Measurement precision rules match the parent family spec and standards addendum',
+        '- [ ] Transfer Gap reporting and trial analytics outputs defined',
+        '- [ ] Valid / partial / invalid / dropout handling documented',
+        '- [ ] Device, motor-baseline, and export requirements captured for research use',
+        '- [ ] Publish config mirrors the locked trial protocol without adaptive overrides',
+    ].join('\n');
+}
+
+function getDefaultDurationMinutes(variant: VariantEntry) {
+    const archetype = resolveVariantArchetype(variant);
+    const lockedSpec = ensureLockedSpec(variant);
+    const variantOverride = getVariantSpecificProfileOverride(variant, archetype);
+    if (variantOverride?.durationMinutes) {
+        return variantOverride.durationMinutes;
+    }
+    if (archetype === 'trial' && lockedSpec?.fixedDuration) {
+        const parsed = Number.parseInt(lockedSpec.fixedDuration, 10);
+        if (Number.isFinite(parsed)) return parsed;
     }
 
-    if (name.includes('combined') || name.includes('mixed') || name.includes('multi-source') || name.includes('dual-channel') || name.includes('overload')) {
-        return {
-            ...genericTheme,
-            variantType: 'Combined-channel variant',
-            purpose: `This variant layers multiple pressure channels at once while staying inside ${variant.family}.`,
-            expectedBenefit: 'Bridge clean single-channel work into higher-load, competition-like complexity.',
-            bestUse: [
-                'the athlete handles isolated pressure but destabilizes when multiple channels compete simultaneously',
-                'Nora wants a higher-load expression without promoting to a new family',
-                'the program is preparing the athlete for immersive, sport-context, or trial-layer work',
-            ],
-            changes: [
-                'multiple channels can overlap or stagger while the family mechanism remains the same',
-                'analytics should log per-channel and overlap context rather than flattening everything into one unlabeled event stream',
-                'difficulty should feel harder because of layered pressure, not because the task identity changed',
-            ],
-            artifactRisks: [
-                'channel overlap can inflate random taps or rushed decisions if trigger-type tagging is missing',
-                'timing misalignment across channels can create artificial difficulty spikes',
-            ],
-        };
+    switch (archetype) {
+        case 'short_daily':
+            return 3;
+        case 'trial':
+            return 12;
+        case 'fatigue_load':
+        case 'immersive':
+            return 6;
+        default:
+            return variant.mode === 'hybrid' ? 4 : 5;
     }
+}
 
-    if (name.includes('cognitive') || name.includes('provocation') || name.includes('ambiguous') || name.includes('confidence') || name.includes('late reveal')) {
-        return {
-            ...genericTheme,
-            variantType: 'Cognitive-pressure variant',
-            purpose: `This variant adds interpretive or psychological load to ${variant.family} without replacing the core family mechanism.`,
-            expectedBenefit: 'Train stability when pressure arrives through thought disruption, self-talk, ambiguity, or evaluation rather than pure sensory noise.',
-            bestUse: [
-                'the athlete destabilizes under provocations, uncertainty, or evaluative messaging',
-                'Nora wants the pressure channel to feel mental rather than purely sensory',
-                'the program needs a more psychologically realistic expression of the same core task',
-            ],
-            changes: [
-                'pressure comes from language, ambiguity, reveal timing, or psychologically loaded cues',
-                'the athlete should still be solving the same family task underneath the provocation',
-                'copy and pacing need tight guardrails so pressure stays sharp but not confusing',
-            ],
-        };
-    }
-
-    if (name.includes('fatigue') || name.includes('late') || name.includes('long') || name.includes('burn') || name.includes('endurance')) {
-        return {
-            ...genericTheme,
-            variantType: 'Fatigue-load variant',
-            purpose: `This variant expresses ${variant.family} under accumulating fatigue or late-session load while preserving the parent mechanism.`,
-            expectedBenefit: 'Expose deterioration patterns and late-session breakdowns that shorter reps can miss.',
-            bestUse: [
-                'the athlete looks stable early but loses control late',
-                'Nora needs a version that highlights fatigue sensitivity instead of fresh-state performance',
-                'the program wants clearer late-session differentiation without changing the family task',
-            ],
-            changes: [
-                'session pacing, duration, or late-round pressure are increased',
-                'analysis should separate early, middle, and late behavior rather than relying on one average',
-                'difficulty should rise through load accumulation, not by rewriting the task',
-            ],
-        };
-    }
-
-    if (name.includes('false') || name.includes('fakeout') || name.includes('decoy') || name.includes('bait') || name.includes('go/no-go')) {
-        return {
-            ...genericTheme,
-            variantType: 'Discrimination / decoy variant',
-            purpose: `This variant sharpens response control inside ${variant.family} by making the athlete resist convincing false triggers.`,
-            expectedBenefit: 'Improve discrimination quality and reduce false starts or decoy-driven mistakes.',
-            bestUse: [
-                'the athlete is vulnerable to decoys, false starts, or convincing near-target signals',
-                'Nora needs a stricter response-control expression of the family task',
-                'the program wants to stress discrimination without changing the family score model',
-            ],
-            changes: [
-                'decoy quality, false triggers, or near-correct cues become the main pressure source',
-                'the real cue must stay definable so the variant remains measurable and fair',
-                'analytics should classify decoy-triggered errors explicitly',
-            ],
-        };
-    }
-
-    return genericTheme;
+function getGenericArchetypeSpecNotes(variant: VariantEntry, familyBase: FamilySpecBase | undefined, theme: VariantTheme) {
+    const profile = buildArchetypeProfile(variant, familyBase, theme.archetype);
+    return [
+        `Archetype: ${ARCHETYPE_LABELS[theme.archetype]}`,
+        `Recommended session length defaults to ${getDefaultDurationMinutes(variant)} minutes unless the registry overrides it.`,
+        `Default feedback mode is ${profile.runtimeDefaults.feedbackMode}.`,
+        `Adaptive difficulty is ${profile.runtimeDefaults.adaptiveDifficulty ? 'enabled inside family boundaries' : 'disabled by default'}.`,
+        `Runtime emphasis: ${profile.runtimeDefaults.emphasis.join('; ')}.`,
+        `Analytics focus: ${profile.runtimeDefaults.analyticsFocus.join('; ')}.`,
+    ];
 }
 
 function buildGeneratedVariantSpec(variant: VariantEntry): string {
     const familyBase = FAMILY_SPEC_BASES[variant.family];
     const theme = inferVariantTheme(variant);
     const today = 'March 9, 2026';
+
+    if (isTrialVariant(variant)) {
+        return buildGeneratedTrialVariantSpec(variant, familyBase, theme, today);
+    }
 
     return [
         '1. Core Identity',
@@ -907,7 +2103,10 @@ function buildGeneratedVariantSpec(variant: VariantEntry): string {
         'When Nora Should Assign:',
         ...theme.bestUse.map((item) => `- ${item}`),
         '',
-        '3. Family Inheritance vs Variant Changes',
+        '3. Archetype Packaging Defaults',
+        ...getGenericArchetypeSpecNotes(variant, familyBase, theme).map((item) => `- ${item}`),
+        '',
+        '4. Family Inheritance vs Variant Changes',
         `Inherited from ${variant.family} and the Sim Specification Standards Addendum:`,
         `- Core mechanism remains ${familyBase?.mechanism ?? 'defined by the parent family spec'}.`,
         `- Core metric remains ${familyBase?.coreMetric ?? 'the parent family metric'}.`,
@@ -916,24 +2115,24 @@ function buildGeneratedVariantSpec(variant: VariantEntry): string {
         'What changes in this variant:',
         ...theme.changes.map((item) => `- ${item}`),
         '',
-        '4. Athlete Experience Flow',
+        '5. Athlete Experience Flow',
         ...theme.athleteFlow.map((item) => `- ${item}`),
         '',
-        '5. Measurement and Scoring Notes',
+        '6. Measurement and Scoring Notes',
         ...theme.scoringNotes.map((item) => `- ${item}`),
         'Artifact / false-start risks:',
         ...theme.artifactRisks.map((item) => `- ${item}`),
         '',
-        '6. Mode Behavior',
+        '7. Mode Behavior',
         'Training Mode:',
         ...theme.trainingMode.map((item) => `- ${item}`),
         'Trial Mode:',
         ...theme.trialMode.map((item) => `- ${item}`),
         '',
-        '7. Build and Implementation Notes',
+        '8. Build and Implementation Notes',
         ...theme.buildNotes.map((item) => `- ${item}`),
         '',
-        '8. Governing Documents',
+        '9. Governing Documents',
         ...(familyBase?.governingDocs ?? [
             'Sim Specification Standards Addendum (v2)',
             `${variant.family} Family Spec`,
@@ -941,11 +2140,12 @@ function buildGeneratedVariantSpec(variant: VariantEntry): string {
             'Sim Family Promotion Protocol v2.1',
         ]).map((item) => `- ${item}`),
         '',
-        '9. Boundary Safeguards',
+        '10. Boundary Safeguards',
         ...theme.boundarySafeguards.map((item) => `- ${item}`),
         '',
-        '10. Variant Readiness Checklist',
+        '11. Variant Readiness Checklist',
         '- [ ] Core identity fields reviewed against the registry entry',
+        '- [ ] Archetype defaults match the intended packaging for this variant',
         '- [ ] Family inheritance and variant-specific changes confirmed',
         '- [ ] Measurement notes checked against family metric rules',
         '- [ ] Training Mode and Trial Mode behavior reviewed',
@@ -961,12 +2161,7 @@ function inferModuleDifficulty(variant: VariantEntry): ExerciseDifficulty {
 }
 
 function inferModuleDurationMinutes(variant: VariantEntry) {
-    const name = variant.name.toLowerCase();
-    if (name.includes('short daily')) return 3;
-    if (name.includes('extended trial') || name.includes('trial')) return 8;
-    if (name.includes('endurance') || name.includes('fatigue') || name.includes('long')) return 6;
-    if (variant.mode === 'hybrid') return 4;
-    return 5;
+    return getDefaultDurationMinutes(variant);
 }
 
 function inferModuleIcon(variant: VariantEntry) {
@@ -989,10 +2184,13 @@ function mapFamilyToFocusType(variant: VariantEntry): 'single_point' | 'distract
 function buildDefaultRuntimeConfig(variant: VariantEntry) {
     const familyBase = FAMILY_SPEC_BASES[variant.family];
     const theme = inferVariantTheme(variant);
+    const archetypeProfile = buildArchetypeProfile(variant, familyBase, theme.archetype);
+    const lockedSpec = ensureLockedSpec(variant);
 
     return {
         schemaVersion: 'sim-variant-config/v1',
         variantId: buildSimVariantId(variant),
+        archetype: theme.archetype,
         family: variant.family,
         variantName: variant.name,
         mode: variant.mode,
@@ -1002,20 +2200,22 @@ function buildDefaultRuntimeConfig(variant: VariantEntry) {
         skillTargets: familyBase?.skillTargets ?? '',
         session: {
             durationMinutes: inferModuleDurationMinutes(variant),
-            feedbackMode: variant.mode === 'hybrid' ? 'suppressed' : 'coached',
-            adaptiveDifficulty: variant.mode !== 'hybrid',
+            feedbackMode: archetypeProfile.runtimeDefaults.feedbackMode,
+            adaptiveDifficulty: archetypeProfile.runtimeDefaults.adaptiveDifficulty,
         },
         stimuli: {
             variantType: theme.variantType,
-            emphasis: theme.changes,
+            emphasis: archetypeProfile.runtimeDefaults.emphasis,
         },
         scoring: {
             headlineMetric: familyBase?.coreMetric ?? '',
             artifactRisks: theme.artifactRisks,
         },
         analytics: {
-            tags: [variant.family, variant.mode, theme.variantType],
+            tags: [variant.family, variant.mode, theme.variantType, ARCHETYPE_LABELS[theme.archetype]],
+            focus: archetypeProfile.runtimeDefaults.analyticsFocus,
         },
+        lockedSpec: lockedSpec ?? null,
         safeguards: theme.boundarySafeguards,
     };
 }
@@ -1071,6 +2271,8 @@ function buildVariantWorkspace(seed: VariantEntry, existing: SimVariantRecord | 
         priority: existing?.priority ?? seed.priority,
         specStatus: existing ? resolveSpecStatus(existing) : seed.specStatus,
         specRaw: existing?.specRaw ?? '',
+        archetypeOverride: existing?.archetypeOverride,
+        lockedSpec: existing?.lockedSpec ?? buildDefaultLockedSpec(existing ?? seed),
         runtimeConfig: existing?.runtimeConfig ?? buildDefaultRuntimeConfig(seed),
         moduleDraft: {
             ...defaultModuleDraft,
@@ -1104,6 +2306,7 @@ function createDraftVariantRecord(seed?: Partial<SimVariantSeed>, sortOrder: num
 
 function buildPublishedModule(record: SimVariantRecord): MentalExercise {
     const moduleDraft = record.moduleDraft ?? buildDefaultModuleDraft(record, 0);
+    const archetype = resolveVariantArchetype(record);
 
     return {
         id: moduleDraft.moduleId,
@@ -1135,6 +2338,13 @@ function buildPublishedModule(record: SimVariantRecord): MentalExercise {
         sortOrder: moduleDraft.sortOrder,
         simSpecId: record.id,
         runtimeConfig: record.runtimeConfig,
+        variantSource: {
+            variantId: record.id,
+            variantName: record.name,
+            family: record.family,
+            mode: record.mode,
+            archetype,
+        },
         createdAt: record.createdAt,
         updatedAt: Date.now(),
     };
@@ -1309,13 +2519,13 @@ function VariantWorkspaceModal({
     onSave: (next: SimVariantRecord) => Promise<void>;
     onPublish: (next: SimVariantRecord) => Promise<void>;
     initialSpecRaw?: string;
-    initialTab?: 'general' | 'spec' | 'config' | 'publish' | 'history';
+    initialTab?: 'general' | 'locks' | 'spec' | 'config' | 'publish' | 'history';
     saving: boolean;
     publishing: boolean;
 }) {
     const [variantMeta, setVariantMeta] = useState<SimVariantRecord>(variant);
     const familyColor = FAMILY_COLORS[variantMeta.family] || '#6b7280';
-    const [activeTab, setActiveTab] = useState<'general' | 'spec' | 'config' | 'publish' | 'history'>(initialTab);
+    const [activeTab, setActiveTab] = useState<'general' | 'locks' | 'spec' | 'config' | 'publish' | 'history'>(initialTab);
     const [rawSpec, setRawSpec] = useState(initialSpecRaw ?? variant.specRaw ?? '');
     const [parsed, setParsed] = useState<ParsedSpec | null>((initialSpecRaw ?? variant.specRaw)?.trim() ? parseVariantSpec(initialSpecRaw ?? variant.specRaw ?? '') : null);
     const [configText, setConfigText] = useState(JSON.stringify(variant.runtimeConfig ?? buildDefaultRuntimeConfig(variant), null, 2));
@@ -1326,6 +2536,9 @@ function VariantWorkspaceModal({
     const [historyEntries, setHistoryEntries] = useState<SimVariantHistoryEntry[]>([]);
     const [historyLoading, setHistoryLoading] = useState(true);
     const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
+    const [auditReport, setAuditReport] = useState<SpecAuditReport | null>(null);
+    const trialVariant = isTrialVariant(variantMeta);
+    const activeLockedSpec = variantMeta.lockedSpec ?? buildDefaultLockedSpec(variantMeta);
 
     useEffect(() => {
         const nextRawSpec = initialSpecRaw ?? variant.specRaw ?? '';
@@ -1336,6 +2549,7 @@ function VariantWorkspaceModal({
         setParsed(nextRawSpec.trim() ? parseVariantSpec(nextRawSpec) : null);
         setConfigText(JSON.stringify(variant.runtimeConfig ?? buildDefaultRuntimeConfig(variant), null, 2));
         setConfigError(null);
+        setAuditReport(nextRawSpec.trim() ? runSpecAuditPipeline(variant, nextRawSpec) : null);
         setModuleDraft(nextModuleDraft);
         setBenefitsText((nextModuleDraft.benefits ?? []).join('\n'));
         setBestForText((nextModuleDraft.bestFor ?? []).join('\n'));
@@ -1382,25 +2596,49 @@ function VariantWorkspaceModal({
 
     const handleGenerateSpec = () => {
         const generated = buildGeneratedVariantSpec(variantMeta);
-        setRawSpec(generated);
-        setParsed(parseVariantSpec(generated));
+        const audit = runSpecAuditPipeline(variantMeta, generated);
+        setRawSpec(audit.fixedRaw);
+        setParsed(parseVariantSpec(audit.fixedRaw));
+        setAuditReport(audit);
         setActiveTab('spec');
     };
 
-    const buildNextRecord = (): SimVariantRecord | null => {
+    const handleRunAudit = () => {
+        const audit = runSpecAuditPipeline(variantMeta, rawSpec);
+        setRawSpec(audit.fixedRaw);
+        setParsed(audit.fixedRaw.trim() ? parseVariantSpec(audit.fixedRaw) : null);
+        setAuditReport(audit);
+        return audit;
+    };
+
+    const updateLockedSpec = (field: keyof SimVariantLockedSpec, value: string) => {
+        setVariantMeta((current) => ({
+            ...current,
+            lockedSpec: {
+                ...(current.lockedSpec ?? buildDefaultLockedSpec(current)!),
+                [field]: value,
+            },
+        }));
+    };
+
+    const buildNextRecord = (nextSpecRaw: string = rawSpec): SimVariantRecord | null => {
         try {
             const runtimeConfig = JSON.parse(configText);
             return {
                 ...variantMeta,
-                specRaw: rawSpec,
+                specRaw: nextSpecRaw,
+                lockedSpec: isTrialVariant(variantMeta) ? (variantMeta.lockedSpec ?? buildDefaultLockedSpec(variantMeta)) : undefined,
                 specStatus: variantMeta.mode === 'hybrid'
                     ? 'not-required'
-                    : rawSpec.trim()
+                    : nextSpecRaw.trim()
                         ? variantMeta.publishedModuleId
                             ? 'complete'
                             : 'in-progress'
                         : 'needs-spec',
-                runtimeConfig,
+                runtimeConfig: {
+                    ...runtimeConfig,
+                    lockedSpec: isTrialVariant(variantMeta) ? (variantMeta.lockedSpec ?? buildDefaultLockedSpec(variantMeta)) : null,
+                },
                 moduleDraft: {
                     ...moduleDraft,
                     benefits: benefitsText.split('\n').map((item) => item.trim()).filter(Boolean),
@@ -1416,16 +2654,26 @@ function VariantWorkspaceModal({
     };
 
     const handleSave = async () => {
-        const next = buildNextRecord();
+        const audit = handleRunAudit();
+        if (audit.status === 'needs_input') {
+            setActiveTab('spec');
+            return;
+        }
+        const next = buildNextRecord(audit.fixedRaw);
         if (!next) return;
-        if (rawSpec.trim()) {
-            setParsed(parseVariantSpec(rawSpec));
+        if (audit.fixedRaw.trim()) {
+            setParsed(parseVariantSpec(audit.fixedRaw));
         }
         await onSave(next);
     };
 
     const handlePublish = async () => {
-        const next = buildNextRecord();
+        const audit = handleRunAudit();
+        if (audit.status === 'needs_input') {
+            setActiveTab('spec');
+            return;
+        }
+        const next = buildNextRecord(audit.fixedRaw);
         if (!next) return;
         await onPublish(next);
     };
@@ -1438,6 +2686,7 @@ function VariantWorkspaceModal({
         setVariantMeta(snapshot);
         setRawSpec(nextRawSpec);
         setParsed(nextRawSpec.trim() ? parseVariantSpec(nextRawSpec) : null);
+        setAuditReport(nextRawSpec.trim() ? runSpecAuditPipeline(snapshot, nextRawSpec) : null);
         setConfigText(JSON.stringify(snapshot.runtimeConfig ?? buildDefaultRuntimeConfig(snapshot), null, 2));
         setConfigError(null);
         setModuleDraft(nextModuleDraft);
@@ -1482,6 +2731,7 @@ function VariantWorkspaceModal({
                 <div className="flex items-center gap-1 px-5 pt-3 pb-0 border-b border-zinc-800 flex-shrink-0">
                     {([
                         { id: 'general' as const, label: 'General' },
+                        ...(trialVariant ? [{ id: 'locks' as const, label: 'Locked Fields' }] : []),
                         { id: 'spec' as const, label: 'Spec' },
                         { id: 'config' as const, label: 'Runtime Config' },
                         { id: 'publish' as const, label: 'Publish' },
@@ -1580,12 +2830,125 @@ function VariantWorkspaceModal({
                                         ].label}
                                     </div>
                                 </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Archetype</label>
+                                    <select
+                                        value={variantMeta.archetypeOverride ?? resolveVariantArchetype(variantMeta)}
+                                        onChange={(event) => setVariantMeta((current) => ({
+                                            ...current,
+                                            archetypeOverride: event.target.value as SimVariantArchetype,
+                                            lockedSpec: event.target.value === 'trial'
+                                                ? (current.lockedSpec ?? buildDefaultLockedSpec({ ...current, archetypeOverride: 'trial' }))
+                                                : current.lockedSpec,
+                                        }))}
+                                        className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                    >
+                                        {Object.entries(ARCHETYPE_LABELS).map(([value, label]) => (
+                                            <option key={value} value={value}>{label}</option>
+                                        ))}
+                                    </select>
+                                </div>
                                 <div className="md:col-span-2">
                                     <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Variant Id</label>
                                     <div className="rounded-xl bg-black/40 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-500 font-mono">
                                         {variantMeta.id}
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'locks' && trialVariant && activeLockedSpec && (
+                        <div className="space-y-5">
+                            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3">
+                                <p className="text-xs text-cyan-300 leading-relaxed">
+                                    These are the registry-owned locked trial fields. The generator and runtime config read from this block so the spec stops guessing and starts rendering the exact assessment contract.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Fixed Tier</label>
+                                    <input
+                                        value={activeLockedSpec.fixedTier}
+                                        onChange={(event) => updateLockedSpec('fixedTier', event.target.value)}
+                                        className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Fixed Duration</label>
+                                    <input
+                                        value={activeLockedSpec.fixedDuration}
+                                        onChange={(event) => updateLockedSpec('fixedDuration', event.target.value)}
+                                        className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Target Session Structure</label>
+                                    <input
+                                        value={activeLockedSpec.targetSessionStructure}
+                                        onChange={(event) => updateLockedSpec('targetSessionStructure', event.target.value)}
+                                        className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {([
+                                    ['buildVersionPolicy', 'Build Version Rule'],
+                                    ['seedPolicy', 'Seed / Schedule Rule'],
+                                    ['modifierProfile', 'Modifier Profile'],
+                                    ['environmentRequirements', 'Environment Requirements'],
+                                    ['fixedProfileDetails', 'Fixed Family Profile'],
+                                    ['motorBaselineRule', 'Motor Baseline Rule'],
+                                    ['deviceCovariateRule', 'Device Covariate Rule'],
+                                    ['exportRequirements', 'Export Requirements'],
+                                ] as Array<[keyof SimVariantLockedSpec, string]>).map(([field, label]) => (
+                                    <div key={field}>
+                                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">{label}</label>
+                                        <textarea
+                                            value={activeLockedSpec[field]}
+                                            onChange={(event) => updateLockedSpec(field, event.target.value)}
+                                            className="w-full min-h-[96px] rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500 resize-y"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {([
+                                    ['validResponseRule', 'Valid Response Rule'],
+                                    ['artifactFloorRule', 'Artifact Floor Rule'],
+                                    ['maxWindowRule', 'Max Window Rule'],
+                                    ['failedRoundRule', 'Failed Round Rule'],
+                                    ['falseStartRule', 'False Start Rule'],
+                                    ['validSessionRule', 'Valid Session Rule'],
+                                    ['partialSessionRule', 'Partial Session Rule'],
+                                    ['invalidSessionRule', 'Invalid Session Rule'],
+                                    ['dropoutRule', 'Dropout Rule'],
+                                    ['retryRule', 'Retry Rule'],
+                                    ['transferMetricDefinition', 'Transfer Metric Definition'],
+                                    ['transferMetricReporting', 'Transfer Metric Reporting'],
+                                    ['validationStage', 'Validation Stage'],
+                                    ['nextValidationMilestone', 'Next Validation Milestone'],
+                                ] as Array<[keyof SimVariantLockedSpec, string]>).map(([field, label]) => (
+                                    <div key={field}>
+                                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">{label}</label>
+                                        {field === 'validationStage' || field === 'nextValidationMilestone' ? (
+                                            <input
+                                                value={activeLockedSpec[field]}
+                                                onChange={(event) => updateLockedSpec(field, event.target.value)}
+                                                className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                            />
+                                        ) : (
+                                            <textarea
+                                                value={activeLockedSpec[field]}
+                                                onChange={(event) => updateLockedSpec(field, event.target.value)}
+                                                className="w-full min-h-[84px] rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500 resize-y"
+                                            />
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}
@@ -1607,7 +2970,10 @@ function VariantWorkspaceModal({
                                 </div>
                                 <textarea
                                     value={rawSpec}
-                                    onChange={(event) => setRawSpec(event.target.value)}
+                                    onChange={(event) => {
+                                        setRawSpec(event.target.value);
+                                        setAuditReport(null);
+                                    }}
                                     placeholder="Paste or author the full variant spec here..."
                                     className="w-full min-h-[420px] rounded-xl bg-black/40 border border-zinc-700 text-xs text-zinc-300 placeholder-zinc-600 p-4 focus:outline-none focus:border-zinc-500 transition-colors resize-y font-mono leading-relaxed"
                                 />
@@ -1616,15 +2982,79 @@ function VariantWorkspaceModal({
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
                                     <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">Formatted Preview</p>
-                                    <button
-                                        onClick={() => rawSpec.trim() && setParsed(parseVariantSpec(rawSpec))}
-                                        disabled={!rawSpec.trim()}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-500/10 border border-purple-500/20 text-purple-300 hover:bg-purple-500/15 transition-colors disabled:opacity-40"
-                                    >
-                                        <Eye className="w-3.5 h-3.5" />
-                                        Refresh Preview
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => rawSpec.trim() && handleRunAudit()}
+                                            disabled={!rawSpec.trim()}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 hover:bg-emerald-500/15 transition-colors disabled:opacity-40"
+                                        >
+                                            <ListChecks className="w-3.5 h-3.5" />
+                                            Audit + Fix
+                                        </button>
+                                        <button
+                                            onClick={() => rawSpec.trim() && setParsed(parseVariantSpec(rawSpec))}
+                                            disabled={!rawSpec.trim()}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-purple-500/10 border border-purple-500/20 text-purple-300 hover:bg-purple-500/15 transition-colors disabled:opacity-40"
+                                        >
+                                            <Eye className="w-3.5 h-3.5" />
+                                            Refresh Preview
+                                        </button>
+                                    </div>
                                 </div>
+                                {auditReport && (
+                                    <div className={`rounded-xl border p-4 space-y-3 ${
+                                        auditReport.status === 'pass'
+                                            ? 'border-emerald-500/20 bg-emerald-500/5'
+                                            : auditReport.status === 'pass_with_warnings'
+                                                ? 'border-amber-500/20 bg-amber-500/5'
+                                                : 'border-red-500/20 bg-red-500/5'
+                                    }`}>
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-xs font-bold text-white">Spec Audit</p>
+                                                <p className="text-[10px] text-zinc-400">
+                                                    Status: {auditReport.status === 'pass' ? 'Pass' : auditReport.status === 'pass_with_warnings' ? 'Pass with Warnings' : 'Needs Input'} · Score {auditReport.score}/100
+                                                </p>
+                                            </div>
+                                            <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest ${
+                                                auditReport.status === 'pass'
+                                                    ? 'bg-emerald-500/10 text-emerald-300'
+                                                    : auditReport.status === 'pass_with_warnings'
+                                                        ? 'bg-amber-500/10 text-amber-300'
+                                                        : 'bg-red-500/10 text-red-300'
+                                            }`}>
+                                                {auditReport.status.replace(/_/g, ' ')}
+                                            </span>
+                                        </div>
+                                        {auditReport.autoFixes.length > 0 && (
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5">Auto Fixes</p>
+                                                <div className="space-y-1">
+                                                    {auditReport.autoFixes.map((fix) => (
+                                                        <p key={fix} className="text-[11px] text-zinc-300">- {fix}</p>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {auditReport.findings.length > 0 ? (
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5">Findings</p>
+                                                <div className="space-y-1.5">
+                                                    {auditReport.findings.map((finding, index) => (
+                                                        <div key={`${finding.code}-${index}`} className="rounded-lg border border-zinc-800 bg-black/20 px-3 py-2">
+                                                            <p className={`text-[10px] font-bold uppercase tracking-widest ${finding.severity === 'error' ? 'text-red-300' : 'text-amber-300'}`}>
+                                                                {finding.severity}
+                                                            </p>
+                                                            <p className="text-[11px] text-zinc-300 mt-1">{finding.message}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <p className="text-[11px] text-zinc-300">No audit findings. This draft passed the current registry rule set.</p>
+                                        )}
+                                    </div>
+                                )}
                                 <div className="rounded-xl border border-zinc-800 bg-black/20 p-4 min-h-[420px]">
                                     {!parsed ? (
                                         <div className="h-full flex items-center justify-center text-center text-zinc-600 text-sm">
@@ -1974,7 +3404,7 @@ function FamilyGroup({
     familyStatus: FamilyStatus;
     variants: SimVariantRecord[];
     familyColor: string;
-    onOpenWorkspace: (variant: SimVariantRecord, options?: { initialTab?: 'general' | 'spec' | 'config' | 'publish' | 'history'; initialSpecRaw?: string }) => void;
+    onOpenWorkspace: (variant: SimVariantRecord, options?: { initialTab?: 'general' | 'locks' | 'spec' | 'config' | 'publish' | 'history'; initialSpecRaw?: string }) => void;
     onPasteSpec: (variant: SimVariantRecord) => void;
     onGenerateSpec: (variant: SimVariantRecord) => void;
 }) {
@@ -2336,7 +3766,7 @@ const VariantRegistryTab: React.FC = () => {
     const [filterSpecStatus, setFilterSpecStatus] = useState<'all' | SpecStatus>('all');
     const [workspaceModalState, setWorkspaceModalState] = useState<{
         variantId: string;
-        initialTab?: 'general' | 'spec' | 'config' | 'publish' | 'history';
+        initialTab?: 'general' | 'locks' | 'spec' | 'config' | 'publish' | 'history';
         initialRaw?: string;
     } | null>(null);
 

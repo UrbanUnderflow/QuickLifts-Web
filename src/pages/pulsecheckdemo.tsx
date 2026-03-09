@@ -1982,16 +1982,18 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
         setChatStep(step + 1);
 
         if (step === 0) {
-            // One tight message: coach name + science + card
+            // Intro message only — no drill card yet
             addNoraMsg(
-                `${coachName} assigned you The Kill Switch today. Research shows elite athletes recover from disruption in under 3 seconds — the average is 30 to 60. This drill measures and trains exactly that. Ready for it?`,
-                'drill-card'
+                `${coachName} assigned you The Kill Switch today. Research shows elite athletes recover from disruption in under 3 seconds — the average is 30 to 60. This drill measures and trains exactly that. Ready for it?`
             );
         } else if (step === 1 && choice === 'ready') {
+            // User responds, then Nora sends the drill card
             setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'athlete', text: "Let's do it. I'm ready." }]);
             setTimeout(() => {
-                addNoraMsg("Starting now. Lock in.");
-                setTimeout(() => setDrillActive(true), 1200);
+                addNoraMsg(
+                    "Let's get after it. Here's what you're about to do.",
+                    'drill-card'
+                );
             }, 300);
         }
     }, [chatStep, addNoraMsg, coachName]);
@@ -2323,7 +2325,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                             </div>
 
                                                             {/* Drill card inline */}
-                                                            {m.type === 'drill-card' && chatStep === 1 && !drillActive && resetPhase === 'idle' && (
+                                                            {m.type === 'drill-card' && chatStep >= 2 && !drillActive && resetPhase === 'idle' && (
                                                                 <motion.div
                                                                     initial={{ opacity: 0, y: 10 }}
                                                                     animate={{ opacity: 1, y: 0 }}
@@ -2402,6 +2404,21 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                             ))}
                                                                         </div>
                                                                     </div>
+
+                                                                    {/* Start this Sim button */}
+                                                                    <motion.button
+                                                                        initial={{ opacity: 0, y: 10 }}
+                                                                        animate={{ opacity: 1, y: 0 }}
+                                                                        transition={{ delay: 0.8 }}
+                                                                        onClick={() => {
+                                                                            setDrillActive(true);
+                                                                            runResetExercise();
+                                                                        }}
+                                                                        className="w-full py-3 rounded-xl font-bold text-sm text-black bg-[#E0FE10] hover:bg-[#d4f00e] active:scale-[0.97] transition-all duration-200 flex items-center justify-center gap-2"
+                                                                    >
+                                                                        <Zap className="w-4 h-4" />
+                                                                        Start this Sim
+                                                                    </motion.button>
                                                                 </motion.div>
 
                                                             )}
@@ -2547,6 +2564,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                         id: 'composure' as const,
                                                         label: 'Composure', score: 91,
                                                         accent: '#22c55e', accentDim: 'rgba(34,197,94,0.12)',
+                                                        definition: 'Your ability to maintain execution quality when things go wrong. Composure is the gap between disruption and re-engagement — trained through deliberate exposure to pressure, error, and evaluation.',
                                                         skills: [
                                                             { name: 'Error Recovery Speed', score: 91, prev: 34, sim: 'Kill Switch', desc: 'How fast you bounce back after a mistake' },
                                                             { name: 'Emotional Interference Control', score: 78, prev: 41, sim: 'Kill Switch', desc: 'Prevent emotion from degrading execution' },
@@ -2563,6 +2581,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                         id: 'focus' as const,
                                                         label: 'Focus', score: 88,
                                                         accent: '#60a5fa', accentDim: 'rgba(96,165,250,0.1)',
+                                                        definition: 'Your ability to lock attention onto the right thing, hold it under load, and redirect it immediately after disruption. Focus is not about blocking everything out — it is about rapid, accurate reallocation of mental resources.',
                                                         skills: [
                                                             { name: 'Sustained Attention', score: 85, prev: 58, sim: 'Endurance Lock', desc: 'Maintain focus over extended time-on-task' },
                                                             { name: 'Selective Attention', score: 81, prev: 50, sim: 'Noise Gate', desc: 'Filter distractors and hold the right cue' },
@@ -2579,6 +2598,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                         id: 'decision' as const,
                                                         label: 'Decision', score: 79,
                                                         accent: '#c084fc', accentDim: 'rgba(192,132,252,0.1)',
+                                                        definition: 'Your ability to read the right cue, suppress the wrong impulse, and act precisely under time pressure. Decision quality degrades faster than any other pillar under fatigue — it is the last pillar trained and the first one lost.',
                                                         skills: [
                                                             { name: 'Response Inhibition', score: 76, prev: 54, sim: 'Brake Point', desc: 'Cancel bad actions before error cascades' },
                                                             { name: 'Working Memory Updating', score: 74, prev: 55, sim: 'Sequence Shift', desc: 'Update rules and priorities mid-execution' },
@@ -2687,6 +2707,17 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                         transition={{ duration: 0.15 }}
                                                                         className="space-y-2.5"
                                                                     >
+                                                                        {/* Pillar definition callout */}
+                                                                        <motion.div
+                                                                            initial={{ opacity: 0, y: -6 }}
+                                                                            animate={{ opacity: 1, y: 0 }}
+                                                                            transition={{ duration: 0.2 }}
+                                                                            className="rounded-xl px-3.5 py-3 mb-1"
+                                                                            style={{ background: active.accentDim, border: `1px solid ${active.accent}22` }}
+                                                                        >
+                                                                            <div className="text-[8px] uppercase tracking-widest font-bold mb-1" style={{ color: active.accent }}>What is {active.label}?</div>
+                                                                            <p className="text-[11px] text-zinc-300 leading-relaxed">{active.definition}</p>
+                                                                        </motion.div>
                                                                         {active.skills.map((skill, si) => (
                                                                             <motion.div
                                                                                 key={skill.name}
