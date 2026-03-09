@@ -82,6 +82,25 @@ interface SpecAuditReport {
     fixedRaw: string;
 }
 
+interface WarningFixAction {
+    key: 'protocol_wording' | 'sport_wording' | 'normalize_terms' | 'tighten_wording' | 'consolidate_build_notes';
+    label: string;
+    codes: string[];
+}
+
+interface WarningFixFeedback {
+    label: string;
+    previousWarningCount: number;
+    currentWarningCount: number;
+}
+
+interface WarningFixGroup {
+    key: string;
+    label: string;
+    findings: SpecAuditFinding[];
+    fixable: boolean;
+}
+
 interface FamilySpecBase {
     mechanism: string;
     coreMetric: string;
@@ -128,6 +147,7 @@ interface VariantArchetypeProfile {
 }
 
 interface VariantProfileOverride {
+    variantType?: string;
     purpose?: string;
     expectedBenefit?: string;
     bestUse?: string[];
@@ -245,7 +265,7 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
     },
     'Signal Window': {
         mechanism: 'identify and commit to the correct cue before the decision window closes',
-        coreMetric: 'Read Accuracy',
+        coreMetric: 'Correct Read Under Time Pressure',
         skillTargets: 'Rapid Cue Recognition, Decision Accuracy, and Pressure Stability',
         boundaryRule: 'the task must remain cue discrimination with a clearly correct answer rather than a blind or ambiguous commitment task',
         trainingModeDefaults: [
@@ -267,7 +287,7 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
     },
     'Sequence Shift': {
         mechanism: 'update immediately to the new rule when the sequence or rule changes',
-        coreMetric: 'Update Accuracy',
+        coreMetric: 'Update Accuracy After Rule Change',
         skillTargets: 'Cognitive Flexibility, Rule Updating, and Pressure Stability',
         boundaryRule: 'each shift must preserve a clearly correct answer and may not drift into unresolved ambiguity or chaos-read logic',
         trainingModeDefaults: [
@@ -671,6 +691,199 @@ function dedupeBulletLines(raw: string) {
     };
 }
 
+function extractSectionBullets(parsed: ParsedSpec, sectionKeyword: string) {
+    const section = parsed.rawSections.find((entry) => entry.heading.toLowerCase().includes(sectionKeyword.toLowerCase()));
+    if (!section) return [];
+    return section.content
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('- '))
+        .map((line) => line.replace(/^-+\s*/, '').trim());
+}
+
+function extractSectionByKeyword(parsed: ParsedSpec, sectionKeyword: string) {
+    return parsed.rawSections.find((entry) => entry.heading.toLowerCase().includes(sectionKeyword.toLowerCase())) ?? null;
+}
+
+function replaceSectionBullets(raw: string, sectionKeyword: string, bullets: string[]) {
+    const parsed = parseVariantSpec(raw);
+    const nextSections = parsed.rawSections.map((entry) => {
+        if (!entry.heading.toLowerCase().includes(sectionKeyword.toLowerCase())) {
+            return entry;
+        }
+        return {
+            ...entry,
+            content: bullets.map((bullet) => `- ${bullet}`).join('\n'),
+        };
+    });
+
+    return nextSections
+        .map((entry) => {
+            const body = entry.content?.trim();
+            return body ? `${entry.heading}\n${body}` : entry.heading;
+        })
+        .join('\n\n');
+}
+
+function normalizeAuditPhrase(text: string) {
+    return text
+        .toLowerCase()
+        .replace(/late-probe|late probe|finish-phase|finish phase/g, 'final phase')
+        .replace(/old-rule|old rule/g, 'old rule')
+        .replace(/first-correct-after-shift|first correct after shift/g, 'first correct after shift')
+        .replace(/phase-of-play|phase of play/g, 'phase of play')
+        .replace(/shot-clock|shot clock/g, 'shot clock')
+        .replace(/motor artifacts?/g, 'motor artifact')
+        .replace(/responses?/g, 'response')
+        .replace(/markers?/g, 'marker')
+        .replace(/tags?/g, 'tag')
+        .replace(/fields?/g, 'field')
+        .replace(/windows?/g, 'window')
+        .replace(/[^a-z0-9 ]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function normalizeOverlapTokens(line: string) {
+    return line
+        .toLowerCase()
+        .replace(/late-probe|late probe|finish-phase|finish phase/g, 'final_phase')
+        .replace(/old-rule|old rule/g, 'old_rule')
+        .replace(/first-correct-after-shift|first correct after shift/g, 'first_correct_after_shift')
+        .replace(/phase-of-play|phase of play/g, 'phase_of_play')
+        .replace(/shot-clock|shot clock/g, 'shot_clock')
+        .replace(/[^a-z0-9_ ]+/g, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+        .filter((token) => !new Set([
+            'store',
+            'export',
+            'keep',
+            'mark',
+            'this',
+            'variant',
+            'family',
+            'mode',
+            'session',
+            'record',
+            'tags',
+            'tag',
+            'markers',
+            'marker',
+            'fields',
+            'field',
+            'notes',
+            'build',
+            'data',
+            'and',
+            'the',
+            'a',
+            'an',
+            'to',
+            'of',
+            'in',
+            'so',
+            'that',
+            'with',
+            'rather',
+            'than',
+            'for',
+            'into',
+            'all',
+            'one',
+            'same',
+        ]).has(token));
+}
+
+function runPolishAudit(parsed: ParsedSpec, findings: SpecAuditFinding[]) {
+    const buildBullets = extractSectionBullets(parsed, 'build');
+    const measurementBullets = extractSectionBullets(parsed, 'measurement');
+    const tagLikeBullets = buildBullets.filter((bullet) => /\b(tag|tags|marker|markers|field|fields)\b/i.test(bullet));
+    const seenMessages = new Set<string>();
+
+    const pushFinding = (code: string, message: string) => {
+        const key = `${code}:${message}`;
+        if (seenMessages.has(key)) {
+            return;
+        }
+        seenMessages.add(key);
+        findings.push({
+            severity: 'warning',
+            code,
+            message,
+        });
+    };
+
+    if (buildBullets.length > 1) {
+        const normalizedBullets = buildBullets.map((bullet) => normalizeAuditPhrase(bullet));
+        for (let i = 0; i < normalizedBullets.length; i += 1) {
+            for (let j = i + 1; j < normalizedBullets.length; j += 1) {
+                if (normalizedBullets[i] === normalizedBullets[j]) {
+                    pushFinding(
+                        'near_duplicate_build_note',
+                        'Build notes contain near-duplicate implementation guidance. Consider consolidating repeated bullets.'
+                    );
+                }
+            }
+        }
+    }
+
+    for (let i = 0; i < tagLikeBullets.length; i += 1) {
+        for (let j = i + 1; j < tagLikeBullets.length; j += 1) {
+            const left = normalizeOverlapTokens(tagLikeBullets[i]);
+            const right = normalizeOverlapTokens(tagLikeBullets[j]);
+            const overlap = left.filter((token) => right.includes(token));
+
+            if (overlap.length > 0 && !overlap.every((token) => ['variant', 'assignment'].includes(token))) {
+                pushFinding(
+                    'overlapping_build_notes',
+                    `Build notes may contain overlapping tagging concepts (${overlap.join(', ')}). Consider consolidating closely related storage bullets.`
+                );
+                return;
+            }
+        }
+    }
+
+    const finalPhaseBullets = buildBullets.filter((bullet) => /finish-phase|finish phase|late-probe|late probe/i.test(bullet));
+    if (finalPhaseBullets.length > 1) {
+        pushFinding(
+            'final_phase_term_overlap',
+            'Build notes use overlapping final-phase terms such as "finish-phase" and "late-probe." Consider consolidating to one shared term.'
+        );
+    }
+
+    const metricLine = measurementBullets.find((bullet) => /headline metric|headline score/i.test(bullet));
+    if (metricLine) {
+        const normalizedMetricLine = normalizeAuditPhrase(metricLine);
+        const overlappingBuildMetric = buildBullets.find((bullet) => {
+            const normalizedBuild = normalizeAuditPhrase(bullet);
+            return normalizedMetricLine
+                .split(' ')
+                .filter((token) => token.length > 4)
+                .some((token) => normalizedBuild.includes(token));
+        });
+
+        if (overlappingBuildMetric && /headline metric|headline score/i.test(overlappingBuildMetric)) {
+            pushFinding(
+                'metric_build_redundancy',
+                'Build notes repeat metric-language that is already defined in Measurement and Scoring Notes. Consider keeping build notes implementation-specific.'
+            );
+        }
+    }
+
+    const buildSection = extractSectionByKeyword(parsed, 'build');
+    if (buildSection) {
+        const storeCount = buildBullets.filter((bullet) => /^store\b/i.test(bullet)).length;
+        const exportCount = buildBullets.filter((bullet) => /^export\b/i.test(bullet)).length;
+        if (storeCount >= 3 && exportCount >= 1) {
+            pushFinding(
+                'dense_build_section',
+                'Build notes are dense and may contain overlapping storage/export instructions. Consider collapsing closely related bullets for readability.'
+            );
+        }
+    }
+}
+
 function buildExpectedSectionLabels(variant: VariantEntry) {
     if (isTrialVariant(variant)) {
         return [
@@ -920,6 +1133,222 @@ function runNonTrialArchetypeAudit(variant: VariantEntry, lowerRaw: string, find
     }
 }
 
+function runNonTrialFamilyAudit(variant: VariantEntry, lowerRaw: string, findings: SpecAuditFinding[]) {
+    const archetype = resolveVariantArchetype(variant);
+
+    if (variant.family === 'The Kill Switch') {
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'kill_switch_missing_valid_reengagement',
+            'Kill Switch specs should explicitly define valid re-engagement as two consecutive correct responses.',
+            ['two consecutive correct responses', 'confirmed re-engagement']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'kill_switch_missing_false_start_logic',
+            'Kill Switch specs should explicitly define false starts as responses during the disruption phase.',
+            ['false start', 'responses during the disruption phase', 'response during disruption']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'kill_switch_missing_attentional_shift_sourcing',
+            'Kill Switch specs should explicitly describe Attentional Shifting as multi-source.',
+            ['attentional shifting', 'multi-source', 'first-post-reset accuracy']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'kill_switch_missing_pressure_stability_sourcing',
+            'Kill Switch specs should explicitly describe Pressure Stability as modifier-stratified.',
+            ['pressure stability', 'modifier-stratified', 'modifier condition']
+        );
+
+        if (archetype === 'sport_context') {
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'kill_switch_sport_context_missing_context_tags',
+                'Sport-context Kill Switch variants should store sport/scenario/reset-moment tags so transfer claims are inspectable.',
+                ['sport', 'scenario', 'reset moment', 'phase of play', 'context tag']
+            );
+        }
+    }
+
+    if (variant.family === 'Noise Gate') {
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'noise_gate_missing_cost_formula',
+            'Noise Gate specs should explicitly define Distractor Cost and mention RT shift, not just name the family metric.',
+            ['distractor cost =', 'rt shift', 'response time shift']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'noise_gate_missing_false_alarm_logic',
+            'Noise Gate specs should explicitly define false alarms as distractor-directed responses.',
+            ['false alarm', 'responses directed at distractors', 'distractor rather than the primary target']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'noise_gate_missing_channel_vulnerability',
+            'Noise Gate specs should explicitly require channel-vulnerability breakdowns by distractor type.',
+            ['channel vulnerability', 'broken down by distractor type', 'per distractor channel']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'noise_gate_missing_valid_response_rule',
+            'Noise Gate specs should include the family valid-response definition and 150 ms artifact floor.',
+            ['valid response = correct response to the primary target', 'above 150 ms', '150 ms']
+        );
+
+        if (archetype === 'audio_channel') {
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'noise_gate_audio_missing_setup_logging',
+                'Audio-channel Noise Gate variants should explicitly log audio route and sound-subtype tags.',
+                ['audio route', 'crowd', 'commentary', 'whistle', 'off-rhythm sound']
+            );
+        }
+
+        if (archetype === 'combined_channel') {
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'noise_gate_combined_missing_overlap_export',
+                'Combined-channel Noise Gate variants should explicitly store per-channel trigger tags and overlap timing windows.',
+                ['overlap timing', 'per-channel trigger tags', 'visual-only', 'audio-only', 'combined overlap']
+            );
+        }
+    }
+
+    if (variant.family === 'Brake Point') {
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'brake_point_missing_valid_response_rule',
+            'Brake Point specs should explicitly define valid Go behavior and the 150 ms artifact floor.',
+            ['valid go response', 'above 150 ms', '150 ms']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'brake_point_missing_false_alarm_classification',
+            'Brake Point specs should classify false alarms by No-Go type.',
+            ['false alarm', 'no-go type', 'obvious', 'fakeout', 'late-reveal']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'brake_point_missing_over_inhibition',
+            'Brake Point specs should include over-inhibition handling so athletes cannot solve inhibition by slowing down.',
+            ['over-inhibition', 'go miss', 'go reaction time']
+        );
+    }
+
+    if (variant.family === 'Signal Window') {
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'signal_window_missing_valid_commit_rule',
+            'Signal Window specs should define the valid response as the first committed response after display onset.',
+            ['first committed response', 'display onset', 'one response per trial']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'signal_window_missing_correct_read_formula',
+            'Signal Window specs should define the combined read metric and latency logic explicitly.',
+            ['correct read under time pressure', 'decision latency', 'weighted by decision latency']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'signal_window_missing_window_utilization',
+            'Signal Window specs should include window-utilization tracking for strategy analysis.',
+            ['window utilization', 'available display window', 'decision strategy']
+        );
+
+        if (archetype === 'sport_context') {
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'signal_window_sport_missing_context_tags',
+                'Sport-context Signal Window variants should store sport/scenario/cue-context tags for interpretability.',
+                ['sport', 'scenario', 'cue type', 'phase of play', 'shot-clock']
+            );
+        }
+    }
+
+    if (variant.family === 'Sequence Shift') {
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'sequence_shift_missing_post_shift_window',
+            'Sequence Shift specs should explicitly define the post-shift measurement window.',
+            ['post-shift', 'first 3–5 trials', 'first 3-5 trials']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'sequence_shift_missing_intrusion_logic',
+            'Sequence Shift specs should classify old-rule intrusions separately from novel errors.',
+            ['old-rule intrusion', 'intrusion', 'novel error']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'sequence_shift_missing_switch_cost',
+            'Sequence Shift specs should include switch-cost logic, not just update accuracy alone.',
+            ['switch cost', 'pre-shift rolling average']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'sequence_shift_missing_artifact_floor',
+            'Sequence Shift specs should include the 150 ms artifact floor on post-shift trials.',
+            ['150 ms', 'post-shift trials', 'motor artifacts']
+        );
+    }
+
+    if (variant.family === 'Endurance Lock') {
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'endurance_missing_baseline_period',
+            'Endurance Lock specs should explicitly define the baseline period before degradation is measured.',
+            ['first 2-3 minutes', 'first 2–3 minutes', 'baseline period', '100% baseline']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'endurance_missing_onset_definition',
+            'Endurance Lock specs should explicitly define degradation onset, not just mention late-session fatigue.',
+            ['below 90% of baseline', 'degradation onset', 'one full block']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'endurance_missing_slope_definition',
+            'Endurance Lock specs should explicitly define Degradation Slope over the session second half.',
+            ['second half', '% drop per minute', 'degradation slope']
+        );
+        pushArchetypeRequirementFinding(
+            findings,
+            lowerRaw,
+            'endurance_missing_block_outputs',
+            'Endurance Lock specs should include block-level tracking and attribution.',
+            ['block-by-block', 'early, mid, and late', 'embedded task attribution']
+        );
+    }
+}
+
 function applySpecAutoFixes(variant: VariantEntry, raw: string) {
     let next = normalizeSpecText(raw);
     const autoFixes: string[] = [];
@@ -1022,14 +1451,18 @@ function runSpecAuditPipeline(variant: VariantEntry, raw: string): SpecAuditRepo
 
     if (!isTrialVariant(variant)) {
         runNonTrialArchetypeAudit(variant, lowerRaw, findings);
+        runNonTrialFamilyAudit(variant, lowerRaw, findings);
     }
+
+    runPolishAudit(parsed, findings);
 
     const errorCount = findings.filter((finding) => finding.severity === 'error').length;
     const warningCount = findings.filter((finding) => finding.severity === 'warning').length;
-    const score = Math.max(0, 100 - (errorCount * 20) - (warningCount * 5));
+    const autoFixPenalty = autoFixes.length > 0 ? Math.min(6, autoFixes.length * 3) : 0;
+    const score = Math.max(0, 100 - (errorCount * 20) - (warningCount * 8) - autoFixPenalty);
     const status: SpecAuditReport['status'] = errorCount > 0
         ? 'needs_input'
-        : warningCount > 0
+        : warningCount > 0 || autoFixes.length > 0
             ? 'pass_with_warnings'
             : 'pass';
 
@@ -1079,7 +1512,7 @@ function resolveVariantArchetype(variant: VariantEntry): SimVariantArchetype {
     if (name.includes('short daily')) return 'short_daily';
     if (name.includes('extended trial') || name.includes('trial-only') || name.includes('field-read trial')) return 'trial';
     if (name.includes('immersive') || name.includes('chamber') || name.includes('tunnel')) return 'immersive';
-    if (name.includes('sport') || name.includes('playbook') || name.includes('pre-shot') || name.includes('field-read')) return 'sport_context';
+    if (name.includes('sport') || name.includes('playbook') || name.includes('pre-shot') || name.includes('field-read') || name.includes('shot-clock')) return 'sport_context';
     if (name.includes('visual') || name.includes('clutter') || name.includes('spotlight') || name.includes('peripheral')) return 'visual_channel';
     if (name.includes('audio') || name.includes('crowd') || name.includes('whistle') || name.includes('commentary')) return 'audio_channel';
     if (name.includes('combined') || name.includes('mixed') || name.includes('multi-source') || name.includes('dual-channel') || name.includes('overload')) return 'combined_channel';
@@ -1434,6 +1867,7 @@ function buildArchetypeProfile(
 
     return {
         ...baseProfile,
+        variantType: override.variantType ?? baseProfile.variantType,
         purpose: override.purpose ?? baseProfile.purpose,
         expectedBenefit: override.expectedBenefit ?? baseProfile.expectedBenefit,
         bestUse: override.bestUse ?? baseProfile.bestUse,
@@ -1654,18 +2088,75 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
     if (variant.family === 'Signal Window') {
         if (name.includes('shot-clock')) {
             return {
+                purpose: 'This variant expresses Signal Window through shot-clock pressure and late-clock game framing while preserving the same cue-discrimination mechanic.',
+                expectedBenefit: 'Increase transfer to late-clock decision windows where the athlete must read correctly before time collapses.',
+                bestUse: [
+                    'the athlete reads well with time but degrades when the decision window visibly shrinks',
+                    'the coach wants cue-recognition language that maps directly to end-of-clock situations',
+                    'Nora needs a sport-native time-pressure version without changing the family scoring model',
+                ],
                 runtimeDefaults: {
                     emphasis: ['shrinking decision window', 'visible urgency', 'late-read pressure'],
-                    analyticsFocus: ['Read Accuracy', 'late-window decisions', 'time-pressure misses'],
+                    analyticsFocus: ['Correct Read Under Time Pressure', 'late-window decisions', 'time-pressure misses'],
                 },
                 durationMinutes: 5,
             };
         }
         if (name.includes('rapid recognition')) {
             return {
+                variantType: 'Recognition-speed variant',
+                purpose: 'This variant expresses Signal Window through compressed cue exposure and earlier commitment pressure while preserving the same cue-discrimination mechanic.',
+                expectedBenefit: 'Improve first-read speed so the athlete can identify and commit before hesitation collapses the decision window.',
+                bestUse: [
+                    'the athlete eventually finds the right cue but commits too late',
+                    'the program wants a fast-recognition branch before layering in heavier sport-context or trial packaging',
+                    'Nora needs an assignment that rewards clean first commitments instead of prolonged scanning',
+                ],
+                changes: [
+                    'cue exposure is compressed so the athlete must extract the signal earlier',
+                    'the variant emphasizes first-commit quality over extended scan time',
+                    'decision pressure comes from reduced deliberation time, not from changing the correct-answer structure',
+                ],
+                buildNotes: [
+                    'Keep naming, analytics keys, and admin labels aligned with the registry entry.',
+                    `Mark this variant as archetype ${ARCHETYPE_LABELS[archetype]} so generation and runtime config stay aligned.`,
+                    'Store variant assignment, family, mode, and any variant-specific tags in the session record.',
+                    'Add first-commit timing buckets so coaches can distinguish late certainty from early clean recognition.',
+                ],
                 runtimeDefaults: {
                     emphasis: ['fast cue recognition', 'compressed window', 'quick commit'],
-                    analyticsFocus: ['Read Accuracy', 'recognition speed', 'first-commit quality'],
+                    analyticsFocus: ['Correct Read Under Time Pressure', 'recognition speed', 'first-commit quality'],
+                },
+                durationMinutes: 5,
+            };
+        }
+    }
+
+    if (variant.family === 'Sequence Shift') {
+        if (name.includes('sequence-memory')) {
+            return {
+                variantType: 'Memory-interference variant',
+                purpose: 'This variant expresses Sequence Shift through memory-linked rule updates so the athlete must hold the active rule, detect the change, and abandon the old pattern quickly.',
+                expectedBenefit: 'Improve update speed when the previous sequence remains sticky in working memory and interferes with the new rule.',
+                bestUse: [
+                    'the athlete keeps executing the old pattern after the rule has already changed',
+                    'the program wants a working-memory-heavy Sequence Shift branch before sport-playbook or trial packaging',
+                    'Nora needs an assignment that punishes delayed updating more than steady-state execution',
+                ],
+                changes: [
+                    'the outgoing rule is held long enough to create memory interference before the update',
+                    'the variant emphasizes post-shift rule abandonment and first-correct-after-shift quality',
+                    'difficulty comes from rule-memory carryover, not from making the correct answer ambiguous',
+                ],
+                buildNotes: [
+                    'Keep naming, analytics keys, and admin labels aligned with the registry entry.',
+                    `Mark this variant as archetype ${ARCHETYPE_LABELS[archetype]} so generation and runtime config stay aligned.`,
+                    'Store variant assignment, family, mode, and any variant-specific tags in the session record.',
+                    'Store old-rule pattern tags and first-correct-after-shift markers so coaches can distinguish slow updating from steady-state weakness.',
+                ],
+                runtimeDefaults: {
+                    emphasis: ['memory-linked rule updates', 'old-rule carryover', 'first-correct-after-shift'],
+                    analyticsFocus: ['Update Accuracy After Rule Change', 'switch cost', 'old-rule intrusion rate'],
                 },
                 durationMinutes: 5,
             };
@@ -1675,6 +2166,8 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
     if (variant.family === 'Endurance Lock') {
         if (name.includes('sustained-focus')) {
             return {
+                purpose: 'This variant expresses Endurance Lock through stable sustained-focus demands so the athlete must preserve clean execution over extended duration without late collapse.',
+                expectedBenefit: 'Improve vigilance maintenance and delay the onset of duration-driven degradation.',
                 runtimeDefaults: {
                     emphasis: ['stable long focus', 'attention maintenance', 'late-session clean execution'],
                     analyticsFocus: ['Degradation Slope', 'block stability', 'late-session deterioration'],
@@ -1684,6 +2177,24 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
         }
         if (name.includes('late-pressure')) {
             return {
+                purpose: 'This variant expresses Endurance Lock through accumulating fatigue plus late-session stakes while preserving the same sustained-execution mechanism.',
+                expectedBenefit: 'Expose whether clean execution holds when fatigue and consequence rise together near the finish phase.',
+                bestUse: [
+                    'the athlete stays stable early but unravels when fatigue and stakes rise at the end',
+                    'the program wants a finish-phase endurance branch rather than a neutral sustained-attention rep',
+                    'Nora needs a version that reveals late-pressure breakdowns instead of averaging them into one whole-session score',
+                ],
+                changes: [
+                    'late-session pressure is intentionally elevated after the baseline and mid-session blocks are established',
+                    'analysis should separate baseline, middle, and finish-phase behavior rather than flattening the session into one average',
+                    'difficulty rises through sustained load plus stakes, not by changing the underlying task identity',
+                ],
+                buildNotes: [
+                    'Keep naming, analytics keys, and admin labels aligned with the registry entry.',
+                    `Mark this variant as archetype ${ARCHETYPE_LABELS[archetype]} so generation and runtime config stay aligned.`,
+                    'Store variant assignment, family, mode, and any variant-specific tags in the session record.',
+                    'Store finish-phase challenge markers so coaches can distinguish generic fatigue from late-pressure-specific breakdown.',
+                ],
                 runtimeDefaults: {
                     emphasis: ['late-session pressure', 'fatigue plus stakes', 'finish-phase control'],
                     analyticsFocus: ['Degradation Slope', 'late-block pressure sensitivity', 'finish-phase breakdown rate'],
@@ -2066,8 +2577,11 @@ function getDefaultDurationMinutes(variant: VariantEntry) {
 
 function getGenericArchetypeSpecNotes(variant: VariantEntry, familyBase: FamilySpecBase | undefined, theme: VariantTheme) {
     const profile = buildArchetypeProfile(variant, familyBase, theme.archetype);
+    const archetypeLabel = theme.archetype === 'baseline' && theme.variantType !== 'Branch variant'
+        ? `${ARCHETYPE_LABELS[theme.archetype]} (${theme.variantType})`
+        : ARCHETYPE_LABELS[theme.archetype];
     return [
-        `Archetype: ${ARCHETYPE_LABELS[theme.archetype]}`,
+        `Archetype: ${archetypeLabel}`,
         `Recommended session length defaults to ${getDefaultDurationMinutes(variant)} minutes unless the registry overrides it.`,
         `Default feedback mode is ${profile.runtimeDefaults.feedbackMode}.`,
         `Adaptive difficulty is ${profile.runtimeDefaults.adaptiveDifficulty ? 'enabled inside family boundaries' : 'disabled by default'}.`,
@@ -2076,9 +2590,414 @@ function getGenericArchetypeSpecNotes(variant: VariantEntry, familyBase: FamilyS
     ];
 }
 
+function getNonTrialMeasurementNotes(variant: VariantEntry, theme: VariantTheme) {
+    if (variant.family === 'The Kill Switch') {
+        return [
+            'Recovery Time = disruption end -> confirmed re-engagement, with valid re-engagement requiring two consecutive correct responses on the refocused task.',
+            'First-Post-Reset Accuracy must be reported alongside Recovery Time so the athlete cannot game the sim by reacting fast but inaccurately.',
+            'False Start Count = responses during the disruption phase before the reset signal; false starts are logged separately and do not count as recovery.',
+            'Responses below 150 ms are motor artifacts and must be excluded from the headline metric.',
+            'Attentional Shifting remains a multi-source score combining re-engagement latency with first-post-reset accuracy.',
+            'Pressure Stability remains modifier-stratified, comparing Recovery Time under baseline versus pressure conditions instead of averaging modifier states together.',
+            'Sport, scenario, or delivery tags may support interpretation, but they must remain context fields and may not replace the family metric.',
+        ];
+    }
+
+    if (variant.family === 'Noise Gate') {
+        const archetype = resolveVariantArchetype(variant);
+        const channelBreakdownNote = archetype === 'audio_channel'
+            ? 'Channel Vulnerability must be reported by distractor type, with audio-channel breakdowns carried by crowd, commentary, whistle, and off-rhythm sound tags.'
+            : 'Channel Vulnerability must be reported by distractor type rather than flattened into one unlabeled distractor score.';
+
+        return [
+            'Distractor Cost = baseline accuracy - noise-phase accuracy, with RT shift reported alongside it. Accuracy remains the headline number.',
+            'Valid response = correct response to the primary target during the noise phase, inside the target response window, and above 150 ms.',
+            'False Alarm Rate = responses directed at distractors rather than the primary target; false alarms must be classified by distractor type.',
+            channelBreakdownNote,
+            'Pressure Stability should be read as Distractor Cost under baseline versus pressure modifier conditions, stratified by modifier condition rather than averaged together.',
+            'Channel, overlap, and context tags may support interpretation, but they must remain decomposition fields rather than a replacement scoring system.',
+        ];
+    }
+
+    if (variant.family === 'Brake Point') {
+        return [
+            'Valid Go response = correct response to a Go stimulus within the response window and above 150 ms; responses below 150 ms are motor artifacts.',
+            'Stop Latency is the headline metric and should be derived from the stop-signal distribution rather than treated as a simple button-press reaction time.',
+            'False Alarm Rate = responses executed on No-Go trials, classified by No-Go type (obvious, fakeout, late-reveal) rather than flattened together.',
+            'Over-Inhibition must be tracked through Go misses and excessively slow Go reaction time so the athlete cannot solve inhibition by simply slowing down.',
+            'Pressure Stability should be read as Stop Latency under baseline versus pressure modifier conditions, stratified by modifier condition rather than averaged together.',
+            'Per-type false alarms and speed-accuracy balance should be preserved as supporting outputs beside the headline Stop Latency metric.',
+        ];
+    }
+
+    if (variant.family === 'Signal Window') {
+        return [
+            'Valid response = the first committed response after display onset, above 150 ms; only one response per trial and the first commitment is final.',
+            'Correct Read Under Time Pressure is the headline metric, combining correct-read rate with decision latency; both components must be reported separately as well.',
+            'Decoy Susceptibility must classify plausible-wrong cue selections separately from neutral misses rather than collapsing both into one error bucket.',
+            'Window Utilization must be tracked so the build can distinguish early guesses from late, information-rich commitments.',
+            'Pressure Stability should be read as decision quality under baseline versus pressure modifier conditions, stratified by modifier condition rather than averaged together.',
+            'Cue type, ambiguity level, and window-length tags should support interpretation, but they must remain context fields rather than a replacement scoring system.',
+        ];
+    }
+
+    if (variant.family === 'Sequence Shift') {
+        return [
+            'Update Accuracy After Rule Change is the headline metric and should be measured across the first 3-5 trials after a rule change rather than steady-state performance.',
+            'Old-rule intrusions must be classified separately from novel errors so the build can tell the difference between perseveration and general confusion.',
+            'Switch Cost = first post-shift reaction time versus the pre-shift rolling average, reported alongside post-shift accuracy.',
+            'Responses below 150 ms on post-shift trials are motor artifacts and must be excluded from the headline metric.',
+            'Pressure Stability should be read as post-shift decision quality under baseline versus pressure modifier conditions, stratified by modifier condition rather than averaged together.',
+            'Shift type, rule-change schedule, and post-shift window tags should support interpretation, but they must remain context fields rather than a replacement scoring system.',
+        ];
+    }
+
+    if (variant.family === 'Endurance Lock') {
+        return [
+            'Baseline Performance = the first 2-3 minutes of the session, treated as the 100% reference window for all later blocks.',
+            'Degradation Onset = the point when performance first drops below 90% of baseline and stays there for at least one full block; one isolated low block does not count.',
+            'Degradation Slope is the headline metric and should be calculated as the accuracy decline over the session second half, expressed as % drop per minute.',
+            'Late-Probe scoring should compare final challenge performance against equivalent baseline difficulty rather than treating the final spike as interchangeable with the slope metric.',
+            'Embedded task attribution must stay with Endurance Lock; if another family task is embedded, the measured phenomenon is duration-dependent degradation, not the embedded family score.',
+            'Block identity, onset timing, and embedded-task tags may support interpretation, but they must remain context fields rather than a replacement scoring system.',
+        ];
+    }
+
+    return theme.scoringNotes;
+}
+
+function getNonTrialModeNotes(variant: VariantEntry, theme: VariantTheme) {
+    const archetype = resolveVariantArchetype(variant);
+    const trainingMode = [...theme.trainingMode];
+    const trialMode = [...theme.trialMode];
+
+    if (variant.family === 'The Kill Switch' && archetype === 'sport_context') {
+        return {
+            trainingMode: [
+                ...trainingMode,
+                'use sport-native reset language and scenario tags, but keep coaching anchored to Recovery Time and first clean re-engagement',
+            ],
+            trialMode: [
+                ...trialMode,
+                'if trial-layer packaging is used, hold sport scenario, reset-moment tags, and primary-task mapping constant across comparison sessions',
+            ],
+        };
+    }
+
+    if (variant.family === 'Noise Gate' && archetype === 'combined_channel') {
+        return {
+            trainingMode: [
+                ...trainingMode,
+                'show per-channel and overlap-tagged coaching so the athlete can see whether misses came from visual-only, audio-only, or combined-overlap conditions',
+            ],
+            trialMode: [
+                ...trialMode,
+                'standardize overlap schedule, visual presentation state, audio route, and overlap logging so combined-channel comparisons stay reproducible',
+            ],
+        };
+    }
+
+    if (variant.family === 'Signal Window' && archetype === 'sport_context') {
+        return {
+            trainingMode: [
+                ...trainingMode,
+                'use sport-native cue language and shot-clock or scenario tags, but keep coaching anchored to correct reads, decision latency, and cue commitment quality',
+            ],
+            trialMode: [
+                ...trialMode,
+                'if trial-layer packaging is used, hold sport scenario, cue type, window length, and ambiguity profile constant across comparison sessions',
+            ],
+        };
+    }
+
+    if (variant.family === 'Endurance Lock' && archetype === 'fatigue_load') {
+        return {
+            trainingMode: [
+                ...trainingMode,
+                'show block-by-block fatigue coaching so the athlete can see whether execution is slipping early, mid, or late rather than over-reading one bad moment',
+            ],
+            trialMode: [
+                ...trialMode,
+                'if trial-layer packaging is used, hold baseline window, pacing structure, and late-probe timing constant so degradation curves stay comparable',
+            ],
+        };
+    }
+
+    return { trainingMode, trialMode };
+}
+
+function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
+    if (variant.family === 'The Kill Switch' && resolveVariantArchetype(variant) === 'sport_context') {
+        return [
+            ...theme.buildNotes,
+            'Store sport, scenario, phase-of-play, and reset-moment tags in the session record so sport framing stays inspectable rather than anecdotal.',
+            'Keep the same primary-task mapping under the sport wrapper; assets, copy, and environmental cues may change, but the reset target may not.',
+            'Preserve disruption-channel tags beneath the sport layer so coaches can distinguish sport context from visual, audio, or cognitive pressure sources.',
+        ];
+    }
+
+    if (variant.family === 'Noise Gate' && resolveVariantArchetype(variant) === 'combined_channel') {
+        return [
+            ...theme.buildNotes,
+            'Store per-channel trigger tags and overlap timing windows so misses can be attributed to visual-only, audio-only, or combined-overlap conditions.',
+            'Export overlap-condition error counts, channel-tagged false alarms, and timing-misalignment flags rather than flattening all misses into one combined distractor bucket.',
+            'Keep overlap sequencing reproducible within the approved family bounds so added difficulty comes from layered noise, not uncontrolled timing drift.',
+        ];
+    }
+
+    if (variant.family === 'Noise Gate' && resolveVariantArchetype(variant) === 'audio_channel') {
+        return [
+            ...theme.buildNotes,
+            'Store audio route, device class, and distractor subtype tags (crowd, commentary, whistle, off-rhythm sound) in the session record.',
+            'Keep visual presentation stable enough that audio remains the primary pressure channel rather than drifting into a mixed-channel build.',
+        ];
+    }
+
+    if (variant.family === 'Brake Point') {
+        return [
+            ...theme.buildNotes,
+            'Store No-Go type tags, stop-signal delay, Go reaction-time window, and lure timing so false alarms can be separated into obvious, fakeout, and late-reveal conditions.',
+            'Export false alarms, Go misses, over-inhibition markers, and motor artifacts separately from the headline Stop Latency metric.',
+        ];
+    }
+
+    if (variant.family === 'Signal Window' && resolveVariantArchetype(variant) === 'sport_context') {
+        return [
+            ...theme.buildNotes,
+            'Store sport, scenario, cue type, phase-of-play, and shot-clock or time-pressure tags in the session record so the sport wrapper is inspectable rather than anecdotal.',
+            'Export window length, ambiguity level, decoy classification, and decision-latency fields separately so coaches can see whether misses came from rushed reads or wrong reads.',
+            'Keep the underlying cue-discrimination task stable under the sport wrapper; contextual assets may change, but the correct-answer structure may not.',
+        ];
+    }
+
+    if (variant.family === 'Signal Window') {
+        return [
+            ...theme.buildNotes,
+            'Store cue type, ambiguity level, window length, and decoy classification tags in the session record so read-quality errors are interpretable.',
+        ];
+    }
+
+    if (variant.family === 'Sequence Shift') {
+        return [
+            ...theme.buildNotes,
+            'Store shift type, rule-change schedule, old-rule intrusion tags, and post-shift window markers in the session record so update failures are interpretable.',
+            'Export switch-cost, post-shift accuracy, intrusion classification, and motor artifacts separately rather than flattening all shift errors into one bucket.',
+        ];
+    }
+
+    if (variant.family === 'Endurance Lock') {
+        return [
+            ...theme.buildNotes,
+            'Store baseline-window markers, block identities, degradation-onset tags, and late-probe markers in the session record so endurance failures are interpretable.',
+            'Export baseline performance, block-by-block accuracy, degradation slope, onset timing, and embedded-task attribution separately rather than flattening the full session into one fatigue score.',
+        ];
+    }
+
+    return theme.buildNotes;
+}
+
+function cleanupGeneratedBuildNotes(variant: VariantEntry, notes: string[]) {
+    const cleaned: string[] = [];
+    const seen = new Set<string>();
+
+    notes.forEach((note) => {
+        const key = note.trim().toLowerCase();
+        if (!seen.has(key)) {
+            seen.add(key);
+            cleaned.push(note);
+        }
+    });
+
+    if (variant.family === 'Signal Window' && variant.name.toLowerCase().includes('rapid recognition')) {
+        const hasFirstCommit = cleaned.some((note) => note.toLowerCase().includes('first-commit timing buckets'));
+        const cueIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store cue type, ambiguity level, window length, and decoy classification tags'));
+        if (hasFirstCommit && cueIndex >= 0) {
+            const next = cleaned.filter((note) => !note.toLowerCase().includes('first-commit timing buckets'));
+            next[cueIndex] = 'Store cue type, ambiguity level, window length, decoy classification, and first-commit timing buckets in the session record so read-quality errors are interpretable.';
+            return next;
+        }
+    }
+
+    if (variant.family === 'Sequence Shift' && variant.name.toLowerCase().includes('sequence-memory')) {
+        const hasMemorySpecific = cleaned.some((note) => note.toLowerCase().includes('old-rule pattern tags and first-correct-after-shift markers'));
+        const familyIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store shift type, rule-change schedule, old-rule intrusion tags'));
+        if (hasMemorySpecific && familyIndex >= 0) {
+            const next = cleaned.filter((note) => !note.toLowerCase().includes('old-rule pattern tags and first-correct-after-shift markers'));
+            next[familyIndex] = 'Store shift type, rule-change schedule, old-rule pattern / intrusion tags, post-shift window markers, and first-correct-after-shift markers in the session record so update failures are interpretable.';
+            return next;
+        }
+    }
+
+    if (variant.family === 'Endurance Lock') {
+        const hasFinalPhaseSpecific = cleaned.some((note) => note.toLowerCase().includes('finish-phase challenge markers'));
+        const familyIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store baseline-window markers, block identities, degradation-onset tags, and late-probe markers'));
+        if (hasFinalPhaseSpecific && familyIndex >= 0) {
+            const next = cleaned.filter((note) => !note.toLowerCase().includes('finish-phase challenge markers'));
+            next[familyIndex] = 'Store baseline-window markers, block identities, degradation-onset tags, and final-phase challenge markers in the session record so endurance failures are interpretable.';
+            return next;
+        }
+    }
+
+    return cleaned;
+}
+
+function buildSupportedWarningFixActions(variant: VariantEntry, findings: SpecAuditFinding[]): WarningFixAction[] {
+    const warningCodes = new Set(findings.filter((finding) => finding.severity === 'warning').map((finding) => finding.code));
+    const archetype = resolveVariantArchetype(variant);
+    const actions: WarningFixAction[] = [];
+
+    if (warningCodes.has('terminology_mismatch')) {
+        if (archetype === 'trial') {
+            actions.push({
+                key: 'protocol_wording',
+                label: 'Tighten Trial Protocol',
+                codes: ['terminology_mismatch'],
+            });
+        } else if (archetype === 'sport_context') {
+            actions.push({
+                key: 'sport_wording',
+                label: 'Tighten Sport Context Wording',
+                codes: ['terminology_mismatch'],
+            });
+        } else {
+            actions.push({
+                key: 'normalize_terms',
+                label: 'Normalize Terms',
+                codes: ['terminology_mismatch'],
+            });
+        }
+    }
+
+    if (warningCodes.has('vague_language')) {
+        if (archetype === 'trial') {
+            actions.push({
+                key: 'protocol_wording',
+                label: 'Tighten Trial Protocol',
+                codes: ['vague_language'],
+            });
+        } else if (archetype === 'sport_context') {
+            actions.push({
+                key: 'sport_wording',
+                label: 'Tighten Sport Context Wording',
+                codes: ['vague_language'],
+            });
+        } else {
+            actions.push({
+                key: 'tighten_wording',
+                label: 'Tighten Wording',
+                codes: ['vague_language'],
+            });
+        }
+    }
+
+    if (
+        warningCodes.has('overlapping_build_notes')
+        || warningCodes.has('near_duplicate_build_note')
+        || warningCodes.has('final_phase_term_overlap')
+        || warningCodes.has('dense_build_section')
+    ) {
+        const label = variant.family === 'Endurance Lock'
+            ? 'Consolidate Endurance Markers'
+            : variant.family === 'Sequence Shift'
+                ? 'Consolidate Shift Markers'
+                : variant.family === 'Signal Window' && archetype === 'sport_context'
+                    ? 'Consolidate Sport Context Tags'
+                    : variant.family === 'Noise Gate' && archetype === 'combined_channel'
+                        ? 'Consolidate Overlap Tags'
+                        : 'Consolidate Build Notes';
+
+        actions.push({
+            key: 'consolidate_build_notes',
+            label,
+            codes: ['overlapping_build_notes', 'near_duplicate_build_note', 'final_phase_term_overlap', 'dense_build_section'],
+        });
+    }
+
+    const merged = new Map<WarningFixAction['key'], WarningFixAction>();
+    actions.forEach((action) => {
+        const existing = merged.get(action.key);
+        if (!existing) {
+            merged.set(action.key, action);
+            return;
+        }
+        merged.set(action.key, {
+            ...existing,
+            codes: Array.from(new Set([...existing.codes, ...action.codes])),
+        });
+    });
+
+    return Array.from(merged.values());
+}
+
+function buildWarningFixGroups(variant: VariantEntry, findings: SpecAuditFinding[]): WarningFixGroup[] {
+    const warningFindings = findings.filter((finding) => finding.severity === 'warning');
+    const actions = buildSupportedWarningFixActions(variant, findings);
+    const groups = new Map<string, WarningFixGroup>();
+
+    actions.forEach((action) => {
+        groups.set(action.key, {
+            key: action.key,
+            label: action.label,
+            findings: [],
+            fixable: true,
+        });
+    });
+
+    warningFindings.forEach((finding) => {
+        const action = actions.find((candidate) => candidate.codes.includes(finding.code));
+        if (action) {
+            groups.get(action.key)?.findings.push(finding);
+            return;
+        }
+
+        const manualKey = `manual:${finding.code}`;
+        if (!groups.has(manualKey)) {
+            groups.set(manualKey, {
+                key: manualKey,
+                label: 'Manual Review',
+                findings: [],
+                fixable: false,
+            });
+        }
+        groups.get(manualKey)?.findings.push(finding);
+    });
+
+    return Array.from(groups.values()).filter((group) => group.findings.length > 0);
+}
+
+function applyAuditWarningFixes(variant: VariantEntry, raw: string, action: WarningFixAction) {
+    let next = raw;
+
+    if (action.codes.includes('terminology_mismatch')) {
+        next = next.replace(/device type/gi, 'device class');
+    }
+
+    if (action.codes.includes('vague_language')) {
+        next = next
+            .replace(/\broughly\b\s*/gi, '')
+            .replace(/\btypically\b[\s,]*/gi, '')
+            .replace(/\bgenerally\b[\s,]*/gi, '')
+            .replace(/\s{2,}/g, ' ')
+            .replace(/\n /g, '\n');
+    }
+
+    if (action.key === 'consolidate_build_notes') {
+        const parsed = parseVariantSpec(next);
+        const buildBullets = extractSectionBullets(parsed, 'build');
+        if (buildBullets.length > 0) {
+            const cleanedBuildBullets = cleanupGeneratedBuildNotes(variant, buildBullets);
+            next = replaceSectionBullets(next, 'build', cleanedBuildBullets);
+        }
+    }
+
+    return normalizeSpecText(next);
+}
+
 function buildGeneratedVariantSpec(variant: VariantEntry): string {
     const familyBase = FAMILY_SPEC_BASES[variant.family];
     const theme = inferVariantTheme(variant);
+    const modeNotes = getNonTrialModeNotes(variant, theme);
+    const buildNotes = cleanupGeneratedBuildNotes(variant, getNonTrialBuildNotes(variant, theme));
     const today = 'March 9, 2026';
 
     if (isTrialVariant(variant)) {
@@ -2119,18 +3038,18 @@ function buildGeneratedVariantSpec(variant: VariantEntry): string {
         ...theme.athleteFlow.map((item) => `- ${item}`),
         '',
         '6. Measurement and Scoring Notes',
-        ...theme.scoringNotes.map((item) => `- ${item}`),
+        ...getNonTrialMeasurementNotes(variant, theme).map((item) => `- ${item}`),
         'Artifact / false-start risks:',
         ...theme.artifactRisks.map((item) => `- ${item}`),
         '',
         '7. Mode Behavior',
         'Training Mode:',
-        ...theme.trainingMode.map((item) => `- ${item}`),
+        ...modeNotes.trainingMode.map((item) => `- ${item}`),
         'Trial Mode:',
-        ...theme.trialMode.map((item) => `- ${item}`),
+        ...modeNotes.trialMode.map((item) => `- ${item}`),
         '',
         '8. Build and Implementation Notes',
-        ...theme.buildNotes.map((item) => `- ${item}`),
+        ...buildNotes.map((item) => `- ${item}`),
         '',
         '9. Governing Documents',
         ...(familyBase?.governingDocs ?? [
@@ -2537,8 +3456,25 @@ function VariantWorkspaceModal({
     const [historyLoading, setHistoryLoading] = useState(true);
     const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
     const [auditReport, setAuditReport] = useState<SpecAuditReport | null>(null);
+    const [warningFixFeedback, setWarningFixFeedback] = useState<WarningFixFeedback | null>(null);
+    const [showDetailedFindings, setShowDetailedFindings] = useState(false);
     const trialVariant = isTrialVariant(variantMeta);
     const activeLockedSpec = variantMeta.lockedSpec ?? buildDefaultLockedSpec(variantMeta);
+    const warningFindings = useMemo(
+        () => auditReport?.findings.filter((finding) => finding.severity === 'warning') ?? [],
+        [auditReport]
+    );
+    const warningFixActions = useMemo(
+        () => auditReport ? buildSupportedWarningFixActions(variantMeta, auditReport.findings) : [],
+        [auditReport, variantMeta]
+    );
+    const warningFixGroups = useMemo(
+        () => auditReport ? buildWarningFixGroups(variantMeta, auditReport.findings) : [],
+        [auditReport, variantMeta]
+    );
+    const nextWarningFixAction = warningFixActions[0] ?? null;
+    const warningFindingCount = warningFindings.length;
+    const warningFixStepCount = warningFixActions.length;
 
     useEffect(() => {
         const nextRawSpec = initialSpecRaw ?? variant.specRaw ?? '';
@@ -2550,6 +3486,8 @@ function VariantWorkspaceModal({
         setConfigText(JSON.stringify(variant.runtimeConfig ?? buildDefaultRuntimeConfig(variant), null, 2));
         setConfigError(null);
         setAuditReport(nextRawSpec.trim() ? runSpecAuditPipeline(variant, nextRawSpec) : null);
+        setWarningFixFeedback(null);
+        setShowDetailedFindings(false);
         setModuleDraft(nextModuleDraft);
         setBenefitsText((nextModuleDraft.benefits ?? []).join('\n'));
         setBestForText((nextModuleDraft.bestFor ?? []).join('\n'));
@@ -2600,6 +3538,8 @@ function VariantWorkspaceModal({
         setRawSpec(audit.fixedRaw);
         setParsed(parseVariantSpec(audit.fixedRaw));
         setAuditReport(audit);
+        setWarningFixFeedback(null);
+        setShowDetailedFindings(false);
         setActiveTab('spec');
     };
 
@@ -2608,7 +3548,26 @@ function VariantWorkspaceModal({
         setRawSpec(audit.fixedRaw);
         setParsed(audit.fixedRaw.trim() ? parseVariantSpec(audit.fixedRaw) : null);
         setAuditReport(audit);
+        setShowDetailedFindings(false);
         return audit;
+    };
+
+    const handleFixAuditWarnings = () => {
+        if (!auditReport || warningFixActions.length === 0) {
+            return;
+        }
+        const nextAction = warningFixActions[0];
+        const previousWarningCount = warningFindings.length;
+        const nextRawSpec = applyAuditWarningFixes(variantMeta, rawSpec, nextAction);
+        const audit = runSpecAuditPipeline(variantMeta, nextRawSpec);
+        setRawSpec(audit.fixedRaw);
+        setParsed(audit.fixedRaw.trim() ? parseVariantSpec(audit.fixedRaw) : null);
+        setAuditReport(audit);
+        setWarningFixFeedback({
+            label: nextAction.label,
+            previousWarningCount,
+            currentWarningCount: audit.findings.filter((finding) => finding.severity === 'warning').length,
+        });
     };
 
     const updateLockedSpec = (field: keyof SimVariantLockedSpec, value: string) => {
@@ -2687,6 +3646,8 @@ function VariantWorkspaceModal({
         setRawSpec(nextRawSpec);
         setParsed(nextRawSpec.trim() ? parseVariantSpec(nextRawSpec) : null);
         setAuditReport(nextRawSpec.trim() ? runSpecAuditPipeline(snapshot, nextRawSpec) : null);
+        setWarningFixFeedback(null);
+        setShowDetailedFindings(false);
         setConfigText(JSON.stringify(snapshot.runtimeConfig ?? buildDefaultRuntimeConfig(snapshot), null, 2));
         setConfigError(null);
         setModuleDraft(nextModuleDraft);
@@ -3015,6 +3976,13 @@ function VariantWorkspaceModal({
                                                 <p className="text-[10px] text-zinc-400">
                                                     Status: {auditReport.status === 'pass' ? 'Pass' : auditReport.status === 'pass_with_warnings' ? 'Pass with Warnings' : 'Needs Input'} · Score {auditReport.score}/100
                                                 </p>
+                                                {warningFindingCount > 0 && (
+                                                    <p className="text-[10px] text-zinc-500 mt-1">
+                                                        {warningFindingCount} warning finding{warningFindingCount === 1 ? '' : 's'}
+                                                        {warningFixStepCount > 0 ? ` · ${warningFixStepCount} fixable step${warningFixStepCount === 1 ? '' : 's'} remaining` : ' · no supported auto-fix steps'}
+                                                        {nextWarningFixAction ? ` · next fix: ${nextWarningFixAction.label}` : ''}
+                                                    </p>
+                                                )}
                                             </div>
                                             <span className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest ${
                                                 auditReport.status === 'pass'
@@ -3026,6 +3994,30 @@ function VariantWorkspaceModal({
                                                 {auditReport.status.replace(/_/g, ' ')}
                                             </span>
                                         </div>
+                                        {warningFixFeedback && (
+                                            <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
+                                                <p className="text-[11px] text-blue-200">
+                                                    Applied <span className="font-semibold">{warningFixFeedback.label}</span>. Warnings: {warningFixFeedback.previousWarningCount} → {warningFixFeedback.currentWarningCount}
+                                                    {warningFixFeedback.currentWarningCount > 0
+                                                        ? ` · ${warningFixStepCount} fixable step${warningFixStepCount === 1 ? '' : 's'} remaining`
+                                                        : ''}
+                                                    {warningFixFeedback.currentWarningCount > 0 && nextWarningFixAction
+                                                        ? ` · Next: ${nextWarningFixAction.label}`
+                                                        : ''}
+                                                </p>
+                                            </div>
+                                        )}
+                                        {nextWarningFixAction && (
+                                            <div className="flex items-center justify-end">
+                                                <button
+                                                    onClick={handleFixAuditWarnings}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-amber-500/10 border border-amber-500/20 text-amber-300 hover:bg-amber-500/15 transition-colors"
+                                                >
+                                                    <Wrench className="w-3.5 h-3.5" />
+                                                    {nextWarningFixAction.label} ({warningFindingCount})
+                                                </button>
+                                            </div>
+                                        )}
                                         {auditReport.autoFixes.length > 0 && (
                                             <div>
                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5">Auto Fixes</p>
@@ -3036,22 +4028,78 @@ function VariantWorkspaceModal({
                                                 </div>
                                             </div>
                                         )}
-                                        {auditReport.findings.length > 0 ? (
+                                        {auditReport.findings.length === 0 ? (
+                                            <p className="text-[11px] text-zinc-300">No audit findings. This draft passed the current registry rule set.</p>
+                                        ) : null}
+                                        {warningFixGroups.length > 0 && (
                                             <div>
-                                                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5">Findings</p>
-                                                <div className="space-y-1.5">
-                                                    {auditReport.findings.map((finding, index) => (
-                                                        <div key={`${finding.code}-${index}`} className="rounded-lg border border-zinc-800 bg-black/20 px-3 py-2">
-                                                            <p className={`text-[10px] font-bold uppercase tracking-widest ${finding.severity === 'error' ? 'text-red-300' : 'text-amber-300'}`}>
-                                                                {finding.severity}
-                                                            </p>
-                                                            <p className="text-[11px] text-zinc-300 mt-1">{finding.message}</p>
-                                                        </div>
-                                                    ))}
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5">Warning Groups</p>
+                                                <div className="space-y-2">
+                                                    {warningFixGroups.map((group, index) => {
+                                                        const isNext = nextWarningFixAction?.key === group.key;
+                                                        return (
+                                                            <div
+                                                                key={`${group.key}-${index}`}
+                                                                className={`rounded-lg border px-3 py-2 ${
+                                                                    group.fixable
+                                                                        ? isNext
+                                                                            ? 'border-amber-500/30 bg-amber-500/10'
+                                                                            : 'border-zinc-800 bg-black/20'
+                                                                        : 'border-zinc-800 bg-black/20'
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                    <p className={`text-[10px] font-bold uppercase tracking-widest ${
+                                                                        group.fixable
+                                                                            ? isNext
+                                                                                ? 'text-amber-300'
+                                                                                : 'text-zinc-300'
+                                                                            : 'text-zinc-400'
+                                                                    }`}>
+                                                                        {group.label}
+                                                                    </p>
+                                                                    <span className="text-[10px] text-zinc-500">
+                                                                        {group.findings.length} finding{group.findings.length === 1 ? '' : 's'}
+                                                                        {group.fixable && isNext ? ' · next step' : group.fixable ? ' · fixable' : ' · manual'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="mt-2 space-y-1">
+                                                                    {group.findings.map((finding, findingIndex) => (
+                                                                        <p key={`${group.key}-${finding.code}-${findingIndex}`} className="text-[11px] text-zinc-300">
+                                                                            - {finding.message}
+                                                                        </p>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
-                                        ) : (
-                                            <p className="text-[11px] text-zinc-300">No audit findings. This draft passed the current registry rule set.</p>
+                                        )}
+                                        {auditReport.findings.length > 0 && (
+                                            <div>
+                                                <div className="flex items-center justify-between gap-3 mb-1.5">
+                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Detailed Findings</p>
+                                                    <button
+                                                        onClick={() => setShowDetailedFindings((current) => !current)}
+                                                        className="text-[10px] font-semibold text-zinc-400 hover:text-zinc-200 transition-colors"
+                                                    >
+                                                        {showDetailedFindings ? 'Hide' : 'Show'}
+                                                    </button>
+                                                </div>
+                                                {showDetailedFindings && (
+                                                    <div className="space-y-1.5">
+                                                        {auditReport.findings.map((finding, index) => (
+                                                            <div key={`${finding.code}-${index}`} className="rounded-lg border border-zinc-800 bg-black/20 px-3 py-2">
+                                                                <p className={`text-[10px] font-bold uppercase tracking-widest ${finding.severity === 'error' ? 'text-red-300' : 'text-amber-300'}`}>
+                                                                    {finding.severity}
+                                                                </p>
+                                                                <p className="text-[11px] text-zinc-300 mt-1">{finding.message}</p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
                                 )}

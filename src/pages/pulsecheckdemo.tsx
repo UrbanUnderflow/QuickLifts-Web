@@ -452,7 +452,7 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
             status: 'Assigned',
         },
         {
-            name: 'The Kill Switch',
+            name: '3-Second Reset',
             category: 'Focus',
             icon: Zap,
             color: '#EF4444',
@@ -804,7 +804,7 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                                                 status: 'Assigned',
                                             },
                                             {
-                                                name: 'The Kill Switch',
+                                                name: '3-Second Reset',
                                                 desc: 'Interrupt rumination loops — rapid refocus drill for high-pressure moments',
                                                 icon: Zap,
                                                 color: '#EF4444',
@@ -1984,7 +1984,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
         if (step === 0) {
             // Intro message only — no drill card yet
             addNoraMsg(
-                `${coachName} assigned you The Kill Switch today. Research shows elite athletes recover from disruption in under 3 seconds — the average is 30 to 60. This drill measures and trains exactly that. Ready for it?`
+                `${coachName} assigned you 3-Second Reset today. Research shows elite athletes recover from disruption in under 3 seconds — the average is 30 to 60. This drill measures and trains exactly that. Ready for it?`
             );
         } else if (step === 1 && choice === 'ready') {
             // User responds, then Nora sends the drill card
@@ -2141,7 +2141,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
         const bestTime = ksRoundTimes.length > 0
             ? Math.min(...ksRoundTimes).toFixed(1)
             : '2.4';
-        setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'system', text: `✓ Kill Switch Complete — ${avgTime}s avg recovery (best: ${bestTime}s)` }]);
+        setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'system', text: `✓ 3-Second Reset Complete — ${avgTime}s avg recovery (best: ${bestTime}s)` }]);
         setTimeout(() => {
             addNoraMsg(`That was incredible. ${avgTime} seconds average recovery across ${ksTotalRounds} rounds. You're consistently under 3 seconds now — that's elite-level recovery. Let me show you how far you've come over the past 90 days...`, 'progress-card');
         }, 800);
@@ -2253,7 +2253,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                     <span className="text-[10px] text-zinc-500">now</span>
                                                 </div>
                                                 <p className="text-xs font-bold text-white mb-0.5">Assigned Drill Ready</p>
-                                                <p className="text-[11px] text-zinc-300 leading-snug">Coach assigned you The Kill Switch drill. Complete by end of day. Tap to start.</p>
+                                                <p className="text-[11px] text-zinc-300 leading-snug">Coach assigned you the 3-Second Reset drill. Complete by end of day. Tap to start.</p>
                                             </div>
                                         </div>
                                     </motion.div>
@@ -2340,7 +2340,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                                 <Zap className="w-4 h-4 text-red-400" />
                                                                             </div>
                                                                             <div>
-                                                                                <div className="text-sm font-bold text-white">The Kill Switch</div>
+                                                                                <div className="text-sm font-bold text-white">3-Second Reset</div>
                                                                                 <div className="text-[10px] text-red-400/70 uppercase tracking-wider font-medium">Composure Sim</div>
                                                                             </div>
                                                                         </div>
@@ -2356,7 +2356,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
 
                                                                     {/* Why it matters */}
                                                                     <p className="text-xs text-zinc-400 leading-relaxed">
-                                                                        When something goes wrong — a bad play, a missed assignment, blown coverage — your brain enters a <span className="text-red-400 font-medium">disruption loop</span>. The Kill Switch trains you to exit that loop and re-lock into the moment. It measures your exact recovery time every round.
+                                                                        When something goes wrong — a bad play, a missed assignment, blown coverage — your brain enters a <span className="text-red-400 font-medium">disruption loop</span>. 3-Second Reset trains you to exit that loop and re-lock into the moment. It measures your exact recovery time every round.
                                                                     </p>
 
                                                                     {/* 3 Phases */}
@@ -2364,7 +2364,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                         {[
                                                                             { phase: '01', label: 'Lock In', desc: 'Sustain focused engagement on the task', color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20' },
                                                                             { phase: '02', label: 'Disruption', desc: 'Evaluative pressure hits — a provocative flash or message', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
-                                                                            { phase: '03', label: 'Kill Switch', desc: 'Re-engage as fast as possible — this is your measured recovery time', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
+                                                                            { phase: '03', label: '3-Second Reset', desc: 'Re-engage as fast as possible — this is your measured recovery time', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
                                                                         ].map((p) => (
                                                                             <div key={p.phase} className={`flex items-start gap-3 rounded-xl border px-3 py-2 ${p.bg}`}>
                                                                                 <span className={`text-[10px] font-black ${p.color} mt-0.5 flex-shrink-0`}>{p.phase}</span>
@@ -2468,7 +2468,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
 
                                                                     {/* Kill Switch skills */}
                                                                     <div>
-                                                                        <div className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider mb-1.5">Kill Switch Target Skills</div>
+                                                                        <div className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider mb-1.5">3-Second Reset Target Skills</div>
                                                                         <div className="space-y-1">
                                                                             {[
                                                                                 { skill: 'Error Recovery Speed', before: 'Avg 45s', after: 'Avg 2.8s', delta: '↓ 94%', color: 'text-green-400' },
@@ -2566,9 +2566,9 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                         accent: '#22c55e', accentDim: 'rgba(34,197,94,0.12)',
                                                         definition: 'Your ability to maintain execution quality when things go wrong. Composure is the gap between disruption and re-engagement — trained through deliberate exposure to pressure, error, and evaluation.',
                                                         skills: [
-                                                            { name: 'Error Recovery Speed', score: 91, prev: 34, sim: 'Kill Switch', desc: 'How fast you bounce back after a mistake' },
-                                                            { name: 'Emotional Interference Control', score: 78, prev: 41, sim: 'Kill Switch', desc: 'Prevent emotion from degrading execution' },
-                                                            { name: 'Pressure Stability', score: 82, prev: 35, sim: 'Kill Switch', desc: 'Maintain quality under evaluative pressure' },
+                                                            { name: 'Error Recovery Speed', score: 91, prev: 34, sim: '3-Second Reset', desc: 'How fast you bounce back after a mistake' },
+                                                            { name: 'Emotional Interference Control', score: 78, prev: 41, sim: '3-Second Reset', desc: 'Prevent emotion from degrading execution' },
+                                                            { name: 'Pressure Stability', score: 82, prev: 35, sim: '3-Second Reset', desc: 'Maintain quality under evaluative pressure' },
                                                         ],
                                                         modifierContext: [
                                                             { label: 'Readiness', score: 82, color: '#22d3ee', impact: 'Higher readiness = faster error recovery and better composure under fatigue' },
@@ -2585,7 +2585,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                         skills: [
                                                             { name: 'Sustained Attention', score: 85, prev: 58, sim: 'Endurance Lock', desc: 'Maintain focus over extended time-on-task' },
                                                             { name: 'Selective Attention', score: 81, prev: 50, sim: 'Noise Gate', desc: 'Filter distractors and hold the right cue' },
-                                                            { name: 'Attentional Shifting', score: 87, prev: 42, sim: 'Kill Switch', desc: 'Rapidly redirect after disruption' },
+                                                            { name: 'Attentional Shifting', score: 87, prev: 42, sim: '3-Second Reset', desc: 'Rapidly redirect after disruption' },
                                                         ],
                                                         modifierContext: [
                                                             { label: 'Readiness', score: 82, color: '#22d3ee', impact: 'Focus sharpness tracks directly with daily readiness check-in' },
@@ -2825,7 +2825,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                             <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/60">
                                                 <div className="flex items-center gap-2">
                                                     <Zap className="w-4 h-4 text-red-400" />
-                                                    <span className="text-sm font-bold text-white">The Kill Switch</span>
+                                                    <span className="text-sm font-bold text-white">3-Second Reset</span>
                                                 </div>
                                                 <div className="flex items-center gap-3">
                                                     {/* Round dots */}
@@ -2848,7 +2848,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                         }`}>
                                                         {resetPhase === 'lockIn' ? 'Lock In' :
                                                             resetPhase === 'disruption' ? 'Disruption!' :
-                                                                resetPhase === 'killSwitch' ? 'Kill Switch' :
+                                                                resetPhase === 'killSwitch' ? '3-Second Reset' :
                                                                     resetPhase === 'done' ? 'Complete' :
                                                                         `Round ${ksCurrentRound}`}
                                                     </span>
@@ -2929,7 +2929,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                         className="text-center space-y-4 w-full max-w-sm"
                                                     >
                                                         <div className="text-xs text-zinc-500 uppercase tracking-widest">Training Complete</div>
-                                                        <div className="text-2xl font-black text-[#E0FE10]">Kill Switch ✓</div>
+                                                        <div className="text-2xl font-black text-[#E0FE10]">3-Second Reset ✓</div>
 
                                                         {/* Round breakdown */}
                                                         <div className="grid grid-cols-3 gap-2 mt-4">
@@ -2982,7 +2982,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                 }`}>
                                                                 {resetPhase === 'lockIn' ? 'Lock In — Tap in rhythm' :
                                                                     resetPhase === 'disruption' ? 'Disruption!' :
-                                                                        'Kill Switch — Re-engage NOW'}
+                                                                        '3-Second Reset — Re-engage NOW'}
                                                             </span>
                                                         </div>
 
@@ -3100,7 +3100,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                             <Zap className="w-5 h-5 text-red-400" />
                                                         </div>
                                                         <div>
-                                                            <span className="text-base font-bold text-white">The Kill Switch</span>
+                                                            <span className="text-base font-bold text-white">3-Second Reset</span>
                                                             <div className="flex items-center gap-2 mt-0.5">
                                                                 <div className="flex gap-1.5">
                                                                     {Array.from({ length: ksTotalRounds }).map((_, i) => (
@@ -3119,7 +3119,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                     }`}>
                                                                     {resetPhase === 'lockIn' ? 'Lock In' :
                                                                         resetPhase === 'disruption' ? 'Disruption!' :
-                                                                            resetPhase === 'killSwitch' ? 'Kill Switch' :
+                                                                            resetPhase === 'killSwitch' ? '3-Second Reset' :
                                                                                 resetPhase === 'done' ? 'Complete' : `Round ${ksCurrentRound}`}
                                                                 </span>
                                                             </div>
@@ -3196,7 +3196,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                 className="text-center space-y-5 w-full"
                                                             >
                                                                 <div className="text-sm text-zinc-500 uppercase tracking-widest">Training Complete</div>
-                                                                <div className="text-3xl font-black text-[#E0FE10]">Kill Switch ✓</div>
+                                                                <div className="text-3xl font-black text-[#E0FE10]">3-Second Reset ✓</div>
                                                                 <div className="grid grid-cols-3 gap-3 mt-4">
                                                                     {ksRoundTimes.map((t, i) => (
                                                                         <div key={i} className="rounded-lg bg-zinc-800/60 border border-zinc-700/30 p-3 text-center">
@@ -3231,7 +3231,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                 <div className="flex items-center gap-2">
                                                                     <div className={`w-3 h-3 rounded-full ${resetPhase === 'lockIn' ? 'bg-[#E0FE10]' : resetPhase === 'disruption' ? 'bg-red-500 animate-pulse' : 'bg-cyan-400'}`} />
                                                                     <span className={`text-sm font-bold tracking-widest uppercase ${resetPhase === 'lockIn' ? 'text-[#E0FE10]' : resetPhase === 'disruption' ? 'text-red-400' : 'text-cyan-400'}`}>
-                                                                        {resetPhase === 'lockIn' ? 'Lock In — Tap in rhythm' : resetPhase === 'disruption' ? 'Disruption!' : 'Kill Switch — Re-engage NOW'}
+                                                                        {resetPhase === 'lockIn' ? 'Lock In — Tap in rhythm' : resetPhase === 'disruption' ? 'Disruption!' : '3-Second Reset — Re-engage NOW'}
                                                                     </span>
                                                                 </div>
                                                                 {resetPhase === 'disruption' ? (
