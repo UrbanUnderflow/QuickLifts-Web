@@ -144,7 +144,7 @@ exports.onCurriculumAssignmentCreated = onDocumentCreated(
       if (assignmentData.exercise?.name) {
         exerciseName = assignmentData.exercise.name;
       } else {
-        const exerciseDoc = await db.collection('mental-exercises').doc(exerciseId).get();
+        const exerciseDoc = await db.collection('sim-modules').doc(exerciseId).get();
         if (exerciseDoc.exists) {
           exerciseName = exerciseDoc.data().name || 'mental exercise';
         }

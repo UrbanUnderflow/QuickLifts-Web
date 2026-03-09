@@ -345,8 +345,8 @@ const NOTIFICATIONS: NotificationRow[] = [
         deliveryMethod: 'scheduled-function',
         source: 'Netlify — scheduled-mental-checkin.ts',
         dataKeys: ['type: mental_checkin', 'userId'],
-        adminLink: '/admin/mental-training',
-        adminLinkLabel: 'Mental Training Library',
+        adminLink: '/admin/systemOverview#variant-registry',
+        adminLinkLabel: 'Variant Registry',
         notes: 'Respects user opt-out (checkInNotificationsEnabled). Logs to notification-logs collection.',
     },
     {
@@ -359,8 +359,8 @@ const NOTIFICATIONS: NotificationRow[] = [
         deliveryMethod: 'scheduled-function',
         source: 'Netlify — scheduled-mental-assignment-reminder.ts',
         dataKeys: ['type: mental_assignment_reminder', 'userId'],
-        adminLink: '/admin/mental-training',
-        adminLinkLabel: 'Mental Training Library',
+        adminLink: '/admin/systemOverview#variant-registry',
+        adminLinkLabel: 'Variant Registry',
         notes: 'Logs to notification-logs collection.',
     },
 

@@ -25,13 +25,13 @@ import { useUser } from '../hooks/useUser';
 import Head from 'next/head';
 import SideNav from '../components/Navigation/SideNav';
 import {
-  exerciseLibraryService,
+  simModuleLibraryService,
   assignmentService,
   completionService,
   athleteProgressService,
-  MentalExercise,
-  ExerciseAssignment,
-  ExerciseCompletion,
+  SimModule,
+  SimAssignment,
+  SimCompletion,
   MentalTrainingStreak,
   AthleteMentalProgress,
   ExerciseCategory,
@@ -51,15 +51,15 @@ const MentalTrainingPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<ExerciseCategory | 'all'>('all');
 
   // Data
-  const [exercises, setExercises] = useState<MentalExercise[]>([]);
-  const [assignments, setAssignments] = useState<ExerciseAssignment[]>([]);
-  const [completions, setCompletions] = useState<ExerciseCompletion[]>([]);
+  const [exercises, setExercises] = useState<SimModule[]>([]);
+  const [assignments, setAssignments] = useState<SimAssignment[]>([]);
+  const [completions, setCompletions] = useState<SimCompletion[]>([]);
   const [streak, setStreak] = useState<MentalTrainingStreak | null>(null);
   const [averageReadiness, setAverageReadiness] = useState<{ average: number; trend: 'up' | 'down' | 'stable' } | undefined>();
   const [athleteProgress, setAthleteProgress] = useState<AthleteMentalProgress | null>(null);
 
   // Exercise player
-  const [selectedExercise, setSelectedExercise] = useState<MentalExercise | null>(null);
+  const [selectedExercise, setSelectedExercise] = useState<SimModule | null>(null);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | undefined>();
 
   // Load data
@@ -70,7 +70,7 @@ const MentalTrainingPage: React.FC = () => {
       setLoading(true);
       try {
         const [exerciseData, progressData, athleteProfile] = await Promise.all([
-          exerciseLibraryService.getAll(),
+          simModuleLibraryService.getAll(),
           completionService.getProgressSummary(currentUser.id),
           athleteProgressService.syncTaxonomyProfile(currentUser.id).catch(() => athleteProgressService.get(currentUser.id)),
         ]);
@@ -105,7 +105,7 @@ const MentalTrainingPage: React.FC = () => {
     a => a.status === AssignmentStatus.Pending || a.status === AssignmentStatus.InProgress
   );
 
-  const handleStartExercise = (exercise: MentalExercise, assignmentId?: string) => {
+  const handleStartExercise = (exercise: SimModule, assignmentId?: string) => {
     // Check if exercise requires writing - redirect to Nora chat
     if (exerciseRequiresWriting(exercise)) {
       // Store exercise in localStorage for the chat to pick up
@@ -120,7 +120,7 @@ const MentalTrainingPage: React.FC = () => {
   };
 
   // Handle redirect to chat for writing exercises from ExercisePlayer
-  const handleStartInChat = (exercise: MentalExercise) => {
+  const handleStartInChat = (exercise: SimModule) => {
     localStorage.setItem('pulsecheck_active_exercise', JSON.stringify(exercise));
     router.push(`/PulseCheck?exercise=${encodeURIComponent(JSON.stringify(exercise))}`);
   };

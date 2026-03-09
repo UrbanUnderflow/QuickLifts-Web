@@ -31,7 +31,7 @@ import {
   dailyCompletionFromFirestore,
   dailyCompletionToFirestore,
 } from './types';
-import { exerciseLibraryService } from './exerciseLibraryService';
+import { simModuleLibraryService } from './exerciseLibraryService';
 
 const COLLECTION = 'mental-curriculum-assignments';
 const DAILY_COMPLETIONS_SUBCOLLECTION = 'daily-completions';
@@ -89,7 +89,7 @@ export const curriculumAssignmentService = {
     pathwayStep?: number;
   }): Promise<CurriculumAssignment> {
     // Get the exercise details
-    const exercise = await exerciseLibraryService.getById(exerciseId);
+    const exercise = await simModuleLibraryService.getById(exerciseId);
     if (!exercise) {
       throw new Error(`Exercise not found: ${exerciseId}`);
     }

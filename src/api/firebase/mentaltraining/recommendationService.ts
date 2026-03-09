@@ -28,7 +28,7 @@ import {
   recommendationFromFirestore,
   recommendationToFirestore,
 } from './types';
-import { exerciseLibraryService } from './exerciseLibraryService';
+import { simModuleLibraryService } from './exerciseLibraryService';
 import { athleteProgressService } from './athleteProgressService';
 import { curriculumAssignmentService } from './curriculumAssignmentService';
 import { getSimSpec } from './taxonomy';
@@ -245,11 +245,11 @@ export const recommendationService = {
     }
 
     // Verify exercise exists in library
-    const exercise = await exerciseLibraryService.getById(exerciseId);
+    const exercise = await simModuleLibraryService.getById(exerciseId);
     if (!exercise) {
       console.warn(`Exercise not found in library: ${exerciseId}`);
       // Try to find by name
-      const exercises = await exerciseLibraryService.getAll();
+      const exercises = await simModuleLibraryService.getAll();
       const found = exercises.find(e => 
         e.name.toLowerCase().includes(exerciseName.toLowerCase()) ||
         e.id === exerciseId

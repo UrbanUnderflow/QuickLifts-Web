@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import EscalationModal from './EscalationModal';
 import NoraIntroCard from './NoraIntroCard';
 import { EscalationTier, EscalationCategory } from '../../api/firebase/escalation/types';
-import { MentalExercise } from '../../api/firebase/mentaltraining/types';
+import { SimModule } from '../../api/firebase/mentaltraining/types';
 import { ExerciseInstructionCard } from '../mentaltraining';
 
 const STORAGE_KEY_NORA_INTRO = 'pulsecheck_has_seen_nora_intro_card';
@@ -20,7 +20,7 @@ interface ChatMessage {
   timestamp: number;
   messageType?: string;
   mentalNote?: MentalNote; // For mental note action cards
-  exercise?: MentalExercise; // For exercise instruction cards
+  exercise?: SimModule; // For sim instruction cards
   escalationTier?: EscalationTier; // For subtle UI cue on the triggering response
 }
 
@@ -162,7 +162,7 @@ const Chat: React.FC = () => {
   });
   
   // Active exercise state (for writing exercises that redirect here)
-  const [activeExercise, setActiveExercise] = useState<MentalExercise | null>(() => {
+  const [activeExercise, setActiveExercise] = useState<SimModule | null>(() => {
     if (typeof window === 'undefined') return null;
     const stored = localStorage.getItem(STORAGE_KEY_ACTIVE_EXERCISE);
     if (stored) {
@@ -181,7 +181,7 @@ const Chat: React.FC = () => {
   };
   
   // Handle starting an exercise from external source (e.g., mental training page)
-  const handleStartExerciseInChat = useCallback((exercise: MentalExercise) => {
+  const handleStartExerciseInChat = useCallback((exercise: SimModule) => {
     // Store in localStorage so it persists across page navigation
     localStorage.setItem(STORAGE_KEY_ACTIVE_EXERCISE, JSON.stringify(exercise));
     setActiveExercise(exercise);
@@ -229,12 +229,6 @@ const Chat: React.FC = () => {
     }
   }, [activeExercise, handleStartExerciseInChat]);
   
-  // Clear exercise when complete
-  const handleExerciseComplete = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY_ACTIVE_EXERCISE);
-    setActiveExercise(null);
-  }, []);
-
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
@@ -353,7 +347,7 @@ const Chat: React.FC = () => {
         };
         setMessages(prev => [...prev, aiMsg]);
       }
-    } catch (e) {
+    } catch {
       const aiMsg: ChatMessage = {
         id: Math.random().toString(36).slice(2),
         content: 'Network error. Please try again.',

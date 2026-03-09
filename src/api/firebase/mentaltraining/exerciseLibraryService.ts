@@ -27,15 +27,16 @@ import {
   exerciseFromFirestore,
   exerciseToFirestore,
 } from './types';
+import { SIM_MODULES_COLLECTION } from './collections';
 import { getSimSpec, getSimSpecByLegacyExerciseId } from './taxonomy';
 
-const COLLECTION = 'mental-exercises';
+const COLLECTION = SIM_MODULES_COLLECTION;
 
 // ============================================================================
 // SERVICE
 // ============================================================================
 
-export const exerciseLibraryService = {
+export const simModuleLibraryService = {
   /**
    * Get all active exercises
    */
@@ -160,6 +161,8 @@ export const exerciseLibraryService = {
     return snap.docs.map(d => exerciseFromFirestore(d.id, d.data()));
   },
 };
+
+export const exerciseLibraryService = simModuleLibraryService;
 
 // ============================================================================
 // SEEDED EXERCISES

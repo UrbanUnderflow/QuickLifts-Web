@@ -9,7 +9,7 @@
  * - Confidence exercises with guided steps
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -28,10 +28,8 @@ import {
 } from 'lucide-react';
 import { speakStep, stopNarration, VoiceChoice } from '../../utils/tts';
 import {
-  MentalExercise,
+  SimModule,
   ExerciseCategory,
-  BreathingPhase,
-  ExerciseCompletion,
 } from '../../api/firebase/mentaltraining/types';
 import { KillSwitchGame } from './KillSwitchGame';
 
@@ -43,7 +41,7 @@ import { KillSwitchGame } from './KillSwitchGame';
  * Determines if an exercise requires user writing/journaling
  * These exercises should redirect to Nora chat for interactive completion
  */
-export function exerciseRequiresWriting(exercise: MentalExercise): boolean {
+export function exerciseRequiresWriting(exercise: SimModule): boolean {
   const { exerciseConfig } = exercise;
 
   // Mindset exercises with journalRequired flag
@@ -67,7 +65,7 @@ export function exerciseRequiresWriting(exercise: MentalExercise): boolean {
 }
 
 interface ExercisePlayerProps {
-  exercise: MentalExercise;
+  exercise: SimModule;
   onComplete: (data: {
     durationSeconds: number;
     preExerciseMood?: number;
@@ -79,7 +77,7 @@ interface ExercisePlayerProps {
   onClose: () => void;
   assignmentId?: string;
   /** Called when a writing exercise should be started in Nora chat */
-  onStartInChat?: (exercise: MentalExercise) => void;
+  onStartInChat?: (exercise: SimModule) => void;
 }
 
 type PlayerState = 'intro' | 'pre-mood' | 'active' | 'post-mood' | 'complete';
@@ -92,7 +90,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   exercise,
   onComplete,
   onClose,
-  assignmentId,
+  assignmentId: _assignmentId,
   onStartInChat,
 }) => {
   // Check if this exercise requires writing - show different flow
@@ -102,7 +100,6 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [preExerciseMood, setPreExerciseMood] = useState<number | undefined>();
   const [postExerciseMood, setPostExerciseMood] = useState<number | undefined>();
-  const [helpfulnessRating, setHelpfulnessRating] = useState<number | undefined>();
   const [soundEnabled, setSoundEnabled] = useState(true);
 
   const startTimeRef = useRef<number>(0);
@@ -149,7 +146,6 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   };
 
   const handleFinalComplete = (rating: number) => {
-    setHelpfulnessRating(rating);
     onComplete({
       durationSeconds: elapsedSeconds,
       preExerciseMood,
@@ -303,7 +299,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
 // ============================================================================
 
 interface IntroScreenProps {
-  exercise: MentalExercise;
+  exercise: SimModule;
   categoryIcon: React.ReactNode;
   categoryColor: string;
   onStart: () => void;
@@ -422,7 +418,7 @@ const MoodSelector: React.FC<MoodSelectorProps> = ({ title, subtitle, onSelect }
 // ============================================================================
 
 interface ActiveExerciseProps {
-  exercise: MentalExercise;
+  exercise: SimModule;
   isPaused: boolean;
   elapsedSeconds: number;
   categoryColor: string;
@@ -431,7 +427,7 @@ interface ActiveExerciseProps {
   onComplete: () => void;
   soundEnabled: boolean;
   requiresWriting?: boolean;
-  onStartInChat?: (exercise: MentalExercise) => void;
+  onStartInChat?: (exercise: SimModule) => void;
 }
 
 const ActiveExercise: React.FC<ActiveExerciseProps> = ({
@@ -466,7 +462,7 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
       return (
         <KillSwitchGame
           exercise={exercise}
-          onComplete={(data) => onComplete()}
+          onComplete={() => onComplete()}
           onClose={onPause}
         />
       );
@@ -475,7 +471,6 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
       <FocusExercise
         config={exercise.exerciseConfig.config}
         isPaused={isPaused}
-        elapsedSeconds={elapsedSeconds}
         categoryColor={categoryColor}
         onPause={onPause}
         onResume={onResume}
@@ -513,7 +508,6 @@ const CUE_WORD_EXERCISE_TYPES = ['cue_word', 'cue_word_anchoring', 'anchoring'];
 interface FocusExerciseProps {
   config: any;
   isPaused: boolean;
-  elapsedSeconds: number;
   categoryColor: string;
   onPause: () => void;
   onResume: () => void;
@@ -523,7 +517,6 @@ interface FocusExerciseProps {
 const FocusExercise: React.FC<FocusExerciseProps> = ({
   config,
   isPaused,
-  elapsedSeconds,
   categoryColor,
   onPause,
   onResume,
@@ -562,7 +555,6 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
   // Rep-based practice: each rep is ~15 seconds of focus
   const repDuration = 15;
   const totalReps = Math.max(1, Math.ceil(practiceDuration / repDuration));
-  const practiceRemaining = Math.max(0, practiceDuration - practiceElapsed);
 
   // Debug: Mount/unmount logging
   useEffect(() => {
@@ -580,7 +572,6 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
         hadTimer: !!practiceTimerRef.current,
       });
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Debug: Log phase changes
@@ -1405,7 +1396,6 @@ interface BreathingExerciseProps {
   onPause: () => void;
   onResume: () => void;
   onComplete: () => void;
-  soundEnabled: boolean;
 }
 
 const BreathingExercise: React.FC<BreathingExerciseProps> = ({
@@ -1415,7 +1405,6 @@ const BreathingExercise: React.FC<BreathingExerciseProps> = ({
   onPause,
   onResume,
   onComplete,
-  soundEnabled,
 }) => {
   const DEBUG_BREATHING = true;
   // Stable-ish id per mount to correlate logs (not cryptographically random)
@@ -1472,7 +1461,6 @@ const BreathingExercise: React.FC<BreathingExerciseProps> = ({
         hadInterval: !!intervalRef.current,
       });
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -1625,7 +1613,6 @@ const BreathingExercise: React.FC<BreathingExerciseProps> = ({
         });
       }, 1300);
       // Clear sanity timeout on cleanup
-      // eslint-disable-next-line consistent-return
       return () => {
         clearTimeout(sanity);
         if (intervalRef.current) {
@@ -1755,7 +1742,7 @@ const BreathingExercise: React.FC<BreathingExerciseProps> = ({
 // ============================================================================
 
 interface PromptExerciseProps {
-  exercise: MentalExercise;
+  exercise: SimModule;
   isPaused: boolean;
   elapsedSeconds: number;
   categoryColor: string;
@@ -1764,7 +1751,7 @@ interface PromptExerciseProps {
   onComplete: () => void;
   soundEnabled?: boolean;
   requiresWriting?: boolean;
-  onStartInChat?: (exercise: MentalExercise) => void;
+  onStartInChat?: (exercise: SimModule) => void;
 }
 
 const PromptExercise: React.FC<PromptExerciseProps> = ({
@@ -1950,7 +1937,6 @@ const AutoNarrator: React.FC<{
       // if text changes/unmounts, stop current narration
       if (runIdRef.current === runId) stopNarration();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, text, voiceChoice]);
   return null;
 };
@@ -1960,7 +1946,7 @@ const AutoNarrator: React.FC<{
 // ============================================================================
 
 interface CompletionScreenProps {
-  exercise: MentalExercise;
+  exercise: SimModule;
   elapsedSeconds: number;
   preExerciseMood?: number;
   postExerciseMood?: number;

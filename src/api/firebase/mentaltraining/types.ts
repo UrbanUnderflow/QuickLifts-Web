@@ -96,8 +96,8 @@ export interface ExerciseOverview {
 }
 
 /**
- * MentalExercise - A reusable exercise template
- * Collection: mental-exercises
+ * SimModule - A reusable simulation module template
+ * Collection: sim-modules
  */
 export interface MentalExercise {
   id: string;
@@ -129,6 +129,14 @@ export interface MentalExercise {
     transferHypothesis: string;
     validationPlan: string;
   };
+  runtimeConfig?: Record<string, any>;
+  variantSource?: {
+    variantId: string;
+    variantName: string;
+    family: string;
+    mode: string;
+    publishedAt?: number;
+  };
   createdAt: number; // Unix timestamp
   updatedAt: number;
 }
@@ -153,8 +161,8 @@ export enum AssignmentSource {
 }
 
 /**
- * ExerciseAssignment - An exercise assigned to an athlete
- * Collection: mental-exercise-assignments
+ * ExerciseAssignment - A sim assignment delivered to an athlete
+ * Collection: sim-assignments
  */
 export interface ExerciseAssignment {
   id: string;
@@ -191,8 +199,8 @@ export interface ExerciseAssignment {
 // ============================================================================
 
 /**
- * ExerciseCompletion - Record of a completed exercise
- * Collection: mental-exercise-completions/{userId}/completions
+ * ExerciseCompletion - Record of a completed sim module
+ * Collection: sim-completions/{userId}/completions
  */
 export interface ExerciseCompletion {
   id: string;
@@ -699,6 +707,12 @@ export function exerciseToFirestore(exercise: MentalExercise): Record<string, an
   if (exercise.taxonomy) {
     data.taxonomy = exercise.taxonomy;
   }
+  if (exercise.runtimeConfig) {
+    data.runtimeConfig = exercise.runtimeConfig;
+  }
+  if (exercise.variantSource) {
+    data.variantSource = exercise.variantSource;
+  }
 
   return data;
 }
@@ -722,10 +736,16 @@ export function exerciseFromFirestore(id: string, data: Record<string, any>): Me
     sortOrder: data.sortOrder || 0,
     simSpecId: data.simSpecId,
     taxonomy: data.taxonomy,
+    runtimeConfig: data.runtimeConfig,
+    variantSource: data.variantSource,
     createdAt: data.createdAt || Date.now(),
     updatedAt: data.updatedAt || Date.now(),
   };
 }
+
+export type SimModule = MentalExercise;
+export type SimAssignment = ExerciseAssignment;
+export type SimCompletion = ExerciseCompletion;
 
 export function assignmentToFirestore(assignment: ExerciseAssignment): Record<string, any> {
   return {

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import Head from 'next/head';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -13,6 +14,7 @@ import {
     AlertTriangle,
     Shield,
     ChevronRight,
+    ChevronLeft,
     RotateCcw,
     Eye,
     Target,
@@ -116,14 +118,14 @@ const DEMO_SCRIPT: ScriptMessage[] = [
     {
         role: 'nora',
         content:
-            "That's okay — anxiety before a high-stakes game is completely normal. I have a few other mental frameworks we can run through, but first — would you mind if I notified Coach about how you're feeling so he's in the loop and can support you today?",
+            "That's okay — anxiety before a high-stakes game is completely normal. I have a few other mental frameworks we can run through, but first — we'd like to notify someone on your support staff so they're in the loop. Who should we notify?",
         delay: 1500,
     },
-    // User responds: "Sure"
+    // User selects a staff member (or opts out)
     {
         role: 'nora',
         content:
-            "Done. I've sent Coach a secure briefing with your physical baseline data and today's conversation context. He'll have the full picture before your 10 AM meeting.",
+            "Done. I've sent a secure briefing with your physical baseline data and today's conversation context. They'll have the full picture before your 10 AM meeting.",
         delay: 2000,
         autoAdvance: true,
         autoAdvanceDelay: 4000,
@@ -194,9 +196,12 @@ const SUGGESTED_RESPONSES: Record<number, SuggestedResponse[]> = {
         { text: "I'm still feeling pretty anxious.", sentiment: 'negative' },
     ],
     8: [
-        { text: 'Sure, go ahead and let Coach know.', sentiment: 'positive' },
-        { text: "Yeah, that's fine. Let him know.", sentiment: 'neutral' },
-        { text: "Do you have to? I don't want him to think I can't handle it.", sentiment: 'negative' },
+        { text: 'Coach Mayo (Head Coach)', sentiment: 'positive' },
+        { text: 'Coach Van Pelt (Offensive Coordinator)', sentiment: 'neutral' },
+        { text: "Coach Covington (Defensive Coordinator)", sentiment: 'neutral' },
+        { text: 'Jim Whalen (Head Athletic Trainer)', sentiment: 'neutral' },
+        { text: 'Dr. Liz Carter (Staff Clinician)', sentiment: 'positive' },
+        { text: "Don't notify anyone", sentiment: 'negative' },
     ],
 };
 
@@ -408,27 +413,26 @@ const BiometricHUD: React.FC<{ isActive: boolean }> = ({ isActive }) => {
 // COACH DASHBOARD (Act 2)
 // ─────────────────────────────────────────────────────────
 
-const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
+const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: string; initials: string; role: string } }> = ({
     onContinue,
+    notifiedStaff,
 }) => {
+    // Which panel is active in the sidebar nav
+    const [coachView, setCoachView] = useState<'alerts' | 'roster'>('alerts');
+    const [alertIndex, setAlertIndex] = useState(0);
+
     const [showAlert, setShowAlert] = useState(false);
-    const [showRoster, setShowRoster] = useState(false);
     const [showExercises, setShowExercises] = useState(false);
     const [showHandoff, setShowHandoff] = useState(false);
-    const [showRosterHint, setShowRosterHint] = useState(false);
 
     useEffect(() => {
         const t1 = setTimeout(() => setShowAlert(true), 800);
-        const t2 = setTimeout(() => setShowRoster(true), 2200);
-        const t3 = setTimeout(() => setShowExercises(true), 3800);
-        const t4 = setTimeout(() => setShowHandoff(true), 5200);
-        const t5 = setTimeout(() => setShowRosterHint(true), 7000);
+        const t2 = setTimeout(() => setShowExercises(true), 2800);
+        const t3 = setTimeout(() => setShowHandoff(true), 4800);
         return () => {
             clearTimeout(t1);
             clearTimeout(t2);
             clearTimeout(t3);
-            clearTimeout(t4);
-            clearTimeout(t5);
         };
     }, []);
 
@@ -539,44 +543,54 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
                     </div>
                 </div>
 
-                {/* Coach Profile */}
+                {/* Coach Profile — driven by Act 1 staff selection */}
                 <div className="flex items-center gap-2.5 px-2 py-3 rounded-xl bg-zinc-800/30 border border-zinc-700/20 mb-5">
                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#E0FE10]/30 to-green-500/20 flex items-center justify-center border border-[#E0FE10]/20">
-                        <span className="text-xs font-bold text-[#E0FE10]">CW</span>
+                        <span className="text-xs font-bold text-[#E0FE10]">{notifiedStaff.initials}</span>
                     </div>
                     <div>
-                        <div className="text-xs font-semibold text-white">Coach Williams</div>
-                        <div className="text-[9px] text-zinc-500">Head Performance Coach</div>
+                        <div className="text-xs font-semibold text-white">{notifiedStaff.name}</div>
+                        <div className="text-[9px] text-zinc-500">{notifiedStaff.role}</div>
                     </div>
                 </div>
 
-                {/* Nav Menu */}
+                {/* Nav Menu — Athlete Alerts and Team Roster are now clickable */}
                 <nav className="flex-1 space-y-0.5">
                     {[
-                        { icon: Home, label: 'Home', active: false },
-                        { icon: Flame, label: 'Athlete Alerts', active: true, badge: '2' },
-                        { icon: Users, label: 'Team Roster', active: false },
-                        { icon: ClipboardList, label: 'Training Library', active: false },
-                        { icon: Calendar, label: 'Schedule', active: false },
-                        { icon: BarChart3, label: 'Reports', active: false },
-                        { icon: Settings, label: 'Settings', active: false },
-                    ].map((item) => (
-                        <div
-                            key={item.label}
-                            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm cursor-pointer transition-colors ${item.active
-                                ? 'bg-[#E0FE10]/10 text-[#E0FE10] font-medium'
-                                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
-                                }`}
-                        >
-                            <item.icon className="w-4 h-4" />
-                            <span>{item.label}</span>
-                            {item.badge && (
-                                <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/25 font-bold">
-                                    {item.badge}
-                                </span>
-                            )}
-                        </div>
-                    ))}
+                        { icon: Home, label: 'Home', view: null },
+                        { icon: Flame, label: 'Athlete Alerts', view: 'alerts', badge: '2' },
+                        { icon: Users, label: 'Team Roster', view: 'roster' },
+                        { icon: ClipboardList, label: 'Training Library', view: null },
+                        { icon: Calendar, label: 'Schedule', view: null },
+                        { icon: BarChart3, label: 'Reports', view: null },
+                        { icon: Settings, label: 'Settings', view: null },
+                    ].map((item) => {
+                        const isActive = item.view === coachView;
+                        return (
+                            <div
+                                key={item.label}
+                                onClick={() => {
+                                    if (item.view === 'alerts' || item.view === 'roster') {
+                                        setCoachView(item.view);
+                                    }
+                                }}
+                                className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm transition-colors ${isActive
+                                    ? 'bg-[#E0FE10]/10 text-[#E0FE10] font-medium'
+                                    : item.view
+                                        ? 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 cursor-pointer'
+                                        : 'text-zinc-500 cursor-default'
+                                    }`}
+                            >
+                                <item.icon className="w-4 h-4" />
+                                <span>{item.label}</span>
+                                {item.badge && (
+                                    <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/25 font-bold">
+                                        {item.badge}
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    })}
                 </nav>
 
                 {/* Logout */}
@@ -589,180 +603,400 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
             </motion.aside>
 
             {/* ── Main Content ── */}
-            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-                {/* Header breadcrumb */}
-                <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center justify-between"
-                >
-                    <div className="flex items-center gap-2 text-sm">
-                        <span className="text-zinc-500">Athlete Alerts</span>
-                        <ChevronRight className="w-3 h-3 text-zinc-600" />
-                        <span className="text-white font-medium">Game Day Overview</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25 font-bold">
-                            2 ALERTS
-                        </span>
-                        <span className="text-[10px] text-zinc-500">March 2, 2026 • 8:15 AM</span>
-                    </div>
-                </motion.div>
+            <AnimatePresence mode="wait">
 
-                {/* Nora Alert Card */}
-                <AnimatePresence>
-                    {showAlert && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 30, scale: 0.95 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            transition={{ duration: 0.5 }}
-                            className="rounded-2xl overflow-hidden"
-                            style={{
-                                background:
-                                    'linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(239,68,68,0.05) 100%)',
-                                border: '1px solid rgba(249,115,22,0.25)',
-                            }}
-                        >
-                            <div className="p-5">
-                                <div className="flex items-start gap-3 mb-4">
-                                    <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center flex-shrink-0">
-                                        <AlertTriangle className="w-5 h-5 text-orange-400" />
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="font-bold text-white">
-                                                Nora Alert — Tremaine Grant
-                                            </h3>
-                                            <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
-                                                Elevated Anxiety
-                                            </span>
+                {/* ── ATHLETE ALERTS VIEW ── */}
+                {coachView === 'alerts' && (
+                    <motion.div
+                        key="alerts-view"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.25 }}
+                        className="flex-1 overflow-y-auto px-6 py-6 space-y-6"
+                    >
+                        {/* Header */}
+                        <div className="flex items-center justify-between">
+                            <span className="text-white font-medium text-sm">Athlete Alerts</span>
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] px-2 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/25 font-bold">
+                                    2 ALERTS
+                                </span>
+                                <span className="text-[10px] text-zinc-500">March 2, 2026 • 8:15 AM</span>
+                            </div>
+                        </div>
+
+                        {/* Nora Alert Card */}
+                        <AnimatePresence>
+                            {showAlert && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    transition={{ duration: 0.5 }}
+                                >
+                                    {/* Carousel wrapper */}
+                                    <div className="relative">
+                                        {/* Dot indicators */}
+                                        <div className="flex justify-center gap-1.5 mb-3">
+                                            {[0, 1].map((i) => (
+                                                <button
+                                                    key={i}
+                                                    onClick={() => setAlertIndex(i)}
+                                                    className={`rounded-full transition-all duration-300 ${alertIndex === i ? 'w-5 h-1.5 bg-[#E0FE10]' : 'w-1.5 h-1.5 bg-zinc-600 hover:bg-zinc-500'}`}
+                                                />
+                                            ))}
                                         </div>
-                                        <p className="text-xs text-zinc-500 mt-0.5">
-                                            Today at 8:15 AM • Game Day
+
+                                        {/* Cards track */}
+                                        <div className="overflow-hidden rounded-2xl">
+                                            <motion.div
+                                                className="flex"
+                                                animate={{ x: `${-alertIndex * 100}%` }}
+                                                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                                                drag="x"
+                                                dragConstraints={{ left: 0, right: 0 }}
+                                                onDragEnd={(_, info) => {
+                                                    if (info.offset.x < -50 && alertIndex < 1) setAlertIndex(1);
+                                                    if (info.offset.x > 50 && alertIndex > 0) setAlertIndex(0);
+                                                }}
+                                            >
+                                                {/* ── ALERT 1: Tremaine Grant ── */}
+                                                <div className="w-full flex-shrink-0 rounded-2xl overflow-hidden"
+                                                    style={{ background: 'linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(239,68,68,0.05) 100%)', border: '1px solid rgba(249,115,22,0.25)' }}
+                                                >
+                                                    <div className="p-5">
+                                                        <div className="flex items-start gap-3 mb-4">
+                                                            <div className="w-10 h-10 rounded-xl bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+                                                                <AlertTriangle className="w-5 h-5 text-orange-400" />
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <h3 className="font-bold text-white">Nora Alert — Tremaine Grant</h3>
+                                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">Elevated Anxiety</span>
+                                                                </div>
+                                                                <p className="text-xs text-zinc-500 mt-0.5">Today at 8:15 AM • Game Day</p>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-sm text-zinc-300 leading-relaxed mb-4">
+                                                            Tremaine is experiencing elevated game-day anxiety related to season-ending pressure. I ran a Box Breathing protocol (4 rounds), but residual tension persists. His physical baseline is excellent (RHR 42, HRV high, 8h sleep), so this appears to be{' '}
+                                                            <span className="text-orange-400 font-semibold">purely psychological</span>.
+                                                        </p>
+                                                        <div className="grid grid-cols-3 gap-3 mb-4">
+                                                            {[
+                                                                { label: 'RHR', value: '42 bpm', icon: Heart, color: '#EF4444' },
+                                                                { label: 'HRV', value: 'High', icon: Activity, color: '#22C55E' },
+                                                                { label: 'Sleep', value: '8h', icon: Brain, color: '#3B82F6' },
+                                                            ].map((stat) => (
+                                                                <div key={stat.label} className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 text-center">
+                                                                    <stat.icon className="w-4 h-4 mx-auto mb-1" style={{ color: stat.color }} />
+                                                                    <div className="text-sm font-bold text-white">{stat.value}</div>
+                                                                    <div className="text-[10px] text-zinc-500 uppercase">{stat.label}</div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/30 p-3">
+                                                            <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1">Recommendation</div>
+                                                            <p className="text-sm text-zinc-300">Check in with Tremaine before the 10:00 AM competition prep meeting. Monitor throughout the day in case escalation to clinical support is needed.</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* ── ALERT 2: K. Thompson ── */}
+                                                <div className="w-full flex-shrink-0 rounded-2xl overflow-hidden"
+                                                    style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.10) 0%, rgba(185,28,28,0.06) 100%)', border: '1px solid rgba(239,68,68,0.35)' }}
+                                                >
+                                                    <div className="p-5">
+                                                        <div className="flex items-start gap-3 mb-4">
+                                                            <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                                                                <AlertTriangle className="w-5 h-5 text-red-400" />
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <h3 className="font-bold text-white">Nora Alert — K. Thompson</h3>
+                                                                    <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30 font-bold">Escalated — Clinical</span>
+                                                                </div>
+                                                                <p className="text-xs text-zinc-500 mt-0.5">Today at 6:50 AM • Flagged for Clinical Review</p>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-sm text-zinc-300 leading-relaxed mb-4">
+                                                            Kevin expressed statements during his morning check-in that indicate{' '}
+                                                            <span className="text-red-400 font-semibold">significant psychological distress</span> — including feelings of hopelessness and withdrawal. This has been escalated beyond coaching scope and requires immediate clinical attention.
+                                                        </p>
+                                                        <div className="grid grid-cols-3 gap-3 mb-4">
+                                                            {[
+                                                                { label: 'RHR', value: '78 bpm', icon: Heart, color: '#EF4444', flag: '↑ Elevated' },
+                                                                { label: 'HRV', value: '28 ms', icon: Activity, color: '#EF4444', flag: '↓ Low' },
+                                                                { label: 'Sleep', value: '3.5h', icon: Brain, color: '#F59E0B', flag: '↓ Poor' },
+                                                            ].map((stat) => (
+                                                                <div key={stat.label} className="rounded-xl bg-zinc-800/40 border border-red-500/20 p-3 text-center">
+                                                                    <stat.icon className="w-4 h-4 mx-auto mb-1" style={{ color: stat.color }} />
+                                                                    <div className="text-sm font-bold text-white">{stat.value}</div>
+                                                                    <div className="text-[10px] text-zinc-500 uppercase">{stat.label}</div>
+                                                                    <div className="text-[9px] text-red-400 mt-0.5">{stat.flag}</div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="rounded-xl bg-red-500/8 border border-red-500/30 p-3">
+                                                            <div className="text-xs font-semibold text-red-400 uppercase tracking-wide mb-1">⚠ Immediate Action Required</div>
+                                                            <p className="text-sm text-zinc-300">Do not discuss availability or performance with Kevin today. A clinical handoff to Dr. Liz Carter has been initiated. Review full case in Team Roster.</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        </div>
+
+                                        {/* Prev / Next buttons */}
+                                        {alertIndex === 1 && (
+                                            <button onClick={() => setAlertIndex(0)} className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:bg-zinc-700 transition-colors">
+                                                <ChevronLeft className="w-3 h-3 text-zinc-400" />
+                                            </button>
+                                        )}
+                                        {alertIndex === 0 && (
+                                            <button onClick={() => setAlertIndex(1)} className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center hover:bg-zinc-700 transition-colors">
+                                                <ChevronRight className="w-3 h-3 text-zinc-400" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+
+                        {/* Nora-Assigned Sims */}
+                        <AnimatePresence>
+                            {showExercises && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 30 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.5 }}
+                                >
+                                    {/* Section header */}
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
+                                            Nora-Assigned Sims
+                                        </h3>
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#E0FE10]/10 text-[#E0FE10] border border-[#E0FE10]/20 font-medium">
+                                            Auto-Queued • 8:15 AM
+                                        </span>
+                                    </div>
+
+                                    {/* Trigger context banner */}
+                                    <div className="rounded-xl bg-orange-500/6 border border-orange-500/20 px-4 py-3 mb-3 flex items-start gap-3">
+                                        <Brain className="w-4 h-4 text-orange-400 flex-shrink-0 mt-0.5" />
+                                        <p className="text-xs text-zinc-300 leading-relaxed">
+                                            Based on Tremaine&apos;s check-in — <span className="text-orange-400 font-medium">elevated pre-game anxiety</span>, high self-pressure sentiment, and residual tension post-breathing — Nora selected and queued these sims to address his cognitive state before the 10 AM meeting.
                                         </p>
                                     </div>
-                                </div>
-
-                                <p className="text-sm text-zinc-300 leading-relaxed mb-4">
-                                    Tremaine is experiencing elevated game-day anxiety related to
-                                    season-ending pressure. I ran a Box Breathing protocol (4
-                                    rounds), but residual tension persists. His physical baseline is
-                                    excellent (RHR 42, HRV high, 8h sleep), so this appears to be{' '}
-                                    <span className="text-orange-400 font-semibold">
-                                        purely psychological
-                                    </span>
-                                    .
-                                </p>
-
-                                {/* Stats Row */}
-                                <div className="grid grid-cols-3 gap-3 mb-4">
-                                    {[
-                                        { label: 'RHR', value: '42 bpm', icon: Heart, color: '#EF4444' },
-                                        { label: 'HRV', value: 'High', icon: Activity, color: '#22C55E' },
-                                        { label: 'Sleep', value: '8h', icon: Brain, color: '#3B82F6' },
-                                    ].map((stat) => (
-                                        <div
-                                            key={stat.label}
-                                            className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 text-center"
-                                        >
-                                            <stat.icon
-                                                className="w-4 h-4 mx-auto mb-1"
-                                                style={{ color: stat.color }}
-                                            />
-                                            <div className="text-sm font-bold text-white">
-                                                {stat.value}
-                                            </div>
-                                            <div className="text-[10px] text-zinc-500 uppercase">
-                                                {stat.label}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <div className="rounded-xl bg-zinc-800/60 border border-zinc-700/30 p-3">
-                                    <div className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1">
-                                        Recommendation
+                                    <div className="space-y-2">
+                                        {[
+                                            {
+                                                name: 'Box Breathing',
+                                                desc: 'Regulated autonomic response — 4 rounds completed this session',
+                                                icon: Wind,
+                                                color: '#22D3EE',
+                                                status: 'Completed',
+                                            },
+                                            {
+                                                name: 'Competition Walkthrough',
+                                                desc: 'Mental rehearsal of key game scenarios to build execution confidence',
+                                                icon: Eye,
+                                                color: '#8B5CF6',
+                                                status: 'Assigned',
+                                            },
+                                            {
+                                                name: 'The Kill Switch',
+                                                desc: 'Interrupt rumination loops — rapid refocus drill for high-pressure moments',
+                                                icon: Zap,
+                                                color: '#EF4444',
+                                                status: 'Assigned',
+                                            },
+                                            {
+                                                name: 'Cue Word Anchoring',
+                                                desc: 'Lock a personal trigger word to an optimal performance state',
+                                                icon: Target,
+                                                color: '#F59E0B',
+                                                status: 'In Queue',
+                                            },
+                                            {
+                                                name: 'Highlight Reel',
+                                                desc: 'Replay peak performance memories to prime confidence before tip-off',
+                                                icon: Star,
+                                                color: '#10B981',
+                                                status: 'In Queue',
+                                            },
+                                        ].map((ex, i) => (
+                                            <motion.div
+                                                key={ex.name}
+                                                initial={{ opacity: 0, x: -20 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: i * 0.12 }}
+                                                className="flex items-start gap-3 p-3 rounded-xl bg-zinc-800/40 border border-zinc-700/30 hover:bg-zinc-800/60 transition-colors"
+                                            >
+                                                <div
+                                                    className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5"
+                                                    style={{ backgroundColor: `${ex.color}15` }}
+                                                >
+                                                    <ex.icon className="w-4 h-4" style={{ color: ex.color }} />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-sm font-medium text-white">{ex.name}</div>
+                                                    <div className="text-xs text-zinc-500 leading-relaxed mt-0.5">{ex.desc}</div>
+                                                </div>
+                                                <span
+                                                    className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${ex.status === 'Completed'
+                                                        ? 'bg-green-500/15 text-green-400 border border-green-500/25'
+                                                        : ex.status === 'Assigned'
+                                                            ? 'bg-[#E0FE10]/10 text-[#E0FE10] border border-[#E0FE10]/25'
+                                                            : 'bg-zinc-700/40 text-zinc-500 border border-zinc-600/30'
+                                                        }`}
+                                                >
+                                                    {ex.status}
+                                                </span>
+                                            </motion.div>
+                                        ))}
                                     </div>
-                                    <p className="text-sm text-zinc-300">
-                                        Check in with Tremaine before the 10:00 AM competition prep
-                                        meeting. Monitor throughout the day in case escalation to
-                                        clinical support is needed.
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* AuntEdna Clinical Handoff */}
+                        <AnimatePresence>
+                            {showHandoff && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: 30 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.5 }}
+                                    className="rounded-2xl bg-gradient-to-br from-purple-500/8 to-blue-500/5 border border-purple-500/20 p-5"
+                                >
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                            <Shield className="w-4 h-4 text-purple-400" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-bold text-white">
+                                                Clinical Handoff Available
+                                            </h3>
+                                            <p className="text-xs text-zinc-500">
+                                                HIPAA-Compliant • AuntEdna Integration
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-zinc-300 leading-relaxed">
+                                        If Nora detects that a player&apos;s anxiety is scaling into a
+                                        clinical zone, Pulse automatically packages the full context —
+                                        sleep data, HRV trends, chat sentiment analysis — and initiates a
+                                        secure handoff to{' '}
+                                        <span className="text-purple-400 font-semibold">AuntEdna</span>,
+                                        the team&apos;s clinical mental health platform.
                                     </p>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
 
-                {/* Full Team Roster */}
-                <AnimatePresence>
-                    {showRoster && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 30 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.5 }}
-                        >
-                            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                                <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
-                                    Team Status Overview — All Athletes
-                                </h3>
-                                <div className="flex items-center gap-3 text-[11px]">
-                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" /> 19 Optimal</span>
-                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> 2 Flagged</span>
-                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" /> 1 Elevated</span>
-                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> 1 Escalated</span>
-                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-600 inline-block" /> 3 Pending</span>
-                                </div>
-                            </div>
+                    </motion.div>
+                )}
 
-                            {/* Check-in progress */}
-                            <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 mb-3 flex items-center gap-4">
-                                <div className="text-sm text-zinc-300">
-                                    <span className="text-white font-bold">22</span>/25 checked in
-                                </div>
-                                <div className="flex-1 h-2 bg-zinc-700/50 rounded-full overflow-hidden">
-                                    <motion.div
-                                        initial={{ width: 0 }}
-                                        animate={{ width: '88%' }}
-                                        transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
-                                        className="h-full rounded-full"
-                                        style={{ background: 'linear-gradient(90deg, #22C55E, #E0FE10)' }}
-                                    />
-                                </div>
-                                <div className="text-xs text-zinc-500">88%</div>
-                            </div>
+                {/* ── TEAM ROSTER VIEW ── */}
+                {coachView === 'roster' && (
+                    <motion.div
+                        key="roster-view"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.25 }}
+                        className="flex-1 overflow-y-auto px-6 py-6 space-y-6"
+                    >
+                        {/* Header */}
+                        <div className="flex items-center justify-between">
+                            <span className="text-white font-medium text-sm">Team Roster</span>
+                            <span className="text-[10px] text-zinc-500">March 2, 2026 • 8:15 AM</span>
+                        </div>
 
-                            {/* Roster table */}
-                            <div className="rounded-xl border border-zinc-700/30 overflow-hidden">
-                                <div className="grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 text-[10px] font-bold text-zinc-500 uppercase tracking-wide px-3 py-2 bg-zinc-800/60 border-b border-zinc-700/30">
-                                    <div>#</div>
-                                    <div>Player</div>
-                                    <div>Pos</div>
-                                    <div>Status</div>
-                                    <div className="text-right">Time</div>
-                                </div>
-                                <div className="max-h-[340px] overflow-y-auto">
-                                    {roster.map((p, i) => (
+                        {/* Roster stats legend */}
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                            <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
+                                Team Status Overview — All Athletes
+                            </h3>
+                            <div className="flex items-center gap-3 text-[11px]">
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" /> 19 Optimal</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> 2 Flagged</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" /> 1 Elevated</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> 1 Escalated</span>
+                                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-600 inline-block" /> 3 Pending</span>
+                            </div>
+                        </div>
+
+                        {/* Check-in progress */}
+                        <div className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 flex items-center gap-4">
+                            <div className="text-sm text-zinc-300">
+                                <span className="text-white font-bold">22</span>/25 checked in
+                            </div>
+                            <div className="flex-1 h-2 bg-zinc-700/50 rounded-full overflow-hidden">
+                                <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: '88%' }}
+                                    transition={{ duration: 1.5, ease: 'easeOut', delay: 0.3 }}
+                                    className="h-full rounded-full"
+                                    style={{ background: 'linear-gradient(90deg, #22C55E, #E0FE10)' }}
+                                />
+                            </div>
+                            <div className="text-xs text-zinc-500">88%</div>
+                        </div>
+
+                        {/* Roster table */}
+                        <div className="rounded-xl border border-zinc-700/30 overflow-hidden">
+                            <div className="grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 text-[10px] font-bold text-zinc-500 uppercase tracking-wide px-3 py-2 bg-zinc-800/60 border-b border-zinc-700/30">
+                                <div>#</div>
+                                <div>Player</div>
+                                <div>Pos</div>
+                                <div>Status</div>
+                                <div className="text-right">Time</div>
+                            </div>
+                            <div className="max-h-[420px] overflow-y-auto">
+                                {[
+                                    { name: 'T. Grant', pos: 'DB', num: 24, status: 'elevated', text: 'Elevated Anxiety', time: '8:15 AM', hl: true },
+                                    { name: 'K. Thompson', pos: 'LB', num: 52, status: 'critical', text: 'Escalated — Clinical', time: '6:50 AM', hl: true },
+                                    { name: 'D. Okafor', pos: 'DT', num: 94, status: 'warning', text: 'Low Sleep (4.5h)', time: '7:55 AM', hl: false },
+                                    { name: 'B. Washington', pos: 'TE', num: 87, status: 'warning', text: 'Elevated Stress', time: '7:50 AM', hl: false },
+                                    { name: 'J. Rodriguez', pos: 'QB', num: 7, status: 'optimal', text: 'Game Ready', time: '7:30 AM', hl: false },
+                                    { name: 'M. Williams', pos: 'WR', num: 11, status: 'optimal', text: 'Optimal', time: '7:45 AM', hl: false },
+                                    { name: 'A. Johnson', pos: 'RB', num: 28, status: 'optimal', text: 'Game Ready', time: '8:00 AM', hl: false },
+                                    { name: 'C. Martinez', pos: 'OG', num: 75, status: 'optimal', text: 'Optimal', time: '7:20 AM', hl: false },
+                                    { name: 'R. Davis', pos: 'S', num: 21, status: 'optimal', text: 'Optimal', time: '7:40 AM', hl: false },
+                                    { name: 'L. Chen', pos: 'K', num: 3, status: 'optimal', text: 'Optimal', time: '7:15 AM', hl: false },
+                                    { name: 'J. Patel', pos: 'CB', num: 32, status: 'optimal', text: 'Game Ready', time: '8:05 AM', hl: false },
+                                    { name: 'S. Brooks', pos: 'WR', num: 15, status: 'optimal', text: 'Optimal', time: '7:35 AM', hl: false },
+                                    { name: 'T. Morrison', pos: 'DE', num: 91, status: 'optimal', text: 'Game Ready', time: '7:25 AM', hl: false },
+                                    { name: 'E. Campbell', pos: 'OT', num: 68, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
+                                    { name: 'M. Foster', pos: 'LB', num: 56, status: 'optimal', text: 'Optimal', time: '7:55 AM', hl: false },
+                                    { name: 'D. Rivera', pos: 'CB', num: 29, status: 'optimal', text: 'Game Ready', time: '8:10 AM', hl: false },
+                                    { name: 'K. Wright', pos: 'RB', num: 33, status: 'optimal', text: 'Optimal', time: '7:30 AM', hl: false },
+                                    { name: 'J. Harper', pos: 'WR', num: 84, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
+                                    { name: 'N. Cooper', pos: 'DT', num: 97, status: 'optimal', text: 'Optimal', time: '7:45 AM', hl: false },
+                                    { name: 'C. Bell', pos: 'S', num: 26, status: 'optimal', text: 'Optimal', time: '7:50 AM', hl: false },
+                                    { name: 'P. Adams', pos: 'C', num: 62, status: 'optimal', text: 'Game Ready', time: '7:40 AM', hl: false },
+                                    { name: 'R. Mitchell', pos: 'DE', num: 95, status: 'optimal', text: 'Optimal', time: '7:55 AM', hl: false },
+                                    { name: 'L. Turner', pos: 'FB', num: 45, status: 'optimal', text: 'Optimal', time: '7:25 AM', hl: false },
+                                    { name: 'A. Scott', pos: 'P', num: 8, status: 'optimal', text: 'Optimal', time: '7:35 AM', hl: false },
+                                    { name: 'H. Baker', pos: 'LS', num: 48, status: 'nocheckin', text: 'No Check-in', time: '—', hl: false },
+                                ].map((p, i) => {
+                                    const dotClass = p.status === 'optimal' ? 'bg-green-400' : p.status === 'warning' ? 'bg-amber-400' : p.status === 'elevated' ? 'bg-orange-400' : p.status === 'critical' ? 'bg-red-400 animate-pulse' : 'bg-zinc-600';
+                                    const textClass = p.status === 'optimal' ? 'text-green-400/80' : p.status === 'warning' ? 'text-amber-400/80' : p.status === 'elevated' ? 'text-orange-400/80' : p.status === 'critical' ? 'text-red-400/80' : 'text-zinc-600';
+                                    return (
                                         <motion.div
                                             key={p.name}
                                             initial={{ opacity: 0, x: -10 }}
                                             animate={{ opacity: 1, x: 0 }}
                                             transition={{ delay: i * 0.03 }}
-                                            className={`grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 items-center px-3 py-2 border-b border-zinc-800/50 text-sm transition-colors ${p.hl ? 'bg-orange-500/5' : ''
-                                                } ${p.status === 'critical' ? 'cursor-pointer hover:bg-red-500/10' : 'hover:bg-zinc-800/40'
-                                                }`}
-                                            onClick={() => {
-                                                if (p.status === 'critical') {
-                                                    onContinue();
-                                                }
-                                            }}
+                                            className={`grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 items-center px-3 py-2 border-b border-zinc-800/50 text-sm transition-colors ${p.hl ? 'bg-orange-500/5' : ''} ${p.status === 'critical' ? 'cursor-pointer hover:bg-red-500/10' : 'hover:bg-zinc-800/40'}`}
+                                            onClick={() => { if (p.status === 'critical') { onContinue(); } }}
                                         >
                                             <div className="text-zinc-500 font-mono text-xs">{p.num}</div>
                                             <div className={`font-medium ${p.hl ? 'text-orange-400' : 'text-white'}`}>{p.name}</div>
                                             <div className="text-zinc-500 text-xs">{p.pos}</div>
                                             <div className="flex items-center gap-1.5">
-                                                <div className={`w-2 h-2 rounded-full shrink-0 ${statusDot(p.status)}`} />
-                                                <span className={`text-xs truncate ${statusColor(p.status)}`}>{p.text}</span>
+                                                <div className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`} />
+                                                <span className={`text-xs truncate ${textClass}`}>{p.text}</span>
                                             </div>
                                             <div className="flex items-center justify-end gap-1">
                                                 <span className="text-zinc-500 text-xs">{p.time}</span>
@@ -771,116 +1005,16 @@ const CoachDashboard: React.FC<{ onContinue: () => void }> = ({
                                                 )}
                                             </div>
                                         </motion.div>
-                                    ))}
-                                </div>
+                                    );
+                                })}
                             </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                        </div>
 
-                {/* Assigned Mental Exercises */}
-                <AnimatePresence>
-                    {showExercises && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 30 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.5 }}
-                        >
-                            <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">
-                                Mental Training Assignments
-                            </h3>
-                            <div className="space-y-2">
-                                {exercises.map((ex, i) => (
-                                    <motion.div
-                                        key={ex.name}
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: i * 0.15 }}
-                                        className="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/40 border border-zinc-700/30 hover:bg-zinc-800/60 transition-colors"
-                                    >
-                                        <div
-                                            className="w-9 h-9 rounded-lg flex items-center justify-center"
-                                            style={{ backgroundColor: `${ex.color}15` }}
-                                        >
-                                            <ex.icon
-                                                className="w-4 h-4"
-                                                style={{ color: ex.color }}
-                                            />
-                                        </div>
-                                        <div className="flex-1">
-                                            <div className="text-sm font-medium text-white">
-                                                {ex.name}
-                                            </div>
-                                            <div className="text-xs text-zinc-500">{ex.category}</div>
-                                        </div>
-                                        <span
-                                            className={`text-xs px-2 py-0.5 rounded-full ${ex.status === 'Completed'
-                                                ? 'bg-green-500/15 text-green-400 border border-green-500/25'
-                                                : ex.status === 'Assigned'
-                                                    ? 'bg-[#E0FE10]/10 text-[#E0FE10] border border-[#E0FE10]/25'
-                                                    : 'bg-zinc-700/40 text-zinc-400 border border-zinc-600/30'
-                                                }`}
-                                        >
-                                            {ex.status}
-                                        </span>
-                                    </motion.div>
-                                ))}
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
 
-                {/* AuntEdna Clinical Handoff */}
-                <AnimatePresence>
-                    {showHandoff && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 30 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.5 }}
-                            className="rounded-2xl bg-gradient-to-br from-purple-500/8 to-blue-500/5 border border-purple-500/20 p-5"
-                        >
-                            <div className="flex items-center gap-2 mb-3">
-                                <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                                    <Shield className="w-4 h-4 text-purple-400" />
-                                </div>
-                                <div>
-                                    <h3 className="text-sm font-bold text-white">
-                                        Clinical Handoff Available
-                                    </h3>
-                                    <p className="text-xs text-zinc-500">
-                                        HIPAA-Compliant • AuntEdna Integration
-                                    </p>
-                                </div>
-                            </div>
-                            <p className="text-sm text-zinc-300 leading-relaxed">
-                                If Nora detects that a player&apos;s anxiety is scaling into a
-                                clinical zone, Pulse automatically packages the full context —
-                                sleep data, HRV trends, chat sentiment analysis — and initiates a
-                                secure handoff to{' '}
-                                <span className="text-purple-400 font-semibold">AuntEdna</span>,
-                                the team&apos;s clinical mental health platform.
-                            </p>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                    </motion.div>
+                )}
 
-                {/* Roster hint */}
-                <AnimatePresence>
-                    {showRosterHint && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="flex justify-center pt-2"
-                        >
-                            <div className="flex items-center gap-2 text-xs text-red-400/80">
-                                <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-                                Click K. Thompson to explore clinical escalation
-                                <ChevronRight className="w-3 h-3" />
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-            </div>{/* end main content */}
+            </AnimatePresence>
         </motion.div>
     );
 };
@@ -1121,16 +1255,16 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                 </div>
                             </div>
 
-                            {/* Dr. Mitchell Profile */}
+                            {/* Dr. Liz Carter Profile */}
                             <div className="px-4 py-4 border-b border-zinc-800/60">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500/30 to-blue-500/20 border border-purple-500/20 flex items-center justify-center">
-                                        <span className="text-sm font-bold text-purple-300">DM</span>
+                                        <span className="text-sm font-bold text-purple-300">LC</span>
                                     </div>
                                     <div>
-                                        <div className="text-sm font-semibold text-white">Dr. R. Mitchell</div>
-                                        <div className="text-[10px] text-zinc-500">PsyD, CMPC</div>
-                                        <div className="text-[9px] text-purple-400/70">Team Psychologist</div>
+                                        <div className="text-sm font-semibold text-white">Dr. Liz Carter</div>
+                                        <div className="text-[10px] text-zinc-500">Ph.D., Licensed Clinician</div>
+                                        <div className="text-[9px] text-purple-400/70">Staff Clinician</div>
                                     </div>
                                 </div>
                             </div>
@@ -1294,7 +1428,7 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                             <Brain className="w-3 h-3 text-[#E0FE10]" />
                                         </div>
                                         <div className="rounded-xl bg-purple-500/10 border border-purple-500/20 px-3 py-2 text-sm text-zinc-300">
-                                            Kevin, thank you for trusting me with that. What you&apos;re describing sounds like something that would really benefit from talking to someone who specializes in this. I&apos;m going to connect you with Dr. Mitchell right now&hellip;
+                                            Kevin, thank you for trusting me with that. What you&apos;re describing sounds like something that would really benefit from talking to someone who specializes in this. I&apos;m going to connect you with Dr. Liz Carter right now&hellip;
                                             <div className="text-[9px] text-purple-400 mt-1 uppercase font-bold tracking-wider">
                                                 → Clinical handoff initiated
                                             </div>
@@ -1319,6 +1453,72 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                             <div className="text-[9px] text-zinc-500">7-Day Trend</div>
                                         </div>
                                     </div>
+                                </div>
+                            </motion.div>
+                            {/* Personal / Professional Context */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.4 }}
+                                className="rounded-2xl border border-zinc-700/40 p-5"
+                                style={{ background: 'rgba(59,130,246,0.03)' }}
+                            >
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Users className="w-4 h-4 text-blue-400" />
+                                    <h4 className="text-sm font-bold text-white">Personal / Professional</h4>
+                                    <span className="text-[9px] text-zinc-600 ml-auto">Non-Sport Stressors</span>
+                                </div>
+                                <p className="text-[10px] text-zinc-500 mb-4 leading-relaxed">
+                                    These are life factors outside of sport that Nora has identified as active contributors to Kevin&apos;s current mental state.
+                                </p>
+
+                                <div className="space-y-3">
+                                    {[
+                                        {
+                                            icon: '👶',
+                                            label: 'New Father — 6 Weeks Postpartum',
+                                            note: 'First child born Jan 18. Sleep disruption averaging 3–4h/night. Kevin has mentioned feeling "torn between being present at home and being locked in for the season."',
+                                            impact: 'Sleep & Focus',
+                                            impactColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+                                        },
+                                        {
+                                            icon: '💼',
+                                            label: 'Brand Deal Pressure — Pending Contract',
+                                            note: 'Negotiating a $2.1M endorsement deal contingent on end-of-season performance metrics. Kevin flagged anxiety around "performing for the contract, not the team."',
+                                            impact: 'Identity Stress',
+                                            impactColor: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
+                                        },
+                                        {
+                                            icon: '📋',
+                                            label: 'Contract Year — Free Agency Eligible',
+                                            note: 'Entering the final year of his rookie deal. Self-described pressure: "every game feels like an audition." Nora detected this framing across 4 check-ins this month.',
+                                            impact: 'Performance Anxiety',
+                                            impactColor: 'text-red-400 bg-red-500/10 border-red-500/20',
+                                        },
+                                        {
+                                            icon: '👨‍👩‍👦',
+                                            label: 'Estranged Relationship — Father',
+                                            note: 'Kevin mentioned his father reached out for the first time in 3 years last week. He described it as "bad timing" and has not followed up. Unresolved tension flagged as background stressor.',
+                                            impact: 'Emotional Load',
+                                            impactColor: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+                                        },
+                                    ].map((item) => (
+                                        <div
+                                            key={item.label}
+                                            className="rounded-xl bg-zinc-800/40 border border-zinc-700/30 p-3 flex gap-3"
+                                        >
+                                            <div className="text-xl flex-shrink-0 mt-0.5">{item.icon}</div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-start justify-between gap-2 mb-1">
+                                                    <div className="text-xs font-semibold text-zinc-200 leading-snug">{item.label}</div>
+                                                    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-medium flex-shrink-0 ${item.impactColor}`}>
+                                                        {item.impact}
+                                                    </span>
+                                                </div>
+                                                <p className="text-[11px] text-zinc-500 leading-relaxed">{item.note}</p>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </motion.div>
 
@@ -1404,7 +1604,7 @@ const ClinicalEscalation: React.FC<{ onContinue: () => void }> = ({ onContinue }
                                 <div className="space-y-2.5">
                                     {[
                                         { step: 'Initiate immediate welfare check — contact K. Thompson directly', priority: 'Urgent', color: 'bg-red-500/15 text-red-400 border-red-500/25', clickable: true },
-                                        { step: 'Schedule same-day clinical session with Dr. Mitchell (team psychologist)', priority: 'High', color: 'bg-amber-500/15 text-amber-400 border-amber-500/25', clickable: false },
+                                        { step: 'Schedule same-day clinical session with Dr. Liz Carter (staff clinician)', priority: 'High', color: 'bg-amber-500/15 text-amber-400 border-amber-500/25', clickable: false },
                                         { step: 'Review medication compliance — Sertraline prescribed 8 weeks ago, verify adherence', priority: 'High', color: 'bg-amber-500/15 text-amber-400 border-amber-500/25', clickable: false },
                                         { step: 'Coordinate with athletic training on practice status — recommend hold pending evaluation', priority: 'Medium', color: 'bg-blue-500/15 text-blue-400 border-blue-500/25', clickable: false },
                                         { step: 'Notify head coach of availability status only (no clinical details per HIPAA)', priority: 'Medium', color: 'bg-blue-500/15 text-blue-400 border-blue-500/25', clickable: false },
@@ -1622,7 +1822,7 @@ const CallSimulation: React.FC<{
 // THE CLOSE — Act 4: Performance Showcase + The Kill Switch
 // ─────────────────────────────────────────────────────────
 
-const TheClose: React.FC = () => {
+const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
     const [phase, setPhase] = useState<'phone' | 'chat'>('phone');
     const [notifTapped, setNotifTapped] = useState(false);
     const [notifTapPos, setNotifTapPos] = useState<{ x: number; y: number } | null>(null);
@@ -1658,6 +1858,105 @@ const TheClose: React.FC = () => {
     const [ksRoundPhase, setKsRoundPhase] = useState<'playing' | 'result' | 'summary'>('playing');
     const ksTotalRounds = 3; // shorter for demo
     const closeScrollRef = useRef<HTMLDivElement>(null);
+    // ── Audio engine ──────────────────────────────────────────
+    const audioCtxRef = useRef<AudioContext | null>(null);
+    const [soundEnabled, setSoundEnabled] = useState(true);
+    const soundEnabledRef = useRef(true);
+    const [showSkillProfile, setShowSkillProfile] = useState(false);
+    const [skillProfileTab, setSkillProfileTab] = useState<'composure' | 'focus' | 'decision'>('composure');
+    useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+
+    const getAudioCtx = useCallback((): AudioContext | null => {
+        if (typeof window === 'undefined') return null;
+        try {
+            if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+                audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+            }
+            if (audioCtxRef.current.state === 'suspended') {
+                audioCtxRef.current.resume();
+            }
+            return audioCtxRef.current;
+        } catch { return null; }
+    }, []);
+
+    /** Crisp metronome tick — played on each pulse beat */
+    const playTick = useCallback((isReengage = false) => {
+        if (!soundEnabledRef.current) return;
+        const ctx = getAudioCtx();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        // Primary tone
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(isReengage ? 880 : 660, now);
+        osc.frequency.exponentialRampToValueAtTime(isReengage ? 660 : 440, now + 0.08);
+        gain.gain.setValueAtTime(0, now);
+        gain.gain.linearRampToValueAtTime(isReengage ? 0.4 : 0.25, now + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        osc.start(now);
+        osc.stop(now + 0.15);
+        // Click transient
+        const click = ctx.createOscillator();
+        const clickGain = ctx.createGain();
+        click.connect(clickGain);
+        clickGain.connect(ctx.destination);
+        click.type = 'triangle';
+        click.frequency.setValueAtTime(2200, now);
+        clickGain.gain.setValueAtTime(isReengage ? 0.3 : 0.18, now);
+        clickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
+        click.start(now);
+        click.stop(now + 0.03);
+    }, [getAudioCtx]);
+
+    /** Harsh disruption burst — dissonant, jarring, short */
+    const playDisruption = useCallback(() => {
+        if (!soundEnabledRef.current) return;
+        const ctx = getAudioCtx();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        // White noise burst
+        const bufferSize = ctx.sampleRate * 0.35;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        const noiseSource = ctx.createBufferSource();
+        noiseSource.buffer = buffer;
+        const noiseGain = ctx.createGain();
+        const noiseFilter = ctx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.setValueAtTime(1800, now);
+        noiseFilter.Q.setValueAtTime(0.5, now);
+        noiseSource.connect(noiseFilter);
+        noiseFilter.connect(noiseGain);
+        noiseGain.connect(ctx.destination);
+        noiseGain.gain.setValueAtTime(0.5, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        noiseSource.start(now);
+        noiseSource.stop(now + 0.35);
+        // Low dissonant tone
+        const tones = [120, 183, 247];
+        tones.forEach((freq, i) => {
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.connect(g); g.connect(ctx.destination);
+            o.type = 'sawtooth';
+            o.frequency.setValueAtTime(freq, now);
+            g.gain.setValueAtTime(0, now);
+            g.gain.linearRampToValueAtTime(0.15, now + 0.01 + i * 0.005);
+            g.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+            o.start(now);
+            o.stop(now + 0.42);
+        });
+    }, [getAudioCtx]);
+
+    // Cleanup AudioContext on unmount
+    useEffect(() => {
+        return () => { audioCtxRef.current?.close(); };
+    }, []);
+    // ─────────────────────────────────────────────────────────
 
     useEffect(() => {
         const t = setTimeout(() => setShowNotifCard(true), 1500);
@@ -1683,33 +1982,19 @@ const TheClose: React.FC = () => {
         setChatStep(step + 1);
 
         if (step === 0) {
-            addNoraMsg("Hey! 👋 Your coach assigned you The Kill Switch today. This is the single most important mental recovery exercise in your program — it trains how fast you bounce back after something goes wrong. Ready to jump in, or do you want me to walk you through the details first?");
-        } else if (step === 1 && choice === 'walk') {
-            setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'athlete', text: 'Walk me through it first.' }]);
-            setTimeout(() => {
-                addNoraMsg("The Kill Switch trains your brain to recover from any disruption — a bad play, a missed shot, a mental error — as fast as possible. It simulates real pressure and measures your recovery speed. Here's how it works:");
-            }, 300);
-        } else if (step === 2) {
-            setTimeout(() => {
-                addNoraMsg("Phase 1: LOCK IN — You'll engage a focus task. Get in rhythm and stay locked.");
-                setTimeout(() => {
-                    addNoraMsg("Phase 2: DISRUPTION — Something will break your focus. A flash, a provocative message, chaos. Just like a bad play in a game.");
-                    setTimeout(() => {
-                        addNoraMsg("Phase 3: KILL SWITCH — Re-engage as fast as possible. We measure exactly how long it takes you to recover. That's your Kill Switch time.");
-                        setTimeout(() => {
-                            addNoraMsg("Most athletes take 30-60 seconds to recover from a mistake. Elite athletes? Under 3 seconds. Ready to train yours?", 'drill-card');
-                        }, 1400);
-                    }, 1400);
-                }, 1400);
-            }, 300);
-        } else if (step === 3 && choice === 'ready') {
+            // One tight message: coach name + science + card
+            addNoraMsg(
+                `${coachName} assigned you The Kill Switch today. Research shows elite athletes recover from disruption in under 3 seconds — the average is 30 to 60. This drill measures and trains exactly that. Ready for it?`,
+                'drill-card'
+            );
+        } else if (step === 1 && choice === 'ready') {
             setChatMessages((prev) => [...prev, { id: `close-${Date.now()}`, role: 'athlete', text: "Let's do it. I'm ready." }]);
             setTimeout(() => {
-                addNoraMsg("Starting The Kill Switch now. Lock in and stay focused...");
-                setTimeout(() => setDrillActive(true), 1500);
+                addNoraMsg("Starting now. Lock in.");
+                setTimeout(() => setDrillActive(true), 1200);
             }, 300);
         }
-    }, [chatStep, addNoraMsg]);
+    }, [chatStep, addNoraMsg, coachName]);
 
     useEffect(() => {
         if (phase === 'chat' && chatStep === 0) {
@@ -1735,17 +2020,20 @@ const TheClose: React.FC = () => {
             ksExpectedTapRef.current = Date.now();
             setKsPulseActive(true);
             setKsPulseScale(1.3);
+            playTick(false);
             setTimeout(() => {
                 setKsPulseScale(1);
                 setKsPulseActive(false);
             }, 600);
         }, 1200);
-    }, []);
+    }, [playTick]);
 
     // Trigger the disruption
     const triggerKsDisruption = useCallback(() => {
         setResetPhase('disruption');
         if (ksPulseTimerRef.current) clearInterval(ksPulseTimerRef.current);
+        // Jarring sound burst
+        playDisruption();
         // Red flash
         setKsFlashActive(true);
         setTimeout(() => setKsFlashActive(false), 150);
@@ -1754,16 +2042,27 @@ const TheClose: React.FC = () => {
         // Provocative message
         setKsProvocMessage(ksProvocMessages[Math.floor(Math.random() * ksProvocMessages.length)]);
 
-        // After disruption → kill switch phase
+        // After disruption → kill switch phase (re-engage ticks are a different pitch)
         setTimeout(() => {
             setResetPhase('killSwitch');
             ksDisruptionEndRef.current = Date.now();
             ksRecoveryStartedRef.current = false;
             setKsTapAccuracy([]);
-            // Restart pulse
-            startKsPulse();
+            // Restart pulse with re-engage sound cue
+            if (ksPulseTimerRef.current) clearInterval(ksPulseTimerRef.current);
+            setKsTapAccuracy([]);
+            ksPulseTimerRef.current = setInterval(() => {
+                ksExpectedTapRef.current = Date.now();
+                setKsPulseActive(true);
+                setKsPulseScale(1.3);
+                playTick(true); // higher-pitched tick = re-engage cue
+                setTimeout(() => {
+                    setKsPulseScale(1);
+                    setKsPulseActive(false);
+                }, 600);
+            }, 1200);
         }, 2000);
-    }, [startKsPulse]);
+    }, [playDisruption, playTick]);
 
     // Start a round (lock in → disruption → kill switch)
     const startKsRound = useCallback(() => {
@@ -1863,10 +2162,6 @@ const TheClose: React.FC = () => {
 
     const closeResponses: Record<number, Array<{ label: string; value: string; sentiment: ResponseSentiment }>> = {
         1: [
-            { label: 'Walk me through it first', value: 'walk', sentiment: 'neutral' },
-            { label: "I'm ready, let's go", value: 'ready-now', sentiment: 'positive' },
-        ],
-        3: [
             { label: "Let's do it. I'm ready.", value: 'ready', sentiment: 'positive' },
         ],
     };
@@ -2028,20 +2323,87 @@ const TheClose: React.FC = () => {
                                                             </div>
 
                                                             {/* Drill card inline */}
-                                                            {m.type === 'drill-card' && chatStep === 3 && !drillActive && resetPhase === 'idle' && (
+                                                            {m.type === 'drill-card' && chatStep === 1 && !drillActive && resetPhase === 'idle' && (
                                                                 <motion.div
                                                                     initial={{ opacity: 0, y: 10 }}
                                                                     animate={{ opacity: 1, y: 0 }}
                                                                     transition={{ delay: 0.5 }}
-                                                                    className="mt-2 rounded-xl border border-red-500/20 p-3 max-w-[85%]"
-                                                                    style={{ background: 'rgba(239,68,68,0.06)' }}
+                                                                    className="mt-3 rounded-2xl border border-red-500/25 p-4 max-w-[90%] space-y-4"
+                                                                    style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.08) 0%, rgba(239,68,68,0.03) 100%)' }}
                                                                 >
-                                                                    <div className="flex items-center gap-2 mb-1">
-                                                                        <Zap className="w-4 h-4 text-red-400" />
-                                                                        <span className="text-xs font-bold text-white">The Kill Switch</span>
+                                                                    {/* Header + Pillar badge */}
+                                                                    <div className="flex items-start justify-between gap-2">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="w-8 h-8 rounded-xl bg-red-500/15 flex items-center justify-center">
+                                                                                <Zap className="w-4 h-4 text-red-400" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <div className="text-sm font-bold text-white">The Kill Switch</div>
+                                                                                <div className="text-[10px] text-red-400/70 uppercase tracking-wider font-medium">Composure Sim</div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-400 font-medium flex-shrink-0">Evidence: Adjacent</span>
                                                                     </div>
-                                                                    <div className="text-[10px] text-zinc-500">Lock In → Disruption → Kill Switch</div>
+
+                                                                    {/* Target skills */}
+                                                                    <div className="flex flex-wrap gap-1.5">
+                                                                        {['Error Recovery Speed', 'Attentional Shifting', 'Pressure Stability'].map((skill) => (
+                                                                            <span key={skill} className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-300">{skill}</span>
+                                                                        ))}
+                                                                    </div>
+
+                                                                    {/* Why it matters */}
+                                                                    <p className="text-xs text-zinc-400 leading-relaxed">
+                                                                        When something goes wrong — a bad play, a missed assignment, blown coverage — your brain enters a <span className="text-red-400 font-medium">disruption loop</span>. The Kill Switch trains you to exit that loop and re-lock into the moment. It measures your exact recovery time every round.
+                                                                    </p>
+
+                                                                    {/* 3 Phases */}
+                                                                    <div className="space-y-1.5">
+                                                                        {[
+                                                                            { phase: '01', label: 'Lock In', desc: 'Sustain focused engagement on the task', color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20' },
+                                                                            { phase: '02', label: 'Disruption', desc: 'Evaluative pressure hits — a provocative flash or message', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
+                                                                            { phase: '03', label: 'Kill Switch', desc: 'Re-engage as fast as possible — this is your measured recovery time', color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
+                                                                        ].map((p) => (
+                                                                            <div key={p.phase} className={`flex items-start gap-3 rounded-xl border px-3 py-2 ${p.bg}`}>
+                                                                                <span className={`text-[10px] font-black ${p.color} mt-0.5 flex-shrink-0`}>{p.phase}</span>
+                                                                                <div>
+                                                                                    <div className={`text-xs font-bold ${p.color}`}>{p.label}</div>
+                                                                                    <div className="text-[11px] text-zinc-500 leading-snug">{p.desc}</div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+
+                                                                    {/* Benchmark + Science */}
+                                                                    <div className="rounded-xl bg-zinc-900/60 border border-zinc-700/30 px-3 py-2 flex items-center gap-3">
+                                                                        <div className="text-center flex-shrink-0">
+                                                                            <div className="text-lg font-black text-red-400">&lt;3s</div>
+                                                                            <div className="text-[9px] text-zinc-500 uppercase">Elite</div>
+                                                                        </div>
+                                                                        <div className="w-px h-8 bg-zinc-700 flex-shrink-0" />
+                                                                        <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                                                            Attentional Control Theory (Eysenck et al., 2007) shows the recovery gap is trainable and can shorten by <span className="text-white font-medium">40–60%</span> with structured reps. Average athletes: 30–60s. Elite: under 3s.
+                                                                        </p>
+                                                                    </div>
+
+                                                                    {/* Tier ladder */}
+                                                                    <div>
+                                                                        <div className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider mb-1.5">Progression</div>
+                                                                        <div className="grid grid-cols-4 gap-1">
+                                                                            {[
+                                                                                { label: 'Foundation', color: 'text-zinc-400 bg-zinc-800/60 border-zinc-700/40' },
+                                                                                { label: 'Sharpening', color: 'text-amber-400 bg-amber-500/8 border-amber-500/20' },
+                                                                                { label: 'Pressure', color: 'text-orange-400 bg-orange-500/8 border-orange-500/20' },
+                                                                                { label: 'Elite', color: 'text-red-400 bg-red-500/10 border-red-500/25' },
+                                                                            ].map((t) => (
+                                                                                <div key={t.label} className={`rounded-lg border px-1.5 py-1 text-center ${t.color}`}>
+                                                                                    <div className="text-[9px] font-bold leading-none">{t.label}</div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
                                                                 </motion.div>
+
                                                             )}
 
                                                             {/* Progress card inline */}
@@ -2050,58 +2412,118 @@ const TheClose: React.FC = () => {
                                                                     initial={{ opacity: 0, y: 10 }}
                                                                     animate={{ opacity: 1, y: 0 }}
                                                                     transition={{ delay: 0.5 }}
-                                                                    className="mt-2 rounded-xl border border-green-500/20 p-4 space-y-3 max-w-[85%]"
+                                                                    className="mt-2 rounded-xl border border-green-500/20 p-4 space-y-3 max-w-[90%]"
                                                                     style={{ background: 'rgba(34,197,94,0.04)' }}
                                                                 >
-                                                                    <div className="flex items-center gap-2 mb-2">
-                                                                        <Star className="w-4 h-4 text-green-400" />
-                                                                        <span className="text-xs font-bold text-white">90-Day Progress Report</span>
+                                                                    {/* Header */}
+                                                                    <div className="flex items-center justify-between mb-1">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Star className="w-4 h-4 text-green-400" />
+                                                                            <span className="text-xs font-bold text-white">90-Day Profile</span>
+                                                                        </div>
+                                                                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 font-medium">Tier: Elite</span>
                                                                     </div>
-                                                                    <div className="grid grid-cols-2 gap-2">
-                                                                        {[
-                                                                            { label: 'Mental Score', value: '42 → 82', color: 'text-green-400', change: '+95%' },
-                                                                            { label: 'Recovery Time', value: '45s → 2.8s', color: 'text-green-400', change: '-94%' },
-                                                                            { label: 'Check-in Streak', value: '87 days', color: 'text-[#E0FE10]', change: '🔥' },
-                                                                            { label: 'Drills Completed', value: '156', color: 'text-purple-400', change: '' },
-                                                                        ].map((s) => (
-                                                                            <div key={s.label} className="rounded-lg bg-zinc-800/50 border border-zinc-700/20 p-2 text-center">
-                                                                                <div className={`text-sm font-bold ${s.color}`}>{s.value}</div>
-                                                                                <div className="text-[8px] text-zinc-500 uppercase">{s.label}</div>
-                                                                                {s.change && <div className={`text-[8px] ${s.color}`}>{s.change}</div>}
-                                                                            </div>
-                                                                        ))}
+
+                                                                    {/* Pillar Scores */}
+                                                                    <div>
+                                                                        <div className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider mb-1.5">Pillars</div>
+                                                                        <div className="grid grid-cols-3 gap-1.5">
+                                                                            {[
+                                                                                { label: 'Focus', start: 61, end: 88, color: 'text-blue-400', bar: 'bg-blue-400' },
+                                                                                { label: 'Composure', start: 38, end: 91, color: 'text-green-400', bar: 'bg-green-400' },
+                                                                                { label: 'Decision', start: 54, end: 79, color: 'text-purple-400', bar: 'bg-purple-400' },
+                                                                            ].map((p) => (
+                                                                                <div key={p.label} className="rounded-lg bg-zinc-800/50 border border-zinc-700/20 p-2">
+                                                                                    <div className={`text-[10px] font-bold ${p.color}`}>{p.label}</div>
+                                                                                    <div className="text-[11px] font-black text-white">{p.start} <span className={p.color}>→ {p.end}</span></div>
+                                                                                    <div className="mt-1 h-1 rounded-full bg-zinc-700">
+                                                                                        <motion.div
+                                                                                            initial={{ width: `${p.start}%` }}
+                                                                                            animate={{ width: `${p.end}%` }}
+                                                                                            transition={{ delay: 0.8, duration: 1 }}
+                                                                                            className={`h-full rounded-full ${p.bar}`}
+                                                                                        />
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
                                                                     </div>
-                                                                    <div className="pt-2">
-                                                                        <div className="text-[9px] text-zinc-500 uppercase mb-1">Mental Performance Trend</div>
-                                                                        <div className="flex items-end gap-[3px] h-12">
-                                                                            {[42, 45, 48, 44, 52, 55, 60, 58, 65, 70, 74, 82].map((v, i) => (
+
+                                                                    {/* Kill Switch skills */}
+                                                                    <div>
+                                                                        <div className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider mb-1.5">Kill Switch Target Skills</div>
+                                                                        <div className="space-y-1">
+                                                                            {[
+                                                                                { skill: 'Error Recovery Speed', before: 'Avg 45s', after: 'Avg 2.8s', delta: '↓ 94%', color: 'text-green-400' },
+                                                                                { skill: 'Attentional Shifting', before: '42', after: '87', delta: '+107%', color: 'text-blue-400' },
+                                                                                { skill: 'Pressure Stability', before: '35', after: '82', delta: '+134%', color: 'text-purple-400' },
+                                                                            ].map((s) => (
+                                                                                <div key={s.skill} className="flex items-center justify-between rounded-lg bg-zinc-800/40 border border-zinc-700/20 px-2.5 py-1.5">
+                                                                                    <div>
+                                                                                        <div className="text-[10px] font-semibold text-zinc-300">{s.skill}</div>
+                                                                                        <div className="text-[9px] text-zinc-500">{s.before} → {s.after}</div>
+                                                                                    </div>
+                                                                                    <span className={`text-[10px] font-black ${s.color}`}>{s.delta}</span>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Recovery trend chart */}
+                                                                    <div>
+                                                                        <div className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider mb-1">Composure Score Trend</div>
+                                                                        <div className="flex items-end gap-[3px] h-10">
+                                                                            {[38, 41, 40, 46, 52, 57, 60, 63, 71, 79, 85, 91].map((v, i) => (
                                                                                 <motion.div
                                                                                     key={i}
                                                                                     initial={{ height: 0 }}
                                                                                     animate={{ height: `${(v / 100) * 100}%` }}
                                                                                     transition={{ delay: i * 0.06, duration: 0.4 }}
-                                                                                    className={`flex-1 rounded-t ${i < 4 ? 'bg-zinc-600' : i < 8 ? 'bg-amber-400/70' : 'bg-green-400'}`}
+                                                                                    className={`flex-1 rounded-t ${i < 3 ? 'bg-zinc-600' : i < 6 ? 'bg-amber-400/70' : i < 9 ? 'bg-orange-400/80' : 'bg-green-400'}`}
                                                                                 />
                                                                             ))}
                                                                         </div>
-                                                                    </div>
-                                                                    <div className="grid grid-cols-3 gap-2 pt-1">
-                                                                        {[
-                                                                            { month: 'Month 1', status: 'Foundation', dot: 'bg-zinc-500' },
-                                                                            { month: 'Month 2', status: 'Building', dot: 'bg-amber-400' },
-                                                                            { month: 'Month 3', status: 'Game Ready', dot: 'bg-green-400' },
-                                                                        ].map((m2) => (
-                                                                            <div key={m2.month} className="text-center">
-                                                                                <div className="flex items-center justify-center gap-1">
-                                                                                    <div className={`w-1.5 h-1.5 rounded-full ${m2.dot}`} />
-                                                                                    <span className="text-[8px] text-zinc-500">{m2.month}</span>
+
+                                                                        {/* Tier labels */}
+                                                                        <div className="grid grid-cols-4 gap-1 mt-2">
+                                                                            {[
+                                                                                { label: 'Foundation', dot: 'bg-zinc-500' },
+                                                                                { label: 'Sharpening', dot: 'bg-amber-400' },
+                                                                                { label: 'Pressure', dot: 'bg-orange-400' },
+                                                                                { label: 'Elite', dot: 'bg-green-400' },
+                                                                            ].map((t) => (
+                                                                                <div key={t.label} className="text-center">
+                                                                                    <div className="flex items-center justify-center gap-0.5 mb-0.5">
+                                                                                        <div className={`w-1.5 h-1.5 rounded-full ${t.dot}`} />
+                                                                                        <span className="text-[7px] text-zinc-500">{t.label}</span>
+                                                                                    </div>
                                                                                 </div>
-                                                                                <div className="text-[9px] text-zinc-300 font-medium">{m2.status}</div>
-                                                                            </div>
-                                                                        ))}
+                                                                            ))}
+                                                                        </div>
                                                                     </div>
+
+                                                                    {/* Check-in streak */}
+                                                                    <div className="flex items-center justify-between rounded-lg bg-zinc-800/40 border border-zinc-700/20 px-2.5 py-1.5">
+                                                                        <div className="text-[10px] text-zinc-400">Check-in Streak</div>
+                                                                        <div className="text-[10px] font-bold text-[#E0FE10]">87 days 🔥</div>
+                                                                    </div>
+
+                                                                    {/* Skill profile CTA */}
+                                                                    <button
+                                                                        onClick={() => setShowSkillProfile(true)}
+                                                                        className="w-full flex items-center justify-between rounded-lg bg-zinc-800/60 border border-zinc-700/30 hover:border-[#E0FE10]/30 hover:bg-zinc-800 px-2.5 py-2 transition-all group"
+                                                                    >
+                                                                        <div className="flex items-center gap-2">
+                                                                            <div className="w-5 h-5 rounded-md bg-[#E0FE10]/10 flex items-center justify-center">
+                                                                                <Brain className="w-3 h-3 text-[#E0FE10]" />
+                                                                            </div>
+                                                                            <span className="text-[10px] font-semibold text-zinc-300 group-hover:text-white transition-colors">View My Skill Profile</span>
+                                                                        </div>
+                                                                        <ChevronRight className="w-3 h-3 text-zinc-500 group-hover:text-[#E0FE10] transition-colors" />
+                                                                    </button>
                                                                 </motion.div>
                                                             )}
+
                                                         </div>
                                                     )}
                                                 </div>
@@ -2115,6 +2537,238 @@ const TheClose: React.FC = () => {
                                             </motion.div>
                                         ))}
                                     </AnimatePresence>
+
+                                    {/* ── Skill Profile Modal (portal) ── */}
+                                    {typeof document !== 'undefined' && ReactDOM.createPortal(
+                                        <AnimatePresence>
+                                            {showSkillProfile && (() => {
+                                                const pillars = [
+                                                    {
+                                                        id: 'composure' as const,
+                                                        label: 'Composure', score: 91,
+                                                        accent: '#22c55e', accentDim: 'rgba(34,197,94,0.12)',
+                                                        skills: [
+                                                            { name: 'Error Recovery Speed', score: 91, prev: 34, sim: 'Kill Switch', desc: 'How fast you bounce back after a mistake' },
+                                                            { name: 'Emotional Interference Control', score: 78, prev: 41, sim: 'Kill Switch', desc: 'Prevent emotion from degrading execution' },
+                                                            { name: 'Pressure Stability', score: 82, prev: 35, sim: 'Kill Switch', desc: 'Maintain quality under evaluative pressure' },
+                                                        ],
+                                                        modifierContext: [
+                                                            { label: 'Readiness', score: 82, color: '#22d3ee', impact: 'Higher readiness = faster error recovery and better composure under fatigue' },
+                                                            { label: 'Consistency', score: 88, color: '#E0FE10', impact: 'Low variance in composure scores across repeated sessions' },
+                                                            { label: 'Fatigability', score: 71, color: '#f59e0b', impact: 'Composure degrades 29% in late-session reps — recovery slows' },
+                                                            { label: 'Pressure Sensitivity', score: 78, color: '#fb923c', impact: 'Composure holds under evaluative pressure but dips under compounding errors' },
+                                                        ],
+                                                    },
+                                                    {
+                                                        id: 'focus' as const,
+                                                        label: 'Focus', score: 88,
+                                                        accent: '#60a5fa', accentDim: 'rgba(96,165,250,0.1)',
+                                                        skills: [
+                                                            { name: 'Sustained Attention', score: 85, prev: 58, sim: 'Endurance Lock', desc: 'Maintain focus over extended time-on-task' },
+                                                            { name: 'Selective Attention', score: 81, prev: 50, sim: 'Noise Gate', desc: 'Filter distractors and hold the right cue' },
+                                                            { name: 'Attentional Shifting', score: 87, prev: 42, sim: 'Kill Switch', desc: 'Rapidly redirect after disruption' },
+                                                        ],
+                                                        modifierContext: [
+                                                            { label: 'Readiness', score: 82, color: '#22d3ee', impact: 'Focus sharpness tracks directly with daily readiness check-in' },
+                                                            { label: 'Consistency', score: 88, color: '#E0FE10', impact: 'Attention scores stay tight across sessions — low drift' },
+                                                            { label: 'Fatigability', score: 71, color: '#f59e0b', impact: 'Sustained attention drops 29% after 3+ min on-task' },
+                                                            { label: 'Pressure Sensitivity', score: 78, color: '#fb923c', impact: 'Selective attention narrows under high-stakes — distractor cost rises' },
+                                                        ],
+                                                    },
+                                                    {
+                                                        id: 'decision' as const,
+                                                        label: 'Decision', score: 79,
+                                                        accent: '#c084fc', accentDim: 'rgba(192,132,252,0.1)',
+                                                        skills: [
+                                                            { name: 'Response Inhibition', score: 76, prev: 54, sim: 'Brake Point', desc: 'Cancel bad actions before error cascades' },
+                                                            { name: 'Working Memory Updating', score: 74, prev: 55, sim: 'Sequence Shift', desc: 'Update rules and priorities mid-execution' },
+                                                            { name: 'Cue Discrimination', score: 80, prev: 52, sim: 'Signal Window', desc: 'Read the real signal from decoys in time' },
+                                                        ],
+                                                        modifierContext: [
+                                                            { label: 'Readiness', score: 82, color: '#22d3ee', impact: 'Low readiness = more impulsive errors and slower cue reads' },
+                                                            { label: 'Consistency', score: 88, color: '#E0FE10', impact: 'Decision accuracy varies the most across sessions of all pillars' },
+                                                            { label: 'Fatigability', score: 71, color: '#f59e0b', impact: 'Inhibition degrades fastest under fatigue — false starts increase' },
+                                                            { label: 'Pressure Sensitivity', score: 78, color: '#fb923c', impact: 'Decision speed holds but accuracy drops under evaluative threat' },
+                                                        ],
+                                                    },
+                                                ];
+                                                const active = pillars.find(p => p.id === skillProfileTab)!;
+                                                return (
+                                                    <>
+                                                        {/* Backdrop */}
+                                                        <motion.div
+                                                            key="sp-backdrop"
+                                                            initial={{ opacity: 0 }}
+                                                            animate={{ opacity: 1 }}
+                                                            exit={{ opacity: 0 }}
+                                                            transition={{ duration: 0.25 }}
+                                                            className="fixed inset-0 z-[9999]"
+                                                            style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+                                                            onClick={() => setShowSkillProfile(false)}
+                                                        />
+                                                        {/* Modal */}
+                                                        <motion.div
+                                                            key="sp-modal"
+                                                            initial={{ opacity: 0, scale: 0.92, y: 24 }}
+                                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                                            exit={{ opacity: 0, scale: 0.95, y: 16 }}
+                                                            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                                                            className="fixed inset-x-4 z-[9999] flex flex-col overflow-hidden rounded-2xl border border-zinc-700/50"
+                                                            style={{
+                                                                top: '3%',
+                                                                bottom: '3%',
+                                                                maxWidth: '440px',
+                                                                margin: '0 auto',
+                                                                background: 'rgba(14,14,16,0.97)',
+                                                                boxShadow: '0 25px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04) inset, 0 1px 0 rgba(255,255,255,0.06) inset',
+                                                            }}
+                                                        >
+                                                            {/* Gradient glow */}
+                                                            <div className="absolute top-0 inset-x-0 h-32 pointer-events-none rounded-t-2xl" style={{ background: `radial-gradient(ellipse at 50% 0%, ${active.accentDim} 0%, transparent 70%)` }} />
+
+                                                            {/* Header */}
+                                                            <div className="relative flex-shrink-0 px-5 pt-5 pb-3">
+                                                                {/* Drag handle */}
+                                                                <div className="w-8 h-1 rounded-full bg-zinc-700 mx-auto mb-4" />
+                                                                <div className="flex items-start justify-between">
+                                                                    <div>
+                                                                        <div className="text-[10px] uppercase tracking-widest font-bold mb-0.5" style={{ color: active.accent }}>Pulse Check</div>
+                                                                        <div className="text-lg font-black text-white leading-tight">Skill Profile</div>
+                                                                        <div className="text-[10px] text-zinc-500 mt-0.5">Tremaine Grant</div>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => setShowSkillProfile(false)}
+                                                                        className="w-7 h-7 rounded-full bg-zinc-800/90 border border-zinc-700/60 flex items-center justify-center hover:bg-zinc-600 transition-colors"
+                                                                    >
+                                                                        <X className="w-3 h-3 text-zinc-400" />
+                                                                    </button>
+                                                                </div>
+
+                                                                {/* Pillar tabs */}
+                                                                <div className="flex gap-1.5 mt-4">
+                                                                    {pillars.map((p) => {
+                                                                        const isActive = skillProfileTab === p.id;
+                                                                        return (
+                                                                            <button
+                                                                                key={p.id}
+                                                                                onClick={() => setSkillProfileTab(p.id)}
+                                                                                className="flex-1 rounded-xl py-2 px-2 border transition-all duration-200 text-center relative overflow-hidden"
+                                                                                style={{
+                                                                                    background: isActive ? p.accentDim : 'rgba(39,39,42,0.3)',
+                                                                                    borderColor: isActive ? p.accent + '50' : 'rgba(63,63,70,0.3)',
+                                                                                }}
+                                                                            >
+                                                                                <div className="text-[8px] uppercase tracking-widest font-bold" style={{ color: isActive ? p.accent : '#52525b' }}>{p.label}</div>
+                                                                                <div className="text-lg font-black leading-tight mt-0.5" style={{ color: isActive ? p.accent : '#71717a' }}>{p.score}</div>
+                                                                                {isActive && (
+                                                                                    <motion.div
+                                                                                        layoutId="pillar-underline"
+                                                                                        className="absolute bottom-0 left-2 right-2 h-[2px] rounded-full"
+                                                                                        style={{ background: p.accent }}
+                                                                                        transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                                                                                    />
+                                                                                )}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+
+
+
+                                                            {/* Skills — scrollable */}
+                                                            <div className="flex-1 overflow-y-auto px-5 pb-5" style={{ scrollbarWidth: 'none' }}>
+                                                                <AnimatePresence mode="wait">
+                                                                    <motion.div
+                                                                        key={skillProfileTab}
+                                                                        initial={{ opacity: 0, x: 14 }}
+                                                                        animate={{ opacity: 1, x: 0 }}
+                                                                        exit={{ opacity: 0, x: -14 }}
+                                                                        transition={{ duration: 0.15 }}
+                                                                        className="space-y-2.5"
+                                                                    >
+                                                                        {active.skills.map((skill, si) => (
+                                                                            <motion.div
+                                                                                key={skill.name}
+                                                                                initial={{ opacity: 0, y: 6 }}
+                                                                                animate={{ opacity: 1, y: 0 }}
+                                                                                transition={{ delay: si * 0.05 }}
+                                                                                className="rounded-xl border p-3.5"
+                                                                                style={{ borderColor: active.accent + '18', background: 'rgba(24,24,27,0.7)' }}
+                                                                            >
+                                                                                <div className="flex items-start justify-between gap-3 mb-2.5">
+                                                                                    <div className="flex-1 min-w-0">
+                                                                                        <div className="text-[13px] font-bold text-white leading-snug">{skill.name}</div>
+                                                                                        <div className="text-[9px] text-zinc-500 mt-0.5 leading-snug">{skill.desc}</div>
+                                                                                    </div>
+                                                                                    <div className="text-right flex-shrink-0">
+                                                                                        <div className="text-2xl font-black leading-none" style={{ color: active.accent }}>{skill.score}</div>
+                                                                                        <div className="text-[8px] font-bold mt-0.5" style={{ color: active.accent }}>+{skill.score - skill.prev}</div>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="relative h-1.5 rounded-full bg-zinc-800/80 overflow-hidden mb-2">
+                                                                                    <div className="absolute top-0 bottom-0 rounded-full opacity-25" style={{ width: `${skill.prev}%`, background: active.accent }} />
+                                                                                    <motion.div
+                                                                                        initial={{ width: `${skill.prev}%` }}
+                                                                                        animate={{ width: `${skill.score}%` }}
+                                                                                        transition={{ delay: 0.2 + si * 0.08, duration: 0.9, ease: 'easeOut' }}
+                                                                                        className="absolute top-0 bottom-0 rounded-full"
+                                                                                        style={{ background: `linear-gradient(90deg, ${active.accent}88, ${active.accent})` }}
+                                                                                    />
+                                                                                </div>
+                                                                                <div className="flex items-center justify-between">
+                                                                                    <div className="flex items-center gap-1">
+                                                                                        <Zap className="w-2.5 h-2.5" style={{ color: active.accent + '99' }} />
+                                                                                        <span className="text-[8px] font-medium text-zinc-500">{skill.sim}</span>
+                                                                                    </div>
+                                                                                    <span className="text-[8px] text-zinc-600">{skill.prev} → {skill.score}</span>
+                                                                                </div>
+                                                                            </motion.div>
+                                                                        ))}
+
+                                                                        {/* Cross-cutting Modifiers — shown on every tab */}
+                                                                        <div className="pt-2">
+                                                                            <div className="text-[8px] text-zinc-500 uppercase font-bold tracking-widest mb-2">
+                                                                                How modifiers affect {active.label}
+                                                                            </div>
+                                                                            <div className="space-y-1.5">
+                                                                                {active.modifierContext.map((mod: { label: string; score: number; color: string; impact: string }) => (
+                                                                                    <div key={mod.label} className="rounded-lg border border-zinc-800/60 px-3 py-2" style={{ background: 'rgba(24,24,27,0.5)' }}>
+                                                                                        <div className="flex items-center justify-between mb-1">
+                                                                                            <div className="text-[8px] font-bold uppercase tracking-wide" style={{ color: mod.color }}>{mod.label}</div>
+                                                                                            <div className="text-xs font-black leading-none" style={{ color: mod.color }}>{mod.score}</div>
+                                                                                        </div>
+                                                                                        <div className="text-[8px] text-zinc-500 leading-snug mb-1.5">{mod.impact}</div>
+                                                                                        <div className="h-0.5 rounded-full bg-zinc-800">
+                                                                                            <motion.div
+                                                                                                initial={{ width: 0 }}
+                                                                                                animate={{ width: `${mod.score}%` }}
+                                                                                                transition={{ delay: 0.6, duration: 0.8 }}
+                                                                                                className="h-full rounded-full"
+                                                                                                style={{ background: mod.color }}
+                                                                                            />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Evidence */}
+                                                                        <div className="pt-2 pb-1">
+                                                                            <p className="text-[8px] text-zinc-600 text-center leading-relaxed">
+                                                                                <span className="text-zinc-500">Adjacent Evidence</span> — ACT (Eysenck 2007) &amp; SIT (Meichenbaum 1985)
+                                                                            </p>
+                                                                        </div>
+                                                                    </motion.div>
+                                                                </AnimatePresence>
+                                                            </div>
+                                                        </motion.div>
+                                                    </>
+                                                );
+                                            })()}
+                                        </AnimatePresence>,
+                                        document.body
+                                    )}
 
                                     {/* Inline Kill Switch Drill — Full Interactive Game */}
                                     {drillActive && !gameExpanded && (
@@ -2167,7 +2821,19 @@ const TheClose: React.FC = () => {
                                                                     resetPhase === 'done' ? 'Complete' :
                                                                         `Round ${ksCurrentRound}`}
                                                     </span>
+                                                    {/* Sound toggle */}
+                                                    <button
+                                                        onClick={() => setSoundEnabled(v => !v)}
+                                                        className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all group ${soundEnabled ? 'bg-zinc-800/60 border-zinc-700/40 hover:bg-zinc-700/60' : 'bg-red-500/10 border-red-500/30'}`}
+                                                        title={soundEnabled ? 'Mute sounds' : 'Unmute sounds'}
+                                                    >
+                                                        {soundEnabled
+                                                            ? <Volume2 className="w-3.5 h-3.5 text-zinc-400 group-hover:text-white transition-colors" />
+                                                            : <VolumeX className="w-3.5 h-3.5 text-red-400" />
+                                                        }
+                                                    </button>
                                                     {/* Expand to fullscreen */}
+
                                                     <button
                                                         onClick={() => setGameExpanded(true)}
                                                         className="w-7 h-7 rounded-lg bg-zinc-800/60 border border-zinc-700/40 flex items-center justify-center hover:bg-zinc-700/60 hover:border-zinc-600/60 transition-all group"
@@ -2685,6 +3351,7 @@ const PulseCheckDemo: React.FC = () => {
     const [showNotification, setShowNotification] = useState(false);
     const [introTapped, setIntroTapped] = useState(false);
     const [tapPosition, setTapPosition] = useState<{ x: number; y: number } | null>(null);
+    const [selectedStaff, setSelectedStaff] = useState('Coach Mayo (Head Coach)');
     const scrollerRef = useRef<HTMLDivElement>(null);
 
     // Voice state
@@ -2889,6 +3556,18 @@ const PulseCheckDemo: React.FC = () => {
 
             // Find next Nora message(s)
             let nextIdx = scriptIndex;
+
+            // ── Staff notification step override ──────────────
+            // scriptIndex 8 = staff-selection step. Personalize Nora's reply
+            // based on which staff member (or opt-out) the athlete chose.
+            const isStaffStep = nextIdx === 8;
+            const didOptOut = userText === "Don't notify anyone";
+
+            // Capture staff selection for Act 2 sidebar
+            if (isStaffStep && !didOptOut) {
+                setSelectedStaff(userText);
+            }
+
             const processNext = async () => {
                 if (nextIdx >= DEMO_SCRIPT.length) return;
                 const nextScript = DEMO_SCRIPT[nextIdx];
@@ -2904,14 +3583,23 @@ const PulseCheckDemo: React.FC = () => {
                 if (nextScript.role === 'nora') {
                     setIsTyping(true);
 
+                    // Override content for the staff notification confirmation step
+                    const overrideContent = isStaffStep
+                        ? didOptOut
+                            ? "Totally understood — your privacy comes first. Let's keep working through this together. I've got a few more tools that can help you reset before game time."
+                            : `Done. I've sent a secure briefing to ${userText.split(' (')[0]} with your physical baseline data and today's conversation context. They'll have the full picture before your 10 AM meeting.`
+                        : undefined;
+
+                    const contentToPlay = overrideContent ?? nextScript.content;
+
                     // Preload audio WHILE typing indicator shows
-                    const playFn = await preloadAudio(nextScript.content, nextScript.ttsSpeed);
+                    const playFn = await preloadAudio(contentToPlay, nextScript.ttsSpeed);
 
                     // Now reveal message and play audio simultaneously
                     setIsTyping(false);
                     const noraMsg: ChatMsg = {
                         id: `nora-${Date.now()}-${nextIdx}`,
-                        content: nextScript.content,
+                        content: contentToPlay,
                         isFromUser: false,
                         timestamp: Date.now(),
                     };
@@ -3037,7 +3725,7 @@ const PulseCheckDemo: React.FC = () => {
                                         ? 'Athlete Experience'
                                         : currentAct === 'act2'
                                             ? 'Coach Dashboard'
-                                            : 'The Close'}
+                                            : ''}
                                 </p>
                             </div>
                         </div>
@@ -3480,7 +4168,19 @@ const PulseCheckDemo: React.FC = () => {
                                 exit={{ opacity: 0, x: -100 }}
                                 className="h-full overflow-y-auto"
                             >
-                                <CoachDashboard onContinue={() => setCurrentAct('act3')} />
+                                <CoachDashboard
+                                    onContinue={() => setCurrentAct('act3')}
+                                    notifiedStaff={(() => {
+                                        const staffMap: Record<string, { name: string; initials: string; role: string }> = {
+                                            'Coach Mayo (Head Coach)': { name: 'Coach Mayo', initials: 'JM', role: 'Head Coach' },
+                                            'Coach Van Pelt (Offensive Coordinator)': { name: 'Coach Van Pelt', initials: 'BV', role: 'Offensive Coordinator' },
+                                            'Coach Covington (Defensive Coordinator)': { name: 'Coach Covington', initials: 'DC', role: 'Defensive Coordinator' },
+                                            'Jim Whalen (Head Athletic Trainer)': { name: 'Jim Whalen', initials: 'JW', role: 'Head Athletic Trainer' },
+                                            'Dr. Liz Carter (Staff Clinician)': { name: 'Dr. Liz Carter', initials: 'LC', role: 'Staff Clinician' },
+                                        };
+                                        return staffMap[selectedStaff] ?? { name: 'Coach Mayo', initials: 'JM', role: 'Head Coach' };
+                                    })()}
+                                />
                             </motion.div>
                         )}
 
@@ -3502,7 +4202,7 @@ const PulseCheckDemo: React.FC = () => {
                                 animate={{ opacity: 1, x: 0 }}
                                 className="h-full overflow-y-auto"
                             >
-                                <TheClose />
+                                <TheClose coachName={selectedStaff.split(' (')[0]} />
                             </motion.div>
                         )}
                     </AnimatePresence>

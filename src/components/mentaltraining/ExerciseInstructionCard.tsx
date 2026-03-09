@@ -9,10 +9,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Brain, Wind, Eye, Target, Star, Sparkles, PenLine } from 'lucide-react';
-import { MentalExercise, ExerciseCategory } from '../../api/firebase/mentaltraining/types';
+import { SimModule, ExerciseCategory } from '../../api/firebase/mentaltraining/types';
 
 interface ExerciseInstructionCardProps {
-  exercise: MentalExercise;
+  exercise: SimModule;
   onDismiss?: () => void;
 }
 
@@ -40,7 +40,6 @@ const getCategoryColor = (category: ExerciseCategory) => {
 
 export const ExerciseInstructionCard: React.FC<ExerciseInstructionCardProps> = ({
   exercise,
-  onDismiss,
 }) => {
   const CategoryIcon = getCategoryIcon(exercise.category);
   const colors = getCategoryColor(exercise.category);

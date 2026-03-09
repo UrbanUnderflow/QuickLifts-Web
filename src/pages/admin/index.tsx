@@ -330,10 +330,10 @@ const adminCardsData = [
     link: "/admin/escalationConditions"
   },
   {
-    title: "Mental Training Library",
-    description: "Manage mental exercises, game configurations, and training programs for Nora.",
+    title: "Variant Registry",
+    description: "Canonical control plane for variant specs, runtime configs, publish actions, and sim-module seeding.",
     icon: <Brain className="w-5 h-5" />,
-    link: "/admin/mental-training"
+    link: "/admin/systemOverview#variant-registry"
   },
   {
     title: "AI Voice Configuration",

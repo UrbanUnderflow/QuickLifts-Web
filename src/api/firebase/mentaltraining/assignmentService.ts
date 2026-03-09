@@ -11,7 +11,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  setDoc,
   updateDoc,
   deleteDoc,
   query,
@@ -19,20 +18,19 @@ import {
   orderBy,
   onSnapshot,
   Unsubscribe,
-  serverTimestamp,
   addDoc,
 } from 'firebase/firestore';
 import {
   ExerciseAssignment,
   AssignmentStatus,
   AssignmentSource,
-  MentalExercise,
   assignmentFromFirestore,
   assignmentToFirestore,
 } from './types';
-import { exerciseLibraryService } from './exerciseLibraryService';
+import { SIM_ASSIGNMENTS_COLLECTION } from './collections';
+import { simModuleLibraryService } from './exerciseLibraryService';
 
-const COLLECTION = 'mental-exercise-assignments';
+const COLLECTION = SIM_ASSIGNMENTS_COLLECTION;
 
 // ============================================================================
 // SERVICE
@@ -66,7 +64,7 @@ export const assignmentService = {
     recurringDays?: number[];
   }): Promise<string> {
     // Get the exercise details
-    const exercise = await exerciseLibraryService.getById(exerciseId);
+    const exercise = await simModuleLibraryService.getById(exerciseId);
     if (!exercise) {
       throw new Error(`Exercise not found: ${exerciseId}`);
     }
@@ -108,7 +106,7 @@ export const assignmentService = {
     reason: string;
     scheduledTime?: 'morning' | 'pre-workout' | 'post-workout' | 'evening';
   }): Promise<string> {
-    const exercise = await exerciseLibraryService.getById(exerciseId);
+    const exercise = await simModuleLibraryService.getById(exerciseId);
     if (!exercise) {
       throw new Error(`Exercise not found: ${exerciseId}`);
     }
@@ -143,7 +141,7 @@ export const assignmentService = {
     athleteUserId: string;
     exerciseId: string;
   }): Promise<string> {
-    const exercise = await exerciseLibraryService.getById(exerciseId);
+    const exercise = await simModuleLibraryService.getById(exerciseId);
     if (!exercise) {
       throw new Error(`Exercise not found: ${exerciseId}`);
     }
