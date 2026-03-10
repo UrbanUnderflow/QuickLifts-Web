@@ -167,6 +167,7 @@ export interface MentalExercise {
     variantName: string;
     family: string;
     mode: string;
+    archetype?: string;
     publishedAt?: number;
   };
   createdAt: number; // Unix timestamp

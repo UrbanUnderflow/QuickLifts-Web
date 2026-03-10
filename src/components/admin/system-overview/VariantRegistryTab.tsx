@@ -69,7 +69,7 @@ import { ExercisePlayer } from '../../mentaltraining';
 type SpecStatus = SimVariantSpecStatus;
 type FamilyStatus = SimVariantFamilyStatus;
 type VariantMode = SimVariantMode;
-type VariantEntry = SimVariantSeed & Partial<Pick<SimVariantRecord, 'lockedSpec'>>;
+type VariantEntry = SimVariantSeed & Partial<Pick<SimVariantRecord, 'lockedSpec' | 'archetypeOverride'>>;
 
 interface ParsedSpec {
     coreIdentity: string;
