@@ -1418,6 +1418,7 @@ interface BreathingExerciseProps {
   onPause: () => void;
   onResume: () => void;
   onComplete: () => void;
+  soundEnabled?: boolean;
 }
 
 const BreathingExercise: React.FC<BreathingExerciseProps> = ({
@@ -1427,6 +1428,7 @@ const BreathingExercise: React.FC<BreathingExerciseProps> = ({
   onPause,
   onResume,
   onComplete,
+  soundEnabled: _soundEnabled = true,
 }) => {
   const DEBUG_BREATHING = true;
   // Stable-ish id per mount to correlate logs (not cryptographically random)
