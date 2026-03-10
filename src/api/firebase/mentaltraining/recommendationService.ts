@@ -71,7 +71,7 @@ const PATHWAY_SEQUENCES: Record<MentalPathway, { exerciseId: string; name: strin
     { exerciseId: 'mindset-growth', name: 'Growth Mindset Self-Talk' },
   ],
   [MentalPathway.PressurePerformance]: [
-    { exerciseId: 'focus-3-second-reset', name: 'The Kill Switch' },
+    { exerciseId: 'focus-3-second-reset', name: 'Reset' },
     { exerciseId: 'decision-brake-point', name: 'Brake Point' },
     { exerciseId: 'focus-endurance-lock', name: 'Endurance Lock' },
   ],
@@ -479,7 +479,7 @@ export const recommendationService = {
         name: 'Pressure Performance',
         description: 'For athletes who underperform when it matters most',
         exerciseSequence: [
-          { step: 1, exerciseId: 'focus-3-second-reset', exerciseName: 'The Kill Switch', weeksRange: '5-6', isFoundation: true, isApplication: false },
+          { step: 1, exerciseId: 'focus-3-second-reset', exerciseName: 'Reset', weeksRange: '5-6', isFoundation: true, isApplication: false },
           { step: 2, exerciseId: 'decision-brake-point', exerciseName: 'Brake Point', weeksRange: '7-8', isFoundation: true, isApplication: true },
           { step: 3, exerciseId: 'focus-endurance-lock', exerciseName: 'Endurance Lock', weeksRange: '9-10', isFoundation: false, isApplication: true },
         ],

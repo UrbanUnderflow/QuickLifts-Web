@@ -7,6 +7,7 @@ import {
   type SimEngineKey,
   type SimSyncStatus,
 } from './types';
+import { getDisplayFamilyName, getDisplaySimText, getDisplayVariantName } from './displayNames';
 import type {
   SimVariantArchetype,
   SimVariantLockedSpec,
@@ -239,8 +240,8 @@ function buildFeedbackModel(record: SimVariantRecord, engineKey: SimEngineKey) {
     feedbackMode: getRuntimeConfigValue(record, 'session.feedbackMode', 'coached'),
     tone: engineKey === 'endurance_lock' ? 'trend' : engineKey === 'signal_window' ? 'decision' : 'performance',
     athleteLabels: {
-      title: record.moduleDraft?.name ?? record.name,
-      description: record.moduleDraft?.description ?? record.specRaw?.slice(0, 140) ?? '',
+      title: getDisplayVariantName(record.moduleDraft?.name ?? record.name),
+      description: getDisplaySimText(record.moduleDraft?.description ?? record.specRaw?.slice(0, 140) ?? ''),
     },
   };
 }
@@ -257,8 +258,8 @@ function buildAnalyticsModel(record: SimVariantRecord, engineKey: SimEngineKey) 
 function buildUiModel(record: SimVariantRecord, engineKey: SimEngineKey) {
   return {
     iconName: record.moduleDraft?.iconName ?? 'brain',
-    introTitle: record.moduleDraft?.name ?? record.name,
-    introDescription: record.moduleDraft?.description ?? '',
+    introTitle: getDisplayVariantName(record.moduleDraft?.name ?? record.name),
+    introDescription: getDisplaySimText(record.moduleDraft?.description ?? ''),
     summaryStyle: engineKey === 'endurance_lock' ? 'blocks' : engineKey === 'noise_gate' ? 'channel_breakdown' : 'scorecard',
   };
 }
@@ -271,9 +272,9 @@ export function compileVariantBuildArtifact(record: SimVariantRecord): SimBuildA
   return {
     engineKey,
     engineVersion: ENGINE_VERSION,
-    family: record.family,
+    family: getDisplayFamilyName(record.family),
     variantId: record.id,
-    variantName: record.name,
+    variantName: getDisplayVariantName(record.name),
     moduleId: record.moduleDraft?.moduleId ?? record.id,
     sessionModel: buildSessionModel(record, engineKey, archetype),
     stimulusModel: buildStimulusModel(record, engineKey),
@@ -334,6 +335,8 @@ export function buildPublishedModuleFromVariant(record: SimVariantRecord, module
   return {
     ...module,
     engineKey: buildArtifact.engineKey,
+    name: getDisplayVariantName(module.name),
+    description: getDisplaySimText(module.description),
     buildArtifact,
     syncStatus: 'in_sync',
     publishedFingerprint: buildArtifact.sourceFingerprint,

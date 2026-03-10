@@ -35,6 +35,9 @@ import {
 import {
     ExerciseCategory,
     ExerciseDifficulty,
+    getDisplayFamilyName,
+    getDisplaySimText,
+    getDisplayVariantName,
     simModuleLibraryService,
     simVariantRegistryService,
     type MentalExercise,
@@ -223,6 +226,18 @@ const FAMILY_COLORS: Record<string, string> = {
     'Chaos Read': '#6366f1',
     'Quiet Eye': '#84cc16',
 };
+
+function displayFamilyName(family: string) {
+    return getDisplayFamilyName(family);
+}
+
+function displayVariantName(name: string) {
+    return getDisplayVariantName(name);
+}
+
+function displayCopy(text: string) {
+    return getDisplaySimText(text);
+}
 
 const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
     'The Kill Switch': {
@@ -2499,7 +2514,7 @@ function getTrialBuildNotes(variant: VariantEntry) {
 }
 
 function buildGeneratedTrialVariantSpec(variant: VariantEntry, familyBase: FamilySpecBase | undefined, theme: VariantTheme, today: string) {
-    return [
+    return displayCopy([
         '1. Core Identity',
         `Variant Name: ${variant.name}`,
         `Parent Family: ${variant.family}`,
@@ -2575,7 +2590,7 @@ function buildGeneratedTrialVariantSpec(variant: VariantEntry, familyBase: Famil
         '- [ ] Valid / partial / invalid / dropout handling documented',
         '- [ ] Device, motor-baseline, and export requirements captured for research use',
         '- [ ] Publish config mirrors the locked trial protocol without adaptive overrides',
-    ].join('\n');
+    ].join('\n'));
 }
 
 function getDefaultDurationMinutes(variant: VariantEntry) {
@@ -3032,7 +3047,7 @@ function buildGeneratedVariantSpec(variant: VariantEntry): string {
         return buildGeneratedTrialVariantSpec(variant, familyBase, theme, today);
     }
 
-    return [
+    return displayCopy([
         '1. Core Identity',
         `Variant Name: ${variant.name}`,
         `Parent Family: ${variant.family}`,
@@ -3098,7 +3113,7 @@ function buildGeneratedVariantSpec(variant: VariantEntry): string {
         '- [ ] Training Mode and Trial Mode behavior reviewed',
         '- [ ] Artifact risks and boundary safeguards documented',
         '- [ ] Build and data notes translated into implementation tasks',
-    ].join('\n');
+    ].join('\n'));
 }
 
 function inferModuleDifficulty(variant: VariantEntry): ExerciseDifficulty {
@@ -3170,28 +3185,30 @@ function buildDefaultRuntimeConfig(variant: VariantEntry) {
 function buildDefaultModuleDraft(variant: VariantEntry, sortOrder: number): SimVariantModuleDraft {
     const familyBase = FAMILY_SPEC_BASES[variant.family];
     const theme = inferVariantTheme(variant);
+    const displayFamily = displayFamilyName(variant.family);
+    const displayVariant = displayVariantName(variant.name);
 
     return {
         moduleId: buildSimVariantId(variant),
-        name: variant.name,
-        description: theme.purpose,
+        name: displayVariant,
+        description: displayCopy(theme.purpose),
         category: ExerciseCategory.Focus,
         difficulty: inferModuleDifficulty(variant),
         durationMinutes: inferModuleDurationMinutes(variant),
         benefits: [
-            theme.expectedBenefit,
-            familyBase?.skillTargets ?? 'Build pressure-ready execution',
-            `${familyBase?.coreMetric ?? 'Core metric'} remains measurable inside the parent family`,
+            displayCopy(theme.expectedBenefit),
+            displayCopy(familyBase?.skillTargets ?? 'Build pressure-ready execution'),
+            displayCopy(`${familyBase?.coreMetric ?? 'Core metric'} remains measurable inside the parent family`),
         ],
-        bestFor: theme.bestUse.slice(0, 4),
-        origin: `${variant.family} family module generated from the variant registry and governed by the family specification stack.`,
-        neuroscience: `Targets ${familyBase?.skillTargets ?? 'pressure-ready cognitive execution'} through ${familyBase?.mechanism ?? 'the parent family mechanism'} while preserving the parent-family scoring model.`,
+        bestFor: theme.bestUse.slice(0, 4).map(displayCopy),
+        origin: displayCopy(`${displayFamily} family module generated from the variant registry and governed by the family specification stack.`),
+        neuroscience: displayCopy(`Targets ${familyBase?.skillTargets ?? 'pressure-ready cognitive execution'} through ${familyBase?.mechanism ?? 'the parent family mechanism'} while preserving the parent-family scoring model.`),
         overview: {
-            when: theme.bestUse[0] || 'When the athlete needs this specific pressure expression',
-            focus: familyBase?.skillTargets ?? 'Execution stability under pressure',
+            when: displayCopy(theme.bestUse[0] || 'When the athlete needs this specific pressure expression'),
+            focus: displayCopy(familyBase?.skillTargets ?? 'Execution stability under pressure'),
             timeScale: `${inferModuleDurationMinutes(variant)} minutes`,
-            skill: familyBase?.coreMetric ?? 'Family metric reinforcement',
-            analogy: `A focused ${theme.variantType.toLowerCase()} of ${variant.family}.`,
+            skill: displayCopy(familyBase?.coreMetric ?? 'Family metric reinforcement'),
+            analogy: displayCopy(`A focused ${theme.variantType.toLowerCase()} of ${displayFamily}.`),
         },
         iconName: inferModuleIcon(variant),
         isActive: true,
@@ -3276,8 +3293,8 @@ function buildPublishedModule(record: SimVariantRecord): MentalExercise {
     const archetype = resolveVariantArchetype(record);
     const nextModule: MentalExercise = {
         id: moduleDraft.moduleId,
-        name: moduleDraft.name,
-        description: moduleDraft.description,
+        name: displayVariantName(moduleDraft.name),
+        description: displayCopy(moduleDraft.description),
         category: moduleDraft.category,
         difficulty: moduleDraft.difficulty,
         durationMinutes: moduleDraft.durationMinutes,
@@ -3288,17 +3305,23 @@ function buildPublishedModule(record: SimVariantRecord): MentalExercise {
                 duration: moduleDraft.durationMinutes * 60,
                 progressionLevel: record.priority === 'high' ? 4 : record.priority === 'medium' ? 3 : 2,
                 instructions: [
-                    `Run ${record.name} inside the ${record.family} family boundary.`,
-                    `Train ${FAMILY_SPEC_BASES[record.family]?.skillTargets ?? 'execution stability under pressure'}.`,
+                    displayCopy(`Run ${record.name} inside the ${record.family} family boundary.`),
+                    displayCopy(`Train ${FAMILY_SPEC_BASES[record.family]?.skillTargets ?? 'execution stability under pressure'}.`),
                     'Keep the family metric interpretable and the runtime behavior consistent with the registry spec.',
                 ],
             },
         },
-        benefits: moduleDraft.benefits,
-        bestFor: moduleDraft.bestFor,
-        origin: moduleDraft.origin,
-        neuroscience: moduleDraft.neuroscience,
-        overview: moduleDraft.overview,
+        benefits: moduleDraft.benefits.map(displayCopy),
+        bestFor: moduleDraft.bestFor.map(displayCopy),
+        origin: displayCopy(moduleDraft.origin),
+        neuroscience: displayCopy(moduleDraft.neuroscience),
+        overview: {
+            ...moduleDraft.overview,
+            when: displayCopy(moduleDraft.overview.when),
+            focus: displayCopy(moduleDraft.overview.focus),
+            skill: displayCopy(moduleDraft.overview.skill),
+            analogy: displayCopy(moduleDraft.overview.analogy),
+        },
         iconName: moduleDraft.iconName,
         isActive: moduleDraft.isActive,
         sortOrder: moduleDraft.sortOrder,
@@ -3306,8 +3329,8 @@ function buildPublishedModule(record: SimVariantRecord): MentalExercise {
         runtimeConfig: record.runtimeConfig,
         variantSource: {
             variantId: record.id,
-            variantName: record.name,
-            family: record.family,
+            variantName: displayVariantName(record.name),
+            family: displayFamilyName(record.family),
             mode: record.mode,
             archetype,
         },
@@ -3380,7 +3403,7 @@ function CreateVariantModal({
                                 value={form.name}
                                 onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
                                 className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
-                                placeholder="e.g. Pressure-Crowd Kill Switch"
+                                placeholder="e.g. Pressure-Crowd Reset"
                             />
                         </div>
                         <div className="md:col-span-2">
@@ -3780,10 +3803,10 @@ function VariantWorkspaceModal({
                     <div className="flex items-center gap-3">
                         <div className="w-2.5 h-2.5 rounded-full" style={{ background: familyColor }} />
                         <div>
-                            <p className="text-sm font-bold text-white">{variantMeta.name}</p>
-                            <p className="text-[10px] text-zinc-500">
-                                {variantMeta.family} · Variant Workspace · {variantMeta.publishedModuleId ? `Published as ${variantMeta.publishedModuleId}` : 'Not yet published'}
-                            </p>
+                                <p className="text-sm font-bold text-white">{displayVariantName(variantMeta.name)}</p>
+                                <p className="text-[10px] text-zinc-500">
+                                {displayFamilyName(variantMeta.family)} · Variant Workspace · {variantMeta.publishedModuleId ? `Published as ${variantMeta.publishedModuleId}` : 'Not yet published'}
+                                </p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors">
@@ -4168,7 +4191,7 @@ function VariantWorkspaceModal({
                                                                 <div className="mt-2 space-y-1">
                                                                     {group.findings.map((finding, findingIndex) => (
                                                                         <p key={`${group.key}-${finding.code}-${findingIndex}`} className="text-[11px] text-zinc-300">
-                                                                            - {finding.message}
+                                                                            - {displayCopy(finding.message)}
                                                                         </p>
                                                                     ))}
                                                                 </div>
@@ -4196,7 +4219,7 @@ function VariantWorkspaceModal({
                                                                 <p className={`text-[10px] font-bold uppercase tracking-widest ${finding.severity === 'error' ? 'text-red-300' : 'text-amber-300'}`}>
                                                                     {finding.severity}
                                                                 </p>
-                                                                <p className="text-[11px] text-zinc-300 mt-1">{finding.message}</p>
+                                                                <p className="text-[11px] text-zinc-300 mt-1">{displayCopy(finding.message)}</p>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -4707,7 +4730,7 @@ function FamilyGroup({
                 <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: familyColor }} />
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-bold text-white">{familyName}</span>
+                                        <span className="text-sm font-bold text-white">{displayFamilyName(familyName)}</span>
                         {familyStatus === 'locked' ? (
                             <span className="flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-green-500/10 border border-green-500/20 text-green-400 font-bold uppercase tracking-widest">
                                 <Lock className="w-2.5 h-2.5" /> Locked
@@ -4739,7 +4762,7 @@ function FamilyGroup({
                             key={i}
                             className="w-1.5 h-3 rounded-sm"
                             style={{ background: SPEC_STATUS_CONFIG[v.specStatus].color + '80' }}
-                            title={`${v.name}: ${SPEC_STATUS_CONFIG[v.specStatus].label}`}
+                            title={`${displayVariantName(v.name)}: ${SPEC_STATUS_CONFIG[v.specStatus].label}`}
                         />
                     ))}
                 </div>
@@ -4777,7 +4800,7 @@ function FamilyGroup({
                                         key={v.name}
                                         className="grid grid-cols-[1fr_120px_130px_96px_110px_112px] gap-2 px-5 py-2 border-t border-zinc-800/50 hover:bg-white/[0.02] transition-colors items-center"
                                     >
-                                        <span className="text-xs text-zinc-300 truncate">{v.name}</span>
+                                        <span className="text-xs text-zinc-300 truncate">{displayVariantName(v.name)}</span>
                                         <span className="flex items-center gap-1.5">
                                             <ModeIcon className="w-3 h-3" style={{ color: modeConf.color }} />
                                             <span className="text-[10px]" style={{ color: modeConf.color }}>{modeConf.label}</span>
@@ -5098,7 +5121,13 @@ const VariantRegistryTab: React.FC = () => {
 
     const filteredVariants = useMemo(() => {
         return registryVariants.filter((v) => {
-            if (searchQuery && !v.name.toLowerCase().includes(searchQuery.toLowerCase()) && !v.family.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+            if (
+                searchQuery
+                && !v.name.toLowerCase().includes(searchQuery.toLowerCase())
+                && !displayVariantName(v.name).toLowerCase().includes(searchQuery.toLowerCase())
+                && !v.family.toLowerCase().includes(searchQuery.toLowerCase())
+                && !displayFamilyName(v.family).toLowerCase().includes(searchQuery.toLowerCase())
+            ) return false;
             if (filterFamilyStatus !== 'all' && v.familyStatus !== filterFamilyStatus) return false;
             if (filterMode !== 'all' && v.mode !== filterMode) return false;
             if (filterSpecStatus !== 'all' && resolveSpecStatus(v) !== filterSpecStatus) return false;
@@ -5149,13 +5178,13 @@ const VariantRegistryTab: React.FC = () => {
             setRegistryVariants((current) => current.map((variant) => variant.id === next.id ? draftRecord : variant));
             setToast({
                 type: 'success',
-                message: `${next.name} saved to the variant registry.`,
+                message: `${displayVariantName(next.name)} saved to the variant registry.`,
             });
         } catch (error) {
             console.error('Failed to save variant workspace:', error);
             setToast({
                 type: 'error',
-                message: `Failed to save ${next.name}.`,
+                message: `Failed to save ${displayVariantName(next.name)}.`,
             });
         } finally {
             setSavingVariantId(null);
@@ -5170,13 +5199,13 @@ const VariantRegistryTab: React.FC = () => {
             setRegistryVariants((current) => current.map((variant) => variant.id === next.id ? builtRecord : variant));
             setToast({
                 type: 'success',
-                message: `${next.name} built into a playable runtime artifact.`,
+                message: `${displayVariantName(next.name)} built into a playable runtime artifact.`,
             });
         } catch (error) {
             console.error('Failed to build variant workspace:', error);
             setToast({
                 type: 'error',
-                message: `Failed to build ${next.name}.`,
+                message: `Failed to build ${displayVariantName(next.name)}.`,
             });
         } finally {
             setBuildingVariantId(null);
@@ -5197,13 +5226,13 @@ const VariantRegistryTab: React.FC = () => {
             setWorkspaceModalState(null);
             setToast({
                 type: 'success',
-                message: `${next.name} published to sim-modules as ${moduleId}.`,
+                message: `${displayVariantName(next.name)} published to sim-modules as ${moduleId}.`,
             });
         } catch (error) {
             console.error('Failed to publish variant workspace:', error);
             setToast({
                 type: 'error',
-                message: `Failed to publish ${next.name}.`,
+                message: `Failed to publish ${displayVariantName(next.name)}.`,
             });
         } finally {
             setPublishingVariantId(null);
@@ -5223,7 +5252,7 @@ const VariantRegistryTab: React.FC = () => {
             });
             setToast({
                 type: 'success',
-                message: `${nextRecord.name} created in the variant registry.`,
+                message: `${displayVariantName(nextRecord.name)} created in the variant registry.`,
             });
         } catch (error) {
             console.error('Failed to create variant:', error);

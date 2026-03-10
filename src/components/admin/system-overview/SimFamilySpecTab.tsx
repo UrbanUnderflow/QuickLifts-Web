@@ -20,7 +20,7 @@ interface FamilySpecEntry {
 const FAMILY_SPECS: FamilySpecEntry[] = [
     {
         id: 'kill-switch',
-        label: 'The Kill Switch',
+        label: 'Reset',
         subtitle: 'Mental recovery sim — disruption, re-engagement, Recovery Time.',
         icon: Zap,
         accent: '#ef4444',

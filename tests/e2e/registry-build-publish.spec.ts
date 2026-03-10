@@ -22,6 +22,14 @@ const variantCases = process.env.PLAYWRIGHT_VARIANT_NAME
   : DEFAULT_VARIANT_CASES;
 const syncTestVariantCase = DEFAULT_VARIANT_CASES.find((entry) => entry.name === SYNC_TEST_VARIANT_NAME) ?? DEFAULT_VARIANT_CASES[DEFAULT_VARIANT_CASES.length - 1];
 
+function displayFamilyName(name: string) {
+  return name === 'The Kill Switch' ? 'Reset' : name;
+}
+
+function displayVariantName(name: string) {
+  return name.replace(/\bThe Kill Switch\b/g, 'Reset').replace(/\bKill Switch\b/g, 'Reset');
+}
+
 async function expectPreviewRuntime(page: Page, familyName: string) {
   if (familyName === 'The Kill Switch') {
     await expect(
@@ -66,7 +74,7 @@ async function prepareRegistryFixture(page: Page, variantName: string, caseNames
     await window.__pulseE2E?.cloneVariantFixtureByName(sourceName, e2eNamespace);
   }, { sourceName: variantName, namespace: caseNamespace });
 
-  const fixtureName = `[E2E] ${variantName}`;
+  const fixtureName = `[E2E] ${displayVariantName(variantName)}`;
   const moduleId = `${caseNamespace}-${variantName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
   return {
@@ -79,7 +87,7 @@ async function openFixtureWorkspace(page: Page, fixtureName: string, familyName:
   const search = page.getByPlaceholder('Search variants or families...');
   await search.fill(fixtureName);
 
-  const familyGroup = page.getByRole('button', { name: new RegExp(familyName, 'i') }).first();
+  const familyGroup = page.getByRole('button', { name: new RegExp(displayFamilyName(familyName), 'i') }).first();
   if (await familyGroup.isVisible()) {
     await familyGroup.click();
   }

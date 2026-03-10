@@ -1104,8 +1104,8 @@ const SEEDED_EXERCISES: MentalExercise[] = [
   // -------------------------------------------------------------------------
   {
     id: 'focus-3-second-reset',
-    name: 'The Kill Switch',
-    description: 'Mental recovery training — how fast can you recover after something goes wrong? Simulates disruption, measures your recovery time, and tracks improvement over sessions. The single most important mental skill in competitive athletics.',
+    name: 'Reset',
+    description: 'Mental recovery training — how fast can you recover after something goes wrong? Reset simulates disruption, measures your recovery time, and tracks improvement over sessions. The single most important mental skill in competitive athletics.',
     category: ExerciseCategory.Focus,
     difficulty: ExerciseDifficulty.Beginner,
     durationMinutes: 3,
@@ -1126,7 +1126,7 @@ const SEEDED_EXERCISES: MentalExercise[] = [
     ],
     bestFor: ['mistake recovery', 'pre-competition', 'in-season training', 'pressure performance'],
     origin: 'Grounded in Attentional Control Theory (Eysenck & Calvo, 1992; Eysenck et al., 2007) and cognitive flexibility research. Military Special Operations units train disruption-recovery cycles to build automatic reset responses under fire. Professional athletes like Navy SEAL-trained MMA fighters and Formula 1 drivers use similar rapid-recovery drills to maintain performance after errors.',
-    neuroscience: 'The Kill Switch targets the prefrontal cortex\'s ability to reassert executive control after the amygdala hijacks attention during a disruption. Each round trains the brain to shorten the "attentional blink" — the cognitive gap between disruption and refocused execution. Research shows this gap is trainable and can be reduced by 40-60% with consistent practice, leading to measurably faster recovery from mistakes during competition.',
+    neuroscience: 'Reset targets the prefrontal cortex\'s ability to reassert executive control after the amygdala hijacks attention during a disruption. Each round trains the brain to shorten the "attentional blink" — the cognitive gap between disruption and refocused execution. Research shows this gap is trainable and can be reduced by 40-60% with consistent practice, leading to measurably faster recovery from mistakes during competition.',
     overview: {
       when: 'Regular training sessions, pre-competition preparation',
       focus: 'How fast you bounce back after something breaks your concentration',

@@ -63,7 +63,7 @@ const PILLARS = [
         skills: [
             { name: 'Sustained Attention', construct: 'Holding task-relevant focus over extended time-on-task without decay.', coreMetric: 'Time-on-task before first significant accuracy drop', primarySim: 'Endurance Lock' },
             { name: 'Selective Attention', construct: 'Filtering distractors and prioritizing the right cue under interference.', coreMetric: 'Accuracy under increasing distractor density', primarySim: 'Noise Gate' },
-            { name: 'Attentional Shifting', construct: 'Rapidly redirecting focus after disruption without residual interference.', coreMetric: 'Refocus speed after disruption event', primarySim: 'Kill Switch' },
+            { name: 'Attentional Shifting', construct: 'Rapidly redirecting focus after disruption without residual interference.', coreMetric: 'Refocus speed after disruption event', primarySim: 'Reset' },
         ] as Skill[],
     },
     {
@@ -75,9 +75,9 @@ const PILLARS = [
         description:
             'The ability to maintain execution quality when emotions, errors, or evaluative pressure threaten to derail performance. Composure skills keep the athlete from spiraling after a mistake or freezing when the moment matters.',
         skills: [
-            { name: 'Error Recovery Speed', construct: 'How fast the athlete returns to baseline execution after making a mistake.', coreMetric: 'Post-error recovery time (ms to clean rep)', primarySim: 'Kill Switch' },
-            { name: 'Emotional Interference Control', construct: 'Preventing emotional arousal from degrading cognitive or motor performance.', coreMetric: 'Performance delta under emotional load vs. neutral', primarySim: 'Kill Switch' },
-            { name: 'Pressure Stability', construct: 'Maintaining quality under evaluative or competitive pressure conditions.', coreMetric: 'Score variance under pressure vs. training reps', primarySim: 'Kill Switch' },
+            { name: 'Error Recovery Speed', construct: 'How fast the athlete returns to baseline execution after making a mistake.', coreMetric: 'Post-error recovery time (ms to clean rep)', primarySim: 'Reset' },
+            { name: 'Emotional Interference Control', construct: 'Preventing emotional arousal from degrading cognitive or motor performance.', coreMetric: 'Performance delta under emotional load vs. neutral', primarySim: 'Reset' },
+            { name: 'Pressure Stability', construct: 'Maintaining quality under evaluative or competitive pressure conditions.', coreMetric: 'Score variance under pressure vs. training reps', primarySim: 'Reset' },
         ] as Skill[],
     },
     {
@@ -104,7 +104,7 @@ const MODIFIERS: Modifier[] = [
 ];
 
 const SIMS: Sim[] = [
-    { name: 'Kill Switch', pillar: 'composure', skills: ['Error Recovery Speed', 'Emotional Interference Control', 'Attentional Shifting'], coreMetric: 'Post-error recovery time (ms to first clean rep after disruption)', supportingMetrics: ['Consistency index', 'Pre-disruption accuracy', 'Disruption-type recovery delta', 'Resilience score'], pressureTypes: ['Escalating (timer shrinks)', 'Error compounding', 'Evaluative (coach watching)'], description: 'Tap a rhythm pattern. The system disrupts with visual noise, rule changes, or emotional interference. The core measurement is how fast the athlete regains clean execution after being thrown off.', evidenceStatus: 'Adjacent', scientificBasis: 'ACT (Eysenck et al., 2007), SIT (Meichenbaum, 1985)' },
+    { name: 'Reset', pillar: 'composure', skills: ['Error Recovery Speed', 'Emotional Interference Control', 'Attentional Shifting'], coreMetric: 'Post-error recovery time (ms to first clean rep after disruption)', supportingMetrics: ['Consistency index', 'Pre-disruption accuracy', 'Disruption-type recovery delta', 'Resilience score'], pressureTypes: ['Escalating (timer shrinks)', 'Error compounding', 'Evaluative (coach watching)'], description: 'Tap a rhythm pattern. The system disrupts with visual noise, rule changes, or emotional interference. The core measurement is how fast the athlete regains clean execution after being thrown off.', evidenceStatus: 'Adjacent', scientificBasis: 'ACT (Eysenck et al., 2007), SIT (Meichenbaum, 1985)' },
     { name: 'Noise Gate', pillar: 'focus', skills: ['Selective Attention', 'Sustained Attention'], coreMetric: 'Accuracy under increasing distractor density (signal vs. noise)', supportingMetrics: ['False alarm rate', 'Distractor cost', 'Sustained accuracy over time'], pressureTypes: ['Distractor escalation', 'Environmental noise injection'], description: "Identify the target cue among increasing visual and auditory distractors. Trains the athlete's ability to filter noise and maintain focus on what matters while the environment gets louder.", evidenceStatus: 'Adjacent', scientificBasis: 'Posner & Petersen (1990), Nideffer & Sagal (2006)' },
     { name: 'Brake Point', pillar: 'decision', skills: ['Response Inhibition'], coreMetric: 'Go/No-Go accuracy under time pressure', supportingMetrics: ['False start rate', 'Inhibition latency', 'Commission errors'], pressureTypes: ['Time compression', 'High-similarity decoys'], description: 'React to valid cues and suppress reactions to no-go cues. Speed and accuracy both matter. Trains the athlete to cancel bad actions before errors cascade — the mental braking system.', evidenceStatus: 'Adjacent', scientificBasis: 'Miyake et al. (2000), USOC Mental Training Manual (2008)' },
     { name: 'Signal Window', pillar: 'decision', skills: ['Cue Discrimination'], coreMetric: 'Correct detection rate minus false alarm rate (d-prime)', supportingMetrics: ['Response time to valid cues', 'Decay rate with time pressure', 'Cross-modal accuracy'], pressureTypes: ['Time window compression', 'Multi-modal distractors'], description: "Detect the real signal from among decoy stimuli within a shrinking time window. Measures the athlete's ability to read the right cue when it matters and ignore convincing fakes.", evidenceStatus: 'Mechanism-Only', scientificBasis: 'Zhu et al. (2024), Signal Detection Theory (Green & Swets)' },
