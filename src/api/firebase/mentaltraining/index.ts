@@ -7,6 +7,7 @@
 // Types
 export * from './types';
 export * from './taxonomy';
+export * from './displayNames';
 
 // Services
 export { exerciseLibraryService, simModuleLibraryService } from './exerciseLibraryService';

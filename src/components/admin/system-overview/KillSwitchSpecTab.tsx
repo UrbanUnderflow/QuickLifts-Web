@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Zap,
-    FileText,
     Brain,
     Gamepad2,
     Ruler,
@@ -73,7 +72,7 @@ const GAME_PHASES = [
     },
     {
         phase: '3',
-        name: 'Kill Switch',
+        name: 'Reset',
         color: '#22c55e',
         duration: 'Measured',
         description: 'Re-engage with the focus task as fast as possible. Recovery Time is captured — the core metric.',
@@ -91,22 +90,22 @@ const SCIENTIFIC_FOUNDATIONS = [
     {
         name: 'Attentional Control Theory',
         authors: 'Eysenck & Calvo, 1992; Eysenck et al., 2007',
-        summary: 'Anxiety disrupts the balance between goal-directed and stimulus-driven attention. Kill Switch trains the goal-directed system to override stimulus-driven hijacking.',
+        summary: 'Anxiety disrupts the balance between goal-directed and stimulus-driven attention. Reset trains the goal-directed system to override stimulus-driven hijacking.',
     },
     {
         name: 'Stress Inoculation Training',
         authors: 'Meichenbaum, 1985',
-        summary: 'Repeated controlled stressor exposure with structured recovery builds resilience. Kill Switch simulates sport-relevant disruptions with graduated intensity.',
+        summary: 'Repeated controlled stressor exposure with structured recovery builds resilience. Reset simulates sport-relevant disruptions with graduated intensity.',
     },
     {
         name: 'Refocusing Speed as Expertise Marker',
         authors: 'Sport psychology literature',
-        summary: 'Elite athletes refocus faster after mistakes than amateurs. This is a trained skill. Kill Switch makes it visible and trainable.',
+        summary: 'Elite athletes refocus faster after mistakes than amateurs. This is a trained skill. Reset makes it visible and trainable.',
     },
     {
         name: 'Distraction-Refocusing Drills',
         authors: 'Nideffer & Sagal, 2006; APA Div 47',
-        summary: 'APA sport psychology guidelines recommend distraction drills. Kill Switch is the gamified, measurable version of this established protocol.',
+        summary: 'APA sport psychology guidelines recommend distraction drills. Reset is the gamified, measurable version of this established protocol.',
     },
 ];
 
@@ -252,7 +251,7 @@ const KillSwitchSpecTab: React.FC = () => {
                     </div>
                     <div>
                         <p className="text-[10px] uppercase tracking-widest text-red-400 font-bold">PULSE CHECK · SIM SPECIFICATION</p>
-                        <h2 className="text-xl font-semibold">The Kill Switch</h2>
+                        <h2 className="text-xl font-semibold">Reset</h2>
                         <p className="text-xs text-zinc-500">Mental Recovery Training Simulation · Spec v2.0 · March 2025</p>
                     </div>
                 </div>
@@ -265,7 +264,7 @@ const KillSwitchSpecTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        The Kill Switch trains the single most important mental skill in competitive athletics: <span className="text-white font-semibold">how fast you recover after something goes wrong</span>. It simulates disruption, measures the athlete&apos;s recovery time back to focused execution, and tracks that recovery speed over days and weeks. The athlete is not just practicing calm — they are building a measurable, improvable reflex.
+                        Reset trains the single most important mental skill in competitive athletics: <span className="text-white font-semibold">how fast you recover after something goes wrong</span>. It simulates disruption, measures the athlete&apos;s recovery time back to focused execution, and tracks that recovery speed over days and weeks. The athlete is not just practicing calm — they are building a measurable, improvable reflex.
                     </p>
                 </div>
             </section>
@@ -497,7 +496,7 @@ const KillSwitchSpecTab: React.FC = () => {
                 </h3>
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3">
                     <p className="text-sm text-zinc-300 leading-relaxed">
-                        This spec defines the Kill Switch at the <span className="text-white font-semibold">family level</span>. The family&apos;s mechanism (disruption → reset → rapid re-engagement), core metric (Recovery Time), and score architecture are <span className="text-white font-semibold">fixed</span>. Variants inherit all of these and vary the disruption channel, sport context, duration, or delivery surface.
+                        This spec defines Reset at the <span className="text-white font-semibold">family level</span>. The family&apos;s mechanism (disruption → reset → rapid re-engagement), core metric (Recovery Time), and score architecture are <span className="text-white font-semibold">fixed</span>. Variants inherit all of these and vary the disruption channel, sport context, duration, or delivery surface.
                     </p>
                     <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-600">Registered Variants</p>
                     <div className="space-y-1.5">
@@ -528,7 +527,7 @@ const KillSwitchSpecTab: React.FC = () => {
                 <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4">
-                            <p className="text-xs font-bold text-cyan-400 mb-1">Extended Trial Kill Switch</p>
+                            <p className="text-xs font-bold text-cyan-400 mb-1">Extended Trial Reset</p>
                             <p className="text-[10px] text-zinc-400 leading-relaxed">Standardized, non-adaptive, 10–15 min at fixed Tier 3. Identical conditions per Standards Addendum §6. Used for Baseline, Post-Training, and Retention assessments.</p>
                         </div>
                         <div className="rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">

@@ -1,14 +1,14 @@
 /**
- * Kill Switch Game Component
+ * Reset Game Component
  *
- * The Kill Switch — Mental Recovery Training Game
+ * Reset — Mental Recovery Training Game
  * Trains how fast athletes recover after disruption.
  * Simulates disruption, measures recovery time, and tracks improvement.
  *
  * Three phases per round:
  *   1. Lock In — focus task engagement
  *   2. Disruption — sudden visual/cognitive disruption
- *   3. Kill Switch — re-engage and measure recovery time
+ *   3. Reset — re-engage and measure recovery time
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -559,7 +559,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                 simSessionService.recordSession({
                     userId: currentUser.id,
                     simId: 'kill_switch',
-                    simName: 'The Kill Switch',
+                    simName: 'Reset',
                     legacyExerciseId: exercise.id,
                     sessionType: avgRecovery <= tierConfig.recoveryTarget ? SessionType.TrainingRep : SessionType.Reassessment,
                     durationMode,
@@ -1171,7 +1171,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                             <div className="text-center mb-8">
                                 <Zap className="w-12 h-12 text-red-500 mx-auto mb-3" />
                                 <h2 className="text-2xl font-black text-white tracking-wider mb-1">SESSION COMPLETE</h2>
-                                <p className="text-white/50 text-sm">The Kill Switch • {tierConfig.displayName}</p>
+                                <p className="text-white/50 text-sm">Reset • {tierConfig.displayName}</p>
                             </div>
 
                             {/* Hero metric */}

@@ -2,17 +2,11 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Brain,
-    Shield,
-    Crosshair,
-    Eye,
     TreePine,
-    Zap,
-    FlaskConical,
     Layers,
     ChevronDown,
     ChevronRight,
     GitBranch,
-    Lightbulb,
     Shuffle,
     Lock,
     Beaker,
@@ -20,11 +14,10 @@ import {
     ArrowDown,
     Monitor,
     User,
-    Megaphone,
 } from 'lucide-react';
 
 /* ---- COLLAPSIBLE ---- */
-function CollapsibleSection({ title, defaultOpen = false, accent, children }: { title: string; defaultOpen?: boolean; accent?: string; children: React.ReactNode }) {
+function CollapsibleSection({ title, defaultOpen = false, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
     const [open, setOpen] = useState(defaultOpen);
     return (
         <div className="border border-zinc-800 rounded-xl overflow-hidden">
@@ -82,12 +75,12 @@ interface LockedFamily {
 
 const LOCKED_FAMILIES: LockedFamily[] = [
     {
-        name: 'The Kill Switch',
+        name: 'Reset',
         pillar: 'composure',
         mechanism: 'Inhibition under pressure, error recovery speed, and attentional shifting after disruption',
         coreMetric: 'Post-error recovery time (ms to first clean rep after disruption)',
         description: 'Three-phase loop: sustained attention task → unpredictable disruption → recognize, inhibit reflex, recover goal-directed focus. Measures how quickly and completely the athlete recovers.',
-        variants: ['Visual disruption Kill Switch', 'Audio disruption Kill Switch', 'Cognitive-provocation Kill Switch', 'Combined-channel Kill Switch', 'Short daily Kill Switch (3–5 min)', 'Extended Trial Kill Switch (10–15 min)', 'Sport-context Kill Switch (basketball, tennis, etc.)', 'Immersive Reset Chamber (Vision Pro)'],
+        variants: ['Visual disruption Reset', 'Audio disruption Reset', 'Cognitive-provocation Reset', 'Combined-channel Reset', 'Short daily Reset (3–5 min)', 'Extended Trial Reset (10–15 min)', 'Sport-context Reset (basketball, tennis, etc.)', 'Immersive Reset Chamber (Vision Pro)'],
     },
     {
         name: 'Noise Gate',
@@ -146,11 +139,11 @@ const CANDIDATE_FAMILIES: CandidateFamily[] = [
     {
         name: 'Fault Line',
         pillar: 'composure',
-        distinctionFrom: 'Kill Switch',
+        distinctionFrom: 'Reset',
         mechanism: 'Recovering from self-generated errors (not external disruption)',
         coreMetric: 'Error cascade rate — how quickly one mistake triggers additional mistakes',
-        description: 'Kill Switch = recovering from something that happens to you. Fault Line = recovering from your own failure. The emotional load includes self-blame, frustration, and rumination. Trains breaking the error-cascade chain.',
-        promotionCriteria: 'Correlation below 0.5 with Kill Switch core metric across 50+ athletes; bidirectional divergence in athlete profiles',
+        description: 'Reset = recovering from something that happens to you. Fault Line = recovering from your own failure. The emotional load includes self-blame, frustration, and rumination. Trains breaking the error-cascade chain.',
+        promotionCriteria: 'Correlation below 0.5 with Reset core metric across 50+ athletes; bidirectional divergence in athlete profiles',
         variants: ['Tilt Test', 'Bounce Back', 'Next Play', 'Error spiral', 'Post-miss reset'],
     },
     {
@@ -176,11 +169,11 @@ const CANDIDATE_FAMILIES: CandidateFamily[] = [
     {
         name: 'Heat Check',
         pillar: 'composure',
-        distinctionFrom: 'Kill Switch',
+        distinctionFrom: 'Reset',
         mechanism: 'Maintaining output as evaluative stakes escalate (not recovery from disruption)',
         coreMetric: 'Output variance and accuracy delta as evaluative intensity increases',
-        description: 'Kill Switch = recovery from disruption. Heat Check = performance under mounting pressure where stakes increase. The athlete is not disrupted — they are pressured. Environment gets louder, scoring more visible, consequences more real.',
-        promotionCriteria: 'Distinct pressure-response profile; athletes with strong Kill Switch may still degrade under escalating stakes',
+        description: 'Reset = recovery from disruption. Heat Check = performance under mounting pressure where stakes increase. The athlete is not disrupted — they are pressured. Environment gets louder, scoring more visible, consequences more real.',
+        promotionCriteria: 'Distinct pressure-response profile; athletes with strong Reset may still degrade under escalating stakes',
         variants: ['Public Eye', 'Last Play', 'Score-on-the-line', 'Ranking pressure', 'Coach-watch mode'],
     },
     {
@@ -213,7 +206,7 @@ interface HybridModule {
 
 const HYBRID_MODULES: HybridModule[] = [
     { name: 'Overload', families: 'Sequence Shift + Noise Gate + Heat Check', description: 'Working memory, selective attention, and pressure stability all stacking together.' },
-    { name: 'Recovery Chain', families: 'Kill Switch + Sequence Shift', description: 'Multiple disruption-reengagement cycles with changing rules between rounds.' },
+    { name: 'Recovery Chain', families: 'Reset + Sequence Shift', description: 'Multiple disruption-reengagement cycles with changing rules between rounds.' },
     { name: 'Noise to Choice', families: 'Noise Gate → Signal Window', description: 'Starts as a filtering task, ends as a decision task.' },
     { name: 'Two-Minute Drill', families: 'Signal Window + Brake Point + Heat Check', description: 'Compressed-duration, high-consequence module combining cue reading, inhibition, and pressured performance.' },
     { name: 'Last Rep', families: 'Endurance Lock + Heat Check', description: 'Longest duration, hardest rounds at the end.' },
@@ -224,7 +217,7 @@ const HYBRID_MODULES: HybridModule[] = [
 /* ---- PILLAR OWNERSHIP DATA ---- */
 const PILLAR_OWNERSHIP = [
     { pillar: 'Focus', color: '#60a5fa', families: ['Noise Gate', 'Endurance Lock', 'Split Stream*', 'Quiet Eye*'], note: '* = Candidate' },
-    { pillar: 'Composure', color: '#22c55e', families: ['Kill Switch', 'Fault Line*', 'Heat Check*'], note: '* = Candidate' },
+    { pillar: 'Composure', color: '#22c55e', families: ['Reset', 'Fault Line*', 'Heat Check*'], note: '* = Candidate' },
     { pillar: 'Decision', color: '#c084fc', families: ['Brake Point', 'Signal Window', 'Sequence Shift', 'Blind Commit*', 'Chaos Read*'], note: '* = Candidate' },
 ];
 
@@ -237,7 +230,7 @@ interface VariantGroup {
 }
 
 const VARIANT_LIBRARY: VariantGroup[] = [
-    { parent: 'The Kill Switch', pillar: 'composure', isCandidate: false, variants: ['Aftershock (double disruption stacking)', 'Reset Window (shrinking recovery window)', 'Restart (emotional reset after simulated turnover)', 'Second Chance (immediate re-execution after failure)', 'Recovery Chain (repeated disruption-reengagement cycles)', 'Reset Chamber (immersive environmental disruption, Vision Pro)'] },
+    { parent: 'Reset', pillar: 'composure', isCandidate: false, variants: ['Aftershock (double disruption stacking)', 'Reset Window (shrinking recovery window)', 'Restart (emotional reset after simulated turnover)', 'Second Chance (immediate re-execution after failure)', 'Recovery Chain (repeated disruption-reengagement cycles)', 'Reset Chamber (immersive environmental disruption, Vision Pro)'] },
     { parent: 'Noise Gate', pillar: 'focus', isCandidate: false, variants: ['Crowd Tunnel (immersive crowd distraction)', 'Tunnel Line (narrow focus under peripheral competition)', 'Spotlight (rapid target identification among moving distractors)', 'Channel Filter (pressure rotating across visual, audio, social channels)', 'Peripheral Fade (ignore escalating peripheral decoys)', 'Crowd Control (performance under crowd noise and commentary)'] },
     { parent: 'Brake Point', pillar: 'decision', isCandidate: false, variants: ['Red Light (classic go/no-go at sport tempo)', 'False Start (prevent premature initiation under anticipation pressure)', 'False Key (high-temptation decoy before real cue)', 'Decoy Lane (spatial decoys pull toward wrong action)', 'Spatial Brake (cancel response to spatial decoy, Vision Pro-ready)'] },
     { parent: 'Signal Window', pillar: 'decision', isCandidate: false, variants: ['Snap Read (rapid correct choice from short cue window)', 'Split Second (compressed-time decision with speed-accuracy balance)', 'Shot Clock (decision under shrinking time window)', 'Window Close (correct option briefly available, rewarding controlled recognition)', 'Check Down (choose safer correct option over tempting decoy)', 'Spatial Read (3D cue discrimination, Vision Pro-ready)'] },
@@ -288,7 +281,7 @@ const SimFamilyTreeTab: React.FC = () => {
                             Think of it like the <span className="text-white font-semibold">squat</span> in physical training. &quot;Squat&quot; is the family. Back squat, front squat, goblet squat, pause squat, box squat — those are <span className="text-cyan-300 font-semibold">variants</span>. They all train hip and knee extension under load, but they vary the surface mechanics. You wouldn&apos;t count them as separate exercises in your programming taxonomy — they&apos;re all squats. But an athlete&apos;s actual training program might rotate through several squat variants depending on what phase they&apos;re in.
                         </p>
                         <p className="text-sm text-zinc-300 leading-relaxed">
-                            Pulse Check works the same way. <span className="text-white font-semibold">Kill Switch</span> is a family — it trains disruption recovery. Visual disruption Kill Switch, audio disruption Kill Switch, cognitive-provocation Kill Switch — those are variants. They all target the same mechanism (recover goal-directed focus after disruption) and produce the same core metric (post-error recovery time). Nora rotates through them for variety and engagement, but the profile shows one Kill Switch score, not eight different variant scores.
+                            Pulse Check works the same way. <span className="text-white font-semibold">Reset</span> is a family — it trains disruption recovery. Visual disruption Reset, audio disruption Reset, cognitive-provocation Reset — those are variants. They all target the same mechanism (recover goal-directed focus after disruption) and produce the same core metric (post-error recovery time). Nora rotates through them for variety and engagement, but the profile shows one Reset score, not eight different variant scores.
                         </p>
 
                         {/* SIDE-BY-SIDE COMPARISON */}
@@ -308,15 +301,15 @@ const SimFamilyTreeTab: React.FC = () => {
                             </div>
                             <div className="rounded-xl border border-purple-500/20 bg-purple-500/[0.03] p-4">
                                 <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-500 mb-2">🧠 Pulse Check</p>
-                                <p className="text-xs font-bold text-white mb-2">Kill Switch <span className="text-zinc-500 font-normal">← Family</span></p>
+                                <p className="text-xs font-bold text-white mb-2">Reset <span className="text-zinc-500 font-normal">← Family</span></p>
                                 <div className="space-y-1 pl-3 border-l-2 border-purple-500/30">
-                                    {['Visual Disruption Kill Switch', 'Audio Disruption Kill Switch', 'Cognitive-Provocation Kill Switch', 'Sport-Context Kill Switch', 'Immersive Reset Chamber'].map((v) => (
+                                    {['Visual Disruption Reset', 'Audio Disruption Reset', 'Cognitive-Provocation Reset', 'Sport-Context Reset', 'Immersive Reset Chamber'].map((v) => (
                                         <p key={v} className="text-[10px] text-zinc-400">{v}</p>
                                     ))}
                                 </div>
                                 <div className="mt-3 pt-2 border-t border-zinc-800">
                                     <p className="text-[9px] text-zinc-600"><span className="text-zinc-400 font-semibold">Shared mechanism:</span> Disruption recovery & attentional shifting</p>
-                                    <p className="text-[9px] text-zinc-600"><span className="text-zinc-400 font-semibold">Profile slot:</span> Kill Switch score</p>
+                                    <p className="text-[9px] text-zinc-600"><span className="text-zinc-400 font-semibold">Profile slot:</span> Reset score</p>
                                 </div>
                             </div>
                         </div>
@@ -380,7 +373,7 @@ const SimFamilyTreeTab: React.FC = () => {
                         <div className="space-y-2">
                             <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
                                 <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-600 mb-1">Nora decides…</p>
-                                <p className="text-xs text-zinc-300">This athlete needs <span className="text-green-400 font-semibold">Kill Switch</span> work because their profile shows weak refocus speed and post-error recovery.</p>
+                                <p className="text-xs text-zinc-300">This athlete needs <span className="text-green-400 font-semibold">Reset</span> work because their profile shows weak refocus speed and post-error recovery.</p>
                             </div>
                             <div className="flex justify-center">
                                 <ArrowDown className="w-4 h-4 text-zinc-600" />
@@ -388,7 +381,7 @@ const SimFamilyTreeTab: React.FC = () => {
                             <div className="rounded-xl border border-zinc-800 bg-black/20 p-3">
                                 <p className="text-[9px] uppercase tracking-widest font-bold text-zinc-600 mb-1">Nora serves…</p>
                                 <div className="flex flex-wrap gap-1.5">
-                                    {['Kill Switch: Visual Disruption', 'Kill Switch: Crowd Noise', 'Kill Switch: Basketball Reset', 'Kill Switch: Extended Recovery Trial'].map((v) => (
+                                    {['Reset: Visual Disruption', 'Reset: Crowd Noise', 'Reset: Basketball Reset', 'Reset: Extended Recovery Trial'].map((v) => (
                                         <span key={v} className="text-[10px] px-2 py-1 rounded-lg bg-green-500/5 border border-green-500/20 text-green-300/80">{v}</span>
                                     ))}
                                 </div>
@@ -407,7 +400,7 @@ const SimFamilyTreeTab: React.FC = () => {
                                     title: 'System Assignment',
                                     subtitle: 'What Nora is doing internally',
                                     color: '#22c55e',
-                                    example: 'Primary prescription need: Kill Switch family',
+                                    example: 'Primary prescription need: Reset family',
                                     reason: 'Reason: low refocus speed, moderate pressure instability',
                                 },
                                 {
@@ -416,7 +409,7 @@ const SimFamilyTreeTab: React.FC = () => {
                                     title: 'Variant Assignment',
                                     subtitle: 'The actual session object',
                                     color: '#60a5fa',
-                                    example: 'Assigned sim: Kill Switch / Audio Disruption / 3-minute / Tennis context',
+                                    example: 'Assigned sim: Reset / Audio Disruption / 3-minute / Tennis context',
                                     reason: '',
                                 },
                                 {
@@ -425,7 +418,7 @@ const SimFamilyTreeTab: React.FC = () => {
                                     title: 'Athlete-Facing Naming',
                                     subtitle: 'What the athlete sees',
                                     color: '#c084fc',
-                                    example: 'Kill Switch',
+                                    example: 'Reset',
                                     reason: 'Crowd Reset · 3 min',
                                 },
                             ].map((layer) => {
@@ -454,7 +447,7 @@ const SimFamilyTreeTab: React.FC = () => {
                         <p className="text-[9px] uppercase tracking-widest font-bold text-purple-400">Recommended Athlete-Facing Display</p>
                         <p className="text-xs text-zinc-400 leading-relaxed">Show <span className="text-white font-semibold">family name + variant subtitle</span>. This strikes the best balance: the athlete builds familiarity with the family (what they&apos;re training) while still seeing variation in the experience.</p>
                         <div className="rounded-xl border border-zinc-700 bg-black/40 p-4 max-w-xs">
-                            <p className="text-base font-bold text-white">Kill Switch</p>
+                            <p className="text-base font-bold text-white">Reset</p>
                             <p className="text-xs text-zinc-500 mt-0.5">Crowd Reset · 3 min</p>
                         </div>
                     </div>
@@ -474,7 +467,7 @@ const SimFamilyTreeTab: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3">
                                 <p className="text-[9px] uppercase tracking-widest font-bold text-green-400 mb-1">✓ Say this</p>
-                                <p className="text-xs text-zinc-300 italic">&quot;You improved in Kill Switch over the last 3 weeks.&quot;</p>
+                                <p className="text-xs text-zinc-300 italic">&quot;You improved in Reset over the last 3 weeks.&quot;</p>
                             </div>
                             <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3">
                                 <p className="text-[9px] uppercase tracking-widest font-bold text-red-400 mb-1">✗ Not this</p>

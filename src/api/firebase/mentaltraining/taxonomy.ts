@@ -182,7 +182,7 @@ export const SIM_REGISTRY: SimSpec[] = [
   {
     id: 'kill_switch',
     legacyExerciseId: 'focus-3-second-reset',
-    name: 'The Kill Switch',
+    name: 'Reset',
     purpose: 'Train rapid recovery and re-engagement after disruption.',
     primaryPillar: TaxonomyPillar.Composure,
     secondaryPillar: TaxonomyPillar.Focus,

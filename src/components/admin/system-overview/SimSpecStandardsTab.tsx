@@ -15,7 +15,6 @@ import {
     ChevronDown,
     ChevronRight,
     CheckCircle2,
-    XCircle,
     Info,
     Ruler,
 } from 'lucide-react';
@@ -42,7 +41,7 @@ function CollapsibleSection({ title, defaultOpen = false, children }: { title: s
 
 /* ---- MEASUREMENT RULES TABLE ---- */
 const MEASUREMENT_RULES = [
-    { family: 'Kill Switch', minSequence: '2 consecutive correct', minRT: '150 ms', maxWindow: 'Per-tier (spec)', falseStart: 'Response during disruption phase' },
+    { family: 'Reset', minSequence: '2 consecutive correct', minRT: '150 ms', maxWindow: 'Per-tier (spec)', falseStart: 'Response during disruption phase' },
     { family: 'Noise Gate', minSequence: '1 correct (continuous stream)', minRT: '150 ms', maxWindow: 'Per-tier (spec)', falseStart: 'Response to distractor stimulus' },
     { family: 'Brake Point', minSequence: '1 committed inhibition', minRT: '150 ms', maxWindow: 'Per-tier (spec)', falseStart: 'Response before Go stimulus' },
     { family: 'Signal Window', minSequence: '1 committed read', minRT: '150 ms', maxWindow: 'Per-tier (spec)', falseStart: 'Response before display onset' },
@@ -68,7 +67,7 @@ const SESSION_VALIDITY = [
 
 /* ---- MODIFIER BOUNDARIES ---- */
 const MODIFIER_BOUNDARIES = [
-    { family: 'Kill Switch', boundary: 'Modifiers may not introduce a secondary cognitive task that changes the recovery mechanism from "return to primary task" to "solve a new problem." The athlete must always recover to the same task, not pivot to a different one.' },
+    { family: 'Reset', boundary: 'Modifiers may not introduce a secondary cognitive task that changes the recovery mechanism from "return to primary task" to "solve a new problem." The athlete must always recover to the same task, not pivot to a different one.' },
     { family: 'Noise Gate', boundary: 'Distractors must remain irrelevant. If the distractor becomes a secondary target the athlete must monitor, the sim shifts from selective attention to divided attention (Split Stream territory).' },
     { family: 'Brake Point', boundary: 'The inhibition target must remain response cancellation. If modifiers add deliberation (e.g., "decide which response is correct"), it shifts into Signal Window territory.' },
     { family: 'Signal Window', boundary: 'The task must remain cue discrimination. If modifiers add ambiguity to the point where the athlete must commit without a correct answer, it shifts into Blind Commit territory.' },
@@ -109,21 +108,21 @@ const VALIDATION_STAGES = [
         name: 'Mechanism-Support',
         color: '#94a3b8',
         criteria: 'Peer-reviewed evidence supports the cognitive mechanism the sim targets. The sim is designed to train and measure a real, published construct.',
-        example: 'Kill Switch is grounded in inhibitory control and attentional shifting literature.',
+        example: 'Reset is grounded in inhibitory control and attentional shifting literature.',
     },
     {
         stage: 'Stage 2',
         name: 'Internal Reliability',
         color: '#60a5fa',
         criteria: 'Internal pilot data confirms the core metric is reliable. Test-retest reliability meets acceptable thresholds (r ≥ 0.70). Score distributions are not floor/ceiling-capped.',
-        example: 'Kill Switch Recovery Time produces r = 0.78 across two sessions with 40 athletes.',
+        example: 'Reset Recovery Time produces r = 0.78 across two sessions with 40 athletes.',
     },
     {
         stage: 'Stage 3',
         name: 'Discriminant Validity',
         color: '#c084fc',
         criteria: 'Data shows the sim differentiates meaningfully between athlete populations or predicts relevant performance differences. Scores correlate with expected outcomes.',
-        example: 'Athletes with higher Kill Switch scores show faster refocus in game-film-coded disruption events.',
+        example: 'Athletes with higher Reset scores show faster refocus in game-film-coded disruption events.',
     },
     {
         stage: 'Stage 4',
@@ -195,10 +194,10 @@ const SimSpecStandardsTab: React.FC = () => {
                 <CollapsibleSection title="2.1 Valid Response Definition" defaultOpen>
                     <div className="space-y-3">
                         {[
-                            { label: 'Minimum Response Sequence', desc: 'A single correct input is not sufficient. Kill Switch requires 2 consecutive correct responses. Single-event sims (Signal Window, Brake Point) require 1 committed response.', color: '#60a5fa' },
+                            { label: 'Minimum Response Sequence', desc: 'A single correct input is not sufficient. Reset requires 2 consecutive correct responses. Single-event sims (Signal Window, Brake Point) require 1 committed response.', color: '#60a5fa' },
                             { label: 'Minimum Reaction Time', desc: 'Any response faster than 150 ms is flagged as a motor artifact, not a cognitive response. Excluded from metric calculations and logged separately.', color: '#22c55e' },
                             { label: 'Maximum Response Window', desc: 'Each sim defines a maximum allowable response window. No valid response within this window → failed trial (Section 3).', color: '#c084fc' },
-                            { label: 'False Start Definition', desc: 'A response that occurs before the valid response window opens. Kill Switch: response during disruption. Brake Point: response before Go stimulus. Logged separately, not counted toward core metric.', color: '#f59e0b' },
+                            { label: 'False Start Definition', desc: 'A response that occurs before the valid response window opens. Reset: response during disruption. Brake Point: response before Go stimulus. Logged separately, not counted toward core metric.', color: '#f59e0b' },
                         ].map((rule) => (
                             <div key={rule.label} className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-black/20 p-3">
                                 <div className="w-1.5 h-8 rounded-full flex-shrink-0 mt-0.5" style={{ background: rule.color }} />
@@ -242,7 +241,7 @@ const SimSpecStandardsTab: React.FC = () => {
                 <CollapsibleSection title="2.3 Product Targets vs. Research Benchmarks">
                     <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
                         <p className="text-xs text-zinc-300 leading-relaxed">
-                            Performance targets in individual specs (e.g., Kill Switch Tier 1 targets recovery under 3 seconds) are <span className="text-amber-300 font-semibold">Pulse Check product progression thresholds</span>. They are not validated population norms.
+                            Performance targets in individual specs (e.g., Reset Tier 1 targets recovery under 3 seconds) are <span className="text-amber-300 font-semibold">Pulse Check product progression thresholds</span>. They are not validated population norms.
                         </p>
                         <p className="text-xs text-zinc-400 leading-relaxed">
                             Published research from Pulse Check studies will establish normative data over time. Until that data exists, all targets should be framed as <span className="text-white font-semibold">internal product standards</span> when referenced in external materials, proposals, or research documentation.
@@ -483,7 +482,7 @@ const SimSpecStandardsTab: React.FC = () => {
                         </p>
                         <div className="rounded-xl border border-zinc-700 bg-black/30 p-3 mt-2">
                             <p className="text-[10px] text-zinc-500 leading-relaxed">
-                                <span className="text-zinc-400 font-semibold">Example:</span> Kill Switch&apos;s Attentional Shifting score uses both re-engagement latency (speed) <em>and</em> first-post-reset accuracy (completeness). Latency alone could be gamed by fast but inaccurate responding.
+                                <span className="text-zinc-400 font-semibold">Example:</span> Reset&apos;s Attentional Shifting score uses both re-engagement latency (speed) <em>and</em> first-post-reset accuracy (completeness). Latency alone could be gamed by fast but inaccurate responding.
                             </p>
                         </div>
                     </CollapsibleSection>
