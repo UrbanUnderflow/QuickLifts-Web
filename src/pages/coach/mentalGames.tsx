@@ -57,7 +57,6 @@ import {
   ExerciseCard,
   AssignExerciseModal,
   ExercisePlayer,
-  KillSwitchGame,
   RecommendationCard,
   CurriculumProgressCard,
 } from '../../components/mentaltraining';
@@ -1056,31 +1055,20 @@ const CoachMentalTraining: React.FC = () => {
 
       {/* Exercise Player (Preview Mode) */}
       {playingExercise && (
-        playingExercise.exerciseConfig.type === 'focus' &&
-          (playingExercise.exerciseConfig.config as any)?.type === 'kill_switch' ? (
-          <KillSwitchGame
-            exercise={playingExercise}
-            onClose={() => setPlayingExercise(null)}
-            onComplete={(data) => {
-              console.log('Kill Switch preview completed:', data);
-              setPlayingExercise(null);
-            }}
-          />
-        ) : (
-          <ExercisePlayer
-            exercise={playingExercise}
-            onClose={() => setPlayingExercise(null)}
-            onComplete={(data) => {
-              console.log('Exercise preview completed:', data);
-              setPlayingExercise(null);
-            }}
-            onStartInChat={(exercise) => {
-              // For coaches previewing, redirect to PulseCheck chat with exercise
-              localStorage.setItem('pulsecheck_active_exercise', JSON.stringify(exercise));
-              router.push(`/PulseCheck?exercise=${encodeURIComponent(JSON.stringify(exercise))}`);
-            }}
-          />
-        )
+        <ExercisePlayer
+          exercise={playingExercise}
+          previewMode
+          onClose={() => setPlayingExercise(null)}
+          onComplete={(data) => {
+            console.log('Exercise preview completed:', data);
+            setPlayingExercise(null);
+          }}
+          onStartInChat={(exercise) => {
+            // For coaches previewing, redirect to PulseCheck chat with exercise
+            localStorage.setItem('pulsecheck_active_exercise', JSON.stringify(exercise));
+            router.push(`/PulseCheck?exercise=${encodeURIComponent(JSON.stringify(exercise))}`);
+          }}
+        />
       )}
 
       {/* Toast */}

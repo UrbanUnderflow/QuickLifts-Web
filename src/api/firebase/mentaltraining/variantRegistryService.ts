@@ -10,12 +10,18 @@ import {
 } from 'firebase/firestore';
 import {
   MentalExercise,
+  type SimBuildArtifact,
+  type SimBuildStatus,
+  type SimEngineKey,
+  type SimSyncStatus,
   exerciseToFirestore,
 } from './types';
 import {
   SIM_MODULES_COLLECTION,
   SIM_VARIANTS_COLLECTION,
 } from './collections';
+import type { SimVariantBuildMeta, SimVariantPublishedSnapshot } from './simBuild';
+import { buildPublishedVariantRecord, buildPublishedModuleFromVariant } from './simBuild';
 
 export type SimVariantSpecStatus = 'needs-spec' | 'in-progress' | 'complete' | 'not-required';
 export type SimVariantFamilyStatus = 'locked' | 'candidate';
@@ -92,6 +98,15 @@ export interface SimVariantRecord extends SimVariantSeed {
   specRaw?: string;
   archetypeOverride?: SimVariantArchetype;
   lockedSpec?: SimVariantLockedSpec;
+  engineKey?: SimEngineKey;
+  buildStatus?: SimBuildStatus;
+  syncStatus?: SimSyncStatus;
+  sourceFingerprint?: string;
+  lastBuiltFingerprint?: string;
+  lastPublishedFingerprint?: string;
+  buildArtifact?: SimBuildArtifact;
+  buildMeta?: SimVariantBuildMeta;
+  publishedSnapshot?: SimVariantPublishedSnapshot;
   runtimeConfig?: Record<string, any>;
   moduleDraft?: SimVariantModuleDraft;
   publishedModuleId?: string;
@@ -136,6 +151,15 @@ function variantFromFirestore(id: string, data: Record<string, any>): SimVariant
     specRaw: data.specRaw || '',
     archetypeOverride: data.archetypeOverride || undefined,
     lockedSpec: data.lockedSpec || undefined,
+    engineKey: data.engineKey || undefined,
+    buildStatus: data.buildStatus || undefined,
+    syncStatus: data.syncStatus || undefined,
+    sourceFingerprint: data.sourceFingerprint || undefined,
+    lastBuiltFingerprint: data.lastBuiltFingerprint || undefined,
+    lastPublishedFingerprint: data.lastPublishedFingerprint || undefined,
+    buildArtifact: data.buildArtifact || undefined,
+    buildMeta: data.buildMeta || undefined,
+    publishedSnapshot: data.publishedSnapshot || undefined,
     runtimeConfig: data.runtimeConfig || undefined,
     moduleDraft: data.moduleDraft || undefined,
     publishedModuleId: data.publishedModuleId || undefined,
@@ -156,6 +180,15 @@ function variantToFirestore(record: SimVariantRecord): Record<string, any> {
     specRaw: record.specRaw || '',
     archetypeOverride: record.archetypeOverride || null,
     lockedSpec: record.lockedSpec || null,
+    engineKey: record.engineKey || null,
+    buildStatus: record.buildStatus || null,
+    syncStatus: record.syncStatus || null,
+    sourceFingerprint: record.sourceFingerprint || null,
+    lastBuiltFingerprint: record.lastBuiltFingerprint || null,
+    lastPublishedFingerprint: record.lastPublishedFingerprint || null,
+    buildArtifact: record.buildArtifact || null,
+    buildMeta: record.buildMeta || null,
+    publishedSnapshot: record.publishedSnapshot || null,
     runtimeConfig: record.runtimeConfig || null,
     moduleDraft: record.moduleDraft || null,
     publishedModuleId: record.publishedModuleId || null,
@@ -287,20 +320,25 @@ export const simVariantRegistryService = {
 
   async publish(record: SimVariantRecord, module: MentalExercise): Promise<string> {
     const publishedAt = Date.now();
-    const nextRecord: SimVariantRecord = {
-      ...record,
-      publishedModuleId: module.id,
-      publishedAt,
-      specStatus: record.specStatus === 'not-required' ? 'not-required' : 'complete',
+    const nextRecord = buildPublishedVariantRecord(
+      {
+        ...record,
+        publishedModuleId: module.id,
+      },
+      publishedAt
+    );
+    const publishedModule = buildPublishedModuleFromVariant(nextRecord, {
+      ...module,
       updatedAt: publishedAt,
-    };
+    });
     const batch = writeBatch(db);
 
     batch.set(
       doc(db, SIM_MODULES_COLLECTION, module.id),
       exerciseToFirestore({
-        ...module,
+        ...publishedModule,
         variantSource: {
+          ...(publishedModule.variantSource || {}),
           variantId: record.id,
           variantName: record.name,
           family: record.family,

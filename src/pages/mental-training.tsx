@@ -37,7 +37,7 @@ import {
   ExerciseCategory,
   AssignmentStatus,
 } from '../api/firebase/mentaltraining';
-import { ExerciseCard, ExercisePlayer, KillSwitchGame, MentalProgressCard, exerciseRequiresWriting } from '../components/mentaltraining';
+import { ExerciseCard, ExercisePlayer, MentalProgressCard, exerciseRequiresWriting } from '../components/mentaltraining';
 import { useRouter } from 'next/router';
 
 type TabType = 'today' | 'library' | 'history';
@@ -433,28 +433,16 @@ const MentalTrainingPage: React.FC = () => {
       {/* Exercise Player Modal */}
       <AnimatePresence>
         {selectedExercise && (
-          selectedExercise.exerciseConfig.type === 'focus' &&
-            (selectedExercise.exerciseConfig.config as any)?.type === 'kill_switch' ? (
-            <KillSwitchGame
-              exercise={selectedExercise}
-              onComplete={handleExerciseComplete}
-              onClose={() => {
-                setSelectedExercise(null);
-                setSelectedAssignmentId(undefined);
-              }}
-            />
-          ) : (
-            <ExercisePlayer
-              exercise={selectedExercise}
-              assignmentId={selectedAssignmentId}
-              onComplete={handleExerciseComplete}
-              onClose={() => {
-                setSelectedExercise(null);
-                setSelectedAssignmentId(undefined);
-              }}
-              onStartInChat={handleStartInChat}
-            />
-          )
+          <ExercisePlayer
+            exercise={selectedExercise}
+            assignmentId={selectedAssignmentId}
+            onComplete={handleExerciseComplete}
+            onClose={() => {
+              setSelectedExercise(null);
+              setSelectedAssignmentId(undefined);
+            }}
+            onStartInChat={handleStartInChat}
+          />
         )}
       </AnimatePresence>
     </div>
