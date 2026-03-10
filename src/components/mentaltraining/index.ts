@@ -6,6 +6,7 @@
 
 export { ExercisePlayer, exerciseRequiresWriting } from './ExercisePlayer';
 export { KillSwitchGame } from './KillSwitchGame';
+export { SimRuntimePlayer } from './SimRuntimePlayer';
 export { ExerciseCard } from './ExerciseCard';
 export { AssignExerciseModal } from './AssignExerciseModal';
 export { MentalProgressCard } from './MentalProgressCard';

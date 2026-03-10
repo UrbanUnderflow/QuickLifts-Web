@@ -32,6 +32,7 @@ import {
   ExerciseCategory,
 } from '../../api/firebase/mentaltraining/types';
 import { KillSwitchGame } from './KillSwitchGame';
+import { SimRuntimePlayer } from './SimRuntimePlayer';
 
 // ============================================================================
 // TYPES
@@ -78,6 +79,7 @@ interface ExercisePlayerProps {
   assignmentId?: string;
   /** Called when a writing exercise should be started in Nora chat */
   onStartInChat?: (exercise: SimModule) => void;
+  previewMode?: boolean;
 }
 
 type PlayerState = 'intro' | 'pre-mood' | 'active' | 'post-mood' | 'complete';
@@ -92,6 +94,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   onClose,
   assignmentId: _assignmentId,
   onStartInChat,
+  previewMode = false,
 }) => {
   // Check if this exercise requires writing - show different flow
   const requiresWriting = exerciseRequiresWriting(exercise);
@@ -203,6 +206,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
 
       {/* Close button */}
       <button
+        aria-label="Close module preview"
         onClick={() => {
           stopNarration();
           onClose();
@@ -214,6 +218,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
 
       {/* Sound toggle */}
       <button
+        aria-label={soundEnabled ? 'Mute module audio' : 'Unmute module audio'}
         onClick={() => {
           const next = !soundEnabled;
           setSoundEnabled(next);
@@ -265,6 +270,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
               soundEnabled={soundEnabled}
               requiresWriting={requiresWriting}
               onStartInChat={onStartInChat}
+              previewMode={previewMode}
             />
           )}
 
@@ -428,6 +434,7 @@ interface ActiveExerciseProps {
   soundEnabled: boolean;
   requiresWriting?: boolean;
   onStartInChat?: (exercise: SimModule) => void;
+  previewMode?: boolean;
 }
 
 const ActiveExercise: React.FC<ActiveExerciseProps> = ({
@@ -441,7 +448,21 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
   soundEnabled,
   requiresWriting,
   onStartInChat,
+  previewMode,
 }) => {
+  if (exercise.buildArtifact?.engineKey) {
+    return (
+      <SimRuntimePlayer
+        exercise={exercise}
+        isPaused={isPaused}
+        onPause={onPause}
+        onResume={onResume}
+        onComplete={onComplete}
+        previewMode={previewMode}
+      />
+    );
+  }
+
   if (exercise.exerciseConfig.type === 'breathing') {
     return (
       <BreathingExercise
@@ -464,6 +485,7 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
           exercise={exercise}
           onComplete={() => onComplete()}
           onClose={onPause}
+          previewMode={previewMode}
         />
       );
     }

@@ -1,8 +1,9 @@
 // src/api/firebase/config.ts
-import { initializeApp, getApps, deleteApp, FirebaseApp } from 'firebase/app';
+import { initializeApp, deleteApp, FirebaseApp } from 'firebase/app';
 import { getAuth, setPersistence, browserLocalPersistence, Auth } from "firebase/auth";
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { installPulseE2EHarness } from './mentaltraining/e2eHarness';
 
 let firebaseApp: FirebaseApp;
 let firebaseAuth: Auth;
@@ -153,8 +154,13 @@ export const initializeFirebase = (isDev = false) => {
 
 // Get initial mode from localStorage if available
 const getInitialMode = () => {
+  if (process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true') {
+    console.log('[Firebase] E2E mode forcing development Firebase config');
+    return true;
+  }
   if (typeof window !== 'undefined') {
-    const mode = window.localStorage.getItem('devMode') === 'true';
+    const mode = window.localStorage.getItem('forceDevFirebase') === 'true'
+      || window.localStorage.getItem('devMode') === 'true';
     console.log('[Firebase] Initial mode:', {
       isDev: mode,
       timestamp: new Date().toISOString()
@@ -170,6 +176,16 @@ const { app, auth, db, storage } = initializeFirebase(getInitialMode());
 // Ensure auth is available before exporting
 if (!auth) {
   throw new Error('[Firebase] Auth was not properly initialized');
+}
+
+if (typeof window !== 'undefined') {
+  const shouldInstallE2EHarness =
+    process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true' ||
+    window.localStorage.getItem('forceDevFirebase') === 'true';
+
+  if (shouldInstallE2EHarness) {
+    installPulseE2EHarness(db);
+  }
 }
 
 export { app, auth, db, storage };

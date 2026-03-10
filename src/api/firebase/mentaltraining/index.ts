@@ -23,6 +23,7 @@ export {
 export { buildTaxonomyCheckInState, bootstrapTaxonomyProfile, deriveTaxonomyProfile, prescribeNextSession, calculateTransferGap } from './taxonomyProfileService';
 export * from './collections';
 export { simVariantRegistryService, buildSimVariantId } from './variantRegistryService';
+export * from './simBuild';
 
 // Curriculum Services
 export { curriculumAssignmentService } from './curriculumAssignmentService';

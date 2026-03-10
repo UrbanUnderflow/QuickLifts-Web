@@ -95,6 +95,34 @@ export interface ExerciseOverview {
   analogy: string;   // Relatable analogy for understanding
 }
 
+export type SimEngineKey =
+  | 'kill_switch'
+  | 'noise_gate'
+  | 'brake_point'
+  | 'signal_window'
+  | 'sequence_shift'
+  | 'endurance_lock';
+
+export type SimBuildStatus = 'not_built' | 'built' | 'published' | 'out_of_sync' | 'build_error';
+export type SimSyncStatus = 'in_sync' | 'spec_changed' | 'config_changed' | 'module_changed' | 'build_stale';
+
+export interface SimBuildArtifact {
+  engineKey: SimEngineKey;
+  engineVersion: string;
+  family: string;
+  variantId: string;
+  variantName: string;
+  moduleId: string;
+  sessionModel: Record<string, any>;
+  stimulusModel: Record<string, any>;
+  scoringModel: Record<string, any>;
+  feedbackModel: Record<string, any>;
+  analyticsModel: Record<string, any>;
+  uiModel: Record<string, any>;
+  safeguards: string[];
+  sourceFingerprint: string;
+}
+
 /**
  * SimModule - A reusable simulation module template
  * Collection: sim-modules
@@ -130,6 +158,10 @@ export interface MentalExercise {
     validationPlan: string;
   };
   runtimeConfig?: Record<string, any>;
+  engineKey?: SimEngineKey;
+  buildArtifact?: SimBuildArtifact;
+  syncStatus?: SimSyncStatus;
+  publishedFingerprint?: string;
   variantSource?: {
     variantId: string;
     variantName: string;
@@ -710,6 +742,18 @@ export function exerciseToFirestore(exercise: MentalExercise): Record<string, an
   if (exercise.runtimeConfig) {
     data.runtimeConfig = exercise.runtimeConfig;
   }
+  if (exercise.engineKey) {
+    data.engineKey = exercise.engineKey;
+  }
+  if (exercise.buildArtifact) {
+    data.buildArtifact = exercise.buildArtifact;
+  }
+  if (exercise.syncStatus) {
+    data.syncStatus = exercise.syncStatus;
+  }
+  if (exercise.publishedFingerprint) {
+    data.publishedFingerprint = exercise.publishedFingerprint;
+  }
   if (exercise.variantSource) {
     data.variantSource = exercise.variantSource;
   }
@@ -737,6 +781,10 @@ export function exerciseFromFirestore(id: string, data: Record<string, any>): Me
     simSpecId: data.simSpecId,
     taxonomy: data.taxonomy,
     runtimeConfig: data.runtimeConfig,
+    engineKey: data.engineKey,
+    buildArtifact: data.buildArtifact,
+    syncStatus: data.syncStatus,
+    publishedFingerprint: data.publishedFingerprint,
     variantSource: data.variantSource,
     createdAt: data.createdAt || Date.now(),
     updatedAt: data.updatedAt || Date.now(),

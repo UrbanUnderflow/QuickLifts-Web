@@ -24,3 +24,8 @@ temp/
 # Dev-only slim functions directory (symlinks)
 netlify/functions-dev/
 serviceAccountKey.json
+
+# Playwright
+playwright-report/
+test-results/
+.playwright/

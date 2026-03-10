@@ -16,9 +16,6 @@ import AthleteJourneyTab from '../../components/admin/system-overview/AthleteJou
 import { systemOverviewManifest } from '../../content/system-overview/manifest';
 import type { ConnectionType, EcosystemConnection, EcosystemNode } from '../../content/system-overview/schema';
 
-const SYSTEM_OVERVIEW_PASSCODE = 'PULSESECURE';
-const SYSTEM_OVERVIEW_UNLOCK_KEY = 'system-overview-unlocked';
-
 const CONNECTION_COLORS: Record<ConnectionType, string> = {
   data: '#38bdf8',
   auth: '#a78bfa',
@@ -125,9 +122,6 @@ function EcosystemMap({ nodes, connections }: { nodes: EcosystemNode[]; connecti
 }
 
 const SystemOverviewPage: React.FC = () => {
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [passcodeInput, setPasscodeInput] = useState('');
-  const [passcodeError, setPasscodeError] = useState('');
   const [activeSystemId, setActiveSystemId] = useState<string>(SYSTEM_TABS[0].id);
   const [activeSectionId, setActiveSectionId] = useState<string>(systemOverviewManifest.sections[0]?.id || 'executive-summary');
 
@@ -138,18 +132,8 @@ const SystemOverviewPage: React.FC = () => {
     [activeSystemTab]
   );
 
-  useEffect(() => {
-    try {
-      const unlocked = sessionStorage.getItem(SYSTEM_OVERVIEW_UNLOCK_KEY) === 'true';
-      setIsUnlocked(unlocked);
-    } catch {
-      setIsUnlocked(false);
-    }
-  }, []);
-
   // Read initial section from URL hash if present
   useEffect(() => {
-    if (!isUnlocked) return;
     const hash = window.location.hash.replace('#', '');
     if (hash) {
       const matchingSection = systemOverviewManifest.sections.find((s) => s.id === hash);
@@ -159,7 +143,7 @@ const SystemOverviewPage: React.FC = () => {
         setActiveSystemId(getSystemForSection(hash));
       }
     }
-  }, [isUnlocked]);
+  }, []);
 
   const handleSystemChange = (systemId: string) => {
     setActiveSystemId(systemId);
@@ -214,63 +198,6 @@ const SystemOverviewPage: React.FC = () => {
     ],
     []
   );
-
-  const handlePasscodeSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmedPasscode = passcodeInput.trim().toUpperCase();
-
-    if (trimmedPasscode === SYSTEM_OVERVIEW_PASSCODE) {
-      try {
-        sessionStorage.setItem(SYSTEM_OVERVIEW_UNLOCK_KEY, 'true');
-      } catch {
-        // no-op when session storage is unavailable
-      }
-      setIsUnlocked(true);
-      setPasscodeInput('');
-      setPasscodeError('');
-      return;
-    }
-
-    setPasscodeError('Incorrect passcode. Please try again.');
-  };
-
-  if (!isUnlocked) {
-    return (
-      <AdminRouteGuard>
-        <div className="min-h-screen bg-[#05070c] text-white flex items-center justify-center px-6">
-          <Head>
-            <title>System Overview Access | Pulse</title>
-          </Head>
-          <div className="w-full max-w-sm bg-[#0b0f18] border border-zinc-800 rounded-2xl p-6">
-            <h1 className="text-xl font-semibold">System Overview</h1>
-            <p className="text-zinc-400 text-sm mt-1 mb-5">Enter passcode to view the handbook.</p>
-            <form onSubmit={handlePasscodeSubmit} className="space-y-3">
-              <input
-                type="password"
-                value={passcodeInput}
-                onChange={(event) => {
-                  setPasscodeInput(event.target.value.toUpperCase());
-                  setPasscodeError('');
-                }}
-                placeholder="Passcode"
-                className="w-full px-4 py-3 rounded-xl bg-black/40 border border-zinc-700 text-white placeholder-zinc-500 focus:outline-none focus:border-white/50 uppercase"
-                style={{ textTransform: 'uppercase' }}
-                autoComplete="off"
-                autoFocus
-              />
-              <button
-                type="submit"
-                className="w-full py-3 rounded-xl bg-white text-black font-semibold hover:bg-zinc-200 transition-colors"
-              >
-                Enter
-              </button>
-              {passcodeError && <p className="text-red-400 text-sm">{passcodeError}</p>}
-            </form>
-          </div>
-        </div>
-      </AdminRouteGuard>
-    );
-  }
 
   /* ---- SECTION CONTENT RENDERER ---- */
   const renderSectionContent = () => {

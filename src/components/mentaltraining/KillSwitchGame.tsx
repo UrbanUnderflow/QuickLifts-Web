@@ -132,6 +132,7 @@ interface KillSwitchGameProps {
         helpfulnessRating?: number;
     }) => void;
     onClose: () => void;
+    previewMode?: boolean;
 }
 
 // ============================================================================
@@ -142,6 +143,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
     exercise,
     onComplete,
     onClose,
+    previewMode = false,
 }) => {
     const currentUser = useUser();
 
@@ -199,7 +201,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
     // Load user's tier progress from Firestore
     useEffect(() => {
         const loadProgress = async () => {
-            if (!currentUser?.id) {
+            if (previewMode || !currentUser?.id) {
                 setProgressLoading(false);
                 return;
             }
@@ -216,7 +218,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
             }
         };
         loadProgress();
-    }, [currentUser?.id]);
+    }, [currentUser?.id, previewMode]);
 
     // Select a tier (from unlocked tiers)
     const selectTier = useCallback((tier: number) => {
@@ -544,6 +546,9 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
             roundCount: roundRecoveryTimes.length,
         };
 
+        if (previewMode) {
+            return;
+        }
         try {
             const [result] = await Promise.all([
                 gameLevelProgressService.recordSession(
@@ -595,7 +600,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
         } catch (err) {
             console.error('Failed to save session progress:', err);
         }
-    }, [currentUser?.id, tierNumber, avgRecovery, variance, resilienceScore, metTarget, roundRecoveryTimes, totalElapsed, delta, bestRecovery, worstRecovery, exercise.id, tierConfig.recoveryTarget]);
+    }, [currentUser?.id, previewMode, tierNumber, avgRecovery, variance, resilienceScore, metTarget, roundRecoveryTimes, totalElapsed, delta, bestRecovery, worstRecovery, exercise.id, tierConfig.recoveryTarget]);
 
     // ============================================================================
     // RENDER HELPERS

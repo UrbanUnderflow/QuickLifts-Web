@@ -30,12 +30,16 @@ import {
     Save,
     Upload,
     RefreshCw,
+    Play,
 } from 'lucide-react';
 import {
     ExerciseCategory,
     ExerciseDifficulty,
+    simModuleLibraryService,
     simVariantRegistryService,
     type MentalExercise,
+    type SimBuildStatus,
+    type SimSyncStatus,
 } from '../../../api/firebase/mentaltraining';
 import {
     type SimVariantArchetype,
@@ -49,6 +53,14 @@ import {
     type SimVariantSeed,
     type SimVariantSpecStatus,
 } from '../../../api/firebase/mentaltraining/variantRegistryService';
+import {
+    applyDraftSyncState,
+    buildPublishedModuleFromVariant,
+    buildPublishedVariantRecord,
+    buildVariantRecordForBuild,
+    summarizeVariantSyncDiff,
+} from '../../../api/firebase/mentaltraining/simBuild';
+import { ExercisePlayer } from '../../mentaltraining';
 
 /* ---- TYPES ---- */
 type SpecStatus = SimVariantSpecStatus;
@@ -178,6 +190,22 @@ const MODE_CONFIG: Record<VariantMode, { label: string; color: string; icon: Rea
     branch: { label: 'Branch Variant', color: '#60a5fa', icon: Layers },
     library: { label: 'Library Variant', color: '#c084fc', icon: BookOpen },
     hybrid: { label: 'Hybrid / Trial', color: '#64748b', icon: Zap },
+};
+
+const BUILD_STATUS_CONFIG: Record<SimBuildStatus, { label: string; color: string }> = {
+    not_built: { label: 'Not Built', color: '#71717a' },
+    built: { label: 'Built', color: '#38bdf8' },
+    published: { label: 'Published', color: '#22c55e' },
+    out_of_sync: { label: 'Out of Sync', color: '#f59e0b' },
+    build_error: { label: 'Build Error', color: '#ef4444' },
+};
+
+const SYNC_STATUS_CONFIG: Record<SimSyncStatus, { label: string; color: string }> = {
+    in_sync: { label: 'In Sync', color: '#22c55e' },
+    spec_changed: { label: 'Spec Changed', color: '#f59e0b' },
+    config_changed: { label: 'Runtime Changed', color: '#f59e0b' },
+    module_changed: { label: 'Module Changed', color: '#f59e0b' },
+    build_stale: { label: 'Build Stale', color: '#f97316' },
 };
 
 /* ---- FAMILY COLOR MAP ---- */
@@ -3171,6 +3199,22 @@ function buildDefaultModuleDraft(variant: VariantEntry, sortOrder: number): SimV
     };
 }
 
+function normalizeModuleDraft(
+    variant: VariantEntry,
+    moduleDraft: Partial<SimVariantModuleDraft> | undefined,
+    sortOrder: number
+): SimVariantModuleDraft {
+    const defaultModuleDraft = buildDefaultModuleDraft(variant, sortOrder);
+    return {
+        ...defaultModuleDraft,
+        ...(moduleDraft ?? {}),
+        overview: {
+            ...defaultModuleDraft.overview,
+            ...((moduleDraft?.overview as Partial<SimVariantModuleDraft['overview']> | undefined) ?? {}),
+        },
+    };
+}
+
 function resolveSpecStatus(record: SimVariantRecord): SpecStatus {
     if (record.mode === 'hybrid' || record.specStatus === 'not-required') return 'not-required';
     if (record.specStatus === 'complete') return 'complete';
@@ -3179,9 +3223,7 @@ function resolveSpecStatus(record: SimVariantRecord): SpecStatus {
 }
 
 function buildVariantWorkspace(seed: VariantEntry, existing: SimVariantRecord | undefined, sortOrder: number): SimVariantRecord {
-    const defaultModuleDraft = buildDefaultModuleDraft(seed, sortOrder);
-
-    return {
+    return applyDraftSyncState({
         id: existing?.id ?? buildSimVariantId(seed),
         name: existing?.name ?? seed.name,
         family: existing?.family ?? seed.family,
@@ -3193,15 +3235,21 @@ function buildVariantWorkspace(seed: VariantEntry, existing: SimVariantRecord | 
         archetypeOverride: existing?.archetypeOverride,
         lockedSpec: existing?.lockedSpec ?? buildDefaultLockedSpec(existing ?? seed),
         runtimeConfig: existing?.runtimeConfig ?? buildDefaultRuntimeConfig(seed),
-        moduleDraft: {
-            ...defaultModuleDraft,
-            ...(existing?.moduleDraft ?? {}),
-        },
+        moduleDraft: normalizeModuleDraft(seed, existing?.moduleDraft, sortOrder),
+        engineKey: existing?.engineKey,
+        buildStatus: existing?.buildStatus,
+        syncStatus: existing?.syncStatus,
+        sourceFingerprint: existing?.sourceFingerprint,
+        lastBuiltFingerprint: existing?.lastBuiltFingerprint,
+        lastPublishedFingerprint: existing?.lastPublishedFingerprint,
+        buildArtifact: existing?.buildArtifact,
+        buildMeta: existing?.buildMeta,
+        publishedSnapshot: existing?.publishedSnapshot,
         publishedModuleId: existing?.publishedModuleId,
         publishedAt: existing?.publishedAt,
         createdAt: existing?.createdAt ?? Date.now(),
         updatedAt: existing?.updatedAt ?? Date.now(),
-    };
+    });
 }
 
 function createDraftVariantRecord(seed?: Partial<SimVariantSeed>, sortOrder: number = 999): SimVariantRecord {
@@ -3226,8 +3274,7 @@ function createDraftVariantRecord(seed?: Partial<SimVariantSeed>, sortOrder: num
 function buildPublishedModule(record: SimVariantRecord): MentalExercise {
     const moduleDraft = record.moduleDraft ?? buildDefaultModuleDraft(record, 0);
     const archetype = resolveVariantArchetype(record);
-
-    return {
+    const nextModule: MentalExercise = {
         id: moduleDraft.moduleId,
         name: moduleDraft.name,
         description: moduleDraft.description,
@@ -3267,6 +3314,7 @@ function buildPublishedModule(record: SimVariantRecord): MentalExercise {
         createdAt: record.createdAt,
         updatedAt: Date.now(),
     };
+    return buildPublishedModuleFromVariant(record, nextModule);
 }
 
 function formatVariantHistoryTimestamp(timestamp: number) {
@@ -3427,19 +3475,23 @@ function VariantWorkspaceModal({
     variant,
     onClose,
     onSave,
+    onBuild,
     onPublish,
     initialSpecRaw,
     initialTab = 'spec',
     saving,
+    building,
     publishing,
 }: {
     variant: SimVariantRecord;
     onClose: () => void;
     onSave: (next: SimVariantRecord) => Promise<void>;
+    onBuild: (next: SimVariantRecord) => Promise<void>;
     onPublish: (next: SimVariantRecord) => Promise<void>;
     initialSpecRaw?: string;
     initialTab?: 'general' | 'locks' | 'spec' | 'config' | 'publish' | 'history';
     saving: boolean;
+    building: boolean;
     publishing: boolean;
 }) {
     const [variantMeta, setVariantMeta] = useState<SimVariantRecord>(variant);
@@ -3449,15 +3501,17 @@ function VariantWorkspaceModal({
     const [parsed, setParsed] = useState<ParsedSpec | null>((initialSpecRaw ?? variant.specRaw)?.trim() ? parseVariantSpec(initialSpecRaw ?? variant.specRaw ?? '') : null);
     const [configText, setConfigText] = useState(JSON.stringify(variant.runtimeConfig ?? buildDefaultRuntimeConfig(variant), null, 2));
     const [configError, setConfigError] = useState<string | null>(null);
-    const [moduleDraft, setModuleDraft] = useState<SimVariantModuleDraft>(variant.moduleDraft ?? buildDefaultModuleDraft(variant, 0));
-    const [benefitsText, setBenefitsText] = useState((variant.moduleDraft?.benefits ?? []).join('\n'));
-    const [bestForText, setBestForText] = useState((variant.moduleDraft?.bestFor ?? []).join('\n'));
+    const [moduleDraft, setModuleDraft] = useState<SimVariantModuleDraft>(normalizeModuleDraft(variant, variant.moduleDraft, 0));
+    const [benefitsText, setBenefitsText] = useState((normalizeModuleDraft(variant, variant.moduleDraft, 0).benefits ?? []).join('\n'));
+    const [bestForText, setBestForText] = useState((normalizeModuleDraft(variant, variant.moduleDraft, 0).bestFor ?? []).join('\n'));
     const [historyEntries, setHistoryEntries] = useState<SimVariantHistoryEntry[]>([]);
     const [historyLoading, setHistoryLoading] = useState(true);
     const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
     const [auditReport, setAuditReport] = useState<SpecAuditReport | null>(null);
     const [warningFixFeedback, setWarningFixFeedback] = useState<WarningFixFeedback | null>(null);
     const [showDetailedFindings, setShowDetailedFindings] = useState(false);
+    const [previewModule, setPreviewModule] = useState<MentalExercise | null>(null);
+    const [loadingPublishedPreview, setLoadingPublishedPreview] = useState(false);
     const trialVariant = isTrialVariant(variantMeta);
     const activeLockedSpec = variantMeta.lockedSpec ?? buildDefaultLockedSpec(variantMeta);
     const warningFindings = useMemo(
@@ -3475,10 +3529,15 @@ function VariantWorkspaceModal({
     const nextWarningFixAction = warningFixActions[0] ?? null;
     const warningFindingCount = warningFindings.length;
     const warningFixStepCount = warningFixActions.length;
+    const syncSummary = useMemo(() => summarizeVariantSyncDiff(variantMeta), [variantMeta]);
+    const effectiveBuildStatus = variantMeta.buildStatus ?? 'not_built';
+    const effectiveSyncStatus = variantMeta.syncStatus ?? 'in_sync';
+    const buildStatusConf = BUILD_STATUS_CONFIG[effectiveBuildStatus];
+    const syncStatusConf = SYNC_STATUS_CONFIG[effectiveSyncStatus];
 
     useEffect(() => {
         const nextRawSpec = initialSpecRaw ?? variant.specRaw ?? '';
-        const nextModuleDraft = variant.moduleDraft ?? buildDefaultModuleDraft(variant, 0);
+        const nextModuleDraft = normalizeModuleDraft(variant, variant.moduleDraft, 0);
         setVariantMeta(variant);
         setActiveTab(initialTab);
         setRawSpec(nextRawSpec);
@@ -3583,7 +3642,7 @@ function VariantWorkspaceModal({
     const buildNextRecord = (nextSpecRaw: string = rawSpec): SimVariantRecord | null => {
         try {
             const runtimeConfig = JSON.parse(configText);
-            return {
+            return applyDraftSyncState({
                 ...variantMeta,
                 specRaw: nextSpecRaw,
                 lockedSpec: isTrialVariant(variantMeta) ? (variantMeta.lockedSpec ?? buildDefaultLockedSpec(variantMeta)) : undefined,
@@ -3604,7 +3663,7 @@ function VariantWorkspaceModal({
                     bestFor: bestForText.split('\n').map((item) => item.trim()).filter(Boolean),
                 },
                 updatedAt: Date.now(),
-            };
+            });
         } catch (error: any) {
             setConfigError(error.message);
             setActiveTab('config');
@@ -3626,6 +3685,19 @@ function VariantWorkspaceModal({
         await onSave(next);
     };
 
+    const handleBuild = async () => {
+        const audit = handleRunAudit();
+        if (audit.status === 'needs_input') {
+            setActiveTab('spec');
+            return;
+        }
+        const next = buildNextRecord(audit.fixedRaw);
+        if (!next) return;
+        const builtRecord = buildVariantRecordForBuild(next);
+        setVariantMeta(builtRecord);
+        await onBuild(builtRecord);
+    };
+
     const handlePublish = async () => {
         const audit = handleRunAudit();
         if (audit.status === 'needs_input') {
@@ -3634,14 +3706,44 @@ function VariantWorkspaceModal({
         }
         const next = buildNextRecord(audit.fixedRaw);
         if (!next) return;
-        await onPublish(next);
+        const builtRecord = buildVariantRecordForBuild(next);
+        setVariantMeta(builtRecord);
+        await onPublish(builtRecord);
+    };
+
+    const handlePreviewBuild = () => {
+        const audit = handleRunAudit();
+        if (audit.status === 'needs_input') {
+            setActiveTab('spec');
+            return;
+        }
+        const next = buildNextRecord(audit.fixedRaw);
+        if (!next) return;
+        const builtRecord = buildVariantRecordForBuild(next);
+        setVariantMeta(builtRecord);
+        setPreviewModule(buildPublishedModule(builtRecord));
+    };
+
+    const handlePreviewPublishedModule = async () => {
+        if (!variantMeta.publishedModuleId) return;
+        setLoadingPublishedPreview(true);
+        try {
+            const module = await simModuleLibraryService.getById(variantMeta.publishedModuleId);
+            if (module) {
+                setPreviewModule(module);
+            }
+        } catch (error) {
+            console.error('Failed to load published module preview:', error);
+        } finally {
+            setLoadingPublishedPreview(false);
+        }
     };
 
     const handleRestoreSnapshot = (entry: SimVariantHistoryEntry) => {
         setRestoringHistoryId(entry.id);
-        const snapshot = entry.snapshot;
+        const snapshot = applyDraftSyncState(entry.snapshot);
         const nextRawSpec = snapshot.specRaw ?? '';
-        const nextModuleDraft = snapshot.moduleDraft ?? buildDefaultModuleDraft(snapshot, 0);
+        const nextModuleDraft = normalizeModuleDraft(snapshot, snapshot.moduleDraft, 0);
         setVariantMeta(snapshot);
         setRawSpec(nextRawSpec);
         setParsed(nextRawSpec.trim() ? parseVariantSpec(nextRawSpec) : null);
@@ -4162,8 +4264,116 @@ function VariantWorkspaceModal({
                         <div className="space-y-5">
                             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
                                 <p className="text-xs text-emerald-300 leading-relaxed">
-                                    Publish creates or updates a `sim-module` derived from this variant workspace. The registry remains the editing surface; the module is the runtime artifact.
+                                    Publish now compiles a playable build artifact first, then writes the derived `sim-module`. The registry stays canonical; the module is runtime output.
                                 </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div className="rounded-xl border border-zinc-800 bg-black/20 px-4 py-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Build Status</p>
+                                    <p className="text-sm font-semibold mt-2" style={{ color: buildStatusConf.color }}>{buildStatusConf.label}</p>
+                                    <p className="text-[11px] text-zinc-500 mt-1">{variantMeta.engineKey ?? 'engine pending'}</p>
+                                </div>
+                                <div className="rounded-xl border border-zinc-800 bg-black/20 px-4 py-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Sync Status</p>
+                                    <p className="text-sm font-semibold mt-2" style={{ color: syncStatusConf.color }}>{syncStatusConf.label}</p>
+                                    <p className="text-[11px] text-zinc-500 mt-1">{variantMeta.publishedModuleId ? 'Compared to published module' : 'No published module yet'}</p>
+                                </div>
+                                <div className="rounded-xl border border-zinc-800 bg-black/20 px-4 py-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Last Built</p>
+                                    <p className="text-sm font-semibold mt-2 text-white">
+                                        {variantMeta.buildMeta?.builtAt ? new Date(variantMeta.buildMeta.builtAt).toLocaleString() : 'Not built yet'}
+                                    </p>
+                                    <p className="text-[11px] text-zinc-500 mt-1">{variantMeta.buildMeta?.engineVersion ?? 'registry-runtime/v1'}</p>
+                                </div>
+                                <div className="rounded-xl border border-zinc-800 bg-black/20 px-4 py-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Last Published</p>
+                                    <p className="text-sm font-semibold mt-2 text-white">
+                                        {variantMeta.publishedAt ? new Date(variantMeta.publishedAt).toLocaleString() : 'Not published yet'}
+                                    </p>
+                                    <p className="text-[11px] text-zinc-500 mt-1">{variantMeta.publishedModuleId ?? 'No live module'}</p>
+                                </div>
+                            </div>
+
+                            <div className="rounded-xl border border-zinc-800 bg-black/20 px-4 py-4 space-y-3">
+                                <div className="flex items-center justify-between gap-3 flex-wrap">
+                                    <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Source Diff</p>
+                                        <p className="text-sm text-white mt-1">
+                                            {syncSummary.hasPublishedSnapshot
+                                                ? 'This compares the current spec/runtime/module draft against the last published snapshot.'
+                                                : 'No published snapshot yet. First publish will establish the live baseline.'}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <button
+                                            onClick={handlePreviewBuild}
+                                            disabled={!!configError}
+                                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-purple-500/10 border border-purple-500/30 text-purple-300 hover:bg-purple-500/15 disabled:opacity-40 transition-colors"
+                                        >
+                                            <Gamepad2 className="w-3.5 h-3.5" />
+                                            {variantMeta.buildArtifact ? 'Preview Built Module' : 'Build + Preview'}
+                                        </button>
+                                        {variantMeta.publishedModuleId && (
+                                            <button
+                                                onClick={handlePreviewPublishedModule}
+                                                disabled={loadingPublishedPreview}
+                                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-40 transition-colors"
+                                            >
+                                                <Play className="w-3.5 h-3.5" />
+                                                {loadingPublishedPreview ? 'Loading Live Module...' : 'Play Published Module'}
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={handleBuild}
+                                            disabled={building || !!configError}
+                                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 transition-colors"
+                                        >
+                                            <FileCode2 className="w-3.5 h-3.5" />
+                                            {building
+                                                ? 'Building...'
+                                                : variantMeta.publishedModuleId && syncSummary.hasPublishedSnapshot
+                                                    ? 'Save + Rebuild Module'
+                                                    : 'Build Module'}
+                                        </button>
+                                        <button
+                                            onClick={handlePublish}
+                                            disabled={publishing || !!configError}
+                                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[#E0FE10] text-black hover:bg-[#c8e40e] disabled:opacity-40 transition-colors"
+                                        >
+                                            <Upload className="w-3.5 h-3.5" />
+                                            {publishing
+                                                ? 'Publishing...'
+                                                : variantMeta.publishedModuleId && syncSummary.hasPublishedSnapshot
+                                                    ? 'Save + Rebuild + Publish'
+                                                    : 'Publish Built Module'}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    {[
+                                        { label: 'Spec Changed', active: syncSummary.specChanged },
+                                        { label: 'Runtime Changed', active: syncSummary.runtimeChanged },
+                                        { label: 'Module Metadata Changed', active: syncSummary.moduleChanged },
+                                    ].map((item) => (
+                                        <div
+                                            key={item.label}
+                                            className={`rounded-lg border px-3 py-2 ${item.active ? 'border-amber-500/30 bg-amber-500/10' : 'border-zinc-800 bg-zinc-950/60'}`}
+                                        >
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">{item.label}</p>
+                                            <p className={`text-xs mt-1 font-semibold ${item.active ? 'text-amber-300' : 'text-zinc-400'}`}>
+                                                {item.active ? 'Changed since publish' : 'No diff'}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                                {variantMeta.publishedModuleId && effectiveSyncStatus !== 'in_sync' && (
+                                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+                                        <p className="text-xs text-amber-200 leading-relaxed">
+                                            Save Draft Only keeps the current live module as-is and marks this variant out of sync until you rebuild or republish.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -4421,7 +4631,15 @@ function VariantWorkspaceModal({
                             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-zinc-800 border border-zinc-700 text-white hover:border-zinc-500 disabled:opacity-40 transition-colors"
                         >
                             <Save className="w-3.5 h-3.5" />
-                            {saving ? 'Saving...' : 'Save Draft'}
+                            {saving ? 'Saving...' : variantMeta.publishedModuleId && effectiveSyncStatus !== 'in_sync' ? 'Save Draft Only' : 'Save Draft'}
+                        </button>
+                        <button
+                            onClick={handleBuild}
+                            disabled={building || !!configError}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 transition-colors"
+                        >
+                            <FileCode2 className="w-3.5 h-3.5" />
+                            {building ? 'Building...' : variantMeta.publishedModuleId ? 'Save + Rebuild Module' : 'Build Module'}
                         </button>
                         <button
                             onClick={handlePublish}
@@ -4429,11 +4647,22 @@ function VariantWorkspaceModal({
                             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-[#E0FE10] text-black hover:bg-[#c8e40e] disabled:opacity-40 transition-colors"
                         >
                             <Upload className="w-3.5 h-3.5" />
-                            {publishing ? 'Publishing...' : 'Publish to Sim Modules'}
+                            {publishing ? 'Publishing...' : variantMeta.publishedModuleId ? 'Save + Rebuild + Publish' : 'Publish Built Module'}
                         </button>
                     </div>
                 </div>
             </motion.div>
+
+            <AnimatePresence>
+                {previewModule && (
+                    <ExercisePlayer
+                        exercise={previewModule}
+                        previewMode
+                        onClose={() => setPreviewModule(null)}
+                        onComplete={() => setPreviewModule(null)}
+                    />
+                )}
+            </AnimatePresence>
         </motion.div>
     );
 }
@@ -4527,11 +4756,12 @@ function FamilyGroup({
                     >
                         <div className="border-t border-zinc-800">
                             {/* Table header */}
-                            <div className="grid grid-cols-[1fr_120px_130px_80px_112px] gap-2 px-5 py-2 bg-black/30 text-[9px] uppercase tracking-widest text-zinc-600 font-bold">
+                            <div className="grid grid-cols-[1fr_120px_130px_96px_110px_112px] gap-2 px-5 py-2 bg-black/30 text-[9px] uppercase tracking-widest text-zinc-600 font-bold">
                                 <span>Variant</span>
                                 <span>Mode</span>
                                 <span>Spec Status</span>
                                 <span>Priority</span>
+                                <span>Build</span>
                                 <span />
                             </div>
                             {/* Rows */}
@@ -4541,10 +4771,11 @@ function FamilyGroup({
                                 const specConf = SPEC_STATUS_CONFIG[v.specStatus];
                                 const SpecIcon = specConf.icon;
                                 const priConf = PRIORITY_CONFIG[v.priority];
+                                const buildConf = BUILD_STATUS_CONFIG[v.buildStatus ?? 'not_built'];
                                 return (
                                     <div
                                         key={v.name}
-                                        className="grid grid-cols-[1fr_120px_130px_80px_112px] gap-2 px-5 py-2 border-t border-zinc-800/50 hover:bg-white/[0.02] transition-colors items-center"
+                                        className="grid grid-cols-[1fr_120px_130px_96px_110px_112px] gap-2 px-5 py-2 border-t border-zinc-800/50 hover:bg-white/[0.02] transition-colors items-center"
                                     >
                                         <span className="text-xs text-zinc-300 truncate">{v.name}</span>
                                         <span className="flex items-center gap-1.5">
@@ -4556,6 +4787,10 @@ function FamilyGroup({
                                             <span className="text-[10px] font-semibold" style={{ color: specConf.color }}>{specConf.label}</span>
                                         </span>
                                         <span className="text-[10px] font-semibold" style={{ color: priConf.color }}>{priConf.label}</span>
+                                        <span className="flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: buildConf.color }} />
+                                            <span className="text-[10px] font-semibold" style={{ color: buildConf.color }}>{buildConf.label}</span>
+                                        </span>
                                         <div className="flex items-center justify-end gap-1">
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); onOpenWorkspace(v); }}
@@ -4806,6 +5041,7 @@ const VariantRegistryTab: React.FC = () => {
     const [creatingVariant, setCreatingVariant] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [savingVariantId, setSavingVariantId] = useState<string | null>(null);
+    const [buildingVariantId, setBuildingVariantId] = useState<string | null>(null);
     const [publishingVariantId, setPublishingVariantId] = useState<string | null>(null);
     const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -4829,6 +5065,7 @@ const VariantRegistryTab: React.FC = () => {
             );
             const customVariants = records
                 .filter((record) => !seededIds.has(record.id))
+                .map((record) => applyDraftSyncState(record))
                 .sort((a, b) => a.family.localeCompare(b.family) || a.name.localeCompare(b.name));
             setRegistryVariants([...merged, ...customVariants]);
 
@@ -4907,8 +5144,9 @@ const VariantRegistryTab: React.FC = () => {
     const handleSaveWorkspace = async (next: SimVariantRecord) => {
         setSavingVariantId(next.id);
         try {
-            await simVariantRegistryService.save(next);
-            setRegistryVariants((current) => current.map((variant) => variant.id === next.id ? next : variant));
+            const draftRecord = applyDraftSyncState(next);
+            await simVariantRegistryService.save(draftRecord);
+            setRegistryVariants((current) => current.map((variant) => variant.id === next.id ? draftRecord : variant));
             setToast({
                 type: 'success',
                 message: `${next.name} saved to the variant registry.`,
@@ -4924,17 +5162,37 @@ const VariantRegistryTab: React.FC = () => {
         }
     };
 
+    const handleBuildWorkspace = async (next: SimVariantRecord) => {
+        setBuildingVariantId(next.id);
+        try {
+            const builtRecord = buildVariantRecordForBuild(next);
+            await simVariantRegistryService.save(builtRecord);
+            setRegistryVariants((current) => current.map((variant) => variant.id === next.id ? builtRecord : variant));
+            setToast({
+                type: 'success',
+                message: `${next.name} built into a playable runtime artifact.`,
+            });
+        } catch (error) {
+            console.error('Failed to build variant workspace:', error);
+            setToast({
+                type: 'error',
+                message: `Failed to build ${next.name}.`,
+            });
+        } finally {
+            setBuildingVariantId(null);
+        }
+    };
+
     const handlePublishWorkspace = async (next: SimVariantRecord) => {
         setPublishingVariantId(next.id);
         try {
-            const module = buildPublishedModule(next);
-            const moduleId = await simVariantRegistryService.publish(next, module);
-            const publishedRecord: SimVariantRecord = {
-                ...next,
+            const builtRecord = buildVariantRecordForBuild(next);
+            const module = buildPublishedModule(builtRecord);
+            const moduleId = await simVariantRegistryService.publish(builtRecord, module);
+            const publishedRecord = buildPublishedVariantRecord({
+                ...builtRecord,
                 publishedModuleId: moduleId,
-                publishedAt: Date.now(),
-                specStatus: next.mode === 'hybrid' ? 'not-required' : 'complete',
-            };
+            });
             setRegistryVariants((current) => current.map((variant) => variant.id === next.id ? publishedRecord : variant));
             setWorkspaceModalState(null);
             setToast({
@@ -5267,8 +5525,10 @@ const VariantRegistryTab: React.FC = () => {
                         initialSpecRaw={workspaceModalState.initialRaw}
                         initialTab={workspaceModalState.initialTab}
                         saving={savingVariantId === selectedVariant.id}
+                        building={buildingVariantId === selectedVariant.id}
                         publishing={publishingVariantId === selectedVariant.id}
                         onSave={handleSaveWorkspace}
+                        onBuild={handleBuildWorkspace}
                         onPublish={handlePublishWorkspace}
                         onClose={() => setWorkspaceModalState(null)}
                     />
