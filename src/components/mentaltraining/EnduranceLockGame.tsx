@@ -129,9 +129,7 @@ export const EnduranceLockGame: React.FC<EnduranceLockGameProps> = ({
     spamDetected,
     spamFlags,
     spamRounds,
-  } = useInputIntegrity({
-    blockedMessage: 'Too fast. Stay with the cadence instead of spamming taps.',
-  });
+  } = useInputIntegrity();
 
   const clearTimers = useCallback(() => {
     if (cueTimerRef.current) {
@@ -271,7 +269,7 @@ export const EnduranceLockGame: React.FC<EnduranceLockGameProps> = ({
 
   const handleTap = useCallback(() => {
     if (stage !== 'active' || !currentCue) return;
-    if (!registerInputAttempt()) {
+    if (!registerInputAttempt({ blockedMessage: 'Too fast. Stay with the cadence instead of spamming taps.' })) {
       setStatusLabel('Rapid input blocked. Stay with the cadence.');
       return;
     }

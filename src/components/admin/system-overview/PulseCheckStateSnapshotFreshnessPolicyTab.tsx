@@ -17,10 +17,10 @@ const VALIDITY_ROWS = [
 ];
 
 const DECAY_ROWS = [
-  ['Signals decay in influence rather than disappearing instantly once their window passes.'],
-  ['Expired signals may remain in history but should not drive high-confidence routing.'],
-  ['Low-freshness snapshots should push Nora toward asking, confirming, or choosing a lighter path.'],
-  ['Escalation may still use older history, but current-state confidence must reflect recency.'],
+  'Signals decay in influence rather than disappearing instantly once their window passes.',
+  'Expired signals may remain in history but should not drive high-confidence routing.',
+  'Low-freshness snapshots should push Nora toward asking, confirming, or choosing a lighter path.',
+  'Escalation may still use older history, but current-state confidence must reflect recency.',
 ];
 
 const PulseCheckStateSnapshotFreshnessPolicyTab: React.FC = () => {

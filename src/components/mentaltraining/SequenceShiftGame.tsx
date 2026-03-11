@@ -310,14 +310,6 @@ export const SequenceShiftGame: React.FC<SequenceShiftGameProps> = ({
     setStage('summary');
   }, [buildArtifact, currentUser?.id, durationMinutes, exercise.id, previewMode, spamDetected, spamFlags, spamRounds]);
 
-  const handleOptionSelect = useCallback((option: string) => {
-    if (stage !== 'response') return;
-    if (!registerInputAttempt({ blockedMessage: 'Too fast. Update the rule once, not by spamming inputs.' })) {
-      return;
-    }
-    resolveRound(option);
-  }, [registerInputAttempt, resolveRound, stage]);
-
   const resolveRound = useCallback((response: string | null) => {
     if (!currentRound || roundResolvedRef.current) return;
     roundResolvedRef.current = true;
@@ -360,6 +352,14 @@ export const SequenceShiftGame: React.FC<SequenceShiftGameProps> = ({
       beginStage('ready', 1200);
     }, 900);
   }, [beginStage, currentRound, finalizeRound, finishSession, responses, roundIndex, rounds.length]);
+
+  const handleOptionSelect = useCallback((option: string) => {
+    if (stage !== 'response') return;
+    if (!registerInputAttempt({ blockedMessage: 'Too fast. Update the rule once, not by spamming inputs.' })) {
+      return;
+    }
+    resolveRound(option);
+  }, [registerInputAttempt, resolveRound, stage]);
 
   useEffect(() => {
     if (stage !== 'ready' && stage !== 'response' && stage !== 'feedback') return undefined;

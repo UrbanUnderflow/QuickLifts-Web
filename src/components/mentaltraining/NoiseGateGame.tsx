@@ -265,14 +265,6 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
     setStage('summary');
   }, [buildArtifact, currentUser?.id, durationMinutes, exercise.id, previewMode, pressureTypes, spamDetected, spamFlags, spamRounds]);
 
-  const handleOptionSelect = useCallback((option: string) => {
-    if (stage !== 'noise') return;
-    if (!registerInputAttempt({ blockedMessage: 'Too fast. Hold the live cue before committing again.' })) {
-      return;
-    }
-    resolveRound(option);
-  }, [registerInputAttempt, resolveRound, stage]);
-
   const resolveRound = useCallback((responseLabel: string | null) => {
     if (!currentRound || noiseResolvedRef.current) return;
     noiseResolvedRef.current = true;
@@ -313,6 +305,14 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
       beginStage('prime', stageDurations.prime);
     }, stageDurations.feedback);
   }, [beginStage, currentRound, finalizeRound, finishSession, responses, roundIndex, rounds.length, stageDurations.feedback, stageDurations.prime]);
+
+  const handleOptionSelect = useCallback((option: string) => {
+    if (stage !== 'noise') return;
+    if (!registerInputAttempt({ blockedMessage: 'Too fast. Hold the live cue before committing again.' })) {
+      return;
+    }
+    resolveRound(option);
+  }, [registerInputAttempt, resolveRound, stage]);
 
   useEffect(() => {
     if (stage !== 'prime' && stage !== 'noise' && stage !== 'feedback') {
