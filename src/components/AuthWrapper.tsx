@@ -120,6 +120,19 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
       return false;
     }
 
+    if (
+      normalizedPath === '/pulsecheck/post-activation' ||
+      normalizedPath.startsWith('/pulsecheck/post-activation/') ||
+      normalizedPath === '/pulsecheck/member-setup' ||
+      normalizedPath.startsWith('/pulsecheck/member-setup/') ||
+      normalizedPath === '/pulsecheck/athlete-onboarding' ||
+      normalizedPath.startsWith('/pulsecheck/athlete-onboarding/') ||
+      normalizedPath === '/pulsecheck/team-workspace' ||
+      normalizedPath.startsWith('/pulsecheck/team-workspace/')
+    ) {
+      return false;
+    }
+
     // Treat creator landing pages (/{username}/{slug}) as public,
     // as long as the first segment is not a reserved app prefix.
     // This matches pages/[username]/[page].tsx routing.

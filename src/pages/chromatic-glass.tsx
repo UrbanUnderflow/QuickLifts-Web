@@ -1,28 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import type { NextPage } from 'next';
 import Head from 'next/head';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import PageHead from '../components/PageHead';
 import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
 import SelfImprovementIcon from '@mui/icons-material/SelfImprovement';
-
-// Custom hook for intersection observer animations
-const useInView = (threshold = 0.1) => {
-  const [ref, setRef] = useState<HTMLElement | null>(null);
-  const [isInView, setIsInView] = useState(false);
-
-  useEffect(() => {
-    if (!ref) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsInView(entry.isIntersecting),
-      { threshold }
-    );
-    observer.observe(ref);
-    return () => observer.disconnect();
-  }, [ref, threshold]);
-
-  return { ref: setRef, isInView };
-};
 
 // Animated Glass Card Component
 const GlassCard: React.FC<{
@@ -1503,98 +1485,187 @@ const ChromaticGlassPage: NextPage = () => {
               transition={{ duration: 0.6, delay: 0.1 }}
               className="mb-16"
             >
-              <h3 className="text-xl font-bold text-white mb-2">Run Summary</h3>
-              <p className="text-zinc-500 text-sm mb-6">A complete page bathed in chromatic blue</p>
+              <h3 className="text-xl font-bold text-white mb-2">Active Run Screen</h3>
+              <p className="text-zinc-500 text-sm mb-6">A full-screen map with a floating glass control dock</p>
               
               <div className="relative max-w-md mx-auto">
-                {/* Blue glow background */}
-                <div className="absolute inset-0 bg-[#3B82F6]/10 blur-3xl rounded-full" />
+                <div className="absolute inset-x-10 top-24 bottom-12 bg-[#3B82F6]/20 blur-[90px] rounded-full" />
                 
-                <div className="relative rounded-3xl overflow-hidden bg-gradient-to-b from-[#0c1929] to-[#0a0a0b] border border-[#3B82F6]/20 p-6">
-                  {/* Header */}
-                  <div className="text-center mb-6">
-                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#3B82F6]/10 flex items-center justify-center">
-                      <motion.div
-                        animate={{ y: [0, -3, 0] }}
-                        transition={{ duration: 1.5, repeat: Infinity }}
-                      >
-                        <svg className="w-8 h-8 text-[#3B82F6]" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/>
+                <div className="relative h-[780px] overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#08101b] shadow-[0_40px_120px_rgba(10,18,35,0.85)]">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_15%,rgba(59,130,246,0.30),transparent_28%),radial-gradient(circle_at_82%_18%,rgba(224,254,16,0.16),transparent_24%),linear-gradient(180deg,#132238_0%,#0a1422_42%,#09111b_100%)]" />
+                  <div className="absolute inset-0 opacity-[0.14] bg-[url('/grid-pattern.svg')]" />
+                  <div className="absolute inset-0 bg-[linear-gradient(115deg,transparent_0%,transparent_43%,rgba(148,163,184,0.16)_44%,transparent_46%,transparent_100%)] opacity-40" />
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_35%,rgba(3,7,18,0.38)_100%)]" />
+
+                  {/* Faux map roads */}
+                  <svg className="absolute inset-0 h-full w-full opacity-80" viewBox="0 0 380 780" fill="none" preserveAspectRatio="none">
+                    <path d="M-20 118C58 132 118 135 205 122C286 110 342 92 404 72" stroke="rgba(148,163,184,0.22)" strokeWidth="20" strokeLinecap="round" />
+                    <path d="M18 262C102 254 165 248 246 244C301 241 344 236 398 220" stroke="rgba(148,163,184,0.16)" strokeWidth="16" strokeLinecap="round" />
+                    <path d="M210 -40C206 88 208 180 212 286C216 415 226 544 236 830" stroke="rgba(148,163,184,0.18)" strokeWidth="18" strokeLinecap="round" />
+                    <path d="M282 82C232 166 181 252 146 334C124 386 103 470 74 572" stroke="rgba(148,163,184,0.12)" strokeWidth="14" strokeLinecap="round" />
+                    <path d="M22 402C94 390 136 380 192 376C243 372 306 374 374 388" stroke="rgba(148,163,184,0.14)" strokeWidth="14" strokeLinecap="round" />
+                    <path d="M36 522C108 518 178 514 244 518C292 520 334 526 378 534" stroke="rgba(148,163,184,0.14)" strokeWidth="12" strokeLinecap="round" />
+                    <path d="M80 650C150 622 186 600 226 560C266 520 294 474 332 406" stroke="rgba(148,163,184,0.12)" strokeWidth="10" strokeLinecap="round" />
+                    <path d="M72 178L118 194L96 248L166 270L132 332" stroke="rgba(96,165,250,0.10)" strokeWidth="6" strokeLinecap="round" />
+                    <path d="M256 164L304 198L274 246L322 286L302 342" stroke="rgba(96,165,250,0.10)" strokeWidth="6" strokeLinecap="round" />
+                  </svg>
+
+                  {/* Route and current location */}
+                  <svg className="absolute inset-0 h-full w-full" viewBox="0 0 380 780" fill="none" preserveAspectRatio="none">
+                    <motion.path
+                      d="M314 96C296 124 286 150 267 182C247 215 218 234 202 270C186 306 188 342 170 372C145 413 109 438 95 474C84 501 90 529 107 558C124 586 155 603 186 622C217 641 251 664 274 702"
+                      fill="none"
+                      stroke="rgba(96,165,250,0.22)"
+                      strokeWidth="18"
+                      strokeLinecap="round"
+                      initial={{ pathLength: 0 }}
+                      whileInView={{ pathLength: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 2.4, delay: 0.2 }}
+                    />
+                    <motion.path
+                      d="M314 96C296 124 286 150 267 182C247 215 218 234 202 270C186 306 188 342 170 372C145 413 109 438 95 474C84 501 90 529 107 558C124 586 155 603 186 622C217 641 251 664 274 702"
+                      fill="none"
+                      stroke="#8FD3FF"
+                      strokeWidth="7"
+                      strokeLinecap="round"
+                      initial={{ pathLength: 0 }}
+                      whileInView={{ pathLength: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 2.4, delay: 0.2 }}
+                    />
+                    <path d="M302 114L314 96L326 113" stroke="#E0FE10" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="302" cy="114" r="9" fill="#0A1422" stroke="#E0FE10" strokeWidth="3" />
+                    <circle cx="188" cy="340" r="56" fill="url(#runnerGlow)" opacity="0.95" />
+                    <path d="M188 340L224 326L208 360Z" fill="rgba(191,219,254,0.52)" />
+                    <circle cx="188" cy="340" r="17" fill="#3B82F6" stroke="#F8FAFC" strokeWidth="5" />
+                    <circle cx="188" cy="340" r="30" stroke="rgba(96,165,250,0.85)" strokeWidth="4" />
+                    <defs>
+                      <radialGradient id="runnerGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(188 340) rotate(90) scale(56)">
+                        <stop stopColor="#60A5FA" stopOpacity="0.42" />
+                        <stop offset="1" stopColor="#60A5FA" stopOpacity="0" />
+                      </radialGradient>
+                    </defs>
+                  </svg>
+
+                  <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[#050b14]/72 via-[#050b14]/28 to-transparent" />
+                  <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-[#050b14]/90 via-[#050b14]/42 to-transparent" />
+
+                  {/* Top controls */}
+                  <div className="absolute inset-x-0 top-0 z-10 px-5 pb-4 pt-5">
+                    <div className="mb-5 flex items-center justify-between text-white/95">
+                      <span className="text-2xl font-semibold tracking-tight">5:58</span>
+                      <div className="flex items-center gap-2">
+                        <span className="block h-3 w-3 rounded-full bg-[#3B82F6]" />
+                        <span className="text-sm text-white/70">LTE</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start justify-between gap-3">
+                      <button className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-black/45 backdrop-blur-xl">
+                        <svg className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
                         </svg>
-                      </motion.div>
+                      </button>
+
+                      <div className="rounded-[1.75rem] border border-[#F59E0B]/70 bg-[#17120b]/78 px-4 py-3 shadow-[0_0_32px_rgba(245,158,11,0.18)] backdrop-blur-xl">
+                        <div className="flex items-center gap-3">
+                          <div className="h-11 w-11 rounded-2xl bg-[radial-gradient(circle_at_35%_35%,#67e8f9_0%,#2563eb_42%,#111827_100%)] ring-1 ring-white/10" />
+                          <div>
+                            <p className="text-[11px] uppercase tracking-[0.28em] text-[#fbbf24]">Weekly heatmap</p>
+                            <p className="text-lg font-semibold text-white">See what&apos;s popular</p>
+                            <p className="text-sm text-white/70">Tap to add route insights</p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <h4 className="text-2xl font-bold text-white mb-2">Thursday Run</h4>
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#3B82F6]/20 text-[#3B82F6] border border-[#3B82F6]/30">
-                        🏃 Free Run
-                      </span>
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-zinc-800/50 text-zinc-400 border border-zinc-700/50">
-                        📍 Outdoor
-                      </span>
-                    </div>
-                    <p className="text-zinc-500 text-sm">Dec 31, 2025 at 11:30 PM</p>
                   </div>
 
-                  {/* Map placeholder */}
-                  <div className="relative h-40 rounded-2xl overflow-hidden mb-4 bg-gradient-to-br from-[#1a2744] to-[#0f172a] border border-[#3B82F6]/20">
-                    <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-10" />
-                    <div className="absolute top-3 left-3 px-2 py-1 rounded-full bg-[#E0FE10] text-black text-xs font-bold flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-black" /> Start
-                    </div>
-                    <div className="absolute top-3 right-3 px-2 py-1 rounded-full bg-[#3B82F6] text-white text-xs font-bold flex items-center gap-1">
-                      🏁 Finish
-                    </div>
-                    {/* Route line */}
-                    <svg className="absolute inset-0 w-full h-full">
-                      <motion.path
-                        d="M 60 120 Q 120 60 180 100 Q 240 140 300 80"
-                        fill="none"
-                        stroke="#3B82F6"
-                        strokeWidth="4"
-                        strokeLinecap="round"
-                        initial={{ pathLength: 0 }}
-                        whileInView={{ pathLength: 1 }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 2, delay: 0.5 }}
-                      />
-                    </svg>
-                  </div>
-
-                  {/* Goal Achieved */}
-                  <div className="flex items-center gap-4 p-4 rounded-2xl bg-[#3B82F6]/10 border border-[#3B82F6]/20 mb-4">
-                    <div className="w-12 h-12 rounded-full bg-[#3B82F6] flex items-center justify-center">
-                      <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  {/* Map utility buttons */}
+                  <div className="absolute right-5 top-[44%] z-10 flex flex-col gap-3">
+                    <button className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-black/50 text-white backdrop-blur-xl">
+                      <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75L15 3m-6 3.75L3.75 9m5.25-2.25v13.5m6-17.25L20.25 9m-5.25-6v13.5m0 0L9 20.25m6-3.75L20.25 15M9 20.25L3.75 15m0-6v6" />
                       </svg>
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-white font-semibold">Goal Achieved!</p>
-                      <p className="text-zinc-400 text-sm">Completed</p>
-                    </div>
-                    <span className="text-2xl">🏆</span>
+                    </button>
+                    <button className="rounded-full border border-white/10 bg-black/50 px-4 py-3 text-lg font-medium text-white backdrop-blur-xl">3D</button>
                   </div>
 
-                  {/* Stats Grid */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-4 rounded-xl bg-[#3B82F6]/10 border border-[#3B82F6]/20 text-center">
-                      <span className="text-[#3B82F6] text-lg mb-1 block">🗺️</span>
-                      <p className="text-2xl font-bold text-white">1.4 mi</p>
-                      <p className="text-zinc-500 text-xs">Distance</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-[#3B82F6]/10 border border-[#3B82F6]/20 text-center">
-                      <span className="text-[#3B82F6] text-lg mb-1 block">⏱️</span>
-                      <p className="text-2xl font-bold text-white">14:41</p>
-                      <p className="text-zinc-500 text-xs">Time</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-[#F59E0B]/10 border border-[#F59E0B]/20 text-center">
-                      <span className="text-[#F59E0B] text-lg mb-1 block">⚡</span>
-                      <p className="text-2xl font-bold text-white">10:30</p>
-                      <p className="text-zinc-500 text-xs">Avg Pace</p>
-                    </div>
-                    <div className="p-4 rounded-xl bg-[#F97316]/10 border border-[#F97316]/20 text-center">
-                      <span className="text-[#F97316] text-lg mb-1 block">🔥</span>
-                      <p className="text-2xl font-bold text-white">137</p>
-                      <p className="text-zinc-500 text-xs">Calories</p>
+                  {/* Bottom glass dock */}
+                  <div className="absolute inset-x-3 bottom-3 z-10">
+                    <div className="relative overflow-hidden rounded-[2rem] border border-white/12 bg-[linear-gradient(180deg,rgba(31,41,55,0.76),rgba(9,14,24,0.88))] shadow-[0_30px_80px_rgba(2,6,23,0.72)] backdrop-blur-[24px]">
+                      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),transparent_26%,transparent_100%)] pointer-events-none" />
+                      <div className="mx-auto mt-3 h-1.5 w-14 rounded-full bg-white/20" />
+
+                      <div className="px-5 pb-5 pt-4">
+                        <div className="mb-5 flex items-center justify-between">
+                          <div>
+                            <p className="text-[11px] uppercase tracking-[0.32em] text-[#93c5fd]">Free run</p>
+                            <h4 className="mt-1 text-2xl font-bold text-white">Thursday Evening Run</h4>
+                          </div>
+                          <div className="rounded-full border border-[#3B82F6]/35 bg-[#3B82F6]/14 px-3 py-1.5 text-sm font-medium text-[#8FD3FF]">
+                            GPS Active
+                          </div>
+                        </div>
+
+                        <div className="mb-5 flex items-end justify-between gap-4">
+                          <div>
+                            <p className="text-6xl font-semibold tracking-[-0.08em] text-white">00:02</p>
+                            <div className="mt-2 flex items-center gap-2 text-sm text-white/70">
+                              <span className="h-2.5 w-2.5 rounded-full bg-[#3B82F6]" />
+                              <span>Recording now</span>
+                            </div>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-right">
+                            <p className="text-[11px] uppercase tracking-[0.26em] text-white/45">Current pace</p>
+                            <p className="mt-1 text-2xl font-semibold text-white">4:08<span className="text-lg text-white/50">/mi</span></p>
+                          </div>
+                        </div>
+
+                        <div className="mb-6 grid grid-cols-3 gap-3">
+                          <div className="rounded-2xl border border-[#3B82F6]/22 bg-[#3B82F6]/10 p-3 text-center">
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-[#93c5fd]">Distance</p>
+                            <p className="mt-2 text-2xl font-semibold text-white">0.01<span className="text-base text-white/45"> mi</span></p>
+                          </div>
+                          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-white/45">Split pace</p>
+                            <p className="mt-2 text-2xl font-semibold text-white">4:08<span className="text-base text-white/45"> /mi</span></p>
+                          </div>
+                          <div className="rounded-2xl border border-[#F59E0B]/24 bg-[#F59E0B]/10 p-3 text-center">
+                            <p className="text-[11px] uppercase tracking-[0.24em] text-[#fdba74]">Calories</p>
+                            <p className="mt-2 text-2xl font-semibold text-white">0<span className="text-base text-white/45"> cal</span></p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 items-start gap-3 text-center">
+                          <button className="group">
+                            <div className="mx-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/55 transition-colors group-hover:bg-white/10 group-hover:text-white">
+                              <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+                              </svg>
+                            </div>
+                            <p className="mt-3 text-lg text-white/55">Cancel</p>
+                          </button>
+
+                          <button className="group">
+                            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-[#3B82F6] text-[#06111f] shadow-[0_0_40px_rgba(59,130,246,0.55)] transition-transform group-hover:scale-[1.03]">
+                              <svg className="h-10 w-10" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 5.5A1.5 1.5 0 019.5 4h1A1.5 1.5 0 0112 5.5v13a1.5 1.5 0 01-1.5 1.5h-1A1.5 1.5 0 018 18.5v-13zm5.5 0A1.5 1.5 0 0115 4h1A1.5 1.5 0 0117.5 5.5v13A1.5 1.5 0 0116 20h-1a1.5 1.5 0 01-1.5-1.5v-13z" />
+                              </svg>
+                            </div>
+                            <p className="mt-3 text-xl font-semibold text-[#60a5fa]">Pause</p>
+                          </button>
+
+                          <button className="group">
+                            <div className="mx-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full border border-[#d9f99d]/35 bg-[#d9f99d]/12 text-[#d9f99d] transition-colors group-hover:bg-[#d9f99d]/18">
+                              <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.4}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                            <p className="mt-3 text-lg text-[#d9f99d]">Finish</p>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

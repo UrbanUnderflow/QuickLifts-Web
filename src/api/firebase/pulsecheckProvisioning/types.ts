@@ -9,14 +9,35 @@ export type PulseCheckClinicianProfileType = 'individual' | 'group' | 'provider'
 export type PulseCheckClinicianProfileSource = 'pulsecheck-local' | 'auntedna';
 export type PulseCheckClinicianProfileSyncStatus = 'pending-sync' | 'synced' | 'sync-failed';
 export type PulseCheckInviteLinkStatus = 'active' | 'redeemed' | 'revoked';
-export type PulseCheckInviteLinkType = 'admin-activation' | 'clinician-onboarding';
+export type PulseCheckInviteLinkType = 'admin-activation' | 'clinician-onboarding' | 'team-access';
 export type PulseCheckOrganizationMembershipRole = 'org-admin' | 'implementation-observer';
+export type PulseCheckOperatingRole = 'admin-only' | 'admin-plus-coach' | 'admin-plus-support-staff';
+export type PulseCheckRosterVisibilityScope = 'team' | 'assigned' | 'none';
 export type PulseCheckTeamMembershipRole =
   | 'team-admin'
   | 'coach'
   | 'performance-staff'
   | 'support-staff'
-  | 'clinician';
+  | 'clinician'
+  | 'athlete';
+
+export interface PulseCheckNotificationPreferences {
+  email: boolean;
+  sms: boolean;
+  push: boolean;
+  weeklyDigest: boolean;
+}
+
+export interface PulseCheckAthleteOnboardingState {
+  productConsentAccepted: boolean;
+  productConsentAcceptedAt?: Timestamp | null;
+  productConsentVersion?: string;
+  researchConsentStatus?: 'not-required' | 'pending' | 'accepted' | 'declined';
+  eligibleForResearchDataset?: boolean;
+  enrollmentMode?: 'product-only' | 'pilot' | 'research';
+  baselinePathStatus?: 'pending' | 'ready' | 'started' | 'complete';
+  baselinePathwayId?: string;
+}
 
 export interface PulseCheckAdminContact {
   name?: string;
@@ -139,6 +160,9 @@ export interface PulseCheckInviteLink {
   organizationId: string;
   teamId: string;
   clinicianProfileId?: string;
+  teamMembershipRole?: PulseCheckTeamMembershipRole;
+  invitedTitle?: string;
+  recipientName?: string;
   targetEmail?: string;
   token: string;
   activationUrl: string;
@@ -173,7 +197,13 @@ export interface PulseCheckTeamMembership {
   role: PulseCheckTeamMembershipRole;
   title?: string;
   permissionSetId?: string;
-  onboardingStatus?: 'pending' | 'complete';
+  operatingRole?: PulseCheckOperatingRole;
+  rosterVisibilityScope?: PulseCheckRosterVisibilityScope;
+  allowedAthleteIds?: string[];
+  notificationPreferences?: PulseCheckNotificationPreferences;
+  athleteOnboarding?: PulseCheckAthleteOnboardingState;
+  onboardingStatus?: 'pending' | 'pending-profile' | 'profile-complete' | 'pending-consent' | 'complete';
+  postActivationCompletedAt?: Timestamp | null;
   grantedByInviteToken?: string;
   grantedAt?: Timestamp | null;
   createdAt?: Timestamp | null;
@@ -187,4 +217,55 @@ export interface RedeemPulseCheckAdminActivationResult {
   teamName: string;
   organizationMembershipId: string;
   teamMembershipId: string;
+}
+
+export interface CreatePulseCheckTeamAccessInviteInput {
+  organizationId: string;
+  teamId: string;
+  teamMembershipRole: PulseCheckTeamMembershipRole;
+  targetEmail?: string;
+  recipientName?: string;
+  invitedTitle?: string;
+  createdByUserId?: string;
+  createdByEmail?: string;
+}
+
+export interface SavePulseCheckPostActivationSetupInput {
+  organizationId: string;
+  teamId: string;
+  teamMembershipId: string;
+  displayName: string;
+  title: string;
+  operatingRole: PulseCheckOperatingRole;
+  notificationPreferences: PulseCheckNotificationPreferences;
+  profileImageUrl?: string;
+}
+
+export interface SavePulseCheckAdultMemberSetupInput {
+  teamMembershipId: string;
+  title: string;
+  notificationPreferences: PulseCheckNotificationPreferences;
+}
+
+export interface CompletePulseCheckAthleteOnboardingInput {
+  teamMembershipId: string;
+  consentVersion: string;
+  baselinePathwayId: string;
+}
+
+export interface UpdatePulseCheckTeamMembershipAccessInput {
+  teamMembershipId: string;
+  rosterVisibilityScope: PulseCheckRosterVisibilityScope;
+  allowedAthleteIds?: string[];
+  permissionSetId?: string;
+}
+
+export interface RedeemPulseCheckTeamInviteResult {
+  organizationId: string;
+  organizationName: string;
+  teamId: string;
+  teamName: string;
+  teamMembershipId: string;
+  teamMembershipRole: PulseCheckTeamMembershipRole;
+  invitedTitle?: string;
 }

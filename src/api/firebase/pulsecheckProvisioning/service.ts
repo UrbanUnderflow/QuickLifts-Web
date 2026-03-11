@@ -1,17 +1,28 @@
-import { addDoc, collection, doc, getDoc, getDocs, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from '../config';
 import type {
+  CompletePulseCheckAthleteOnboardingInput,
+  CreatePulseCheckTeamAccessInviteInput,
   CreatePulseCheckOrganizationInput,
   CreatePulseCheckTeamInput,
   PulseCheckAdminContact,
   PulseCheckOrganization,
   PulseCheckAuntEdnaClinicianProfile,
+  PulseCheckInviteLinkType,
+  PulseCheckRosterVisibilityScope,
+  PulseCheckNotificationPreferences,
   PulseCheckOrganizationStatus,
   PulseCheckTeam,
+  PulseCheckTeamMembership,
+  PulseCheckTeamMembershipRole,
   PulseCheckTeamStatus,
   PulseCheckInviteLink,
   PulseCheckInviteLinkStatus,
   RedeemPulseCheckAdminActivationResult,
+  RedeemPulseCheckTeamInviteResult,
+  SavePulseCheckAdultMemberSetupInput,
+  SavePulseCheckPostActivationSetupInput,
+  UpdatePulseCheckTeamMembershipAccessInput,
   UpsertPulseCheckAuntEdnaClinicianProfileInput,
 } from './types';
 
@@ -19,8 +30,26 @@ const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
 const CLINICIAN_PROFILES_COLLECTION = 'pulsecheck-auntedna-clinician-profiles';
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
+const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 
 const normalizeString = (value?: string) => value?.trim() || '';
+const normalizeEmail = (value?: string) => normalizeString(value).toLowerCase();
+const defaultNotificationPreferences = (): PulseCheckNotificationPreferences => ({
+  email: true,
+  sms: false,
+  push: true,
+  weeklyDigest: true,
+});
+const defaultAthleteOnboardingState = () => ({
+  productConsentAccepted: false,
+  productConsentAcceptedAt: null,
+  productConsentVersion: '',
+  researchConsentStatus: 'not-required' as const,
+  eligibleForResearchDataset: false,
+  enrollmentMode: 'product-only' as const,
+  baselinePathStatus: 'pending' as const,
+  baselinePathwayId: '',
+});
 const normalizeAdminContacts = (value: unknown): PulseCheckAdminContact[] => {
   if (!Array.isArray(value)) return [];
 
@@ -81,16 +110,47 @@ const toTeam = (id: string, data: Record<string, any>): PulseCheckTeam => ({
 
 const toInviteLink = (id: string, data: Record<string, any>): PulseCheckInviteLink => ({
   id,
-  inviteType: data.inviteType || 'admin-activation',
+  inviteType: (data.inviteType as PulseCheckInviteLinkType) || 'admin-activation',
   status: (data.status as PulseCheckInviteLinkStatus) || 'active',
   organizationId: data.organizationId || '',
   teamId: data.teamId || '',
   clinicianProfileId: data.clinicianProfileId || '',
+  teamMembershipRole: data.teamMembershipRole || undefined,
+  invitedTitle: data.invitedTitle || '',
+  recipientName: data.recipientName || '',
   targetEmail: data.targetEmail || '',
   token: data.token || id,
   activationUrl: data.activationUrl || '',
   createdByUserId: data.createdByUserId || '',
   createdByEmail: data.createdByEmail || '',
+  createdAt: data.createdAt || null,
+  updatedAt: data.updatedAt || null,
+});
+
+const toTeamMembership = (id: string, data: Record<string, any>): PulseCheckTeamMembership => ({
+  id,
+  organizationId: data.organizationId || '',
+  teamId: data.teamId || '',
+  userId: data.userId || '',
+  email: data.email || '',
+  role: (data.role as PulseCheckTeamMembershipRole) || 'coach',
+  title: data.title || '',
+  permissionSetId: data.permissionSetId || '',
+  operatingRole: data.operatingRole || undefined,
+  notificationPreferences: {
+    ...defaultNotificationPreferences(),
+    ...(data.notificationPreferences || {}),
+  },
+  rosterVisibilityScope: (data.rosterVisibilityScope as PulseCheckRosterVisibilityScope) || 'team',
+  allowedAthleteIds: Array.isArray(data.allowedAthleteIds) ? data.allowedAthleteIds : [],
+  athleteOnboarding: {
+    ...defaultAthleteOnboardingState(),
+    ...(data.athleteOnboarding || {}),
+  },
+  onboardingStatus: data.onboardingStatus || 'pending',
+  postActivationCompletedAt: data.postActivationCompletedAt || null,
+  grantedByInviteToken: data.grantedByInviteToken || '',
+  grantedAt: data.grantedAt || null,
   createdAt: data.createdAt || null,
   updatedAt: data.updatedAt || null,
 });
@@ -128,6 +188,45 @@ export const pulseCheckProvisioningService = {
   async listInviteLinks(): Promise<PulseCheckInviteLink[]> {
     const snapshot = await getDocs(query(collection(db, INVITE_LINKS_COLLECTION), orderBy('createdAt', 'desc')));
     return snapshot.docs.map((docSnap) => toInviteLink(docSnap.id, docSnap.data() as Record<string, any>));
+  },
+
+  async listTeamInviteLinks(teamId: string): Promise<PulseCheckInviteLink[]> {
+    const snapshot = await getDocs(query(collection(db, INVITE_LINKS_COLLECTION), where('teamId', '==', normalizeString(teamId))));
+    return snapshot.docs
+      .map((docSnap) => toInviteLink(docSnap.id, docSnap.data() as Record<string, any>))
+      .sort((left, right) => {
+        const leftTime = left.createdAt && 'seconds' in left.createdAt ? Number(left.createdAt.seconds) : 0;
+        const rightTime = right.createdAt && 'seconds' in right.createdAt ? Number(right.createdAt.seconds) : 0;
+        return rightTime - leftTime;
+      });
+  },
+
+  async listUserTeamMemberships(userId: string): Promise<PulseCheckTeamMembership[]> {
+    const snapshot = await getDocs(query(collection(db, TEAM_MEMBERSHIPS_COLLECTION), where('userId', '==', normalizeString(userId))));
+    return snapshot.docs.map((docSnap) => toTeamMembership(docSnap.id, docSnap.data() as Record<string, any>));
+  },
+
+  async listTeamMemberships(teamId: string): Promise<PulseCheckTeamMembership[]> {
+    const snapshot = await getDocs(query(collection(db, TEAM_MEMBERSHIPS_COLLECTION), where('teamId', '==', normalizeString(teamId))));
+    return snapshot.docs
+      .map((docSnap) => toTeamMembership(docSnap.id, docSnap.data() as Record<string, any>))
+      .sort((left, right) => {
+        if (left.role === 'team-admin' && right.role !== 'team-admin') return -1;
+        if (left.role !== 'team-admin' && right.role === 'team-admin') return 1;
+        return (left.email || '').localeCompare(right.email || '');
+      });
+  },
+
+  async getOrganization(organizationId: string): Promise<PulseCheckOrganization | null> {
+    const snapshot = await getDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizeString(organizationId)));
+    if (!snapshot.exists()) return null;
+    return toOrganization(snapshot.id, snapshot.data() as Record<string, any>);
+  },
+
+  async getTeam(teamId: string): Promise<PulseCheckTeam | null> {
+    const snapshot = await getDoc(doc(db, TEAMS_COLLECTION, normalizeString(teamId)));
+    if (!snapshot.exists()) return null;
+    return toTeam(snapshot.id, snapshot.data() as Record<string, any>);
   },
 
   async createClinicianProfile(input: UpsertPulseCheckAuntEdnaClinicianProfileInput): Promise<PulseCheckAuntEdnaClinicianProfile> {
@@ -376,6 +475,116 @@ export const pulseCheckProvisioningService = {
     return inviteDocRef.id;
   },
 
+  async createTeamAccessInviteLink(input: CreatePulseCheckTeamAccessInviteInput): Promise<string> {
+    const token = crypto.randomUUID();
+    const normalizedTeamId = normalizeString(input.teamId);
+    const normalizedRole = input.teamMembershipRole;
+    const normalizedTargetEmail = normalizeEmail(input.targetEmail);
+    const baseUrl =
+      typeof window !== 'undefined'
+        ? window.location.origin
+        : process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai';
+    const activationUrl = `${baseUrl}/pulsecheck/team-invite/${token}`;
+
+    const existingActiveLinks = await getDocs(collection(db, INVITE_LINKS_COLLECTION));
+    const linksToRevoke = existingActiveLinks.docs.filter((snapshot) => {
+      const link = snapshot.data() as Record<string, any>;
+      return (
+        (link.teamId || '') === normalizedTeamId &&
+        (link.teamMembershipRole || '') === normalizedRole &&
+        normalizeEmail(link.targetEmail || '') === normalizedTargetEmail &&
+        (link.inviteType || '') === 'team-access' &&
+        (link.status || '') === 'active'
+      );
+    });
+
+    await Promise.all(
+      linksToRevoke.map((snapshot) =>
+        updateDoc(snapshot.ref, {
+          status: 'revoked',
+          updatedAt: serverTimestamp(),
+        })
+      )
+    );
+
+    const payload = {
+      inviteType: 'team-access',
+      status: 'active',
+      organizationId: normalizeString(input.organizationId),
+      teamId: normalizedTeamId,
+      teamMembershipRole: normalizedRole,
+      targetEmail: normalizedTargetEmail,
+      recipientName: normalizeString(input.recipientName),
+      invitedTitle: normalizeString(input.invitedTitle),
+      token,
+      activationUrl,
+      createdByUserId: normalizeString(input.createdByUserId),
+      createdByEmail: normalizeString(input.createdByEmail),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    const inviteDocRef = doc(db, INVITE_LINKS_COLLECTION, token);
+    await setDoc(inviteDocRef, payload);
+    return inviteDocRef.id;
+  },
+
+  async savePostActivationSetup(input: SavePulseCheckPostActivationSetupInput): Promise<void> {
+    const membershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, normalizeString(input.teamMembershipId));
+    await updateDoc(membershipRef, {
+      title: normalizeString(input.title),
+      operatingRole: input.operatingRole,
+      notificationPreferences: {
+        ...defaultNotificationPreferences(),
+        ...(input.notificationPreferences || {}),
+      },
+      onboardingStatus: 'profile-complete',
+      postActivationCompletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async saveAdultMemberSetup(input: SavePulseCheckAdultMemberSetupInput): Promise<void> {
+    const membershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, normalizeString(input.teamMembershipId));
+    await updateDoc(membershipRef, {
+      title: normalizeString(input.title),
+      notificationPreferences: {
+        ...defaultNotificationPreferences(),
+        ...(input.notificationPreferences || {}),
+      },
+      onboardingStatus: 'complete',
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async completeAthleteOnboarding(input: CompletePulseCheckAthleteOnboardingInput): Promise<void> {
+    const membershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, normalizeString(input.teamMembershipId));
+    await updateDoc(membershipRef, {
+      athleteOnboarding: {
+        productConsentAccepted: true,
+        productConsentAcceptedAt: serverTimestamp(),
+        productConsentVersion: normalizeString(input.consentVersion),
+        researchConsentStatus: 'not-required',
+        eligibleForResearchDataset: false,
+        enrollmentMode: 'product-only',
+        baselinePathStatus: 'ready',
+        baselinePathwayId: normalizeString(input.baselinePathwayId),
+      },
+      onboardingStatus: 'complete',
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async updateTeamMembershipAccess(input: UpdatePulseCheckTeamMembershipAccessInput): Promise<void> {
+    const membershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, normalizeString(input.teamMembershipId));
+    await updateDoc(membershipRef, {
+      rosterVisibilityScope: input.rosterVisibilityScope,
+      allowedAthleteIds: input.rosterVisibilityScope === 'assigned' ? [...(input.allowedAthleteIds || [])] : [],
+      ...(input.permissionSetId ? { permissionSetId: normalizeString(input.permissionSetId) } : {}),
+      updatedAt: serverTimestamp(),
+    });
+  },
+
   async redeemAdminActivationInvite(token: string): Promise<RedeemPulseCheckAdminActivationResult> {
     const currentUser = auth.currentUser;
     if (!currentUser) {
@@ -398,5 +607,29 @@ export const pulseCheckProvisioningService = {
     }
 
     return payload as RedeemPulseCheckAdminActivationResult;
+  },
+
+  async redeemTeamInvite(token: string): Promise<RedeemPulseCheckTeamInviteResult> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('You must be signed in to redeem this invite.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+    const response = await fetch('/api/pulsecheck/team-invite/redeem', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ token: normalizeString(token) }),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Failed to redeem team invite.');
+    }
+
+    return payload as RedeemPulseCheckTeamInviteResult;
   },
 };

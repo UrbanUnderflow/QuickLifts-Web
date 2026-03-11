@@ -1219,7 +1219,7 @@ const LegalDocumentsAdmin: React.FC = () => {
 
     try {
       setIsSendingExecutedNotification(document.id);
-      setMessage({ type: 'info', text: 'Sending fully executed notification...' });
+      setMessage({ type: 'info', text: 'Sending fully executed notifications...' });
 
       const response = await fetch('/.netlify/functions/send-fully-executed-email', {
         method: 'POST',
@@ -1238,7 +1238,7 @@ const LegalDocumentsAdmin: React.FC = () => {
         throw new Error('Failed to send notification');
       }
 
-      setMessage({ type: 'success', text: 'Fully executed notification sent successfully!' });
+      setMessage({ type: 'success', text: 'Fully executed notifications sent successfully!' });
     } catch (error) {
       console.error('Error sending fully executed notification:', error);
       setMessage({ type: 'error', text: 'Failed to send notification.' });

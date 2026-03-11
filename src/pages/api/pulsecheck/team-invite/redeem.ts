@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../../lib/firebase-admin';
+import type { PulseCheckTeamMembershipRole } from '../../../../api/firebase/pulsecheckProvisioning/types';
 
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
 const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
@@ -9,6 +10,15 @@ const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const normalizeEmail = (value: unknown) => normalizeString(value).toLowerCase();
+
+const permissionSetByRole: Record<PulseCheckTeamMembershipRole, string> = {
+  'team-admin': 'pulsecheck-team-admin-v1',
+  coach: 'pulsecheck-coach-v1',
+  'performance-staff': 'pulsecheck-performance-staff-v1',
+  'support-staff': 'pulsecheck-support-staff-v1',
+  clinician: 'pulsecheck-clinician-v1',
+  athlete: 'pulsecheck-athlete-v1',
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -46,7 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const invite = inviteSnap.data() || {};
-      if ((invite.inviteType || '') !== 'admin-activation') {
+      if ((invite.inviteType || '') !== 'team-access') {
         throw new Error('Invite type is invalid for this route.');
       }
       if ((invite.status || '') !== 'active') {
@@ -60,8 +70,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const organizationId = normalizeString(invite.organizationId);
       const teamId = normalizeString(invite.teamId);
-      if (!organizationId || !teamId) {
-        throw new Error('Invite is missing organization or team context.');
+      const teamMembershipRole = normalizeString(invite.teamMembershipRole) as PulseCheckTeamMembershipRole;
+      const invitedTitle = normalizeString(invite.invitedTitle);
+      if (!organizationId || !teamId || !teamMembershipRole) {
+        throw new Error('Invite is missing organization, team, or role context.');
       }
 
       const organizationRef = firestore.collection(ORGANIZATIONS_COLLECTION).doc(organizationId);
@@ -84,23 +96,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const organizationName = normalizeString(organizationSnap.data()?.displayName) || 'PulseCheck Organization';
-      const teamName = normalizeString(teamSnap.data()?.displayName) || 'Initial Team';
+      const teamName = normalizeString(teamSnap.data()?.displayName) || 'Team';
 
-      transaction.set(
-        organizationMembershipRef,
-        {
-          organizationId,
-          userId,
-          email: userEmail,
-          role: 'org-admin',
-          status: 'active',
-          grantedByInviteToken: token,
-          grantedAt: now,
-          createdAt: now,
-          updatedAt: now,
-        },
-        { merge: true }
-      );
+      if (teamMembershipRole === 'team-admin') {
+        transaction.set(
+          organizationMembershipRef,
+          {
+            organizationId,
+            userId,
+            email: userEmail,
+            role: 'org-admin',
+            status: 'active',
+            grantedByInviteToken: token,
+            grantedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+
+        transaction.set(
+          teamRef,
+          {
+            defaultAdminUserIds: admin.firestore.FieldValue.arrayUnion(userId),
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+      }
 
       transaction.set(
         teamMembershipRef,
@@ -109,40 +132,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           teamId,
           userId,
           email: userEmail,
-          role: 'team-admin',
-          title: 'Organization Admin',
-          permissionSetId: 'pulsecheck-team-admin-v1',
-          rosterVisibilityScope: 'team',
+          role: teamMembershipRole,
+          title: invitedTitle || null,
+          permissionSetId: permissionSetByRole[teamMembershipRole] || 'pulsecheck-team-member-v1',
+          rosterVisibilityScope: teamMembershipRole === 'athlete' ? 'none' : 'team',
           allowedAthleteIds: [],
-          onboardingStatus: 'pending-profile',
+          athleteOnboarding:
+            teamMembershipRole === 'athlete'
+              ? {
+                  productConsentAccepted: false,
+                  productConsentAcceptedAt: null,
+                  productConsentVersion: null,
+                  researchConsentStatus: 'not-required',
+                  eligibleForResearchDataset: false,
+                  enrollmentMode: 'product-only',
+                  baselinePathStatus: 'pending',
+                  baselinePathwayId: null,
+                }
+              : null,
+          onboardingStatus: teamMembershipRole === 'athlete' ? 'pending-consent' : 'pending-profile',
           grantedByInviteToken: token,
           grantedAt: now,
           createdAt: now,
-          updatedAt: now,
-        },
-        { merge: true }
-      );
-
-      transaction.set(
-        organizationRef,
-        {
-          status: 'active',
-          activatedByUserId: userId,
-          activatedByEmail: userEmail,
-          activatedAt: now,
-          updatedAt: now,
-        },
-        { merge: true }
-      );
-
-      transaction.set(
-        teamRef,
-        {
-          status: 'active',
-          activatedByUserId: userId,
-          activatedByEmail: userEmail,
-          activatedAt: now,
-          defaultAdminUserIds: admin.firestore.FieldValue.arrayUnion(userId),
           updatedAt: now,
         },
         { merge: true }
@@ -165,8 +176,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         organizationName,
         teamId,
         teamName,
-        organizationMembershipId: organizationMembershipRef.id,
         teamMembershipId: teamMembershipRef.id,
+        teamMembershipRole,
+        invitedTitle,
       };
     });
 
@@ -182,7 +194,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             ? 403
             : 400;
 
-    console.error('[pulsecheck-admin-activation/redeem] Failed to redeem invite:', error);
+    console.error('[pulsecheck-team-invite/redeem] Failed to redeem invite:', error);
     return res.status(statusCode).json({ error: message });
   }
 }
