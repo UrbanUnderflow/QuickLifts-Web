@@ -1,7 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { motion } from 'framer-motion';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, query, Timestamp, where } from 'firebase/firestore';
+import { Loader2, StickyNote, Trash2, X } from 'lucide-react';
+import { useSelector } from 'react-redux';
+import { db } from '../../../api/firebase/config';
+import { RootState } from '../../../redux/store';
 import admin from '../../../lib/firebase-admin';
 import { getSystemOverviewShareCookieName, verifySystemOverviewShareAccessCookieValue } from '../../../lib/systemOverviewShareAccess';
 import { resolveSystemOverviewSharePreviewMeta } from '../../../lib/sharePreviewMeta';
@@ -25,6 +30,56 @@ type SharedSystemOverviewPageProps = {
     url: string;
   };
 };
+
+type NoteColorKey = 'yellow' | 'pink' | 'blue' | 'green' | 'purple';
+
+type ArtifactNote = {
+  id: string;
+  documentId: string;
+  authorName: string;
+  content: string;
+  xPercent: number;
+  yOffset: number;
+  createdAt: Timestamp | Date;
+  authorKey?: string;
+  color?: NoteColorKey;
+};
+
+const NOTE_COLORS: { key: NoteColorKey; bg: string; icon: string; tooltipBg: string; tooltipText: string; ring: string }[] = [
+  { key: 'yellow', bg: 'bg-yellow-400', icon: 'text-yellow-800', tooltipBg: 'bg-yellow-100', tooltipText: 'text-yellow-900', ring: 'rgba(250, 204, 21, 0.45)' },
+  { key: 'pink', bg: 'bg-pink-400', icon: 'text-pink-800', tooltipBg: 'bg-pink-100', tooltipText: 'text-pink-900', ring: 'rgba(244, 114, 182, 0.45)' },
+  { key: 'blue', bg: 'bg-blue-400', icon: 'text-blue-800', tooltipBg: 'bg-blue-100', tooltipText: 'text-blue-900', ring: 'rgba(96, 165, 250, 0.45)' },
+  { key: 'green', bg: 'bg-green-400', icon: 'text-green-800', tooltipBg: 'bg-green-100', tooltipText: 'text-green-900', ring: 'rgba(74, 222, 128, 0.45)' },
+  { key: 'purple', bg: 'bg-purple-400', icon: 'text-purple-800', tooltipBg: 'bg-purple-100', tooltipText: 'text-purple-900', ring: 'rgba(192, 132, 252, 0.45)' },
+];
+
+const getNoteColorStyles = (colorKey: NoteColorKey | undefined) => {
+  return NOTE_COLORS.find((color) => color.key === (colorKey || 'yellow')) ?? NOTE_COLORS[0];
+};
+
+const getAuthorKey = (): string => {
+  if (typeof window === 'undefined') return '';
+  const storageKey = 'document-notes-author-key';
+  let key = window.localStorage.getItem(storageKey);
+  if (!key) {
+    key = `author_${Date.now()}_${Math.random().toString(36).slice(2, 15)}`;
+    window.localStorage.setItem(storageKey, key);
+  }
+  return key;
+};
+
+const formatNoteDate = (value: Timestamp | Date | undefined): string => {
+  if (!value) return '';
+  const date = value instanceof Timestamp ? value.toDate() : value;
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
+const getArtifactNotesDocumentId = (token: string) => `system-overview-share:${token}`;
 
 // ─── Smart Text Parser ──────────────────────────────────────────────────
 
@@ -672,11 +727,84 @@ function renderEnhancedText(text: string): React.ReactNode {
 // ─── Main Page Component ─────────────────────────────────────────────────
 
 const SharedSystemOverviewPage = ({ share, ogMeta }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
+  const currentUser = useSelector((state: RootState) => state.user.currentUser);
+  const isAdmin = currentUser?.role === 'admin';
   const blocks = useMemo(() => (share.isLocked ? [] : parseSnapshotText(share.snapshotText)), [share.isLocked, share.snapshotText]);
   const [copied, setCopied] = useState(false);
   const [passcode, setPasscode] = useState('');
   const [unlocking, setUnlocking] = useState(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [notes, setNotes] = useState<ArtifactNote[]>([]);
+  const [showNoteForm, setShowNoteForm] = useState(false);
+  const [noteFormPosition, setNoteFormPosition] = useState({ xPercent: 0, yOffset: 0 });
+  const [newNoteName, setNewNoteName] = useState('');
+  const [newNoteContent, setNewNoteContent] = useState('');
+  const [newNoteColor, setNewNoteColor] = useState<NoteColorKey>('yellow');
+  const [savingNote, setSavingNote] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+  const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
+  const [localAuthorKey, setLocalAuthorKey] = useState('');
+  const contentRef = useRef<HTMLDivElement>(null);
+  const hideNoteTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const artifactNotesDocumentId = useMemo(() => getArtifactNotesDocumentId(share.token), [share.token]);
+  const HIDE_NOTE_DELAY_MS = 2500;
+
+  const scheduleHideNote = (noteId: string) => {
+    if (hideNoteTimeoutRef.current) clearTimeout(hideNoteTimeoutRef.current);
+    hideNoteTimeoutRef.current = setTimeout(() => {
+      setHoveredNoteId((current) => (current === noteId ? null : current));
+      hideNoteTimeoutRef.current = null;
+    }, HIDE_NOTE_DELAY_MS);
+  };
+
+  const cancelHideNote = () => {
+    if (hideNoteTimeoutRef.current) {
+      clearTimeout(hideNoteTimeoutRef.current);
+      hideNoteTimeoutRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    setLocalAuthorKey(getAuthorKey());
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (hideNoteTimeoutRef.current) clearTimeout(hideNoteTimeoutRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (share.isLocked) {
+      setNotes([]);
+      return;
+    }
+
+    const notesQuery = query(
+      collection(db, 'document-notes'),
+      where('documentId', '==', artifactNotesDocumentId)
+    );
+
+    const unsubscribe = onSnapshot(notesQuery, (snapshot) => {
+      const notesData = snapshot.docs.map((snapshotDoc) => ({
+        id: snapshotDoc.id,
+        ...snapshotDoc.data(),
+      })) as ArtifactNote[];
+
+      notesData.sort((a, b) => {
+        const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : a.createdAt?.toDate?.()?.getTime?.() || 0;
+        const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : b.createdAt?.toDate?.()?.getTime?.() || 0;
+        return aTime - bTime;
+      });
+
+      setNotes(notesData);
+    }, (error) => {
+      console.error('[SharedArtifactNotes] Error fetching notes:', error);
+    });
+
+    return () => unsubscribe();
+  }, [artifactNotesDocumentId, share.isLocked]);
 
   const handleCopy = async () => {
     if (share.isLocked) return;
@@ -687,6 +815,63 @@ const SharedSystemOverviewPage = ({ share, ogMeta }: InferGetServerSidePropsType
     } catch {
       /* noop */
     }
+  };
+
+  const handleDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (share.isLocked || !contentRef.current) return;
+
+    const rect = contentRef.current.getBoundingClientRect();
+    const xPercent = ((event.clientX - rect.left) / rect.width) * 100;
+    const yOffset = event.clientY - rect.top + contentRef.current.scrollTop;
+
+    setNoteFormPosition({ xPercent, yOffset });
+    setShowNoteForm(true);
+    setNewNoteName('');
+    setNewNoteContent('');
+    setNewNoteColor('yellow');
+  };
+
+  const handleSaveNote = async () => {
+    if (!newNoteName.trim() || !newNoteContent.trim()) return;
+
+    setSavingNote(true);
+    try {
+      await addDoc(collection(db, 'document-notes'), {
+        documentId: artifactNotesDocumentId,
+        authorName: newNoteName.trim(),
+        content: newNoteContent.trim(),
+        xPercent: noteFormPosition.xPercent,
+        yOffset: noteFormPosition.yOffset,
+        createdAt: new Date(),
+        authorKey: localAuthorKey,
+        color: newNoteColor,
+      });
+
+      setShowNoteForm(false);
+      setNewNoteName('');
+      setNewNoteContent('');
+      setNewNoteColor('yellow');
+    } catch (error) {
+      console.error('[SharedArtifactNotes] Error saving note:', error);
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    setDeletingNoteId(noteId);
+    try {
+      await deleteDoc(doc(db, 'document-notes', noteId));
+    } catch (error) {
+      console.error('[SharedArtifactNotes] Error deleting note:', error);
+    } finally {
+      setDeletingNoteId(null);
+    }
+  };
+
+  const canDeleteNote = (note: ArtifactNote): boolean => {
+    if (isAdmin) return true;
+    return Boolean(note.authorKey && note.authorKey === localAuthorKey);
   };
 
   const handleUnlock = async (event: React.FormEvent) => {
@@ -990,197 +1175,390 @@ const SharedSystemOverviewPage = ({ share, ogMeta }: InferGetServerSidePropsType
               <div className="absolute top-0 left-0 right-0 h-px opacity-30" style={{ background: 'linear-gradient(90deg, transparent 10%, rgba(139,92,246,0.4) 50%, transparent 90%)' }} />
 
               <div className="relative" style={{ padding: '32px 36px 40px' }}>
-                {blocks.map((block, idx) => {
-                switch (block.type) {
-                  case 'section-header': {
-                    const accent = ACCENTS[sectionIdx % ACCENTS.length];
-                    sectionIdx++;
-                    return (
-                      <motion.div
-                        key={idx}
-                        initial={{ opacity: 0, x: -10 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 0.4 }}
-                        style={{ marginTop: idx === 0 ? 0 : 40, marginBottom: 12 }}
-                      >
-                        {/* Divider line above each section except the first */}
-                        {idx > 0 && (
-                          <div style={{ height: 1, marginBottom: 28, background: 'linear-gradient(90deg, rgba(255,255,255,0.06), transparent 80%)' }} />
-                        )}
-                        <div className="flex items-center gap-3">
-                          <span style={{ width: 24, height: 2, borderRadius: 1, background: `linear-gradient(90deg, ${accent}, transparent)` }} />
-                          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: accent }}>
-                            {block.text}
-                          </span>
-                        </div>
-                      </motion.div>
-                    );
-                  }
+                <div
+                  className="mb-5 flex flex-col gap-2 border-b border-white/5 pb-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <p className="flex items-center gap-2 text-xs text-zinc-500">
+                    <StickyNote className="h-4 w-4 text-yellow-400" />
+                    Double-click anywhere in the artifact to add a note
+                  </p>
+                  {notes.length > 0 ? (
+                    <span
+                      className="self-start rounded-full px-2 py-1 text-xs font-medium text-yellow-300 sm:self-auto"
+                      style={{ background: 'rgba(250, 204, 21, 0.12)', border: '1px solid rgba(250, 204, 21, 0.18)' }}
+                    >
+                      {notes.length} note{notes.length === 1 ? '' : 's'}
+                    </span>
+                  ) : null}
+                </div>
 
-                  case 'sub-header':
-                    return (
-                      <motion.h2
-                        key={idx}
-                        initial={{ opacity: 0, y: 8 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 0.35 }}
-                        style={{ fontSize: 18, fontWeight: 700, color: '#fafafa', lineHeight: 1.35, marginTop: 24, marginBottom: 8, letterSpacing: '-0.005em' }}
-                      >
-                        {block.text}
-                      </motion.h2>
-                    );
-
-                  case 'version-badge':
-                    return (
-                      <motion.div
-                        key={idx}
-                        initial={{ opacity: 0, scale: 0.96 }}
-                        whileInView={{ opacity: 1, scale: 1 }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 0.35 }}
-                        className="inline-flex items-center gap-2"
-                        style={{ padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 500, fontFamily: 'ui-monospace, SFMono-Regular, monospace', color: '#a1a1aa', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', marginTop: 4, marginBottom: 12 }}
-                      >
-                        <span className="animate-pulse" style={{ width: 5, height: 5, borderRadius: '50%', background: '#E0FE10', display: 'inline-block' }} />
-                        {block.text}
-                      </motion.div>
-                    );
-
-                  case 'body':
-                    return (
-                      <motion.div
-                        key={idx}
-                        initial={{ opacity: 0, y: 6 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 0.4 }}
-                        className="space-y-3"
-                        style={{ marginBottom: 16 }}
-                      >
-                        {block.lines.map((line, li) => (
-                          <p
-                            key={li}
-                            style={{ fontSize: 14, color: '#d4d4d8', lineHeight: 1.75, maxWidth: 680 }}
+                <div
+                  ref={contentRef}
+                  className="relative"
+                  onDoubleClick={handleDoubleClick}
+                  style={{ cursor: 'text' }}
+                >
+                  {blocks.map((block, idx) => {
+                    switch (block.type) {
+                      case 'section-header': {
+                        const accent = ACCENTS[sectionIdx % ACCENTS.length];
+                        sectionIdx++;
+                        return (
+                          <motion.div
+                            key={idx}
+                            initial={{ opacity: 0, x: -10 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.4 }}
+                            style={{ marginTop: idx === 0 ? 0 : 40, marginBottom: 12 }}
                           >
-                            {renderEnhancedText(line)}
-                          </p>
-                        ))}
-                      </motion.div>
-                    );
+                            {idx > 0 && (
+                              <div style={{ height: 1, marginBottom: 28, background: 'linear-gradient(90deg, rgba(255,255,255,0.06), transparent 80%)' }} />
+                            )}
+                            <div className="flex items-center gap-3">
+                              <span style={{ width: 24, height: 2, borderRadius: 1, background: `linear-gradient(90deg, ${accent}, transparent)` }} />
+                              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: accent }}>
+                                {block.text}
+                              </span>
+                            </div>
+                          </motion.div>
+                        );
+                      }
 
-                  case 'flow-diagram':
-                    return (
-                      <FlowDiagram
-                        key={idx}
-                        steps={block.steps}
-                        label={block.label}
-                        accent={ACCENTS[(sectionIdx - 1 + ACCENTS.length) % ACCENTS.length]}
-                      />
-                    );
+                      case 'sub-header':
+                        return (
+                          <motion.h2
+                            key={idx}
+                            initial={{ opacity: 0, y: 8 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.35 }}
+                            style={{ fontSize: 18, fontWeight: 700, color: '#fafafa', lineHeight: 1.35, marginTop: 24, marginBottom: 8, letterSpacing: '-0.005em' }}
+                          >
+                            {block.text}
+                          </motion.h2>
+                        );
 
-                  case 'api-table':
-                    return (
-                      <ApiTable
-                        key={idx}
-                        rows={block.rows}
-                        accent={ACCENTS[(sectionIdx - 1 + ACCENTS.length) % ACCENTS.length]}
-                      />
-                    );
+                      case 'version-badge':
+                        return (
+                          <motion.div
+                            key={idx}
+                            initial={{ opacity: 0, scale: 0.96 }}
+                            whileInView={{ opacity: 1, scale: 1 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.35 }}
+                            className="inline-flex items-center gap-2"
+                            style={{ padding: '5px 14px', borderRadius: 20, fontSize: 11, fontWeight: 500, fontFamily: 'ui-monospace, SFMono-Regular, monospace', color: '#a1a1aa', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', marginTop: 4, marginBottom: 12 }}
+                          >
+                            <span className="animate-pulse" style={{ width: 5, height: 5, borderRadius: '50%', background: '#E0FE10', display: 'inline-block' }} />
+                            {block.text}
+                          </motion.div>
+                        );
 
-                  case 'bullet-list':
-                    return (
-                      <BulletList
-                        key={idx}
-                        items={block.items}
-                        accent={ACCENTS[(sectionIdx - 1 + ACCENTS.length) % ACCENTS.length]}
-                      />
-                    );
+                      case 'body':
+                        return (
+                          <motion.div
+                            key={idx}
+                            initial={{ opacity: 0, y: 6 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.4 }}
+                            className="space-y-3"
+                            style={{ marginBottom: 16 }}
+                          >
+                            {block.lines.map((line, li) => (
+                              <p
+                                key={li}
+                                style={{ fontSize: 14, color: '#d4d4d8', lineHeight: 1.75, maxWidth: 680 }}
+                              >
+                                {renderEnhancedText(line)}
+                              </p>
+                            ))}
+                          </motion.div>
+                        );
 
-                  case 'labeled-table':
-                    return (
-                      <LabeledTable
-                        key={idx}
-                        labelCol={block.labelCol}
-                        valueCol={block.valueCol}
-                        rows={block.rows}
-                        accent={ACCENTS[(sectionIdx - 1 + ACCENTS.length) % ACCENTS.length]}
-                      />
-                    );
+                      case 'flow-diagram':
+                        return (
+                          <FlowDiagram
+                            key={idx}
+                            steps={block.steps}
+                            label={block.label}
+                            accent={ACCENTS[(sectionIdx - 1 + ACCENTS.length) % ACCENTS.length]}
+                          />
+                        );
 
-                  case 'card-grid': {
-                    const cols = block.cards.length <= 2 ? 2 : block.cards.length === 3 ? 3 : 2;
+                      case 'api-table':
+                        return (
+                          <ApiTable
+                            key={idx}
+                            rows={block.rows}
+                            accent={ACCENTS[(sectionIdx - 1 + ACCENTS.length) % ACCENTS.length]}
+                          />
+                        );
+
+                      case 'bullet-list':
+                        return (
+                          <BulletList
+                            key={idx}
+                            items={block.items}
+                            accent={ACCENTS[(sectionIdx - 1 + ACCENTS.length) % ACCENTS.length]}
+                          />
+                        );
+
+                      case 'labeled-table':
+                        return (
+                          <LabeledTable
+                            key={idx}
+                            labelCol={block.labelCol}
+                            valueCol={block.valueCol}
+                            rows={block.rows}
+                            accent={ACCENTS[(sectionIdx - 1 + ACCENTS.length) % ACCENTS.length]}
+                          />
+                        );
+
+                      case 'card-grid': {
+                        const cols = block.cards.length <= 2 ? 2 : block.cards.length === 3 ? 3 : 2;
+                        return (
+                          <motion.div
+                            key={idx}
+                            initial={{ opacity: 0, y: 14 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.45 }}
+                            className="grid gap-3"
+                            style={{
+                              gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                              marginTop: 16,
+                              marginBottom: 20,
+                            }}
+                          >
+                            {block.cards.map((card, ci) => {
+                              const accent = ACCENTS[(sectionIdx + ci) % ACCENTS.length];
+                              return (
+                                <motion.div
+                                  key={ci}
+                                  initial={{ opacity: 0, y: 10 }}
+                                  whileInView={{ opacity: 1, y: 0 }}
+                                  viewport={{ once: true }}
+                                  transition={{ duration: 0.35, delay: ci * 0.06 }}
+                                  className="relative group rounded-xl overflow-hidden"
+                                  style={{
+                                    padding: '20px 20px 18px',
+                                    background: `linear-gradient(135deg, ${accent}08, transparent)`,
+                                    border: `1px solid ${accent}20`,
+                                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    const el = e.currentTarget;
+                                    el.style.transform = 'translateY(-2px)';
+                                    el.style.boxShadow = `0 4px 24px ${accent}10`;
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    const el = e.currentTarget;
+                                    el.style.transform = 'translateY(0)';
+                                    el.style.boxShadow = 'none';
+                                  }}
+                                >
+                                  <div className="absolute top-0 left-0 right-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${accent}50, transparent)`, opacity: 0.6 }} />
+                                  <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] via-transparent to-transparent pointer-events-none" />
+
+                                  <div className="relative">
+                                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: accent, opacity: 0.7, marginBottom: 10 }} />
+                                    <h3 style={{ fontSize: 13, fontWeight: 700, color: '#fafafa', lineHeight: 1.35, marginBottom: 6 }}>
+                                      {card.title}
+                                    </h3>
+                                    {card.body ? (
+                                      <p style={{ fontSize: 12, color: '#a1a1aa', lineHeight: 1.6 }}>
+                                        {card.body}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                </motion.div>
+                              );
+                            })}
+                          </motion.div>
+                        );
+                      }
+
+                      default:
+                        return null;
+                    }
+                  })}
+
+                  {notes.map((note) => {
+                    const styles = getNoteColorStyles(note.color);
+                    const isHovered = hoveredNoteId === note.id;
+
                     return (
-                      <motion.div
-                        key={idx}
-                        initial={{ opacity: 0, y: 14 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 0.45 }}
-                        className="grid gap-3"
+                      <div
+                        key={note.id}
+                        className="absolute z-20"
                         style={{
-                          gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                          marginTop: 16,
-                          marginBottom: 20,
+                          left: `${Math.min(Math.max(note.xPercent, 2), 95)}%`,
+                          top: `${note.yOffset}px`,
+                          transform: 'translate(-50%, -50%)',
                         }}
+                        onMouseEnter={() => {
+                          cancelHideNote();
+                          setHoveredNoteId(note.id);
+                        }}
+                        onMouseLeave={() => scheduleHideNote(note.id)}
                       >
-                        {block.cards.map((card, ci) => {
-                          const accent = ACCENTS[(sectionIdx + ci) % ACCENTS.length];
-                          return (
-                            <motion.div
-                              key={ci}
-                              initial={{ opacity: 0, y: 10 }}
-                              whileInView={{ opacity: 1, y: 0 }}
-                              viewport={{ once: true }}
-                              transition={{ duration: 0.35, delay: ci * 0.06 }}
-                              className="relative group rounded-xl overflow-hidden"
-                              style={{
-                                padding: '20px 20px 18px',
-                                background: `linear-gradient(135deg, ${accent}08, transparent)`,
-                                border: `1px solid ${accent}20`,
-                                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                              }}
-                              onMouseEnter={(e) => {
-                                const el = e.currentTarget;
-                                el.style.transform = 'translateY(-2px)';
-                                el.style.boxShadow = `0 4px 24px ${accent}10`;
-                              }}
-                              onMouseLeave={(e) => {
-                                const el = e.currentTarget;
-                                el.style.transform = 'translateY(0)';
-                                el.style.boxShadow = 'none';
-                              }}
-                            >
-                              {/* Chromatic top edge */}
-                              <div className="absolute top-0 left-0 right-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${accent}50, transparent)`, opacity: 0.6 }} />
-                              <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] via-transparent to-transparent pointer-events-none" />
+                        <div
+                          className={`${styles.bg} flex h-8 w-8 cursor-pointer items-center justify-center rounded shadow-lg transition-all duration-200 ${isHovered ? 'scale-110 opacity-100' : 'opacity-30 hover:scale-110 hover:opacity-100'}`}
+                          onMouseEnter={() => {
+                            cancelHideNote();
+                            setHoveredNoteId(note.id);
+                          }}
+                        >
+                          <StickyNote className={`h-5 w-5 ${styles.icon}`} />
+                        </div>
 
-                              <div className="relative">
-                                <div style={{ width: 6, height: 6, borderRadius: '50%', background: accent, opacity: 0.7, marginBottom: 10 }} />
-                                <h3 style={{ fontSize: 13, fontWeight: 700, color: '#fafafa', lineHeight: 1.35, marginBottom: 6 }}>
-                                  {card.title}
-                                </h3>
-                                {card.body && (
-                                  <p style={{ fontSize: 12, color: '#a1a1aa', lineHeight: 1.6 }}>
-                                    {card.body}
-                                  </p>
-                                )}
-                              </div>
-                            </motion.div>
-                          );
-                        })}
-                      </motion.div>
+                        {isHovered ? (
+                          <div
+                            className={`absolute z-30 min-w-[200px] max-w-[300px] rounded-lg p-3 shadow-xl ${styles.tooltipBg} ${styles.tooltipText}`}
+                            style={{
+                              left: note.xPercent > 70 ? 'auto' : '100%',
+                              right: note.xPercent > 70 ? '100%' : 'auto',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              marginLeft: note.xPercent > 70 ? 0 : '8px',
+                              marginRight: note.xPercent > 70 ? '8px' : 0,
+                            }}
+                            onMouseEnter={cancelHideNote}
+                            onMouseLeave={() => scheduleHideNote(note.id)}
+                          >
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                              <div className="text-sm font-semibold">{note.authorName}</div>
+                              {canDeleteNote(note) ? (
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleDeleteNote(note.id);
+                                  }}
+                                  disabled={deletingNoteId === note.id}
+                                  className="rounded p-1 text-red-600 transition-colors hover:bg-red-200 hover:text-red-700"
+                                  title="Delete note"
+                                >
+                                  {deletingNoteId === note.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="h-4 w-4" />
+                                  )}
+                                </button>
+                              ) : null}
+                            </div>
+                            <div className="whitespace-pre-wrap text-sm">{note.content}</div>
+                            <div className={`mt-2 text-xs opacity-80 ${styles.tooltipText}`}>
+                              {formatNoteDate(note.createdAt)}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
                     );
-                  }
-
-                  default:
-                    return null;
-                }
-                })}
+                  })}
+                </div>
               </div>
             </motion.section>
           )}
+
+          {showNoteForm ? (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4"
+              onClick={(event) => {
+                if (event.target === event.currentTarget) setShowNoteForm(false);
+              }}
+            >
+              <div
+                className="w-full max-w-md rounded-xl border border-zinc-700 bg-[#17191f] p-6 shadow-2xl"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`flex h-8 w-8 items-center justify-center rounded ${getNoteColorStyles(newNoteColor).bg}`}>
+                      <StickyNote className={`h-5 w-5 ${getNoteColorStyles(newNoteColor).icon}`} />
+                    </div>
+                    <h3 className="text-lg font-semibold text-white">Add Note</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowNoteForm(false)}
+                    className="rounded-lg p-1 transition-colors hover:bg-zinc-700"
+                    title="Close note form"
+                  >
+                    <X className="h-5 w-5 text-zinc-400" />
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-300">Note color</label>
+                    <div className="flex flex-wrap gap-2">
+                      {NOTE_COLORS.map(({ key, bg, icon, ring }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setNewNoteColor(key)}
+                          className={`flex h-10 w-10 items-center justify-center rounded-lg ${bg} transition-all`}
+                          style={{
+                            boxShadow: newNoteColor === key ? `0 0 0 2px #fff, 0 0 0 4px ${ring}` : 'none',
+                          }}
+                          title={key.charAt(0).toUpperCase() + key.slice(1)}
+                        >
+                          <StickyNote className={`h-5 w-5 ${icon}`} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-300">Your Name</label>
+                    <input
+                      type="text"
+                      value={newNoteName}
+                      onChange={(event) => setNewNoteName(event.target.value)}
+                      placeholder="Enter your name"
+                      autoFocus
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-white placeholder-zinc-500 outline-none transition-colors focus:border-yellow-400 focus:ring-2 focus:ring-yellow-500/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-300">Note</label>
+                    <textarea
+                      value={newNoteContent}
+                      onChange={(event) => setNewNoteContent(event.target.value)}
+                      placeholder="Enter your note or comment..."
+                      rows={4}
+                      className="w-full resize-none rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-white placeholder-zinc-500 outline-none transition-colors focus:border-yellow-400 focus:ring-2 focus:ring-yellow-500/30"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={() => setShowNoteForm(false)}
+                      className="flex-1 rounded-lg bg-zinc-700 px-4 py-2.5 font-medium text-white transition-colors hover:bg-zinc-600"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveNote}
+                      disabled={!newNoteName.trim() || !newNoteContent.trim() || savingNote}
+                      className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-yellow-400 px-4 py-2.5 font-medium text-black transition-colors hover:bg-yellow-300 disabled:cursor-not-allowed disabled:bg-zinc-600 disabled:text-zinc-400"
+                    >
+                      {savingNote ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : (
+                        'Save Note'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {/* Footer */}
           <footer className="flex flex-col items-center gap-3" style={{ paddingTop: 36, paddingBottom: 48 }}>
