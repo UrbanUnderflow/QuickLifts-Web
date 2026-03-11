@@ -18,6 +18,34 @@ const memberStateRows = [
   ['paired', 'Member has an active pairing assigned by the host.'],
 ];
 
+const phaseOneDecisionRows = [
+  ['Club config location', '`Club.activation` nested object', 'Activation is distinct from `ClubFeatures`. `ClubFeatures` remains for leaderboards and nutrition; `Club.activation` owns onboarding, intro, and pairing settings.'],
+  ['Member activation state', '`ClubMember` timestamp fields', 'Store `onboardedAt`, `introducedAt`, and `pairedAt` directly on the membership record so host roster queries stay cheap and cross-platform parity stays simple.'],
+  ['Onboarding response storage', 'Separate `clubMemberProfiles/{clubId_userId}` document', 'Responses are variable, club-specific, and useful for pairing. Keeping them separate avoids bloating `ClubMember` and preserves a clean membership core model.'],
+  ['Question source', 'Curated system question bank', 'Hosts select from reusable system questions by id in v1; no freeform form builder.'],
+  ['Intro completion source', 'Explicit activation write, not inference only', 'The system can optionally reference the intro message id, but the source of truth is the `introducedAt` activation timestamp.'],
+  ['Pairing system shape', 'Separate pairing records plus denormalized member state', 'Pair relationships should not be modeled as raw fields on both users. Membership stores `pairedAt`; the actual pairing record lives separately when pairing is implemented.'],
+];
+
+const activationConfigRows = [
+  ['`enabled`', 'boolean', 'Master gate for the club activation layer.'],
+  ['`requiredQuestionIds`', 'string[]', 'Ordered list of system question ids required for onboarding completion.'],
+  ['`introRequired`', 'boolean', 'Determines whether intro completion is required for activation.'],
+  ['`introTemplate`', 'string', 'Host-owned structured intro prompt.'],
+  ['`matchingEnabled`', 'boolean', 'Turns pairing on for the club.'],
+  ['`matchingMode`', '`manual` | `assisted`', 'Assisted suggests pairings; host confirms.'],
+];
+
+const activationProfileRows = [
+  ['`id`', '`clubId_userId`', 'Matches the club member id convention for easy joins.'],
+  ['`clubId`', 'string', 'Club context for the activation record.'],
+  ['`userId`', 'string', 'Member context for the activation record.'],
+  ['`responses`', 'record keyed by question id', 'Typed answers used for onboarding completion and assisted pairing.'],
+  ['`completedQuestionIds`', 'string[]', 'Explicit record of which required questions were answered.'],
+  ['`completedAt`', 'timestamp', 'Marks onboarding profile completion.'],
+  ['`updatedAt`', 'timestamp', 'Supports host review and future edits.'],
+];
+
 const questionBankRows = [
   ['Fitness level', 'single select', 'Useful for matching pace, expectations, and confidence level.'],
   ['Primary goal', 'single select', 'Core signal for compatibility and motivation.'],
@@ -96,6 +124,20 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
           columns={['Setting', 'Purpose', 'First-Pass Rule']}
           rows={hostSettingsRows}
         />
+      </SectionBlock>
+
+      <SectionBlock icon={GitBranch} title="Phase 1 Decisions">
+        <div className="space-y-4">
+          <InfoCard
+            title="Decision status"
+            accent="green"
+            body="Phase 1 is now locked enough to start implementation. The system should introduce one new club activation config object, keep activation timestamps on the member record, and store typed onboarding responses in a separate activation profile document."
+          />
+          <DataTable
+            columns={['Decision', 'Chosen approach', 'Why this is the right v1 cut']}
+            rows={phaseOneDecisionRows}
+          />
+        </div>
       </SectionBlock>
 
       <SectionBlock icon={Sparkles} title="Activation Sequence">
@@ -181,6 +223,39 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
           <DataTable
             columns={['State', 'Meaning']}
             rows={memberStateRows}
+          />
+        </div>
+      </SectionBlock>
+
+      <SectionBlock icon={Settings2} title="Phase 1 Data Model">
+        <div className="space-y-4">
+          <CardGrid columns="xl:grid-cols-2">
+            <InfoCard
+              title="Club-level config"
+              accent="blue"
+              body="Activation settings belong on the club object as a dedicated nested config. This keeps host controls centralized and avoids overloading the existing feature-flags object."
+            />
+            <InfoCard
+              title="Member-level activation"
+              accent="green"
+              body="Membership remains the right place for activation timestamps because hosts need simple roster queries for who finished onboarding, who introduced themselves, and who is ready for pairing."
+            />
+          </CardGrid>
+          <DataTable
+            columns={['Club.activation field', 'Type', 'Purpose']}
+            rows={activationConfigRows}
+          />
+          <DataTable
+            columns={['clubMemberProfiles field', 'Type', 'Purpose']}
+            rows={activationProfileRows}
+          />
+          <BulletList
+            items={[
+              'Do not store full onboarding answers directly on `ClubMember` in v1.',
+              'Do store `onboardedAt`, `introducedAt`, and `pairedAt` on `ClubMember` so the roster can be filtered without reading a second collection.',
+              'Do treat `requiredQuestionIds` as system question ids selected by the host, not ad hoc form definitions.',
+              'Do keep pairing records separate from membership records so rematch, unpair, and future pair history can evolve cleanly.',
+            ]}
           />
         </div>
       </SectionBlock>
