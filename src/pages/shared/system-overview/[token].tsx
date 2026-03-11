@@ -646,7 +646,7 @@ const LabeledTable: React.FC<{ labelCol: string; valueCol: string; rows: { label
       <div
         className="grid gap-0"
         style={{
-          gridTemplateColumns: '120px 1fr',
+          gridTemplateColumns: 'clamp(180px, 24%, 280px) minmax(0, 1fr)',
           background: 'rgba(255,255,255,0.03)',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
         }}
@@ -665,7 +665,7 @@ const LabeledTable: React.FC<{ labelCol: string; valueCol: string; rows: { label
           key={ri}
           className="grid gap-0"
           style={{
-            gridTemplateColumns: '120px 1fr',
+            gridTemplateColumns: 'clamp(180px, 24%, 280px) minmax(0, 1fr)',
             borderBottom: ri < rows.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
             transition: 'background 0.15s',
           }}
@@ -680,10 +680,12 @@ const LabeledTable: React.FC<{ labelCol: string; valueCol: string; rows: { label
                 borderRadius: 5,
                 fontSize: 11,
                 fontWeight: 700,
+                lineHeight: 1.35,
                 color: accent,
                 background: `${accent}10`,
                 border: `1px solid ${accent}22`,
-                whiteSpace: 'nowrap',
+                whiteSpace: 'normal',
+                overflowWrap: 'anywhere',
               }}
             >
               {row.label}
