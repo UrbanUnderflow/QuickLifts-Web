@@ -359,12 +359,8 @@ const LegalDocumentsAdmin: React.FC = () => {
   }, []);
 
   // Get signing requests for a document
-  const getSigningRequestsForDocument = (documentId: string): SigningRequest[] => {
-    return signingRequests.filter(r => r.legalDocumentId === documentId);
-  };
-
-  const buildDefaultSignersForLegalDoc = (doc: LegalDocument): SignerRow[] => {
-    let existing = getSigningRequestsForDocument(doc.id);
+  const getSigningRequestsForDocument = (doc: LegalDocument): SigningRequest[] => {
+    let existing = signingRequests.filter(r => r.legalDocumentId === doc.id);
 
     // If the document has a specific list of request IDs, only use those.
     // Otherwise, deduplicate by email + role.
@@ -379,6 +375,11 @@ const LegalDocumentsAdmin: React.FC = () => {
         return true;
       });
     }
+    return existing;
+  };
+
+  const buildDefaultSignersForLegalDoc = (doc: LegalDocument): SignerRow[] => {
+    let existing = getSigningRequestsForDocument(doc);
 
     const makeRow = (row: Omit<SignerRow, 'id'>): SignerRow => {
       const existingReq = existing.find(r => r.recipientEmail?.toLowerCase() === row.email?.toLowerCase() && r.signerRole === row.role);
@@ -1201,6 +1202,48 @@ const LegalDocumentsAdmin: React.FC = () => {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to send document' });
     } finally {
       setIsSending(false);
+    }
+  };
+
+  const [isSendingExecutedNotification, setIsSendingExecutedNotification] = useState<string | null>(null);
+
+  const handleNotifySigners = async (document: LegalDocument, signingRequestsForDoc: any[]) => {
+    if (!signingRequestsForDoc || signingRequestsForDoc.length === 0) return;
+
+    // Only allow if everyone has signed
+    const allSigned = signingRequestsForDoc.every(r => r.status === 'signed');
+    if (!allSigned) {
+      setMessage({ type: 'error', text: 'Cannot send notification until all parties have signed.' });
+      return;
+    }
+
+    try {
+      setIsSendingExecutedNotification(document.id);
+      setMessage({ type: 'info', text: 'Sending fully executed notification...' });
+
+      const response = await fetch('/.netlify/functions/send-fully-executed-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId: document.id,
+          documentName: document.title,
+          allSigners: signingRequestsForDoc.map(s => ({
+            name: s.recipientName,
+            email: s.recipientEmail,
+          }))
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send notification');
+      }
+
+      setMessage({ type: 'success', text: 'Fully executed notification sent successfully!' });
+    } catch (error) {
+      console.error('Error sending fully executed notification:', error);
+      setMessage({ type: 'error', text: 'Failed to send notification.' });
+    } finally {
+      setIsSendingExecutedNotification(null);
     }
   };
   const handleResendEmailToSigner = async (signer: SignerRow) => {
@@ -2524,7 +2567,7 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
             ) : (
               <div className="divide-y divide-zinc-800">
                 {documents.map((document) => {
-                  const signingRequestsForDoc = getSigningRequestsForDocument(document.id);
+                  const signingRequestsForDoc = getSigningRequestsForDocument(document);
                   const signingRequest = signingRequestsForDoc[0];
                   const needsSignature = requiresSignature(document);
 
@@ -2603,13 +2646,26 @@ ${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}<
 
                               {/* Signing Actions */}
                               {signingRequest?.status === 'signed' ? (
-                                <button
-                                  onClick={() => window.open(`/sign/${signingRequest.id}?download=true`, '_blank')}
-                                  className="flex items-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors"
-                                >
-                                  <Download className="w-4 h-4" />
-                                  Download Signed
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => window.open(`/sign/${signingRequest.id}?download=true`, '_blank')}
+                                    className="flex items-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition-colors"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                    Download Signed
+                                  </button>
+                                  {signingRequestsForDoc.length > 1 && signingRequestsForDoc.every(r => r.status === 'signed') && (
+                                    <button
+                                      onClick={() => handleNotifySigners(document, signingRequestsForDoc)}
+                                      disabled={isSendingExecutedNotification === document.id}
+                                      className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                                      title="Manually trigger 'Fully Executed' emails to all parties"
+                                    >
+                                      <Send className="w-4 h-4" />
+                                      {isSendingExecutedNotification === document.id ? 'Sending...' : 'Notify All Signers'}
+                                    </button>
+                                  )}
+                                </div>
                               ) : needsSignature && !signingRequest ? (
                                 <button
                                   onClick={() => openSigningModal(document)}

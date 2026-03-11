@@ -15,8 +15,7 @@ import {
   ShortUser,
   ClinicalHandoffPayload,
   EscalationTier,
-  EscalationCategory,
-  HandoffStatus
+  EscalationCategory
 } from '../firebase/escalation/types';
 
 // ============================================================================
@@ -78,6 +77,24 @@ export interface ConversationUploadResponse {
   encryptionStatus: 'encrypted' | 'pending';
 }
 
+export type AuntEDNAClinicianProfileType = 'individual' | 'group' | 'provider';
+
+export interface AuntEDNAClinicianProfile {
+  id: string;
+  displayName: string;
+  organizationName?: string;
+  email?: string;
+  profileType: AuntEDNAClinicianProfileType;
+  source: 'auntedna';
+}
+
+export interface CreateAuntEDNAClinicianProfileInput {
+  displayName: string;
+  organizationName?: string;
+  email?: string;
+  profileType: AuntEDNAClinicianProfileType;
+}
+
 // ============================================================================
 // Mock Response Generator
 // ============================================================================
@@ -88,11 +105,32 @@ const generateMockResponse = <T>(data: T): AuntEDNAResponse<T> => ({
   requestId: `mock-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 });
 
-const generateMockError = (code: string, message: string): AuntEDNAResponse<never> => ({
-  success: false,
-  error: { code, message },
-  requestId: `mock-err-${Date.now()}`
-});
+const mockClinicianProfiles: AuntEDNAClinicianProfile[] = [
+  {
+    id: 'ae-clin-group-hampton-main',
+    displayName: 'Hampton Sports Medicine Main',
+    organizationName: 'Hampton Athletics',
+    email: 'sportsmed@hampton.edu',
+    profileType: 'group',
+    source: 'auntedna',
+  },
+  {
+    id: 'ae-clin-ind-dr-carter',
+    displayName: 'Dr. Liz Carter',
+    organizationName: 'Hampton Sports Medicine',
+    email: 'liz.carter@auntedna.com',
+    profileType: 'individual',
+    source: 'auntedna',
+  },
+  {
+    id: 'ae-clin-provider-auntedna-tier2',
+    displayName: 'AuntEdna Tier 2 Provider Pool',
+    organizationName: 'AuntEdna',
+    email: 'tier2@auntedna.com',
+    profileType: 'provider',
+    source: 'auntedna',
+  },
+];
 
 // Simulate network delay
 const simulateDelay = (ms: number = 500) => 
@@ -348,6 +386,57 @@ class AuntEDNAClient {
     }
 
     return this.request<{ resolved: boolean }>('POST', `/escalations/${escalationId}/resolve`, resolution);
+  }
+
+  /**
+   * Search AuntEDNA clinician profiles that can be attached to a team or athlete.
+   */
+  async searchClinicianProfiles(searchTerm: string = ''): Promise<AuntEDNAResponse<AuntEDNAClinicianProfile[]>> {
+    console.log('[AuntEDNA] Searching clinician profiles:', searchTerm);
+
+    if (this.useMock) {
+      await simulateDelay(250);
+      const normalizedTerm = searchTerm.trim().toLowerCase();
+      const filtered = !normalizedTerm
+        ? mockClinicianProfiles
+        : mockClinicianProfiles.filter((profile) =>
+            [profile.displayName, profile.organizationName, profile.email, profile.profileType]
+              .filter(Boolean)
+              .some((value) => String(value).toLowerCase().includes(normalizedTerm))
+          );
+
+      return generateMockResponse(filtered);
+    }
+
+    return this.request<AuntEDNAClinicianProfile[]>(
+      'GET',
+      `/clinician-profiles${searchTerm ? `?search=${encodeURIComponent(searchTerm)}` : ''}`
+    );
+  }
+
+  /**
+   * Create a clinician profile in AuntEDNA and return the external profile identity.
+   */
+  async createClinicianProfile(
+    input: CreateAuntEDNAClinicianProfileInput
+  ): Promise<AuntEDNAResponse<AuntEDNAClinicianProfile>> {
+    console.log('[AuntEDNA] Creating clinician profile:', input.displayName);
+
+    if (this.useMock) {
+      await simulateDelay(400);
+      const createdProfile: AuntEDNAClinicianProfile = {
+        id: `ae-clin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        displayName: input.displayName,
+        organizationName: input.organizationName,
+        email: input.email,
+        profileType: input.profileType,
+        source: 'auntedna',
+      };
+      mockClinicianProfiles.unshift(createdProfile);
+      return generateMockResponse(createdProfile);
+    }
+
+    return this.request<AuntEDNAClinicianProfile>('POST', '/clinician-profiles', input);
   }
 
   /**

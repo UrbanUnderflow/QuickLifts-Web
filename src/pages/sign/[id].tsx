@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { FileText, Check, AlertCircle, Download } from 'lucide-react';
-import { doc, getDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, Timestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 
 interface SigningRequest {
@@ -26,6 +26,8 @@ interface SigningRequest {
     timestamp: Timestamp;
   };
   documentContent?: string;
+  signingGroupId?: string;
+  legalDocumentId?: string;
 }
 
 // Signature fonts available
@@ -138,6 +140,22 @@ const SignDocument: React.FC = () => {
         signatureData,
       });
 
+      // Check if all signees in the same group are signed
+      let isFullyExecuted = false;
+      let allSigners: any[] = [];
+
+      if (request.signingGroupId) {
+        const groupQuery = query(collection(db, 'signingRequests'), where('signingGroupId', '==', request.signingGroupId));
+        const groupSnap = await getDocs(groupQuery);
+        allSigners = groupSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Ensure the current request is treated as signed
+        isFullyExecuted = allSigners.every(r => r.id === request.id ? true : r.status === 'signed');
+      } else {
+        // If it's an old document without a group ID, it's just this one signer.
+        isFullyExecuted = true;
+        allSigners = [{ name: request.recipientName, email: request.recipientEmail }];
+      }
+
       // Send confirmation email via Netlify function
       await fetch('/.netlify/functions/send-signed-confirmation', {
         method: 'POST',
@@ -149,6 +167,8 @@ const SignDocument: React.FC = () => {
           recipientEmail: request.recipientEmail,
           signedAt: new Date().toISOString(),
           typedName: typedName.trim(),
+          isFullyExecuted,
+          allSigners: allSigners.map(s => ({ name: s.recipientName || s.name, email: s.recipientEmail || s.email }))
         }),
       });
 

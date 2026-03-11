@@ -59,6 +59,12 @@ const adminCardsData = [
     link: "/admin/systemOverview"
   },
   {
+    title: "PulseCheck Provisioning",
+    description: "Create PulseCheck organizations and teams as the first implementation slice for provisioning and onboarding.",
+    icon: <Building2 className="w-5 h-5" />,
+    link: "/admin/pulsecheckProvisioning"
+  },
+  {
 
     title: "Virtual Office",
     description: "Live status board for agents with animated desks and typing state.",

@@ -7,7 +7,7 @@ const hostSettingsRows = [
   ['Required onboarding questions', 'Host selects from a shared question bank.', 'Start with curated system questions, not a freeform builder.'],
   ['Introduction required', 'Controls whether the member must post an intro to complete activation.', 'Uses a structured intro template owned by the host.'],
   ['Introduction template', 'Host-customizable prompt for the first post.', 'Should feel club-native while still producing consistent structure.'],
-  ['Pairing enabled', 'Turns on accountability pairing inside the club.', 'Generic label and behavior so this works beyond FWB.'],
+  ['Pairing enabled', 'Turns on accountability pairing inside the club.', 'Generic label and behavior so this works across creator clubs.'],
   ['Pairing mode', 'Manual or assisted.', 'Assisted suggests pairs from onboarding data; host confirms.'],
 ];
 
@@ -37,8 +37,8 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
         summary="System-level artifact for how creator clubs should turn a passive join into an activated member relationship. This document defines the first-pass operating model for configurable club onboarding, structured introductions, and host-controlled member pairing."
         highlights={[
           {
-            title: 'Generic, not FWB-specific',
-            body: 'The host-facing model must work for any creator club. FWB is the first proving ground, not a special-case branch in the product architecture.',
+            title: 'Reusable across clubs',
+            body: 'The host-facing model must work for any creator club and remain part of the shared product architecture rather than a one-off implementation.',
           },
           {
             title: 'Activation before expansion',
@@ -55,7 +55,7 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
         sectionLabel="Artifact Position"
         role="Source-of-truth artifact for the first-pass club activation layer inside Pulse Community."
         sourceOfTruth="This document governs the reusable host settings, member state model, and sequencing for onboarding, intro completion, and pairing across creator clubs."
-        masterReference="Use this page when designing club activation features, auditing creator club onboarding behavior, or deciding whether a proposed FWB need should become a generic club primitive."
+        masterReference="Use this page when designing club activation features, auditing creator club onboarding behavior, or deciding whether a proposed club need should become a shared platform primitive."
         relatedDocs={[
           'Product Handbooks section in the System Overview',
           'QuickLifts Web club surfaces',
@@ -161,7 +161,7 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
             'Hosts should be able to require a structured intro and customize the intro prompt.',
             'The system should explicitly track whether a member is joined, onboarded, introduced, and paired.',
             'Pairing should support manual and assisted modes; assisted suggestions should be based on onboarding responses.',
-            'The architecture should stay reusable across creator clubs without introducing FWB-only data paths.',
+            'The architecture should stay reusable across creator clubs without introducing club-specific data paths.',
           ]}
         />
       </SectionBlock>
