@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import Head from 'next/head';
 import { motion, AnimatePresence } from 'framer-motion';
+import act1AudioManifest from '../data/pulsecheckdemo-act1-audio.json';
 import {
     Volume2,
     VolumeX,
@@ -61,6 +62,43 @@ interface ChatMsg {
     isFromUser: boolean;
     timestamp: number;
 }
+
+type Act1AudioManifestEntry = {
+    id: string;
+    filename: string;
+    text: string;
+};
+
+const ACT1_STATIC_AUDIO_BASE = '/audio/pulsecheckdemo';
+const ACT1_AUDIO_MANIFEST = act1AudioManifest as Act1AudioManifestEntry[];
+const ACT1_AUDIO_BY_ID = new Map(
+    ACT1_AUDIO_MANIFEST.map((entry) => [entry.id, entry])
+);
+const ACT1_AUDIO_ID_BY_SCRIPT_INDEX: Record<number, string> = {
+    0: 'act1-00-intro',
+    1: 'act1-01-baseline',
+    2: 'act1-02-meeting',
+    3: 'act1-03-probe',
+    4: 'act1-04-box-breathing',
+    6: 'act1-05-post-breathing',
+    7: 'act1-06-support-staff',
+};
+const ACT1_STAFF_AUDIO_ID_BY_SELECTION: Record<string, string> = {
+    'Coach Mayo (Head Coach)': 'act1-07-notify-coach-mayo',
+    'Coach Van Pelt (Offensive Coordinator)': 'act1-07-notify-coach-van-pelt',
+    'Coach Covington (Defensive Coordinator)': 'act1-07-notify-coach-covington',
+    'Jim Whalen (Head Athletic Trainer)': 'act1-07-notify-jim-whalen',
+    'Dr. Liz Carter (Staff Clinician)': 'act1-07-notify-dr-liz-carter',
+    "Don't notify anyone": 'act1-07-notify-opt-out',
+};
+
+const getAct1AudioEntry = (audioId: string | null): Act1AudioManifestEntry | null =>
+    audioId ? ACT1_AUDIO_BY_ID.get(audioId) ?? null : null;
+
+const getAct1AudioPath = (audioId: string | null): string | null => {
+    const entry = getAct1AudioEntry(audioId);
+    return entry ? `${ACT1_STATIC_AUDIO_BASE}/${entry.filename}` : null;
+};
 
 // ─────────────────────────────────────────────────────────
 // DEMO SCRIPT — Act 1 Conversation Flow
@@ -3392,8 +3430,30 @@ const PulseCheckDemo: React.FC = () => {
     const [isSpeaking, setIsSpeaking] = useState(false);
     const recognitionRef = useRef<any>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
-    const ttsQueueRef = useRef<string[]>([]);
-    const ttsProcessingRef = useRef(false);
+    const narrationRunRef = useRef(0);
+
+    const stopNarration = useCallback(() => {
+        narrationRunRef.current += 1;
+
+        if (audioRef.current) {
+            audioRef.current.onplay = null;
+            audioRef.current.onended = null;
+            audioRef.current.onerror = null;
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+            audioRef.current = null;
+        }
+
+        window.speechSynthesis?.cancel();
+        setIsSpeaking(false);
+    }, []);
+
+    const getNarrationAudioId = useCallback((scriptIdx: number, userText?: string) => {
+        if (scriptIdx === 8) {
+            return ACT1_STAFF_AUDIO_ID_BY_SELECTION[userText || ''] ?? null;
+        }
+        return ACT1_AUDIO_ID_BY_SCRIPT_INDEX[scriptIdx] ?? null;
+    }, []);
 
     // ── Scroll to bottom on new messages ──────────────────
     useEffect(() => {
@@ -3411,7 +3471,10 @@ const PulseCheckDemo: React.FC = () => {
         const timer = setTimeout(async () => {
             setIsTyping(true);
             // Preload audio while "typing" indicator is showing
-            const playFn = await preloadAudio(firstMsg.content, firstMsg.ttsSpeed);
+            const playFn = await preloadAudio(
+                getAct1AudioPath(getNarrationAudioId(0)),
+                firstMsg.ttsSpeed
+            );
             setIsTyping(false);
             const msg: ChatMsg = {
                 id: 'msg-0',
@@ -3427,89 +3490,79 @@ const PulseCheckDemo: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentAct]);
 
-    // ── TTS: preload audio and return a play() function ────
-    // Call this while typing indicator is showing → audio loads in background
-    // When ready, show message and call play() simultaneously
+    // ── Demo narration: preload static MP3 and return a play() function ─────
     const preloadAudio = useCallback(
-        async (text: string, speed?: number): Promise<(() => void) | null> => {
-            if (!ttsEnabled || typeof window === 'undefined') return null;
+        async (audioPath: string | null, speed?: number): Promise<(() => void) | null> => {
+            if (!ttsEnabled || typeof window === 'undefined' || !audioPath) return null;
 
-            // Stop any currently playing audio
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current = null;
-            }
-
-            const ttsSpeed = speed ?? 1.0;
+            stopNarration();
+            const runId = narrationRunRef.current;
+            const playbackRate = speed ?? 1.0;
+            const audio = new Audio(audioPath);
+            audio.preload = 'auto';
+            audio.playbackRate = playbackRate;
+            audio.defaultPlaybackRate = playbackRate;
 
             try {
-                const res = await fetch('/api/tts', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        text,
-                        voice: 'rachel',
-                        speed: ttsSpeed,
-                    }),
+                await new Promise<void>((resolve, reject) => {
+                    const handleReady = () => {
+                        cleanup();
+                        resolve();
+                    };
+                    const handleError = () => {
+                        cleanup();
+                        reject(new Error(`Failed to load demo narration: ${audioPath}`));
+                    };
+                    const cleanup = () => {
+                        audio.removeEventListener('canplaythrough', handleReady);
+                        audio.removeEventListener('error', handleError);
+                    };
+
+                    audio.addEventListener('canplaythrough', handleReady, { once: true });
+                    audio.addEventListener('error', handleError, { once: true });
+                    audio.load();
                 });
 
-                if (!res.ok) {
-                    console.warn('[TTS] TTS API failed, falling back to Web Speech API');
-                    return () => fallbackSpeak(text, ttsSpeed);
+                if (narrationRunRef.current !== runId) {
+                    return null;
                 }
 
-                const data = await res.json();
-                if (!data.audio) {
-                    return () => fallbackSpeak(text, ttsSpeed);
-                }
-
-                // Decode base64 MP3 and prepare audio element (but don't play yet)
-                const audioBytes = Uint8Array.from(atob(data.audio), (c) => c.charCodeAt(0));
-                const blob = new Blob([audioBytes], { type: 'audio/mp3' });
-                const url = URL.createObjectURL(blob);
-                const audio = new Audio(url);
                 audioRef.current = audio;
 
                 audio.onplay = () => setIsSpeaking(true);
                 audio.onended = () => {
                     setIsSpeaking(false);
-                    URL.revokeObjectURL(url);
-                    audioRef.current = null;
+                    if (audioRef.current === audio) {
+                        audioRef.current = null;
+                    }
                 };
                 audio.onerror = () => {
                     setIsSpeaking(false);
-                    URL.revokeObjectURL(url);
-                    audioRef.current = null;
+                    if (audioRef.current === audio) {
+                        audioRef.current = null;
+                    }
                 };
 
-                // Return a function that plays instantly when called
                 return () => {
-                    audio.play().catch(() => fallbackSpeak(text, ttsSpeed));
+                    if (narrationRunRef.current !== runId) return;
+                    audioRef.current = audio;
+                    audio
+                        .play()
+                        .catch(() => {
+                            if (audioRef.current === audio) {
+                                audioRef.current = null;
+                            }
+                            setIsSpeaking(false);
+                            console.warn('[TTS] Failed to play static demo narration', audioPath);
+                        });
                 };
             } catch (err) {
-                console.warn('[TTS] Error preloading TTS:', err);
-                return () => fallbackSpeak(text, ttsSpeed);
+                console.warn('[TTS] Error loading static demo narration:', err);
+                return null;
             }
         },
-        [ttsEnabled]
+        [stopNarration, ttsEnabled]
     );
-
-    // Fallback to Web Speech API if TTS API fails
-    const fallbackSpeak = useCallback((text: string, speed?: number) => {
-        if (!('speechSynthesis' in window)) return;
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = speed ?? 1.0;
-        utterance.pitch = 1.0;
-        const voices = window.speechSynthesis.getVoices();
-        const preferred = voices.find(
-            (v) =>
-                v.name.includes('Samantha') ||
-                v.name.includes('Google UK English Female')
-        );
-        if (preferred) utterance.voice = preferred;
-        window.speechSynthesis.speak(utterance);
-    }, []);
 
 
     // ── STT: speech recognition ───────────────────────────
@@ -3617,14 +3670,17 @@ const PulseCheckDemo: React.FC = () => {
                     // Override content for the staff notification confirmation step
                     const overrideContent = isStaffStep
                         ? didOptOut
-                            ? "Totally understood — your privacy comes first. Let's keep working through this together. I've got a few more tools that can help you reset before game time."
-                            : `Done. I've sent a secure briefing to ${userText.split(' (')[0]} with your physical baseline data and today's conversation context. They'll have the full picture before your 10 AM meeting.`
+                            ? getAct1AudioEntry('act1-07-notify-opt-out')?.text
+                            : getAct1AudioEntry(getNarrationAudioId(8, userText))?.text
                         : undefined;
 
                     const contentToPlay = overrideContent ?? nextScript.content;
 
                     // Preload audio WHILE typing indicator shows
-                    const playFn = await preloadAudio(contentToPlay, nextScript.ttsSpeed);
+                    const playFn = await preloadAudio(
+                        getAct1AudioPath(getNarrationAudioId(nextIdx, userText)),
+                        nextScript.ttsSpeed
+                    );
 
                     // Now reveal message and play audio simultaneously
                     setIsTyping(false);
@@ -3658,7 +3714,7 @@ const PulseCheckDemo: React.FC = () => {
 
             processNext();
         },
-        [scriptIndex, preloadAudio]
+        [getNarrationAudioId, preloadAudio, scriptIndex]
     );
 
     // ── Handle send ───────────────────────────────────────
@@ -3690,7 +3746,10 @@ const PulseCheckDemo: React.FC = () => {
             const nextScript = DEMO_SCRIPT[scriptIndex];
             if (nextScript.role === 'nora') {
                 setIsTyping(true);
-                const playFn = await preloadAudio(nextScript.content, nextScript.ttsSpeed);
+                const playFn = await preloadAudio(
+                    getAct1AudioPath(getNarrationAudioId(scriptIndex)),
+                    nextScript.ttsSpeed
+                );
                 setIsTyping(false);
                 const msg: ChatMsg = {
                     id: `nora-${Date.now()}`,
@@ -3703,7 +3762,9 @@ const PulseCheckDemo: React.FC = () => {
                 setScriptIndex((prev) => prev + 1);
             }
         }
-    }, [scriptIndex, preloadAudio]);
+    }, [getNarrationAudioId, preloadAudio, scriptIndex]);
+
+    useEffect(() => stopNarration, [stopNarration]);
 
     // ── Render ────────────────────────────────────────────
     return (
@@ -3768,14 +3829,7 @@ const PulseCheckDemo: React.FC = () => {
                                 onClick={() => {
                                     setTtsEnabled(!ttsEnabled);
                                     if (ttsEnabled) {
-                                        // Stop OpenAI audio
-                                        if (audioRef.current) {
-                                            audioRef.current.pause();
-                                            audioRef.current = null;
-                                            setIsSpeaking(false);
-                                        }
-                                        // Also stop Web Speech fallback
-                                        window.speechSynthesis?.cancel();
+                                        stopNarration();
                                     }
                                 }}
                                 className={`relative w-9 h-9 rounded-lg flex items-center justify-center transition-all ${ttsEnabled
@@ -3820,13 +3874,7 @@ const PulseCheckDemo: React.FC = () => {
                             {currentAct === 'act1' && (
                                 <button
                                     onClick={() => {
-                                        // Stop any TTS
-                                        if (audioRef.current) {
-                                            audioRef.current.pause();
-                                            audioRef.current = null;
-                                            setIsSpeaking(false);
-                                        }
-                                        window.speechSynthesis?.cancel();
+                                        stopNarration();
                                         setShowBreathing(false);
                                         setCurrentAct('act2');
                                     }}
