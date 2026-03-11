@@ -69,7 +69,7 @@ const SignDocument: React.FC = () => {
       const docSnap = await getDoc(docRef);
 
       if (!docSnap.exists()) {
-        setError('Document not found or link has expired.');
+        setError('Document not found. Please check the link or contact the sender.');
         return;
       }
 
