@@ -4,6 +4,7 @@ import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { motion } from 'framer-motion';
 import admin from '../../../lib/firebase-admin';
 import { getSystemOverviewShareCookieName, verifySystemOverviewShareAccessCookieValue } from '../../../lib/systemOverviewShareAccess';
+import { resolveSystemOverviewSharePreviewMeta } from '../../../lib/sharePreviewMeta';
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -16,6 +17,12 @@ type SharedSystemOverviewPageProps = {
     createdAt: string | null;
     passcodeProtected: boolean;
     isLocked: boolean;
+  };
+  ogMeta: {
+    title: string;
+    description: string;
+    image: string;
+    url: string;
   };
 };
 
@@ -664,7 +671,7 @@ function renderEnhancedText(text: string): React.ReactNode {
 
 // ─── Main Page Component ─────────────────────────────────────────────────
 
-const SharedSystemOverviewPage = ({ share }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
+const SharedSystemOverviewPage = ({ share, ogMeta }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
   const blocks = useMemo(() => (share.isLocked ? [] : parseSnapshotText(share.snapshotText)), [share.isLocked, share.snapshotText]);
   const [copied, setCopied] = useState(false);
   const [passcode, setPasscode] = useState('');
@@ -720,9 +727,11 @@ const SharedSystemOverviewPage = ({ share }: InferGetServerSidePropsType<typeof 
   return (
     <>
       <Head>
-        <title>{share.sectionLabel} | Shared Artifact — PulseCheck</title>
+        <title>{ogMeta.title}</title>
+        <meta name="description" content={ogMeta.description} />
         <meta name="robots" content="noindex,nofollow" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="canonical" href={ogMeta.url} />
         <link
           href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
           rel="stylesheet"
@@ -1212,6 +1221,18 @@ export const getServerSideProps: GetServerSideProps<SharedSystemOverviewPageProp
     const passcodeProtected = Boolean(data.passcodeProtected && data.passcodeHash && data.passcodeSalt);
     const accessCookie = req.cookies[getSystemOverviewShareCookieName(token)];
     const isUnlocked = !passcodeProtected || verifySystemOverviewShareAccessCookieValue(token, accessCookie);
+    const isLocked = passcodeProtected && !isUnlocked;
+    const siteOrigin =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}`;
+    const ogMeta = resolveSystemOverviewSharePreviewMeta({
+      token,
+      sectionId: data.sectionId || '',
+      sectionLabel: data.sectionLabel || 'Shared System Overview Artifact',
+      sectionDescription: data.sectionDescription || '',
+      siteOrigin,
+      isLocked,
+    });
 
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
 
@@ -1224,8 +1245,9 @@ export const getServerSideProps: GetServerSideProps<SharedSystemOverviewPageProp
           snapshotText: isUnlocked ? data.snapshotText || '' : '',
           createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
           passcodeProtected,
-          isLocked: passcodeProtected && !isUnlocked,
+          isLocked,
         },
+        ogMeta,
       },
     };
   } catch (error) {

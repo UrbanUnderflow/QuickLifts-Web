@@ -15,6 +15,8 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
     { id: 'product-handbooks', label: 'Product Handbooks', description: 'Feature-by-feature inventory for each product surface.' },
     { id: 'pulse-club-activation-architecture', label: 'Club Activation Architecture', description: 'Generic creator-club operating model for onboarding, introductions, and member pairing.' },
+    { id: 'smart-routes-v1-architecture', label: 'Smart Routes v1 Architecture', description: 'First-pass routing recommendation stack, ownership boundaries, API contract, and AI role for Pulse Community.' },
+    { id: 'shared-link-preview-strategy', label: 'Shared Link Preview Strategy', description: 'Fallback metadata, branded default image, and crawler-safe preview rules for shared Pulse pages.' },
     { id: 'backend-data', label: 'Backend and Data', description: 'Core services and canonical data collections.' },
     { id: 'integrations', label: 'Integrations', description: 'External systems, ownership, and credential sources.' },
     { id: 'end-to-end-flows', label: 'End-to-End Flows', description: 'Cross-product flows from trigger to failure points.' },
@@ -50,6 +52,8 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Added the Shared Link Preview Strategy artifact covering crawler metadata fallbacks, protected-share guardrails, and the branded default-image recommendation.',
+      'Added the Smart Routes v1 Architecture artifact covering provider boundaries, route scoring, Firestore objects, API contracts, and AI limits.',
       'Added the AuntEdna Integration Strategy artifact covering APIs, webhooks, MCP role, and the local clinician-profile mirror model.',
       'Added Pulse Community Club Activation Architecture artifact for generic creator-club onboarding, introductions, and pairing.',
       'Replaced tab-driven architecture page with a full handbook structure and anchored navigation.',

@@ -15,6 +15,8 @@ import SimFamilySpecTab from '../../components/admin/system-overview/SimFamilySp
 import AthleteJourneyTab from '../../components/admin/system-overview/AthleteJourneyTab';
 import CoachJourneyTab from '../../components/admin/system-overview/CoachJourneyTab';
 import PulseClubActivationArchitectureTab from '../../components/admin/system-overview/PulseClubActivationArchitectureTab';
+import SmartRoutesV1ArchitectureTab from '../../components/admin/system-overview/SmartRoutesV1ArchitectureTab';
+import SharedLinkPreviewStrategyTab from '../../components/admin/system-overview/SharedLinkPreviewStrategyTab';
 import PulseCheckRuntimeArchitectureTab from '../../components/admin/system-overview/PulseCheckRuntimeArchitectureTab';
 import PulseCheckStateSignalLayerTab from '../../components/admin/system-overview/PulseCheckStateSignalLayerTab';
 import PulseCheckStateSnapshotFreshnessPolicyTab from '../../components/admin/system-overview/PulseCheckStateSnapshotFreshnessPolicyTab';
@@ -60,7 +62,7 @@ const SYSTEM_TABS: SystemTab[] = [
     label: 'Pulse Community',
     icon: Users,
     accent: '#60a5fa',
-    sectionIds: ['executive-summary', 'ecosystem-map', 'product-handbooks', 'pulse-club-activation-architecture', 'backend-data', 'integrations', 'end-to-end-flows', 'ownership-release-matrix', 'risks-gaps', 'glossary'],
+    sectionIds: ['executive-summary', 'ecosystem-map', 'product-handbooks', 'pulse-club-activation-architecture', 'smart-routes-v1-architecture', 'shared-link-preview-strategy', 'backend-data', 'integrations', 'end-to-end-flows', 'ownership-release-matrix', 'risks-gaps', 'glossary'],
   },
   {
     id: 'pulsecheck',
@@ -465,6 +467,12 @@ const SystemOverviewPage: React.FC = () => {
 
       case 'pulse-club-activation-architecture':
         return <PulseClubActivationArchitectureTab />;
+
+      case 'smart-routes-v1-architecture':
+        return <SmartRoutesV1ArchitectureTab />;
+
+      case 'shared-link-preview-strategy':
+        return <SharedLinkPreviewStrategyTab />;
 
       case 'backend-data':
         return (
