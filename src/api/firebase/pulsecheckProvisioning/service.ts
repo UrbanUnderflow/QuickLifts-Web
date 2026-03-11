@@ -1,5 +1,5 @@
 import { addDoc, collection, doc, getDoc, getDocs, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { db } from '../config';
+import { auth, db } from '../config';
 import type {
   CreatePulseCheckOrganizationInput,
   CreatePulseCheckTeamInput,
@@ -11,6 +11,7 @@ import type {
   PulseCheckTeamStatus,
   PulseCheckInviteLink,
   PulseCheckInviteLinkStatus,
+  RedeemPulseCheckAdminActivationResult,
   UpsertPulseCheckAuntEdnaClinicianProfileInput,
 } from './types';
 
@@ -23,19 +24,20 @@ const normalizeString = (value?: string) => value?.trim() || '';
 const normalizeAdminContacts = (value: unknown): PulseCheckAdminContact[] => {
   if (!Array.isArray(value)) return [];
 
-  return value
-    .map((entry) => {
-      if (!entry || typeof entry !== 'object') return null;
-      const candidate = entry as Record<string, unknown>;
-      const email = normalizeString(typeof candidate.email === 'string' ? candidate.email : '');
-      if (!email) return null;
+  return value.reduce<PulseCheckAdminContact[]>((acc, entry) => {
+    if (!entry || typeof entry !== 'object') return acc;
 
-      return {
-        name: normalizeString(typeof candidate.name === 'string' ? candidate.name : ''),
-        email,
-      };
-    })
-    .filter((entry): entry is PulseCheckAdminContact => Boolean(entry));
+    const candidate = entry as Record<string, unknown>;
+    const email = normalizeString(typeof candidate.email === 'string' ? candidate.email : '');
+    if (!email) return acc;
+
+    acc.push({
+      name: normalizeString(typeof candidate.name === 'string' ? candidate.name : ''),
+      email,
+    });
+
+    return acc;
+  }, []);
 };
 
 const toOrganization = (id: string, data: Record<string, any>): PulseCheckOrganization => ({
@@ -372,5 +374,29 @@ export const pulseCheckProvisioningService = {
     await setDoc(inviteDocRef, payload);
 
     return inviteDocRef.id;
+  },
+
+  async redeemAdminActivationInvite(token: string): Promise<RedeemPulseCheckAdminActivationResult> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('You must be signed in to redeem this invite.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+    const response = await fetch('/api/pulsecheck/admin-activation/redeem', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ token: normalizeString(token) }),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Failed to redeem admin activation invite.');
+    }
+
+    return payload as RedeemPulseCheckAdminActivationResult;
   },
 };

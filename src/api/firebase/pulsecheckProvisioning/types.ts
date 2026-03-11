@@ -10,6 +10,13 @@ export type PulseCheckClinicianProfileSource = 'pulsecheck-local' | 'auntedna';
 export type PulseCheckClinicianProfileSyncStatus = 'pending-sync' | 'synced' | 'sync-failed';
 export type PulseCheckInviteLinkStatus = 'active' | 'redeemed' | 'revoked';
 export type PulseCheckInviteLinkType = 'admin-activation' | 'clinician-onboarding';
+export type PulseCheckOrganizationMembershipRole = 'org-admin' | 'implementation-observer';
+export type PulseCheckTeamMembershipRole =
+  | 'team-admin'
+  | 'coach'
+  | 'performance-staff'
+  | 'support-staff'
+  | 'clinician';
 
 export interface PulseCheckAdminContact {
   name?: string;
@@ -139,4 +146,45 @@ export interface PulseCheckInviteLink {
   createdByEmail?: string;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
+  redeemedByUserId?: string;
+  redeemedByEmail?: string;
+  redeemedAt?: Timestamp | null;
+}
+
+export interface PulseCheckOrganizationMembership {
+  id: string;
+  organizationId: string;
+  userId: string;
+  email?: string;
+  role: PulseCheckOrganizationMembershipRole;
+  status: 'active';
+  grantedByInviteToken?: string;
+  grantedAt?: Timestamp | null;
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+}
+
+export interface PulseCheckTeamMembership {
+  id: string;
+  organizationId: string;
+  teamId: string;
+  userId: string;
+  email?: string;
+  role: PulseCheckTeamMembershipRole;
+  title?: string;
+  permissionSetId?: string;
+  onboardingStatus?: 'pending' | 'complete';
+  grantedByInviteToken?: string;
+  grantedAt?: Timestamp | null;
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+}
+
+export interface RedeemPulseCheckAdminActivationResult {
+  organizationId: string;
+  organizationName: string;
+  teamId: string;
+  teamName: string;
+  organizationMembershipId: string;
+  teamMembershipId: string;
 }
