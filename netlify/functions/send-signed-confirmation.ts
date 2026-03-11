@@ -4,7 +4,7 @@ const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
 const SENDER_NAME = "Pulse Intelligence Labs";
 const ADMIN_EMAIL = "tre@fitwithpulse.ai";
-const BASE_URL = process.env.URL || "https://fitwithpulse.ai";
+const BASE_URL = process.env.CUSTOM_BASE_URL || "https://fitwithpulse.ai";
 
 const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   if (event.httpMethod !== "POST") {
@@ -388,11 +388,11 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
   } catch (error: any) {
     console.error("Error in send-signed-confirmation function:", error);
-    return { 
-      statusCode: 500, 
-      body: JSON.stringify({ 
-        message: "Internal server error while sending email.", 
-        details: error.message 
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        message: "Internal server error while sending email.",
+        details: error.message
       })
     };
   }
