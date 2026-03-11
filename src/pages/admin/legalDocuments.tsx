@@ -1221,11 +1221,15 @@ const LegalDocumentsAdmin: React.FC = () => {
       setIsSendingExecutedNotification(document.id);
       setMessage({ type: 'info', text: 'Sending fully executed notifications...' });
 
+      // Use the first signing request ID (not the legal document ID) because
+      // the /sign/[id] page resolves IDs from the signingRequests collection.
+      const firstSigningRequestId = signingRequestsForDoc[0]?.id || document.id;
+
       const response = await fetch('/.netlify/functions/send-fully-executed-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          documentId: document.id,
+          documentId: firstSigningRequestId,
           documentName: document.title,
           allSigners: signingRequestsForDoc.map(s => ({
             name: s.recipientName,
