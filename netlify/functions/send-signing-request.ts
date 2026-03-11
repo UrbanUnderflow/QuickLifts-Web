@@ -4,7 +4,7 @@ import { getFirestore } from "firebase-admin/firestore";
 
 const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
-const BASE_URL = process.env.URL || "https://fitwithpulse.ai";
+const BASE_URL = process.env.CUSTOM_BASE_URL || "https://fitwithpulse.ai";
 
 // Resolve branding based on which company the document belongs to
 function resolveBranding(companyName: string) {
