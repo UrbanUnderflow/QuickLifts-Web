@@ -31,7 +31,7 @@ import {
   SimModule,
   ExerciseCategory,
 } from '../../api/firebase/mentaltraining/types';
-import { KillSwitchGame } from './KillSwitchGame';
+import { ResetGame } from './ResetGame';
 import { SimRuntimePlayer } from './SimRuntimePlayer';
 
 // ============================================================================
@@ -84,6 +84,11 @@ interface ExercisePlayerProps {
 
 type PlayerState = 'intro' | 'pre-mood' | 'active' | 'post-mood' | 'complete';
 
+function isResetRuntime(exercise: SimModule): boolean {
+  return exercise.buildArtifact?.engineKey === 'reset'
+    || exercise.exerciseConfig.type === 'focus' && (exercise.exerciseConfig.config as any)?.type === 'reset';
+}
+
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -98,6 +103,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
 }) => {
   // Check if this exercise requires writing - show different flow
   const requiresWriting = exerciseRequiresWriting(exercise);
+  const resetOwnedFlow = isResetRuntime(exercise);
   const [state, setState] = useState<PlayerState>('intro');
   const [isPaused, setIsPaused] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -127,7 +133,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   }, [state, isPaused]);
 
   const handleStart = () => {
-    setState('pre-mood');
+    setState(resetOwnedFlow ? 'active' : 'pre-mood');
   };
 
   const handlePreMoodSelect = (mood: number) => {
@@ -135,11 +141,29 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
     setState('active');
   };
 
-  const handleExerciseComplete = () => {
+  const handleExerciseComplete = (data?: {
+    durationSeconds?: number;
+    preExerciseMood?: number;
+    postExerciseMood?: number;
+    difficultyRating?: number;
+    helpfulnessRating?: number;
+    notes?: string;
+  }) => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
     }
     stopNarration();
+    if (resetOwnedFlow) {
+      onComplete({
+        durationSeconds: data?.durationSeconds ?? elapsedSeconds,
+        preExerciseMood: data?.preExerciseMood,
+        postExerciseMood: data?.postExerciseMood,
+        difficultyRating: data?.difficultyRating,
+        helpfulnessRating: data?.helpfulnessRating,
+        notes: data?.notes,
+      });
+      return;
+    }
     setState('post-mood');
   };
 
@@ -266,6 +290,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
               categoryColor={getCategoryColor()}
               onPause={() => setIsPaused(true)}
               onResume={() => setIsPaused(false)}
+              onClose={onClose}
               onComplete={handleExerciseComplete}
               soundEnabled={soundEnabled}
               requiresWriting={requiresWriting}
@@ -430,7 +455,15 @@ interface ActiveExerciseProps {
   categoryColor: string;
   onPause: () => void;
   onResume: () => void;
-  onComplete: () => void;
+  onClose: () => void;
+  onComplete: (data?: {
+    durationSeconds?: number;
+    preExerciseMood?: number;
+    postExerciseMood?: number;
+    difficultyRating?: number;
+    helpfulnessRating?: number;
+    notes?: string;
+  }) => void;
   soundEnabled: boolean;
   requiresWriting?: boolean;
   onStartInChat?: (exercise: SimModule) => void;
@@ -444,6 +477,7 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
   categoryColor,
   onPause,
   onResume,
+  onClose,
   onComplete,
   soundEnabled,
   requiresWriting,
@@ -457,6 +491,7 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
         isPaused={isPaused}
         onPause={onPause}
         onResume={onResume}
+        onClose={onClose}
         onComplete={onComplete}
         previewMode={previewMode}
       />
@@ -478,13 +513,13 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
   }
 
   if (exercise.exerciseConfig.type === 'focus') {
-    // Kill Switch gets its own dedicated game component
-    if ((exercise.exerciseConfig.config as any)?.type === 'kill_switch') {
+    // Reset gets its own dedicated game component
+    if ((exercise.exerciseConfig.config as any)?.type === 'reset') {
       return (
-        <KillSwitchGame
+        <ResetGame
           exercise={exercise}
-          onComplete={() => onComplete()}
-          onClose={onPause}
+          onComplete={onComplete}
+          onClose={onClose}
           previewMode={previewMode}
         />
       );

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, ChevronRight, FileText, Volume2, StopCircle, ScanSearch, Shuffle, Timer } from 'lucide-react';
-import KillSwitchSpecTab from './KillSwitchSpecTab';
+import ResetSpecTab from './ResetSpecTab';
 import NoiseGateSpecTab from './NoiseGateSpecTab';
 import BrakePointSpecTab from './BrakePointSpecTab';
 import SignalWindowSpecTab from './SignalWindowSpecTab';
@@ -19,7 +19,7 @@ interface FamilySpecEntry {
 
 const FAMILY_SPECS: FamilySpecEntry[] = [
     {
-        id: 'kill-switch',
+        id: 'reset',
         label: 'Reset',
         subtitle: 'Mental recovery sim — disruption, re-engagement, Recovery Time.',
         icon: Zap,
@@ -68,8 +68,8 @@ const SimFamilySpecTab: React.FC = () => {
 
     const renderSpecContent = () => {
         switch (activeSpecId) {
-            case 'kill-switch':
-                return <KillSwitchSpecTab />;
+            case 'reset':
+                return <ResetSpecTab />;
             case 'noise-gate':
                 return <NoiseGateSpecTab />;
             case 'brake-point':

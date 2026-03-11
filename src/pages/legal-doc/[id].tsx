@@ -7,13 +7,67 @@ import { Download, Loader2, FileText, AlertCircle, StickyNote, X, Trash2, ArrowD
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 
+// Wire transfer instructions keyed by company
+const WIRE_INSTRUCTIONS: Record<string, {
+  bankName: string;
+  accountNumber: string;
+  routingNumber: string;
+  accountType?: string;
+  beneficiaryName: string;
+  beneficiaryAddress?: string;
+  swift?: string;
+  bankAddress?: string;
+  intermediarySwift?: string;
+  note?: string;
+}> = {
+  'Pulse Intelligence Labs, Inc.': {
+    bankName: 'Column N.A. (via Mercury)',
+    routingNumber: '121145433',
+    accountNumber: '118879863125743',
+    accountType: 'Checking',
+    beneficiaryName: 'Pulse Intelligence Labs, Inc.',
+    beneficiaryAddress: '1111B S Governors Ave, STE 50759, Dover, DE 19904',
+    bankAddress: '1 Letterman Drive, Building A, Suite A4-700, San Francisco, CA 94129',
+    swift: 'CLNOUS66MER',
+    intermediarySwift: 'CHASUS33XXX',
+    note: 'For international wires use SWIFT: CLNOUS66MER. Intermediary bank SWIFT: CHASUS33XXX.',
+  },
+  'TresProperties LLC': {
+    bankName: 'JPMorgan Chase Bank, N.A.',
+    routingNumber: '021000021',
+    accountNumber: '888397715',
+    accountType: 'Checking',
+    beneficiaryName: 'TresProperties LLC',
+    note: 'Routing number 021000021 applies to both ACH/direct deposit and wire transfers.',
+  },
+};
+
+// Invoice line item type
+interface InvoiceLineItem {
+  description: string;
+  qty: number;
+  unitPrice: number;
+}
+
 interface LegalDocument {
   id: string;
   title: string;
   content: string;
   documentType: string;
+  companyName?: string;
   createdAt: Timestamp | Date;
   requiresSignature?: boolean;
+  invoiceData?: {
+    invoiceNumber: string;
+    issueDate: string;
+    dueDate: string;
+    billToName: string;
+    billToEmail: string;
+    billToAddress: string;
+    lineItems: InvoiceLineItem[];
+    memo: string;
+    total: number;
+  };
 }
 
 type NoteColorKey = 'yellow' | 'pink' | 'blue' | 'green' | 'purple';
@@ -568,14 +622,17 @@ const processContentForPdf = (content: string, documentId: string): string => {
 };
 
 // Generate PDF from document content
-const generatePdf = (document: LegalDocument & { id: string }) => {
-  const includeSignature = Boolean(document.requiresSignature);
-  const isProject = isProjectDocument(document.documentType);
+const generatePdf = (legalDoc: LegalDocument & { id: string }) => {
+  const includeSignature = Boolean(legalDoc.requiresSignature);
+  const isProject = isProjectDocument(legalDoc.documentType);
 
   // Use different styling based on document type
-  const html = isProject
-    ? generateProjectStylePdf(document, includeSignature)
-    : generateLegalStylePdf(document, includeSignature);
+  const isInvoice = legalDoc.documentType === 'invoice' || !!legalDoc.invoiceData;
+  const html = isInvoice
+    ? generateInvoicePdf(legalDoc)
+    : isProject
+      ? generateProjectStylePdf(legalDoc, includeSignature)
+      : generateLegalStylePdf(legalDoc, includeSignature);
 
   const printWindow = window.open('', '_blank');
   if (printWindow) {
@@ -797,32 +854,155 @@ const generateProjectStylePdf = (document: LegalDocument, includeSignature: bool
   `;
 };
 
+// ── Invoice PDF Generator ───────────────────────────────────────────────────
+const generateInvoicePdf = (doc: LegalDocument): string => {
+  const inv = doc.invoiceData;
+  const company = doc.companyName || 'Pulse Intelligence Labs, Inc.';
+  const wire = WIRE_INSTRUCTIONS[company] || WIRE_INSTRUCTIONS['Pulse Intelligence Labs, Inc.'];
+  const isTres = company.includes('TresProperties');
+  const accent = isTres ? '#3B82F6' : '#d7ff00';
+  const accentText = isTres ? '#ffffff' : '#000000';
+
+  const lineItemRows = (inv?.lineItems || []).map(item => {
+    const amount = item.qty * item.unitPrice;
+    return `<tr>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;">${item.description}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${item.qty}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;">$${item.unitPrice.toFixed(2)}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:500;">$${amount.toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+
+  const total = inv?.total ?? 0;
+  const num = inv?.invoiceNumber || 'N/A';
+
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Invoice ${num}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: #111827; background: #fff; padding: 48px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
+  .invoice-title { font-size: 36px; font-weight: 700; color: #111827; }
+  .company-badge { background: ${accent}; color: ${accentText}; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 32px; max-width: 320px; }
+  .meta-label { color: #6b7280; font-size: 12px; }
+  .meta-value { font-weight: 600; font-size: 13px; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 32px; padding: 24px; background: #f9fafb; border-radius: 12px; }
+  .party-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af; margin-bottom: 6px; font-weight: 600; }
+  .party-name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .party-detail { color: #6b7280; font-size: 13px; line-height: 1.5; }
+  .amount-banner { background: #111827; color: #fff; padding: 20px 24px; border-radius: 12px; margin-bottom: 32px; }
+  .amount-banner .label { font-size: 12px; color: #9ca3af; margin-bottom: 4px; }
+  .amount-banner .value { font-size: 28px; font-weight: 800; color: ${accent}; }
+  .amount-banner .due { font-size: 13px; color: #d1d5db; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  thead th { padding: 10px 12px; background: #f3f4f6; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; text-align: left; }
+  thead th:nth-child(2) { text-align: center; }
+  thead th:nth-child(3), thead th:nth-child(4) { text-align: right; }
+  .totals { margin-left: auto; width: 280px; }
+  .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: #374151; border-bottom: 1px solid #f3f4f6; }
+  .totals-row.final { font-size: 16px; font-weight: 800; color: #111827; border-bottom: 2px solid #111827; padding: 10px 0; margin-top: 4px; }
+  .wire-section { margin-top: 40px; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+  .wire-header { background: ${accent}; color: ${accentText}; padding: 14px 20px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .wire-body { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .wire-field { }
+  .wire-field-label { font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .wire-field-value { font-size: 14px; font-weight: 600; color: #111827; font-family: 'Courier New', monospace; }
+  .wire-note { padding: 12px 20px; background: #f9fafb; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }
+  .memo { margin-top: 24px; padding: 16px 20px; background: #f9fafb; border-radius: 8px; border-left: 3px solid ${accent}; font-size: 13px; color: #374151; }
+  .memo-label { font-size: 11px; text-transform: uppercase; color: #9ca3af; margin-bottom: 6px; font-weight: 600; }
+  @media print { body { padding: 24px; } }
+</style></head><body>
+<div class="header">
+  <div>
+    <div class="invoice-title">Invoice</div>
+  </div>
+  <div class="company-badge">${company}</div>
+</div>
+
+<div class="meta-grid">
+  <div class="meta-label">Invoice number</div><div class="meta-value">${num}</div>
+  <div class="meta-label">Date of issue</div><div class="meta-value">${inv?.issueDate || ''}</div>
+  <div class="meta-label">Past due after</div><div class="meta-value">${inv?.dueDate || ''}</div>
+</div>
+
+<div class="parties">
+  <div>
+    <div class="party-label">Bill From</div>
+    <div class="party-name">${company}</div>
+  </div>
+  <div>
+    <div class="party-label">Bill To</div>
+    <div class="party-name">${inv?.billToName || ''}</div>
+    ${inv?.billToEmail ? `<div class="party-detail">${inv.billToEmail}</div>` : ''}
+    ${inv?.billToAddress ? `<div class="party-detail">${inv.billToAddress}</div>` : ''}
+  </div>
+</div>
+
+<div class="amount-banner">
+  <div class="label">Amount Due</div>
+  <div class="value">$${total.toFixed(2)} USD</div>
+  <div class="due">Past due after ${inv?.dueDate || ''}</div>
+</div>
+
+<table>
+  <thead><tr>
+    <th>Description</th><th>Qty</th><th>Unit Price</th><th>Amount</th>
+  </tr></thead>
+  <tbody>${lineItemRows}</tbody>
+</table>
+
+<div class="totals">
+  <div class="totals-row"><span>Subtotal</span><span>$${total.toFixed(2)}</span></div>
+  <div class="totals-row final"><span>Amount Due</span><span>$${total.toFixed(2)} USD</span></div>
+</div>
+
+<div class="wire-section">
+  <div class="wire-header">Wire Transfer Instructions</div>
+  <div class="wire-body">
+    <div class="wire-field"><div class="wire-field-label">Beneficiary Name</div><div class="wire-field-value">${wire.beneficiaryName}</div></div>
+    <div class="wire-field"><div class="wire-field-label">Bank Name</div><div class="wire-field-value">${wire.bankName}</div></div>
+    <div class="wire-field"><div class="wire-field-label">Routing Number (ABA)</div><div class="wire-field-value">${wire.routingNumber}</div></div>
+    <div class="wire-field"><div class="wire-field-label">Account Number</div><div class="wire-field-value">${wire.accountNumber}</div></div>
+    ${wire.accountType ? `<div class="wire-field"><div class="wire-field-label">Account Type</div><div class="wire-field-value">${wire.accountType}</div></div>` : ''}
+    ${wire.beneficiaryAddress ? `<div class="wire-field" style="grid-column:span 2"><div class="wire-field-label">Beneficiary Address</div><div class="wire-field-value" style="font-family:sans-serif;font-size:13px;">${wire.beneficiaryAddress}</div></div>` : ''}
+    ${wire.swift ? `<div class="wire-field"><div class="wire-field-label">SWIFT / BIC</div><div class="wire-field-value">${wire.swift}</div></div>` : ''}
+    ${wire.intermediarySwift ? `<div class="wire-field"><div class="wire-field-label">Intermediary SWIFT</div><div class="wire-field-value">${wire.intermediarySwift}</div></div>` : ''}
+  </div>
+  ${wire.note ? `<div class="wire-note">${wire.note}</div>` : ''}
+</div>
+
+${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}</div>` : ''}
+
+</body></html>`;
+};
+
 // Legal style PDF (formal, contract-style)
 const generateLegalStylePdf = (document: LegalDocument, includeSignature: boolean): string => {
   return `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>${document.title} - Pulse Intelligence Labs</title>
-        <style>
-          @page {
-            margin: 1in;
+    < !DOCTYPE html >
+      <html>
+        <head>
+          <title>${document.title} - Pulse Intelligence Labs</title>
+          <style>
+            @page {
+              margin: 1in;
             /* Hide browser headers and footers */
             margin-top: 0.75in;
             margin-bottom: 0.5in;
           }
-          @media print {
-            /* Hide URL and date in print */
-            @page {
+            @media print {
+              /* Hide URL and date in print */
+              @page {
               margin: 1in 1in 0.5in 1in;
             }
             html, body {
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
+              -webkit - print - color - adjust: exact;
+            print-color-adjust: exact;
             }
           }
-          body {
-            font-family: 'Times New Roman', Times, serif;
+            body {
+              font - family: 'Times New Roman', Times, serif;
             font-size: 12pt;
             line-height: 1.6;
             color: #111;
@@ -830,8 +1010,8 @@ const generateLegalStylePdf = (document: LegalDocument, includeSignature: boolea
             margin: 0 auto;
             padding: 40px;
           }
-          h1 {
-            font-size: 18pt;
+            h1 {
+              font - size: 18pt;
             font-weight: bold;
             text-align: center;
             margin-bottom: 24px;
@@ -839,72 +1019,72 @@ const generateLegalStylePdf = (document: LegalDocument, includeSignature: boolea
             border-bottom: 2px solid #333;
             padding-bottom: 12px;
           }
-          h2 {
-            font-size: 14pt;
+            h2 {
+              font - size: 14pt;
             font-weight: bold;
             margin-top: 24px;
             margin-bottom: 12px;
           }
-          h3 {
-            font-size: 12pt;
+            h3 {
+              font - size: 12pt;
             font-weight: bold;
             margin-top: 18px;
             margin-bottom: 8px;
           }
-          h4 {
-            font-size: 12pt;
+            h4 {
+              font - size: 12pt;
             font-weight: bold;
             margin-top: 14px;
             margin-bottom: 6px;
           }
-          p {
-            margin-bottom: 12px;
+            p {
+              margin - bottom: 12px;
             text-align: justify;
           }
-          .header {
-            text-align: center;
+            .header {
+              text - align: center;
             margin-bottom: 30px;
           }
-          .company-name {
-            font-size: 14pt;
+            .company-name {
+              font - size: 14pt;
             font-weight: bold;
             margin-bottom: 4px;
           }
-          .document-date {
-            font-size: 10pt;
+            .document-date {
+              font - size: 10pt;
             color: #666;
             margin-bottom: 20px;
           }
-          .section {
-            margin-bottom: 20px;
+            .section {
+              margin - bottom: 20px;
           }
-          .signature-block {
-            margin-top: 60px;
+            .signature-block {
+              margin - top: 60px;
             page-break-inside: avoid;
           }
-          .signature-line {
-            border-bottom: 1px solid #333;
+            .signature-line {
+              border - bottom: 1px solid #333;
             width: 250px;
             margin: 40px 0 8px 0;
           }
-          .signature-label {
-            font-size: 10pt;
+            .signature-label {
+              font - size: 10pt;
             color: #666;
           }
-          ul, ol {
-            margin: 12px 0;
+            ul, ol {
+              margin: 12px 0;
             padding-left: 24px;
           }
-          li {
-            margin-bottom: 8px;
+            li {
+              margin - bottom: 8px;
           }
-          hr {
-            border: none;
+            hr {
+              border: none;
             border-top: 1px solid #999;
             margin: 20px 0;
           }
-          pre, .code-block {
-            background: #f8f8f8;
+            pre, .code-block {
+              background: #f8f8f8;
             border: 1px solid #ddd;
             border-radius: 4px;
             padding: 16px;
@@ -915,46 +1095,46 @@ const generateLegalStylePdf = (document: LegalDocument, includeSignature: boolea
             line-height: 1.3;
             white-space: pre;
           }
-          pre code, .code-block code {
-            background: none;
+            pre code, .code-block code {
+              background: none;
             padding: 0;
             font-family: inherit;
             font-size: inherit;
           }
-          .footer {
-            margin-top: 60px;
+            .footer {
+              margin - top: 60px;
             padding-top: 20px;
             border-top: 1px solid #ddd;
             font-size: 9pt;
             color: #666;
             text-align: center;
           }
-          .confidential {
-            font-size: 9pt;
+            .confidential {
+              font - size: 9pt;
             color: #999;
             text-align: center;
             margin-top: 20px;
           }
-          @media print {
-            body {
+            @media print {
+              body {
               padding: 0;
             }
           }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="company-name">PULSE INTELLIGENCE LABS, INC.</div>
-          <div class="document-date">Created: ${formatDate(document.createdAt)}</div>
-        </div>
-        
-        <h1>${document.title}</h1>
-        
-        <div class="content">
-          ${processContentForPdf(document.content, document.id)}
-        </div>
-        
-        ${includeSignature ? `
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="company-name">PULSE INTELLIGENCE LABS, INC.</div>
+            <div class="document-date">Created: ${formatDate(document.createdAt)}</div>
+          </div>
+
+          <h1>${document.title}</h1>
+
+          <div class="content">
+            ${processContentForPdf(document.content, document.id)}
+          </div>
+
+          ${includeSignature ? `
           <div class="signature-block">
             <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
               <div style="width: 45%;">
@@ -976,16 +1156,16 @@ const generateLegalStylePdf = (document: LegalDocument, includeSignature: boolea
             </div>
           </div>
         ` : ''}
-        
-        <div class="footer">
-          <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
-        </div>
-        
-        <div class="confidential">
-          CONFIDENTIAL - This document contains proprietary information.
-        </div>
-      </body>
-    </html>
+
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+          </div>
+
+          <div class="confidential">
+            CONFIDENTIAL - This document contains proprietary information.
+          </div>
+        </body>
+      </html>
   `;
 };
 
@@ -1338,8 +1518,8 @@ const LegalDocumentSharePage: React.FC = () => {
                   key={note.id}
                   className="absolute z-10"
                   style={{
-                    left: `${Math.min(Math.max(note.xPercent, 2), 95)}%`,
-                    top: `${note.yOffset}px`,
+                    left: `${Math.min(Math.max(note.xPercent, 2), 95)}% `,
+                    top: `${note.yOffset} px`,
                     transform: 'translate(-50%, -50%)'
                   }}
                   onMouseEnter={() => {
@@ -1353,13 +1533,13 @@ const LegalDocumentSharePage: React.FC = () => {
                     const styles = getNoteColorStyles(note.color);
                     return (
                       <div
-                        className={`w-8 h-8 ${styles.bg} rounded shadow-lg cursor-pointer flex items-center justify-center transform transition-all duration-200 ${hoveredNoteId === note.id ? 'opacity-100 scale-110' : 'opacity-25 hover:opacity-100 hover:scale-110'}`}
+                        className={`w - 8 h - 8 ${styles.bg} rounded shadow - lg cursor - pointer flex items - center justify - center transform transition - all duration - 200 ${hoveredNoteId === note.id ? 'opacity-100 scale-110' : 'opacity-25 hover:opacity-100 hover:scale-110'} `}
                         onMouseEnter={() => {
                           cancelHideNote();
                           setHoveredNoteId(note.id);
                         }}
                       >
-                        <StickyNote className={`w-5 h-5 ${styles.icon}`} />
+                        <StickyNote className={`w - 5 h - 5 ${styles.icon} `} />
                       </div>
                     );
                   })()}
@@ -1369,7 +1549,7 @@ const LegalDocumentSharePage: React.FC = () => {
                     const styles = getNoteColorStyles(note.color);
                     return (
                       <div
-                        className={`absolute z-20 ${styles.tooltipBg} ${styles.tooltipText} rounded-lg shadow-xl p-3 min-w-[200px] max-w-[300px]`}
+                        className={`absolute z - 20 ${styles.tooltipBg} ${styles.tooltipText} rounded - lg shadow - xl p - 3 min - w - [200px] max - w - [300px]`}
                         style={{
                           left: note.xPercent > 70 ? 'auto' : '100%',
                           right: note.xPercent > 70 ? '100%' : 'auto',
@@ -1402,7 +1582,7 @@ const LegalDocumentSharePage: React.FC = () => {
                           )}
                         </div>
                         <div className="text-sm whitespace-pre-wrap">{note.content}</div>
-                        <div className={`text-xs ${styles.tooltipText} opacity-80 mt-2`}>
+                        <div className={`text - xs ${styles.tooltipText} opacity - 80 mt - 2`}>
                           {note.createdAt instanceof Date
                             ? note.createdAt.toLocaleDateString()
                             : (note.createdAt as Timestamp).toDate().toLocaleDateString()}
@@ -1428,8 +1608,8 @@ const LegalDocumentSharePage: React.FC = () => {
                 >
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2">
-                      <div className={`w-8 h-8 ${getNoteColorStyles(newNoteColor).bg} rounded flex items-center justify-center`}>
-                        <StickyNote className={`w-5 h-5 ${getNoteColorStyles(newNoteColor).icon}`} />
+                      <div className={`w - 8 h - 8 ${getNoteColorStyles(newNoteColor).bg} rounded flex items - center justify - center`}>
+                        <StickyNote className={`w - 5 h - 5 ${getNoteColorStyles(newNoteColor).icon} `} />
                       </div>
                       <h3 className="text-lg font-semibold text-white">Add Note</h3>
                     </div>
@@ -1452,11 +1632,11 @@ const LegalDocumentSharePage: React.FC = () => {
                             key={key}
                             type="button"
                             onClick={() => setNewNoteColor(key)}
-                            className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center ring-2 transition-all ${newNoteColor === key ? 'ring-white ring-offset-2 ring-offset-[#1a1e24]' : 'ring-transparent hover:ring-zinc-500'
-                              }`}
+                            className={`w - 10 h - 10 rounded - lg ${bg} flex items - center justify - center ring - 2 transition - all ${newNoteColor === key ? 'ring-white ring-offset-2 ring-offset-[#1a1e24]' : 'ring-transparent hover:ring-zinc-500'
+                              } `}
                             title={key.charAt(0).toUpperCase() + key.slice(1)}
                           >
-                            <StickyNote className={`w-5 h-5 ${icon}`} />
+                            <StickyNote className={`w - 5 h - 5 ${icon} `} />
                           </button>
                         ))}
                       </div>
@@ -1516,93 +1696,93 @@ const LegalDocumentSharePage: React.FC = () => {
             )}
 
             <style jsx global>{`
-              .document-content {
-                color: #e4e4e7;
-                font-size: 16px;
-                line-height: 1.8;
-              }
-              .document-content h2 {
-                font-size: 1.5rem;
-                font-weight: 700;
-                color: #ffffff;
-                margin-top: 2rem;
-                margin-bottom: 1rem;
-                padding-bottom: 0.5rem;
-                border-bottom: 1px solid #3f3f46;
-              }
-              .document-content h3 {
-                font-size: 1.25rem;
-                font-weight: 600;
-                color: #ffffff;
-                margin-top: 1.5rem;
-                margin-bottom: 0.75rem;
-              }
-              .document-content h4 {
-                font-size: 1.1rem;
-                font-weight: 600;
-                color: #fafafa;
-                margin-top: 1.25rem;
-                margin-bottom: 0.5rem;
-              }
-              .document-content p {
-                margin-bottom: 1rem;
-                color: #d4d4d8;
-              }
-              .document-content strong {
-                font-weight: 600;
-                color: #ffffff;
-              }
-              .document-content em {
-                font-style: italic;
-                color: #a1a1aa;
-              }
-              .document-content ul,
-              .document-content ol {
-                margin: 1rem 0;
-                padding-left: 1.75rem;
-              }
-              .document-content ul {
-                list-style-type: disc;
-              }
-              .document-content ol {
-                list-style-type: decimal;
-              }
-              .document-content li {
-                margin-bottom: 0.5rem;
-                color: #d4d4d8;
-              }
-              .document-content li::marker {
-                color: #d7ff00;
-              }
-              .document-content hr {
-                border: none;
-                border-top: 1px solid #3f3f46;
-                margin: 1.5rem 0;
-              }
-              .document-content pre,
-              .document-content .code-block {
-                background: linear-gradient(135deg, rgba(39, 39, 42, 0.8) 0%, rgba(24, 24, 27, 0.9) 100%);
-                border: 1px solid #3f3f46;
-                border-radius: 12px;
-                padding: 24px;
-                margin: 24px 0;
-                overflow-x: auto;
-                font-family: 'SF Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'Courier New', monospace;
-                font-size: 12px;
-                line-height: 1.5;
-                white-space: pre;
-                color: #d7ff00;
-                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
-              }
-              .document-content pre code,
-              .document-content .code-block code {
-                background: none;
-                padding: 0;
-                font-family: inherit;
-                font-size: inherit;
-                color: inherit;
-              }
-            `}</style>
+    .document - content {
+    color: #e4e4e7;
+    font - size: 16px;
+    line - height: 1.8;
+  }
+              .document - content h2 {
+  font - size: 1.5rem;
+  font - weight: 700;
+  color: #ffffff;
+  margin - top: 2rem;
+  margin - bottom: 1rem;
+  padding - bottom: 0.5rem;
+  border - bottom: 1px solid #3f3f46;
+}
+              .document - content h3 {
+  font - size: 1.25rem;
+  font - weight: 600;
+  color: #ffffff;
+  margin - top: 1.5rem;
+  margin - bottom: 0.75rem;
+}
+              .document - content h4 {
+  font - size: 1.1rem;
+  font - weight: 600;
+  color: #fafafa;
+  margin - top: 1.25rem;
+  margin - bottom: 0.5rem;
+}
+              .document - content p {
+  margin - bottom: 1rem;
+  color: #d4d4d8;
+}
+              .document - content strong {
+  font - weight: 600;
+  color: #ffffff;
+}
+              .document - content em {
+  font - style: italic;
+  color: #a1a1aa;
+}
+              .document - content ul,
+              .document - content ol {
+  margin: 1rem 0;
+  padding - left: 1.75rem;
+}
+              .document - content ul {
+  list - style - type: disc;
+}
+              .document - content ol {
+  list - style - type: decimal;
+}
+              .document - content li {
+  margin - bottom: 0.5rem;
+  color: #d4d4d8;
+}
+              .document - content li::marker {
+  color: #d7ff00;
+}
+              .document - content hr {
+  border: none;
+  border - top: 1px solid #3f3f46;
+  margin: 1.5rem 0;
+}
+              .document - content pre,
+              .document - content.code - block {
+  background: linear - gradient(135deg, rgba(39, 39, 42, 0.8) 0 %, rgba(24, 24, 27, 0.9) 100 %);
+  border: 1px solid #3f3f46;
+  border - radius: 12px;
+  padding: 24px;
+  margin: 24px 0;
+  overflow - x: auto;
+  font - family: 'SF Mono', 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', 'Courier New', monospace;
+  font - size: 12px;
+  line - height: 1.5;
+  white - space: pre;
+  color: #d7ff00;
+  box - shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+              .document - content pre code,
+              .document - content.code - block code {
+  background: none;
+  padding: 0;
+  font - family: inherit;
+  font - size: inherit;
+  color: inherit;
+}
+`}</style>
           </div>
 
           {/* Footer */}

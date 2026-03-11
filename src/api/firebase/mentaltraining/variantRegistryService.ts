@@ -1,6 +1,7 @@
 import { db } from '../config';
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -240,6 +241,80 @@ function buildHistoryRef(variantId: string) {
   return collection(db, SIM_VARIANTS_COLLECTION, variantId, 'history');
 }
 
+async function deleteVariantHistory(variantId: string) {
+  const historySnap = await getDocs(buildHistoryRef(variantId));
+  await Promise.all(historySnap.docs.map((entry) => deleteDoc(entry.ref)));
+}
+
+function includesLegacyResetToken(value?: string | null) {
+  if (!value) return false;
+  return value.includes('kill-switch') || value.includes('kill_switch') || value.includes('Kill Switch') || value.includes('The Kill Switch');
+}
+
+function isLegacyResetVariant(record: SimVariantRecord) {
+  return (
+    includesLegacyResetToken(record.id)
+    || record.family === 'The Kill Switch'
+    || (record.engineKey as string | undefined) === 'kill_switch'
+    || includesLegacyResetToken(record.name)
+    || includesLegacyResetToken(record.publishedModuleId)
+    || includesLegacyResetToken(record.moduleDraft?.moduleId)
+    || includesLegacyResetToken(record.buildArtifact?.engineKey)
+    || includesLegacyResetToken(record.buildArtifact?.family)
+    || includesLegacyResetToken(record.buildArtifact?.moduleId)
+  );
+}
+
+function isLegacyResetModule(id: string, data: Record<string, any>) {
+  return (
+    includesLegacyResetToken(id)
+    || includesLegacyResetToken(data?.name)
+    || includesLegacyResetToken(data?.description)
+    || includesLegacyResetToken(data?.exerciseConfig?.config?.type)
+    || includesLegacyResetToken(data?.engineKey)
+    || includesLegacyResetToken(data?.buildArtifact?.engineKey)
+    || includesLegacyResetToken(data?.buildArtifact?.family)
+    || includesLegacyResetToken(data?.buildArtifact?.moduleId)
+    || includesLegacyResetToken(data?.variantSource?.family)
+  );
+}
+
+async function purgeLegacyResetArtifacts(existingVariants: SimVariantRecord[]) {
+  const legacyVariants = existingVariants.filter(isLegacyResetVariant);
+  const moduleSnap = await getDocs(collection(db, SIM_MODULES_COLLECTION));
+  const moduleIds = new Set(
+    moduleSnap.docs
+      .filter((entry) => isLegacyResetModule(entry.id, entry.data() || {}))
+      .map((entry) => entry.id)
+  );
+
+  legacyVariants.forEach((record) => {
+    if (record.publishedModuleId) {
+      moduleIds.add(record.publishedModuleId);
+    }
+    if (record.moduleDraft?.moduleId) {
+      moduleIds.add(record.moduleDraft.moduleId);
+    }
+  });
+
+  if (!legacyVariants.length && !moduleIds.size) {
+    return existingVariants;
+  }
+
+  await Promise.all(legacyVariants.map((record) => deleteVariantHistory(record.id)));
+
+  const batch = writeBatch(db);
+  legacyVariants.forEach((record) => {
+    batch.delete(doc(db, SIM_VARIANTS_COLLECTION, record.id));
+  });
+  moduleIds.forEach((moduleId) => {
+    batch.delete(doc(db, SIM_MODULES_COLLECTION, moduleId));
+  });
+  await batch.commit();
+
+  return existingVariants.filter((record) => !isLegacyResetVariant(record));
+}
+
 function writeVariantHistory(
   batch: ReturnType<typeof writeBatch>,
   record: SimVariantRecord,
@@ -268,7 +343,7 @@ export const simVariantRegistryService = {
   },
 
   async syncSeeds(seeds: SimVariantSeed[]): Promise<{ records: SimVariantRecord[]; created: number }> {
-    const existing = await this.list();
+    const existing = await purgeLegacyResetArtifacts(await this.list());
     const existingById = new Map(existing.map((record) => [record.id, record]));
     const now = Date.now();
     const batch = writeBatch(db);

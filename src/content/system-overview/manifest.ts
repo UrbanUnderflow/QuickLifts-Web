@@ -9,11 +9,12 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-02-27',
+  lastUpdated: '2026-03-10',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
     { id: 'product-handbooks', label: 'Product Handbooks', description: 'Feature-by-feature inventory for each product surface.' },
+    { id: 'pulse-club-activation-architecture', label: 'Club Activation Architecture', description: 'Generic creator-club operating model for onboarding, introductions, and member pairing.' },
     { id: 'backend-data', label: 'Backend and Data', description: 'Core services and canonical data collections.' },
     { id: 'integrations', label: 'Integrations', description: 'External systems, ownership, and credential sources.' },
     { id: 'end-to-end-flows', label: 'End-to-End Flows', description: 'Cross-product flows from trigger to failure points.' },
@@ -29,6 +30,18 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'variant-registry', label: 'Variant Registry', description: 'Exhaustive inventory of all named variants with spec status tracking.' },
     { id: 'sim-family-specs', label: 'Sim FamilySpecs', description: 'Complete specifications for each simulation family.' },
     { id: 'athlete-journey', label: 'Athlete Journey', description: 'Recommended entry, progression, and system flow for athlete adoption.' },
+    { id: 'coach-journey', label: 'Coach Journey', description: 'Recommended entry, setup, and daily operating flow for coaches using Pulse Check.' },
+    { id: 'pulsecheck-runtime-architecture', label: 'Runtime Architecture', description: 'Top-level operating model for the perception-to-action runtime stack.' },
+    { id: 'pulsecheck-state-signal-layer', label: 'State Signal Layer', description: 'Operational state inference, confidence bands, freshness rules, and routing outputs for Nora.' },
+    { id: 'pulsecheck-state-snapshot-freshness-policy', label: 'Snapshot Freshness Policy', description: 'Shared recency, validity, and decay rules for state snapshots used across runtime consumers.' },
+    { id: 'pulsecheck-performance-state-flag-definitions', label: 'Performance-State Flags', description: 'Family-level definitions for translating acute sim behavior into state evidence.' },
+    { id: 'pulsecheck-nora-assignment-rules', label: 'Nora Assignment Rules', description: 'Decision rules for Protocol, Sim, Trial, defer, and safety-aware assignment behavior.' },
+    { id: 'pulsecheck-nora-qa-edge-case-matrix', label: 'Nora QA Matrix', description: 'Conflict, override, and edge-case scenarios for testing runtime behavior before pilot.' },
+    { id: 'pulsecheck-state-escalation-orchestration', label: 'State & Escalation Orchestration', description: 'Shared upstream state perception with separate performance, support, and safety lanes.' },
+    { id: 'pulsecheck-escalation-integration-spec', label: 'Escalation Integration Spec', description: 'Execution-layer bridge between state snapshots and the escalation workflow.' },
+    { id: 'pulsecheck-team-pilot-cohort-onboarding-architecture', label: 'Team & Pilot Onboarding', description: 'How organizations, teams, pilots, cohorts, clinicians, and enrollments enter the system.' },
+    { id: 'pulsecheck-permissions-visibility-model', label: 'Permissions & Visibility', description: 'Role-based access, invite-linked permissions, and minimum-necessary visibility rules.' },
+    { id: 'pulsecheck-coach-dashboard-information-architecture', label: 'Coach Dashboard IA', description: 'Coach-facing information hierarchy, workflows, and privacy boundaries for roster visibility.' },
   ],
   executiveSummary: {
     mission:
@@ -36,6 +49,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Added Pulse Community Club Activation Architecture artifact for generic creator-club onboarding, introductions, and pairing.',
       'Replaced tab-driven architecture page with a full handbook structure and anchored navigation.',
       'Added complete feature inventories for QuickLifts iOS, Pulse Android, PulseCheck iOS, and QuickLifts Web.',
       'Normalized backend/data/integration ownership into explicit matrix rows and release cadences.',

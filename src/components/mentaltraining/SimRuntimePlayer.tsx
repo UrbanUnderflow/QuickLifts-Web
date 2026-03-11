@@ -10,13 +10,19 @@ import {
   TaxonomySkill,
 } from '../../api/firebase/mentaltraining/taxonomy';
 import type { SimModule, SimBuildArtifact } from '../../api/firebase/mentaltraining/types';
-import { KillSwitchGame } from './KillSwitchGame';
+import { ResetGame } from './ResetGame';
+import { NoiseGateGame } from './NoiseGateGame';
+import { BrakePointGame } from './BrakePointGame';
+import { SignalWindowGame } from './SignalWindowGame';
+import { SequenceShiftGame } from './SequenceShiftGame';
+import { EnduranceLockGame } from './EnduranceLockGame';
 
 interface SimRuntimePlayerProps {
   exercise: SimModule;
   isPaused: boolean;
   onPause: () => void;
   onResume: () => void;
+  onClose: () => void;
   onComplete: () => void;
   previewMode?: boolean;
 }
@@ -55,7 +61,7 @@ const ENGINE_THEME: Record<SimBuildArtifact['engineKey'], {
   panel: string;
   badge: string;
 }> = {
-  kill_switch: { accent: '#ef4444', glow: 'from-red-500/20 to-orange-500/10', panel: 'border-red-500/20 bg-red-500/8', badge: 'RESET LOOP' },
+  reset: { accent: '#ef4444', glow: 'from-red-500/20 to-orange-500/10', panel: 'border-red-500/20 bg-red-500/8', badge: 'RESET LOOP' },
   noise_gate: { accent: '#f59e0b', glow: 'from-amber-500/20 to-orange-500/10', panel: 'border-amber-500/20 bg-amber-500/8', badge: 'FILTER UNDER NOISE' },
   brake_point: { accent: '#22c55e', glow: 'from-emerald-500/20 to-green-500/10', panel: 'border-emerald-500/20 bg-emerald-500/8', badge: 'INHIBIT THE WRONG ACTION' },
   signal_window: { accent: '#3b82f6', glow: 'from-blue-500/20 to-cyan-500/10', panel: 'border-blue-500/20 bg-blue-500/8', badge: 'COMMIT INSIDE THE WINDOW' },
@@ -96,7 +102,7 @@ function clampScore(value: number) {
 
 function buildDefaultAdapter(engineKey: SimBuildArtifact['engineKey']): RuntimeAdapter {
   const telemetryLookup: Record<SimBuildArtifact['engineKey'], { targetSkills: TaxonomySkill[]; pressureTypes: PressureType[] }> = {
-    kill_switch: {
+    reset: {
       targetSkills: [TaxonomySkill.ErrorRecoverySpeed, TaxonomySkill.AttentionalShifting, TaxonomySkill.PressureStability],
       pressureTypes: [PressureType.Visual, PressureType.Evaluative, PressureType.CompoundingError],
     },
@@ -122,7 +128,7 @@ function buildDefaultAdapter(engineKey: SimBuildArtifact['engineKey']): RuntimeA
     },
   };
 
-  const adapters: Record<Exclude<SimBuildArtifact['engineKey'], 'kill_switch'>, RuntimeAdapter> = {
+  const adapters: Record<Exclude<SimBuildArtifact['engineKey'], 'reset'>, RuntimeAdapter> = {
     noise_gate: {
       initialize: (artifact) => createBinaryRounds(
         parseRoundCount(artifact.sessionModel.targetSessionStructure, artifact.sessionModel.durationMinutes),
@@ -291,7 +297,7 @@ function buildDefaultAdapter(engineKey: SimBuildArtifact['engineKey']): RuntimeA
     },
   };
 
-  return adapters[engineKey as Exclude<SimBuildArtifact['engineKey'], 'kill_switch'>];
+  return adapters[engineKey as Exclude<SimBuildArtifact['engineKey'], 'reset'>];
 }
 
 function getDurationMode(durationMinutes: number) {
@@ -311,6 +317,7 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
   isPaused,
   onPause,
   onResume,
+  onClose,
   onComplete,
   previewMode = false,
 }) => {
@@ -324,7 +331,7 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
   const [recorded, setRecorded] = useState(false);
 
   useEffect(() => {
-    if (!buildArtifact || buildArtifact.engineKey === 'kill_switch') {
+    if (!buildArtifact || buildArtifact.engineKey === 'reset') {
       return undefined;
     }
     const adapter = buildDefaultAdapter(buildArtifact.engineKey);
@@ -339,7 +346,7 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
   }, [buildArtifact]);
 
   useEffect(() => {
-    if (!buildArtifact || buildArtifact.engineKey === 'kill_switch' || runtimePhase !== 'summary' || recorded || !currentUser?.id || previewMode) {
+    if (!buildArtifact || buildArtifact.engineKey === 'reset' || runtimePhase !== 'summary' || recorded || !currentUser?.id || previewMode) {
       return undefined;
     }
     const adapter = buildDefaultAdapter(buildArtifact.engineKey);
@@ -368,7 +375,7 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
   }, [buildArtifact, currentUser?.id, exercise.id, previewMode, recorded, responses, runtimePhase]);
 
   const adapter = useMemo(
-    () => (buildArtifact && buildArtifact.engineKey !== 'kill_switch' ? buildDefaultAdapter(buildArtifact.engineKey) : null),
+    () => (buildArtifact && buildArtifact.engineKey !== 'reset' ? buildDefaultAdapter(buildArtifact.engineKey) : null),
     [buildArtifact]
   );
   const engineTheme = buildArtifact ? ENGINE_THEME[buildArtifact.engineKey] : ENGINE_THEME.noise_gate;
@@ -382,12 +389,82 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
     return null;
   }
 
-  if (buildArtifact.engineKey === 'kill_switch') {
+  if (buildArtifact.engineKey === 'reset') {
     return (
-      <KillSwitchGame
+      <ResetGame
         exercise={exercise}
-        onClose={onPause}
+        onClose={onClose}
         onComplete={() => onComplete()}
+        previewMode={previewMode}
+      />
+    );
+  }
+
+  if (buildArtifact.engineKey === 'noise_gate') {
+    return (
+      <NoiseGateGame
+        exercise={exercise}
+        isPaused={isPaused}
+        onPause={onPause}
+        onResume={onResume}
+        onClose={onClose}
+        onComplete={onComplete}
+        previewMode={previewMode}
+      />
+    );
+  }
+
+  if (buildArtifact.engineKey === 'brake_point') {
+    return (
+      <BrakePointGame
+        exercise={exercise}
+        isPaused={isPaused}
+        onPause={onPause}
+        onResume={onResume}
+        onClose={onClose}
+        onComplete={onComplete}
+        previewMode={previewMode}
+      />
+    );
+  }
+
+  if (buildArtifact.engineKey === 'signal_window') {
+    return (
+      <SignalWindowGame
+        exercise={exercise}
+        isPaused={isPaused}
+        onPause={onPause}
+        onResume={onResume}
+        onClose={onClose}
+        onComplete={onComplete}
+        previewMode={previewMode}
+      />
+    );
+  }
+
+  if (buildArtifact.engineKey === 'sequence_shift') {
+    return (
+      <SequenceShiftGame
+        exercise={exercise}
+        isPaused={isPaused}
+        onPause={onPause}
+        onResume={onResume}
+        onClose={onClose}
+        onComplete={onComplete}
+        previewMode={previewMode}
+      />
+    );
+  }
+
+  if (buildArtifact.engineKey === 'endurance_lock') {
+    return (
+      <EnduranceLockGame
+        exercise={exercise}
+        isPaused={isPaused}
+        onPause={onPause}
+        onResume={onResume}
+        onClose={onClose}
+        onComplete={onComplete}
         previewMode={previewMode}
       />
     );
@@ -426,7 +503,7 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
           <div className="relative z-10">
             <p className="text-xs uppercase tracking-[0.3em] text-white/45">Compiled Runtime</p>
             <h3 className="text-2xl font-semibold">{buildArtifact.variantName}</h3>
-            <p className="text-sm text-white/55 mt-1">{buildArtifact.family} · {buildArtifact.engineKey.replace('_', ' ')}</p>
+            <p className="text-sm text-white/55 mt-1">{buildArtifact.family} · {String(buildArtifact.engineKey).replace('_', ' ')}</p>
             <div
               className={`inline-flex items-center gap-2 mt-3 px-3 py-1 rounded-full border ${engineTheme.panel}`}
               style={{ color: engineTheme.accent }}

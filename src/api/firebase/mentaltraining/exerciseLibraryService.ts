@@ -1100,7 +1100,7 @@ const SEEDED_EXERCISES: MentalExercise[] = [
   },
 
   // -------------------------------------------------------------------------
-  // THE KILL SWITCH (FOCUS - MENTAL RECOVERY TRAINING)
+  // RESET (FOCUS - MENTAL RECOVERY TRAINING)
   // -------------------------------------------------------------------------
   {
     id: 'focus-3-second-reset',
@@ -1112,7 +1112,7 @@ const SEEDED_EXERCISES: MentalExercise[] = [
     exerciseConfig: {
       type: 'focus',
       config: {
-        type: 'kill_switch',
+        type: 'reset',
         duration: 180,
         progressionLevel: 1,
         instructions: ['Train your mental recovery speed through disruption-recovery cycles'],

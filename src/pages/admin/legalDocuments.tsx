@@ -7,6 +7,54 @@ import { FileText, Download, Trash2, Loader2, Sparkles, Clock, AlertCircle, Chec
 import { applyDocumentPatches, type DocumentPatch } from '../../utils/documentPatches';
 import { formatDiagram, previewFormattedDiagram, extractSectionHeaders, insertDiagramIntoDocument } from '../../utils/diagramFormatter';
 
+// Companies available for document generation
+const COMPANIES = [
+  { id: 'pulse', name: 'Pulse Intelligence Labs, Inc.' },
+  { id: 'tres', name: 'TresProperties LLC' },
+];
+
+// Wire transfer instructions keyed by company
+const WIRE_INSTRUCTIONS: Record<string, {
+  bankName: string;
+  accountNumber: string;
+  routingNumber: string;
+  accountType?: string;
+  beneficiaryName: string;
+  beneficiaryAddress?: string;
+  swift?: string;
+  bankAddress?: string;
+  intermediarySwift?: string;
+  note?: string;
+}> = {
+  'Pulse Intelligence Labs, Inc.': {
+    bankName: 'Column N.A. (via Mercury)',
+    routingNumber: '121145433',
+    accountNumber: '118879863125743',
+    accountType: 'Checking',
+    beneficiaryName: 'Pulse Intelligence Labs, Inc.',
+    beneficiaryAddress: '1111B S Governors Ave, STE 50759, Dover, DE 19904',
+    bankAddress: '1 Letterman Drive, Building A, Suite A4-700, San Francisco, CA 94129',
+    swift: 'CLNOUS66MER',
+    intermediarySwift: 'CHASUS33XXX',
+    note: 'For international wires use SWIFT: CLNOUS66MER. Intermediary bank SWIFT: CHASUS33XXX.',
+  },
+  'TresProperties LLC': {
+    bankName: 'JPMorgan Chase Bank, N.A.',
+    routingNumber: '021000021',
+    accountNumber: '888397715',
+    accountType: 'Checking',
+    beneficiaryName: 'TresProperties LLC',
+    note: 'Routing number 021000021 applies to both ACH/direct deposit and wire transfers.',
+  },
+};
+
+// Invoice line item type
+interface InvoiceLineItem {
+  description: string;
+  qty: number;
+  unitPrice: number;
+}
+
 // Types
 interface LegalDocument {
   id: string;
@@ -14,6 +62,7 @@ interface LegalDocument {
   prompt: string;
   content: string;
   documentType: string;
+  companyName?: string;
   createdAt: Timestamp | Date;
   updatedAt?: Timestamp | Date;
   status: 'generating' | 'completed' | 'error';
@@ -25,6 +74,18 @@ interface LegalDocument {
   requiresSignature?: boolean;
   // Exhibits - other documents attached as exhibits
   exhibits?: string[];
+  // Invoice-specific structured data
+  invoiceData?: {
+    invoiceNumber: string;
+    issueDate: string;
+    dueDate: string;
+    billToName: string;
+    billToEmail: string;
+    billToAddress: string;
+    lineItems: InvoiceLineItem[];
+    memo: string;
+    total: number;
+  };
 }
 
 interface SigningRequest {
@@ -60,6 +121,7 @@ type SignerRow = {
   name: string;
   email: string;
   signingRequestId?: string;
+  status?: SigningRequest['status'];
 };
 
 interface AuditResult {
@@ -87,6 +149,7 @@ const DOCUMENT_TYPES = [
   { id: 'safe', label: 'SAFE Agreement', icon: '💰' },
   { id: 'partnership', label: 'Partnership Agreement', icon: '🤝' },
   { id: 'license', label: 'License Agreement', icon: '📄' },
+  { id: 'invoice', label: 'Invoice', icon: '🧾' },
   { id: 'proposal', label: 'Proposal Document', icon: '📋' },
   { id: 'system-design', label: 'System Design', icon: '🏗️' },
   { id: 'spreadsheet', label: 'Spreadsheet', icon: '📊', exportFormat: 'xlsx' },
@@ -159,10 +222,23 @@ const LegalDocumentsAdmin: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [selectedType, setSelectedType] = useState('nda');
+  const [selectedCompany, setSelectedCompany] = useState(COMPANIES[0].name);
   const [requiresSignatureChecked, setRequiresSignatureChecked] = useState<boolean>(SIGNATURE_REQUIRED_TYPES.includes('nda'));
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  const [resendSuccessId, setResendSuccessId] = useState<string | null>(null);
+
+  // Invoice-specific state
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [invoiceIssueDate, setInvoiceIssueDate] = useState('');
+  const [invoiceDueDate, setInvoiceDueDate] = useState('');
+  const [invoiceBillToName, setInvoiceBillToName] = useState('');
+  const [invoiceBillToEmail, setInvoiceBillToEmail] = useState('');
+  const [invoiceBillToAddress, setInvoiceBillToAddress] = useState('');
+  const [invoiceLineItems, setInvoiceLineItems] = useState<InvoiceLineItem[]>([{ description: '', qty: 1, unitPrice: 0 }]);
+  const [invoiceMemo, setInvoiceMemo] = useState('');
 
   // Edit Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -288,18 +364,33 @@ const LegalDocumentsAdmin: React.FC = () => {
   };
 
   const buildDefaultSignersForLegalDoc = (doc: LegalDocument): SignerRow[] => {
-    const existing = getSigningRequestsForDocument(doc.id);
+    let existing = getSigningRequestsForDocument(doc.id);
+
+    // If the document has a specific list of request IDs, only use those.
+    // Otherwise, deduplicate by email + role.
+    if (doc.signingRequestIds && doc.signingRequestIds.length > 0) {
+      existing = existing.filter(r => doc.signingRequestIds!.includes(r.id));
+    } else {
+      const seen = new Set();
+      existing = existing.filter(r => {
+        const key = `${r.recipientEmail?.toLowerCase()}-${r.signerRole}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
 
     const makeRow = (row: Omit<SignerRow, 'id'>): SignerRow => {
       const existingReq = existing.find(r => r.recipientEmail?.toLowerCase() === row.email?.toLowerCase() && r.signerRole === row.role);
       return {
-        id: `${row.role}-${row.email || Math.random().toString(36).slice(2)}`,
+        id: existingReq ? existingReq.id : `${row.role}-${row.email || Math.random().toString(36).slice(2)}`,
         ...row,
         signingRequestId: existingReq?.id,
+        status: existingReq?.status,
       };
     };
 
-    // Start with a single signer by default (user can add more)
+    // Start with existing signers if any
     if (existing.length > 0) {
       return existing.map((r, idx) => makeRow({
         role: r.signerRole || `Signer ${idx + 1}`,
@@ -307,7 +398,7 @@ const LegalDocumentsAdmin: React.FC = () => {
         name: r.recipientName,
         email: r.recipientEmail,
         signingRequestId: r.id,
-      } as any));
+      }));
     }
 
     return [makeRow({ role: 'Recipient', name: '', email: '' })];
@@ -321,10 +412,38 @@ const LegalDocumentsAdmin: React.FC = () => {
   // Default signature checkbox based on document type (user can override)
   useEffect(() => {
     setRequiresSignatureChecked(SIGNATURE_REQUIRED_TYPES.includes(selectedType));
+    // Auto-populate invoice defaults when switching to invoice type
+    if (selectedType === 'invoice') {
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const toDateStr = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const due = new Date(now); due.setDate(due.getDate() + 4);
+      setInvoiceIssueDate(toDateStr(now));
+      setInvoiceDueDate(toDateStr(due));
+      if (!invoiceNumber) {
+        const rand = Math.floor(Math.random() * 9000) + 1000;
+        setInvoiceNumber(`INV-${now.getFullYear()}-${rand}`);
+      }
+    }
   }, [selectedType]);
 
-  // Generate document using AI
+  // Generate document using AI (or directly for invoice type)
   const handleGenerate = async () => {
+    // For invoice type, validate invoice fields instead of prompt
+    if (selectedType === 'invoice') {
+      if (!invoiceBillToName.trim()) {
+        setMessage({ type: 'error', text: 'Please enter a Bill To name' });
+        return;
+      }
+      if (invoiceLineItems.every(item => !item.description.trim() || item.unitPrice === 0)) {
+        setMessage({ type: 'error', text: 'Please add at least one line item with a description and price' });
+        return;
+      }
+      // Generate invoice directly without AI
+      await handleGenerateInvoice();
+      return;
+    }
+
     if (!prompt.trim()) {
       setMessage({ type: 'error', text: 'Please enter a prompt for the document' });
       return;
@@ -342,6 +461,7 @@ const LegalDocumentsAdmin: React.FC = () => {
         prompt: prompt,
         content: '',
         documentType: selectedType,
+        companyName: selectedCompany,
         requiresSignature: requiresSignatureChecked,
         createdAt: Timestamp.now(),
         status: 'generating'
@@ -404,6 +524,84 @@ const LegalDocumentsAdmin: React.FC = () => {
         }
       }
       loadDocuments();
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  // Generate invoice directly (no AI needed)
+  const handleGenerateInvoice = async () => {
+    setGenerating(true);
+    setMessage(null);
+    try {
+      const total = invoiceLineItems.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
+      const wire = WIRE_INSTRUCTIONS[selectedCompany] || WIRE_INSTRUCTIONS['Pulse Intelligence Labs, Inc.'];
+      const num = invoiceNumber || `INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 9000) + 1000}`;
+
+      const lineItemsText = invoiceLineItems
+        .filter(i => i.description.trim())
+        .map(i => `  • ${i.description}  ×${i.qty}  @$${i.unitPrice.toFixed(2)}  =  $${(i.qty * i.unitPrice).toFixed(2)}`)
+        .join('\n');
+
+      // Store clean plain-text content (actual PDF comes from generateInvoicePdf)
+      const content = [
+        `INVOICE ${num}`,
+        ``,
+        `Date of Issue: ${invoiceIssueDate}`,
+        `Past Due After: ${invoiceDueDate}`,
+        ``,
+        `From: ${selectedCompany}`,
+        `To: ${invoiceBillToName}${invoiceBillToEmail ? ' <' + invoiceBillToEmail + '>' : ''}${invoiceBillToAddress ? '\n     ' + invoiceBillToAddress : ''}`,
+        ``,
+        `Line Items:`,
+        lineItemsText,
+        ``,
+        `Total Due: $${total.toFixed(2)} USD`,
+        ``,
+        `Wire Instructions:`,
+        `  Bank: ${wire.bankName}`,
+        `  Routing: ${wire.routingNumber}`,
+        `  Account: ${wire.accountNumber}`,
+        wire.accountType ? `  Type: ${wire.accountType}` : '',
+        wire.swift ? `  SWIFT: ${wire.swift}` : '',
+        invoiceMemo ? `\nNotes: ${invoiceMemo}` : '',
+      ].filter(line => line !== '').join('\n');
+
+      const invoiceData = {
+        invoiceNumber: num,
+        issueDate: invoiceIssueDate,
+        dueDate: invoiceDueDate,
+        billToName: invoiceBillToName,
+        billToEmail: invoiceBillToEmail,
+        billToAddress: invoiceBillToAddress,
+        lineItems: invoiceLineItems.filter(i => i.description.trim()),
+        memo: invoiceMemo,
+        total,
+      };
+
+      await addDoc(collection(db, 'legal-documents'), {
+        title: `Invoice ${num} — ${invoiceBillToName}`,
+        prompt: `Invoice for ${invoiceBillToName}, amount $${total.toFixed(2)}`,
+        content,
+        invoiceData,
+        documentType: 'invoice',
+        companyName: selectedCompany,
+        requiresSignature: false,
+        createdAt: Timestamp.now(),
+        status: 'completed',
+      });
+
+      setMessage({ type: 'success', text: 'Invoice created successfully!' });
+      // Reset invoice fields
+      setInvoiceBillToName('');
+      setInvoiceBillToEmail('');
+      setInvoiceBillToAddress('');
+      setInvoiceLineItems([{ description: '', qty: 1, unitPrice: 0 }]);
+      setInvoiceMemo('');
+      loadDocuments();
+    } catch (error) {
+      console.error('Error creating invoice:', error);
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to create invoice' });
     } finally {
       setGenerating(false);
     }
@@ -607,7 +805,11 @@ const LegalDocumentsAdmin: React.FC = () => {
       // (If content was manually modified via diagram insert, we just save the new content directly)
       if (hasRevisionPrompt && !contentManuallyModified) {
         const requestOnce = async (payload: any) => {
-          const response = await fetch('/.netlify/functions/revise-legal-document', {
+          const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+          const reviseEndpoint = isLocalhost
+            ? '/api/admin/revise-legal-document'
+            : '/.netlify/functions/revise-legal-document';
+          const response = await fetch(reviseEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -915,17 +1117,21 @@ const LegalDocumentsAdmin: React.FC = () => {
     try {
       const signingGroupId = `${signingDocument.id}-${Date.now()}`;
       const signingRequestIds: string[] = [];
+      let sentCount = 0;
 
       for (let i = 0; i < normalized.length; i++) {
         const signer = normalized[i];
 
         let requestId = signer.signingRequestId;
+        let isNewOrUpdated = false;
+
         if (!requestId) {
           const requestData: any = {
             documentType: signingDocument.documentType,
             documentName: signingDocument.title,
             recipientName: signer.name,
             recipientEmail: signer.email,
+            companyName: signingDocument.companyName || 'Pulse Intelligence Labs, Inc.',
             status: 'pending',
             createdAt: serverTimestamp(),
             legalDocumentId: signingDocument.id,
@@ -938,24 +1144,42 @@ const LegalDocumentsAdmin: React.FC = () => {
 
           const docRef = await addDoc(collection(db, 'signingRequests'), requestData);
           requestId = docRef.id;
+          isNewOrUpdated = true;
+        } else {
+          // Update the existing request in case name or email has changed
+          const docRef = doc(db, 'signingRequests', requestId);
+          await updateDoc(docRef, {
+            recipientName: signer.name,
+            recipientEmail: signer.email,
+            stakeholderId: signer.stakeholderId || null,
+          });
+          isNewOrUpdated = true; // since they clicked SEND, let's treat it as needing an email.
         }
 
         signingRequestIds.push(requestId);
 
-        const response = await fetch('/.netlify/functions/send-signing-request', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            documentId: requestId,
-            documentName: signingDocument.title,
-            documentType: signingDocument.documentType,
-            recipientName: signer.name,
-            recipientEmail: signer.email,
-          }),
-        });
+        if (isNewOrUpdated) {
+          const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+          const signingEndpoint = isLocalhost
+            ? '/api/admin/send-signing-request'
+            : '/.netlify/functions/send-signing-request';
+          const response = await fetch(signingEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              documentId: requestId,
+              documentName: signingDocument.title,
+              documentType: signingDocument.documentType,
+              recipientName: signer.name,
+              recipientEmail: signer.email,
+              companyName: signingDocument.companyName || 'Pulse Intelligence Labs, Inc.',
+            }),
+          });
 
-        if (!response.ok) {
-          throw new Error(`Failed to send email to ${signer.email}`);
+          if (!response.ok) {
+            throw new Error(`Failed to send email to ${signer.email}`);
+          }
+          sentCount++;
         }
       }
 
@@ -966,7 +1190,7 @@ const LegalDocumentsAdmin: React.FC = () => {
         updatedAt: Timestamp.now(),
       });
 
-      setMessage({ type: 'success', text: `Document sent to ${signingRequestIds.length} signer(s)!` });
+      setMessage({ type: 'success', text: `Document sent or updated for ${sentCount} signer(s)!` });
       setIsSigningModalOpen(false);
       setSigningDocument(null);
       setSigners([]);
@@ -977,6 +1201,53 @@ const LegalDocumentsAdmin: React.FC = () => {
       setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to send document' });
     } finally {
       setIsSending(false);
+    }
+  };
+  const handleResendEmailToSigner = async (signer: SignerRow) => {
+    if (!signer.signingRequestId || !signingDocument) return;
+
+    setResendingId(signer.id);
+    setResendSuccessId(null);
+
+    // First save any local changes to this signer's name or email to DB
+    try {
+      const docRef = doc(db, 'signingRequests', signer.signingRequestId);
+      await updateDoc(docRef, {
+        recipientName: signer.name,
+        recipientEmail: signer.email,
+        stakeholderId: signer.stakeholderId || null,
+      });
+
+      const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+      const signingEndpoint = isLocalhost
+        ? '/api/admin/send-signing-request'
+        : '/.netlify/functions/send-signing-request';
+
+      const response = await fetch(signingEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          documentId: signer.signingRequestId,
+          documentName: signingDocument.title,
+          documentType: signingDocument.documentType,
+          recipientName: signer.name,
+          recipientEmail: signer.email,
+          companyName: signingDocument.companyName || 'Pulse Intelligence Labs, Inc.',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to resend email to ${signer.email}`);
+      }
+
+      setResendSuccessId(signer.id);
+      setTimeout(() => setResendSuccessId(null), 3000);
+      setMessage({ type: 'success', text: `Email resent to ${signer.name}!` });
+    } catch (error) {
+      console.error('Error resending email:', error);
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to resend email' });
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -1292,16 +1563,142 @@ const LegalDocumentsAdmin: React.FC = () => {
     return result;
   };
 
-  // Generate PDF from document content
-  const generatePdf = (document: LegalDocument) => {
-    const includeSignature = requiresSignature(document);
-    const isProject = isProjectDocument(document.documentType);
-    const exhibitDocs = getExhibitDocuments(document.id);
+  // ── Invoice PDF Generator ───────────────────────────────────────────────────
+  const generateInvoicePdf = (doc: LegalDocument): string => {
+    const inv = doc.invoiceData;
+    const company = doc.companyName || 'Pulse Intelligence Labs, Inc.';
+    const wire = WIRE_INSTRUCTIONS[company] || WIRE_INSTRUCTIONS['Pulse Intelligence Labs, Inc.'];
+    const isTres = company.includes('TresProperties');
+    const accent = isTres ? '#3B82F6' : '#d7ff00';
+    const accentText = isTres ? '#ffffff' : '#000000';
 
-    // Use different styling based on document type
-    const html = isProject
-      ? generateProjectStylePdf(document, includeSignature, exhibitDocs)
-      : generateLegalStylePdf(document, includeSignature, exhibitDocs);
+    const lineItemRows = (inv?.lineItems || []).map(item => {
+      const amount = item.qty * item.unitPrice;
+      return `<tr>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;">${item.description}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">${item.qty}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;">$${item.unitPrice.toFixed(2)}</td>
+        <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:500;">$${amount.toFixed(2)}</td>
+      </tr>`;
+    }).join('');
+
+    const total = inv?.total ?? 0;
+    const num = inv?.invoiceNumber || 'N/A';
+
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Invoice ${num}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; color: #111827; background: #fff; padding: 48px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; }
+  .invoice-title { font-size: 36px; font-weight: 700; color: #111827; }
+  .company-badge { background: ${accent}; color: ${accentText}; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 32px; max-width: 320px; }
+  .meta-label { color: #6b7280; font-size: 12px; }
+  .meta-value { font-weight: 600; font-size: 13px; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-bottom: 32px; padding: 24px; background: #f9fafb; border-radius: 12px; }
+  .party-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af; margin-bottom: 6px; font-weight: 600; }
+  .party-name { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+  .party-detail { color: #6b7280; font-size: 13px; line-height: 1.5; }
+  .amount-banner { background: #111827; color: #fff; padding: 20px 24px; border-radius: 12px; margin-bottom: 32px; }
+  .amount-banner .label { font-size: 12px; color: #9ca3af; margin-bottom: 4px; }
+  .amount-banner .value { font-size: 28px; font-weight: 800; color: ${accent}; }
+  .amount-banner .due { font-size: 13px; color: #d1d5db; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  thead th { padding: 10px 12px; background: #f3f4f6; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6b7280; text-align: left; }
+  thead th:nth-child(2) { text-align: center; }
+  thead th:nth-child(3), thead th:nth-child(4) { text-align: right; }
+  .totals { margin-left: auto; width: 280px; }
+  .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; color: #374151; border-bottom: 1px solid #f3f4f6; }
+  .totals-row.final { font-size: 16px; font-weight: 800; color: #111827; border-bottom: 2px solid #111827; padding: 10px 0; margin-top: 4px; }
+  .wire-section { margin-top: 40px; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+  .wire-header { background: ${accent}; color: ${accentText}; padding: 14px 20px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .wire-body { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .wire-field { }
+  .wire-field-label { font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .wire-field-value { font-size: 14px; font-weight: 600; color: #111827; font-family: 'Courier New', monospace; }
+  .wire-note { padding: 12px 20px; background: #f9fafb; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }
+  .memo { margin-top: 24px; padding: 16px 20px; background: #f9fafb; border-radius: 8px; border-left: 3px solid ${accent}; font-size: 13px; color: #374151; }
+  .memo-label { font-size: 11px; text-transform: uppercase; color: #9ca3af; margin-bottom: 6px; font-weight: 600; }
+  @media print { body { padding: 24px; } }
+</style></head><body>
+<div class="header">
+  <div>
+    <div class="invoice-title">Invoice</div>
+  </div>
+  <div class="company-badge">${company}</div>
+</div>
+
+<div class="meta-grid">
+  <div class="meta-label">Invoice number</div><div class="meta-value">${num}</div>
+  <div class="meta-label">Date of issue</div><div class="meta-value">${inv?.issueDate || ''}</div>
+  <div class="meta-label">Past due after</div><div class="meta-value">${inv?.dueDate || ''}</div>
+</div>
+
+<div class="parties">
+  <div>
+    <div class="party-label">Bill From</div>
+    <div class="party-name">${company}</div>
+  </div>
+  <div>
+    <div class="party-label">Bill To</div>
+    <div class="party-name">${inv?.billToName || ''}</div>
+    ${inv?.billToEmail ? `<div class="party-detail">${inv.billToEmail}</div>` : ''}
+    ${inv?.billToAddress ? `<div class="party-detail">${inv.billToAddress}</div>` : ''}
+  </div>
+</div>
+
+<div class="amount-banner">
+  <div class="label">Amount Due</div>
+  <div class="value">$${total.toFixed(2)} USD</div>
+  <div class="due">Past due after ${inv?.dueDate || ''}</div>
+</div>
+
+<table>
+  <thead><tr>
+    <th>Description</th><th>Qty</th><th>Unit Price</th><th>Amount</th>
+  </tr></thead>
+  <tbody>${lineItemRows}</tbody>
+</table>
+
+<div class="totals">
+  <div class="totals-row"><span>Subtotal</span><span>$${total.toFixed(2)}</span></div>
+  <div class="totals-row final"><span>Amount Due</span><span>$${total.toFixed(2)} USD</span></div>
+</div>
+
+<div class="wire-section">
+  <div class="wire-header">Wire Transfer Instructions</div>
+  <div class="wire-body">
+    <div class="wire-field"><div class="wire-field-label">Beneficiary Name</div><div class="wire-field-value">${wire.beneficiaryName}</div></div>
+    <div class="wire-field"><div class="wire-field-label">Bank Name</div><div class="wire-field-value">${wire.bankName}</div></div>
+    <div class="wire-field"><div class="wire-field-label">Routing Number (ABA)</div><div class="wire-field-value">${wire.routingNumber}</div></div>
+    <div class="wire-field"><div class="wire-field-label">Account Number</div><div class="wire-field-value">${wire.accountNumber}</div></div>
+    ${wire.accountType ? `<div class="wire-field"><div class="wire-field-label">Account Type</div><div class="wire-field-value">${wire.accountType}</div></div>` : ''}
+    ${wire.beneficiaryAddress ? `<div class="wire-field" style="grid-column:span 2"><div class="wire-field-label">Beneficiary Address</div><div class="wire-field-value" style="font-family:sans-serif;font-size:13px;">${wire.beneficiaryAddress}</div></div>` : ''}
+    ${wire.swift ? `<div class="wire-field"><div class="wire-field-label">SWIFT / BIC</div><div class="wire-field-value">${wire.swift}</div></div>` : ''}
+    ${wire.intermediarySwift ? `<div class="wire-field"><div class="wire-field-label">Intermediary SWIFT</div><div class="wire-field-value">${wire.intermediarySwift}</div></div>` : ''}
+  </div>
+  ${wire.note ? `<div class="wire-note">${wire.note}</div>` : ''}
+</div>
+
+${inv?.memo ? `<div class="memo"><div class="memo-label">Notes</div>${inv.memo}</div>` : ''}
+
+</body></html>`;
+  };
+
+  // Generate PDF from document content
+  const generatePdf = (legalDoc: LegalDocument) => {
+    const includeSignature = requiresSignature(legalDoc);
+    const isProject = isProjectDocument(legalDoc.documentType);
+    const exhibitDocs = getExhibitDocuments(legalDoc.id);
+
+    // Invoice type gets its own dedicated renderer (also check invoiceData as fallback)
+    const isInvoice = legalDoc.documentType === 'invoice' || !!legalDoc.invoiceData;
+    const html = isInvoice
+      ? generateInvoicePdf(legalDoc)
+      : isProject
+        ? generateProjectStylePdf(legalDoc, includeSignature, exhibitDocs)
+        : generateLegalStylePdf(legalDoc, includeSignature, exhibitDocs);
 
     // Create a new window and write HTML directly
     const printWindow = window.open('', '_blank');
@@ -1371,7 +1768,8 @@ const LegalDocumentsAdmin: React.FC = () => {
   };
 
   // Project/Planning style PDF (modern, readable)
-  const generateProjectStylePdf = (document: LegalDocument, includeSignature: boolean, exhibits: LegalDocument[] = []): string => {
+  const generateProjectStylePdf = (document: LegalDocument, includeSignature: boolean, exhibits: LegalDocument[] = [], companyNameOverride?: string): string => {
+    const resolvedCompanyName = companyNameOverride || document.companyName || COMPANIES[0].name;
     const exhibitsHtml = generateExhibitsHtml(exhibits);
     const hasExhibits = exhibits.length > 0;
     const showFooter = document.documentType !== 'custom';
@@ -1578,7 +1976,7 @@ const LegalDocumentsAdmin: React.FC = () => {
         </head>
         <body>
           <div class="header">
-            <div class="company-name">Pulse Intelligence Labs, Inc.</div>
+            <div class="company-name">${resolvedCompanyName}</div>
           </div>
           
           <h1>${document.title}</h1>
@@ -1621,7 +2019,7 @@ const LegalDocumentsAdmin: React.FC = () => {
           
           ${showFooter ? `
           <div class="footer">
-            <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} ${resolvedCompanyName}. All rights reserved.</p>
           </div>
           ` : ''}
           
@@ -1632,7 +2030,8 @@ const LegalDocumentsAdmin: React.FC = () => {
   };
 
   // Legal style PDF (formal, contract-style)
-  const generateLegalStylePdf = (document: LegalDocument, includeSignature: boolean, exhibits: LegalDocument[] = []): string => {
+  const generateLegalStylePdf = (document: LegalDocument, includeSignature: boolean, exhibits: LegalDocument[] = [], companyNameOverride?: string): string => {
+    const resolvedCompanyName = companyNameOverride || document.companyName || COMPANIES[0].name;
     const exhibitsHtml = generateExhibitsHtml(exhibits);
     const hasExhibits = exhibits.length > 0;
     const showFooter = document.documentType !== 'custom';
@@ -1641,7 +2040,7 @@ const LegalDocumentsAdmin: React.FC = () => {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>${document.title} - Pulse Intelligence Labs</title>
+          <title>${document.title} - ${resolvedCompanyName}</title>
           <style>
             @page {
               margin: 1in;
@@ -1811,7 +2210,7 @@ const LegalDocumentsAdmin: React.FC = () => {
         </head>
         <body>
           <div class="header">
-            <div class="company-name">PULSE INTELLIGENCE LABS, INC.</div>
+            <div class="company-name">${resolvedCompanyName.toUpperCase()}</div>
           </div>
           
           <h1>${document.title}</h1>
@@ -1855,7 +2254,7 @@ const LegalDocumentsAdmin: React.FC = () => {
           
           ${showFooter ? `
           <div class="footer">
-            <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+            <p>© ${new Date().getFullYear()} ${resolvedCompanyName}. All rights reserved.</p>
           </div>
           ` : ''}
           
@@ -1949,64 +2348,155 @@ const LegalDocumentsAdmin: React.FC = () => {
               </div>
             </div>
 
-            {/* Signature Requirement Toggle */}
-            <div className="mb-4 flex items-center justify-between gap-4 p-4 bg-zinc-900/50 rounded-xl border border-zinc-700">
-              <div>
-                <p className="text-sm font-medium text-white">Requires signature</p>
-                <p className="text-xs text-zinc-500 mt-0.5">
-                  When enabled, the PDF includes signature lines and e-signing tools are available.
-                </p>
-              </div>
-              <label className="inline-flex items-center cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={requiresSignatureChecked}
-                  onChange={(e) => setRequiresSignatureChecked(e.target.checked)}
-                  className="sr-only"
-                />
-                <div className={`w-12 h-7 rounded-full transition-colors ${requiresSignatureChecked ? 'bg-orange-600' : 'bg-zinc-700'}`}>
-                  <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform mt-1 ${requiresSignatureChecked ? 'translate-x-6' : 'translate-x-1'}`} />
-                </div>
-              </label>
-            </div>
-
-            {/* Prompt Input */}
+            {/* Company Selector */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-zinc-400 mb-2">
-                Document Details & Instructions
+                Issuing Company
               </label>
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe the specifics of your document. For example: 'Create an NDA between Pulse Intelligence Labs and [Company Name] for a potential partnership discussion. The agreement should be mutual, have a 2-year term, and include standard confidentiality provisions.'"
-                className="w-full h-40 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors resize-none"
-              />
+              <div className="relative">
+                <select
+                  value={selectedCompany}
+                  onChange={(e) => setSelectedCompany(e.target.value)}
+                  className="w-full px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white focus:outline-none focus:border-[#d7ff00] transition-colors appearance-none cursor-pointer"
+                  style={{ backgroundImage: 'none' }}
+                >
+                  {COMPANIES.map(company => (
+                    <option key={company.id} value={company.name} className="bg-zinc-900 text-white">
+                      {company.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4">
+                  <svg className="w-4 h-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </div>
+              </div>
               <p className="text-xs text-zinc-500 mt-2">
-                Be specific about parties involved, terms, duration, and any special clauses you need.
+                This company name will appear in the document header and footer.
               </p>
             </div>
 
+            {/* Signature Requirement Toggle — hidden for invoices */}
+            {selectedType !== 'invoice' && (
+              <div className="mb-4 flex items-center justify-between gap-4 p-4 bg-zinc-900/50 rounded-xl border border-zinc-700">
+                <div>
+                  <p className="text-sm font-medium text-white">Requires signature</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    When enabled, the PDF includes signature lines and e-signing tools are available.
+                  </p>
+                </div>
+                <label className="inline-flex items-center cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={requiresSignatureChecked}
+                    onChange={(e) => setRequiresSignatureChecked(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <div className={`w-12 h-7 rounded-full transition-colors ${requiresSignatureChecked ? 'bg-orange-600' : 'bg-zinc-700'}`}>
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform mt-1 ${requiresSignatureChecked ? 'translate-x-6' : 'translate-x-1'}`} />
+                  </div>
+                </label>
+              </div>
+            )}
+
+            {/* Invoice Form or Prompt — conditional on document type */}
+            {selectedType === 'invoice' ? (
+              <div className="space-y-4 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1">Invoice #</label>
+                    <input type="text" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} placeholder="INV-2026-0001" className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-[#d7ff00] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1">Date of Issue</label>
+                    <input type="date" value={invoiceIssueDate} onChange={(e) => setInvoiceIssueDate(e.target.value)} className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-[#d7ff00] transition-colors" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1">Past Due After</label>
+                    <input type="date" value={invoiceDueDate} onChange={(e) => setInvoiceDueDate(e.target.value)} className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-[#d7ff00] transition-colors" />
+                  </div>
+                </div>
+                <div className="p-4 bg-zinc-900/50 border border-zinc-700 rounded-xl">
+                  <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-3">Bill To</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><label className="block text-xs text-zinc-500 mb-1">Name *</label>
+                      <input type="text" value={invoiceBillToName} onChange={(e) => setInvoiceBillToName(e.target.value)} placeholder="Client or company name" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-[#d7ff00] transition-colors" /></div>
+                    <div><label className="block text-xs text-zinc-500 mb-1">Email</label>
+                      <input type="email" value={invoiceBillToEmail} onChange={(e) => setInvoiceBillToEmail(e.target.value)} placeholder="client@company.com" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-[#d7ff00] transition-colors" /></div>
+                    <div className="sm:col-span-2"><label className="block text-xs text-zinc-500 mb-1">Address (optional)</label>
+                      <input type="text" value={invoiceBillToAddress} onChange={(e) => setInvoiceBillToAddress(e.target.value)} placeholder="123 Main St, City, State ZIP" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-[#d7ff00] transition-colors" /></div>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Line Items</p>
+                    <button type="button" onClick={() => setInvoiceLineItems(prev => [...prev, { description: '', qty: 1, unitPrice: 0 }])} className="text-xs text-[#d7ff00] hover:text-white transition-colors">+ Add Line</button>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-12 gap-2 px-1">
+                      <div className="col-span-6 text-xs text-zinc-500">Description</div>
+                      <div className="col-span-2 text-xs text-zinc-500 text-center">Qty</div>
+                      <div className="col-span-3 text-xs text-zinc-500 text-right">Unit Price</div>
+                      <div className="col-span-1"></div>
+                    </div>
+                    {invoiceLineItems.map((item, i) => (
+                      <div key={i} className="grid grid-cols-12 gap-2 items-center">
+                        <input type="text" value={item.description} onChange={(e) => { const u = [...invoiceLineItems]; u[i] = { ...u[i], description: e.target.value }; setInvoiceLineItems(u); }} placeholder="Service description" className="col-span-6 px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-[#d7ff00] transition-colors" />
+                        <input type="number" min="1" value={item.qty} onChange={(e) => { const u = [...invoiceLineItems]; u[i] = { ...u[i], qty: Number(e.target.value) }; setInvoiceLineItems(u); }} className="col-span-2 px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm text-center focus:outline-none focus:border-[#d7ff00] transition-colors" />
+                        <input type="number" min="0" step="0.01" value={item.unitPrice || ''} onChange={(e) => { const u = [...invoiceLineItems]; u[i] = { ...u[i], unitPrice: Number(e.target.value) }; setInvoiceLineItems(u); }} placeholder="0.00" className="col-span-3 px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm text-right focus:outline-none focus:border-[#d7ff00] transition-colors" />
+                        <button type="button" onClick={() => setInvoiceLineItems(prev => prev.filter((_, idx) => idx !== i))} disabled={invoiceLineItems.length === 1} className="col-span-1 flex items-center justify-center text-zinc-500 hover:text-red-400 disabled:opacity-30 transition-colors">×</button>
+                      </div>
+                    ))}
+                    <div className="flex justify-end pt-2 pr-8">
+                      <span className="text-zinc-400 text-sm mr-4">Total</span>
+                      <span className="text-white font-bold text-lg">${invoiceLineItems.reduce((sum, i) => sum + i.qty * i.unitPrice, 0).toFixed(2)} USD</span>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1">Notes / Memo (optional)</label>
+                  <textarea value={invoiceMemo} onChange={(e) => setInvoiceMemo(e.target.value)} placeholder="Any additional notes or payment terms..." rows={2} className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-white text-sm focus:outline-none focus:border-[#d7ff00] transition-colors resize-none" />
+                </div>
+                <div className="flex items-center gap-2 p-3 bg-zinc-900/50 border border-zinc-700 rounded-lg">
+                  <span className="text-lg">🏦</span>
+                  <div>
+                    <p className="text-xs font-medium text-zinc-300">Wire instructions auto-included</p>
+                    <p className="text-xs text-zinc-500">{WIRE_INSTRUCTIONS[selectedCompany]?.bankName} · Acct ending {WIRE_INSTRUCTIONS[selectedCompany]?.accountNumber.slice(-4)}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-zinc-400 mb-2">Document Details &amp; Instructions</label>
+                <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Describe the specifics of your document..." className="w-full h-40 px-4 py-3 bg-zinc-900 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-[#d7ff00] transition-colors resize-none" />
+                <p className="text-xs text-zinc-500 mt-2">Be specific about parties involved, terms, duration, and any special clauses you need.</p>
+              </div>
+            )}
+
             {/* Generate Button */}
-            <button
-              onClick={handleGenerate}
-              disabled={generating || !prompt.trim()}
-              className={`flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-xl font-semibold transition-all ${generating || !prompt.trim()
-                ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
-                : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
-                }`}
-            >
-              {generating ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Generating Document...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5" />
-                  Generate Document
-                </>
-              )}
-            </button>
+            <div className="mt-4">
+              <button
+                onClick={handleGenerate}
+                disabled={generating || (selectedType === 'invoice' ? !invoiceBillToName.trim() : !prompt.trim())}
+                className={`flex items-center justify-center gap-2 w-full sm:w-auto px-6 py-3 rounded-xl font-semibold transition-all ${generating || (selectedType === 'invoice' ? !invoiceBillToName.trim() : !prompt.trim())
+                  ? 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+                  : 'bg-[#d7ff00] text-black hover:bg-[#c5eb00]'
+                  }`}
+              >
+                {generating ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    {selectedType === 'invoice' ? 'Creating Invoice...' : 'Generating Document...'}
+                  </>
+                ) : (
+                  <>
+                    {selectedType === 'invoice' ? <span>🧾</span> : <Sparkles className="w-5 h-5" />}
+                    {selectedType === 'invoice' ? 'Create Invoice' : 'Generate Document'}
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Documents Table */}
@@ -2068,6 +2558,14 @@ const LegalDocumentsAdmin: React.FC = () => {
                             <span className="px-2 py-0.5 bg-zinc-800 rounded text-xs">
                               {DOCUMENT_TYPES.find(t => t.id === document.documentType)?.label || document.documentType}
                             </span>
+                            {document.companyName && (
+                              <span className={`px-2 py-0.5 rounded text-xs font-medium ${document.companyName === 'TresProperties LLC'
+                                ? 'bg-blue-900/30 text-blue-400 border border-blue-800'
+                                : 'bg-[#d7ff00]/10 text-[#d7ff00] border border-[#d7ff00]/30'
+                                }`}>
+                                {document.companyName}
+                              </span>
+                            )}
                             {signingRequest && (
                               <span className="text-xs text-zinc-500">
                                 {signingRequestsForDoc.length > 1
@@ -2121,13 +2619,24 @@ const LegalDocumentsAdmin: React.FC = () => {
                                   Send for Signature
                                 </button>
                               ) : signingRequest ? (
-                                <button
-                                  onClick={() => window.open(`/sign/${signingRequest.id}`, '_blank')}
-                                  className="flex items-center gap-1 px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  View Signing Page
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => openSigningModal(document)}
+                                    className="flex items-center gap-1 px-3 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-lg text-sm font-medium transition-colors"
+                                    title="Add signers or resend emails"
+                                  >
+                                    <Send className="w-4 h-4" />
+                                    Manage Signers
+                                  </button>
+                                  <button
+                                    onClick={() => window.open(`/sign/${signingRequest.id}`, '_blank')}
+                                    className="flex items-center gap-1 px-3 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded-lg text-sm transition-colors"
+                                    title="Open the signer's view"
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                    View Signing Page
+                                  </button>
+                                </div>
                               ) : null}
 
                               <button
@@ -2729,10 +3238,10 @@ const LegalDocumentsAdmin: React.FC = () => {
 
       {/* Send for Signature Modal */}
       {isSigningModalOpen && signingDocument && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#1a1e24] rounded-2xl border border-zinc-700 w-full max-w-md overflow-hidden">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-0 sm:p-4">
+          <div className="bg-[#1a1e24] sm:rounded-2xl border-0 sm:border border-zinc-700 w-full h-full sm:h-auto sm:max-h-[90vh] max-w-3xl flex flex-col overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-zinc-700">
+            <div className="flex items-center justify-between p-6 border-b border-zinc-700 flex-shrink-0">
               <div>
                 <h2 className="text-xl font-semibold text-white flex items-center gap-2">
                   <Send className="w-5 h-5 text-orange-400" />
@@ -2753,7 +3262,7 @@ const LegalDocumentsAdmin: React.FC = () => {
             </div>
 
             {/* Modal Content */}
-            <div className="p-6">
+            <div className="p-6 overflow-y-auto flex-1">
               <div className="bg-zinc-900/50 rounded-xl p-4 mb-6 border border-zinc-700">
                 <div className="flex items-center gap-3 mb-2">
                   <FileText className="w-5 h-5 text-[#d7ff00]" />
@@ -2783,25 +3292,50 @@ const LegalDocumentsAdmin: React.FC = () => {
                 </div>
 
                 {signers.map((s, idx) => (
-                  <div key={s.id} className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-700 space-y-3">
+                  <div key={s.id} className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-700 space-y-3 relative group">
                     <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="px-2 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-300 border border-zinc-700">
                           {s.role || `Signer ${idx + 1}`}
                         </span>
                         {s.signingRequestId ? (
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-blue-900/30 text-blue-300 border border-blue-800">
-                            Existing link
+                          <>
+                            <span className="px-2 py-0.5 rounded-full text-xs bg-blue-900/30 text-blue-300 border border-blue-800">
+                              Existing link
+                            </span>
+                            {s.status && getSigningStatusBadge(s.status)}
+                          </>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400 border border-zinc-700">
+                            New Signer
                           </span>
-                        ) : null}
+                        )}
                       </div>
-                      <button
-                        onClick={() => setSigners(prev => prev.filter(x => x.id !== s.id))}
-                        className="p-2 rounded-lg hover:bg-zinc-800 transition-colors"
-                        title="Remove signer"
-                      >
-                        <Trash2 className="w-4 h-4 text-red-400" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {s.signingRequestId && (
+                          <button
+                            onClick={() => handleResendEmailToSigner(s)}
+                            disabled={resendingId === s.id}
+                            className="p-1.5 rounded-lg hover:bg-zinc-800 transition-colors text-blue-400 hover:text-blue-300 disabled:opacity-50"
+                            title="Resend email individually"
+                          >
+                            {resendingId === s.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                            ) : resendSuccessId === s.id ? (
+                              <Check className="w-4 h-4 text-green-400" />
+                            ) : (
+                              <Mail className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setSigners(prev => prev.filter(x => x.id !== s.id))}
+                          className="p-1.5 rounded-lg hover:bg-zinc-800 transition-colors text-zinc-500 hover:text-red-400"
+                          title="Remove signer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
 
                     <div>
@@ -2866,7 +3400,7 @@ const LegalDocumentsAdmin: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-zinc-700 flex-shrink-0">
               <button
                 onClick={() => {
                   setIsSigningModalOpen(false);
