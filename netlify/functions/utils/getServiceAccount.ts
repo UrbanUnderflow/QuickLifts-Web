@@ -49,7 +49,7 @@ export function initAdmin(): typeof admin {
   // Try split environment variables method.
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  let privateKey = process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_SECRET_KEY;
 
   // Handle split private key (for very long keys).
   if (!privateKey && process.env.FIREBASE_PRIVATE_KEY_1) {
@@ -126,7 +126,7 @@ export async function getFirebaseAdmin(): Promise<admin.app.App> {
   // Try split environment variables method
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  let privateKey = process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_SECRET_KEY;
 
   // Handle split private key (for very long keys)
   if (!privateKey && process.env.FIREBASE_PRIVATE_KEY_1) {
@@ -141,7 +141,7 @@ export async function getFirebaseAdmin(): Promise<admin.app.App> {
   if (projectId && clientEmail && privateKey) {
     // Handle various formats of the private key
     let formattedPrivateKey = privateKey.trim();
-    
+
     // Remove surrounding quotes if present
     if (formattedPrivateKey.startsWith('"') && formattedPrivateKey.endsWith('"')) {
       formattedPrivateKey = formattedPrivateKey.slice(1, -1);
@@ -149,17 +149,17 @@ export async function getFirebaseAdmin(): Promise<admin.app.App> {
     if (formattedPrivateKey.startsWith("'") && formattedPrivateKey.endsWith("'")) {
       formattedPrivateKey = formattedPrivateKey.slice(1, -1);
     }
-    
+
     // If the key contains literal \n strings, replace them with actual newlines
     if (formattedPrivateKey.includes('\\n')) {
       formattedPrivateKey = formattedPrivateKey.replace(/\\n/g, '\n');
     }
-    
+
     // If it's been double-escaped (\\\\n), handle that too
     if (formattedPrivateKey.includes('\\\\n')) {
       formattedPrivateKey = formattedPrivateKey.replace(/\\\\n/g, '\n');
     }
-    
+
     // If the key is missing proper PEM headers/footers, try to add them
     if (!formattedPrivateKey.includes('-----BEGIN')) {
       // If it's just the key material without markers, add them
@@ -170,7 +170,7 @@ export async function getFirebaseAdmin(): Promise<admin.app.App> {
         throw new Error('Invalid private key format - missing PEM headers');
       }
     }
-    
+
     try {
       adminApp = admin.initializeApp({
         credential: admin.credential.cert({

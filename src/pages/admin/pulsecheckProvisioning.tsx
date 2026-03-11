@@ -1,0 +1,1737 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import Head from 'next/head';
+import { AlertTriangle, ArrowRight, Building2, Clipboard, ClipboardList, ExternalLink, Loader2, MailPlus, ShieldPlus, Sparkles, Stethoscope, Users2, X } from 'lucide-react';
+import type { Timestamp } from 'firebase/firestore';
+import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
+import { useUser } from '../../hooks/useUser';
+import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
+import type {
+  PulseCheckAdminContact,
+  CreatePulseCheckOrganizationInput,
+  CreatePulseCheckTeamInput,
+  PulseCheckAuntEdnaClinicianProfile,
+  PulseCheckClinicianBridgeMode,
+  PulseCheckClinicianProfileType,
+  PulseCheckInviteLink,
+  PulseCheckInvitePolicy,
+  PulseCheckOrganization,
+  PulseCheckOrganizationStatus,
+  PulseCheckStudyPosture,
+  PulseCheckTeam,
+  PulseCheckTeamStatus,
+} from '../../api/firebase/pulsecheckProvisioning/types';
+
+const defaultOrganizationForm: CreatePulseCheckOrganizationInput = {
+  displayName: '',
+  legalName: '',
+  organizationType: 'athletic-department',
+  primaryCustomerAdminName: '',
+  primaryCustomerAdminEmail: '',
+  defaultStudyPosture: 'operational',
+  defaultClinicianBridgeMode: 'optional',
+  notes: '',
+};
+
+const ORGANIZATION_TYPE_OPTIONS = [
+  { value: 'athletic-department', label: 'Athletic Department' },
+  { value: 'professional-sports-team', label: 'Professional Sports Team' },
+  { value: 'athletic-team', label: 'Athletic Team' },
+  { value: 'athletic-club', label: 'Athletic Club' },
+  { value: 'sports-academy', label: 'Sports Academy' },
+  { value: 'school-program', label: 'School Program' },
+  { value: 'brand', label: 'Brand' },
+  { value: 'clinic-partner', label: 'Clinic Partner' },
+  { value: 'research-partner', label: 'Research Partner' },
+  { value: 'other', label: 'Other' },
+];
+
+const defaultTeamForm: CreatePulseCheckTeamInput = {
+  organizationId: '',
+  displayName: '',
+  teamType: 'sport-team',
+  sportOrProgram: '',
+  siteLabel: '',
+  defaultAdminName: '',
+  defaultAdminEmail: '',
+  defaultInvitePolicy: 'admin-and-staff',
+  defaultClinicianProfileId: '',
+  defaultClinicianProfileName: '',
+  defaultClinicianProfileType: 'group',
+  defaultClinicianProfileSource: 'pulsecheck-local',
+  notes: '',
+};
+
+const TEAM_TYPE_OPTIONS = [
+  { value: 'sport-team', label: 'Sport Team' },
+  { value: 'performance-staff-unit', label: 'Performance Staff Unit' },
+  { value: 'sports-medicine-unit', label: 'Sports Medicine Unit' },
+  { value: 'rehab-group', label: 'Rehab Group' },
+  { value: 'academy-squad', label: 'Academy Squad' },
+  { value: 'club-team', label: 'Club Team' },
+  { value: 'brand-athlete-group', label: 'Brand Athlete Group' },
+  { value: 'research-group', label: 'Research Group' },
+  { value: 'other', label: 'Other' },
+];
+
+const CLINICIAN_PROFILE_TYPE_OPTIONS: Array<{ value: PulseCheckClinicianProfileType; label: string }> = [
+  { value: 'group', label: 'Clinical Group' },
+  { value: 'individual', label: 'Individual Clinician' },
+  { value: 'provider', label: 'Provider Network' },
+];
+
+const formatTimestamp = (value?: Timestamp | null) => {
+  if (!value || typeof value.toDate !== 'function') return 'Pending write';
+  return value.toDate().toLocaleString();
+};
+
+const getOrganizationStatusDisplay = (status?: PulseCheckOrganizationStatus) => {
+  switch (status) {
+    case 'ready-for-activation':
+      return { label: 'Ready for Activation', tone: 'border-amber-500/30 text-amber-200 bg-amber-500/10' };
+    case 'active':
+      return { label: 'Active', tone: 'border-green-500/30 text-green-200 bg-green-500/10' };
+    case 'implementation-hold':
+      return { label: 'Implementation Hold', tone: 'border-red-500/30 text-red-200 bg-red-500/10' };
+    case 'archived':
+      return { label: 'Archived', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+    case 'draft':
+    case 'provisioning':
+    default:
+      return { label: 'Provisioning', tone: 'border-blue-500/30 text-blue-200 bg-blue-500/10' };
+  }
+};
+
+const getTeamStatusDisplay = (status?: PulseCheckTeamStatus) => {
+  switch (status) {
+    case 'ready-for-activation':
+      return { label: 'Ready for Activation', tone: 'border-amber-500/30 text-amber-200 bg-amber-500/10' };
+    case 'active':
+      return { label: 'Active', tone: 'border-green-500/30 text-green-200 bg-green-500/10' };
+    case 'paused':
+      return { label: 'Paused', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+    case 'archived':
+      return { label: 'Archived', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+    case 'draft':
+    case 'provisioning':
+    default:
+      return { label: 'Provisioning', tone: 'border-blue-500/30 text-blue-200 bg-blue-500/10' };
+  }
+};
+
+type OnboardingModalState =
+  | {
+      channel: 'admin';
+      organization: PulseCheckOrganization;
+      team: PulseCheckTeam;
+      clinicianProfile?: PulseCheckAuntEdnaClinicianProfile | null;
+    }
+  | {
+      channel: 'clinician';
+      organization: PulseCheckOrganization;
+      team: PulseCheckTeam;
+      clinicianProfile: PulseCheckAuntEdnaClinicianProfile;
+    };
+
+const PulseCheckProvisioningPage: React.FC = () => {
+  const currentUser = useUser();
+  const [organizations, setOrganizations] = useState<PulseCheckOrganization[]>([]);
+  const [teams, setTeams] = useState<PulseCheckTeam[]>([]);
+  const [clinicianProfiles, setClinicianProfiles] = useState<PulseCheckAuntEdnaClinicianProfile[]>([]);
+  const [inviteLinks, setInviteLinks] = useState<PulseCheckInviteLink[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [orgForm, setOrgForm] = useState<CreatePulseCheckOrganizationInput>(defaultOrganizationForm);
+  const [teamForm, setTeamForm] = useState<CreatePulseCheckTeamInput>(defaultTeamForm);
+  const [clinicianSearchTerm, setClinicianSearchTerm] = useState('');
+  const [clinicianLinkMode, setClinicianLinkMode] = useState<'existing' | 'create'>('existing');
+  const [clinicianSubmitting, setClinicianSubmitting] = useState(false);
+  const [newClinicianProfileForm, setNewClinicianProfileForm] = useState({
+    displayName: '',
+    organizationName: '',
+    email: '',
+    profileType: 'group' as PulseCheckClinicianProfileType,
+  });
+  const [orgSubmitting, setOrgSubmitting] = useState(false);
+  const [teamSubmitting, setTeamSubmitting] = useState(false);
+  const [activationCreatingTeamId, setActivationCreatingTeamId] = useState<string | null>(null);
+  const [clinicianLinkCreatingProfileId, setClinicianLinkCreatingProfileId] = useState<string | null>(null);
+  const [adminLinkCreatingEmail, setAdminLinkCreatingEmail] = useState<string | null>(null);
+  const [onboardingModal, setOnboardingModal] = useState<OnboardingModalState | null>(null);
+  const [additionalAdminForm, setAdditionalAdminForm] = useState({ name: '', email: '' });
+  const [additionalAdminSubmitting, setAdditionalAdminSubmitting] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const selectedOrganization = useMemo(
+    () => organizations.find((organization) => organization.id === teamForm.organizationId) || null,
+    [organizations, teamForm.organizationId]
+  );
+  const teamAdminOptions = useMemo(() => {
+    if (!selectedOrganization) return [];
+
+    const contacts: Array<{ value: string; label: string; name: string; email: string }> = [];
+    const seenEmails = new Set<string>();
+    const pushContact = (name?: string, email?: string) => {
+      if (!email) return;
+      const normalizedEmail = email.trim().toLowerCase();
+      if (!normalizedEmail || seenEmails.has(normalizedEmail)) return;
+      seenEmails.add(normalizedEmail);
+      contacts.push({
+        value: email,
+        label: name ? `${name} (${email})` : email,
+        name: name || '',
+        email,
+      });
+    };
+
+    pushContact(selectedOrganization.primaryCustomerAdminName, selectedOrganization.primaryCustomerAdminEmail);
+    (selectedOrganization.additionalAdminContacts || []).forEach((contact) => pushContact(contact.name, contact.email));
+
+    return contacts;
+  }, [selectedOrganization]);
+  const onboardingAdminRecipients = useMemo(() => {
+    if (!onboardingModal || onboardingModal.channel !== 'admin') return [];
+
+    const recipients: Array<PulseCheckAdminContact & { kind: 'primary' | 'additional' | 'team-default' }> = [];
+    const seenEmails = new Set<string>();
+    const pushRecipient = (kind: 'primary' | 'additional' | 'team-default', name?: string, email?: string) => {
+      if (!email) return;
+      const normalizedEmail = email.trim().toLowerCase();
+      if (!normalizedEmail || seenEmails.has(normalizedEmail)) return;
+      seenEmails.add(normalizedEmail);
+      recipients.push({ kind, name: name || '', email });
+    };
+
+    pushRecipient('primary', onboardingModal.organization.primaryCustomerAdminName, onboardingModal.organization.primaryCustomerAdminEmail);
+    (onboardingModal.organization.additionalAdminContacts || []).forEach((contact) =>
+      pushRecipient('additional', contact.name, contact.email)
+    );
+    pushRecipient('team-default', onboardingModal.team.defaultAdminName, onboardingModal.team.defaultAdminEmail);
+
+    return recipients;
+  }, [onboardingModal]);
+  const filteredClinicianProfiles = useMemo(() => {
+    const normalizedTerm = clinicianSearchTerm.trim().toLowerCase();
+    if (!normalizedTerm) return clinicianProfiles;
+
+    return clinicianProfiles.filter((profile) =>
+      [profile.displayName, profile.organizationName, profile.email, profile.profileType]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedTerm))
+    );
+  }, [clinicianProfiles, clinicianSearchTerm]);
+  const selectedClinicianProfile = useMemo(
+    () => clinicianProfiles.find((profile) => profile.id === teamForm.defaultClinicianProfileId) || null,
+    [clinicianProfiles, teamForm.defaultClinicianProfileId]
+  );
+  const clinicianProfileById = useMemo(
+    () => new Map(clinicianProfiles.map((profile) => [profile.id, profile])),
+    [clinicianProfiles]
+  );
+  const inviteLinksByTeamId = useMemo(() => {
+    const nextMap = new Map<string, PulseCheckInviteLink[]>();
+    inviteLinks.forEach((link) => {
+      const current = nextMap.get(link.teamId) || [];
+      current.push(link);
+      nextMap.set(link.teamId, current);
+    });
+    return nextMap;
+  }, [inviteLinks]);
+  const inviteLinksByClinicianProfileId = useMemo(() => {
+    const nextMap = new Map<string, PulseCheckInviteLink[]>();
+    inviteLinks.forEach((link) => {
+      if (!link.clinicianProfileId) return;
+      const current = nextMap.get(link.clinicianProfileId) || [];
+      current.push(link);
+      nextMap.set(link.clinicianProfileId, current);
+    });
+    return nextMap;
+  }, [inviteLinks]);
+  const organizationBundles = useMemo(
+    () =>
+      organizations.map((organization) => {
+        const teamsForOrganization = teams
+          .filter((team) => team.organizationId === organization.id)
+          .map((team) => ({
+            team,
+            clinicianProfile: team.defaultClinicianProfileId
+              ? clinicianProfileById.get(team.defaultClinicianProfileId) || null
+              : null,
+            adminActivationLinks:
+              (inviteLinksByTeamId.get(team.id) || []).filter((link) => link.inviteType === 'admin-activation' && link.status === 'active'),
+            clinicianOnboardingLink:
+              team.defaultClinicianProfileId
+                ? (inviteLinksByClinicianProfileId.get(team.defaultClinicianProfileId) || []).find(
+                    (link) => link.inviteType === 'clinician-onboarding' && link.status === 'active' && link.teamId === team.id
+                  ) || null
+                : null,
+          }));
+
+        return {
+          organization,
+          teams: teamsForOrganization,
+        };
+      }),
+    [organizations, teams, clinicianProfileById, inviteLinksByTeamId, inviteLinksByClinicianProfileId]
+  );
+  const onboardingModalLinks = useMemo(() => {
+    if (!onboardingModal) return [];
+
+    return inviteLinks.filter((link) => {
+      if (link.status !== 'active') return false;
+      if (link.organizationId !== onboardingModal.organization.id) return false;
+      if (link.teamId !== onboardingModal.team.id) return false;
+
+      if (onboardingModal.channel === 'admin') {
+        return link.inviteType === 'admin-activation';
+      }
+
+      return link.inviteType === 'clinician-onboarding' && link.clinicianProfileId === onboardingModal.clinicianProfile.id;
+    });
+  }, [inviteLinks, onboardingModal]);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setMessage(null);
+    try {
+      const [organizationResults, teamResults, clinicianProfileResults, inviteLinkResults] = await Promise.all([
+        pulseCheckProvisioningService.listOrganizations(),
+        pulseCheckProvisioningService.listTeams(),
+        pulseCheckProvisioningService.listClinicianProfiles(),
+        pulseCheckProvisioningService.listInviteLinks(),
+      ]);
+      setOrganizations(organizationResults);
+      setTeams(teamResults);
+      setClinicianProfiles(clinicianProfileResults);
+      setInviteLinks(inviteLinkResults);
+      setTeamForm((current) => ({
+        ...current,
+        organizationId: current.organizationId || organizationResults[0]?.id || '',
+        defaultAdminName:
+          current.defaultAdminName ||
+          organizationResults.find((organization) => organization.id === (current.organizationId || organizationResults[0]?.id))
+            ?.primaryCustomerAdminName ||
+          '',
+        defaultAdminEmail:
+          current.defaultAdminEmail ||
+          organizationResults.find((organization) => organization.id === (current.organizationId || organizationResults[0]?.id))
+            ?.primaryCustomerAdminEmail ||
+          '',
+      }));
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to load provisioning data:', error);
+      setMessage({ type: 'error', text: 'Failed to load PulseCheck provisioning data.' });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    if (!selectedOrganization?.displayName) return;
+
+    setNewClinicianProfileForm((current) => (
+      current.organizationName
+        ? current
+        : {
+            ...current,
+            organizationName: selectedOrganization.displayName,
+          }
+    ));
+  }, [selectedOrganization]);
+
+  useEffect(() => {
+    if (!onboardingModal) return;
+
+    const refreshedOrganization = organizations.find((organization) => organization.id === onboardingModal.organization.id);
+    const refreshedTeam = teams.find((team) => team.id === onboardingModal.team.id);
+    const refreshedClinicianProfile =
+      onboardingModal.channel === 'clinician'
+        ? clinicianProfiles.find((profile) => profile.id === onboardingModal.clinicianProfile.id)
+        : onboardingModal.clinicianProfile
+          ? clinicianProfiles.find((profile) => profile.id === onboardingModal.clinicianProfile?.id) || onboardingModal.clinicianProfile
+          : null;
+
+    if (!refreshedOrganization || !refreshedTeam) return;
+
+    setOnboardingModal((current) => {
+      if (!current || current.organization.id !== refreshedOrganization.id || current.team.id !== refreshedTeam.id) return current;
+
+      if (current.channel === 'clinician') {
+        if (!refreshedClinicianProfile) return current;
+        if (
+          current.organization === refreshedOrganization &&
+          current.team === refreshedTeam &&
+          current.clinicianProfile === refreshedClinicianProfile
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          organization: refreshedOrganization,
+          team: refreshedTeam,
+          clinicianProfile: refreshedClinicianProfile,
+        };
+      }
+
+      if (
+        current.organization === refreshedOrganization &&
+        current.team === refreshedTeam &&
+        (current.clinicianProfile || null) === (refreshedClinicianProfile || current.clinicianProfile || null)
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        organization: refreshedOrganization,
+        team: refreshedTeam,
+        clinicianProfile: refreshedClinicianProfile || current.clinicianProfile || null,
+      };
+    });
+  }, [organizations, teams, clinicianProfiles, onboardingModal]);
+
+  const handleOrgFieldChange = (
+    field: keyof CreatePulseCheckOrganizationInput,
+    value: string | PulseCheckStudyPosture | PulseCheckClinicianBridgeMode
+  ) => {
+    setOrgForm((current) => ({ ...current, [field]: value }));
+    setMessage(null);
+  };
+
+  const handleTeamFieldChange = (
+    field: keyof CreatePulseCheckTeamInput,
+    value: string | PulseCheckInvitePolicy
+  ) => {
+    setTeamForm((current) => {
+      if (field === 'organizationId') {
+        const nextOrganization = organizations.find((organization) => organization.id === value) || null;
+        setNewClinicianProfileForm((currentProfile) => ({
+          ...currentProfile,
+          organizationName: currentProfile.organizationName || nextOrganization?.displayName || '',
+        }));
+        return {
+          ...current,
+          organizationId: String(value),
+          defaultAdminName: nextOrganization?.primaryCustomerAdminName || '',
+          defaultAdminEmail: nextOrganization?.primaryCustomerAdminEmail || '',
+        };
+      }
+
+      return { ...current, [field]: value };
+    });
+    setMessage(null);
+  };
+
+  const handleTeamAdminSelection = (email: string) => {
+    const selectedAdmin = teamAdminOptions.find((option) => option.value === email);
+    setTeamForm((current) => ({
+      ...current,
+      defaultAdminName: selectedAdmin?.name || '',
+      defaultAdminEmail: selectedAdmin?.email || '',
+    }));
+    setMessage(null);
+  };
+
+  const handleSelectClinicianProfile = (profile: PulseCheckAuntEdnaClinicianProfile) => {
+    setTeamForm((current) => ({
+      ...current,
+      defaultClinicianProfileId: profile.id,
+      defaultClinicianExternalProfileId: profile.auntEdnaProfileId || profile.externalProfileId || '',
+      defaultClinicianProfileName: profile.displayName,
+      defaultClinicianProfileType: profile.profileType,
+      defaultClinicianProfileSource: profile.source,
+    }));
+    setMessage(null);
+  };
+
+  const handleCreateClinicianProfile = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!newClinicianProfileForm.displayName.trim()) {
+      setMessage({ type: 'error', text: 'Clinician profile display name is required.' });
+      return;
+    }
+
+    if (!newClinicianProfileForm.email.trim()) {
+      setMessage({ type: 'error', text: 'Contact email is required for clinician profile creation.' });
+      return;
+    }
+
+    setClinicianSubmitting(true);
+    setMessage(null);
+
+    try {
+      const createdProfile = await pulseCheckProvisioningService.createClinicianProfile({
+        displayName: newClinicianProfileForm.displayName.trim(),
+        organizationName: newClinicianProfileForm.organizationName.trim(),
+        email: newClinicianProfileForm.email.trim(),
+        profileType: newClinicianProfileForm.profileType,
+        source: 'pulsecheck-local',
+        syncStatus: 'pending-sync',
+      });
+
+      setClinicianProfiles((current) =>
+        [createdProfile, ...current.filter((profile) => profile.id !== createdProfile.id)].sort(
+          (left, right) => left.displayName.localeCompare(right.displayName)
+        )
+      );
+      handleSelectClinicianProfile(createdProfile);
+      setClinicianLinkMode('existing');
+      setClinicianSearchTerm(createdProfile.displayName);
+      setNewClinicianProfileForm({
+        displayName: '',
+        organizationName: selectedOrganization?.displayName || '',
+        email: '',
+        profileType: 'group',
+      });
+      setMessage({ type: 'success', text: 'Clinician profile saved locally and attached to the team draft. It can sync to AuntEdna later once APIs are live.' });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to create local clinician profile:', error);
+      setMessage({ type: 'error', text: 'Failed to create clinician profile.' });
+    } finally {
+      setClinicianSubmitting(false);
+    }
+  };
+
+  const handleCreateOrganization = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!orgForm.displayName.trim() || !orgForm.legalName.trim() || !orgForm.primaryCustomerAdminEmail?.trim()) {
+      setMessage({ type: 'error', text: 'Display name, legal name, and customer admin email are required.' });
+      return;
+    }
+
+    setOrgSubmitting(true);
+    setMessage(null);
+
+    try {
+      const createdId = await pulseCheckProvisioningService.createOrganization({
+        ...orgForm,
+        implementationOwnerUserId: currentUser?.id || '',
+        implementationOwnerEmail: currentUser?.email || '',
+      });
+
+      setOrgForm(defaultOrganizationForm);
+      await loadData();
+      setTeamForm((current) => ({
+        ...current,
+        organizationId: createdId,
+        defaultAdminName: current.defaultAdminName || orgForm.primaryCustomerAdminName || '',
+        defaultAdminEmail: current.defaultAdminEmail || orgForm.primaryCustomerAdminEmail || '',
+      }));
+      setMessage({ type: 'success', text: 'Organization created. You can now create the first team under it.' });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to create organization:', error);
+      setMessage({ type: 'error', text: 'Failed to create organization.' });
+    } finally {
+      setOrgSubmitting(false);
+    }
+  };
+
+  const handleCreateTeam = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!teamForm.organizationId || !teamForm.displayName.trim() || !teamForm.sportOrProgram.trim()) {
+      setMessage({ type: 'error', text: 'Organization, team name, and sport or program are required.' });
+      return;
+    }
+
+    if (!teamForm.defaultClinicianProfileId || !teamForm.defaultClinicianProfileName) {
+      setMessage({
+        type: 'error',
+        text: 'Select or create a clinician profile before creating the team.',
+      });
+      return;
+    }
+
+    setTeamSubmitting(true);
+    setMessage(null);
+
+    try {
+      await pulseCheckProvisioningService.createTeam(teamForm);
+      const selectedOrganizationId = teamForm.organizationId;
+      const selectedOrganization = organizations.find((organization) => organization.id === selectedOrganizationId);
+      setTeamForm({
+        ...defaultTeamForm,
+        organizationId: selectedOrganizationId,
+        defaultAdminName: selectedOrganization?.primaryCustomerAdminName || '',
+        defaultAdminEmail: selectedOrganization?.primaryCustomerAdminEmail || '',
+      });
+      setClinicianSearchTerm('');
+      setNewClinicianProfileForm((current) => ({
+        ...current,
+        displayName: '',
+        email: '',
+        organizationName: selectedOrganization?.displayName || '',
+        profileType: 'group',
+      }));
+      await loadData();
+      setMessage({
+        type: 'success',
+        text: 'Team created with its default clinician profile attached. The next slice should generate the admin activation link from this team record.',
+      });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to create team:', error);
+      setMessage({ type: 'error', text: 'Failed to create team.' });
+    } finally {
+      setTeamSubmitting(false);
+    }
+  };
+
+  const handleCreateAdminActivationLink = async (team: PulseCheckTeam, targetEmail?: string) => {
+    if (!targetEmail?.trim()) {
+      setMessage({ type: 'error', text: 'An admin email is required before generating an onboarding link.' });
+      return;
+    }
+
+    setActivationCreatingTeamId(team.id);
+    setAdminLinkCreatingEmail(targetEmail);
+    setMessage(null);
+
+    try {
+      await pulseCheckProvisioningService.createAdminActivationLink({
+        organizationId: team.organizationId,
+        teamId: team.id,
+        targetEmail,
+        createdByUserId: currentUser?.id || '',
+        createdByEmail: currentUser?.email || '',
+      });
+
+      await loadData();
+      setMessage({
+        type: 'success',
+        text: `Admin activation link created for ${targetEmail}. ${team.displayName} is ready for activation.`,
+      });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to create admin activation link:', error);
+      setMessage({ type: 'error', text: 'Failed to create admin activation link.' });
+    } finally {
+      setActivationCreatingTeamId(null);
+      setAdminLinkCreatingEmail(null);
+    }
+  };
+
+  const handleCopyActivationLink = async (activationUrl: string) => {
+    try {
+      await navigator.clipboard.writeText(activationUrl);
+      setMessage({ type: 'success', text: 'Admin activation link copied to clipboard.' });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to copy admin activation link:', error);
+      setMessage({ type: 'error', text: 'Failed to copy admin activation link.' });
+    }
+  };
+
+  const handleOpenOnboardingModal = (input: OnboardingModalState) => {
+    setOnboardingModal(input);
+    setAdditionalAdminForm({ name: '', email: '' });
+    setMessage(null);
+  };
+
+  const handleCloseOnboardingModal = () => {
+    setOnboardingModal(null);
+  };
+
+  const handleCreateClinicianOnboardingLink = async (
+    organization: PulseCheckOrganization,
+    team: PulseCheckTeam,
+    clinicianProfile: PulseCheckAuntEdnaClinicianProfile
+  ) => {
+    setClinicianLinkCreatingProfileId(clinicianProfile.id);
+    setMessage(null);
+
+    try {
+      await pulseCheckProvisioningService.createClinicianOnboardingLink({
+        organizationId: organization.id,
+        teamId: team.id,
+        clinicianProfileId: clinicianProfile.id,
+        targetEmail: clinicianProfile.email,
+        createdByUserId: currentUser?.id || '',
+        createdByEmail: currentUser?.email || '',
+      });
+
+      await loadData();
+      setMessage({
+        type: 'success',
+        text: `Clinician onboarding link created for ${clinicianProfile.displayName}.`,
+      });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to create clinician onboarding link:', error);
+      setMessage({ type: 'error', text: 'Failed to create clinician onboarding link.' });
+    } finally {
+      setClinicianLinkCreatingProfileId(null);
+    }
+  };
+
+  const handleSendOnboardingEmail = (link: PulseCheckInviteLink) => {
+    const recipient =
+      onboardingModal?.channel === 'clinician'
+        ? onboardingModal.clinicianProfile.email || link.targetEmail || ''
+        : onboardingModal?.team.defaultAdminEmail || link.targetEmail || '';
+
+    const subject =
+      onboardingModal?.channel === 'clinician'
+        ? `AuntEdna onboarding for ${onboardingModal.team.displayName}`
+        : `PulseCheck admin onboarding for ${onboardingModal?.organization.displayName || 'your organization'}`;
+
+    const body =
+      onboardingModal?.channel === 'clinician'
+        ? `Your clinician handoff record is ready for ${onboardingModal.organization.displayName} / ${onboardingModal.team.displayName}.\n\nUse this onboarding link:\n${link.activationUrl}\n\nFor now this lands on the PulseCheck handoff page until AuntEdna's onboarding API is live.`
+        : `Your PulseCheck organization shell is ready.\n\nOrganization: ${onboardingModal?.organization.displayName}\nTeam: ${onboardingModal?.team.displayName}\n\nUse this onboarding link:\n${link.activationUrl}`;
+
+    if (typeof window === 'undefined') return;
+
+    window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  const handleAddAdditionalAdmin = async () => {
+    if (!onboardingModal || onboardingModal.channel !== 'admin') return;
+    if (!additionalAdminForm.email.trim()) {
+      setMessage({ type: 'error', text: 'Admin email is required.' });
+      return;
+    }
+
+    setAdditionalAdminSubmitting(true);
+    setMessage(null);
+
+    try {
+      await pulseCheckProvisioningService.addOrganizationAdminContact({
+        organizationId: onboardingModal.organization.id,
+        name: additionalAdminForm.name,
+        email: additionalAdminForm.email,
+      });
+      const addedEmail = additionalAdminForm.email;
+      setAdditionalAdminForm({ name: '', email: '' });
+      await loadData();
+      setMessage({ type: 'success', text: `Added ${addedEmail} as an additional organization admin contact.` });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to add organization admin contact:', error);
+      setMessage({ type: 'error', text: 'Failed to add additional admin contact.' });
+    } finally {
+      setAdditionalAdminSubmitting(false);
+    }
+  };
+
+  return (
+    <AdminRouteGuard>
+      <div className="min-h-screen bg-[#05070c] text-white">
+        <Head>
+          <title>PulseCheck Provisioning | Pulse Admin</title>
+          <meta name="robots" content="noindex,nofollow" />
+        </Head>
+
+        <div className="mx-auto flex w-full max-w-[1480px] flex-col gap-6 px-4 py-8 md:px-6 md:py-10">
+          <header className="space-y-3">
+            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">PulseCheck Admin</p>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h1 className="text-3xl font-semibold text-white">PulseCheck Provisioning</h1>
+                <p className="mt-2 max-w-4xl text-sm text-zinc-300">
+                  First implementation slice for the provisioning model. This page lets Pulse Check admins create the
+                  top-level organization and its initial team before we add admin activation links, invite generation,
+                  and pilot controls.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] px-4 py-3 text-sm text-zinc-300">
+                Signed in as <span className="font-medium text-white">{currentUser?.email || 'unknown user'}</span>
+              </div>
+            </div>
+          </header>
+
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+            <article className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] p-4">
+              <div className="flex items-center gap-3">
+                <Building2 className="h-5 w-5 text-blue-300" />
+                <h2 className="text-sm font-semibold text-white">Step 1: Create Organization</h2>
+              </div>
+              <p className="mt-2 text-sm text-zinc-300">
+                Create the top-level account and capture the first customer admin contact plus posture defaults.
+              </p>
+            </article>
+
+            <article className="rounded-2xl border border-green-500/20 bg-green-500/[0.06] p-4">
+              <div className="flex items-center gap-3">
+                <Users2 className="h-5 w-5 text-green-300" />
+                <h2 className="text-sm font-semibold text-white">Step 2: Create Team</h2>
+              </div>
+              <p className="mt-2 text-sm text-zinc-300">
+                Create the persistent team container under that organization. Team is separate from pilot.
+              </p>
+            </article>
+
+            <article className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.06] p-4">
+              <div className="flex items-center gap-3">
+                <Stethoscope className="h-5 w-5 text-purple-300" />
+                <h2 className="text-sm font-semibold text-white">Step 3: Connect Clinical Profile</h2>
+              </div>
+              <p className="mt-2 text-sm text-zinc-300">
+                Attach the team to a clinician profile record now, then let athlete-level overrides fall back to this default later.
+              </p>
+            </article>
+
+            <article className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
+              <div className="flex items-center gap-3">
+                <MailPlus className="h-5 w-5 text-amber-300" />
+                <h2 className="text-sm font-semibold text-white">Step 4: Generate Admin Activation</h2>
+              </div>
+              <p className="mt-2 text-sm text-zinc-300">
+                Once the shell is configured, generate the first customer admin activation link and hand off onboarding.
+              </p>
+            </article>
+          </section>
+
+          <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="max-w-3xl">
+                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Lifecycle Model</p>
+                <h2 className="mt-2 text-xl font-semibold text-white">Provisioning Lifecycle</h2>
+                <p className="mt-2 text-sm leading-7 text-zinc-300">
+                  Organization and team records move through three operational states: provisioning while PulseCheck assembles the shell,
+                  ready for activation once the onboarding link is issued, and active after the first customer admin completes handoff and
+                  takes ownership of the container.
+                </p>
+              </div>
+
+              <div className="grid w-full max-w-[520px] grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] p-4">
+                  <p className="text-xs uppercase tracking-wide text-blue-200">Provisioning</p>
+                  <p className="mt-2 text-sm text-zinc-300">Internal shell is being assembled.</p>
+                </div>
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
+                  <p className="text-xs uppercase tracking-wide text-amber-200">Ready for Activation</p>
+                  <p className="mt-2 text-sm text-zinc-300">Activation link exists and handoff can start.</p>
+                </div>
+                <div className="rounded-2xl border border-green-500/20 bg-green-500/[0.06] p-4">
+                  <p className="text-xs uppercase tracking-wide text-green-200">Active</p>
+                  <p className="mt-2 text-sm text-zinc-300">Customer admin redeemed the link and owns the container.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {message ? (
+            <div
+              className={`flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm ${
+                message.type === 'success'
+                  ? 'border-green-500/20 bg-green-500/[0.06] text-green-200'
+                  : 'border-red-500/20 bg-red-500/[0.06] text-red-200'
+              }`}
+            >
+              <AlertTriangle className="h-4 w-4" />
+              <span>{message.text}</span>
+            </div>
+          ) : null}
+
+          <main className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+            <div className="space-y-6">
+              <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
+                <div className="mb-5 flex items-center gap-3">
+                  <Building2 className="h-5 w-5 text-blue-300" />
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Create Organization</h2>
+                    <p className="text-sm text-zinc-400">Internal-only setup for the customer account shell.</p>
+                  </div>
+                </div>
+
+                <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreateOrganization}>
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Display Name</span>
+                    <input
+                      value={orgForm.displayName}
+                      onChange={(event) => handleOrgFieldChange('displayName', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
+                      placeholder="Hampton Athletics"
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Legal Name</span>
+                    <input
+                      value={orgForm.legalName}
+                      onChange={(event) => handleOrgFieldChange('legalName', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
+                      placeholder="Hampton University Athletics Department"
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Organization Type</span>
+                    <select
+                      value={orgForm.organizationType}
+                      onChange={(event) => handleOrgFieldChange('organizationType', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
+                    >
+                      {ORGANIZATION_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Default Study Posture</span>
+                    <select
+                      value={orgForm.defaultStudyPosture}
+                      onChange={(event) => handleOrgFieldChange('defaultStudyPosture', event.target.value as PulseCheckStudyPosture)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
+                    >
+                      <option value="operational">Operational</option>
+                      <option value="pilot">Pilot</option>
+                      <option value="research-eligible">Research Eligible</option>
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Customer Admin Name</span>
+                    <input
+                      value={orgForm.primaryCustomerAdminName}
+                      onChange={(event) => handleOrgFieldChange('primaryCustomerAdminName', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
+                      placeholder="Athletic Director"
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Customer Admin Email</span>
+                    <input
+                      type="email"
+                      value={orgForm.primaryCustomerAdminEmail}
+                      onChange={(event) => handleOrgFieldChange('primaryCustomerAdminEmail', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
+                      placeholder="admin@school.edu"
+                    />
+                  </label>
+
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Clinician Routing Requirement</span>
+                    <select
+                      value={orgForm.defaultClinicianBridgeMode}
+                      onChange={(event) =>
+                        handleOrgFieldChange('defaultClinicianBridgeMode', event.target.value as PulseCheckClinicianBridgeMode)
+                      }
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
+                    >
+                      <option value="none">None</option>
+                      <option value="optional">Optional</option>
+                      <option value="required">Required</option>
+                    </select>
+                  </label>
+
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Notes</span>
+                    <textarea
+                      value={orgForm.notes}
+                      onChange={(event) => handleOrgFieldChange('notes', event.target.value)}
+                      rows={4}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-blue-400"
+                      placeholder="Implementation notes, routing assumptions, or contract context."
+                    />
+                  </label>
+
+                  <div className="md:col-span-2 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={orgSubmitting}
+                      className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {orgSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Building2 className="h-4 w-4" />}
+                      {orgSubmitting ? 'Creating Organization...' : 'Create Organization'}
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
+                <div className="mb-5 flex items-center gap-3">
+                  <Users2 className="h-5 w-5 text-green-300" />
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Create Team</h2>
+                    <p className="text-sm text-zinc-400">Persistent sport or unit container inside the selected organization.</p>
+                  </div>
+                </div>
+
+                <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreateTeam}>
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Organization</span>
+                    <select
+                      value={teamForm.organizationId}
+                      onChange={(event) => handleTeamFieldChange('organizationId', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
+                    >
+                      <option value="">Select an organization</option>
+                      {organizations.map((organization) => (
+                        <option key={organization.id} value={organization.id}>
+                          {organization.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Team Name</span>
+                    <input
+                      value={teamForm.displayName}
+                      onChange={(event) => handleTeamFieldChange('displayName', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
+                      placeholder="Men's Basketball"
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Team Type</span>
+                    <select
+                      value={teamForm.teamType}
+                      onChange={(event) => handleTeamFieldChange('teamType', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
+                    >
+                      {TEAM_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Sport or Program</span>
+                    <input
+                      value={teamForm.sportOrProgram}
+                      onChange={(event) => handleTeamFieldChange('sportOrProgram', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
+                      placeholder="Basketball"
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Site / Campus Label (Optional)</span>
+                    <input
+                      value={teamForm.siteLabel}
+                      onChange={(event) => handleTeamFieldChange('siteLabel', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
+                      placeholder="Main Campus"
+                    />
+                  </label>
+
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Organization-Linked Team Admin</span>
+                    <select
+                      value={teamForm.defaultAdminEmail}
+                      onChange={(event) => handleTeamAdminSelection(event.target.value)}
+                      disabled={!selectedOrganization || teamAdminOptions.length === 0}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value="">
+                        {!selectedOrganization
+                          ? 'Select an organization first'
+                          : teamAdminOptions.length === 0
+                            ? 'No organization admin contact configured'
+                            : 'Select organization admin'}
+                      </option>
+                      {teamAdminOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-zinc-500">
+                      Team admins must come from the selected organization&apos;s admin contact data in this first slice.
+                    </p>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Who Can Create Invite Links</span>
+                    <select
+                      value={teamForm.defaultInvitePolicy}
+                      onChange={(event) => handleTeamFieldChange('defaultInvitePolicy', event.target.value as PulseCheckInvitePolicy)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
+                    >
+                      <option value="admin-only">Admin Only</option>
+                      <option value="admin-and-staff">Admin and Staff</option>
+                      <option value="admin-staff-and-coaches">Admin, Staff, and Coaches</option>
+                    </select>
+                  </label>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Selected Team Clinical Profile</span>
+                    <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3">
+                      {selectedClinicianProfile ? (
+                        <div className="space-y-1 text-sm text-zinc-300">
+                          <p className="font-medium text-white">{selectedClinicianProfile.displayName}</p>
+                          <p>
+                            Local Profile ID: <span className="text-zinc-400">{selectedClinicianProfile.id}</span>
+                          </p>
+                          <p>
+                            Type: <span className="text-zinc-400">{selectedClinicianProfile.profileType}</span>
+                          </p>
+                          <p>
+                            Organization: <span className="text-zinc-400">{selectedClinicianProfile.organizationName || 'Not set'}</span>
+                          </p>
+                          <p>
+                            Sync status: <span className="text-zinc-400">{selectedClinicianProfile.syncStatus}</span>
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-zinc-500">
+                          No clinician profile connected yet. Use the clinical profile card below before creating the team.
+                        </p>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-500">
+                      Routing rule: athlete-specific provider override later, otherwise fall back to this team default.
+                    </p>
+                  </div>
+
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Notes</span>
+                    <textarea
+                      value={teamForm.notes}
+                      onChange={(event) => handleTeamFieldChange('notes', event.target.value)}
+                      rows={4}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-green-400"
+                      placeholder="Roster scope, staffing notes, or activation assumptions."
+                    />
+                  </label>
+
+                  <div className="md:col-span-2 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={teamSubmitting || organizations.length === 0}
+                      className="inline-flex items-center gap-2 rounded-xl bg-green-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {teamSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users2 className="h-4 w-4" />}
+                      {teamSubmitting ? 'Creating Team...' : 'Create Team'}
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
+                <div className="mb-5 flex items-center gap-3">
+                  <Stethoscope className="h-5 w-5 text-purple-300" />
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Connect Clinical Profile</h2>
+                    <p className="text-sm text-zinc-400">
+                      For now, PulseCheck stores clinician profile records locally in Firestore and links the team to that record. These can sync to AuntEdna later once the APIs are available.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setClinicianLinkMode('existing')}
+                    className={`rounded-2xl border px-4 py-3 text-left transition ${
+                      clinicianLinkMode === 'existing'
+                        ? 'border-purple-400 bg-purple-500/[0.12] text-white'
+                        : 'border-zinc-800 bg-black/20 text-zinc-300 hover:border-zinc-700'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold">Link Existing Profile</p>
+                    <p className="mt-1 text-xs text-zinc-400">Search previously saved clinician profiles and attach one to this team.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClinicianLinkMode('create')}
+                    className={`rounded-2xl border px-4 py-3 text-left transition ${
+                      clinicianLinkMode === 'create'
+                        ? 'border-purple-400 bg-purple-500/[0.12] text-white'
+                        : 'border-zinc-800 bg-black/20 text-zinc-300 hover:border-zinc-700'
+                    }`}
+                  >
+                    <p className="text-sm font-semibold">Create New Profile</p>
+                    <p className="mt-1 text-xs text-zinc-400">Create a local clinician profile record now and sync it to AuntEdna later.</p>
+                  </button>
+                </div>
+
+                {clinicianLinkMode === 'existing' ? (
+                  <div className="space-y-4">
+                    <label className="block space-y-2">
+                      <span className="text-xs uppercase tracking-wide text-zinc-500">Search Saved Profiles</span>
+                      <input
+                        value={clinicianSearchTerm}
+                        onChange={(event) => setClinicianSearchTerm(event.target.value)}
+                        className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-purple-400"
+                        placeholder="Hampton, Carter, provider network..."
+                      />
+                    </label>
+
+                    <div className="space-y-3">
+                      {filteredClinicianProfiles.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-zinc-700 bg-black/10 px-4 py-5 text-sm text-zinc-500">
+                          No saved clinician profiles yet. Create one locally to keep moving on provisioning.
+                        </div>
+                      ) : (
+                        filteredClinicianProfiles.map((profile) => {
+                          const isSelected = profile.id === teamForm.defaultClinicianProfileId;
+                          return (
+                            <article
+                              key={profile.id}
+                              className={`rounded-2xl border p-4 transition ${
+                                isSelected ? 'border-purple-400 bg-purple-500/[0.08]' : 'border-zinc-800 bg-black/20'
+                              }`}
+                            >
+                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                <div className="space-y-1">
+                                  <p className="text-sm font-semibold text-white">{profile.displayName}</p>
+                                  <p className="text-xs text-zinc-400">Local profile ID: {profile.id}</p>
+                                  <p className="text-xs text-zinc-400">Type: {profile.profileType}</p>
+                                  <p className="text-xs text-zinc-400">Organization: {profile.organizationName || 'Not set'}</p>
+                                  <p className="text-xs text-zinc-400">Email: {profile.email || 'Not set'}</p>
+                                  <p className="text-xs text-zinc-400">Sync status: {profile.syncStatus}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSelectClinicianProfile(profile)}
+                                  className={`rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                                    isSelected
+                                      ? 'bg-purple-400 text-black'
+                                      : 'bg-zinc-800 text-white hover:bg-zinc-700'
+                                  }`}
+                                >
+                                  {isSelected ? 'Connected' : 'Connect to Team'}
+                                </button>
+                              </div>
+                            </article>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreateClinicianProfile}>
+                    <label className="space-y-2">
+                      <span className="text-xs uppercase tracking-wide text-zinc-500">Profile Display Name</span>
+                      <input
+                        value={newClinicianProfileForm.displayName}
+                        onChange={(event) =>
+                          setNewClinicianProfileForm((current) => ({ ...current, displayName: event.target.value }))
+                        }
+                        className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-purple-400"
+                        placeholder="Hampton Sports Medicine Main"
+                      />
+                    </label>
+
+                    <label className="space-y-2">
+                      <span className="text-xs uppercase tracking-wide text-zinc-500">Profile Type</span>
+                      <select
+                        value={newClinicianProfileForm.profileType}
+                        onChange={(event) =>
+                          setNewClinicianProfileForm((current) => ({
+                            ...current,
+                            profileType: event.target.value as PulseCheckClinicianProfileType,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-purple-400"
+                      >
+                        {CLINICIAN_PROFILE_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="space-y-2">
+                      <span className="text-xs uppercase tracking-wide text-zinc-500">Organization / Provider</span>
+                      <input
+                        value={newClinicianProfileForm.organizationName}
+                        onChange={(event) =>
+                          setNewClinicianProfileForm((current) => ({ ...current, organizationName: event.target.value }))
+                        }
+                        className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-purple-400"
+                        placeholder={selectedOrganization?.displayName || 'Clinical Partner'}
+                      />
+                    </label>
+
+                    <label className="space-y-2">
+                      <span className="text-xs uppercase tracking-wide text-zinc-500">Contact Email</span>
+                      <input
+                        type="email"
+                        value={newClinicianProfileForm.email}
+                        onChange={(event) =>
+                          setNewClinicianProfileForm((current) => ({ ...current, email: event.target.value }))
+                        }
+                        className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-purple-400"
+                        placeholder="sportsmed@hampton.edu"
+                        required
+                      />
+                    </label>
+
+                    <div className="md:col-span-2 rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
+                      Creating a profile here saves the initial bones of the clinician account handoff in PulseCheck, immediately selects it as the team default route, and gives us a record we can sync into AuntEdna later before completing clinician onboarding there through SSO.
+                    </div>
+
+                    <div className="md:col-span-2 flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={clinicianSubmitting}
+                        className="inline-flex items-center gap-2 rounded-xl bg-purple-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-purple-400 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {clinicianSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldPlus className="h-4 w-4" />}
+                        {clinicianSubmitting ? 'Creating Profile...' : 'Create Local Profile and Connect'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </section>
+            </div>
+
+            <div className="space-y-6">
+              <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
+                <div className="mb-4 flex items-center gap-3">
+                  <ClipboardList className="h-5 w-5 text-purple-300" />
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Connected Provisioning Map</h2>
+                    <p className="text-sm text-zinc-400">Live org, team, clinician, and activation state shown as one connected hierarchy.</p>
+                  </div>
+                </div>
+
+                {loading ? (
+                  <div className="flex items-center gap-2 rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading provisioning graph...
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {organizationBundles.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-zinc-700 bg-black/10 px-4 py-5 text-sm text-zinc-500">
+                        No organizations created yet.
+                      </div>
+                    ) : (
+                      organizationBundles.map(({ organization, teams: bundledTeams }) => {
+                        const orgStatus = getOrganizationStatusDisplay(organization.status);
+
+                        return (
+                          <article key={organization.id} className="rounded-[28px] border border-blue-500/15 bg-blue-500/[0.04] p-5">
+                            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-3">
+                                  <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.08] p-2.5">
+                                    <Building2 className="h-5 w-5 text-blue-300" />
+                                  </div>
+                                  <div>
+                                    <p className="text-lg font-semibold text-white">{organization.displayName}</p>
+                                    <p className="text-xs text-zinc-400">{organization.legalName}</p>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-1 gap-2 text-xs text-zinc-400 md:grid-cols-2">
+                                  <p>Type: {organization.organizationType}</p>
+                                  <p>Study posture: {organization.defaultStudyPosture}</p>
+                                  <p>Clinician routing requirement: {organization.defaultClinicianBridgeMode}</p>
+                                  <p>Customer admin: {organization.primaryCustomerAdminEmail || 'Not set'}</p>
+                                </div>
+                              </div>
+                              <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-wide ${orgStatus.tone}`}>
+                                {orgStatus.label}
+                              </span>
+                            </div>
+
+                            <div className="mt-5 space-y-4 border-l border-zinc-800/80 pl-4 md:pl-6">
+                              {bundledTeams.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed border-zinc-700 bg-black/10 px-4 py-5 text-sm text-zinc-500">
+                                  No teams attached yet.
+                                </div>
+                              ) : (
+                                bundledTeams.map(({ team, clinicianProfile, adminActivationLinks, clinicianOnboardingLink }) => {
+                                  const teamStatus = getTeamStatusDisplay(team.status);
+
+                                  return (
+                                    <div key={team.id} className="relative rounded-3xl border border-zinc-800 bg-black/20 p-4">
+                                      <div className="absolute -left-[31px] top-8 hidden h-px w-5 bg-zinc-800 md:block" />
+                                      <div className="flex flex-col gap-4">
+                                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                          <div>
+                                            <div className="flex items-center gap-3">
+                                              <div className="rounded-2xl border border-green-500/20 bg-green-500/[0.08] p-2">
+                                                <Users2 className="h-4 w-4 text-green-300" />
+                                              </div>
+                                              <div>
+                                                <p className="text-base font-semibold text-white">{team.displayName}</p>
+                                                <p className="text-xs text-zinc-400">
+                                                  {team.teamType} · {team.sportOrProgram}
+                                                </p>
+                                              </div>
+                                            </div>
+                                            <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-zinc-400 md:grid-cols-2">
+                                              <p>Invite policy: {team.defaultInvitePolicy}</p>
+                                              <p>Default admin: {team.defaultAdminEmail || 'Not set'}</p>
+                                              <p>Site / campus: {team.siteLabel || 'Not set'}</p>
+                                              <p>Created: {formatTimestamp(team.createdAt)}</p>
+                                            </div>
+                                          </div>
+                                          <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-wide ${teamStatus.tone}`}>
+                                            {teamStatus.label}
+                                          </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,0.9fr)_auto_minmax(0,1.1fr)] xl:items-stretch">
+                                          <div className="rounded-2xl border border-purple-500/20 bg-purple-500/[0.06] p-4">
+                                            <div className="flex items-start justify-between gap-3">
+                                              <div className="flex items-center gap-2">
+                                                <Stethoscope className="h-4 w-4 text-purple-300" />
+                                                <p className="text-sm font-semibold text-white">AuntEdna Clinician Onboarding</p>
+                                              </div>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  clinicianProfile
+                                                    ? handleOpenOnboardingModal({
+                                                        channel: 'clinician',
+                                                        organization,
+                                                        team,
+                                                        clinicianProfile,
+                                                      })
+                                                    : undefined
+                                                }
+                                                disabled={!clinicianProfile}
+                                                className="inline-flex items-center gap-1.5 rounded-xl border border-purple-400/30 px-3 py-2 text-[11px] font-semibold text-purple-100 transition hover:border-purple-300 hover:text-white disabled:cursor-not-allowed disabled:border-zinc-800 disabled:text-zinc-600"
+                                              >
+                                                <MailPlus className="h-3.5 w-3.5" />
+                                                Send Onboarding Link
+                                              </button>
+                                            </div>
+                                            {clinicianProfile ? (
+                                              <div className="mt-3 space-y-2 text-xs text-zinc-300">
+                                                <p className="font-medium text-white">{clinicianProfile.displayName}</p>
+                                                <p>{clinicianProfile.profileType} · {clinicianProfile.syncStatus}</p>
+                                                <p>{clinicianProfile.email || 'No email set'}</p>
+                                                <p>{clinicianProfile.organizationName || 'No organization label'}</p>
+                                                {clinicianOnboardingLink ? (
+                                                  <div className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-3">
+                                                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">Active clinician link</p>
+                                                    <p className="mt-1 truncate text-xs text-white">{clinicianOnboardingLink.activationUrl}</p>
+                                                  </div>
+                                                ) : (
+                                                  <p className="text-[11px] text-zinc-500">
+                                                    No clinician onboarding link created yet.
+                                                  </p>
+                                                )}
+                                              </div>
+                                            ) : (
+                                              <p className="mt-3 text-xs text-zinc-500">No clinician profile connected yet.</p>
+                                            )}
+                                          </div>
+
+                                          <div className="hidden items-center justify-center xl:flex">
+                                            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-800 bg-black/30">
+                                              <ArrowRight className="h-4 w-4 text-zinc-500" />
+                                            </div>
+                                          </div>
+
+                                          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.06] p-4">
+                                            <div className="flex items-start justify-between gap-3">
+                                              <div className="flex items-center gap-2">
+                                                <MailPlus className="h-4 w-4 text-amber-300" />
+                                                <p className="text-sm font-semibold text-white">PulseCheck Admin Onboarding</p>
+                                              </div>
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  handleOpenOnboardingModal({
+                                                    channel: 'admin',
+                                                    organization,
+                                                    team,
+                                                    clinicianProfile,
+                                                  })
+                                                }
+                                                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-400/30 px-3 py-2 text-[11px] font-semibold text-amber-100 transition hover:border-amber-300 hover:text-white"
+                                              >
+                                                <MailPlus className="h-3.5 w-3.5" />
+                                                Send Onboarding Link
+                                              </button>
+                                            </div>
+                                            {adminActivationLinks.length > 0 ? (
+                                              <div className="mt-3 space-y-3">
+                                                <div className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-3">
+                                                  <p className="text-[11px] uppercase tracking-wide text-zinc-500">Active admin links</p>
+                                                  <p className="mt-1 text-sm font-medium text-white">{adminActivationLinks.length}</p>
+                                                  <div className="mt-2 space-y-1">
+                                                    {adminActivationLinks.slice(0, 3).map((link) => (
+                                                      <p key={link.token} className="truncate text-[11px] text-zinc-400">
+                                                        {link.targetEmail || 'No email set'}
+                                                      </p>
+                                                    ))}
+                                                  </div>
+                                                </div>
+                                                <p className="text-[11px] text-zinc-500">
+                                                  Once redeemed, this should make the first external user the org admin and initial team admin.
+                                                </p>
+                                                <p className="text-[11px] text-zinc-600">
+                                                  Regenerating a link for the same admin email revokes the prior link for that recipient.
+                                                </p>
+                                              </div>
+                                            ) : (
+                                              <div className="mt-3 space-y-3">
+                                                <p className="text-xs text-zinc-400">
+                                                  No admin onboarding link has been issued yet. Open the onboarding modal to generate a unique handoff link, copy it, or draft the email.
+                                                </p>
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+              </section>
+            </div>
+          </main>
+
+          {onboardingModal ? (
+            <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 px-4 py-4 sm:px-6 sm:py-6">
+              <div className="flex min-h-full items-start justify-center">
+                <div className="my-auto flex w-full max-w-4xl max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-[28px] border border-zinc-800 bg-[#090f1c] p-5 shadow-2xl sm:p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Onboarding Link</p>
+                    <h2 className="mt-2 text-2xl font-semibold text-white">
+                      {onboardingModal.channel === 'admin' ? 'PulseCheck Admin Onboarding' : 'AuntEdna Clinician Onboarding'}
+                    </h2>
+                    <p className="mt-2 text-sm leading-7 text-zinc-300">
+                      {onboardingModal.channel === 'admin'
+                        ? `Manage PulseCheck onboarding links for the admin recipients tied to ${onboardingModal.organization.displayName}.`
+                        : `Send the clinician onboarding handoff to ${onboardingModal.clinicianProfile.email || 'the clinician'} for ${onboardingModal.team.displayName}.`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCloseOnboardingModal}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-zinc-800 bg-black/20 text-zinc-400 transition hover:border-zinc-700 hover:text-white"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-5 flex-1 overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                  <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                    <p className="text-xs uppercase tracking-wide text-zinc-500">Container</p>
+                    <p className="mt-2 text-sm font-medium text-white">
+                      {`${onboardingModal.organization.displayName} -> ${onboardingModal.team.displayName}`}
+                    </p>
+                    <p className="mt-3 text-xs text-zinc-500">
+                      {onboardingModal.channel === 'admin'
+                        ? 'Each admin recipient can have one active onboarding link at a time.'
+                        : `${onboardingModal.clinicianProfile.displayName} is the current clinician routing target for this team.`}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                    <p className="text-xs uppercase tracking-wide text-zinc-500">Link Behavior</p>
+                    <p className="mt-2 text-sm text-zinc-300">
+                      {onboardingModal.channel === 'admin'
+                        ? 'Generate a unique onboarding link per admin email. Regenerating for the same email revokes the old link and the old link stops working.'
+                        : 'There is one active clinician onboarding link for this clinician profile. Regenerating it revokes the old link and the old link stops working.'}
+                    </p>
+                  </div>
+                </div>
+
+                {onboardingModal.channel === 'admin' ? (
+                  <div className="mt-5 space-y-4">
+                    <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                      <p className="text-xs uppercase tracking-wide text-zinc-500">Add Additional Admin</p>
+                      <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)_auto]">
+                        <input
+                          value={additionalAdminForm.name}
+                          onChange={(event) => setAdditionalAdminForm((current) => ({ ...current, name: event.target.value }))}
+                          className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-amber-400"
+                          placeholder="Additional admin name"
+                        />
+                        <input
+                          type="email"
+                          value={additionalAdminForm.email}
+                          onChange={(event) => setAdditionalAdminForm((current) => ({ ...current, email: event.target.value }))}
+                          className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-amber-400"
+                          placeholder="admin2@school.edu"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleAddAdditionalAdmin()}
+                          disabled={additionalAdminSubmitting}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-400/30 px-4 py-2.5 text-sm font-semibold text-amber-100 transition hover:border-amber-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {additionalAdminSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users2 className="h-4 w-4" />}
+                          Add Admin
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {onboardingAdminRecipients.length === 0 ? (
+                        <div className="rounded-2xl border border-dashed border-zinc-700 bg-black/10 px-4 py-5 text-sm text-zinc-500">
+                          No admin recipients configured yet.
+                        </div>
+                      ) : (
+                        onboardingAdminRecipients.map((recipient) => {
+                          const activeLink =
+                            onboardingModalLinks.find((link) => (link.targetEmail || '').toLowerCase() === recipient.email.toLowerCase()) || null;
+                          const isGenerating =
+                            activationCreatingTeamId === onboardingModal.team.id &&
+                            adminLinkCreatingEmail?.toLowerCase() === recipient.email.toLowerCase();
+
+                          return (
+                            <div key={recipient.email} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-semibold text-white">{recipient.name || recipient.email}</p>
+                                    <span className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                                      {recipient.kind === 'primary'
+                                        ? 'Primary'
+                                        : recipient.kind === 'team-default'
+                                          ? 'Team Default'
+                                          : 'Additional'}
+                                    </span>
+                                  </div>
+                                  <p className="mt-1 text-xs text-zinc-400">{recipient.email}</p>
+                                  {activeLink ? (
+                                    <>
+                                      <div className="mt-3 rounded-xl border border-zinc-800 bg-black/30 px-3 py-3">
+                                        <p className="break-all text-xs leading-6 text-white">{activeLink.activationUrl}</p>
+                                      </div>
+                                      <p className="mt-1 text-[11px] text-zinc-500">Created: {formatTimestamp(activeLink.createdAt)}</p>
+                                    </>
+                                  ) : (
+                                    <p className="mt-3 text-xs text-zinc-500">No active onboarding link yet for this admin.</p>
+                                  )}
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 xl:max-w-[240px] xl:justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleCreateAdminActivationLink(onboardingModal.team, recipient.email)}
+                                    disabled={isGenerating}
+                                    className="inline-flex items-center gap-1.5 rounded-xl bg-amber-400 px-3 py-2 text-xs font-semibold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {isGenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                                    {activeLink ? 'Regenerate Link' : 'Generate Link'}
+                                  </button>
+                                  {activeLink ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleCopyActivationLink(activeLink.activationUrl)}
+                                        className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+                                      >
+                                        <Clipboard className="h-3.5 w-3.5" />
+                                        Copy
+                                      </button>
+                                      <a
+                                        href={activeLink.activationUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+                                      >
+                                        <ExternalLink className="h-3.5 w-3.5" />
+                                        Open
+                                      </a>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSendOnboardingEmail(activeLink)}
+                                        className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+                                      >
+                                        <MailPlus className="h-3.5 w-3.5" />
+                                        Draft Email
+                                      </button>
+                                    </>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-5 space-y-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void handleCreateClinicianOnboardingLink(
+                            onboardingModal.organization,
+                            onboardingModal.team,
+                            onboardingModal.clinicianProfile
+                          )
+                        }
+                        disabled={clinicianLinkCreatingProfileId === onboardingModal.clinicianProfile.id}
+                        className="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {clinicianLinkCreatingProfileId === onboardingModal.clinicianProfile.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4" />
+                        )}
+                        Generate New Link
+                      </button>
+
+                      <p className="text-xs text-zinc-500">
+                        Creating a new link revokes the prior active link for this clinician onboarding lane.
+                      </p>
+                    </div>
+
+                    {onboardingModalLinks.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-zinc-700 bg-black/10 px-4 py-5 text-sm text-zinc-500">
+                        No active onboarding link yet for this lane.
+                      </div>
+                    ) : (
+                      onboardingModalLinks.map((link) => (
+                        <div key={link.token} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                          <div className="rounded-xl border border-zinc-800 bg-black/30 px-3 py-3">
+                            <p className="break-all text-sm font-medium leading-6 text-white">{link.activationUrl}</p>
+                          </div>
+                          <p className="mt-1 text-xs text-zinc-500">Target: {link.targetEmail || 'No email set'}</p>
+                          <p className="mt-1 text-xs text-zinc-500">Created: {formatTimestamp(link.createdAt)}</p>
+                          <div className="mt-4 flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleCopyActivationLink(link.activationUrl)}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+                            >
+                              <Clipboard className="h-3.5 w-3.5" />
+                              Copy Link
+                            </button>
+                            <a
+                              href={link.activationUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              Open Link
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleSendOnboardingEmail(link)}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+                            >
+                              <MailPlus className="h-3.5 w-3.5" />
+                              Draft Email
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+                </div>
+              </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </AdminRouteGuard>
+  );
+};
+
+export default PulseCheckProvisioningPage;

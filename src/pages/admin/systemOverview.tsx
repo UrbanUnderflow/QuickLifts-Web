@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
-import { Activity, AlertTriangle, Brain, Database, Gamepad2, Layers, Link2, Server, Users, Cpu } from 'lucide-react';
+import { Activity, AlertTriangle, Brain, Check, Copy, Cpu, Database, ExternalLink, Gamepad2, Layers, Link2, Loader2, Server, Share2, Trash2, Users } from 'lucide-react';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import SectionNav from '../../components/admin/system-overview/SectionNav';
 import ProductHandbook from '../../components/admin/system-overview/ProductHandbook';
@@ -26,6 +26,9 @@ import PulseCheckEscalationIntegrationSpecTab from '../../components/admin/syste
 import PulseCheckTeamPilotCohortOnboardingArchitectureTab from '../../components/admin/system-overview/PulseCheckTeamPilotCohortOnboardingArchitectureTab';
 import PulseCheckPermissionsVisibilityModelTab from '../../components/admin/system-overview/PulseCheckPermissionsVisibilityModelTab';
 import PulseCheckCoachDashboardInformationArchitectureTab from '../../components/admin/system-overview/PulseCheckCoachDashboardInformationArchitectureTab';
+import AuntEdnaIntegrationStrategyTab from '../../components/admin/system-overview/AuntEdnaIntegrationStrategyTab';
+import { systemOverviewShareService } from '../../api/systemOverviewShare/service';
+import type { SystemOverviewShareLink } from '../../api/systemOverviewShare/types';
 import { systemOverviewManifest } from '../../content/system-overview/manifest';
 import type { ConnectionType, EcosystemConnection, EcosystemNode } from '../../content/system-overview/schema';
 
@@ -94,6 +97,13 @@ const SYSTEM_TABS: SystemTab[] = [
     sectionIds: ['agent-infrastructure-handbook'],
   },
   {
+    id: 'auntedna',
+    label: 'AuntEdna',
+    icon: Link2,
+    accent: '#f59e0b',
+    sectionIds: ['auntedna-integration-strategy'],
+  },
+  {
     id: 'hunter-world',
     label: 'Hunter World',
     icon: Gamepad2,
@@ -157,12 +167,24 @@ function EcosystemMap({ nodes, connections }: { nodes: EcosystemNode[]; connecti
 const SystemOverviewPage: React.FC = () => {
   const [activeSystemId, setActiveSystemId] = useState<string>(SYSTEM_TABS[0].id);
   const [activeSectionId, setActiveSectionId] = useState<string>(systemOverviewManifest.sections[0]?.id || 'executive-summary');
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [shareLinksLoading, setShareLinksLoading] = useState(false);
+  const [shareCreating, setShareCreating] = useState(false);
+  const [shareRevokingToken, setShareRevokingToken] = useState<string | null>(null);
+  const [shareLinks, setShareLinks] = useState<SystemOverviewShareLink[]>([]);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const artifactContentRef = React.useRef<HTMLDivElement | null>(null);
 
   // Derive filtered sidebar sections for the active system tab
   const activeSystemTab = useMemo(() => SYSTEM_TABS.find((t) => t.id === activeSystemId) || SYSTEM_TABS[0], [activeSystemId]);
   const filteredSections = useMemo(
     () => systemOverviewManifest.sections.filter((s) => activeSystemTab.sectionIds.includes(s.id)),
     [activeSystemTab]
+  );
+  const activeSectionMeta = useMemo(
+    () => systemOverviewManifest.sections.find((section) => section.id === activeSectionId),
+    [activeSectionId]
   );
 
   // Read initial section from URL hash if present
@@ -196,6 +218,126 @@ const SystemOverviewPage: React.FC = () => {
     window.history.replaceState(null, '', `#${sectionId}`);
     // Scroll to top of content area
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCopyActiveSection = async () => {
+    const content = artifactContentRef.current?.innerText?.trim();
+    if (!content) {
+      setCopyState('error');
+      return;
+    }
+
+    const headerLines = [
+      systemOverviewManifest.title,
+      activeSectionMeta?.label || activeSectionId,
+      '',
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(`${headerLines}${content}`);
+      setCopyState('copied');
+    } catch (error) {
+      console.error('[SystemOverview] Failed to copy artifact text:', error);
+      setCopyState('error');
+    }
+  };
+
+  useEffect(() => {
+    setCopyState('idle');
+    setShareMenuOpen(false);
+    setShareError(null);
+  }, [activeSectionId]);
+
+  useEffect(() => {
+    if (copyState !== 'copied') return;
+    const timeout = window.setTimeout(() => setCopyState('idle'), 2000);
+    return () => window.clearTimeout(timeout);
+  }, [copyState]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadShareLinks = async () => {
+      if (!activeSectionId) return;
+      setShareLinksLoading(true);
+      setShareError(null);
+
+      try {
+        const links = await systemOverviewShareService.list(activeSectionId);
+        if (!cancelled) {
+          setShareLinks(links.filter((link) => !link.revokedAt));
+        }
+      } catch (error) {
+        console.error('[SystemOverview] Failed to load share links:', error);
+        if (!cancelled) {
+          setShareLinks([]);
+          setShareError('Failed to load share links.');
+        }
+      } finally {
+        if (!cancelled) {
+          setShareLinksLoading(false);
+        }
+      }
+    };
+
+    void loadShareLinks();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSectionId]);
+
+  const handleCreateShareLink = async () => {
+    const snapshotText = artifactContentRef.current?.innerText?.trim();
+    if (!snapshotText || !activeSectionMeta) {
+      setShareError('Nothing available to share.');
+      return;
+    }
+
+    setShareCreating(true);
+    setShareError(null);
+
+    try {
+      const createdLink = await systemOverviewShareService.create({
+        sectionId: activeSectionMeta.id,
+        systemId: activeSystemId,
+        sectionLabel: activeSectionMeta.label,
+        sectionDescription: activeSectionMeta.description,
+        snapshotText,
+      });
+
+      setShareLinks((current) => [createdLink, ...current]);
+      await navigator.clipboard.writeText(createdLink.shareUrl);
+    } catch (error) {
+      console.error('[SystemOverview] Failed to create share link:', error);
+      setShareError('Failed to create share link.');
+    } finally {
+      setShareCreating(false);
+    }
+  };
+
+  const handleCopyShareLink = async (shareUrl: string) => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch (error) {
+      console.error('[SystemOverview] Failed to copy share link:', error);
+      setShareError('Failed to copy share link.');
+    }
+  };
+
+  const handleRevokeShareLink = async (token: string) => {
+    setShareRevokingToken(token);
+    setShareError(null);
+
+    try {
+      await systemOverviewShareService.revoke(token);
+      setShareLinks((current) => current.filter((link) => link.token !== token));
+    } catch (error) {
+      console.error('[SystemOverview] Failed to revoke share link:', error);
+      setShareError('Failed to revoke share link.');
+    } finally {
+      setShareRevokingToken(null);
+    }
   };
 
   const summaryCards = useMemo(
@@ -586,6 +728,9 @@ const SystemOverviewPage: React.FC = () => {
       case 'pulsecheck-coach-dashboard-information-architecture':
         return <PulseCheckCoachDashboardInformationArchitectureTab />;
 
+      case 'auntedna-integration-strategy':
+        return <AuntEdnaIntegrationStrategyTab />;
+
       default:
         return null;
     }
@@ -644,7 +789,119 @@ const SystemOverviewPage: React.FC = () => {
             />
 
             <div className="min-w-0">
-              {renderSectionContent()}
+              <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-[#090f1c] p-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Artifact Actions</p>
+                  <p className="mt-1 text-sm font-semibold text-white">{activeSectionMeta?.label || 'Current Section'}</p>
+                  {activeSectionMeta?.description ? (
+                    <p className="mt-1 text-xs text-zinc-400">{activeSectionMeta.description}</p>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-3">
+                  {copyState === 'error' ? (
+                    <p className="text-xs text-red-400">Copy failed. Try again.</p>
+                  ) : null}
+                  {shareError ? (
+                    <p className="text-xs text-red-400">{shareError}</p>
+                  ) : null}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShareMenuOpen((current) => !current)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-black/20 px-4 py-2 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-500 hover:text-white"
+                    >
+                      <Share2 className="h-4 w-4" />
+                      Share
+                    </button>
+
+                    {shareMenuOpen ? (
+                      <div className="absolute right-0 z-30 mt-2 w-[360px] rounded-2xl border border-zinc-800 bg-[#090f1c] p-3 shadow-2xl">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-white">Share Links</p>
+                            <p className="text-xs text-zinc-500">Each share creates a unique revocable public link.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void handleCreateShareLink()}
+                            disabled={shareCreating}
+                            className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-3 py-2 text-xs font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {shareCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
+                            {shareCreating ? 'Creating...' : 'New Link'}
+                          </button>
+                        </div>
+
+                        <div className="mt-3 space-y-2">
+                          {shareLinksLoading ? (
+                            <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-black/20 px-3 py-3 text-xs text-zinc-400">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Loading share links...
+                            </div>
+                          ) : shareLinks.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-zinc-700 bg-black/10 px-3 py-3 text-xs text-zinc-500">
+                              No active share links for this artifact.
+                            </div>
+                          ) : (
+                            shareLinks.map((link) => (
+                              <div key={link.token} className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-3">
+                                <p className="truncate text-xs font-medium text-white">{link.shareUrl}</p>
+                                <p className="mt-1 text-[11px] text-zinc-500">
+                                  Created {link.createdAt ? new Date(link.createdAt).toLocaleString() : 'just now'}
+                                </p>
+                                <div className="mt-3 flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleCopyShareLink(link.shareUrl)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                    Copy
+                                  </button>
+                                  <a
+                                    href={link.shareUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] text-zinc-200 transition hover:border-zinc-500 hover:text-white"
+                                  >
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                    Open
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleRevokeShareLink(link.token)}
+                                    disabled={shareRevokingToken === link.token}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/25 px-2.5 py-1.5 text-[11px] text-red-200 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {shareRevokingToken === link.token ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                    Revoke
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyActiveSection}
+                    className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
+                      copyState === 'copied'
+                        ? 'border-green-500/30 bg-green-500/10 text-green-200'
+                        : 'border-zinc-700 bg-black/20 text-zinc-200 hover:border-zinc-500 hover:text-white'
+                    }`}
+                  >
+                    {copyState === 'copied' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {copyState === 'copied' ? 'Copied' : 'Copy to Clipboard'}
+                  </button>
+                </div>
+              </div>
+
+              <div ref={artifactContentRef}>
+                {renderSectionContent()}
+              </div>
             </div>
           </main>
         </div>

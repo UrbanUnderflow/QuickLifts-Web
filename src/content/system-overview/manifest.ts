@@ -9,7 +9,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-03-10',
+  lastUpdated: '2026-03-11',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -42,6 +42,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-team-pilot-cohort-onboarding-architecture', label: 'Team & Pilot Onboarding', description: 'How organizations, teams, pilots, cohorts, clinicians, and enrollments enter the system.' },
     { id: 'pulsecheck-permissions-visibility-model', label: 'Permissions & Visibility', description: 'Role-based access, invite-linked permissions, and minimum-necessary visibility rules.' },
     { id: 'pulsecheck-coach-dashboard-information-architecture', label: 'Coach Dashboard IA', description: 'Coach-facing information hierarchy, workflows, and privacy boundaries for roster visibility.' },
+    { id: 'auntedna-integration-strategy', label: 'Integration Strategy', description: 'API layer, webhook contract, profile mirror model, and MCP positioning for the AuntEdna clinical bridge.' },
   ],
   executiveSummary: {
     mission:
@@ -49,6 +50,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Added the AuntEdna Integration Strategy artifact covering APIs, webhooks, MCP role, and the local clinician-profile mirror model.',
       'Added Pulse Community Club Activation Architecture artifact for generic creator-club onboarding, introductions, and pairing.',
       'Replaced tab-driven architecture page with a full handbook structure and anchored navigation.',
       'Added complete feature inventories for QuickLifts iOS, Pulse Android, PulseCheck iOS, and QuickLifts Web.',
