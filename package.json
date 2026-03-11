@@ -89,6 +89,7 @@
     "netlify-dev": "netlify dev --port 8888 --functions-port 9999",
     "dev:fast": "bash scripts/dev-functions-link.sh && netlify dev --port 8888 --functions-port 9999 -f netlify/functions-dev",
     "dev:full": "netlify dev --port 8888 --functions-port 9999",
+    "pulsecheckdemo:audio": "node scripts/generate-pulsecheckdemo-audio.js",
     "system-overview:validate": "node scripts/validate-system-overview-content.js",
     "env-check": "node env-check.js",
     "stripe:create-products": "node scripts/create-stripe-products.js",

@@ -1,0 +1,67 @@
+[
+  {
+    "id": "act1-00-intro",
+    "filename": "act1-00-intro.mp3",
+    "text": "Hi Tremaine, today is game day. How are you feeling?"
+  },
+  {
+    "id": "act1-01-baseline",
+    "filename": "act1-01-baseline.mp3",
+    "text": "Your baseline looks great today. You had 8 hours of solid sleep, your Resting Heart Rate (RHR) is at 42 bpm, and your HRV baseline is high, indicating excellent central nervous system (CNS) recovery. Your body is primed for today."
+  },
+  {
+    "id": "act1-02-meeting",
+    "filename": "act1-02-meeting.mp3",
+    "text": "Coach scheduled the competition prep meeting for 10:00 AM in the film room. You've got a couple hours."
+  },
+  {
+    "id": "act1-03-probe",
+    "filename": "act1-03-probe.mp3",
+    "text": "Talk to me. What is it about today that feels different from the other days? Why does today's game make you nervous?"
+  },
+  {
+    "id": "act1-04-box-breathing",
+    "filename": "act1-04-box-breathing.mp3",
+    "text": "OK. Let's slow it down.\n\nI want to run you through an exercise called Box Breathing. This is a technique performed by Navy SEALs during acute stress responses to override the body's fight-or-flight system. We can apply it right now, and you can use it again right before you run out of the tunnel.\n\nHere's how it works: Inhale for 4 seconds → Hold for 4 seconds → Exhale for 4 seconds → Hold for 4 seconds. We'll do 4 rounds.\n\nAre you ready?"
+  },
+  {
+    "id": "act1-05-post-breathing",
+    "filename": "act1-05-post-breathing.mp3",
+    "text": "Great work. How are you feeling now?"
+  },
+  {
+    "id": "act1-06-support-staff",
+    "filename": "act1-06-support-staff.mp3",
+    "text": "That's okay — anxiety before a high-stakes game is completely normal. I have a few other mental frameworks we can run through, but first — we'd like to notify someone on your support staff so they're in the loop. Who should we notify?"
+  },
+  {
+    "id": "act1-07-notify-coach-mayo",
+    "filename": "act1-07-notify-coach-mayo.mp3",
+    "text": "Done. I've sent a secure briefing to Coach Mayo with your physical baseline data and today's conversation context. They'll have the full picture before your 10 AM meeting."
+  },
+  {
+    "id": "act1-07-notify-coach-van-pelt",
+    "filename": "act1-07-notify-coach-van-pelt.mp3",
+    "text": "Done. I've sent a secure briefing to Coach Van Pelt with your physical baseline data and today's conversation context. They'll have the full picture before your 10 AM meeting."
+  },
+  {
+    "id": "act1-07-notify-coach-covington",
+    "filename": "act1-07-notify-coach-covington.mp3",
+    "text": "Done. I've sent a secure briefing to Coach Covington with your physical baseline data and today's conversation context. They'll have the full picture before your 10 AM meeting."
+  },
+  {
+    "id": "act1-07-notify-jim-whalen",
+    "filename": "act1-07-notify-jim-whalen.mp3",
+    "text": "Done. I've sent a secure briefing to Jim Whalen with your physical baseline data and today's conversation context. They'll have the full picture before your 10 AM meeting."
+  },
+  {
+    "id": "act1-07-notify-dr-liz-carter",
+    "filename": "act1-07-notify-dr-liz-carter.mp3",
+    "text": "Done. I've sent a secure briefing to Dr. Liz Carter with your physical baseline data and today's conversation context. They'll have the full picture before your 10 AM meeting."
+  },
+  {
+    "id": "act1-07-notify-opt-out",
+    "filename": "act1-07-notify-opt-out.mp3",
+    "text": "Totally understood — your privacy comes first. Let's keep working through this together. I've got a few more tools that can help you reset before game time."
+  }
+]
