@@ -242,14 +242,6 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
     setStage('summary');
   }, [buildArtifact, currentUser?.id, durationMinutes, exercise.id, previewMode, spamDetected, spamFlags, spamRounds, stageDurations.response]);
 
-  const handleActionSelect = useCallback((action: 'commit' | 'brake') => {
-    if (stage !== 'response') return;
-    if (!registerInputAttempt({ blockedMessage: 'Too fast. Read the lane before committing or braking again.' })) {
-      return;
-    }
-    resolveRound(action);
-  }, [registerInputAttempt, resolveRound, stage]);
-
   const resolveRound = useCallback((response: 'commit' | 'brake' | null) => {
     if (!currentRound || roundResolvedRef.current) return;
     roundResolvedRef.current = true;
@@ -292,6 +284,14 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
       beginStage('ready', stageDurations.ready);
     }, stageDurations.feedback);
   }, [beginStage, currentRound, finalizeRound, finishSession, responses, roundIndex, rounds.length, stageDurations.feedback, stageDurations.ready]);
+
+  const handleActionSelect = useCallback((action: 'commit' | 'brake') => {
+    if (stage !== 'response') return;
+    if (!registerInputAttempt({ blockedMessage: 'Too fast. Read the lane before committing or braking again.' })) {
+      return;
+    }
+    resolveRound(action);
+  }, [registerInputAttempt, resolveRound, stage]);
 
   useEffect(() => {
     if (stage !== 'ready' && stage !== 'response' && stage !== 'feedback') {

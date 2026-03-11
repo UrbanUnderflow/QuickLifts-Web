@@ -19,10 +19,10 @@ const INTERPRETATION_RULES = [
 ];
 
 const GOVERNING_ROWS = [
-  ['Flags are for state inference, not athlete labeling.'],
-  ['Compare current-session behavior to the athlete’s own rolling baseline wherever possible.'],
-  ['A single flag should rarely drive routing by itself; confidence should increase when multiple signals align.'],
-  ['Flags do not override hard safety policy.'],
+  'Flags are for state inference, not athlete labeling.',
+  'Compare current-session behavior to the athlete’s own rolling baseline wherever possible.',
+  'A single flag should rarely drive routing by itself; confidence should increase when multiple signals align.',
+  'Flags do not override hard safety policy.',
 ];
 
 const PulseCheckPerformanceStateFlagDefinitionsTab: React.FC = () => {

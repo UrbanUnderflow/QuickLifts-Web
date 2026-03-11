@@ -254,14 +254,6 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
     setStage('summary');
   }, [buildArtifact, currentUser?.id, durationMinutes, exercise.id, previewMode, spamDetected, spamFlags, spamRounds]);
 
-  const handleOptionSelect = useCallback((option: string) => {
-    if (stage !== 'response') return;
-    if (!registerInputAttempt({ blockedMessage: 'Too fast. Let the cue resolve before committing another read.' })) {
-      return;
-    }
-    resolveRound(option);
-  }, [registerInputAttempt, resolveRound, stage]);
-
   const resolveRound = useCallback((response: string | null) => {
     if (!currentRound || roundResolvedRef.current) return;
     roundResolvedRef.current = true;
@@ -304,6 +296,14 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
       beginStage('ready', 1100);
     }, 900);
   }, [beginStage, currentRound, finalizeRound, finishSession, responses, roundIndex, rounds.length]);
+
+  const handleOptionSelect = useCallback((option: string) => {
+    if (stage !== 'response') return;
+    if (!registerInputAttempt({ blockedMessage: 'Too fast. Let the cue resolve before committing another read.' })) {
+      return;
+    }
+    resolveRound(option);
+  }, [registerInputAttempt, resolveRound, stage]);
 
   useEffect(() => {
     if (stage !== 'ready' && stage !== 'response' && stage !== 'feedback') return undefined;
