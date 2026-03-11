@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import {
@@ -12,15 +12,7 @@ import {
   AlertCircle,
   RefreshCw,
 } from 'lucide-react';
-
-/* ─── Defaults ──────────────────────────────────────────────────── */
-const EMPTY_STATE = {
-  pageUrl: '',
-  slug: '',
-  title: '',
-  description: '',
-  ogImage: '',
-};
+import { buildOgTagSnippet, extractSlugFromUrl, normalizePreviewUrl, parseOgFromHtml, resolvePreviewImage } from '../../lib/ogPreview';
 
 /* ─── Component ────────────────────────────────────────────────── */
 const OgPreviewTool: React.FC = () => {
@@ -40,19 +32,10 @@ const OgPreviewTool: React.FC = () => {
   const urlInputRef = useRef<HTMLInputElement>(null);
 
   /* ── Derived ─────────────────────────────────────────────────── */
-  const normalizedPageUrl = useMemo(() => {
-    const raw = pageUrl.trim();
-    if (!raw) return '';
-    if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
-    return `https://${raw}`;
-  }, [pageUrl]);
+  const normalizedPageUrl = useMemo(() => normalizePreviewUrl(pageUrl), [pageUrl]);
 
   // Use the fetched OG image, or fall back to the slug-based Netlify function
-  const resolvedOgImage = useMemo(() => {
-    if (ogImage) return ogImage;
-    if (!slug.trim()) return '';
-    return `https://fitwithpulse.ai/.netlify/functions/og-article?slug=${encodeURIComponent(slug.trim())}`;
-  }, [ogImage, slug]);
+  const resolvedOgImage = useMemo(() => resolvePreviewImage(ogImage, slug), [ogImage, slug]);
 
   const previewImageUrl = useMemo(() => {
     if (!resolvedOgImage) return '';
@@ -60,20 +43,16 @@ const OgPreviewTool: React.FC = () => {
     return `${resolvedOgImage}${divider}v=${previewNonce}`;
   }, [resolvedOgImage, previewNonce]);
 
-  const ogTags = useMemo(() => {
-    if (!title && !description && !resolvedOgImage) return [];
-    return [
-      `<meta property="og:title" content="${title}" />`,
-      `<meta property="og:description" content="${description}" />`,
-      `<meta property="og:image" content="${resolvedOgImage}" />`,
-      `<meta property="og:url" content="${normalizedPageUrl}" />`,
-      `<meta property="og:type" content="article" />`,
-      `<meta name="twitter:card" content="summary_large_image" />`,
-      `<meta name="twitter:title" content="${title}" />`,
-      `<meta name="twitter:description" content="${description}" />`,
-      `<meta name="twitter:image" content="${resolvedOgImage}" />`,
-    ];
-  }, [description, resolvedOgImage, normalizedPageUrl, title]);
+  const ogTags = useMemo(
+    () =>
+      buildOgTagSnippet({
+        title,
+        description,
+        image: resolvedOgImage,
+        url: normalizedPageUrl,
+      }),
+    [description, normalizedPageUrl, resolvedOgImage, title]
+  );
 
   /* ── Clear everything ────────────────────────────────────────── */
   const clearForm = useCallback(() => {
@@ -90,73 +69,12 @@ const OgPreviewTool: React.FC = () => {
     urlInputRef.current?.focus();
   }, []);
 
-  /* ── Parse OG tags from HTML ─────────────────────────────────── */
-  const parseOgFromHtml = useCallback((html: string) => {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-
-    const getMeta = (property: string): string => {
-      const el =
-        doc.querySelector(`meta[property="${property}"]`) ||
-        doc.querySelector(`meta[name="${property}"]`);
-      return el?.getAttribute('content') || '';
-    };
-
-    let ogTitle = getMeta('og:title');
-    let ogDescription = getMeta('og:description');
-    let ogImage = getMeta('og:image');
-    const ogUrl = getMeta('og:url');
-    const twitterImage = getMeta('twitter:image');
-
-    // ── Fallback: extract from __NEXT_DATA__ JSON ────────────
-    // In dev mode, Next.js doesn't SSR <Head> tags from page components,
-    // so the meta tags only show _app defaults. But the getServerSideProps
-    // data (including ogMeta and articleData) IS always in __NEXT_DATA__.
-    const isGenericDefault =
-      !ogTitle ||
-      ogTitle === 'Pulse Community Fitness' ||
-      ogImage?.includes('og-image.png?title=Pulse');
-
-    if (isGenericDefault) {
-      try {
-        const nextDataEl = doc.querySelector('#__NEXT_DATA__');
-        if (nextDataEl?.textContent) {
-          const nextData = JSON.parse(nextDataEl.textContent);
-          const props = nextData?.props?.pageProps;
-
-          // Prefer ogMeta (set by getServerSideProps)
-          if (props?.ogMeta) {
-            ogTitle = props.ogMeta.title || ogTitle;
-            ogDescription = props.ogMeta.description || ogDescription;
-            ogImage = props.ogMeta.image || ogImage;
-          }
-          // Fallback to articleData fields
-          else if (props?.articleData) {
-            const a = props.articleData;
-            ogTitle = a.title || ogTitle;
-            ogDescription = a.excerpt || a.subtitle || ogDescription;
-            ogImage = a.featuredImage || ogImage;
-          }
-        }
-      } catch {
-        // Ignore parse errors
-      }
-    }
-
-    return {
-      title: ogTitle,
-      description: ogDescription,
-      image: ogImage,
-      url: ogUrl,
-      twitterImage,
-    };
-  }, []);
-
   /* ── Fetch OG data from a URL ────────────────────────────────── */
   const fetchOgData = useCallback(
     async (url: string) => {
       if (!url.trim()) return;
 
-      const normalized = url.startsWith('http') ? url : `https://${url}`;
+      const normalized = normalizePreviewUrl(url);
 
       // Abort previous fetch
       abortRef.current?.abort();
@@ -199,10 +117,7 @@ const OgPreviewTool: React.FC = () => {
           setOgImage(og.image || og.twitterImage || '');
 
           // Extract slug from URL
-          const urlObj = new URL(normalized);
-          const pathParts = urlObj.pathname.split('/').filter(Boolean);
-          const lastSegment = pathParts[pathParts.length - 1] || '';
-          setSlug(lastSegment);
+          setSlug(extractSlugFromUrl(normalized));
 
           setFetchStatus('success');
           setFetchMessage(
@@ -221,7 +136,7 @@ const OgPreviewTool: React.FC = () => {
         if (!controller.signal.aborted) setFetching(false);
       }
     },
-    [parseOgFromHtml]
+    []
   );
 
   /* ── Auto-clear when URL is emptied ──────────────────────────── */
