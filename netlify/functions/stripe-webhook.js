@@ -22,10 +22,20 @@ const SubscriptionPlatform = {
 // Initialize Firebase if not already initialized
 let db;
 if (!global.firebaseInitialized) {
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  initializeApp({
-    credential: cert(serviceAccount)
-  });
+  if (process.env.FIREBASE_SECRET_KEY) {
+    initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID || "quicklifts-dd3f1",
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
+        privateKey: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
+      })
+    });
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    initializeApp({
+      credential: cert(serviceAccount)
+    });
+  }
   global.firebaseInitialized = true;
 }
 db = getFirestore();
@@ -33,22 +43,22 @@ db = getFirestore();
 // Price ID to subscription type mapping
 function mapPriceIdToSubscriptionType(priceId) {
   console.log(`[Webhook] Mapping price ID: ${priceId}`);
-  
+
   // Live price IDs (from subscribe.tsx)
   const LIVE_MONTHLY_PRICE_ID = 'price_1PDq26RobSf56MUOucDIKLhd';
   const LIVE_ANNUAL_PRICE_ID = 'price_1PDq3LRobSf56MUOng0UxhCC';
-  
+
   // Test price IDs (from subscribe.tsx)
   const TEST_MONTHLY_PRICE_ID = 'price_1RMIUNRobSf56MUOfeB4gIot';
   const TEST_ANNUAL_PRICE_ID = 'price_1RMISFRobSf56MUOpcSoohjP';
-  
+
   const priceMapping = {
     [LIVE_MONTHLY_PRICE_ID]: SubscriptionType.monthly,
     [LIVE_ANNUAL_PRICE_ID]: SubscriptionType.annual,
     [TEST_MONTHLY_PRICE_ID]: SubscriptionType.monthly,
     [TEST_ANNUAL_PRICE_ID]: SubscriptionType.annual,
   };
-  
+
   const mappedType = priceMapping[priceId] || SubscriptionType.unsubscribed;
   console.log(`[Webhook] Mapped ${priceId} to ${mappedType}`);
   return mappedType;
@@ -57,18 +67,18 @@ function mapPriceIdToSubscriptionType(priceId) {
 // Helper function to get user ID from subscription
 async function getUserIdFromSubscription(subscription) {
   console.log(`[Webhook] Getting user ID for subscription: ${subscription.id}`);
-  
+
   // Try client_reference_id first (set during checkout)
   if (subscription.metadata?.userId) {
     console.log(`[Webhook] Found userId in metadata: ${subscription.metadata.userId}`);
     return subscription.metadata.userId;
   }
-  
+
   // Try to find user by customer ID
   if (subscription.customer) {
     const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
     console.log(`[Webhook] Looking up user by customer ID: ${customerId}`);
-    
+
     const userQuery = await db.collection('users').where('stripeCustomerId', '==', customerId).limit(1).get();
     if (!userQuery.empty) {
       const userId = userQuery.docs[0].id;
@@ -76,7 +86,7 @@ async function getUserIdFromSubscription(subscription) {
       return userId;
     }
   }
-  
+
   console.error(`[Webhook] Could not determine user ID for subscription: ${subscription.id}`);
   return null;
 }
@@ -90,7 +100,7 @@ exports.handler = async (event) => {
   }
 
   let stripeEvent;
-  
+
   try {
     const sig = event.headers['stripe-signature'];
     stripeEvent = stripe.webhooks.constructEvent(event.body, sig, endpointSecret);
@@ -104,7 +114,7 @@ exports.handler = async (event) => {
 
   // Handle the event
   console.log(`Processing webhook event type: ${stripeEvent.type}`);
-  
+
   try {
     switch (stripeEvent.type) {
       case 'checkout.session.completed':
@@ -143,38 +153,38 @@ exports.handler = async (event) => {
 // Handle subscription created event
 async function handleSubscriptionCreated(subscription) {
   console.log(`[Webhook] Processing subscription created: ${subscription.id}`);
-  
+
   try {
     // Skip coach subscriptions (handled by coach webhook)
     if (subscription.metadata?.userType === 'coach') {
       console.log(`[Webhook] Skipping coach subscription: ${subscription.id}`);
       return;
     }
-    
+
     const userId = await getUserIdFromSubscription(subscription);
     if (!userId) {
       console.error(`[Webhook] No user ID found for subscription: ${subscription.id}`);
       return;
     }
-    
+
     // Get the price ID from the subscription
     const priceId = subscription.items.data[0]?.price?.id;
     if (!priceId) {
       console.error(`[Webhook] No price ID found for subscription: ${subscription.id}`);
       return;
     }
-    
+
     const subscriptionType = mapPriceIdToSubscriptionType(priceId);
     const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
-    
+
     console.log(`[Webhook] Updating user ${userId} with subscription type: ${subscriptionType}`);
-    
+
     // Check if subscription is in trial period
     const isTrialing = subscription.status === 'trialing';
     const trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000) : null;
-    
+
     console.log(`[Webhook] Subscription status: ${subscription.status}, trial end: ${trialEnd}`);
-    
+
     // Load user for denormalized fields on subscription doc
     let userEmail = null;
     let username = null;
@@ -199,9 +209,9 @@ async function handleSubscriptionCreated(subscription) {
       trialEndDate: trialEnd,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
-    
+
     await db.collection('users').doc(userId).update(userUpdateData);
-    
+
     // Append-only plans model
     const subRef = db.collection('subscriptions').doc(userId);
     await subRef.set({
@@ -249,9 +259,9 @@ async function handleSubscriptionCreated(subscription) {
         });
       }
     }
-    
+
     console.log(`[Webhook] Successfully processed subscription created for user: ${userId}`);
-    
+
   } catch (error) {
     console.error(`[Webhook] Error handling subscription created: ${error.message}`);
     throw error;
@@ -261,44 +271,44 @@ async function handleSubscriptionCreated(subscription) {
 // Handle subscription updated event
 async function handleSubscriptionUpdated(subscription) {
   console.log(`[Webhook] Processing subscription updated: ${subscription.id}`);
-  
+
   try {
     // Skip coach subscriptions (handled by coach webhook)
     if (subscription.metadata?.userType === 'coach') {
       console.log(`[Webhook] Skipping coach subscription update: ${subscription.id}`);
       return;
     }
-    
+
     const userId = await getUserIdFromSubscription(subscription);
     if (!userId) {
       console.error(`[Webhook] No user ID found for subscription: ${subscription.id}`);
       return;
     }
-    
+
     // Get the price ID from the subscription
     const priceId = subscription.items.data[0]?.price?.id;
     if (!priceId) {
       console.error(`[Webhook] No price ID found for subscription: ${subscription.id}`);
       return;
     }
-    
+
     const subscriptionType = mapPriceIdToSubscriptionType(priceId);
     const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
-    
+
     console.log(`[Webhook] Updating user ${userId} subscription status: ${subscription.status}, type: ${subscriptionType}`);
-    
+
     // Check if subscription is in trial period
     const isTrialing = subscription.status === 'trialing';
     const trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000) : null;
-    
+
     // Determine subscription type based on status
     let finalSubscriptionType = subscriptionType;
     if (subscription.status === 'canceled' || subscription.status === 'incomplete_expired') {
       finalSubscriptionType = SubscriptionType.unsubscribed;
     }
-    
+
     console.log(`[Webhook] Subscription status: ${subscription.status}, trial end: ${trialEnd}, final type: ${finalSubscriptionType}`);
-    
+
     // Load user for denormalized fields on subscription doc
     let userEmail = null;
     let username = null;
@@ -323,9 +333,9 @@ async function handleSubscriptionUpdated(subscription) {
       trialEndDate: trialEnd,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
-    
+
     await db.collection('users').doc(userId).update(userUpdateData);
-    
+
     // Append-only plan update on subscription doc
     const subRef = db.collection('subscriptions').doc(userId);
     await subRef.set({
@@ -372,9 +382,9 @@ async function handleSubscriptionUpdated(subscription) {
         });
       }
     }
-    
+
     console.log(`[Webhook] Successfully processed subscription updated for user: ${userId}`);
-    
+
   } catch (error) {
     console.error(`[Webhook] Error handling subscription updated: ${error.message}`);
     throw error;
@@ -384,42 +394,42 @@ async function handleSubscriptionUpdated(subscription) {
 // Handle subscription deleted event
 async function handleSubscriptionDeleted(subscription) {
   console.log(`[Webhook] Processing subscription deleted: ${subscription.id}`);
-  
+
   try {
     // Skip coach subscriptions (handled by coach webhook)
     if (subscription.metadata?.userType === 'coach') {
       console.log(`[Webhook] Skipping coach subscription deletion: ${subscription.id}`);
       return;
     }
-    
+
     const userId = await getUserIdFromSubscription(subscription);
     if (!userId) {
       console.error(`[Webhook] No user ID found for subscription: ${subscription.id}`);
       return;
     }
-    
+
     console.log(`[Webhook] Setting user ${userId} to unsubscribed`);
-    
+
     // Update user document to unsubscribed
     const userUpdateData = {
       subscriptionType: SubscriptionType.unsubscribed,
       subscriptionPlatform: SubscriptionPlatform.Web,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
-    
+
     await db.collection('users').doc(userId).update(userUpdateData);
-    
+
     // Update subscription document
     const subscriptionData = {
       subscriptionType: SubscriptionType.unsubscribed,
       status: 'canceled',
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
-    
+
     await db.collection('subscriptions').doc(userId).update(subscriptionData);
-    
+
     console.log(`[Webhook] Successfully processed subscription deleted for user: ${userId}`);
-    
+
   } catch (error) {
     console.error(`[Webhook] Error handling subscription deleted: ${error.message}`);
     throw error;
@@ -428,29 +438,29 @@ async function handleSubscriptionDeleted(subscription) {
 
 async function handleCheckoutSessionCompleted(session) {
   console.log('Processing checkout.session.completed event');
-  
+
   try {
     // Extract necessary information from the session
     const { metadata, customer_email, customer, client_reference_id } = session;
     const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
-    
+
     if (!lineItems || !lineItems.data || lineItems.data.length === 0) {
       console.error('No line items found in the checkout session');
       return;
     }
-    
+
     // Extract metadata
     // Round/challenge context
     const challengeId = metadata?.challengeId || metadata?.roundId;
     const challengeTitle = metadata?.challengeTitle;
     let ownerId = metadata?.ownerId;
-    
+
     console.log(`Extracted challengeId: ${challengeId}, ownerId: ${ownerId}, challengeTitle: ${challengeTitle}`);
-    
+
     // Resolve customer information
     let buyerEmail = customer_email;
     let buyerId = client_reference_id;
-    
+
     // Resolve ownerId if not present in metadata
     let resolvedOwnerId = ownerId;
     if (!resolvedOwnerId && challengeId) {
@@ -464,13 +474,13 @@ async function handleCheckoutSessionCompleted(session) {
         console.error(`Error finding owner from challenge: ${error.message}`);
       }
     }
-    
+
     // If we still don't have an owner ID, use the challenge title as the owner ID
     if (!resolvedOwnerId && challengeId) {
       resolvedOwnerId = challengeTitle;
       console.log(`Resolved owner ID ${resolvedOwnerId} from challenge title ${challengeTitle}`);
     }
-    
+
     // Resolve buyer ID if not present in client_reference_id
     let resolvedBuyerId = buyerId;
     if (!resolvedBuyerId && buyerEmail) {
@@ -484,7 +494,7 @@ async function handleCheckoutSessionCompleted(session) {
         console.error(`Error finding buyer by email: ${error.message}`);
       }
     }
-    
+
     // Process purchase and record transaction (round access)
     if (resolvedOwnerId && resolvedBuyerId) {
       await recordPurchase({
@@ -520,11 +530,11 @@ async function handleCheckoutSessionCompleted(session) {
 
 async function handleAccountUpdated(account) {
   console.log('Processing account.updated event');
-  
+
   try {
     // Process account updates as needed
     const { id, charges_enabled, payouts_enabled, details_submitted } = account;
-    
+
     // Update user account info in Firestore
     const userQuery = await db.collection('users').where('stripeAccountId', '==', id).limit(1).get();
     if (!userQuery.empty) {
@@ -547,7 +557,7 @@ async function handleAccountUpdated(account) {
 
 async function recordPurchase(purchaseData) {
   console.log(`Recording purchase: ${JSON.stringify(purchaseData)}`);
-  
+
   try {
     // Create transaction record
     const transactionRef = await db.collection('transactions').add({
@@ -555,26 +565,26 @@ async function recordPurchase(purchaseData) {
       type: 'challenge_purchase',
       status: 'completed'
     });
-    
+
     console.log(`Transaction recorded with ID: ${transactionRef.id}`);
-    
+
     // Update challenge purchases (if applicable)
     if (purchaseData.challengeId) {
       await db.collection('challenges').doc(purchaseData.challengeId).update({
         purchaseCount: admin.firestore.FieldValue.increment(1),
         totalRevenue: admin.firestore.FieldValue.increment(purchaseData.amount)
       });
-      
+
       // Add buyer to authorized users
       await db.collection('challenges').doc(purchaseData.challengeId).collection('authorizedUsers').doc(purchaseData.buyerId).set({
         userId: purchaseData.buyerId,
         purchaseDate: purchaseData.timestamp,
         transactionId: transactionRef.id
       });
-      
+
       console.log(`Updated challenge ${purchaseData.challengeId} with purchase info`);
     }
-    
+
     return transactionRef.id;
   } catch (error) {
     console.error(`Error recording purchase: ${error.message}`);

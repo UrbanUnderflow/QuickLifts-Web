@@ -3,14 +3,23 @@ const admin = require('firebase-admin');
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
     try {
-        const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-        if (!serviceAccountKey) {
-            throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set');
+        if (process.env.FIREBASE_SECRET_KEY) {
+            admin.initializeApp({
+                credential: admin.credential.cert({
+                    projectId: process.env.FIREBASE_PROJECT_ID || "quicklifts-dd3f1",
+                    clientEmail: process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
+                    privateKey: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
+                })
+            });
+        } else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+            const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+            const serviceAccount = JSON.parse(serviceAccountKey);
+            admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount)
+            });
+        } else {
+            throw new Error('Firebase credentials environment variables are not set');
         }
-        const serviceAccount = JSON.parse(serviceAccountKey);
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount)
-        });
     } catch (error) {
         console.error('Error initializing Firebase Admin:', error);
         throw error; // Re-throw to prevent the function from running without Firebase

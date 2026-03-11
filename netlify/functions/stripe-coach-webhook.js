@@ -14,10 +14,20 @@ const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET_COACH;
 // Initialize Firebase if not already initialized
 let db;
 if (!global.firebaseCoachWebhookInitialized) {
-  const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-  initializeApp({
-    credential: cert(serviceAccount)
-  }, 'coach-webhook');
+  if (process.env.FIREBASE_SECRET_KEY) {
+    initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID || "quicklifts-dd3f1",
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
+        privateKey: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
+      })
+    }, 'coach-webhook');
+  } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    initializeApp({
+      credential: cert(serviceAccount)
+    }, 'coach-webhook');
+  }
   global.firebaseCoachWebhookInitialized = true;
   db = getFirestore(admin.app('coach-webhook'));
 } else {
@@ -52,7 +62,7 @@ const handleCoachSubscriptionCreated = async (subscription) => {
     let linkedPartnerId = null;
     if (partnerCode) {
       console.log('[CoachWebhook] Validating partner code:', partnerCode);
-      
+
       const partnerQuery = await db.collection('coaches')
         .where('referralCode', '==', partnerCode.toUpperCase())
         .where('subscriptionStatus', '==', 'partner')
@@ -114,7 +124,7 @@ const generateUniqueReferralCode = async (attempts = 0) => {
   }
 
   const code = generateReferralCode();
-  
+
   // Check if code already exists
   const existingCoach = await db.collection('coaches')
     .where('referralCode', '==', code)
@@ -134,7 +144,7 @@ const handleCoachSubscriptionUpdated = async (subscription) => {
 
   try {
     const userId = subscription.metadata.userId;
-    
+
     if (!userId) {
       console.error('[CoachWebhook] No userId in subscription metadata');
       return;
@@ -151,7 +161,7 @@ const handleCoachSubscriptionUpdated = async (subscription) => {
     // If subscription is cancelled or past_due, handle accordingly
     if (subscription.status === 'canceled' || subscription.status === 'past_due') {
       console.log(`[CoachWebhook] Coach ${userId} subscription is ${subscription.status} - may need to disable coach features`);
-      
+
       // Note: You might want to add logic here to handle:
       // - Disabling coach dashboard access
       // - Notifying linked athletes
@@ -220,7 +230,7 @@ exports.handler = async (event) => {
   }
 
   let stripeEvent;
-  
+
   try {
     const sig = event.headers['stripe-signature'];
     stripeEvent = stripe.webhooks.constructEvent(event.body, sig, endpointSecret);
@@ -233,7 +243,7 @@ exports.handler = async (event) => {
   }
 
   console.log(`[CoachWebhook] Processing webhook event type: ${stripeEvent.type}`);
-  
+
   try {
     switch (stripeEvent.type) {
       // Coach-specific events

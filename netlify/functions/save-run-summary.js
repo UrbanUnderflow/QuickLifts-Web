@@ -3,10 +3,20 @@ const admin = require('firebase-admin');
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
   try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY || '{}');
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
+    if (process.env.FIREBASE_SECRET_KEY) {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.FIREBASE_PROJECT_ID || "quicklifts-dd3f1",
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
+          privateKey: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
+        })
+      });
+    } else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+    }
   } catch (error) {
     console.error('Error initializing Firebase Admin:', error);
   }
@@ -41,7 +51,7 @@ exports.handler = async (event) => {
 
   try {
     const runSummary = JSON.parse(event.body);
-    
+
     if (!runSummary.userId) {
       return {
         statusCode: 400,
@@ -52,7 +62,7 @@ exports.handler = async (event) => {
 
     // Generate ID if not provided
     const docId = runSummary.id || db.collection('users').doc().id;
-    
+
     // Prepare data for Firestore
     const firestoreData = {
       ...runSummary,
@@ -81,8 +91,8 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ 
-        success: true, 
+      body: JSON.stringify({
+        success: true,
         id: docId,
         message: 'Run summary saved successfully'
       })
@@ -93,9 +103,9 @@ exports.handler = async (event) => {
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         error: 'Failed to save run summary',
-        details: error.message 
+        details: error.message
       })
     };
   }

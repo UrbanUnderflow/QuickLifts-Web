@@ -22,24 +22,31 @@ let db: admin.firestore.Firestore;
 
 function initializeFirebase() {
   if (!admin.apps.length) {
-    const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    
-    if (!serviceAccountJson) {
-      throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set');
+    if (process.env.FIREBASE_SECRET_KEY) {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.FIREBASE_PROJECT_ID || "quicklifts-dd3f1",
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL || "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
+          privateKey: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
+        })
+      });
+    } else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+      let serviceAccount;
+      try {
+        serviceAccount = JSON.parse(serviceAccountJson);
+      } catch {
+        serviceAccount = JSON.parse(Buffer.from(serviceAccountJson, 'base64').toString());
+      }
+
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+      });
+    } else {
+      throw new Error('Firebase credentials environment variables are not set');
     }
-    
-    let serviceAccount;
-    try {
-      serviceAccount = JSON.parse(serviceAccountJson);
-    } catch {
-      serviceAccount = JSON.parse(Buffer.from(serviceAccountJson, 'base64').toString());
-    }
-    
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
   }
-  
+
   db = admin.firestore();
 }
 
@@ -52,28 +59,28 @@ function getMonthName(month: number): string {
 function isLastSaturdayBeforeFirstMonday(): boolean {
   const now = new Date();
   const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
-  
+
   // Must be Saturday
   if (dayOfWeek !== 6) {
     return false;
   }
-  
+
   // Check if Monday (2 days from now) is in a new month or is the 1st-7th
   const monday = new Date(now);
   monday.setDate(monday.getDate() + 2);
-  
+
   // If Monday is in a different month than today, or Monday is the 1st
   // This means we're the Saturday before the first Monday
   const isNewMonth = monday.getMonth() !== now.getMonth();
   const mondayIsFirst = monday.getDate() === 1;
   const mondayIsFirstWeek = monday.getDate() <= 7 && monday.getDay() === 1;
-  
+
   return isNewMonth || mondayIsFirst || mondayIsFirstWeek;
 }
 
 function getDraftReminderEmailContent(
-  monthName: string, 
-  year: number, 
+  monthName: string,
+  year: number,
   draftUrl: string,
   weeklyUpdatesCount: number
 ): string {
@@ -227,20 +234,20 @@ function getDraftReminderEmailContent(
 
 const sendDraftReminder: Handler = async (event: HandlerEvent, context: HandlerContext) => {
   console.log("📧 Draft review reminder triggered");
-  
+
   // Check if this is the right time to send (Saturday before first Monday)
   if (!isLastSaturdayBeforeFirstMonday()) {
     console.log("⏭️ Not the Saturday before first Monday, skipping...");
     return {
       statusCode: 200,
-      body: JSON.stringify({ 
-        success: true, 
+      body: JSON.stringify({
+        success: true,
         skipped: true,
         reason: 'Not the Saturday before first Monday of the month'
       })
     };
   }
-  
+
   if (!BREVO_API_KEY) {
     console.error('Brevo API key (BREVO_MARKETING_KEY) is not set.');
     return {
@@ -251,7 +258,7 @@ const sendDraftReminder: Handler = async (event: HandlerEvent, context: HandlerC
 
   try {
     initializeFirebase();
-    
+
     const now = new Date();
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
@@ -272,10 +279,10 @@ const sendDraftReminder: Handler = async (event: HandlerEvent, context: HandlerC
       console.log('⚠️ No weekly updates found for this month, skipping draft generation');
       return {
         statusCode: 200,
-        body: JSON.stringify({ 
-          success: true, 
+        body: JSON.stringify({
+          success: true,
           skipped: true,
-          reason: 'No weekly updates to generate draft from' 
+          reason: 'No weekly updates to generate draft from'
         })
       };
     }
@@ -295,7 +302,7 @@ const sendDraftReminder: Handler = async (event: HandlerEvent, context: HandlerC
       // Create a placeholder draft
       const draftRef = db.collection('reviewDrafts').doc();
       draftId = draftRef.id;
-      
+
       await draftRef.set({
         id: draftId,
         monthYear,
@@ -314,7 +321,7 @@ const sendDraftReminder: Handler = async (event: HandlerEvent, context: HandlerC
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         generatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      
+
       console.log(`📝 Created placeholder draft: ${draftId}`);
     }
 
@@ -362,7 +369,7 @@ const sendDraftReminder: Handler = async (event: HandlerEvent, context: HandlerC
       console.error("Brevo API Error:", response.status, errorBody);
       return {
         statusCode: response.status,
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           success: false,
           error: `Failed to send email: ${errorBody.message || 'Unknown error'}`
         })
