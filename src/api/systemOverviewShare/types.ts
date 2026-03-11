@@ -5,6 +5,7 @@ export interface SystemOverviewShareLink {
   sectionLabel: string;
   sectionDescription?: string;
   snapshotText: string;
+  passcodeProtected?: boolean;
   createdByEmail?: string;
   createdAt?: string | null;
   revokedAt?: string | null;
@@ -17,4 +18,5 @@ export interface CreateSystemOverviewShareLinkInput {
   sectionLabel: string;
   sectionDescription?: string;
   snapshotText: string;
+  passcode?: string;
 }

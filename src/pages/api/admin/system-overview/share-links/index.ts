@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { randomBytes } from 'crypto';
 import admin from '../../../../../lib/firebase-admin';
 import { requireAdminRequest } from './_auth';
+import { createPasscodeHash } from '../../../../../lib/systemOverviewShareAccess';
 
 const COLLECTION = 'systemOverviewShareLinks';
 
@@ -30,6 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             sectionLabel: data.sectionLabel || '',
             sectionDescription: data.sectionDescription || '',
             snapshotText: data.snapshotText || '',
+            passcodeProtected: Boolean(data.passcodeProtected),
             createdByEmail: data.createdByEmail || '',
             createdAt: toIso(data.createdAt),
             revokedAt: toIso(data.revokedAt),
@@ -46,7 +48,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (req.method === 'POST') {
-    const { sectionId, systemId, sectionLabel, sectionDescription, snapshotText } = req.body || {};
+    const { sectionId, systemId, sectionLabel, sectionDescription, snapshotText, passcode } = req.body || {};
 
     if (!sectionId || !systemId || !sectionLabel || !snapshotText) {
       return res.status(400).json({ error: 'sectionId, systemId, sectionLabel, and snapshotText are required.' });
@@ -58,6 +60,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         process.env.NEXT_PUBLIC_SITE_URL ||
         `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}`;
       const shareUrl = `${baseUrl}/shared/system-overview/${token}`;
+      const trimmedPasscode = typeof passcode === 'string' ? passcode.trim() : '';
+      const passcodeHash = trimmedPasscode ? createPasscodeHash(trimmedPasscode) : null;
 
       await db.collection(COLLECTION).doc(token).set({
         sectionId,
@@ -65,6 +69,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         sectionLabel,
         sectionDescription: sectionDescription || '',
         snapshotText,
+        passcodeProtected: Boolean(passcodeHash),
+        passcodeSalt: passcodeHash?.salt || null,
+        passcodeHash: passcodeHash?.hash || null,
         createdByEmail: adminUser.email,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         revokedAt: null,
@@ -80,6 +87,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           sectionLabel,
           sectionDescription: sectionDescription || '',
           snapshotText,
+          passcodeProtected: Boolean(passcodeHash),
           createdByEmail: adminUser.email,
           createdAt: new Date().toISOString(),
           revokedAt: null,

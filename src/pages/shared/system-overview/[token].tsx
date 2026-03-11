@@ -3,15 +3,19 @@ import Head from 'next/head';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { motion } from 'framer-motion';
 import admin from '../../../lib/firebase-admin';
+import { getSystemOverviewShareCookieName, verifySystemOverviewShareAccessCookieValue } from '../../../lib/systemOverviewShareAccess';
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
 type SharedSystemOverviewPageProps = {
   share: {
+    token: string;
     sectionLabel: string;
     sectionDescription: string;
     snapshotText: string;
     createdAt: string | null;
+    passcodeProtected: boolean;
+    isLocked: boolean;
   };
 };
 
@@ -661,16 +665,53 @@ function renderEnhancedText(text: string): React.ReactNode {
 // ─── Main Page Component ─────────────────────────────────────────────────
 
 const SharedSystemOverviewPage = ({ share }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
-  const blocks = useMemo(() => parseSnapshotText(share.snapshotText), [share.snapshotText]);
+  const blocks = useMemo(() => (share.isLocked ? [] : parseSnapshotText(share.snapshotText)), [share.isLocked, share.snapshotText]);
   const [copied, setCopied] = useState(false);
+  const [passcode, setPasscode] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
 
   const handleCopy = async () => {
+    if (share.isLocked) return;
     try {
       await navigator.clipboard.writeText(share.snapshotText);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       /* noop */
+    }
+  };
+
+  const handleUnlock = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!passcode.trim()) {
+      setUnlockError('Passcode is required.');
+      return;
+    }
+
+    setUnlocking(true);
+    setUnlockError(null);
+
+    try {
+      const response = await fetch(`/api/shared/system-overview/${encodeURIComponent(share.token)}/unlock`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ passcode: passcode.trim() }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || 'Incorrect passcode.');
+      }
+
+      window.location.reload();
+    } catch (error) {
+      console.error('[shared/system-overview] Failed to unlock share:', error);
+      setUnlockError(error instanceof Error ? error.message : 'Failed to unlock shared artifact.');
+    } finally {
+      setUnlocking(false);
     }
   };
 
@@ -754,6 +795,7 @@ const SharedSystemOverviewPage = ({ share }: InferGetServerSidePropsType<typeof 
 
             <button
               onClick={handleCopy}
+              disabled={share.isLocked}
               className="flex-shrink-0 flex items-center gap-1.5 rounded-lg transition-all duration-200"
               style={{
                 fontSize: 11,
@@ -761,7 +803,8 @@ const SharedSystemOverviewPage = ({ share }: InferGetServerSidePropsType<typeof 
                 padding: '6px 12px',
                 border: copied ? '1px solid rgba(224,254,16,0.3)' : '1px solid rgba(63,63,70,0.8)',
                 background: copied ? 'rgba(224,254,16,0.08)' : 'rgba(39,39,42,0.5)',
-                color: copied ? '#E0FE10' : '#a1a1aa',
+                color: copied ? '#E0FE10' : share.isLocked ? '#52525b' : '#a1a1aa',
+                opacity: share.isLocked ? 0.6 : 1,
               }}
             >
               {copied ? (
@@ -769,7 +812,7 @@ const SharedSystemOverviewPage = ({ share }: InferGetServerSidePropsType<typeof 
               ) : (
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" /></svg>
               )}
-              {copied ? 'Copied' : 'Copy'}
+              {share.isLocked ? 'Locked' : copied ? 'Copied' : 'Copy'}
             </button>
           </motion.nav>
         </header>
@@ -824,26 +867,121 @@ const SharedSystemOverviewPage = ({ share }: InferGetServerSidePropsType<typeof 
                 <span style={{ width: 3, height: 3, borderRadius: '50%', background: '#3f3f46' }} />
                 <span className="flex items-center gap-1.5" style={{ fontSize: 11, color: '#52525b' }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
-                  View-only · Private link
+                  {share.passcodeProtected ? 'View-only · Passcode protected' : 'View-only · Private link'}
                 </span>
               </div>
             </div>
           </motion.section>
 
-          {/* Artifact body */}
-          <motion.section
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.18 }}
-            className="relative rounded-2xl overflow-hidden"
-            style={{ marginTop: 16 }}
-          >
-            {/* Glass surface */}
-            <div className="absolute inset-0 rounded-2xl" style={{ background: 'linear-gradient(180deg, rgba(20,20,24,0.55), rgba(12,12,16,0.45))', border: '1px solid rgba(255,255,255,0.05)' }} />
-            <div className="absolute top-0 left-0 right-0 h-px opacity-30" style={{ background: 'linear-gradient(90deg, transparent 10%, rgba(139,92,246,0.4) 50%, transparent 90%)' }} />
+          {share.isLocked ? (
+            <motion.section
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.18 }}
+              className="relative rounded-2xl overflow-hidden"
+              style={{ marginTop: 16 }}
+            >
+              <div className="absolute inset-0 rounded-2xl" style={{ background: 'linear-gradient(180deg, rgba(20,20,24,0.55), rgba(12,12,16,0.45))', border: '1px solid rgba(255,255,255,0.05)' }} />
+              <div className="absolute top-0 left-0 right-0 h-px opacity-30" style={{ background: 'linear-gradient(90deg, transparent 10%, rgba(139,92,246,0.4) 50%, transparent 90%)' }} />
 
-            <div className="relative" style={{ padding: '32px 36px 40px' }}>
-              {blocks.map((block, idx) => {
+              <div className="relative" style={{ padding: '32px 36px 40px' }}>
+                <div
+                  className="rounded-2xl"
+                  style={{
+                    padding: '28px 24px',
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    maxWidth: 520,
+                  }}
+                >
+                  <div
+                    className="inline-flex items-center gap-2 rounded-full"
+                    style={{
+                      padding: '5px 12px',
+                      marginBottom: 16,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: '0.12em',
+                      textTransform: 'uppercase',
+                      color: '#facc15',
+                      background: 'rgba(250,204,21,0.08)',
+                      border: '1px solid rgba(250,204,21,0.16)',
+                    }}
+                  >
+                    Protected Share
+                  </div>
+                  <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fafafa', lineHeight: 1.25 }}>
+                    Enter passcode to view this artifact
+                  </h2>
+                  <p style={{ fontSize: 14, color: '#a1a1aa', lineHeight: 1.7, marginTop: 12 }}>
+                    This shared document is protected at the server level. The artifact content is not sent to the browser until the correct passcode is verified.
+                  </p>
+
+                  <form onSubmit={handleUnlock} style={{ marginTop: 22 }}>
+                    <label style={{ display: 'block' }}>
+                      <span style={{ display: 'block', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#71717a', marginBottom: 8 }}>
+                        Passcode
+                      </span>
+                      <input
+                        type="password"
+                        value={passcode}
+                        onChange={(event) => setPasscode(event.target.value.toUpperCase())}
+                        autoCapitalize="characters"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        style={{
+                          width: '100%',
+                          borderRadius: 12,
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          background: 'rgba(0,0,0,0.25)',
+                          color: '#fafafa',
+                          padding: '12px 14px',
+                          outline: 'none',
+                        }}
+                        placeholder="Enter passcode"
+                      />
+                    </label>
+
+                    {unlockError ? (
+                      <p style={{ marginTop: 10, fontSize: 12, color: '#fca5a5' }}>{unlockError}</p>
+                    ) : null}
+
+                    <button
+                      type="submit"
+                      disabled={unlocking}
+                      style={{
+                        marginTop: 16,
+                        borderRadius: 12,
+                        border: '1px solid rgba(224,254,16,0.18)',
+                        background: 'rgba(224,254,16,0.9)',
+                        color: '#111827',
+                        padding: '11px 16px',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        opacity: unlocking ? 0.7 : 1,
+                        cursor: unlocking ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {unlocking ? 'Unlocking...' : 'Unlock Artifact'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </motion.section>
+          ) : (
+            <motion.section
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.18 }}
+              className="relative rounded-2xl overflow-hidden"
+              style={{ marginTop: 16 }}
+            >
+              {/* Glass surface */}
+              <div className="absolute inset-0 rounded-2xl" style={{ background: 'linear-gradient(180deg, rgba(20,20,24,0.55), rgba(12,12,16,0.45))', border: '1px solid rgba(255,255,255,0.05)' }} />
+              <div className="absolute top-0 left-0 right-0 h-px opacity-30" style={{ background: 'linear-gradient(90deg, transparent 10%, rgba(139,92,246,0.4) 50%, transparent 90%)' }} />
+
+              <div className="relative" style={{ padding: '32px 36px 40px' }}>
+                {blocks.map((block, idx) => {
                 switch (block.type) {
                   case 'section-header': {
                     const accent = ACCENTS[sectionIdx % ACCENTS.length];
@@ -1030,9 +1168,10 @@ const SharedSystemOverviewPage = ({ share }: InferGetServerSidePropsType<typeof 
                   default:
                     return null;
                 }
-              })}
-            </div>
-          </motion.section>
+                })}
+              </div>
+            </motion.section>
+          )}
 
           {/* Footer */}
           <footer className="flex flex-col items-center gap-3" style={{ paddingTop: 36, paddingBottom: 48 }}>
@@ -1060,7 +1199,7 @@ const SharedSystemOverviewPage = ({ share }: InferGetServerSidePropsType<typeof 
 
 // ─── Server Side Props ───────────────────────────────────────────────────
 
-export const getServerSideProps: GetServerSideProps<SharedSystemOverviewPageProps> = async ({ params, res }) => {
+export const getServerSideProps: GetServerSideProps<SharedSystemOverviewPageProps> = async ({ params, req, res }) => {
   const token = typeof params?.token === 'string' ? params.token : '';
   if (!token) return { notFound: true };
 
@@ -1070,16 +1209,22 @@ export const getServerSideProps: GetServerSideProps<SharedSystemOverviewPageProp
 
     const data = docSnap.data() || {};
     if (data.revokedAt) return { notFound: true };
+    const passcodeProtected = Boolean(data.passcodeProtected && data.passcodeHash && data.passcodeSalt);
+    const accessCookie = req.cookies[getSystemOverviewShareCookieName(token)];
+    const isUnlocked = !passcodeProtected || verifySystemOverviewShareAccessCookieValue(token, accessCookie);
 
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
 
     return {
       props: {
         share: {
+          token,
           sectionLabel: data.sectionLabel || 'Shared System Overview Artifact',
           sectionDescription: data.sectionDescription || '',
-          snapshotText: data.snapshotText || '',
+          snapshotText: isUnlocked ? data.snapshotText || '' : '',
           createdAt: data.createdAt?.toDate?.()?.toISOString?.() || null,
+          passcodeProtected,
+          isLocked: passcodeProtected && !isUnlocked,
         },
       },
     };

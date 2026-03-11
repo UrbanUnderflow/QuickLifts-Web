@@ -174,6 +174,8 @@ const SystemOverviewPage: React.FC = () => {
   const [shareRevokingToken, setShareRevokingToken] = useState<string | null>(null);
   const [shareLinks, setShareLinks] = useState<SystemOverviewShareLink[]>([]);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [sharePasscodeEnabled, setSharePasscodeEnabled] = useState(false);
+  const [sharePasscode, setSharePasscode] = useState('');
   const artifactContentRef = React.useRef<HTMLDivElement | null>(null);
 
   // Derive filtered sidebar sections for the active system tab
@@ -246,6 +248,8 @@ const SystemOverviewPage: React.FC = () => {
     setCopyState('idle');
     setShareMenuOpen(false);
     setShareError(null);
+    setSharePasscodeEnabled(false);
+    setSharePasscode('');
   }, [activeSectionId]);
 
   useEffect(() => {
@@ -294,6 +298,11 @@ const SystemOverviewPage: React.FC = () => {
       return;
     }
 
+    if (sharePasscodeEnabled && sharePasscode.trim().length < 4) {
+      setShareError('Passcode must be at least 4 characters.');
+      return;
+    }
+
     setShareCreating(true);
     setShareError(null);
 
@@ -304,10 +313,13 @@ const SystemOverviewPage: React.FC = () => {
         sectionLabel: activeSectionMeta.label,
         sectionDescription: activeSectionMeta.description,
         snapshotText,
+        passcode: sharePasscodeEnabled ? sharePasscode.trim() : '',
       });
 
       setShareLinks((current) => [createdLink, ...current]);
       await navigator.clipboard.writeText(createdLink.shareUrl);
+      setSharePasscodeEnabled(false);
+      setSharePasscode('');
     } catch (error) {
       console.error('[SystemOverview] Failed to create share link:', error);
       setShareError('Failed to create share link.');
@@ -833,6 +845,48 @@ const SystemOverviewPage: React.FC = () => {
                         </div>
 
                         <div className="mt-3 space-y-2">
+                          <div className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-semibold text-white">Passcode Protection</p>
+                                <p className="mt-1 text-[11px] text-zinc-500">
+                                  Require a passcode before the shared artifact can be viewed.
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSharePasscodeEnabled((current) => !current);
+                                  setSharePasscode('');
+                                }}
+                                className={`inline-flex h-6 w-11 items-center rounded-full border transition ${
+                                  sharePasscodeEnabled ? 'border-amber-400/40 bg-amber-500/20' : 'border-zinc-700 bg-black/20'
+                                }`}
+                              >
+                                <span
+                                  className={`block h-4 w-4 rounded-full bg-white transition-transform ${
+                                    sharePasscodeEnabled ? 'translate-x-5' : 'translate-x-1'
+                                  }`}
+                                />
+                              </button>
+                            </div>
+                            {sharePasscodeEnabled ? (
+                              <label className="mt-3 block">
+                                <span className="mb-1 block text-[11px] uppercase tracking-wide text-zinc-500">Passcode</span>
+                                <input
+                                  type="password"
+                                  value={sharePasscode}
+                                  onChange={(event) => setSharePasscode(event.target.value.toUpperCase())}
+                                  autoCapitalize="characters"
+                                  autoCorrect="off"
+                                  spellCheck={false}
+                                  className="w-full rounded-lg border border-zinc-700 bg-black/20 px-3 py-2 text-xs text-white outline-none transition focus:border-amber-400"
+                                  placeholder="Set passcode"
+                                />
+                              </label>
+                            ) : null}
+                          </div>
+
                           {shareLinksLoading ? (
                             <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-black/20 px-3 py-3 text-xs text-zinc-400">
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -849,6 +903,9 @@ const SystemOverviewPage: React.FC = () => {
                                 <p className="mt-1 text-[11px] text-zinc-500">
                                   Created {link.createdAt ? new Date(link.createdAt).toLocaleString() : 'just now'}
                                 </p>
+                                {link.passcodeProtected ? (
+                                  <p className="mt-1 text-[11px] text-amber-300">Passcode protected</p>
+                                ) : null}
                                 <div className="mt-3 flex items-center gap-2">
                                   <button
                                     type="button"
