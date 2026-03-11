@@ -3,14 +3,15 @@ import Head from 'next/head';
 import Link from 'next/link';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut, type User as FirebaseAuthUser } from 'firebase/auth';
-import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, LogIn, LogOut, MailPlus, ShieldPlus, UserPlus } from 'lucide-react';
+import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, LogIn, LogOut, MailPlus, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import admin from '../../../lib/firebase-admin';
 import { auth } from '../../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
+import type { PulseCheckTeamMembershipRole } from '../../../api/firebase/pulsecheckProvisioning/types';
 import { claimUsername, generateUsernameFromEmail, isUsernameAvailable, isValidUsernameFormat, normalizeUsername } from '../../../api/firebase/auth/username';
 import { SubscriptionPlatform, SubscriptionType, UserLevel, userService } from '../../../api/firebase/user';
 
-type AdminActivationPageProps = {
+type TeamInvitePageProps = {
   invite: {
     token: string;
     organizationId: string;
@@ -19,12 +20,36 @@ type AdminActivationPageProps = {
     organizationName: string;
     teamName: string;
     status: string;
+    teamMembershipRole: PulseCheckTeamMembershipRole;
+    invitedTitle: string;
+    recipientName: string;
   };
 };
 
 type AuthMode = 'create-account' | 'sign-in';
 
-const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
+const roleLabel: Record<PulseCheckTeamMembershipRole, string> = {
+  'team-admin': 'Team Admin',
+  coach: 'Coach',
+  'performance-staff': 'Performance Staff',
+  'support-staff': 'Support Staff',
+  clinician: 'Clinician',
+  athlete: 'Athlete',
+};
+
+const nextHrefByRole = (role: PulseCheckTeamMembershipRole, organizationId: string, teamId: string) => {
+  if (role === 'team-admin') {
+    return `/PulseCheck/post-activation?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`;
+  }
+
+  if (role === 'athlete') {
+    return `/PulseCheck/athlete-onboarding?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`;
+  }
+
+  return `/PulseCheck/member-setup?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`;
+};
+
+const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
   const [mode, setMode] = useState<AuthMode>('create-account');
   const [authReady, setAuthReady] = useState(false);
   const [authUser, setAuthUser] = useState<FirebaseAuthUser | null>(null);
@@ -32,7 +57,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
     email: invite.targetEmail || '',
     password: '',
     confirmPassword: '',
-    username: generateUsernameFromEmail(invite.targetEmail || 'pulsecheckadmin'),
+    username: generateUsernameFromEmail(invite.targetEmail || invite.recipientName || invite.teamMembershipRole),
   });
   const [signInForm, setSignInForm] = useState({
     email: invite.targetEmail || '',
@@ -41,25 +66,10 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
   const [redeemedState, setRedeemedState] = useState<{
-    organizationId: string;
     organizationName: string;
-    teamId: string;
     teamName: string;
+    teamMembershipRole: PulseCheckTeamMembershipRole;
   } | null>(null);
-
-  useEffect(() => {
-    setCreateForm((current) => ({
-      ...current,
-      email: invite.targetEmail || current.email,
-      username:
-        current.username ||
-        generateUsernameFromEmail(invite.targetEmail || 'pulsecheckadmin'),
-    }));
-    setSignInForm((current) => ({
-      ...current,
-      email: invite.targetEmail || current.email,
-    }));
-  }, [invite.targetEmail]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
@@ -74,28 +84,16 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
   const normalizedAuthEmail = useMemo(() => authUser?.email?.trim().toLowerCase() || '', [authUser]);
   const authEmailMatchesInvite = !normalizedTargetEmail || !normalizedAuthEmail || normalizedTargetEmail === normalizedAuthEmail;
 
-  const completeRedeem = async () => {
-    const result = await pulseCheckProvisioningService.redeemAdminActivationInvite(invite.token);
-    setRedeemedState({
-      organizationId: result.organizationId,
-      organizationName: result.organizationName,
-      teamId: result.teamId,
-      teamName: result.teamName,
-    });
-    setMessage({
-      type: 'success',
-      text: `Activation complete. ${result.organizationName} is now active and your admin membership is in place.`,
-    });
-  };
-
-  const createPulseCheckAdminUser = async (user: FirebaseAuthUser, username: string) => {
+  const createTeamInviteUser = async (user: FirebaseAuthUser, username: string) => {
     const normalizedName = normalizeUsername(username);
-    const userData = {
+    const isAthlete = invite.teamMembershipRole === 'athlete';
+
+    await userService.updateUser(user.uid, {
       id: user.uid,
-      email: user.email || createForm.email.trim(),
+      email: user.email || createForm.email.trim().toLowerCase(),
       username: normalizedName,
       displayName: normalizedName,
-      role: 'coach' as const,
+      role: isAthlete ? 'athlete' : 'coach',
       registrationComplete: true,
       subscriptionType: SubscriptionType.unsubscribed,
       subscriptionPlatform: SubscriptionPlatform.Web,
@@ -116,18 +114,30 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
       videoCount: 0,
       creator: null,
       winner: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
       onboardInvite: {
-        source: 'pulsecheck-admin-activation',
+        source: 'pulsecheck-team-invite',
         token: invite.token,
         organizationId: invite.organizationId,
         teamId: invite.teamId,
+        teamMembershipRole: invite.teamMembershipRole,
         capturedAt: Math.floor(Date.now() / 1000),
       },
-    };
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  };
 
-    await userService.updateUser(user.uid, userData);
+  const completeRedeem = async () => {
+    const result = await pulseCheckProvisioningService.redeemTeamInvite(invite.token);
+    setRedeemedState({
+      organizationName: result.organizationName,
+      teamName: result.teamName,
+      teamMembershipRole: result.teamMembershipRole,
+    });
+    setMessage({
+      type: 'success',
+      text: `Your ${roleLabel[result.teamMembershipRole]} access for ${result.teamName} is active.`,
+    });
   };
 
   const handleCreateAccount = async (event: React.FormEvent) => {
@@ -165,10 +175,10 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
 
       const credential = await createUserWithEmailAndPassword(auth, email, createForm.password);
       await claimUsername(credential.user.uid, username);
-      await createPulseCheckAdminUser(credential.user, username);
+      await createTeamInviteUser(credential.user, username);
       await completeRedeem();
     } catch (error) {
-      console.error('[pulsecheck-admin-activation] Failed to create account:', error);
+      console.error('[pulsecheck-team-invite] Failed to create account:', error);
       const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code) : '';
       const messageText =
         code === 'auth/email-already-in-use'
@@ -207,7 +217,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
       await signInWithEmailAndPassword(auth, email, signInForm.password);
       await completeRedeem();
     } catch (error) {
-      console.error('[pulsecheck-admin-activation] Failed to sign in:', error);
+      console.error('[pulsecheck-team-invite] Failed to sign in:', error);
       const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code) : '';
       const messageText =
         code === 'auth/invalid-credential' ||
@@ -232,7 +242,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
     try {
       await completeRedeem();
     } catch (error) {
-      console.error('[pulsecheck-admin-activation] Failed to redeem for signed-in user:', error);
+      console.error('[pulsecheck-team-invite] Failed to redeem for signed-in user:', error);
       setMessage({
         type: 'error',
         text: error instanceof Error ? error.message : 'Failed to redeem invite.',
@@ -247,63 +257,66 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
       await signOut(auth);
       setMessage(null);
     } catch (error) {
-      console.error('[pulsecheck-admin-activation] Failed to sign out:', error);
+      console.error('[pulsecheck-team-invite] Failed to sign out:', error);
       setMessage({ type: 'error', text: 'Failed to sign out.' });
     }
   };
 
+  const completionHref = nextHrefByRole(invite.teamMembershipRole, invite.organizationId, invite.teamId);
+
   return (
     <div className="min-h-screen bg-[#05070c] text-white">
       <Head>
-        <title>PulseCheck Admin Activation</title>
+        <title>PulseCheck Team Invite</title>
         <meta name="robots" content="noindex,nofollow" />
       </Head>
 
-      <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-10 md:px-6">
-        <section className="grid w-full gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-          <div className="rounded-[32px] border border-zinc-800 bg-[#090f1c] p-8 shadow-2xl">
+      <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center px-4 py-10 md:px-6">
+        <section className="grid w-full gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+          <div className="rounded-[32px] border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.12),_transparent_42%),#09111e] p-8 shadow-2xl">
             <div className="space-y-5">
-              <div className="inline-flex rounded-2xl border border-amber-500/25 bg-amber-500/10 p-3">
-                <ShieldPlus className="h-6 w-6 text-amber-300" />
+              <div className="inline-flex rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-3">
+                <Users className="h-6 w-6 text-cyan-200" />
               </div>
 
               <div className="space-y-2">
-                <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">PulseCheck Admin Activation</p>
-                <h1 className="text-3xl font-semibold text-white">Claim the organization handoff</h1>
+                <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">PulseCheck Team Invite</p>
+                <h1 className="text-3xl font-semibold text-white">Join {invite.teamName}</h1>
                 <p className="max-w-2xl text-sm leading-7 text-zinc-300">
-                  This invite activates <span className="font-medium text-white">{invite.organizationName}</span> and makes the
-                  accepted user the initial admin for <span className="font-medium text-white">{invite.teamName}</span>.
+                  This invite grants <span className="font-medium text-white">{roleLabel[invite.teamMembershipRole]}</span> access
+                  inside <span className="font-medium text-white">{invite.organizationName}</span>.
                 </p>
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
                   <div className="flex items-center gap-2">
-                    <MailPlus className="h-4 w-4 text-amber-300" />
-                    <p className="text-sm font-semibold text-white">Target Admin</p>
+                    <ShieldCheck className="h-4 w-4 text-cyan-200" />
+                    <p className="text-sm font-semibold text-white">Role</p>
                   </div>
-                  <p className="mt-3 text-sm text-zinc-300">{invite.targetEmail || 'Not specified'}</p>
+                  <p className="mt-3 text-sm text-zinc-300">{roleLabel[invite.teamMembershipRole]}</p>
                 </div>
 
                 <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-green-300" />
-                    <p className="text-sm font-semibold text-white">Invite Status</p>
+                    <MailPlus className="h-4 w-4 text-cyan-200" />
+                    <p className="text-sm font-semibold text-white">Target Email</p>
                   </div>
-                  <p className="mt-3 text-sm text-zinc-300">{redeemedState ? 'redeemed' : invite.status}</p>
+                  <p className="mt-3 text-sm text-zinc-300">{invite.targetEmail || 'Open invite link'}</p>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] p-4 text-sm leading-7 text-zinc-300">
-                Accepting this invite creates org and team admin memberships, marks the invite as redeemed, and moves the organization
-                and team from provisioning into active ownership.
-              </div>
+              {invite.invitedTitle ? (
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-4 text-sm leading-7 text-zinc-200">
+                  Invited title: <span className="font-medium text-white">{invite.invitedTitle}</span>
+                </div>
+              ) : null}
 
               <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-400">
                 <p className="font-medium text-white">What happens on redemption</p>
                 <p className="mt-2 leading-7">
-                  You become the first organization admin and team admin for this container. The invite is single-use and tied to the
-                  target email when one is specified.
+                  Your team membership is created and this invite is marked redeemed. Team admins continue into setup,
+                  while other roles land in the shared team workspace.
                 </p>
               </div>
             </div>
@@ -329,20 +342,20 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                   <CheckCircle2 className="h-6 w-6 text-green-300" />
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Activation Complete</p>
-                  <h2 className="mt-2 text-3xl font-semibold text-white">You now own the initial admin handoff</h2>
+                  <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Access Ready</p>
+                  <h2 className="mt-2 text-3xl font-semibold text-white">Your team access is live</h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
-                    <span className="font-medium text-white">{redeemedState.organizationName}</span> is active and your team admin
-                    membership for <span className="font-medium text-white">{redeemedState.teamName}</span> has been created.
+                    {redeemedState.organizationName} has attached your {roleLabel[redeemedState.teamMembershipRole].toLowerCase()} access to{' '}
+                    <span className="font-medium text-white">{redeemedState.teamName}</span>.
                   </p>
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <Link
-                    href={`/PulseCheck/post-activation?organizationId=${encodeURIComponent(redeemedState.organizationId)}&teamId=${encodeURIComponent(redeemedState.teamId)}`}
+                    href={completionHref}
                     className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
                   >
-                    Continue Setup
+                    Continue
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                   <Link
@@ -361,7 +374,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
               <div className="space-y-6">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Signed In</p>
-                  <h2 className="mt-2 text-3xl font-semibold text-white">Finish activation</h2>
+                  <h2 className="mt-2 text-3xl font-semibold text-white">Finish access setup</h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
                     You are currently signed in as <span className="font-medium text-white">{authUser.email}</span>.
                   </p>
@@ -388,10 +401,10 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                       type="button"
                       onClick={handleRedeemSignedInUser}
                       disabled={submitting}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-black transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldPlus className="h-4 w-4" />}
-                      {submitting ? 'Activating...' : 'Accept Invite and Activate'}
+                      {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                      {submitting ? 'Joining...' : 'Accept Invite'}
                     </button>
                     <button
                       type="button"
@@ -408,9 +421,9 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
               <div className="space-y-6">
                 <div>
                   <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Account Required</p>
-                  <h2 className="mt-2 text-3xl font-semibold text-white">Create or access your admin account</h2>
+                  <h2 className="mt-2 text-3xl font-semibold text-white">Create or access your Pulse account</h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
-                    Use the invited email, then redeem the organization handoff from this page.
+                    Use the invited email when one is specified, then accept the invite from this page.
                   </p>
                 </div>
 
@@ -420,7 +433,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                     onClick={() => setMode('create-account')}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                       mode === 'create-account'
-                        ? 'border-amber-400 bg-amber-500/[0.12] text-white'
+                        ? 'border-cyan-300 bg-cyan-400/[0.12] text-white'
                         : 'border-zinc-800 bg-black/20 text-zinc-300 hover:border-zinc-700'
                     }`}
                   >
@@ -428,7 +441,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                       <UserPlus className="h-4 w-4" />
                       <span className="text-sm font-semibold">Create Account</span>
                     </div>
-                    <p className="mt-2 text-xs text-zinc-400">Use this if the invited admin does not have a Pulse account yet.</p>
+                    <p className="mt-2 text-xs text-zinc-400">Use this if you do not have a Pulse account yet.</p>
                   </button>
 
                   <button
@@ -436,7 +449,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                     onClick={() => setMode('sign-in')}
                     className={`rounded-2xl border px-4 py-3 text-left transition ${
                       mode === 'sign-in'
-                        ? 'border-amber-400 bg-amber-500/[0.12] text-white'
+                        ? 'border-cyan-300 bg-cyan-400/[0.12] text-white'
                         : 'border-zinc-800 bg-black/20 text-zinc-300 hover:border-zinc-700'
                     }`}
                   >
@@ -444,7 +457,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                       <LogIn className="h-4 w-4" />
                       <span className="text-sm font-semibold">Sign In</span>
                     </div>
-                    <p className="mt-2 text-xs text-zinc-400">Use this if the invited admin already has an account.</p>
+                    <p className="mt-2 text-xs text-zinc-400">Use this if you already have an account.</p>
                   </button>
                 </div>
 
@@ -457,7 +470,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                         value={createForm.email}
                         onChange={(event) => setCreateForm((current) => ({ ...current, email: event.target.value }))}
                         disabled={!!invite.targetEmail}
-                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-400 disabled:cursor-not-allowed disabled:opacity-70"
+                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300 disabled:cursor-not-allowed disabled:opacity-70"
                       />
                     </label>
 
@@ -467,8 +480,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                         type="text"
                         value={createForm.username}
                         onChange={(event) => setCreateForm((current) => ({ ...current, username: event.target.value }))}
-                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-400"
-                        placeholder="pulsecheckadmin"
+                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
                       />
                     </label>
 
@@ -478,7 +490,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                         type="password"
                         value={createForm.password}
                         onChange={(event) => setCreateForm((current) => ({ ...current, password: event.target.value }))}
-                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-400"
+                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
                       />
                     </label>
 
@@ -488,17 +500,17 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                         type="password"
                         value={createForm.confirmPassword}
                         onChange={(event) => setCreateForm((current) => ({ ...current, confirmPassword: event.target.value }))}
-                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-400"
+                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
                       />
                     </label>
 
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-black transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-                      {submitting ? 'Creating Account...' : 'Create Account and Activate'}
+                      {submitting ? 'Creating Account...' : 'Create Account and Join'}
                     </button>
                   </form>
                 ) : (
@@ -510,7 +522,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                         value={signInForm.email}
                         onChange={(event) => setSignInForm((current) => ({ ...current, email: event.target.value }))}
                         disabled={!!invite.targetEmail}
-                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-400 disabled:cursor-not-allowed disabled:opacity-70"
+                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300 disabled:cursor-not-allowed disabled:opacity-70"
                       />
                     </label>
 
@@ -520,17 +532,17 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
                         type="password"
                         value={signInForm.password}
                         onChange={(event) => setSignInForm((current) => ({ ...current, password: event.target.value }))}
-                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-400"
+                        className="w-full rounded-2xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-300"
                       />
                     </label>
 
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-black transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
-                      {submitting ? 'Signing In...' : 'Sign In and Activate'}
+                      {submitting ? 'Signing In...' : 'Sign In and Join'}
                     </button>
                   </form>
                 )}
@@ -543,7 +555,7 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
   );
 };
 
-export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = async ({ params, res }) => {
+export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async ({ params, res }) => {
   const token = typeof params?.token === 'string' ? params.token : '';
   if (!token) return { notFound: true };
 
@@ -553,7 +565,7 @@ export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = 
 
     const invite = inviteSnap.data() || {};
     if (invite.status && invite.status !== 'active') return { notFound: true };
-    if (invite.inviteType !== 'admin-activation') return { notFound: true };
+    if (invite.inviteType !== 'team-access') return { notFound: true };
 
     const [organizationSnap, teamSnap] = await Promise.all([
       admin.firestore().collection('pulsecheck-organizations').doc(invite.organizationId || '').get(),
@@ -570,15 +582,18 @@ export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = 
           teamId: invite.teamId || '',
           targetEmail: invite.targetEmail || '',
           organizationName: organizationSnap.data()?.displayName || 'PulseCheck Organization',
-          teamName: teamSnap.data()?.displayName || 'Initial Team',
+          teamName: teamSnap.data()?.displayName || 'Team',
           status: invite.status || 'active',
+          teamMembershipRole: (invite.teamMembershipRole || 'coach') as PulseCheckTeamMembershipRole,
+          invitedTitle: invite.invitedTitle || '',
+          recipientName: invite.recipientName || '',
         },
       },
     };
   } catch (error) {
-    console.error('[pulsecheck-admin-activation] Failed to load invite:', error);
+    console.error('[pulsecheck-team-invite] Failed to load invite:', error);
     return { notFound: true };
   }
 };
 
-export default AdminActivationPage;
+export default TeamInvitePage;

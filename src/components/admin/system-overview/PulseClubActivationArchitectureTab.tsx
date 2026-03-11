@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, GitBranch, Settings2, Sparkles, Users } from 'lucide-react';
+import { Compass, GitBranch, Settings2, ShieldAlert, Sparkles, Users } from 'lucide-react';
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 
 const hostSettingsRows = [
@@ -25,6 +25,13 @@ const questionBankRows = [
   ['Weekly availability', 'multi select', 'Most important operational signal for pairing.'],
   ['Location / neighborhood', 'short text or select', 'Needed when clubs have in-person meetups.'],
   ['Accountability style', 'single select', 'Matches communication preferences and support style.'],
+];
+
+const pairingRiskRows = [
+  ['Compatibility mismatch', 'System should not imply that pairing is safety-vetted or guaranteed to be a fit.', 'Use opt-in pairing, host confirmation, and a simple rematch path.'],
+  ['Known conflict between members', 'Hosts need a way to avoid pairing people who should not be matched.', 'Support a lightweight do-not-pair rule or host override list.'],
+  ['Unsafe behavior at an event', 'Pairing should not be treated as a substitute for event operations or supervision.', 'Require club code of conduct, removal rights, and incident escalation workflow.'],
+  ['Misleading product claims', 'Marketing the feature as screened, verified, or guaranteed creates avoidable exposure.', 'Position pairing as community/accountability support, not safety certification.'],
 ];
 
 const PulseClubActivationArchitectureTab: React.FC = () => {
@@ -118,6 +125,52 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
         />
       </SectionBlock>
 
+      <SectionBlock icon={Compass} title="Event Acquisition and App Conversion">
+        <div className="space-y-4">
+          <InfoCard
+            title="Recommended funnel"
+            accent="blue"
+            body="For a cold audience, the first gate should be interest, not app install. Web should capture intent quickly, while the app should handle belonging, activation, and club participation."
+          />
+          <StepRail
+            steps={[
+              {
+                title: 'Discover on web',
+                body: 'Runner sees the event page, understands the run, and hits a low-friction reserve or RSVP action without being forced to install the app first.',
+                owner: 'Growth surface',
+              },
+              {
+                title: 'Capture light RSVP',
+                body: 'Collect only the minimum contact details needed to hold intent and send follow-up. Do not front-load the full club setup here.',
+                owner: 'Event acquisition layer',
+              },
+              {
+                title: 'Push into the app',
+                body: 'Immediately after RSVP, deliver a clear join-in-Pulse action through app-linking so the runner can enter the club, complete onboarding, introduce themselves, and prepare for pairing.',
+                owner: 'Club activation layer',
+              },
+              {
+                title: 'Keep event-day fallback',
+                body: 'If the runner still has not installed the app, event-day QR or check-in links should still let them enter through the web fallback so the event itself is never blocked by install friction.',
+                owner: 'Operational fallback',
+              },
+            ]}
+          />
+          <CardGrid columns="xl:grid-cols-2">
+            <InfoCard
+              title="Product stance"
+              accent="green"
+              body="Use web for intent and the app for belonging. The app should feel like the place where the club comes alive, not the thing that prevents someone from saying yes to the first run."
+            />
+            <InfoCard
+              title="First-pass policy"
+              accent="amber"
+              body="Do not require app install before RSVP for broad or cold-audience events. App-first gating can be tested later once deep linking, event landing, and activation completion rates are stronger."
+            />
+          </CardGrid>
+        </div>
+      </SectionBlock>
+
       <SectionBlock icon={GitBranch} title="Member State Model">
         <div className="space-y-4">
           <InfoCard
@@ -164,6 +217,29 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
             'The architecture should stay reusable across creator clubs without introducing club-specific data paths.',
           ]}
         />
+      </SectionBlock>
+
+      <SectionBlock icon={ShieldAlert} title="Pairing Risk and Mitigation Model">
+        <div className="space-y-4">
+          <InfoCard
+            title="System posture"
+            accent="red"
+            body="Pairing is a community and accountability feature, not a safety certification system. The product should not imply that matched members have been screened, verified, or guaranteed to be compatible."
+          />
+          <DataTable
+            columns={['Risk', 'Why it matters', 'First-pass mitigation']}
+            rows={pairingRiskRows}
+          />
+          <BulletList
+            items={[
+              'Pairing should be opt-in rather than automatically forced on every member.',
+              'Hosts should be able to decline, unpair, or rematch members quickly.',
+              'The product should support a basic do-not-pair control before scale.',
+              'Every club using pairing should also have a code of conduct and clear event removal rights.',
+              'Event waiver, terms, and conduct language should be reviewed by counsel before broad rollout.',
+            ]}
+          />
+        </div>
       </SectionBlock>
 
       <SectionBlock icon={Compass} title="Deliberately Deferred">

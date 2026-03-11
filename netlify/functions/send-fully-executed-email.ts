@@ -6,7 +6,12 @@ const SENDER_NAME = "Pulse Intelligence Labs";
 const ADMIN_EMAIL = "tre@fitwithpulse.ai";
 const BASE_URL = process.env.CUSTOM_BASE_URL || "https://fitwithpulse.ai";
 
-const handler: Handler = async (event: HandlerEvent, context: HandlerContext) => {
+type Recipient = {
+    email: string;
+    name: string;
+};
+
+const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) => {
     if (event.httpMethod !== "POST") {
         return { statusCode: 405, body: "Method Not Allowed" };
     }
@@ -70,35 +75,63 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       </html>
     `;
 
-        // Filter out invalid emails just in case
-        let recipients = allSigners.filter((s: any) => s && s.email && s.name);
+        const dedupedRecipients = new Map<string, Recipient>();
+        for (const signer of allSigners) {
+            if (!signer?.email) continue;
+            const normalizedEmail = String(signer.email).trim().toLowerCase();
+            if (!normalizedEmail) continue;
+            dedupedRecipients.set(normalizedEmail, {
+                email: normalizedEmail,
+                name: String(signer.name || signer.email).trim() || normalizedEmail,
+            });
+        }
 
-        // Also add the admin to the executed email CC/To so they know it is done
-        recipients.push({ name: "Tremaine Grant", email: ADMIN_EMAIL });
+        // Keep the admin informed, but as a separate email so it does not become a grouped thread.
+        dedupedRecipients.set(ADMIN_EMAIL.toLowerCase(), {
+            email: ADMIN_EMAIL,
+            name: "Tremaine Grant",
+        });
+
+        const recipients = Array.from(dedupedRecipients.values());
 
         if (recipients.length > 0) {
-            const executedResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
-                method: "POST",
-                headers: {
-                    "Accept": "application/json",
-                    "api-key": BREVO_API_KEY,
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    sender: { name: SENDER_NAME, email: SENDER_EMAIL },
-                    to: recipients,
-                    subject: executedSubject,
-                    htmlContent: executedHtmlContent,
-                }),
-            });
+            const results = await Promise.allSettled(
+                recipients.map(async (recipient) => {
+                    const executedResponse = await fetch("https://api.brevo.com/v3/smtp/email", {
+                        method: "POST",
+                        headers: {
+                            "Accept": "application/json",
+                            "api-key": BREVO_API_KEY,
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            sender: { name: SENDER_NAME, email: SENDER_EMAIL },
+                            to: [recipient],
+                            subject: executedSubject,
+                            htmlContent: executedHtmlContent,
+                        }),
+                    });
 
-            if (!executedResponse.ok) {
-                console.error("Failed to send fully executed confirmation:", await executedResponse.json());
-                return { statusCode: 500, body: JSON.stringify({ message: "Failed to send to Brevo API." }) };
+                    if (!executedResponse.ok) {
+                        let errorBody: unknown;
+                        try {
+                            errorBody = await executedResponse.json();
+                        } catch {
+                            errorBody = await executedResponse.text();
+                        }
+                        throw new Error(`Failed for ${recipient.email}: ${JSON.stringify(errorBody)}`);
+                    }
+                })
+            );
+
+            const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+            if (failures.length > 0) {
+                console.error("Failed to send one or more fully executed emails:", failures.map((failure) => failure.reason));
+                return { statusCode: 500, body: JSON.stringify({ message: "Failed to send one or more notification emails." }) };
             }
         }
 
-        return { statusCode: 200, body: JSON.stringify({ message: "Fully executed email sent successfully." }) };
+        return { statusCode: 200, body: JSON.stringify({ message: "Fully executed emails sent successfully." }) };
 
     } catch (error: any) {
         console.error("Error in send-fully-executed-email function:", error);
