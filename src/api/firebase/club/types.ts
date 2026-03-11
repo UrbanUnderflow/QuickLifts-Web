@@ -1,6 +1,14 @@
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
 import { ShortUser } from '../user';
 
+const convertOptionalFirestoreTimestamp = (timestamp: any): Date | undefined => {
+  if (timestamp == null) {
+    return undefined;
+  }
+
+  return convertFirestoreTimestamp(timestamp);
+};
+
 export class ClubFeatures {
   workoutLeaderboardEnabled: boolean;
   nutritionLeaderboardEnabled: boolean;
@@ -53,6 +61,125 @@ export class ClubFeatures {
   }
 }
 
+export type ClubActivationMatchingMode = 'manual' | 'assisted';
+export type ClubActivationQuestionType = 'single_select' | 'multi_select' | 'short_text';
+
+export class ClubActivationConfig {
+  enabled: boolean;
+  requiredQuestionIds: string[];
+  introRequired: boolean;
+  introTemplate?: string;
+  matchingEnabled: boolean;
+  matchingMode: ClubActivationMatchingMode;
+
+  constructor(data: any = {}) {
+    this.enabled = data.enabled ?? false;
+    this.requiredQuestionIds = data.requiredQuestionIds || [];
+    this.introRequired = data.introRequired ?? false;
+    this.introTemplate = data.introTemplate || undefined;
+    this.matchingEnabled = data.matchingEnabled ?? false;
+    this.matchingMode = data.matchingMode === 'assisted' ? 'assisted' : 'manual';
+  }
+
+  toDictionary(): { [key: string]: any } {
+    const dict: { [key: string]: any } = {
+      enabled: this.enabled,
+      requiredQuestionIds: this.requiredQuestionIds,
+      introRequired: this.introRequired,
+      matchingEnabled: this.matchingEnabled,
+      matchingMode: this.matchingMode,
+    };
+
+    if (this.introTemplate) {
+      dict.introTemplate = this.introTemplate;
+    }
+
+    return dict;
+  }
+}
+
+export class ClubActivationQuestionOption {
+  id: string;
+  label: string;
+
+  constructor(data: any = {}) {
+    this.id = data.id || '';
+    this.label = data.label || '';
+  }
+
+  toDictionary(): { [key: string]: any } {
+    return {
+      id: this.id,
+      label: this.label,
+    };
+  }
+}
+
+export class ClubActivationQuestionDefinition {
+  id: string;
+  title: string;
+  description?: string;
+  type: ClubActivationQuestionType;
+  options: ClubActivationQuestionOption[];
+  placeholder?: string;
+
+  constructor(data: any = {}) {
+    this.id = data.id || '';
+    this.title = data.title || '';
+    this.description = data.description || undefined;
+    this.type = data.type || 'single_select';
+    this.options = (data.options || []).map((option: any) => new ClubActivationQuestionOption(option));
+    this.placeholder = data.placeholder || undefined;
+  }
+
+  toDictionary(): { [key: string]: any } {
+    const dict: { [key: string]: any } = {
+      id: this.id,
+      title: this.title,
+      type: this.type,
+      options: this.options.map((option) => option.toDictionary()),
+    };
+
+    if (this.description) {
+      dict.description = this.description;
+    }
+
+    if (this.placeholder) {
+      dict.placeholder = this.placeholder;
+    }
+
+    return dict;
+  }
+}
+
+export class ClubActivationResponse {
+  questionId: string;
+  type: ClubActivationQuestionType;
+  selectedOptionIds: string[];
+  textValue?: string;
+
+  constructor(data: any = {}) {
+    this.questionId = data.questionId || '';
+    this.type = data.type || 'single_select';
+    this.selectedOptionIds = data.selectedOptionIds || [];
+    this.textValue = data.textValue || undefined;
+  }
+
+  toDictionary(): { [key: string]: any } {
+    const dict: { [key: string]: any } = {
+      questionId: this.questionId,
+      type: this.type,
+      selectedOptionIds: this.selectedOptionIds,
+    };
+
+    if (this.textValue) {
+      dict.textValue = this.textValue;
+    }
+
+    return dict;
+  }
+}
+
 /**
  * Represents a Creator Club - a persistent community space for a creator's followers
  */
@@ -70,6 +197,7 @@ export class Club {
   secondaryColor?: string;
   pinnedRoundIds: string[];
   features: ClubFeatures;
+  activation: ClubActivationConfig;
   tagline?: string;
   clubType?: string;
   createdAt: Date;
@@ -89,6 +217,7 @@ export class Club {
     this.secondaryColor = data.secondaryColor || undefined;
     this.pinnedRoundIds = data.pinnedRoundIds || [];
     this.features = new ClubFeatures(data.features || {});
+    this.activation = new ClubActivationConfig(data.activation || {});
     this.tagline = data.tagline || undefined;
     this.clubType = data.clubType || undefined;
     this.createdAt = convertFirestoreTimestamp(data.createdAt);
@@ -121,6 +250,7 @@ export class Club {
       linkedRoundIds: this.linkedRoundIds,
       pinnedRoundIds: this.pinnedRoundIds,
       features: this.features.toDictionary(),
+      activation: this.activation.toDictionary(),
       createdAt: dateToUnixTimestamp(this.createdAt),
       updatedAt: dateToUnixTimestamp(this.updatedAt)
     };
@@ -169,6 +299,9 @@ export class ClubMember {
   joinedAt: Date;
   isActive: boolean; // For opt-out tracking
   totalPoints: number;
+  onboardedAt?: Date;
+  introducedAt?: Date;
+  pairedAt?: Date;
 
   constructor(data: any) {
     this.clubId = data.clubId || '';
@@ -178,6 +311,9 @@ export class ClubMember {
     this.joinedAt = convertFirestoreTimestamp(data.joinedAt);
     this.isActive = data.isActive !== false; // Default to true
     this.totalPoints = data.totalPoints || 0;
+    this.onboardedAt = convertOptionalFirestoreTimestamp(data.onboardedAt);
+    this.introducedAt = convertOptionalFirestoreTimestamp(data.introducedAt);
+    this.pairedAt = convertOptionalFirestoreTimestamp(data.pairedAt);
 
     // Parse userInfo
     if (data.userInfo) {
@@ -195,7 +331,7 @@ export class ClubMember {
   }
 
   toDictionary(): { [key: string]: any } {
-    return {
+    const dict: { [key: string]: any } = {
       id: this.id,
       clubId: this.clubId,
       userId: this.userId,
@@ -205,12 +341,79 @@ export class ClubMember {
       isActive: this.isActive,
       totalPoints: this.totalPoints,
     };
+
+    if (this.onboardedAt) {
+      dict.onboardedAt = dateToUnixTimestamp(this.onboardedAt);
+    }
+
+    if (this.introducedAt) {
+      dict.introducedAt = dateToUnixTimestamp(this.introducedAt);
+    }
+
+    if (this.pairedAt) {
+      dict.pairedAt = dateToUnixTimestamp(this.pairedAt);
+    }
+
+    return dict;
   }
 
   /**
    * Generates a consistent member ID from clubId and userId
    */
   static generateMemberId(clubId: string, userId: string): string {
+    return `${clubId}_${userId}`;
+  }
+}
+
+export class ClubMemberProfile {
+  id: string; // Format: "{clubId}_{userId}"
+  clubId: string;
+  userId: string;
+  responses: Record<string, ClubActivationResponse>;
+  completedQuestionIds: string[];
+  completedAt?: Date;
+  updatedAt: Date;
+
+  constructor(data: any = {}) {
+    this.clubId = data.clubId || '';
+    this.userId = data.userId || '';
+    this.id = data.id || ClubMemberProfile.generateProfileId(this.clubId, this.userId);
+
+    const rawResponses = data.responses || {};
+    this.responses = Object.entries(rawResponses).reduce<Record<string, ClubActivationResponse>>((accumulator, [questionId, response]) => {
+      accumulator[questionId] = new ClubActivationResponse({
+        questionId,
+        ...(response as object),
+      });
+      return accumulator;
+    }, {});
+
+    this.completedQuestionIds = data.completedQuestionIds || Object.keys(this.responses);
+    this.completedAt = convertOptionalFirestoreTimestamp(data.completedAt);
+    this.updatedAt = convertOptionalFirestoreTimestamp(data.updatedAt) || new Date();
+  }
+
+  toDictionary(): { [key: string]: any } {
+    const dict: { [key: string]: any } = {
+      id: this.id,
+      clubId: this.clubId,
+      userId: this.userId,
+      responses: Object.entries(this.responses).reduce<Record<string, any>>((accumulator, [questionId, response]) => {
+        accumulator[questionId] = response.toDictionary();
+        return accumulator;
+      }, {}),
+      completedQuestionIds: this.completedQuestionIds,
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
+    };
+
+    if (this.completedAt) {
+      dict.completedAt = dateToUnixTimestamp(this.completedAt);
+    }
+
+    return dict;
+  }
+
+  static generateProfileId(clubId: string, userId: string): string {
     return `${clubId}_${userId}`;
   }
 }
