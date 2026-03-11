@@ -180,7 +180,7 @@ export function createEmptyModifierScores(initial = 50): Record<TaxonomyModifier
 
 export const SIM_REGISTRY: SimSpec[] = [
   {
-    id: 'kill_switch',
+    id: 'reset',
     legacyExerciseId: 'focus-3-second-reset',
     name: 'Reset',
     purpose: 'Train rapid recovery and re-engagement after disruption.',

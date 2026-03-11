@@ -2,7 +2,7 @@
  * Game Level Progress Service
  * 
  * Manages tier/level progression for mental training games.
- * This is game-agnostic infrastructure — any game with tiers (Kill Switch, etc.)
+ * This is game-agnostic infrastructure — any game with tiers (Reset, etc.)
  * stores and reads its progression data through this service.
  * 
  * Firestore path: game-level-progress/{userId}/games/{gameType}

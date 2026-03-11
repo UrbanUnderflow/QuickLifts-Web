@@ -62,7 +62,7 @@ export interface VisualizationExerciseConfig {
 }
 
 export interface FocusExerciseConfig {
-  type: 'single_point' | 'distraction' | 'cue_word' | 'body_scan' | 'kill_switch';
+  type: 'single_point' | 'distraction' | 'cue_word' | 'body_scan' | 'reset';
   duration: number; // seconds
   progressionLevel: number; // 1-5
   instructions: string[];
@@ -96,7 +96,7 @@ export interface ExerciseOverview {
 }
 
 export type SimEngineKey =
-  | 'kill_switch'
+  | 'reset'
   | 'noise_gate'
   | 'brake_point'
   | 'signal_window'
@@ -287,7 +287,7 @@ export interface TierSessionRecord {
  */
 export interface GameLevelProgress {
   userId: string;
-  gameType: string;                    // 'kill_switch', etc.
+  gameType: string;                    // 'reset', etc.
   currentTier: number;                 // 1-4 (tier number)
   tierHistory: TierSessionRecord[];    // last N sessions at current tier (keep last 10)
   totalSessions: number;

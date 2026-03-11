@@ -31,18 +31,19 @@ import { simSessionService } from '../../api/firebase/mentaltraining/simSessionS
 import { athleteProgressService } from '../../api/firebase/mentaltraining/athleteProgressService';
 import { DurationMode, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
 import { useUser } from '../../hooks/useUser';
+import { useInputIntegrity } from './useInputIntegrity';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 type GameState = 'intro' | 'preMood' | 'playing' | 'roundResult' | 'postMood' | 'summary';
-type GamePhase = 'lockIn' | 'disruption' | 'resetBreath' | 'killSwitch';
-type DisruptionType = 'visual' | 'cognitive' | 'combined';
+type GamePhase = 'lockIn' | 'disruption' | 'resetBreath' | 'reengage';
+type DisruptionType = 'visual' | 'audio' | 'cognitive' | 'combined' | 'immersive';
 
-type KillSwitchTier = 'foundation' | 'sharpening' | 'pressure' | 'elite';
+type ResetTier = 'foundation' | 'sharpening' | 'pressure' | 'elite';
 
-const TIER_CONFIG: Record<KillSwitchTier, {
+const TIER_CONFIG: Record<ResetTier, {
     displayName: string;
     recoveryTarget: number;
     roundCount: number;
@@ -79,7 +80,7 @@ const TIER_CONFIG: Record<KillSwitchTier, {
     },
 };
 
-const TIER_NUMBER_MAP: Record<number, KillSwitchTier> = {
+const TIER_NUMBER_MAP: Record<number, ResetTier> = {
     1: 'foundation',
     2: 'sharpening',
     3: 'pressure',
@@ -123,7 +124,7 @@ const MOODS = [
 // PROPS
 // ============================================================================
 
-interface KillSwitchGameProps {
+interface ResetGameProps {
     exercise: SimModule;
     onComplete: (data: {
         durationSeconds: number;
@@ -139,18 +140,30 @@ interface KillSwitchGameProps {
 // MAIN COMPONENT
 // ============================================================================
 
-export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
+export const ResetGame: React.FC<ResetGameProps> = ({
     exercise,
     onComplete,
     onClose,
     previewMode = false,
 }) => {
     const currentUser = useUser();
+    const buildArtifact = exercise.buildArtifact;
+    const variantTitle = buildArtifact?.variantName || exercise.name || 'Reset';
+    const variantSubtitle = buildArtifact?.uiModel?.introDescription || exercise.description || 'Mental Recovery Training';
+    const normalizedVariantTitle = variantTitle.toLowerCase();
+    const isSecondChanceVariant = normalizedVariantTitle.includes('second chance');
+    const buildArtifactArchetype = buildArtifact?.sessionModel?.archetype;
+    const variantArchetype = buildArtifactArchetype && buildArtifactArchetype !== 'baseline'
+        ? buildArtifactArchetype
+        : exercise.variantSource?.archetype ?? buildArtifactArchetype ?? 'baseline';
+    const stimulusEmphasis = (buildArtifact?.stimulusModel?.emphasis ?? exercise.runtimeConfig?.stimuli?.emphasis ?? []) as string[];
+    const audioAssets = (buildArtifact?.stimulusModel?.audioAssets ?? exercise.runtimeConfig?.audioAssets ?? {}) as Record<string, { downloadURL?: string }>;
+    const normalizedEmphasis = stimulusEmphasis.map((item) => String(item).toLowerCase());
 
     // Game state
     const [gameState, setGameState] = useState<GameState>('intro');
     const [currentRound, setCurrentRound] = useState(0);
-    const [currentTier, setCurrentTier] = useState<KillSwitchTier>('foundation');
+    const [currentTier, setCurrentTier] = useState<ResetTier>('foundation');
     const [tierNumber, setTierNumber] = useState(1);
     const [levelProgress, setLevelProgress] = useState<GameLevelProgress | null>(null);
     const [advancementResult, setAdvancementResult] = useState<TierAdvancementResult | null>(null);
@@ -182,8 +195,15 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
     const [scrambled, setScrambled] = useState(false);
     const [provocMessage, setProvocMessage] = useState('');
     const [showProvocMessage, setShowProvocMessage] = useState(false);
+    const [audioCueLabel, setAudioCueLabel] = useState('');
+    const [audioPulseActive, setAudioPulseActive] = useState(false);
+    const [immersiveCueLabel, setImmersiveCueLabel] = useState('');
+    const [immersiveFieldActive, setImmersiveFieldActive] = useState(false);
+    const [secondChancePromptActive, setSecondChancePromptActive] = useState(false);
     const [disruptionActive, setDisruptionActive] = useState(false);
     const [showReset, setShowReset] = useState(false);
+    const [phaseMessage, setPhaseMessage] = useState('Hold steady until the disruption hits.');
+    const [phaseCountdown, setPhaseCountdown] = useState<number | null>(null);
 
     // Recovery measurement
     const disruptionEndRef = useRef<number>(0);
@@ -193,6 +213,16 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
     const preTotalRef = useRef(0);
     const postHitsRef = useRef(0);
     const postTotalRef = useRef(0);
+    const {
+        warningActive: spamWarningActive,
+        registerInputAttempt,
+        resetRound: resetInputRound,
+        resetSession: resetInputSession,
+        finalizeRound: finalizeInputRound,
+        spamDetected,
+        spamFlags,
+        spamRounds,
+    } = useInputIntegrity();
 
     // Mood
     const [preExerciseMood, setPreExerciseMood] = useState<number | undefined>();
@@ -206,7 +236,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                 return;
             }
             try {
-                const progress = await gameLevelProgressService.getProgress(currentUser.id, 'kill_switch');
+                const progress = await gameLevelProgressService.getProgress(currentUser.id, 'reset');
                 setLevelProgress(progress);
                 const tierKey = TIER_NUMBER_MAP[progress.currentTier] ?? 'foundation';
                 setCurrentTier(tierKey);
@@ -233,43 +263,156 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
     const trackingTimerRef = useRef<NodeJS.Timeout | null>(null);
     const sessionStartRef = useRef<number>(Date.now());
     const [soundEnabled, setSoundEnabled] = useState(true);
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const cueAudioRef = useRef<HTMLAudioElement | null>(null);
+    const timeoutRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
+    const isClosedRef = useRef(false);
+
+    const scheduleTimeout = useCallback((callback: () => void, delay: number) => {
+        const timeout = setTimeout(() => {
+            timeoutRefs.current = timeoutRefs.current.filter((id) => id !== timeout);
+            if (isClosedRef.current) return;
+            callback();
+        }, delay);
+        timeoutRefs.current.push(timeout);
+        return timeout;
+    }, []);
 
     // Cleanup all timers
     const cleanup = useCallback(() => {
         if (gameTimerRef.current) clearInterval(gameTimerRef.current);
         if (pulseTimerRef.current) clearInterval(pulseTimerRef.current);
         if (trackingTimerRef.current) clearInterval(trackingTimerRef.current);
+        timeoutRefs.current.forEach((timeout) => clearTimeout(timeout));
+        timeoutRefs.current = [];
+        if (audioContextRef.current) {
+            audioContextRef.current.close().catch(() => undefined);
+            audioContextRef.current = null;
+        }
+        if (cueAudioRef.current) {
+            cueAudioRef.current.pause();
+            cueAudioRef.current = null;
+        }
         gameTimerRef.current = null;
         pulseTimerRef.current = null;
         trackingTimerRef.current = null;
+        setPulseScale(1);
+        setAudioPulseActive(false);
     }, []);
 
-    useEffect(() => () => cleanup(), [cleanup]);
+    const handleClose = useCallback(() => {
+        isClosedRef.current = true;
+        cleanup();
+        onClose();
+    }, [cleanup, onClose]);
+
+    useEffect(() => {
+        isClosedRef.current = false;
+        return () => {
+            isClosedRef.current = true;
+            cleanup();
+        };
+    }, [cleanup]);
 
     // ============================================================================
     // GAME LOGIC
     // ============================================================================
 
+    const getAudioCueLabel = useCallback(() => {
+        const options = normalizedEmphasis.some((item) => item.includes('whistle') || item.includes('buzzer'))
+            ? ['Whistle blast', 'Buzzer shock', 'Crowd surge']
+            : normalizedEmphasis.some((item) => item.includes('crowd'))
+                ? ['Crowd surge', 'Commentary burst', 'Startle cue']
+                : ['Audio startle', 'Crowd surge', 'Whistle blast'];
+        return options[Math.floor(Math.random() * options.length)];
+    }, [normalizedEmphasis]);
+
+    const getAudioCueAssetUrl = useCallback((cueLabel: string) => {
+        const normalized = cueLabel.toLowerCase();
+        if (normalized.includes('whistle')) return audioAssets.whistle_blast?.downloadURL;
+        if (normalized.includes('buzzer')) return audioAssets.buzzer_shock?.downloadURL;
+        if (normalized.includes('commentary')) return audioAssets.commentary_overlap?.downloadURL;
+        if (normalized.includes('crowd')) return audioAssets.crowd_surge?.downloadURL ?? audioAssets.crowd_bed?.downloadURL;
+        return audioAssets.startle_cue?.downloadURL;
+    }, [audioAssets]);
+
+    const playAudioDisruption = useCallback((cueLabel: string) => {
+        if (!soundEnabled || typeof window === 'undefined') return;
+        const assetUrl = getAudioCueAssetUrl(cueLabel);
+        if (assetUrl) {
+            if (cueAudioRef.current) {
+                cueAudioRef.current.pause();
+                cueAudioRef.current = null;
+            }
+            const audio = new Audio(assetUrl);
+            audio.volume = cueLabel.toLowerCase().includes('crowd') ? 0.75 : 0.92;
+            cueAudioRef.current = audio;
+            audio.play().catch(() => undefined);
+            return;
+        }
+        const BrowserAudioContext = (window as typeof window & { webkitAudioContext?: typeof AudioContext }).AudioContext
+            || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!BrowserAudioContext) return;
+
+        const context = audioContextRef.current ?? new BrowserAudioContext();
+        audioContextRef.current = context;
+        if (context.state === 'suspended') {
+            context.resume().catch(() => undefined);
+        }
+
+        const now = context.currentTime;
+        const frequency = cueLabel.toLowerCase().includes('whistle')
+            ? 1180
+            : cueLabel.toLowerCase().includes('buzzer')
+                ? 220
+                : 540;
+
+        [0, 0.16, 0.34].forEach((offset) => {
+            const oscillator = context.createOscillator();
+            const gain = context.createGain();
+            oscillator.type = cueLabel.toLowerCase().includes('crowd') ? 'sawtooth' : 'square';
+            oscillator.frequency.setValueAtTime(frequency, now + offset);
+            gain.gain.setValueAtTime(0.0001, now + offset);
+            gain.gain.exponentialRampToValueAtTime(cueLabel.toLowerCase().includes('crowd') ? 0.06 : 0.12, now + offset + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.14);
+            oscillator.connect(gain);
+            gain.connect(context.destination);
+            oscillator.start(now + offset);
+            oscillator.stop(now + offset + 0.16);
+        });
+    }, [getAudioCueAssetUrl, soundEnabled]);
+
     const selectDisruption = useCallback((): DisruptionType => {
+        if (variantArchetype === 'visual_channel') return 'visual';
+        if (variantArchetype === 'audio_channel') return 'audio';
+        if (variantArchetype === 'combined_channel') return 'combined';
+        if (variantArchetype === 'cognitive_pressure') return 'cognitive';
+        if (variantArchetype === 'immersive') return 'immersive';
         switch (currentTier) {
             case 'foundation': return 'visual';
             case 'sharpening': return Math.random() > 0.5 ? 'visual' : 'cognitive';
             case 'pressure': return ['visual', 'cognitive', 'combined'][Math.floor(Math.random() * 3)] as DisruptionType;
             case 'elite': return 'combined';
         }
-    }, [currentTier]);
+    }, [currentTier, variantArchetype]);
 
     // Start pulse animation for rhythm task
+    const triggerPulseBeat = useCallback(() => {
+        expectedTapTimeRef.current = Date.now();
+        setPulseScale(1.3);
+        scheduleTimeout(() => {
+            setPulseScale(1);
+        }, 420);
+    }, [scheduleTimeout]);
+
     const startPulseAnimation = useCallback(() => {
         if (pulseTimerRef.current) clearInterval(pulseTimerRef.current);
+        setPulseScale(1);
+        triggerPulseBeat();
         pulseTimerRef.current = setInterval(() => {
-            expectedTapTimeRef.current = Date.now();
-            setPulseScale(1.3);
-            setTimeout(() => {
-                setPulseScale(1);
-            }, 600);
+            triggerPulseBeat();
         }, 1200);
-    }, []);
+    }, [triggerPulseBeat]);
 
     // Start tracking animation
     const startTrackingAnimation = useCallback(() => {
@@ -285,11 +428,11 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                 x: Math.random() * 70 + 15,
                 y: Math.random() * 70 + 15,
             });
-            setTimeout(() => {
+            scheduleTimeout(() => {
                 expectedTapTimeRef.current = Date.now();
             }, 2000);
         }, 2500);
-    }, []);
+    }, [scheduleTimeout]);
 
     // Generate and show sequence
     const showSequence = useCallback((targets: number[]) => {
@@ -297,27 +440,36 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
         setSequenceHighlight(-1);
         setSequenceInputs([]);
         targets.forEach((t, i) => {
-            setTimeout(() => setSequenceHighlight(t), (i + 1) * 700);
-            setTimeout(() => setSequenceHighlight(-1), (i + 1) * 700 + 400);
+            scheduleTimeout(() => setSequenceHighlight(t), (i + 1) * 700);
+            scheduleTimeout(() => setSequenceHighlight(-1), (i + 1) * 700 + 400);
         });
-        setTimeout(() => {
+        scheduleTimeout(() => {
             setShowingSequence(false);
             expectedTapTimeRef.current = Date.now();
         }, targets.length * 700 + 500);
-    }, []);
+    }, [scheduleTimeout]);
 
     // Clear disruption effects
     const clearDisruption = useCallback(() => {
         setFlashActive(false);
         setScrambled(false);
         setShowProvocMessage(false);
+        setAudioCueLabel('');
+        setAudioPulseActive(false);
+        setImmersiveCueLabel('');
+        setImmersiveFieldActive(false);
+        setSecondChancePromptActive(false);
         setDisruptionActive(false);
+        setPhaseCountdown(null);
+        setPulseScale(1);
     }, []);
 
     // Trigger disruption
     const triggerDisruption = useCallback(() => {
         setPhase('disruption');
         setDisruptionActive(true);
+        setPhaseMessage('Disruption active. Hold steady, then reset immediately.');
+        setPhaseCountdown(tierConfig.disruptionDuration);
 
         // Pre-disruption accuracy
         const hits = tapAccuracy.filter(Boolean).length;
@@ -335,28 +487,82 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
         if (dt === 'visual' || dt === 'combined') {
             setFlashActive(true);
             setScrambled(true);
-            setTimeout(() => setFlashActive(false), 150);
-            setTimeout(() => setFlashActive(true), 300);
-            setTimeout(() => setFlashActive(false), 450);
+            scheduleTimeout(() => setFlashActive(false), 150);
+            scheduleTimeout(() => setFlashActive(true), 300);
+            scheduleTimeout(() => setFlashActive(false), 450);
+        }
+        if (dt === 'audio' || dt === 'combined') {
+            const cueLabel = getAudioCueLabel();
+            setAudioCueLabel(cueLabel);
+            setAudioPulseActive(true);
+            playAudioDisruption(cueLabel);
+            scheduleTimeout(() => setAudioPulseActive(false), 520);
+        }
+        if (dt === 'immersive') {
+            const immersiveLabels = [
+                'Chamber Shift',
+                'Spatial Drift',
+                'Tunnel Collapse',
+                'Field Reorientation',
+            ];
+            setImmersiveCueLabel(immersiveLabels[Math.floor(Math.random() * immersiveLabels.length)]);
+            setImmersiveFieldActive(true);
+            setFlashActive(true);
+            scheduleTimeout(() => setFlashActive(false), 180);
+            scheduleTimeout(() => setFlashActive(true), 460);
+            scheduleTimeout(() => setFlashActive(false), 760);
         }
         if (dt === 'cognitive' || dt === 'combined') {
             setProvocMessage(PROVOCATIVE_MESSAGES[Math.floor(Math.random() * PROVOCATIVE_MESSAGES.length)]);
             setShowProvocMessage(true);
         }
 
-        // After disruption duration → reset breath → kill switch
-        setTimeout(() => {
+        const disruptionStartedAt = Date.now();
+        const disruptionCountdownInterval = setInterval(() => {
+            const remaining = Math.max(0, tierConfig.disruptionDuration - ((Date.now() - disruptionStartedAt) / 1000));
+            setPhaseCountdown(remaining);
+            if (remaining <= 0) {
+                clearInterval(disruptionCountdownInterval);
+            }
+        }, 100);
+        timeoutRefs.current.push(disruptionCountdownInterval as unknown as ReturnType<typeof setTimeout>);
+
+        // After disruption duration → reset breath → reset
+        scheduleTimeout(() => {
+            clearInterval(disruptionCountdownInterval);
             clearDisruption();
             setPhase('resetBreath');
             setShowReset(true);
+            setPhaseMessage('Reset cue. Breathe, then re-engage the same task.');
+            setPhaseCountdown(0.8);
 
-            setTimeout(() => {
+            const resetStartedAt = Date.now();
+            const resetCountdownInterval = setInterval(() => {
+                const remaining = Math.max(0, 0.8 - ((Date.now() - resetStartedAt) / 1000));
+                setPhaseCountdown(remaining);
+                if (remaining <= 0) {
+                    clearInterval(resetCountdownInterval);
+                }
+            }, 100);
+            timeoutRefs.current.push(resetCountdownInterval as unknown as ReturnType<typeof setTimeout>);
+            scheduleTimeout(() => {
+                clearInterval(resetCountdownInterval);
                 setShowReset(false);
-                setPhase('killSwitch');
+                setPhase('reengage');
                 disruptionEndRef.current = Date.now();
                 recoveryStartedRef.current = false;
                 setTapAccuracy([]);
                 setSequenceInputs([]);
+                setSecondChancePromptActive(false);
+                setPhaseCountdown(null);
+                setPhaseMessage(currentTier === 'foundation'
+                    ? 'Tap in rhythm as soon as you have the target again.'
+                    : currentTier === 'sharpening'
+                        ? 'Track the live cue immediately after the reset.'
+                        : variantArchetype === 'immersive'
+                            ? 'Re-anchor to the same target immediately inside the chamber.'
+                            : 'Re-enter the same sequence cleanly and fast.'
+                );
 
                 // Restart focus task
                 if (currentTier === 'foundation') startPulseAnimation();
@@ -369,15 +575,20 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                 }
             }, 800);
         }, tierConfig.disruptionDuration * 1000);
-    }, [tapAccuracy, selectDisruption, clearDisruption, tierConfig.disruptionDuration, currentTier, startPulseAnimation, startTrackingAnimation, showSequence]);
+    }, [tapAccuracy, selectDisruption, clearDisruption, tierConfig.disruptionDuration, currentTier, startPulseAnimation, startTrackingAnimation, showSequence, getAudioCueLabel, playAudioDisruption, scheduleTimeout, variantArchetype]);
 
     // Start lock-in phase
     const startLockInPhase = useCallback(() => {
         setPhase('lockIn');
         setTapAccuracy([]);
         recoveryStartedRef.current = false;
+        setSecondChancePromptActive(false);
+        resetInputRound();
+        setPhaseMessage('Lock in on the primary task. The disruption is coming.');
         const duration = tierConfig.lockInDuration;
         setLockInRemaining(duration);
+        setPhaseCountdown(duration);
+        setPulseScale(1);
 
         // Start focus task
         if (currentTier === 'foundation') startPulseAnimation();
@@ -398,12 +609,14 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
             if (remaining <= 0) {
                 if (gameTimerRef.current) clearInterval(gameTimerRef.current);
                 gameTimerRef.current = null;
+                setPhaseCountdown(null);
                 triggerDisruption();
             } else {
                 setLockInRemaining(remaining);
+                setPhaseCountdown(remaining);
             }
         }, 100);
-    }, [tierConfig.lockInDuration, currentTier, startPulseAnimation, startTrackingAnimation, showSequence, triggerDisruption]);
+    }, [currentTier, resetInputRound, showSequence, startPulseAnimation, startTrackingAnimation, tierConfig.lockInDuration, triggerDisruption]);
 
     // Start next round
     const startNextRound = useCallback(() => {
@@ -425,49 +638,71 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
         preTotalRef.current = 0;
         postHitsRef.current = 0;
         postTotalRef.current = 0;
+        resetInputSession();
         sessionStartRef.current = Date.now();
         startNextRound();
-    }, [startNextRound]);
+    }, [resetInputSession, startNextRound]);
 
     // End round
     const endRound = useCallback(() => {
+        finalizeInputRound();
         cleanup();
-        setTimeout(() => setGameState('roundResult'), 300);
-    }, [cleanup]);
+        scheduleTimeout(() => setGameState('roundResult'), 300);
+    }, [cleanup, finalizeInputRound, scheduleTimeout]);
 
     // Handle focus task tap
     const handleFocusTaskTap = useCallback(() => {
         const now = Date.now();
+        if (phase === 'reengage') {
+            if (!registerInputAttempt({ blockedMessage: 'Too fast. Wait for the live target before re-entering.' })) {
+                setPhaseMessage('Too fast. Wait for the live target before re-entering.');
+                return;
+            }
+        }
         const diff = Math.abs(now - expectedTapTimeRef.current);
         const accurate = diff < 400;
         setTapAccuracy((prev) => [...prev, accurate]);
 
-        if (phase === 'killSwitch' && !recoveryStartedRef.current && accurate) {
+        if (phase === 'reengage' && !recoveryStartedRef.current && accurate) {
             recoveryStartedRef.current = true;
             const recoveryTime = Math.max(0.1, (now - disruptionEndRef.current) / 1000);
             setRoundRecoveryTimes((prev) => [...prev, recoveryTime]);
             postHitsRef.current += 1;
             postTotalRef.current += 1;
             endRound();
-        } else if (phase === 'killSwitch') {
+        } else if (phase === 'reengage') {
             postHitsRef.current += accurate ? 1 : 0;
             postTotalRef.current += 1;
+            if (!accurate && isSecondChanceVariant && !secondChancePromptActive) {
+                setSecondChancePromptActive(true);
+                setPhaseMessage('Missed the first recovery. Second chance - reclaim the same target now.');
+            }
         }
-    }, [phase, endRound]);
+    }, [endRound, isSecondChanceVariant, phase, registerInputAttempt, secondChancePromptActive]);
 
     // Handle sequence tap
     const handleSequenceTap = useCallback((index: number) => {
         if (showingSequence) return;
+        if (phase === 'reengage') {
+            if (!registerInputAttempt({ blockedMessage: 'Too fast. Wait for the live target before committing again.' })) {
+                setPhaseMessage('Too fast. Wait for the live target before committing again.');
+                return;
+            }
+        }
         setSequenceInputs((prev) => {
             const next = [...prev, index];
             const inputIndex = next.length - 1;
             if (inputIndex < sequenceTargets.length) {
                 const correct = next[inputIndex] === sequenceTargets[inputIndex];
                 setTapAccuracy((prevAcc) => [...prevAcc, correct]);
+                if (phase === 'reengage' && !correct && isSecondChanceVariant && !secondChancePromptActive) {
+                    setSecondChancePromptActive(true);
+                    setPhaseMessage('First re-entry missed. Settle immediately and take the second chance cleanly.');
+                }
             }
             // Sequence complete
             if (next.length >= sequenceTargets.length) {
-                if (phase === 'killSwitch' && !recoveryStartedRef.current) {
+                if (phase === 'reengage' && !recoveryStartedRef.current) {
                     recoveryStartedRef.current = true;
                     const now = Date.now();
                     const recoveryTime = Math.max(0.1, (now - disruptionEndRef.current) / 1000);
@@ -480,8 +715,8 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
             return next;
         });
         setSequenceHighlight(index);
-        setTimeout(() => setSequenceHighlight(-1), 150);
-    }, [showingSequence, sequenceTargets, phase, tapAccuracy, endRound]);
+        scheduleTimeout(() => setSequenceHighlight(-1), 150);
+    }, [endRound, isSecondChanceVariant, phase, registerInputAttempt, secondChancePromptActive, sequenceTargets, showingSequence, tapAccuracy]);
 
     // ============================================================================
     // DERIVED VALUES
@@ -512,7 +747,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
         ))
         : 100;
 
-    const metTarget = avgRecovery > 0 && avgRecovery <= tierConfig.recoveryTarget;
+    const metTarget = avgRecovery > 0 && avgRecovery <= tierConfig.recoveryTarget && !spamDetected;
 
     const totalElapsed = Math.round((Date.now() - sessionStartRef.current) / 1000);
 
@@ -543,6 +778,9 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
             consistencyIndex: variance,
             resilienceScore,
             metTarget,
+            spamDetected,
+            spamFlags,
+            spamRounds,
             roundCount: roundRecoveryTimes.length,
         };
 
@@ -553,12 +791,12 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
             const [result] = await Promise.all([
                 gameLevelProgressService.recordSession(
                     currentUser.id,
-                    'kill_switch',
+                    'reset',
                     sessionRecord
                 ),
                 simSessionService.recordSession({
                     userId: currentUser.id,
-                    simId: 'kill_switch',
+                    simId: 'reset',
                     simName: 'Reset',
                     legacyExerciseId: exercise.id,
                     sessionType: avgRecovery <= tierConfig.recoveryTarget ? SessionType.TrainingRep : SessionType.Reassessment,
@@ -570,6 +808,9 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                         recovery_trend: delta,
                         disruption_resilience_score: resilienceScore,
                         consistency_index: variance,
+                        rapid_input_flags: spamFlags,
+                        rapid_input_rounds: spamRounds,
+                        flagged_for_spam: spamDetected ? 1 : 0,
                         worst_to_best_delta: delta,
                         best_recovery: bestRecovery,
                         worst_recovery: worstRecovery,
@@ -600,7 +841,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
         } catch (err) {
             console.error('Failed to save session progress:', err);
         }
-    }, [currentUser?.id, previewMode, tierNumber, avgRecovery, variance, resilienceScore, metTarget, roundRecoveryTimes, totalElapsed, delta, bestRecovery, worstRecovery, exercise.id, tierConfig.recoveryTarget]);
+    }, [bestRecovery, currentUser?.id, delta, exercise.id, metTarget, previewMode, resilienceScore, roundRecoveryTimes, spamDetected, spamFlags, spamRounds, tierConfig.recoveryTarget, tierNumber, totalElapsed, variance, avgRecovery, worstRecovery]);
 
     // ============================================================================
     // RENDER HELPERS
@@ -644,7 +885,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
             {gameState === 'playing' && (
                 <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-6 py-4">
                     <button
-                        onClick={() => { cleanup(); onClose(); }}
+                        onClick={handleClose}
                         className="p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
                     >
                         <X className="w-5 h-5 text-white/60" />
@@ -688,7 +929,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                         >
                             {/* Close button */}
                             <button
-                                onClick={onClose}
+                                onClick={handleClose}
                                 className="absolute top-6 right-6 p-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
                             >
                                 <X className="w-5 h-5 text-white/60" />
@@ -705,9 +946,9 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                             </motion.div>
 
                             <h1 className="text-3xl font-black text-white tracking-wider mb-2">
-                                THE KILL SWITCH
+                                {variantTitle.toUpperCase()}
                             </h1>
-                            <p className="text-red-400/80 font-medium mb-6">Mental Recovery Training</p>
+                            <p className="text-red-400/80 font-medium mb-6">{variantSubtitle}</p>
 
                             {/* Tier selector */}
                             <div className="mb-6">
@@ -941,6 +1182,13 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                             {/* Disruption Phase */}
                             {phase === 'disruption' && (
                                 <div className="flex flex-col items-center justify-center h-full">
+                                    <div className="absolute top-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-center">
+                                        <p className="text-red-300 text-[11px] font-bold tracking-[0.35em] uppercase">Disruption</p>
+                                        <p className="text-white/55 text-sm">{phaseMessage}</p>
+                                        {phaseCountdown !== null && (
+                                            <p className="text-white/35 text-xs">{phaseCountdown.toFixed(1)}s until reset cue</p>
+                                        )}
+                                    </div>
                                     {showProvocMessage && (
                                         <motion.p
                                             initial={{ scale: 0.5, opacity: 0 }}
@@ -949,6 +1197,60 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                                         >
                                             {provocMessage}
                                         </motion.p>
+                                    )}
+                                    {audioCueLabel && (
+                                        <motion.div
+                                            initial={{ scale: 0.8, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            className="flex flex-col items-center gap-4"
+                                        >
+                                            <div className="relative w-40 h-40 flex items-center justify-center">
+                                                <motion.div
+                                                    animate={{ scale: audioPulseActive ? [0.9, 1.25, 0.95] : 1, opacity: audioPulseActive ? [0.35, 0.12, 0.28] : 0.2 }}
+                                                    transition={{ duration: 0.45, ease: 'easeInOut' }}
+                                                    className="absolute inset-0 rounded-full border border-red-400/30 bg-red-500/10"
+                                                />
+                                                <motion.div
+                                                    animate={{ scale: audioPulseActive ? [0.75, 1.05, 0.85] : 0.8 }}
+                                                    transition={{ duration: 0.4, ease: 'easeInOut' }}
+                                                    className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center"
+                                                >
+                                                    <Volume2 className="w-9 h-9 text-red-300" />
+                                                </motion.div>
+                                            </div>
+                                            <p className="text-2xl font-black text-red-300 tracking-wide uppercase text-center">{audioCueLabel}</p>
+                                        </motion.div>
+                                    )}
+                                    {immersiveFieldActive && (
+                                        <motion.div
+                                            initial={{ scale: 0.92, opacity: 0 }}
+                                            animate={{ scale: 1, opacity: 1 }}
+                                            className="flex flex-col items-center gap-5"
+                                        >
+                                            <div className="relative w-64 h-64 flex items-center justify-center">
+                                                <motion.div
+                                                    animate={{ scale: [0.92, 1.08, 0.96], opacity: [0.16, 0.4, 0.18] }}
+                                                    transition={{ duration: 1.15, repeat: Infinity, ease: 'easeInOut' }}
+                                                    className="absolute inset-0 rounded-full border border-cyan-400/20"
+                                                />
+                                                <motion.div
+                                                    animate={{ scale: [0.74, 0.98, 0.8], opacity: [0.2, 0.32, 0.16] }}
+                                                    transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+                                                    className="absolute inset-10 rounded-full border border-red-400/20"
+                                                />
+                                                <motion.div
+                                                    animate={{ rotate: [0, 8, -8, 0], scale: [1, 1.04, 0.98, 1] }}
+                                                    transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+                                                    className="w-24 h-24 rounded-full bg-cyan-500/10 border border-cyan-300/25 flex items-center justify-center"
+                                                >
+                                                    <Shield className="w-10 h-10 text-cyan-200" />
+                                                </motion.div>
+                                            </div>
+                                            <div className="text-center space-y-2">
+                                                <p className="text-2xl font-black text-cyan-200 tracking-wide uppercase">{immersiveCueLabel}</p>
+                                                <p className="text-white/55 text-sm">Environmental fidelity surges. Keep the same reset target.</p>
+                                            </div>
+                                        </motion.div>
                                     )}
                                     {scrambled && (
                                         <div className="absolute inset-0 pointer-events-none">
@@ -973,6 +1275,13 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                             {/* Reset Breath */}
                             {phase === 'resetBreath' && (
                                 <div className="flex flex-col items-center gap-6">
+                                    <div className="text-center space-y-2">
+                                        <p className="text-cyan-300 text-[11px] font-bold tracking-[0.35em] uppercase">Reset Cue</p>
+                                        <p className="text-white/55 text-sm">{phaseMessage}</p>
+                                        {phaseCountdown !== null && (
+                                            <p className="text-white/35 text-xs">{phaseCountdown.toFixed(1)}s</p>
+                                        )}
+                                    </div>
                                     <motion.div
                                         animate={{ scale: showReset ? 1.2 : 0.8 }}
                                         transition={{ duration: 0.8 }}
@@ -987,8 +1296,8 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                                 </div>
                             )}
 
-                            {/* Kill Switch Phase */}
-                            {phase === 'killSwitch' && (
+                            {/* Reset Phase */}
+                            {phase === 'reengage' && (
                                 <div className="flex flex-col items-center gap-6 w-full max-w-md">
                                     <div className="flex items-center gap-2 self-start">
                                         <motion.div
@@ -998,20 +1307,34 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                                         />
                                         <span className="text-red-500 text-xs font-bold tracking-widest">RECOVER NOW</span>
                                     </div>
+                                    <p className="self-start text-sm text-white/55">{phaseMessage}</p>
+                                    {spamWarningActive && (
+                                        <div className="self-start px-3 py-2 rounded-xl border border-orange-400/30 bg-orange-500/10 text-orange-200 text-xs font-semibold tracking-[0.18em] uppercase">
+                                            Rapid input blocked
+                                        </div>
+                                    )}
+                                    {isSecondChanceVariant && secondChancePromptActive && (
+                                        <div className="self-start px-3 py-2 rounded-xl border border-amber-400/25 bg-amber-500/10 text-amber-200 text-xs font-semibold tracking-[0.18em] uppercase">
+                                            Second chance active
+                                        </div>
+                                    )}
 
                                     <div className="flex-1 flex items-center justify-center min-h-[300px]">
                                         {/* Same focus task as lock-in */}
                                         {currentTier === 'foundation' && (
                                             <div className="flex flex-col items-center gap-6">
+                                                {variantArchetype === 'immersive' && (
+                                                    <p className="text-cyan-300/80 text-xs font-semibold tracking-[0.25em] uppercase">Re-anchor inside the chamber</p>
+                                                )}
                                                 <motion.button
                                                     onClick={handleFocusTaskTap}
                                                     animate={{ scale: pulseScale }}
                                                     transition={{ duration: 0.3, ease: 'easeInOut' }}
                                                     className="relative w-32 h-32 rounded-full flex items-center justify-center"
                                                 >
-                                                    <div className="absolute inset-0 rounded-full bg-[#E0FE10]/15 blur-xl" />
-                                                    <div className="absolute inset-0 rounded-full border-2 border-[#E0FE10]/30" />
-                                                    <div className="w-20 h-20 rounded-full bg-gradient-radial from-[#E0FE10] to-[#E0FE10]/60 flex items-center justify-center">
+                                                    <div className={`absolute inset-0 rounded-full blur-xl ${variantArchetype === 'immersive' ? 'bg-cyan-400/15' : 'bg-[#E0FE10]/15'}`} />
+                                                    <div className={`absolute inset-0 rounded-full border-2 ${variantArchetype === 'immersive' ? 'border-cyan-300/30' : 'border-[#E0FE10]/30'}`} />
+                                                    <div className={`w-20 h-20 rounded-full flex items-center justify-center ${variantArchetype === 'immersive' ? 'bg-gradient-radial from-cyan-300 to-cyan-500/60' : 'bg-gradient-radial from-[#E0FE10] to-[#E0FE10]/60'}`}>
                                                         <div className="w-3 h-3 rounded-full bg-white" />
                                                     </div>
                                                 </motion.button>
@@ -1181,7 +1504,11 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                                     {avgRecovery.toFixed(1)}
                                 </p>
                                 <p className="text-white/50 text-xs font-bold tracking-widest mt-2">AVG RECOVERY TIME</p>
-                                {metTarget ? (
+                                {spamDetected ? (
+                                    <p className="text-orange-300 text-sm mt-2">
+                                        Session flagged: rapid-input spamming detected
+                                    </p>
+                                ) : metTarget ? (
                                     <p className="text-[#E0FE10] text-sm mt-2 flex items-center justify-center gap-1">
                                         ✓ Target met: under {tierConfig.recoveryTarget.toFixed(1)}s
                                     </p>
@@ -1254,7 +1581,7 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
                                     { icon: <Zap className="w-5 h-5" />, value: `${bestRecovery.toFixed(1)}s`, label: 'Best Recovery', color: 'text-[#E0FE10]' },
                                     { icon: <TrendingDown className="w-5 h-5" />, value: `${delta.toFixed(1)}s`, label: 'Worst-to-Best Δ', color: delta < 1 ? 'text-[#E0FE10]' : 'text-red-500' },
                                     { icon: <Shield className="w-5 h-5" />, value: `${resilienceScore}%`, label: 'Resilience Score', color: resilienceScore >= 80 ? 'text-[#E0FE10]' : resilienceScore >= 60 ? 'text-orange-400' : 'text-red-500' },
-                                    { icon: <Activity className="w-5 h-5" />, value: consistencyLabel, label: 'Consistency', color: variance < 0.5 ? 'text-[#E0FE10]' : variance < 1 ? 'text-orange-400' : 'text-red-500' },
+                                    { icon: <Activity className="w-5 h-5" />, value: spamDetected ? `${spamFlags} flags` : consistencyLabel, label: spamDetected ? 'Rapid Input Flags' : 'Consistency', color: spamDetected ? 'text-orange-300' : variance < 0.5 ? 'text-[#E0FE10]' : variance < 1 ? 'text-orange-400' : 'text-red-500' },
                                 ].map((m, i) => (
                                     <div key={i} className="p-4 rounded-2xl bg-white/3 border border-white/8 text-center">
                                         <div className={`mx-auto mb-2 ${m.color}`}>{m.icon}</div>
@@ -1328,4 +1655,4 @@ export const KillSwitchGame: React.FC<KillSwitchGameProps> = ({
     );
 };
 
-export default KillSwitchGame;
+export default ResetGame;

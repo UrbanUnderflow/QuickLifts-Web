@@ -1815,11 +1815,11 @@ const CallSimulation: React.FC<{
 };
 
 // ─────────────────────────────────────────────────────────
-// THE CLOSE — Act 4: Performance Showcase + The Kill Switch
+// THE CLOSE — Act 4: Performance Showcase + Reset
 // ─────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────
-// THE CLOSE — Act 4: Performance Showcase + The Kill Switch
+// THE CLOSE — Act 4: Performance Showcase + Reset
 // ─────────────────────────────────────────────────────────
 
 const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
@@ -1836,11 +1836,11 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
     const [chatStep, setChatStep] = useState(0);
     const [isNTyping, setIsNTyping] = useState(false);
     const [resetPhase, setResetPhase] = useState<
-        'idle' | 'lockIn' | 'disruption' | 'killSwitch' | 'done'
+        'idle' | 'lockIn' | 'disruption' | 'reengage' | 'done'
     >('idle');
     const [drillActive, setDrillActive] = useState(false);
     const [gameExpanded, setGameExpanded] = useState(false);
-    // Kill Switch game state
+    // Reset game state
     const [ksPulseScale, setKsPulseScale] = useState(1);
     const [ksPulseActive, setKsPulseActive] = useState(false);
     const [ksTapAccuracy, setKsTapAccuracy] = useState<boolean[]>([]);
@@ -2044,9 +2044,9 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
         // Provocative message
         setKsProvocMessage(ksProvocMessages[Math.floor(Math.random() * ksProvocMessages.length)]);
 
-        // After disruption → kill switch phase (re-engage ticks are a different pitch)
+        // After disruption → reset phase (re-engage ticks are a different pitch)
         setTimeout(() => {
-            setResetPhase('killSwitch');
+            setResetPhase('reengage');
             ksDisruptionEndRef.current = Date.now();
             ksRecoveryStartedRef.current = false;
             setKsTapAccuracy([]);
@@ -2066,7 +2066,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
         }, 2000);
     }, [playDisruption, playTick]);
 
-    // Start a round (lock in → disruption → kill switch)
+    // Start a round (lock in → disruption → reset)
     const startKsRound = useCallback(() => {
         setResetPhase('lockIn');
         setKsRecoveryTime(null);
@@ -2102,7 +2102,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
         const accurate = diff < 400;
         setKsTapAccuracy((prev) => [...prev, accurate]);
 
-        if (resetPhase === 'killSwitch' && !ksRecoveryStartedRef.current && accurate) {
+        if (resetPhase === 'reengage' && !ksRecoveryStartedRef.current && accurate) {
             ksRecoveryStartedRef.current = true;
             const recoveryTime = Math.max(0.1, (now - ksDisruptionEndRef.current) / 1000);
             setKsRecoveryTime(recoveryTime);
@@ -2466,7 +2466,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                         </div>
                                                                     </div>
 
-                                                                    {/* Kill Switch skills */}
+                                                                    {/* Reset skills */}
                                                                     <div>
                                                                         <div className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider mb-1.5">3-Second Reset Target Skills</div>
                                                                         <div className="space-y-1">
@@ -2801,7 +2801,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                         document.body
                                     )}
 
-                                    {/* Inline Kill Switch Drill — Full Interactive Game */}
+                                    {/* Inline Reset Drill — Full Interactive Game */}
                                     {drillActive && !gameExpanded && (
                                         <motion.div
                                             initial={{ opacity: 0, y: 10 }}
@@ -2834,7 +2834,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                             <div
                                                                 key={i}
                                                                 className={`w-2 h-2 rounded-full transition-colors ${i < ksCurrentRound - 1 ? 'bg-[#E0FE10]' :
-                                                                    i === ksCurrentRound - 1 ? (resetPhase === 'disruption' ? 'bg-red-500 animate-pulse' : resetPhase === 'killSwitch' ? 'bg-cyan-400' : 'bg-[#E0FE10]') :
+                                                                    i === ksCurrentRound - 1 ? (resetPhase === 'disruption' ? 'bg-red-500 animate-pulse' : resetPhase === 'reengage' ? 'bg-cyan-400' : 'bg-[#E0FE10]') :
                                                                         'bg-white/20'
                                                                     }`}
                                                             />
@@ -2843,12 +2843,12 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                     {/* Phase label */}
                                                     <span className={`text-[10px] font-bold uppercase tracking-wider ${resetPhase === 'lockIn' ? 'text-[#E0FE10]' :
                                                         resetPhase === 'disruption' ? 'text-red-400' :
-                                                            resetPhase === 'killSwitch' ? 'text-cyan-400' :
+                                                            resetPhase === 'reengage' ? 'text-cyan-400' :
                                                                 'text-zinc-500'
                                                         }`}>
                                                         {resetPhase === 'lockIn' ? 'Lock In' :
                                                             resetPhase === 'disruption' ? 'Disruption!' :
-                                                                resetPhase === 'killSwitch' ? '3-Second Reset' :
+                                                                resetPhase === 'reengage' ? '3-Second Reset' :
                                                                     resetPhase === 'done' ? 'Complete' :
                                                                         `Round ${ksCurrentRound}`}
                                                     </span>
@@ -2968,7 +2968,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                     </motion.div>
 
                                                 ) : (
-                                                    /* Active Game — Lock In / Disruption / Kill Switch */
+                                                    /* Active Game — Lock In / Disruption / Reset */
                                                     <div className="flex flex-col items-center gap-4 w-full">
                                                         {/* Phase indicator */}
                                                         <div className="flex items-center gap-2">
@@ -3023,7 +3023,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                         ) : (
                                                             /* Focus Task — Pulsing Circle */
                                                             <div className="flex flex-col items-center gap-4 py-4">
-                                                                {resetPhase === 'killSwitch' && (
+                                                                {resetPhase === 'reengage' && (
                                                                     <motion.div
                                                                         initial={{ opacity: 0 }}
                                                                         animate={{ opacity: 1 }}
@@ -3040,15 +3040,15 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                 >
                                                                     {/* Outer glow */}
                                                                     <div
-                                                                        className={`absolute inset-0 rounded-full blur-xl transition-colors duration-300 ${resetPhase === 'killSwitch' ? 'bg-cyan-400/20' : 'bg-[#E0FE10]/15'
+                                                                        className={`absolute inset-0 rounded-full blur-xl transition-colors duration-300 ${resetPhase === 'reengage' ? 'bg-cyan-400/20' : 'bg-[#E0FE10]/15'
                                                                             }`}
                                                                         style={{ transform: `scale(${ksPulseScale * 1.3})` }}
                                                                     />
                                                                     {/* Ring */}
-                                                                    <div className={`absolute inset-0 rounded-full border-2 transition-colors duration-300 ${resetPhase === 'killSwitch' ? 'border-cyan-400/40' : 'border-[#E0FE10]/30'
+                                                                    <div className={`absolute inset-0 rounded-full border-2 transition-colors duration-300 ${resetPhase === 'reengage' ? 'border-cyan-400/40' : 'border-[#E0FE10]/30'
                                                                         }`} />
                                                                     {/* Core */}
-                                                                    <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${resetPhase === 'killSwitch'
+                                                                    <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${resetPhase === 'reengage'
                                                                         ? 'bg-gradient-to-br from-cyan-400 to-cyan-500'
                                                                         : 'bg-gradient-to-br from-[#E0FE10] to-[#c5dc0e]'
                                                                         }`}>
@@ -3060,7 +3060,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                 {ksTapAccuracy.length > 0 && (
                                                                     <div className="flex gap-1">
                                                                         {ksTapAccuracy.slice(-8).map((acc, i) => (
-                                                                            <div key={i} className={`w-1.5 h-1.5 rounded-full ${acc ? (resetPhase === 'killSwitch' ? 'bg-cyan-400' : 'bg-[#E0FE10]') : 'bg-red-500/50'}`} />
+                                                                            <div key={i} className={`w-1.5 h-1.5 rounded-full ${acc ? (resetPhase === 'reengage' ? 'bg-cyan-400' : 'bg-[#E0FE10]') : 'bg-red-500/50'}`} />
                                                                         ))}
                                                                     </div>
                                                                 )}
@@ -3107,7 +3107,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                         <div
                                                                             key={i}
                                                                             className={`w-2 h-2 rounded-full transition-colors ${i < ksCurrentRound - 1 ? 'bg-[#E0FE10]' :
-                                                                                i === ksCurrentRound - 1 ? (resetPhase === 'disruption' ? 'bg-red-500 animate-pulse' : resetPhase === 'killSwitch' ? 'bg-cyan-400' : 'bg-[#E0FE10]') :
+                                                                                i === ksCurrentRound - 1 ? (resetPhase === 'disruption' ? 'bg-red-500 animate-pulse' : resetPhase === 'reengage' ? 'bg-cyan-400' : 'bg-[#E0FE10]') :
                                                                                     'bg-white/20'
                                                                                 }`}
                                                                         />
@@ -3115,11 +3115,11 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                 </div>
                                                                 <span className={`text-[10px] font-bold uppercase tracking-wider ${resetPhase === 'lockIn' ? 'text-[#E0FE10]' :
                                                                     resetPhase === 'disruption' ? 'text-red-400' :
-                                                                        resetPhase === 'killSwitch' ? 'text-cyan-400' : 'text-zinc-500'
+                                                                        resetPhase === 'reengage' ? 'text-cyan-400' : 'text-zinc-500'
                                                                     }`}>
                                                                     {resetPhase === 'lockIn' ? 'Lock In' :
                                                                         resetPhase === 'disruption' ? 'Disruption!' :
-                                                                            resetPhase === 'killSwitch' ? '3-Second Reset' :
+                                                                            resetPhase === 'reengage' ? '3-Second Reset' :
                                                                                 resetPhase === 'done' ? 'Complete' : `Round ${ksCurrentRound}`}
                                                                 </span>
                                                             </div>
@@ -3242,7 +3242,7 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                     </motion.div>
                                                                 ) : (
                                                                     <div className="flex flex-col items-center gap-6 py-4">
-                                                                        {resetPhase === 'killSwitch' && (
+                                                                        {resetPhase === 'reengage' && (
                                                                             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-4 py-1.5 rounded-full">
                                                                                 ⏱ Recovery timer running...
                                                                             </motion.div>
@@ -3253,16 +3253,16 @@ const TheClose: React.FC<{ coachName: string }> = ({ coachName }) => {
                                                                             transition={{ duration: 0.3, ease: 'easeInOut' }}
                                                                             className="relative w-40 h-40 rounded-full flex items-center justify-center"
                                                                         >
-                                                                            <div className={`absolute inset-0 rounded-full blur-xl transition-colors duration-300 ${resetPhase === 'killSwitch' ? 'bg-cyan-400/20' : 'bg-[#E0FE10]/15'}`} style={{ transform: `scale(${ksPulseScale * 1.3})` }} />
-                                                                            <div className={`absolute inset-0 rounded-full border-2 transition-colors duration-300 ${resetPhase === 'killSwitch' ? 'border-cyan-400/40' : 'border-[#E0FE10]/30'}`} />
-                                                                            <div className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 ${resetPhase === 'killSwitch' ? 'bg-gradient-to-br from-cyan-400 to-cyan-500' : 'bg-gradient-to-br from-[#E0FE10] to-[#c5dc0e]'}`}>
+                                                                            <div className={`absolute inset-0 rounded-full blur-xl transition-colors duration-300 ${resetPhase === 'reengage' ? 'bg-cyan-400/20' : 'bg-[#E0FE10]/15'}`} style={{ transform: `scale(${ksPulseScale * 1.3})` }} />
+                                                                            <div className={`absolute inset-0 rounded-full border-2 transition-colors duration-300 ${resetPhase === 'reengage' ? 'border-cyan-400/40' : 'border-[#E0FE10]/30'}`} />
+                                                                            <div className={`w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 ${resetPhase === 'reengage' ? 'bg-gradient-to-br from-cyan-400 to-cyan-500' : 'bg-gradient-to-br from-[#E0FE10] to-[#c5dc0e]'}`}>
                                                                                 <div className="w-4 h-4 rounded-full bg-white" />
                                                                             </div>
                                                                         </motion.button>
                                                                         {ksTapAccuracy.length > 0 && (
                                                                             <div className="flex gap-1.5">
                                                                                 {ksTapAccuracy.slice(-8).map((acc, i) => (
-                                                                                    <div key={i} className={`w-2 h-2 rounded-full ${acc ? (resetPhase === 'killSwitch' ? 'bg-cyan-400' : 'bg-[#E0FE10]') : 'bg-red-500/50'}`} />
+                                                                                    <div key={i} className={`w-2 h-2 rounded-full ${acc ? (resetPhase === 'reengage' ? 'bg-cyan-400' : 'bg-[#E0FE10]') : 'bg-red-500/50'}`} />
                                                                                 ))}
                                                                             </div>
                                                                         )}

@@ -17,7 +17,7 @@ This rollout keeps the legacy mental-training model running while the taxonomy b
 
 1. Backfill `taxonomyProfile` for existing athletes from baseline assessment, check-ins, and sim sessions.
 2. Backfill `activeProgram` by prescribing from the derived taxonomy profile.
-3. Map existing Kill Switch history into `sim-sessions` when raw round metrics exist.
+3. Map existing Reset history into `sim-sessions` when raw round metrics exist.
 4. Leave legacy `mprScore`, `currentPathway`, and curriculum documents in place until all major surfaces read the taxonomy profile.
 
 ## Compatibility rules
@@ -28,6 +28,6 @@ This rollout keeps the legacy mental-training model running while the taxonomy b
 
 ## Validation checks
 
-- Kill Switch completion creates both a legacy completion and a canonical sim session.
+- Reset completion creates both a legacy completion and a canonical sim session.
 - Daily check-ins change `activeProgram` when readiness or modifier state changes.
 - Coach roster cards show taxonomy bottlenecks without breaking existing pathway flows.

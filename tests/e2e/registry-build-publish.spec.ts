@@ -4,7 +4,7 @@ import path from 'path';
 
 const VARIANT_NAME = process.env.PLAYWRIGHT_VARIANT_NAME || 'Late-Pressure Endurance Lock';
 const DEFAULT_VARIANT_CASES = [
-  { name: 'Sport-Context Kill Switch', family: 'The Kill Switch' },
+  { name: 'Sport-Context Reset', family: 'Reset' },
   { name: 'Crowd-Noise Noise Gate', family: 'Noise Gate' },
   { name: 'False-Start Brake Point', family: 'Brake Point' },
   { name: 'Rapid Recognition Signal Window', family: 'Signal Window' },
@@ -23,17 +23,17 @@ const variantCases = process.env.PLAYWRIGHT_VARIANT_NAME
 const syncTestVariantCase = DEFAULT_VARIANT_CASES.find((entry) => entry.name === SYNC_TEST_VARIANT_NAME) ?? DEFAULT_VARIANT_CASES[DEFAULT_VARIANT_CASES.length - 1];
 
 function displayFamilyName(name: string) {
-  return name === 'The Kill Switch' ? 'Reset' : name;
+  return name;
 }
 
 function displayVariantName(name: string) {
-  return name.replace(/\bThe Kill Switch\b/g, 'Reset').replace(/\bKill Switch\b/g, 'Reset');
+  return name;
 }
 
 async function expectPreviewRuntime(page: Page, familyName: string) {
-  if (familyName === 'The Kill Switch') {
+  if (familyName === 'Reset') {
     await expect(
-      page.getByText(/3-Second Reset|Kill Switch|Reset/i).first(),
+      page.getByText(/3-Second Reset|Reset/i).first(),
     ).toBeVisible({ timeout: 15_000 });
     return;
   }
@@ -119,11 +119,11 @@ test.describe('Variant registry harness', () => {
       await waitForE2EHarness(page);
 
       await expect(page.getByRole('button', { name: /Variant Registry/i }).first()).toBeVisible({ timeout: 20_000 });
+      await page.getByRole('button', { name: /Sync Registry/i }).click();
       const { fixtureName, moduleId } = await prepareRegistryFixture(page, variantCase.name, caseNamespace);
 
       try {
         await page.getByRole('button', { name: /Sync Registry/i }).click();
-
         await openFixtureWorkspace(page, fixtureName, variantCase.family);
         await page.getByRole('button', { name: /Generate Draft/i }).click();
         await expect(page.getByText(/Status:\s+(Pass|Pass with Warnings)/i)).toBeVisible({ timeout: 20_000 });
@@ -177,6 +177,7 @@ test.describe('Variant registry harness', () => {
     await ensureAdminSession(page);
     await waitForE2EHarness(page);
     await expect(page.getByRole('button', { name: /Variant Registry/i }).first()).toBeVisible({ timeout: 20_000 });
+    await page.getByRole('button', { name: /Sync Registry/i }).click();
     const { fixtureName, moduleId } = await prepareRegistryFixture(page, syncTestVariantCase.name, caseNamespace);
 
     try {

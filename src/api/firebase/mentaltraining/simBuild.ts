@@ -54,8 +54,8 @@ function hashString(input: string) {
 
 export function inferEngineKey(record: Pick<SimVariantRecord, 'family'>): SimEngineKey {
   switch (record.family) {
-    case 'The Kill Switch':
-      return 'kill_switch';
+    case 'Reset':
+      return 'reset';
     case 'Noise Gate':
       return 'noise_gate';
     case 'Brake Point':
@@ -67,7 +67,7 @@ export function inferEngineKey(record: Pick<SimVariantRecord, 'family'>): SimEng
     case 'Endurance Lock':
       return 'endurance_lock';
     default:
-      return 'kill_switch';
+      return 'reset';
   }
 }
 
@@ -157,7 +157,7 @@ function buildStimulusModel(record: SimVariantRecord, engineKey: SimEngineKey) {
   const emphasis = getRuntimeConfigValue<string[]>(record, 'stimuli.emphasis', []);
   const priority = record.priority === 'high' ? 'high' : record.priority === 'medium' ? 'medium' : 'low';
   const defaults: Record<SimEngineKey, Record<string, any>> = {
-    kill_switch: {
+    reset: {
       primaryTask: 'reset_to_same_task',
       disruptionChannels: ['visual', 'audio', 'cognitive'],
       resetCue: 're-engage immediately',
@@ -192,13 +192,14 @@ function buildStimulusModel(record: SimVariantRecord, engineKey: SimEngineKey) {
   return {
     priority,
     emphasis,
+    audioAssets: getRuntimeConfigValue<Record<string, any>>(record, 'audioAssets', {}),
     ...defaults[engineKey],
   };
 }
 
 function buildScoringModel(record: SimVariantRecord, engineKey: SimEngineKey) {
   const scoringByEngine: Record<SimEngineKey, Record<string, any>> = {
-    kill_switch: {
+    reset: {
       coreMetricName: 'recovery_time',
       supportingMetrics: ['first_post_reset_accuracy', 'false_start_count', 'pressure_stability'],
     },
@@ -266,7 +267,7 @@ function buildUiModel(record: SimVariantRecord, engineKey: SimEngineKey) {
 
 export function compileVariantBuildArtifact(record: SimVariantRecord): SimBuildArtifact {
   const engineKey = record.engineKey ?? inferEngineKey(record);
-  const archetype = record.archetypeOverride ?? 'baseline';
+  const archetype = record.archetypeOverride ?? record.runtimeConfig?.archetype ?? 'baseline';
   const sourceFingerprint = buildVariantSourceFingerprint(record);
 
   return {

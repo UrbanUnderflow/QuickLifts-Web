@@ -13,6 +13,19 @@ import SimSpecStandardsTab from '../../components/admin/system-overview/SimSpecS
 import VariantRegistryTab from '../../components/admin/system-overview/VariantRegistryTab';
 import SimFamilySpecTab from '../../components/admin/system-overview/SimFamilySpecTab';
 import AthleteJourneyTab from '../../components/admin/system-overview/AthleteJourneyTab';
+import CoachJourneyTab from '../../components/admin/system-overview/CoachJourneyTab';
+import PulseClubActivationArchitectureTab from '../../components/admin/system-overview/PulseClubActivationArchitectureTab';
+import PulseCheckRuntimeArchitectureTab from '../../components/admin/system-overview/PulseCheckRuntimeArchitectureTab';
+import PulseCheckStateSignalLayerTab from '../../components/admin/system-overview/PulseCheckStateSignalLayerTab';
+import PulseCheckStateSnapshotFreshnessPolicyTab from '../../components/admin/system-overview/PulseCheckStateSnapshotFreshnessPolicyTab';
+import PulseCheckPerformanceStateFlagDefinitionsTab from '../../components/admin/system-overview/PulseCheckPerformanceStateFlagDefinitionsTab';
+import PulseCheckNoraAssignmentRulesTab from '../../components/admin/system-overview/PulseCheckNoraAssignmentRulesTab';
+import PulseCheckNoraQaEdgeCaseScenarioMatrixTab from '../../components/admin/system-overview/PulseCheckNoraQaEdgeCaseScenarioMatrixTab';
+import PulseCheckStateEscalationOrchestrationTab from '../../components/admin/system-overview/PulseCheckStateEscalationOrchestrationTab';
+import PulseCheckEscalationIntegrationSpecTab from '../../components/admin/system-overview/PulseCheckEscalationIntegrationSpecTab';
+import PulseCheckTeamPilotCohortOnboardingArchitectureTab from '../../components/admin/system-overview/PulseCheckTeamPilotCohortOnboardingArchitectureTab';
+import PulseCheckPermissionsVisibilityModelTab from '../../components/admin/system-overview/PulseCheckPermissionsVisibilityModelTab';
+import PulseCheckCoachDashboardInformationArchitectureTab from '../../components/admin/system-overview/PulseCheckCoachDashboardInformationArchitectureTab';
 import { systemOverviewManifest } from '../../content/system-overview/manifest';
 import type { ConnectionType, EcosystemConnection, EcosystemNode } from '../../content/system-overview/schema';
 
@@ -44,14 +57,34 @@ const SYSTEM_TABS: SystemTab[] = [
     label: 'Pulse Community',
     icon: Users,
     accent: '#60a5fa',
-    sectionIds: ['executive-summary', 'ecosystem-map', 'product-handbooks', 'backend-data', 'integrations', 'end-to-end-flows', 'ownership-release-matrix', 'risks-gaps', 'glossary'],
+    sectionIds: ['executive-summary', 'ecosystem-map', 'product-handbooks', 'pulse-club-activation-architecture', 'backend-data', 'integrations', 'end-to-end-flows', 'ownership-release-matrix', 'risks-gaps', 'glossary'],
   },
   {
     id: 'pulsecheck',
     label: 'PulseCheck',
     icon: Brain,
     accent: '#c084fc',
-    sectionIds: ['simulation-taxonomy', 'sim-family-tree', 'promotion-protocol', 'sim-spec-standards', 'variant-registry', 'sim-family-specs', 'athlete-journey'],
+    sectionIds: [
+      'simulation-taxonomy',
+      'sim-family-tree',
+      'promotion-protocol',
+      'sim-spec-standards',
+      'variant-registry',
+      'sim-family-specs',
+      'athlete-journey',
+      'coach-journey',
+      'pulsecheck-runtime-architecture',
+      'pulsecheck-state-signal-layer',
+      'pulsecheck-state-snapshot-freshness-policy',
+      'pulsecheck-performance-state-flag-definitions',
+      'pulsecheck-nora-assignment-rules',
+      'pulsecheck-nora-qa-edge-case-matrix',
+      'pulsecheck-state-escalation-orchestration',
+      'pulsecheck-escalation-integration-spec',
+      'pulsecheck-team-pilot-cohort-onboarding-architecture',
+      'pulsecheck-permissions-visibility-model',
+      'pulsecheck-coach-dashboard-information-architecture',
+    ],
   },
   {
     id: 'agent-swarm',
@@ -275,6 +308,9 @@ const SystemOverviewPage: React.FC = () => {
             ))}
           </div>
         );
+
+      case 'pulse-club-activation-architecture':
+        return <PulseClubActivationArchitectureTab />;
 
       case 'backend-data':
         return (
@@ -513,6 +549,42 @@ const SystemOverviewPage: React.FC = () => {
 
       case 'athlete-journey':
         return <AthleteJourneyTab />;
+
+      case 'coach-journey':
+        return <CoachJourneyTab />;
+
+      case 'pulsecheck-runtime-architecture':
+        return <PulseCheckRuntimeArchitectureTab />;
+
+      case 'pulsecheck-state-signal-layer':
+        return <PulseCheckStateSignalLayerTab />;
+
+      case 'pulsecheck-state-snapshot-freshness-policy':
+        return <PulseCheckStateSnapshotFreshnessPolicyTab />;
+
+      case 'pulsecheck-performance-state-flag-definitions':
+        return <PulseCheckPerformanceStateFlagDefinitionsTab />;
+
+      case 'pulsecheck-nora-assignment-rules':
+        return <PulseCheckNoraAssignmentRulesTab />;
+
+      case 'pulsecheck-nora-qa-edge-case-matrix':
+        return <PulseCheckNoraQaEdgeCaseScenarioMatrixTab />;
+
+      case 'pulsecheck-state-escalation-orchestration':
+        return <PulseCheckStateEscalationOrchestrationTab />;
+
+      case 'pulsecheck-escalation-integration-spec':
+        return <PulseCheckEscalationIntegrationSpecTab />;
+
+      case 'pulsecheck-team-pilot-cohort-onboarding-architecture':
+        return <PulseCheckTeamPilotCohortOnboardingArchitectureTab />;
+
+      case 'pulsecheck-permissions-visibility-model':
+        return <PulseCheckPermissionsVisibilityModelTab />;
+
+      case 'pulsecheck-coach-dashboard-information-architecture':
+        return <PulseCheckCoachDashboardInformationArchitectureTab />;
 
       default:
         return null;

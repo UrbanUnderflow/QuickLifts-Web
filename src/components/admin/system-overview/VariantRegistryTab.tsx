@@ -61,8 +61,10 @@ import {
     buildPublishedModuleFromVariant,
     buildPublishedVariantRecord,
     buildVariantRecordForBuild,
+    stableStringify,
     summarizeVariantSyncDiff,
 } from '../../../api/firebase/mentaltraining/simBuild';
+import { resolveVariantAudioAssets } from '../../../api/firebase/mentaltraining/audioAssetService';
 import { ExercisePlayer } from '../../mentaltraining';
 
 /* ---- TYPES ---- */
@@ -107,13 +109,16 @@ interface WarningFixFeedback {
     label: string;
     previousWarningCount: number;
     currentWarningCount: number;
+    remainingFixableSteps: number;
+    nextLabel: string | null;
+    noEffectiveChange?: boolean;
 }
 
 interface WarningFixGroup {
     key: string;
     label: string;
     findings: SpecAuditFinding[];
-    fixable: boolean;
+    state: 'next' | 'fixable' | 'manual' | 'exhausted';
 }
 
 interface FamilySpecBase {
@@ -213,7 +218,7 @@ const SYNC_STATUS_CONFIG: Record<SimSyncStatus, { label: string; color: string }
 
 /* ---- FAMILY COLOR MAP ---- */
 const FAMILY_COLORS: Record<string, string> = {
-    'The Kill Switch': '#ef4444',
+    'Reset': '#ef4444',
     'Noise Gate': '#f59e0b',
     'Brake Point': '#22c55e',
     'Signal Window': '#3b82f6',
@@ -240,7 +245,7 @@ function displayCopy(text: string) {
 }
 
 const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
-    'The Kill Switch': {
+    'Reset': {
         mechanism: 'disruption -> reset -> rapid re-engagement to the same primary task',
         coreMetric: 'Recovery Time',
         skillTargets: 'Attentional Shifting, Error Recovery Speed, and Pressure Stability',
@@ -257,7 +262,7 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
         ],
         governingDocs: [
             'Sim Specification Standards Addendum (v2)',
-            'The Kill Switch Sim Spec v3',
+            'Reset Sim Spec v3',
             'Sim Family Tree v2',
             'Sim Family Promotion Protocol v2.1',
         ],
@@ -376,7 +381,7 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
         mechanism: 'stabilize after an error event before it cascades into a broader performance spiral',
         coreMetric: 'Reset Stability',
         skillTargets: 'Emotional Recovery, Next-Rep Control, and Pressure Stability',
-        boundaryRule: 'the sim must stay focused on post-error stabilization rather than becoming a full Kill Switch or Heat Check duplicate',
+        boundaryRule: 'the sim must stay focused on post-error stabilization rather than becoming a full Reset or Heat Check duplicate',
         trainingModeDefaults: [
             'give clear, low-friction post-error feedback that keeps the athlete moving forward',
             'scale consequence and emotional salience within candidate-family limits',
@@ -508,22 +513,22 @@ const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
 
 /* ---- VARIANT DATA ---- */
 const VARIANT_REGISTRY: VariantEntry[] = [
-    // ── THE KILL SWITCH (LOCKED) ── Branch Variants
-    { name: 'Visual Disruption Kill Switch', family: 'The Kill Switch', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
-    { name: 'Audio Disruption Kill Switch', family: 'The Kill Switch', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
-    { name: 'Cognitive-Provocation Kill Switch', family: 'The Kill Switch', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
-    { name: 'Combined-Channel Kill Switch', family: 'The Kill Switch', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
-    { name: 'Short Daily Kill Switch', family: 'The Kill Switch', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
-    { name: 'Extended Trial Kill Switch', family: 'The Kill Switch', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
-    { name: 'Sport-Context Kill Switch', family: 'The Kill Switch', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
-    { name: 'Immersive Reset Chamber', family: 'The Kill Switch', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
-    // ── THE KILL SWITCH ── Library Variants
-    { name: 'Aftershock', family: 'The Kill Switch', familyStatus: 'locked', mode: 'library', specStatus: 'needs-spec', priority: 'medium' },
-    { name: 'Reset Window', family: 'The Kill Switch', familyStatus: 'locked', mode: 'library', specStatus: 'needs-spec', priority: 'medium' },
-    { name: 'Restart', family: 'The Kill Switch', familyStatus: 'locked', mode: 'library', specStatus: 'needs-spec', priority: 'medium' },
-    { name: 'Second Chance', family: 'The Kill Switch', familyStatus: 'locked', mode: 'library', specStatus: 'needs-spec', priority: 'medium' },
-    { name: 'Recovery Chain', family: 'The Kill Switch', familyStatus: 'locked', mode: 'library', specStatus: 'needs-spec', priority: 'medium' },
-    { name: 'Reset Chamber', family: 'The Kill Switch', familyStatus: 'locked', mode: 'library', specStatus: 'needs-spec', priority: 'medium' },
+    // ── RESET (LOCKED) ── Branch Variants
+    { name: 'Visual Disruption Reset', family: 'Reset', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
+    { name: 'Audio Disruption Reset', family: 'Reset', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
+    { name: 'Cognitive-Provocation Reset', family: 'Reset', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
+    { name: 'Combined-Channel Reset', family: 'Reset', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
+    { name: 'Short Daily Reset', family: 'Reset', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
+    { name: 'Extended Trial Reset', family: 'Reset', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
+    { name: 'Sport-Context Reset', family: 'Reset', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
+    { name: 'Immersive Reset Chamber', family: 'Reset', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
+    // ── RESET ── Library Variants
+    { name: 'Aftershock', family: 'Reset', familyStatus: 'locked', mode: 'library', specStatus: 'needs-spec', priority: 'medium' },
+    { name: 'Reset Window', family: 'Reset', familyStatus: 'locked', mode: 'library', specStatus: 'needs-spec', priority: 'medium' },
+    { name: 'Restart', family: 'Reset', familyStatus: 'locked', mode: 'library', specStatus: 'needs-spec', priority: 'medium' },
+    { name: 'Second Chance', family: 'Reset', familyStatus: 'locked', mode: 'library', specStatus: 'needs-spec', priority: 'medium' },
+    { name: 'Recovery Chain', family: 'Reset', familyStatus: 'locked', mode: 'library', specStatus: 'needs-spec', priority: 'medium' },
+    { name: 'Reset Chamber', family: 'Reset', familyStatus: 'locked', mode: 'library', specStatus: 'needs-spec', priority: 'medium' },
 
     // ── NOISE GATE (LOCKED) ── Branch Variants
     { name: 'Visual Clutter Noise Gate', family: 'Noise Gate', familyStatus: 'locked', mode: 'branch', specStatus: 'needs-spec', priority: 'high' },
@@ -637,8 +642,8 @@ const VARIANT_REGISTRY: VariantEntry[] = [
     { name: 'Fixation Under Pressure', family: 'Quiet Eye', familyStatus: 'candidate', mode: 'branch', specStatus: 'needs-spec', priority: 'medium' },
 
     // ── HYBRIDS / TRIAL EXPRESSIONS (No spec needed) ──
-    { name: 'Overload', family: 'The Kill Switch', familyStatus: 'locked', mode: 'hybrid', specStatus: 'not-required', priority: 'low' },
-    { name: 'Recovery Chain', family: 'The Kill Switch', familyStatus: 'locked', mode: 'hybrid', specStatus: 'not-required', priority: 'low' },
+    { name: 'Overload', family: 'Reset', familyStatus: 'locked', mode: 'hybrid', specStatus: 'not-required', priority: 'low' },
+    { name: 'Recovery Chain', family: 'Reset', familyStatus: 'locked', mode: 'hybrid', specStatus: 'not-required', priority: 'low' },
     { name: 'Noise to Choice (Hybrid)', family: 'Chaos Read', familyStatus: 'candidate', mode: 'hybrid', specStatus: 'not-required', priority: 'low' },
     { name: 'Two-Minute Drill', family: 'Endurance Lock', familyStatus: 'locked', mode: 'hybrid', specStatus: 'not-required', priority: 'low' },
     { name: 'Last Rep', family: 'Endurance Lock', familyStatus: 'locked', mode: 'hybrid', specStatus: 'not-required', priority: 'low' },
@@ -835,13 +840,56 @@ function normalizeOverlapTokens(line: string) {
             'all',
             'one',
             'same',
+            'audio',
+            'sound',
+            'visual',
+            'screen',
+            'sport',
+            'scenario',
+            'delivery',
+            'context',
         ]).has(token));
 }
 
-function runPolishAudit(parsed: ParsedSpec, findings: SpecAuditFinding[]) {
+const BUILD_NOTE_OVERLAP_SIGNAL_TOKENS = new Set([
+    'route',
+    'device',
+    'class',
+    'type',
+    'subtype',
+    'trigger',
+    'timing',
+    'window',
+    'schedule',
+    'seed',
+    'profile',
+    'modifier',
+    'overlap',
+    'baseline',
+    'block',
+    'onset',
+    'probe',
+    'phase',
+    'ambiguity',
+    'density',
+    'contrast',
+    'load',
+    'classification',
+    'latency',
+    'artifact',
+    'false',
+    'start',
+    'intrusion',
+    'shift',
+    'cue',
+]);
+
+function runPolishAudit(variant: VariantEntry, parsed: ParsedSpec, findings: SpecAuditFinding[]) {
     const buildBullets = extractSectionBullets(parsed, 'build');
     const measurementBullets = extractSectionBullets(parsed, 'measurement');
     const tagLikeBullets = buildBullets.filter((bullet) => /\b(tag|tags|marker|markers|field|fields)\b/i.test(bullet));
+    const cleanedBuildBullets = cleanupGeneratedBuildNotes(variant, buildBullets);
+    const buildNotesCanBeConsolidated = stableStringify(cleanedBuildBullets) !== stableStringify(buildBullets);
     const seenMessages = new Set<string>();
 
     const pushFinding = (code: string, message: string) => {
@@ -871,24 +919,30 @@ function runPolishAudit(parsed: ParsedSpec, findings: SpecAuditFinding[]) {
         }
     }
 
-    for (let i = 0; i < tagLikeBullets.length; i += 1) {
-        for (let j = i + 1; j < tagLikeBullets.length; j += 1) {
-            const left = normalizeOverlapTokens(tagLikeBullets[i]);
-            const right = normalizeOverlapTokens(tagLikeBullets[j]);
-            const overlap = left.filter((token) => right.includes(token));
+    if (buildNotesCanBeConsolidated) {
+        for (let i = 0; i < tagLikeBullets.length; i += 1) {
+            for (let j = i + 1; j < tagLikeBullets.length; j += 1) {
+                const left = normalizeOverlapTokens(tagLikeBullets[i]);
+                const right = normalizeOverlapTokens(tagLikeBullets[j]);
+                const overlap = left.filter((token) => right.includes(token));
+                const signalOverlap = overlap.filter((token) => (
+                    BUILD_NOTE_OVERLAP_SIGNAL_TOKENS.has(token)
+                    || token.includes('_')
+                ));
 
-            if (overlap.length > 0 && !overlap.every((token) => ['variant', 'assignment'].includes(token))) {
-                pushFinding(
-                    'overlapping_build_notes',
-                    `Build notes may contain overlapping tagging concepts (${overlap.join(', ')}). Consider consolidating closely related storage bullets.`
-                );
-                return;
+                if (signalOverlap.length >= 2) {
+                    pushFinding(
+                        'overlapping_build_notes',
+                        `Build notes may contain overlapping tagging concepts (${signalOverlap.join(', ')}). Consider consolidating closely related storage bullets.`
+                    );
+                    return;
+                }
             }
         }
     }
 
     const finalPhaseBullets = buildBullets.filter((bullet) => /finish-phase|finish phase|late-probe|late probe/i.test(bullet));
-    if (finalPhaseBullets.length > 1) {
+    if (finalPhaseBullets.length > 1 && buildNotesCanBeConsolidated) {
         pushFinding(
             'final_phase_term_overlap',
             'Build notes use overlapping final-phase terms such as "finish-phase" and "late-probe." Consider consolidating to one shared term.'
@@ -918,7 +972,7 @@ function runPolishAudit(parsed: ParsedSpec, findings: SpecAuditFinding[]) {
     if (buildSection) {
         const storeCount = buildBullets.filter((bullet) => /^store\b/i.test(bullet)).length;
         const exportCount = buildBullets.filter((bullet) => /^export\b/i.test(bullet)).length;
-        if (storeCount >= 3 && exportCount >= 1) {
+        if (storeCount >= 3 && exportCount >= 1 && buildNotesCanBeConsolidated) {
             pushFinding(
                 'dense_build_section',
                 'Build notes are dense and may contain overlapping storage/export instructions. Consider collapsing closely related bullets for readability.'
@@ -1179,33 +1233,33 @@ function runNonTrialArchetypeAudit(variant: VariantEntry, lowerRaw: string, find
 function runNonTrialFamilyAudit(variant: VariantEntry, lowerRaw: string, findings: SpecAuditFinding[]) {
     const archetype = resolveVariantArchetype(variant);
 
-    if (variant.family === 'The Kill Switch') {
+    if (variant.family === 'Reset') {
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'kill_switch_missing_valid_reengagement',
-            'Kill Switch specs should explicitly define valid re-engagement as two consecutive correct responses.',
+            'reset_missing_valid_reengagement',
+            'Reset specs should explicitly define valid re-engagement as two consecutive correct responses.',
             ['two consecutive correct responses', 'confirmed re-engagement']
         );
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'kill_switch_missing_false_start_logic',
-            'Kill Switch specs should explicitly define false starts as responses during the disruption phase.',
+            'reset_missing_false_start_logic',
+            'Reset specs should explicitly define false starts as responses during the disruption phase.',
             ['false start', 'responses during the disruption phase', 'response during disruption']
         );
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'kill_switch_missing_attentional_shift_sourcing',
-            'Kill Switch specs should explicitly describe Attentional Shifting as multi-source.',
+            'reset_missing_attentional_shift_sourcing',
+            'Reset specs should explicitly describe Attentional Shifting as multi-source.',
             ['attentional shifting', 'multi-source', 'first-post-reset accuracy']
         );
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
-            'kill_switch_missing_pressure_stability_sourcing',
-            'Kill Switch specs should explicitly describe Pressure Stability as modifier-stratified.',
+            'reset_missing_pressure_stability_sourcing',
+            'Reset specs should explicitly describe Pressure Stability as modifier-stratified.',
             ['pressure stability', 'modifier-stratified', 'modifier condition']
         );
 
@@ -1213,8 +1267,8 @@ function runNonTrialFamilyAudit(variant: VariantEntry, lowerRaw: string, finding
             pushArchetypeRequirementFinding(
                 findings,
                 lowerRaw,
-                'kill_switch_sport_context_missing_context_tags',
-                'Sport-context Kill Switch variants should store sport/scenario/reset-moment tags so transfer claims are inspectable.',
+                'reset_sport_context_missing_context_tags',
+                'Sport-context Reset variants should store sport/scenario/reset-moment tags so transfer claims are inspectable.',
                 ['sport', 'scenario', 'reset moment', 'phase of play', 'context tag']
             );
         }
@@ -1497,7 +1551,7 @@ function runSpecAuditPipeline(variant: VariantEntry, raw: string): SpecAuditRepo
         runNonTrialFamilyAudit(variant, lowerRaw, findings);
     }
 
-    runPolishAudit(parsed, findings);
+    runPolishAudit(variant, parsed, findings);
 
     const errorCount = findings.filter((finding) => finding.severity === 'error').length;
     const warningCount = findings.filter((finding) => finding.severity === 'warning').length;
@@ -1929,10 +1983,10 @@ function buildArchetypeProfile(
 function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: SimVariantArchetype): VariantProfileOverride | null {
     const name = variant.name.toLowerCase();
 
-    if (variant.family === 'The Kill Switch') {
+    if (variant.family === 'Reset') {
         if (name.includes('visual disruption')) {
             return {
-                purpose: 'This variant expresses Kill Switch through screen-based visual interruptions while preserving the same disruption -> reset -> re-engagement mechanic.',
+                purpose: 'This variant expresses Reset through screen-based visual interruptions while preserving the same disruption -> reset -> re-engagement mechanic.',
                 expectedBenefit: 'Surface visual-triggered reset speed and make recovery breakdowns legible under visual chaos.',
                 bestUse: [
                     'the athlete loses composure when the screen flashes, scrambles, or visually collapses',
@@ -1949,11 +2003,11 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
 
         if (name.includes('audio disruption')) {
             return {
-                purpose: 'This variant expresses Kill Switch through crowd, whistle, buzzer, and startle-like sound disruptions while preserving the same recovery mechanic.',
+                purpose: 'This variant expresses Reset through crowd, whistle, buzzer, and startle-like sound disruptions while preserving the same recovery mechanic.',
                 expectedBenefit: 'Train reset speed in loud sport-like environments and reveal audio-triggered recovery breakdowns.',
                 bestUse: [
                     'the athlete destabilizes under crowd, whistle, or buzzer conditions',
-                    'the program wants a sport-native audio-pressure version of Kill Switch',
+                    'the program wants a sport-native audio-pressure version of Reset',
                     'Nora needs an assignment that feels closer to live game noise than abstract visual disruption',
                 ],
                 runtimeDefaults: {
@@ -1966,7 +2020,7 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
 
         if (name.includes('cognitive-provocation')) {
             return {
-                purpose: 'This variant expresses Kill Switch through provocative language, evaluative cues, and psychological disruption without changing the reset mechanic.',
+                purpose: 'This variant expresses Reset through provocative language, evaluative cues, and psychological disruption without changing the reset mechanic.',
                 expectedBenefit: 'Reveal whether the athlete can recover when disruption arrives through thought and self-talk rather than pure sensory noise.',
                 bestUse: [
                     'the athlete spirals after mistakes, criticism, or ambiguity',
@@ -1983,12 +2037,12 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
 
         if (name.includes('combined-channel')) {
             return {
-                purpose: 'This variant layers visual, audio, and cognitive disruptions together while preserving the same Kill Switch reset target.',
+                purpose: 'This variant layers visual, audio, and cognitive disruptions together while preserving the same Reset reset target.',
                 expectedBenefit: 'Bridge single-channel reset work into competition-like stacked pressure without promoting to a new family.',
                 bestUse: [
                     'the athlete handles isolated resets but breaks down when channels stack together',
                     'the program needs a higher-load branch before moving to formal Trial or immersive work',
-                    'Nora wants the default advanced Kill Switch branch for pressure-combination training',
+                    'Nora wants the default advanced Reset branch for pressure-combination training',
                 ],
                 runtimeDefaults: {
                     emphasis: ['multi-channel overlap', 'stacked disruption timing', 'pressure layering'],
@@ -2000,7 +2054,7 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
 
         if (name.includes('sport-context')) {
             return {
-                purpose: 'This variant expresses Kill Switch in recognizable sport situations so the athlete experiences the reset mechanic inside game-like framing.',
+                purpose: 'This variant expresses Reset in recognizable sport situations so the athlete experiences the reset mechanic inside game-like framing.',
                 expectedBenefit: 'Increase transfer credibility and coach/athlete buy-in without changing the family scoring model.',
                 bestUse: [
                     'the athlete responds better to sport-native framing than abstract drills',
@@ -2015,9 +2069,26 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
             };
         }
 
+        if (name.includes('second chance')) {
+            return {
+                purpose: 'This variant expresses Reset through immediate recovery after an initially missed re-entry, forcing the athlete to reclaim the same target without spiraling.',
+                expectedBenefit: 'Train bounce-back speed when the first recovery attempt is sloppy, late, or unstable rather than letting one miss become a sequence.',
+                bestUse: [
+                    'the athlete misses the first recovery moment and then unravels on the next one',
+                    'the program wants a reclaim-focused Reset branch before adding heavier channel pressure',
+                    'Nora needs an assignment that reinforces immediate recovery after a bad first response rather than punishing one miss as terminal',
+                ],
+                runtimeDefaults: {
+                    emphasis: ['immediate reclaim window', 'miss-to-recover bounceback', 'second-attempt stabilization'],
+                    analyticsFocus: ['Recovery Time', 'first-miss recovery rate', 'bounceback after false starts'],
+                },
+                durationMinutes: 5,
+            };
+        }
+
         if (name.includes('immersive reset chamber')) {
             return {
-                purpose: 'This variant raises Kill Switch transfer fidelity through immersive environmental presentation while keeping the same reset target and scoring model.',
+                purpose: 'This variant raises Reset transfer fidelity through immersive environmental presentation while keeping the same reset target and scoring model.',
                 expectedBenefit: 'Test whether reset speed survives richer perceptual pressure and more embodied presentation.',
                 bestUse: [
                     'the athlete needs a higher-fidelity pre-field reset check',
@@ -2325,10 +2396,10 @@ function buildDefaultLockedSpec(variant: VariantEntry): SimVariantLockedSpec | u
     };
 
     switch (variant.family) {
-        case 'The Kill Switch':
+        case 'Reset':
             return {
                 ...generic,
-                modifierProfile: 'Use one fixed documented Kill Switch Tier 3 protocol bundle: sequence-memory focus task, combined disruption emphasis, and evaluative threat / consequence / ambiguity held constant across the full session.',
+                modifierProfile: 'Use one fixed documented Reset Tier 3 protocol bundle: sequence-memory focus task, combined disruption emphasis, and evaluative threat / consequence / ambiguity held constant across the full session.',
                 fixedProfileDetails: 'Do not swap task mappings, disruption channels, or modifier intensities within-session; the full Tier 3 protocol bundle remains constant for every comparison point.',
                 validResponseRule: 'Valid re-engagement requires two consecutive correct responses on the refocused task.',
                 maxWindowRule: 'Tier 3 maximum recovery window is 1.5 seconds.',
@@ -2415,9 +2486,9 @@ function getMeasurementPrecisionNotes(variant: VariantEntry) {
             'Any response faster than 150 ms is flagged as a motor artifact and excluded from the headline metric.',
         ];
 
-    if (variant.family === 'The Kill Switch') {
-        notes.push('Attentional Shifting scoring remains multi-source, combining re-engagement latency with first-post-reset accuracy exactly as defined in the Kill Switch family spec.');
-        notes.push('Pressure Stability scoring remains modifier-stratified, comparing baseline versus pressure conditions exactly as defined in the Kill Switch family spec.');
+    if (variant.family === 'Reset') {
+        notes.push('Attentional Shifting scoring remains multi-source, combining re-engagement latency with first-post-reset accuracy exactly as defined in the Reset family spec.');
+        notes.push('Pressure Stability scoring remains modifier-stratified, comparing baseline versus pressure conditions exactly as defined in the Reset family spec.');
         notes.push('Trial reporting should emphasize Recovery Time, Recovery Trend, modifier-stratified Pressure Stability, fail rate, and within-session deterioration.');
     }
 
@@ -2494,7 +2565,7 @@ function getResearchAlignmentNotes(variant: VariantEntry) {
             'In research export and analysis, device class should be treated as a covariate rather than assumed to be behaviorally neutral.',
         ];
 
-    if (variant.family === 'The Kill Switch') {
+    if (variant.family === 'Reset') {
         return [
             ...baseNotes,
             'The family is grounded in attentional shifting, inhibitory control, and pressure-stability literature; the Trial variant should preserve that evidence chain rather than introduce a new mechanism.',
@@ -2540,10 +2611,10 @@ function buildGeneratedTrialVariantSpec(variant: VariantEntry, familyBase: Famil
         `- Core mechanism remains ${familyBase?.mechanism ?? 'defined by the parent family spec'}.`,
         `- Core metric remains ${familyBase?.coreMetric ?? 'the parent family metric'}.`,
         `- Primary skill targets remain ${familyBase?.skillTargets ?? 'the parent family skill architecture'}.`,
-        ...(variant.family === 'The Kill Switch'
+        ...(variant.family === 'Reset'
             ? [
-                '- Attentional Shifting scoring remains multi-source, combining re-engagement latency with first-post-reset accuracy exactly as defined in the Kill Switch family spec.',
-                '- Pressure Stability scoring remains modifier-stratified, comparing baseline versus pressure conditions exactly as defined in the Kill Switch family spec.',
+                '- Attentional Shifting scoring remains multi-source, combining re-engagement latency with first-post-reset accuracy exactly as defined in the Reset family spec.',
+                '- Pressure Stability scoring remains modifier-stratified, comparing baseline versus pressure conditions exactly as defined in the Reset family spec.',
             ]
             : []),
         `- Boundary rule remains ${familyBase?.boundaryRule ?? 'governed by the parent family spec'}.`,
@@ -2634,7 +2705,14 @@ function getGenericArchetypeSpecNotes(variant: VariantEntry, familyBase: FamilyS
 }
 
 function getNonTrialMeasurementNotes(variant: VariantEntry, theme: VariantTheme) {
-    if (variant.family === 'The Kill Switch') {
+    if (variant.family === 'Reset') {
+        const archetype = resolveVariantArchetype(variant);
+        const contextTagNote = archetype === 'visual_channel'
+            ? 'Visual-channel, display-state, and delivery tags may support interpretation, but they must remain context fields and may not replace the family metric.'
+            : archetype === 'audio_channel'
+                ? 'Audio-channel, audio-route, and delivery tags may support interpretation, but they must remain context fields and may not replace the family metric.'
+            : 'Sport, scenario, or delivery tags may support interpretation, but they must remain context fields and may not replace the family metric.';
+
         return [
             'Recovery Time = disruption end -> confirmed re-engagement, with valid re-engagement requiring two consecutive correct responses on the refocused task.',
             'First-Post-Reset Accuracy must be reported alongside Recovery Time so the athlete cannot game the sim by reacting fast but inaccurately.',
@@ -2642,7 +2720,7 @@ function getNonTrialMeasurementNotes(variant: VariantEntry, theme: VariantTheme)
             'Responses below 150 ms are motor artifacts and must be excluded from the headline metric.',
             'Attentional Shifting remains a multi-source score combining re-engagement latency with first-post-reset accuracy.',
             'Pressure Stability remains modifier-stratified, comparing Recovery Time under baseline versus pressure conditions instead of averaging modifier states together.',
-            'Sport, scenario, or delivery tags may support interpretation, but they must remain context fields and may not replace the family metric.',
+            contextTagNote,
         ];
     }
 
@@ -2714,7 +2792,7 @@ function getNonTrialModeNotes(variant: VariantEntry, theme: VariantTheme) {
     const trainingMode = [...theme.trainingMode];
     const trialMode = [...theme.trialMode];
 
-    if (variant.family === 'The Kill Switch' && archetype === 'sport_context') {
+    if (variant.family === 'Reset' && archetype === 'sport_context') {
         return {
             trainingMode: [
                 ...trainingMode,
@@ -2770,7 +2848,25 @@ function getNonTrialModeNotes(variant: VariantEntry, theme: VariantTheme) {
 }
 
 function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
-    if (variant.family === 'The Kill Switch' && resolveVariantArchetype(variant) === 'sport_context') {
+    if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            ...theme.buildNotes,
+            'Store visual disruption subtype tags such as flash, target disappearance, and layout scramble in the session record so recovery failures are attributable to the active disruption style.',
+            'Store display-state tags such as contrast profile, peripheral load, and visual density tier so visual difficulty is inspectable rather than anecdotal.',
+            'Preserve which visual disruption was active when a false start, motor artifact, or slow recovery occurred so coaches can separate reset speed from display-driven artifacts.',
+        ];
+    }
+
+    if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'audio_channel') {
+        return [
+            ...theme.buildNotes,
+            'Store audio disruption subtype tags such as crowd surge, whistle, buzzer, and startle cue in the session record so recovery failures are attributable to the active sound event.',
+            'Store audio-route, output-device class, and volume-profile tags so sound-driven difficulty is inspectable rather than anecdotal.',
+            'Preserve which audio disruption was active when a false start, motor artifact, or slow recovery occurred so coaches can separate reset speed from audio-routing artifacts.',
+        ];
+    }
+
+    if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'sport_context') {
         return [
             ...theme.buildNotes,
             'Store sport, scenario, phase-of-play, and reset-moment tags in the session record so sport framing stays inspectable rather than anecdotal.',
@@ -2850,6 +2946,28 @@ function cleanupGeneratedBuildNotes(variant: VariantEntry, notes: string[]) {
             cleaned.push(note);
         }
     });
+
+    if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
+        const disruptionIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store visual disruption subtype tags such as flash, target disappearance, and layout scramble'));
+        const displayStateIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store display-state tags such as contrast profile, peripheral load, and visual density tier'));
+        const preserveIndex = cleaned.findIndex((note) => note.toLowerCase().includes('preserve which visual disruption was active when a false start'));
+        if (disruptionIndex >= 0 && displayStateIndex >= 0 && preserveIndex >= 0) {
+            const next = cleaned.filter((_, index) => index !== displayStateIndex && index !== preserveIndex);
+            next[disruptionIndex] = 'Store visual disruption subtype tags such as flash, target disappearance, and layout scramble, plus display-state tags such as contrast profile, peripheral load, and visual density tier, and preserve which visual disruption was active when a false start, motor artifact, or slow recovery occurred so recovery failures are attributable to the active visual disruption style.';
+            return next;
+        }
+    }
+
+    if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'audio_channel') {
+        const disruptionIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store audio disruption subtype tags such as crowd surge, whistle, buzzer, and startle cue'));
+        const routeIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store audio-route, output-device class, and volume-profile tags'));
+        const preserveIndex = cleaned.findIndex((note) => note.toLowerCase().includes('preserve which audio disruption was active when a false start'));
+        if (disruptionIndex >= 0 && routeIndex >= 0 && preserveIndex >= 0) {
+            const next = cleaned.filter((_, index) => index !== routeIndex && index !== preserveIndex);
+            next[disruptionIndex] = 'Store audio disruption subtype tags such as crowd surge, whistle, buzzer, and startle cue, plus audio-route, output-device class, and volume-profile tags, and preserve which sound event was active when a false start, motor artifact, or slow recovery occurred so recovery failures are attributable to the active audio disruption.';
+            return next;
+        }
+    }
 
     if (variant.family === 'Signal Window' && variant.name.toLowerCase().includes('rapid recognition')) {
         const hasFirstCommit = cleaned.some((note) => note.toLowerCase().includes('first-commit timing buckets'));
@@ -2982,7 +3100,7 @@ function buildWarningFixGroups(variant: VariantEntry, findings: SpecAuditFinding
             key: action.key,
             label: action.label,
             findings: [],
-            fixable: true,
+            state: 'fixable',
         });
     });
 
@@ -2999,7 +3117,7 @@ function buildWarningFixGroups(variant: VariantEntry, findings: SpecAuditFinding
                 key: manualKey,
                 label: 'Manual Review',
                 findings: [],
-                fixable: false,
+                state: 'manual',
             });
         }
         groups.get(manualKey)?.findings.push(finding);
@@ -3034,6 +3152,26 @@ function applyAuditWarningFixes(variant: VariantEntry, raw: string, action: Warn
     }
 
     return normalizeSpecText(next);
+}
+
+function materializeWarningFixGroups(
+    variant: VariantEntry,
+    findings: SpecAuditFinding[],
+    disabledKeys: string[],
+    nextActionKey: string | null
+) {
+    return buildWarningFixGroups(variant, findings).map((group) => {
+        if (group.state === 'manual') {
+            return group;
+        }
+        if (disabledKeys.includes(group.key)) {
+            return { ...group, state: 'exhausted' as const };
+        }
+        if (group.key === nextActionKey) {
+            return { ...group, state: 'next' as const };
+        }
+        return { ...group, state: 'fixable' as const };
+    });
 }
 
 function buildGeneratedVariantSpec(variant: VariantEntry): string {
@@ -3127,7 +3265,7 @@ function inferModuleDurationMinutes(variant: VariantEntry) {
 }
 
 function inferModuleIcon(variant: VariantEntry) {
-    if (variant.family === 'The Kill Switch') return 'rotate-ccw';
+    if (variant.family === 'Reset') return 'rotate-ccw';
     if (variant.family === 'Noise Gate') return 'volume-x';
     if (variant.family === 'Brake Point') return 'hand';
     if (variant.family === 'Signal Window') return 'radar';
@@ -3136,8 +3274,8 @@ function inferModuleIcon(variant: VariantEntry) {
     return 'brain';
 }
 
-function mapFamilyToFocusType(variant: VariantEntry): 'single_point' | 'distraction' | 'cue_word' | 'body_scan' | 'kill_switch' {
-    if (variant.family === 'The Kill Switch') return 'kill_switch';
+function mapFamilyToFocusType(variant: VariantEntry): 'single_point' | 'distraction' | 'cue_word' | 'body_scan' | 'reset' {
+    if (variant.family === 'Reset') return 'reset';
     if (variant.family === 'Noise Gate') return 'distraction';
     if (variant.family === 'Quiet Eye') return 'single_point';
     return 'cue_word';
@@ -3532,9 +3670,13 @@ function VariantWorkspaceModal({
     const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
     const [auditReport, setAuditReport] = useState<SpecAuditReport | null>(null);
     const [warningFixFeedback, setWarningFixFeedback] = useState<WarningFixFeedback | null>(null);
+    const [disabledWarningFixKeys, setDisabledWarningFixKeys] = useState<string[]>([]);
     const [showDetailedFindings, setShowDetailedFindings] = useState(false);
     const [previewModule, setPreviewModule] = useState<MentalExercise | null>(null);
     const [loadingPublishedPreview, setLoadingPublishedPreview] = useState(false);
+    const [workspaceActionLabel, setWorkspaceActionLabel] = useState<string | null>(null);
+    const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
+    const [specCopied, setSpecCopied] = useState(false);
     const trialVariant = isTrialVariant(variantMeta);
     const activeLockedSpec = variantMeta.lockedSpec ?? buildDefaultLockedSpec(variantMeta);
     const warningFindings = useMemo(
@@ -3542,12 +3684,17 @@ function VariantWorkspaceModal({
         [auditReport]
     );
     const warningFixActions = useMemo(
-        () => auditReport ? buildSupportedWarningFixActions(variantMeta, auditReport.findings) : [],
-        [auditReport, variantMeta]
+        () => auditReport
+            ? buildSupportedWarningFixActions(variantMeta, auditReport.findings)
+                .filter((action) => !disabledWarningFixKeys.includes(action.key))
+            : [],
+        [auditReport, disabledWarningFixKeys, variantMeta]
     );
     const warningFixGroups = useMemo(
-        () => auditReport ? buildWarningFixGroups(variantMeta, auditReport.findings) : [],
-        [auditReport, variantMeta]
+        () => auditReport
+            ? materializeWarningFixGroups(variantMeta, auditReport.findings, disabledWarningFixKeys, warningFixActions[0]?.key ?? null)
+            : [],
+        [auditReport, disabledWarningFixKeys, variantMeta, warningFixActions]
     );
     const nextWarningFixAction = warningFixActions[0] ?? null;
     const warningFindingCount = warningFindings.length;
@@ -3557,6 +3704,7 @@ function VariantWorkspaceModal({
     const effectiveSyncStatus = variantMeta.syncStatus ?? 'in_sync';
     const buildStatusConf = BUILD_STATUS_CONFIG[effectiveBuildStatus];
     const syncStatusConf = SYNC_STATUS_CONFIG[effectiveSyncStatus];
+    const workspaceBusy = Boolean(workspaceActionLabel);
 
     useEffect(() => {
         const nextRawSpec = initialSpecRaw ?? variant.specRaw ?? '';
@@ -3569,7 +3717,11 @@ function VariantWorkspaceModal({
         setConfigError(null);
         setAuditReport(nextRawSpec.trim() ? runSpecAuditPipeline(variant, nextRawSpec) : null);
         setWarningFixFeedback(null);
+        setDisabledWarningFixKeys([]);
         setShowDetailedFindings(false);
+        setWorkspaceActionLabel(null);
+        setWorkspaceActionError(null);
+        setSpecCopied(false);
         setModuleDraft(nextModuleDraft);
         setBenefitsText((nextModuleDraft.benefits ?? []).join('\n'));
         setBestForText((nextModuleDraft.bestFor ?? []).join('\n'));
@@ -3621,6 +3773,7 @@ function VariantWorkspaceModal({
         setParsed(parseVariantSpec(audit.fixedRaw));
         setAuditReport(audit);
         setWarningFixFeedback(null);
+        setDisabledWarningFixKeys([]);
         setShowDetailedFindings(false);
         setActiveTab('spec');
     };
@@ -3630,6 +3783,8 @@ function VariantWorkspaceModal({
         setRawSpec(audit.fixedRaw);
         setParsed(audit.fixedRaw.trim() ? parseVariantSpec(audit.fixedRaw) : null);
         setAuditReport(audit);
+        setWarningFixFeedback(null);
+        setDisabledWarningFixKeys([]);
         setShowDetailedFindings(false);
         return audit;
     };
@@ -3641,14 +3796,33 @@ function VariantWorkspaceModal({
         const nextAction = warningFixActions[0];
         const previousWarningCount = warningFindings.length;
         const nextRawSpec = applyAuditWarningFixes(variantMeta, rawSpec, nextAction);
+        if (normalizeSpecText(nextRawSpec) === normalizeSpecText(rawSpec)) {
+            const nextDisabledWarningFixKeys = Array.from(new Set([...disabledWarningFixKeys, nextAction.key]));
+            const remainingActions = buildSupportedWarningFixActions(variantMeta, auditReport.findings)
+                .filter((action) => !nextDisabledWarningFixKeys.includes(action.key));
+            setDisabledWarningFixKeys(nextDisabledWarningFixKeys);
+            setWarningFixFeedback({
+                label: nextAction.label,
+                previousWarningCount,
+                currentWarningCount: previousWarningCount,
+                remainingFixableSteps: remainingActions.length,
+                nextLabel: remainingActions[0]?.label ?? null,
+                noEffectiveChange: true,
+            });
+            return;
+        }
         const audit = runSpecAuditPipeline(variantMeta, nextRawSpec);
         setRawSpec(audit.fixedRaw);
         setParsed(audit.fixedRaw.trim() ? parseVariantSpec(audit.fixedRaw) : null);
         setAuditReport(audit);
+        setDisabledWarningFixKeys([]);
+        const remainingActions = buildSupportedWarningFixActions(variantMeta, audit.findings);
         setWarningFixFeedback({
             label: nextAction.label,
             previousWarningCount,
             currentWarningCount: audit.findings.filter((finding) => finding.severity === 'warning').length,
+            remainingFixableSteps: remainingActions.length,
+            nextLabel: remainingActions[0]?.label ?? null,
         });
     };
 
@@ -3695,70 +3869,122 @@ function VariantWorkspaceModal({
     };
 
     const handleSave = async () => {
-        const audit = handleRunAudit();
-        if (audit.status === 'needs_input') {
-            setActiveTab('spec');
-            return;
+        setWorkspaceActionError(null);
+        setWorkspaceActionLabel('Saving draft...');
+        try {
+            const audit = handleRunAudit();
+            if (audit.status === 'needs_input') {
+                setActiveTab('spec');
+                return;
+            }
+            const next = buildNextRecord(audit.fixedRaw);
+            if (!next) return;
+            if (audit.fixedRaw.trim()) {
+                setParsed(parseVariantSpec(audit.fixedRaw));
+            }
+            await onSave(next);
+        } catch (error: any) {
+            setWorkspaceActionError(error?.message || 'Failed to save draft.');
+        } finally {
+            setWorkspaceActionLabel(null);
         }
-        const next = buildNextRecord(audit.fixedRaw);
-        if (!next) return;
-        if (audit.fixedRaw.trim()) {
-            setParsed(parseVariantSpec(audit.fixedRaw));
-        }
-        await onSave(next);
+    };
+
+    const prepareBuildRecord = async (raw: string) => {
+        const next = buildNextRecord(raw);
+        if (!next) return null;
+        const nextWithAudio = await resolveVariantAudioAssets(next);
+        return buildVariantRecordForBuild(nextWithAudio);
     };
 
     const handleBuild = async () => {
-        const audit = handleRunAudit();
-        if (audit.status === 'needs_input') {
-            setActiveTab('spec');
-            return;
+        setWorkspaceActionError(null);
+        setWorkspaceActionLabel('Building module...');
+        try {
+            const audit = handleRunAudit();
+            if (audit.status === 'needs_input') {
+                setActiveTab('spec');
+                return;
+            }
+            const builtRecord = await prepareBuildRecord(audit.fixedRaw);
+            if (!builtRecord) return;
+            setVariantMeta(builtRecord);
+            await onBuild(builtRecord);
+        } catch (error: any) {
+            setWorkspaceActionError(error?.message || 'Failed to build module.');
+        } finally {
+            setWorkspaceActionLabel(null);
         }
-        const next = buildNextRecord(audit.fixedRaw);
-        if (!next) return;
-        const builtRecord = buildVariantRecordForBuild(next);
-        setVariantMeta(builtRecord);
-        await onBuild(builtRecord);
     };
 
     const handlePublish = async () => {
-        const audit = handleRunAudit();
-        if (audit.status === 'needs_input') {
-            setActiveTab('spec');
-            return;
+        setWorkspaceActionError(null);
+        setWorkspaceActionLabel('Building and publishing module...');
+        try {
+            const audit = handleRunAudit();
+            if (audit.status === 'needs_input') {
+                setActiveTab('spec');
+                return;
+            }
+            const builtRecord = await prepareBuildRecord(audit.fixedRaw);
+            if (!builtRecord) return;
+            setVariantMeta(builtRecord);
+            await onPublish(builtRecord);
+        } catch (error: any) {
+            setWorkspaceActionError(error?.message || 'Failed to publish module.');
+        } finally {
+            setWorkspaceActionLabel(null);
         }
-        const next = buildNextRecord(audit.fixedRaw);
-        if (!next) return;
-        const builtRecord = buildVariantRecordForBuild(next);
-        setVariantMeta(builtRecord);
-        await onPublish(builtRecord);
     };
 
-    const handlePreviewBuild = () => {
-        const audit = handleRunAudit();
-        if (audit.status === 'needs_input') {
-            setActiveTab('spec');
-            return;
+    const handlePreviewBuild = async () => {
+        setWorkspaceActionError(null);
+        setWorkspaceActionLabel('Preparing preview...');
+        try {
+            const audit = handleRunAudit();
+            if (audit.status === 'needs_input') {
+                setActiveTab('spec');
+                return;
+            }
+            const builtRecord = await prepareBuildRecord(audit.fixedRaw);
+            if (!builtRecord) return;
+            setVariantMeta(builtRecord);
+            setPreviewModule(buildPublishedModule(builtRecord));
+        } catch (error: any) {
+            setWorkspaceActionError(error?.message || 'Failed to prepare preview.');
+        } finally {
+            setWorkspaceActionLabel(null);
         }
-        const next = buildNextRecord(audit.fixedRaw);
-        if (!next) return;
-        const builtRecord = buildVariantRecordForBuild(next);
-        setVariantMeta(builtRecord);
-        setPreviewModule(buildPublishedModule(builtRecord));
     };
 
     const handlePreviewPublishedModule = async () => {
         if (!variantMeta.publishedModuleId) return;
+        setWorkspaceActionError(null);
+        setWorkspaceActionLabel('Loading published module...');
         setLoadingPublishedPreview(true);
         try {
             const module = await simModuleLibraryService.getById(variantMeta.publishedModuleId);
             if (module) {
                 setPreviewModule(module);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to load published module preview:', error);
+            setWorkspaceActionError(error?.message || 'Failed to load published module.');
         } finally {
             setLoadingPublishedPreview(false);
+            setWorkspaceActionLabel(null);
+        }
+    };
+
+    const handleCopySpec = async () => {
+        if (!rawSpec.trim()) return;
+        try {
+            await navigator.clipboard.writeText(rawSpec);
+            setSpecCopied(true);
+            window.setTimeout(() => setSpecCopied(false), 1800);
+        } catch (error) {
+            console.error('Failed to copy spec:', error);
+            setWorkspaceActionError('Failed to copy spec to clipboard.');
         }
     };
 
@@ -3772,6 +3998,7 @@ function VariantWorkspaceModal({
         setParsed(nextRawSpec.trim() ? parseVariantSpec(nextRawSpec) : null);
         setAuditReport(nextRawSpec.trim() ? runSpecAuditPipeline(snapshot, nextRawSpec) : null);
         setWarningFixFeedback(null);
+        setDisabledWarningFixKeys([]);
         setShowDetailedFindings(false);
         setConfigText(JSON.stringify(snapshot.runtimeConfig ?? buildDefaultRuntimeConfig(snapshot), null, 2));
         setConfigError(null);
@@ -3835,6 +4062,28 @@ function VariantWorkspaceModal({
                         </button>
                     ))}
                 </div>
+
+                {(workspaceActionLabel || workspaceActionError) && (
+                    <div className="px-5 pt-4 flex-shrink-0 space-y-2">
+                        {workspaceActionLabel && (
+                            <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3">
+                                <p className="text-xs font-semibold text-cyan-200 flex items-center gap-2">
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                    {workspaceActionLabel}
+                                </p>
+                                <p className="text-[11px] text-cyan-100/70 mt-1">
+                                    The registry is working in the background. Please wait for the action to finish.
+                                </p>
+                            </div>
+                        )}
+                        {workspaceActionError && (
+                            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3">
+                                <p className="text-xs font-semibold text-red-200">Action failed</p>
+                                <p className="text-[11px] text-red-100/80 mt-1">{workspaceActionError}</p>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 <div className="flex-1 overflow-y-auto p-5 space-y-5">
                     {activeTab === 'general' && (
@@ -4054,15 +4303,28 @@ function VariantWorkspaceModal({
                                         Generate Draft
                                     </button>
                                 </div>
-                                <textarea
-                                    value={rawSpec}
-                                    onChange={(event) => {
-                                        setRawSpec(event.target.value);
-                                        setAuditReport(null);
-                                    }}
-                                    placeholder="Paste or author the full variant spec here..."
-                                    className="w-full min-h-[420px] rounded-xl bg-black/40 border border-zinc-700 text-xs text-zinc-300 placeholder-zinc-600 p-4 focus:outline-none focus:border-zinc-500 transition-colors resize-y font-mono leading-relaxed"
-                                />
+                                <div className="relative">
+                                    <button
+                                        onClick={handleCopySpec}
+                                        disabled={!rawSpec.trim()}
+                                        className="absolute top-3 right-3 z-10 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-zinc-900/90 border border-zinc-700 text-zinc-200 hover:border-zinc-500 disabled:opacity-40 transition-colors"
+                                    >
+                                        <ClipboardPaste className="w-3.5 h-3.5" />
+                                        {specCopied ? 'Copied' : 'Copy'}
+                                    </button>
+                                    <textarea
+                                        value={rawSpec}
+                                        onChange={(event) => {
+                                            setRawSpec(event.target.value);
+                                            setAuditReport(null);
+                                            setWarningFixFeedback(null);
+                                            setDisabledWarningFixKeys([]);
+                                            setSpecCopied(false);
+                                        }}
+                                        placeholder="Paste or author the full variant spec here..."
+                                        className="w-full min-h-[420px] rounded-xl bg-black/40 border border-zinc-700 text-xs text-zinc-300 placeholder-zinc-600 p-4 pr-24 focus:outline-none focus:border-zinc-500 transition-colors resize-y font-mono leading-relaxed"
+                                    />
+                                </div>
                             </div>
 
                             <div className="space-y-3">
@@ -4122,12 +4384,14 @@ function VariantWorkspaceModal({
                                         {warningFixFeedback && (
                                             <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
                                                 <p className="text-[11px] text-blue-200">
-                                                    Applied <span className="font-semibold">{warningFixFeedback.label}</span>. Warnings: {warningFixFeedback.previousWarningCount} → {warningFixFeedback.currentWarningCount}
-                                                    {warningFixFeedback.currentWarningCount > 0
-                                                        ? ` · ${warningFixStepCount} fixable step${warningFixStepCount === 1 ? '' : 's'} remaining`
-                                                        : ''}
-                                                    {warningFixFeedback.currentWarningCount > 0 && nextWarningFixAction
-                                                        ? ` · Next: ${nextWarningFixAction.label}`
+                                                    {warningFixFeedback.noEffectiveChange
+                                                        ? <>No effective change from <span className="font-semibold">{warningFixFeedback.label}</span>. Warnings remain {warningFixFeedback.currentWarningCount}.</>
+                                                        : <>Applied <span className="font-semibold">{warningFixFeedback.label}</span>. Warnings: {warningFixFeedback.previousWarningCount} → {warningFixFeedback.currentWarningCount}</>}
+                                                    {warningFixFeedback.remainingFixableSteps > 0
+                                                        ? ` · ${warningFixFeedback.remainingFixableSteps} fixable step${warningFixFeedback.remainingFixableSteps === 1 ? '' : 's'} remaining`
+                                                        : ' · no supported auto-fix steps remaining'}
+                                                    {warningFixFeedback.nextLabel
+                                                        ? ` · Next: ${warningFixFeedback.nextLabel}`
                                                         : ''}
                                                 </p>
                                             </div>
@@ -4161,31 +4425,42 @@ function VariantWorkspaceModal({
                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1.5">Warning Groups</p>
                                                 <div className="space-y-2">
                                                     {warningFixGroups.map((group, index) => {
-                                                        const isNext = nextWarningFixAction?.key === group.key;
+                                                        const isNext = group.state === 'next';
+                                                        const isFixable = group.state === 'next' || group.state === 'fixable';
                                                         return (
                                                             <div
                                                                 key={`${group.key}-${index}`}
                                                                 className={`rounded-lg border px-3 py-2 ${
-                                                                    group.fixable
+                                                                    isFixable
                                                                         ? isNext
                                                                             ? 'border-amber-500/30 bg-amber-500/10'
                                                                             : 'border-zinc-800 bg-black/20'
-                                                                        : 'border-zinc-800 bg-black/20'
+                                                                        : group.state === 'exhausted'
+                                                                            ? 'border-blue-500/20 bg-blue-500/5'
+                                                                            : 'border-zinc-800 bg-black/20'
                                                                 }`}
                                                             >
                                                                 <div className="flex items-center justify-between gap-3">
                                                                     <p className={`text-[10px] font-bold uppercase tracking-widest ${
-                                                                        group.fixable
+                                                                        isFixable
                                                                             ? isNext
                                                                                 ? 'text-amber-300'
                                                                                 : 'text-zinc-300'
-                                                                            : 'text-zinc-400'
+                                                                            : group.state === 'exhausted'
+                                                                                ? 'text-blue-300'
+                                                                                : 'text-zinc-400'
                                                                     }`}>
                                                                         {group.label}
                                                                     </p>
                                                                     <span className="text-[10px] text-zinc-500">
                                                                         {group.findings.length} finding{group.findings.length === 1 ? '' : 's'}
-                                                                        {group.fixable && isNext ? ' · next step' : group.fixable ? ' · fixable' : ' · manual'}
+                                                                        {group.state === 'next'
+                                                                            ? ' · next step'
+                                                                            : group.state === 'fixable'
+                                                                                ? ' · fixable'
+                                                                                : group.state === 'exhausted'
+                                                                                    ? ' · no effective auto-fix'
+                                                                                    : ' · manual'}
                                                                     </span>
                                                                 </div>
                                                                 <div className="mt-2 space-y-1">
@@ -4331,7 +4606,7 @@ function VariantWorkspaceModal({
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <button
                                             onClick={handlePreviewBuild}
-                                            disabled={!!configError}
+                                            disabled={!!configError || workspaceBusy}
                                             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-purple-500/10 border border-purple-500/30 text-purple-300 hover:bg-purple-500/15 disabled:opacity-40 transition-colors"
                                         >
                                             <Gamepad2 className="w-3.5 h-3.5" />
@@ -4340,7 +4615,7 @@ function VariantWorkspaceModal({
                                         {variantMeta.publishedModuleId && (
                                             <button
                                                 onClick={handlePreviewPublishedModule}
-                                                disabled={loadingPublishedPreview}
+                                                disabled={loadingPublishedPreview || workspaceBusy}
                                                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-40 transition-colors"
                                             >
                                                 <Play className="w-3.5 h-3.5" />
@@ -4349,7 +4624,7 @@ function VariantWorkspaceModal({
                                         )}
                                         <button
                                             onClick={handleBuild}
-                                            disabled={building || !!configError}
+                                            disabled={building || !!configError || workspaceBusy}
                                             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 transition-colors"
                                         >
                                             <FileCode2 className="w-3.5 h-3.5" />
@@ -4361,7 +4636,7 @@ function VariantWorkspaceModal({
                                         </button>
                                         <button
                                             onClick={handlePublish}
-                                            disabled={publishing || !!configError}
+                                            disabled={publishing || !!configError || workspaceBusy}
                                             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-[#E0FE10] text-black hover:bg-[#c8e40e] disabled:opacity-40 transition-colors"
                                         >
                                             <Upload className="w-3.5 h-3.5" />
@@ -4650,7 +4925,7 @@ function VariantWorkspaceModal({
                         </button>
                         <button
                             onClick={handleSave}
-                            disabled={saving || !!configError}
+                            disabled={saving || !!configError || workspaceBusy}
                             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-zinc-800 border border-zinc-700 text-white hover:border-zinc-500 disabled:opacity-40 transition-colors"
                         >
                             <Save className="w-3.5 h-3.5" />
@@ -4658,7 +4933,7 @@ function VariantWorkspaceModal({
                         </button>
                         <button
                             onClick={handleBuild}
-                            disabled={building || !!configError}
+                            disabled={building || !!configError || workspaceBusy}
                             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 transition-colors"
                         >
                             <FileCode2 className="w-3.5 h-3.5" />
@@ -4666,7 +4941,7 @@ function VariantWorkspaceModal({
                         </button>
                         <button
                             onClick={handlePublish}
-                            disabled={publishing || !!configError}
+                            disabled={publishing || !!configError || workspaceBusy}
                             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-[#E0FE10] text-black hover:bg-[#c8e40e] disabled:opacity-40 transition-colors"
                         >
                             <Upload className="w-3.5 h-3.5" />

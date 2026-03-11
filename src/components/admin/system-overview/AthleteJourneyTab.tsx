@@ -40,9 +40,9 @@ const PHASES: Phase[] = [
         label: 'Entry',
         icon: UserCheck,
         accent: '#60a5fa',
-        description: 'Athlete joins through a team, coach, program, or direct sign-up.',
+        description: 'Athlete joins through a team, pilot, cohort-linked invite, coach-led invite, or direct sign-up.',
         detail:
-            'The system captures only the minimum setup needed to personalize the first experience: sport, role, season context, and current goal. Friction is front-loaded here so every subsequent step feels lighter.',
+            'The system captures only the minimum setup needed to personalize the first experience: team context, pilot participation, sport, season context, and current goal. The athlete should feel like they are entering one guided system, even when onboarding truth is being stored across team, pilot, cohort, and enrollment objects behind the scenes.',
     },
     {
         id: 'onboarding',
@@ -50,9 +50,9 @@ const PHASES: Phase[] = [
         label: 'First-Run Onboarding',
         icon: BookOpen,
         accent: '#a78bfa',
-        description: 'Pulse Check explains itself in plain language.',
+        description: 'Pulse Check explains itself in plain language and confirms why this athlete is here.',
         detail:
-            'Nora is introduced as the guide who learns the athlete and assigns the right daily work. The product introduces its mission — training focus, composure, and decision-making under pressure — clearly and without jargon.',
+            'Nora is introduced as the guide who learns the athlete and assigns the right daily work. The product introduces its mission clearly, confirms team branding and pilot context when applicable, and keeps product consent, research consent, and clinical escalation consent in separate lanes.',
     },
     {
         id: 'baseline',
@@ -62,7 +62,7 @@ const PHASES: Phase[] = [
         accent: '#34d399',
         description: 'A short baseline session that samples the major pillars without overwhelming detail.',
         detail:
-            'This should be positioned as a "starting read" or "mental baseline," not a high-stakes test. The athlete completes a clean first rep across key mechanisms so Nora can build an initial profile signal.',
+            'This should be positioned as a "starting read" or "mental baseline," not a high-stakes test. The athlete completes a clean first rep across key mechanisms so Nora can build an initial profile signal. If the athlete entered through a pilot, the system should branch them into the correct baseline path automatically: standard product path or research-aligned path.',
     },
     {
         id: 'program',
@@ -169,6 +169,25 @@ const VARIANT_ORDER = [
     { step: 4, label: 'Immersive / Field-Transfer', description: 'Trial-level fidelity using real-world or high-context scenarios to prove skill transfer.', accent: '#facc15' },
 ];
 
+const ENTRY_CONTEXTS = [
+    { label: 'Standard team onboarding', description: 'Athlete enters through a team invite, sees team branding, and is linked to the persistent team container.', accent: '#60a5fa' },
+    { label: 'Pilot-linked onboarding', description: 'Athlete enters through a pilot-aware invite and is automatically connected to the correct pilot and cohort context.', accent: '#a78bfa' },
+    { label: 'Product-only onboarding', description: 'Athlete uses Pulse Check without study enrollment and still receives the normal baseline and daily rhythm.', accent: '#34d399' },
+];
+
+const CONSENT_BRANCHES = [
+    { lane: 'Product consent', meaning: 'Required for Pulse Check use and should happen in every athlete path.' },
+    { lane: 'Research consent', meaning: 'Shown only when the pilot or cohort requires it. Decline should not necessarily block product use.' },
+    { lane: 'Escalation / clinical consent', meaning: 'Separate event-driven workflow inside the safety lane, never merged into generic onboarding.' },
+];
+
+const DAY_ONE_RULES = [
+    'Show one next step, not a menu of possible sims or system objects.',
+    'Confirm why the athlete is here: team context, pilot context, and baseline expectation.',
+    'Branch automatically into the right baseline path based on enrollment truth rather than making the athlete choose.',
+    'Keep research / product branching invisible to the athlete unless consent or study posture requires explanation.',
+];
+
 /* ─────────────────────────────────────────────
    SUB-COMPONENTS
 ───────────────────────────────────────────── */
@@ -269,6 +288,23 @@ const AthleteJourneyTab: React.FC = () => {
                 </div>
             </div>
 
+            {/* ── ENTRY CONTEXTS ── */}
+            <div>
+                <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wide mb-3">Entry Contexts the Journey Must Support</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {ENTRY_CONTEXTS.map((entry) => (
+                        <div
+                            key={entry.label}
+                            className="rounded-xl border p-4"
+                            style={{ background: `${entry.accent}08`, borderColor: `${entry.accent}25` }}
+                        >
+                            <p className="text-sm font-semibold text-white">{entry.label}</p>
+                            <p className="mt-2 text-xs leading-relaxed text-zinc-400">{entry.description}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
             {/* ── CORE PRINCIPLES ── */}
             <div>
                 <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wide mb-3">Core Journey Principles</h3>
@@ -341,6 +377,44 @@ const AthleteJourneyTab: React.FC = () => {
                             The first athlete experience should feel guided, calm, and obvious. The aim is to get the athlete into
                             a clean first rep quickly. The system must not present a menu of choices — it must present one next step.
                         </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── CONSENT + BASELINE BRANCHING ── */}
+            <div>
+                <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wide mb-3">Consent and Baseline Branching</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-[#090f1c] border border-zinc-800 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                            <p className="text-sm font-semibold text-white">Consent Lanes Stay Separate</p>
+                        </div>
+                        {CONSENT_BRANCHES.map((branch) => (
+                            <div key={branch.lane}>
+                                <p className="text-xs font-semibold text-zinc-200">{branch.lane}</p>
+                                <p className="text-xs leading-relaxed text-zinc-500 mt-1">{branch.meaning}</p>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="bg-[#090f1c] border border-zinc-800 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                            <BarChart3 className="w-4 h-4 text-sky-400" />
+                            <p className="text-sm font-semibold text-white">Baseline Branching Rule</p>
+                        </div>
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                            The first Trial an athlete takes is their baseline. Once onboarding is complete, the system should route them directly into the correct baseline path based on enrollment truth.
+                        </p>
+                        <div className="space-y-2">
+                            <div className="rounded-lg border border-zinc-800 bg-black/20 p-3">
+                                <p className="text-xs font-semibold text-white">Product-only athlete</p>
+                                <p className="mt-1 text-xs text-zinc-500">Enter the standard baseline path and continue into the normal Program rhythm.</p>
+                            </div>
+                            <div className="rounded-lg border border-zinc-800 bg-black/20 p-3">
+                                <p className="text-xs font-semibold text-white">Research-enrolled athlete</p>
+                                <p className="mt-1 text-xs text-zinc-500">Enter the research-aligned baseline path while preserving clean dataset eligibility rules.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -438,6 +512,19 @@ const AthleteJourneyTab: React.FC = () => {
                 </div>
             </div>
 
+            {/* ── DAY 1 RULES ── */}
+            <div>
+                <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wide mb-3">Day 1 Rules for Pilot-Aware Onboarding</h3>
+                <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3">
+                    {DAY_ONE_RULES.map((rule, i) => (
+                        <div key={i} className="flex items-start gap-3">
+                            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                            <p className="text-sm text-zinc-300">{rule}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
             {/* ── IMPLEMENTATION RULES ── */}
             <div>
                 <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wide mb-3">Implementation Rules</h3>
@@ -457,7 +544,7 @@ const AthleteJourneyTab: React.FC = () => {
                 <p className="text-sm text-zinc-300 leading-relaxed">
                     The easiest athlete entry for Pulse Check is not a menu of all possible sims, variants, and taxonomy objects.
                     It is a guided flow where Nora meets the athlete, learns the athlete quickly, prescribes one clean first rep,
-                    and then proves over time that the system is getting smarter and more specific. That is the journey most likely
+                    and then proves over time that the system is getting smarter and more specific. That flow should remain simple to the athlete even when the system is storing team, pilot, cohort, and enrollment truth behind the scenes. That is the journey most likely
                     to support adoption, adherence, and believable performance progress.
                 </p>
             </div>

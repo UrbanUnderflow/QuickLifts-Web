@@ -240,7 +240,7 @@ const GOVERNING_DOCS = [
 ];
 
 /* ---- MAIN TAB ---- */
-const KillSwitchSpecTab: React.FC = () => {
+const ResetSpecTab: React.FC = () => {
     return (
         <div className="space-y-10">
             {/* HEADER */}
@@ -699,4 +699,4 @@ const KillSwitchSpecTab: React.FC = () => {
     );
 };
 
-export default KillSwitchSpecTab;
+export default ResetSpecTab;

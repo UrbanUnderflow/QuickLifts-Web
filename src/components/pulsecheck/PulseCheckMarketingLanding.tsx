@@ -287,7 +287,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({ onJoinWaitlist }) => {
             <h2 className="pc2-h2">An always-on mental performance<br /><em>conversation.</em></h2>
             <p className="pc2-section-sub">Nora runs a frictionless 2-minute daily check-in via iMessage-style chat. She reads biometric context from HealthKit, asks targeted questions, and responds with clinically grounded mental performance drills — all in real time.</p>
             <ul className="pc2-checklist">
-              {['Frictionless iMessage-style daily mental reps', 'Real-time response to anxiety, fatigue & focus drops', 'Personalized drills: Box Breathing, Kill Switch, 3-Second Reset', 'Privacy-first — athletes control their coach visibility'].map(t => (
+              {['Frictionless iMessage-style daily mental reps', 'Real-time response to anxiety, fatigue & focus drops', 'Personalized drills: Box Breathing, Reset, 3-Second Reset', 'Privacy-first — athletes control their coach visibility'].map(t => (
                 <li key={t}><span className="pc2-check">✓</span>{t}</li>
               ))}
             </ul>

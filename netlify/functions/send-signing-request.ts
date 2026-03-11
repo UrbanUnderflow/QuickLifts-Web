@@ -4,8 +4,22 @@ import { getFirestore } from "firebase-admin/firestore";
 
 const BREVO_API_KEY = process.env.BREVO_MARKETING_KEY;
 const SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || "tre@fitwithpulse.ai";
-const SENDER_NAME = "Pulse Intelligence Labs";
 const BASE_URL = process.env.URL || "https://fitwithpulse.ai";
+
+// Resolve branding based on which company the document belongs to
+function resolveBranding(companyName: string) {
+  const isTres = companyName?.toLowerCase().includes('tresproperties') ||
+    companyName?.toLowerCase().includes('tres');
+  return {
+    senderName: isTres ? 'Tremaine Grant' : 'Pulse Intelligence Labs',
+    displayCompany: isTres ? 'TresProperties LLC' : 'Pulse Intelligence Labs, Inc.',
+    requestedBy: 'Tremaine Grant',
+    requestedByCompany: isTres ? 'TresProperties LLC' : 'Pulse Intelligence Labs, Inc.',
+    footerCompany: isTres ? 'TresProperties LLC' : 'Pulse Intelligence Labs, Inc.',
+    accentColor: isTres ? '#3B82F6' : '#E0FE10',
+    accentText: isTres ? '#FFFFFF' : '#000000',
+  };
+}
 
 // Initialize Firebase Admin if not already initialized
 if (getApps().length === 0) {
@@ -30,11 +44,13 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
   }
 
   try {
-    const { documentId, documentName, documentType, recipientName, recipientEmail } = JSON.parse(event.body || "{}");
+    const { documentId, documentName, documentType, recipientName, recipientEmail, companyName } = JSON.parse(event.body || "{}");
 
     if (!documentId || !recipientEmail) {
       return { statusCode: 400, body: JSON.stringify({ message: "Missing required fields." }) };
     }
+
+    const branding = resolveBranding(companyName || '');
 
     const signingUrl = `${BASE_URL}/sign/${documentId}`;
     const subject = `📝 Action Required: Please Sign "${documentName}"`;
@@ -67,7 +83,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
               border-bottom: 1px solid #27272a;
             }
             .header h1 {
-              color: #E0FE10;
+              color: ${branding.accentColor};
               font-size: 28px;
               font-weight: 700;
               margin: 0 0 8px 0;
@@ -97,7 +113,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
               border-radius: 12px;
               padding: 20px;
               margin: 20px 0;
-              border-left: 4px solid #E0FE10;
+              border-left: 4px solid ${branding.accentColor};
             }
             .document-label {
               color: #a1a1aa;
@@ -113,8 +129,8 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
             }
             .cta-button {
               display: inline-block;
-              background-color: #E0FE10;
-              color: #000000 !important;
+              background-color: ${branding.accentColor};
+              color: ${branding.accentText} !important;
               text-decoration: none;
               padding: 16px 32px;
               border-radius: 12px;
@@ -135,7 +151,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
               margin: 0 0 8px 0;
             }
             .footer a {
-              color: #E0FE10;
+              color: ${branding.accentColor};
               text-decoration: none;
             }
           </style>
@@ -144,7 +160,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
           <div style="padding: 20px; background-color: #09090b;">
             <div class="container">
               <div class="header">
-                <h1>Pulse Intelligence Labs</h1>
+                <h1>${branding.displayCompany}</h1>
                 <p>Document Signing Request</p>
               </div>
               
@@ -152,7 +168,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
                 <p class="greeting">Hi ${recipientName},</p>
                 
                 <p class="message">
-                  <strong>Tremaine Grant</strong> from Pulse Intelligence Labs, Inc. has requested your signature on the following document:
+                  <strong>${branding.requestedBy}</strong> from ${branding.requestedByCompany} has requested your signature on the following document:
                 </p>
                 
                 <div class="document-box">
@@ -176,7 +192,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
               </div>
               
               <div class="footer">
-                <p>© ${new Date().getFullYear()} Pulse Intelligence Labs, Inc. All rights reserved.</p>
+                <p>© ${new Date().getFullYear()} ${branding.footerCompany}. All rights reserved.</p>
                 <p>Questions? Reply to this email or reach out at <a href="mailto:tre@fitwithpulse.ai">tre@fitwithpulse.ai</a></p>
               </div>
             </div>
@@ -187,7 +203,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
     const brevoPayload = {
       sender: {
-        name: SENDER_NAME,
+        name: branding.senderName,
         email: SENDER_EMAIL,
       },
       to: [
@@ -213,7 +229,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
     if (!response.ok) {
       const errorBody = await response.json();
       console.error("Brevo API Error:", response.status, errorBody);
-      return { 
+      return {
         statusCode: response.status,
         body: JSON.stringify({ message: "Failed to send email via Brevo.", details: errorBody })
       };
@@ -230,7 +246,7 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
       console.error("Failed to update Firestore:", dbError);
       // Don't fail the request if Firestore update fails
     }
-    
+
     const responseData = await response.json();
     console.log("Signing request email sent successfully:", responseData);
 
@@ -238,11 +254,11 @@ const handler: Handler = async (event: HandlerEvent, context: HandlerContext) =>
 
   } catch (error: any) {
     console.error("Error in send-signing-request function:", error);
-    return { 
-      statusCode: 500, 
-      body: JSON.stringify({ 
-        message: "Internal server error while sending email.", 
-        details: error.message 
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        message: "Internal server error while sending email.",
+        details: error.message
       })
     };
   }
