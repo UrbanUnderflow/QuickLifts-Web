@@ -20,8 +20,8 @@ interface UserSearchInputProps {
   setSelectedUser: React.Dispatch<React.SetStateAction<User | null>>;
   selectedUser: User | null;
   isOverallLoading: boolean;
-  resultsRef: React.RefObject<HTMLDivElement | null>;
-  inputRef: React.RefObject<HTMLInputElement | null>;
+  resultsRef: React.RefObject<HTMLDivElement>;
+  inputRef: React.RefObject<HTMLInputElement>;
   clearSelectedUserAndQuery: () => void;
   allUsersCount: number;
 }
@@ -34,8 +34,8 @@ interface ChallengeSearchInputProps {
   setSelectedChallenge: React.Dispatch<React.SetStateAction<SweatlistCollection | null>>;
   selectedChallenge: SweatlistCollection | null;
   isOverallLoading: boolean;
-  resultsRef: React.RefObject<HTMLDivElement | null>;
-  inputRef: React.RefObject<HTMLInputElement | null>;
+  resultsRef: React.RefObject<HTMLDivElement>;
+  inputRef: React.RefObject<HTMLInputElement>;
   clearSelectedChallengeAndQuery: () => void;
   allChallengesCount: number;
 }
@@ -194,7 +194,7 @@ const ReferralAwardPage: React.FC = () => {
   const [selectedChallenge, setSelectedChallenge] = useState<SweatlistCollection | null>(null);
   const [challengeSearchQuery, setChallengeSearchQuery] = useState('');
   const [challengeSearchResults, setChallengeSearchResults] = useState<SweatlistCollection[]>([]);
-  const challengeResultsRef = useRef<HTMLDivElement | null>(null);
+  const challengeResultsRef = useRef<HTMLDivElement>(null);
 
   // User Search State for Referrer
   const [referrerSearchQuery, setReferrerSearchQuery] = useState('');
@@ -206,13 +206,13 @@ const ReferralAwardPage: React.FC = () => {
   const [refereeSearchResults, setRefereeSearchResults] = useState<User[]>([]);
   const [selectedReferee, setSelectedReferee] = useState<User | null>(null);
 
-  const referrerResultsRef = useRef<HTMLDivElement | null>(null);
-  const refereeResultsRef = useRef<HTMLDivElement | null>(null);
+  const referrerResultsRef = useRef<HTMLDivElement>(null);
+  const refereeResultsRef = useRef<HTMLDivElement>(null);
 
   // Input refs
-  const referrerInputRef = useRef<HTMLInputElement | null>(null);
-  const refereeInputRef = useRef<HTMLInputElement | null>(null);
-  const challengeInputRef = useRef<HTMLInputElement | null>(null);
+  const referrerInputRef = useRef<HTMLInputElement>(null);
+  const refereeInputRef = useRef<HTMLInputElement>(null);
+  const challengeInputRef = useRef<HTMLInputElement>(null);
 
   // Operation State
   const [isSubmitting, setIsSubmitting] = useState(false);
