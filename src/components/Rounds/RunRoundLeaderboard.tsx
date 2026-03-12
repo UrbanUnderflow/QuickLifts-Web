@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Trophy, User, ArrowUpRight, ArrowDownRight, Minus, MapPin, Timer, TrendingUp } from 'lucide-react';
+import { Trophy, User, MapPin, Timer, TrendingUp } from 'lucide-react';
 import { UserChallenge, RunRoundConfiguration, RunLeaderboardMetric, RunLeaderboardMetricInfo } from '../../api/firebase/workout/types';
 
 interface RunLeaderboardEntry {
@@ -32,7 +32,7 @@ const RunRoundLeaderboard: React.FC<RunRoundLeaderboardProps> = ({
     startDate,
     endDate,
     runRoundConfig,
-    participants,
+    participants: _participants,
     currentUserId,
     onParticipantClick
 }) => {
@@ -162,7 +162,7 @@ const RunRoundLeaderboard: React.FC<RunRoundLeaderboardProps> = ({
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {displayedEntries.map((entry, index) => {
+                    {displayedEntries.map((entry) => {
                         const isCurrentUser = entry.userId === currentUserId;
 
                         return (

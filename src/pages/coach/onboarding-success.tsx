@@ -4,13 +4,11 @@ import type { NextPage } from 'next';
 import PageHead from '../../components/PageHead';
 import Footer from '../../components/Footer/Footer';
 import { FaCircleCheck, FaDownload, FaShare, FaArrowRight, FaChartLine, FaUsers, FaCoins } from 'react-icons/fa6';
-import { useUser } from '../../hooks/useUser';
 
 const CoachOnboardingSuccess: NextPage = () => {
   const router = useRouter();
-  const currentUser = useUser();
   const { session_id } = router.query;
-  const [sessionData, setSessionData] = useState<any>(null);
+  const [_sessionData, _setSessionData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

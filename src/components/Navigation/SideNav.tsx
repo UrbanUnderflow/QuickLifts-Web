@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import { FaEnvelope, FaPlusSquare, FaBars, FaCog, FaSignOutAlt, FaInfoCircle, FaHome, FaUserTie, FaBrain, FaUsers, FaChartLine, FaUserFriends, FaInbox } from 'react-icons/fa';
+import { FaEnvelope, FaPlusSquare, FaBars, FaCog, FaSignOutAlt, FaInfoCircle, FaHome, FaUserTie, FaBrain } from 'react-icons/fa';
 import { useUser } from '../../hooks/useUser';
 import { signOut } from '../../api/firebase/auth/methods';
-import ProfilePhoto from '../pulsecheck/ProfilePhoto';
 import { SelectedRootTabs } from '../../types/DashboardTypes';
 import { motion, AnimatePresence } from 'framer-motion';
 

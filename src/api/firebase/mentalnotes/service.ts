@@ -9,7 +9,6 @@ import {
   orderBy,
   where,
   query,
-  addDoc,
   serverTimestamp,
   onSnapshot,
   Unsubscribe,
@@ -84,5 +83,4 @@ export const mentalNotesService = {
 };
 
 export type { MentalNote, MentalNoteStatus, MentalNoteCategory, MentalNoteSeverity };
-
 

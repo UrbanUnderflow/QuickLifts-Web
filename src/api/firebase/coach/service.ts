@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch, addDoc, deleteDoc, orderBy, limit, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, writeBatch, addDoc, deleteDoc, orderBy, limit, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config';
 import { CoachModel, CoachFirestoreData } from '../../../types/Coach';
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
@@ -805,12 +805,12 @@ class CoachService {
               console.log(`[CoachService] Found ${workoutSnapshot.docs.length} documents in ${collectionName}`);
               break; // Use the first collection that has data
             }
-          } catch (collectionError) {
+          } catch (_collectionError) {
             // Collection might not exist, continue to next one
             continue;
           }
         }
-      } catch (workoutError) {
+      } catch (_workoutError) {
         console.log('[CoachService] No workout data found, using 0 sessions');
       }
 

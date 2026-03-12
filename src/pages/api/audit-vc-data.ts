@@ -50,7 +50,7 @@ export default async function handler(
   }
 
   try {
-    const { prospects, batchSize = 3 } = req.body as AuditVCDataRequest;
+    const { prospects, batchSize: _batchSize = 3 } = req.body as AuditVCDataRequest;
 
     if (!prospects || !Array.isArray(prospects) || prospects.length === 0) {
       return res.status(400).json({ error: 'Valid prospects array is required' });

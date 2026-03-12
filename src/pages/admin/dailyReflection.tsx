@@ -3,7 +3,6 @@ import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import { DailyPrompt } from '../../api/firebase/admin/types';
-import { Timestamp } from 'firebase/firestore';
 import { exerciseService, Exercise } from '../../api/firebase/exercise';
 import { workoutService } from '../../api/firebase/workout/service';
 import { SweatlistCollection } from '../../api/firebase/workout/types';

@@ -23,7 +23,7 @@ const AdminRouteGuard: React.FC<AdminRouteGuardProps> = ({ children }) => {
       try {
         const result = await adminMethods.isAdmin(user.email);
         setIsAdmin(result);
-      } catch (e) {
+      } catch (_e) {
         setIsAdmin(false);
       }
       setLoading(false);

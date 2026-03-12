@@ -14,7 +14,6 @@ import {
   Calendar,
   Lightbulb,
   Clock,
-  CheckCircle,
   Rocket,
   Download
 } from 'lucide-react';
@@ -53,7 +52,7 @@ const q3OverallMetrics = [
 ];
 
 // Morning Mobility Final Metrics
-const mobilityFinalMetrics = [
+const _mobilityFinalMetrics = [
   {
     label: "Total Participants",
     currentValue: 83,
@@ -95,7 +94,7 @@ const learnings = [
   }
 ];
 
-const businessHighlights = [
+const _businessHighlights = [
   {
     title: "AWS + Techstars Impact Bootcamp",
     description: "Selected for the AWS Impact Bootcamp in Atlanta—hands-on technical training, business mentorship, and direct investor access.",
@@ -402,4 +401,3 @@ const Q3Review2025 = () => {
 };
 
 export default Q3Review2025;
-

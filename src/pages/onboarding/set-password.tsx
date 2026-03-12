@@ -76,7 +76,7 @@ const SetPasswordPage: React.FC = () => {
 
             setEmail(data.email || null);
             setSuccess(true);
-        } catch (err: any) {
+        } catch (_err: any) {
             setError('Network error. Please check your connection and try again.');
         } finally {
             setIsLoading(false);

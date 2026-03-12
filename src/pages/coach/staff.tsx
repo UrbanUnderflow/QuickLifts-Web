@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/router';
 import { useUser } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
 import { db } from '../../api/firebase/config';
@@ -36,7 +35,6 @@ type Membership = {
 };
 
 const StaffPage: React.FC = () => {
-  const router = useRouter();
   const currentUser = useUser();
   const [searchQuery, setSearchQuery] = useState('');
   const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -373,7 +371,7 @@ const StaffPage: React.FC = () => {
                           } catch (_) {}
                           setStaff(prev => prev.filter(p => p.id !== m.id));
                           setToast('Staff removed'); setTimeout(()=>setToast(null), 2000);
-                        } catch (e) {
+                        } catch (_e) {
                           setToast('Failed to remove staff'); setTimeout(()=>setToast(null), 2500);
                         }
                       }}
@@ -517,5 +515,3 @@ const StaffPage: React.FC = () => {
 };
 
 export default StaffPage;
-
-

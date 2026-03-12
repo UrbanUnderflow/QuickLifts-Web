@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { ArrowUpRight, Download, Copy, Check, ChevronRight, ArrowLeft, Dumbbell, Plus, Circle } from 'lucide-react';
+import { ArrowUpRight, Download, Copy, Check, ChevronRight, ArrowLeft, Plus } from 'lucide-react';
 import { useScrollFade } from '../../hooks/useScrollFade';
-import Header from '../../components/Header';
 import Footer from '../../components/Footer/Footer';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
@@ -84,7 +83,7 @@ const BrandGuidelines = () => {
     minSize: null, // Added for Minimum Size section
   });
 
-  const [pressKitAssets, setPressKitAssets] = useState<PressKitAssets | null>(null); // Raw from Firestore
+  const [_pressKitAssets, setPressKitAssets] = useState<PressKitAssets | null>(null); // Raw from Firestore
   const [processedLogos, setProcessedLogos] = useState<Record<string, DisplayLogoAsset>>({}); // Keyed by asset ID
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);

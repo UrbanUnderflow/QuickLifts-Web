@@ -855,7 +855,7 @@ const Year2025Review = () => {
         {/* Year End Stats */}
         <div className="relative max-w-4xl mx-auto px-6 pb-16">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            {yearEndStats.map((stat, index) => (
+            {yearEndStats.map((stat, _index) => (
               <div
                 key={stat.label}
                 className="bg-white/60 backdrop-blur-lg border border-gray-200/50 rounded-xl p-5 hover:bg-white/80 hover:shadow-lg hover:shadow-gray-200/30 transition-all duration-300"

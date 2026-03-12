@@ -13,11 +13,6 @@ const SENDER_NAME = process.env.BREVO_SENDER_NAME || "Pulse Review Bot";
 const FOUNDER_EMAIL = "tre@fitwithpulse.ai";
 const FOUNDER_NAME = "Tremaine";
 
-// Webhook URL where replies will be processed
-const REPLY_WEBHOOK_URL = process.env.NEXT_PUBLIC_BASE_URL 
-  ? `${process.env.NEXT_PUBLIC_BASE_URL}/api/review/capture-reply`
-  : 'https://fitwithpulse.ai/api/review/capture-reply';
-
 interface SendWeeklyCheckinResponse {
   success: boolean;
   messageId?: string;
@@ -271,6 +266,5 @@ export default async function handler(
     });
   }
 }
-
 
 

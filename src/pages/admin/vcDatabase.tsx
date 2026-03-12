@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, doc, setDoc, getDocs, query, orderBy, updateDoc, addDoc, getDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, query, orderBy, updateDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { GeminiService } from '../../api/firebase/gemini/service';
 import { FirebaseStorageService, UploadImageType } from '../../api/firebase/storage/service';
-import { Building2, Mail, User, MapPin, Globe, DollarSign, Calendar, Users, Trophy, FileText, Upload, Eye, Loader2, RefreshCw, Edit3, Check, X, AlertTriangle } from 'lucide-react';
+import { Building2, Mail, User, MapPin, Globe, Calendar, Users, Trophy, FileText, Upload, Eye, Loader2, RefreshCw, Edit3, Check, X, AlertTriangle } from 'lucide-react';
 
 interface VCFormData {
   person: string;
@@ -152,7 +151,6 @@ const VCDatabasePage: React.FC = () => {
   const [cancellingEmail, setCancellingEmail] = useState<string | null>(null);
 
   // Bulk source labeling state
-  const [showSourceLabeling, setShowSourceLabeling] = useState(false);
   const [labelingInProgress, setLabelingInProgress] = useState(false);
   const [labelingProgress, setLabelingProgress] = useState({ current: 0, total: 0 });
 
@@ -1046,59 +1044,6 @@ const VCDatabasePage: React.FC = () => {
     } catch (error) {
       console.error('Error during bulk source labeling:', error);
       showToast('Failed to complete source labeling', 'error');
-    } finally {
-      setLabelingInProgress(false);
-      setLabelingProgress({ current: 0, total: 0 });
-    }
-  };
-
-  // Bulk update sources for selected prospects
-  const bulkUpdateSource = async (prospectIds: string[], newSource: string) => {
-    if (prospectIds.length === 0) return;
-
-    setLabelingInProgress(true);
-    setLabelingProgress({ current: 0, total: prospectIds.length });
-
-    let successCount = 0;
-    let errorCount = 0;
-
-    try {
-      for (let i = 0; i < prospectIds.length; i++) {
-        const prospectId = prospectIds[i];
-        setLabelingProgress({ current: i + 1, total: prospectIds.length });
-
-        try {
-          const prospectRef = doc(db, 'venture-prospects', prospectId);
-          await updateDoc(prospectRef, {
-            source: newSource,
-            updatedAt: new Date()
-          });
-
-          // Update local state
-          setVcProspects(prev => prev.map(p => 
-            p.id === prospectId 
-              ? { ...p, source: newSource as VCFormData['source'], updatedAt: new Date() }
-              : p
-          ));
-
-          successCount++;
-
-        } catch (error) {
-          console.error(`❌ Error updating prospect ${prospectId}:`, error);
-          errorCount++;
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      showToast(
-        `Updated ${successCount} prospects to "${newSource}" source.`,
-        successCount > errorCount ? 'success' : 'error'
-      );
-
-    } catch (error) {
-      console.error('Error during bulk source update:', error);
-      showToast('Failed to update source labels', 'error');
     } finally {
       setLabelingInProgress(false);
       setLabelingProgress({ current: 0, total: 0 });

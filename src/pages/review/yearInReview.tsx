@@ -10,7 +10,6 @@ import {
   Building2,
   Rocket,
   Code,
-  CheckCircle,
   Target,
   ArrowLeft,
   ArrowRight,
@@ -167,7 +166,7 @@ const YearInReview = () => {
         {/* Year End Stats */}
         <div className="relative max-w-4xl mx-auto px-6 pb-16">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {yearEndStats.map((stat, index) => (
+            {yearEndStats.map((stat, _index) => (
               <div
                 key={stat.label}
                 className="bg-white/60 backdrop-blur-lg border border-gray-200/50 rounded-xl p-5 hover:bg-white/80 hover:shadow-lg hover:shadow-gray-200/30 transition-all duration-300"
@@ -204,7 +203,7 @@ const YearInReview = () => {
             </div>
 
             <div className="space-y-4">
-              {milestones.map((milestone, index) => (
+              {milestones.map((milestone, _index) => (
                 <div
                   key={milestone.month}
                   className={`relative overflow-hidden rounded-xl transition-all duration-300 ${

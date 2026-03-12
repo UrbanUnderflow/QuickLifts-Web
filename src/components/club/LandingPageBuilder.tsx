@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiArrowRight, FiActivity, FiUsers, FiMessageCircle, FiAward, FiSliders, FiEdit3, FiCheckCircle, FiImage, FiX, FiCalendar } from 'react-icons/fi';
+import { FiArrowRight, FiActivity, FiUsers, FiMessageCircle, FiAward, FiSliders, FiEdit3, FiCheckCircle, FiImage, FiX } from 'react-icons/fi';
 import { Club } from '../../api/firebase/club/types';
 import { SweatlistCollection } from '../../api/firebase/workout/types';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -329,7 +329,7 @@ export default function LandingPageBuilder({ club, creatorFallback, totalWorkout
                             {/* Section 2: Marquee */}
                             <div className="py-6 overflow-hidden border-y border-white/10">
                                 <div className="flex animate-marquee whitespace-nowrap w-max">
-                                    {["Active members", "Daily workouts", "Live chat", "Challenges", "Leaderboards", "Community support"].flatMap((item, i) => [item, item]).map((item, i) => (
+                                    {["Active members", "Daily workouts", "Live chat", "Challenges", "Leaderboards", "Community support"].flatMap((item, _i) => [item, item]).map((item, i) => (
                                         <span key={i} className="mx-8 text-gray-400 font-semibold flex items-center gap-2">
                                             <span style={{ color: accent }}>◆</span> {item}
                                         </span>

@@ -1,5 +1,3 @@
-import { firebaseStorageService } from '../storage/service';
-import { exerciseService } from '../exercise/service';
 import { userService } from '../user/service';
 import { ExerciseVideo, Exercise } from '../exercise/types';
 import { formatExerciseNameForId } from '../../../utils/stringUtils';

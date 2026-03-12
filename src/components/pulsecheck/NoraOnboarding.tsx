@@ -3,11 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Brain, 
   MessageCircle, 
-  Shield, 
   Sparkles, 
   ChevronRight, 
   ChevronLeft,
-  Target,
   TrendingUp,
   Users
 } from 'lucide-react';

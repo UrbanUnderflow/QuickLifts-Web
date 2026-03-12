@@ -63,7 +63,7 @@ const AddPointsPage: React.FC = () => {
     }
   };
 
-  const handleSearchDebounced = debounce(handleSearch, 500);
+  const _handleSearchDebounced = debounce(handleSearch, 500);
 
   const handleAddPoints = async () => {
     if (!selectedUserChallenge) return;

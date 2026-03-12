@@ -7,9 +7,8 @@ import { FollowRequest, CheckinsPrivacy } from '../../api/firebase/user';
 import { User, userService } from '../../api/firebase/user';
 import ExerciseGrid from '../../components/ExerciseGrid';
 import { Exercise } from '../../api/firebase/exercise/types';
-import { Challenge, Workout, SweatlistCollection, ChallengeType } from '../../api/firebase/workout/types';
+import { Workout, SweatlistCollection } from '../../api/firebase/workout/types';
 import { workoutService } from '../../api/firebase/workout/service';
-import { ChallengesTab } from '../../components/ChallengesTab';
 import { WorkoutSummary } from '../../api/firebase/workout';
 import { StarIcon, EllipsisHorizontalIcon, ShareIcon, FlagIcon, NoSymbolIcon, ScaleIcon, FireIcon, TrophyIcon } from '@heroicons/react/24/outline';
 import { ActivityTab } from '../../components/ActivityTab';
@@ -17,7 +16,6 @@ import { parseActivityType } from '../../utils/activityParser';
 import { UserActivity } from '../../types/Activity';
 import FullScreenExerciseView from '../FullscreenExerciseView';
 import UserProfileMeta from '../../components/UserProfileMeta';
-import Link from 'next/link';
 import { db } from '../../api/firebase/config';
 import { collection, query, where, getDocs, addDoc, serverTimestamp, doc, getDoc } from 'firebase/firestore';
 import FollowButton from '../../components/FollowButton';
@@ -81,7 +79,6 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
 
   // Redux state for current authenticated user
   const currentUser = useSelector((state: RootState) => state.user.currentUser);
-  const isAuthLoading = useSelector((state: RootState) => state.user.loading);
 
   // Determine if current user is viewing their own profile
   const isOwnProfile = currentUser && initialUserData && currentUser.id === initialUserData.id;
@@ -91,7 +88,6 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
   const [userVideos, setUserVideos] = useState<Exercise[]>([]);
   const [userStacks, setUserStacks] = useState<Workout[]>([]);
   const [stackSearchQuery, setStackSearchQuery] = useState('');
-  const [activeChallenges, setActiveChallenges] = useState<Challenge[]>([]);
   const [workoutSummaries, setWorkoutSummaries] = useState<WorkoutSummary[]>([]);
   const [activities, setActivities] = useState<UserActivity[]>([]);
   const [followers, setFollowers] = useState<FollowRequest[]>([]);
@@ -236,9 +232,6 @@ export default function ProfileView({ initialUserData, error: serverError }: Pro
         });
         setUserRounds(userCreatedRounds);
 
-        // Also set activeChallenges for backward compatibility
-        const challenges = userCreatedRounds.map(c => c.challenge).filter((c): c is Challenge => !!c);
-        setActiveChallenges(challenges);
       } catch (error) {
         console.error('Error fetching user rounds:', error);
       }

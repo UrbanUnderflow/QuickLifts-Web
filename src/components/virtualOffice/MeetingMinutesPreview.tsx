@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import {
-  X, Download, Save, Trash2, FileText,
+  X, Download, Save, FileText,
   Lightbulb, HelpCircle, CheckSquare, MessageSquare,
   Target, Loader2, Sparkles
 } from 'lucide-react';

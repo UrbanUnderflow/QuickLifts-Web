@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { collection, addDoc, getDocs, orderBy, query, updateDoc, doc, deleteDoc } from 'firebase/firestore';
@@ -281,6 +281,7 @@ const FriendsOfBusinessPage: React.FC = () => {
 
   const dispatch = useDispatch();
   const [initialEmailDraft, setInitialEmailDraft] = useState<{ subject: string; body: string } | null>(null);
+  const emailDraftWasOpen = useRef(false);
 
   // Load email template from Firestore
   useEffect(() => {
@@ -335,11 +336,11 @@ const FriendsOfBusinessPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (emailOpen && emailFriend) {
+    if (emailOpen && emailFriend && !emailDraftWasOpen.current) {
       setInitialEmailDraft({ subject: emailSubject, body: emailBody });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [emailOpen]);
+    emailDraftWasOpen.current = emailOpen;
+  }, [emailOpen, emailFriend, emailSubject, emailBody]);
 
   const emailDirty = !!initialEmailDraft && (
     initialEmailDraft.subject !== emailSubject ||

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { auth } from '../../api/firebase/config';
-import { CheckCircle, XCircle, Clock, Trash2, Eye, EyeOff, Code, Users, Shield, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, Trash2, Eye, Code, Users, AlertCircle } from 'lucide-react';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import { ProgrammingAccess } from '../../api/firebase/admin/types';
 

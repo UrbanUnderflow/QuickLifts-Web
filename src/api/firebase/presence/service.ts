@@ -302,7 +302,6 @@ export const presenceService = {
     const docRef = doc(db, COLLECTION, agentId);
 
     // We need to read-modify-write. In production you'd use a transaction.
-    const { onSnapshot: snapOnce } = await import('firebase/firestore');
     return new Promise<void>((resolve, reject) => {
       const unsub = onSnapshot(docRef, async (snap) => {
         unsub(); // one-shot read

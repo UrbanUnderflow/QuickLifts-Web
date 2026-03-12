@@ -1,4 +1,4 @@
-import { Firestore, collection, doc, setDoc } from 'firebase/firestore';
+import { collection, doc, setDoc } from 'firebase/firestore';
 import { ExerciseLog } from '../exercise/types';
 import { Workout } from '../../firebase/workout';
 import { userService } from '../user';

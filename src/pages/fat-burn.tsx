@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/router';
-import { ArrowLeft, Play, Pause, Square, ChevronRight, Target, Clock, Flame, TrendingUp, CheckCircle, Camera } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Square, ChevronRight, Target, Clock, Flame, TrendingUp, CheckCircle } from 'lucide-react';
 import { 
   FatBurnEquipment,
   FatBurnEquipmentInfo,
@@ -11,7 +11,6 @@ import {
   FatBurnDistancePresetMiles,
   FatBurnFloorsPreset,
   FatBurnFloorsPresetCount,
-  FatBurnConfiguration,
   FatBurnSummary,
   TreadmillMode,
   PulsePoints,
@@ -77,7 +76,7 @@ const FatBurnPage: React.FC = () => {
   const persistFatBurnSession = useCallback((payload: any) => {
     try {
       localStorage.setItem(fatBurnSessionStorageKey, JSON.stringify(payload));
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
   }, [fatBurnSessionStorageKey]);
@@ -85,7 +84,7 @@ const FatBurnPage: React.FC = () => {
   const clearFatBurnSession = useCallback(() => {
     try {
       localStorage.removeItem(fatBurnSessionStorageKey);
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
   }, [fatBurnSessionStorageKey]);
@@ -187,7 +186,7 @@ const FatBurnPage: React.FC = () => {
         setCurrentStep(FatBurnStep.Entry);
         if (savedElapsed !== null) setElapsedTime(savedElapsed);
       }
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
   }, [fatBurnSessionStorageKey, equipment, goalType, treadmillMode]);

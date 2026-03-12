@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
-import { ArrowLeft, Play, Pause, SkipForward, ChevronRight, Clock, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Play, Pause, SkipForward, CheckCircle } from 'lucide-react';
 import { 
   StretchBodyArea, 
   StretchBodyAreaInfo,

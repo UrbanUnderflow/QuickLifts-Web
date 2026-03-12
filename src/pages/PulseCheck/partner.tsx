@@ -1,6 +1,6 @@
 import type { NextPage } from 'next';
 import React, { useState } from 'react';
-import { FaBolt, FaCoins, FaHandshake, FaChartLine, FaArrowRight, FaClock, FaUsers, FaDiagramProject, FaCircleCheck } from 'react-icons/fa6';
+import { FaBolt, FaCoins, FaHandshake, FaArrowRight, FaClock, FaUsers, FaDiagramProject, FaCircleCheck } from 'react-icons/fa6';
 import Footer from '../../components/Footer/Footer';
 import PageHead from '../../components/PageHead';
 import PartnerJoinModal from '../../components/PartnerJoinModal';

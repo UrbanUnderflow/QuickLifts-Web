@@ -8,7 +8,6 @@ import {
     serverTimestamp,
     query,
     orderBy,
-    Timestamp,
 } from 'firebase/firestore';
 import { db } from '../config';
 import type { MeetingMinutes } from './types';

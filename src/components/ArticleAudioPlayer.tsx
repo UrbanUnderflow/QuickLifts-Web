@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Volume2, X } from 'lucide-react';
+import { Play, Pause, X } from 'lucide-react';
 
 interface ArticleAudioPlayerProps {
   /** The full text of the article to narrate */
@@ -59,8 +59,6 @@ const ArticleAudioPlayer: React.FC<ArticleAudioPlayerProps> = ({
   title,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0); // 0-100 percentage

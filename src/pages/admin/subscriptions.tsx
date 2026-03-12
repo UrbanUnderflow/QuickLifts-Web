@@ -63,7 +63,7 @@ const SubscriptionsAdminPage: React.FC = () => {
   const [hasMore, setHasMore] = useState(true);
   const [usernames, setUsernames] = useState<Record<string, string>>({});
   const [selectedSubscription, setSelectedSubscription] = useState<SubscriptionRow | null>(null);
-  const [copiedId, setCopiedId] = useState<string>('');
+  const [_copiedId, setCopiedId] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
   const [autoResolving, setAutoResolving] = useState(false);
   const healedUserIdsRef = useRef<Set<string>>(new Set());
@@ -136,7 +136,6 @@ const SubscriptionsAdminPage: React.FC = () => {
 
   useEffect(() => {
     loadPage(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-resolve unknown statuses by pinging RevenueCat and Stripe history migrator
@@ -285,7 +284,7 @@ const SubscriptionsAdminPage: React.FC = () => {
       // Clear alias input
       setRcNewAliasEdits(prev => ({ ...prev, [subId]: '' }));
       setToastMessage({ type: 'success', text: 'RevenueCat fields saved' });
-    } catch (e) {
+    } catch (_e) {
       setToastMessage({ type: 'error', text: 'Failed to save RevenueCat fields' });
     } finally {
       setSavingRcFor(null);
@@ -651,7 +650,7 @@ const SubscriptionsAdminPage: React.FC = () => {
                       });
                       await loadPage(false);
                       setToastMessage({ type: 'success', text: 'Backfill complete' });
-                    } catch (e) {
+                    } catch (_e) {
                       setToastMessage({ type: 'error', text: 'Backfill failed' });
                     }
                   }}
@@ -862,5 +861,4 @@ const SubscriptionsAdminPage: React.FC = () => {
 };
 
 export default SubscriptionsAdminPage;
-
 

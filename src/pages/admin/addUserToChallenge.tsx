@@ -3,7 +3,7 @@ import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { workoutService } from '../../api/firebase/workout/service';
 import { userService } from '../../api/firebase/user/service';
-import { Challenge, UserChallenge, SweatlistCollection } from '../../api/firebase/workout/types';
+import { Challenge } from '../../api/firebase/workout/types';
 import { User } from '../../api/firebase/user/types';
 import { Search, Users, Plus, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import debounce from 'lodash.debounce';
@@ -107,7 +107,7 @@ const AddUserToChallengeAdmin: React.FC = () => {
   }, [successMessage, errorMessage]);
 
   // Check if user is already in challenge
-  const checkUserInChallenge = async (userId: string, challengeId: string): Promise<boolean> => {
+  const _checkUserInChallenge = async (userId: string, challengeId: string): Promise<boolean> => {
     try {
       const userChallenges = await workoutService.fetchUserChallengesByUserId(userId);
       return userChallenges.some(uc => uc.challengeId === challengeId);

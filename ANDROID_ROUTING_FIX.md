@@ -45,8 +45,8 @@ Android users were experiencing 404 errors when accessing the website, with page
 ### 1. Pre-deployment Testing
 ```bash
 # Test the routing fixes locally
-yarn build
-yarn start
+npm run build
+npm run start
 
 # Run the Android routing test
 node scripts/test-android-routing.js

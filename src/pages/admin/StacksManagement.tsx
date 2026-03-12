@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, where, getCountFromServer, doc, deleteDoc, writeBatch, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, getCountFromServer, doc, writeBatch, getDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { Layers, Users, Calendar, AlertCircle, CheckCircle, Loader2, Eye, XCircle, Search, Filter, Trash2, Copy, Clock, Target, Info } from 'lucide-react';
+import { Layers, Users, AlertCircle, CheckCircle, Loader2, Eye, XCircle, Search, Filter, Trash2, Copy, Clock, Target, Info } from 'lucide-react';
 import { Workout } from '../../api/firebase/workout/types';
 import { convertFirestoreTimestamp } from '../../utils/formatDate';
 
@@ -301,7 +301,7 @@ const StacksManagement: React.FC = () => {
         return date.toLocaleString();
       }
       return 'Invalid Date';
-    } catch (e) {
+    } catch (_e) {
       return 'Invalid Date';
     }
   };

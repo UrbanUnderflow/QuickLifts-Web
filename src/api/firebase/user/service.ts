@@ -934,7 +934,7 @@ class UserService {
         if (typeof timestamp === 'string') {
           try {
             return new Date(timestamp).toISOString();
-          } catch (e) {
+          } catch (_e) {
             return timestamp;
           }
         }

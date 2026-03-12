@@ -15,7 +15,6 @@ import {
   ALL_EXERCISE_CATEGORIES,
   WORKOUT_TYPE_INFO,
   EXERCISE_CATEGORY_INFO,
-  WorkoutType
 } from '../../api/firebase/workoutCategoryMapping';
 
 // Workout types that support generation

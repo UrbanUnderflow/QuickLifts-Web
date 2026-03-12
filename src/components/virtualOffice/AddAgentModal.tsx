@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import {
-    X, UserPlus, Sparkles, Monitor, ChevronRight,
+    X, UserPlus, Sparkles, ChevronRight,
     Loader2, CheckCircle2, Lock,
 } from 'lucide-react';
 import { groupChatService } from '../../api/firebase/groupChat/service';

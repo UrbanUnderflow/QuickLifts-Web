@@ -31,7 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ message: 'Email service not configured: BREVO_MARKETING_KEY missing' });
   }
 
-  const { documentId, documentName, documentType, recipientName, recipientEmail, companyName } = req.body;
+  const { documentId, documentName, documentType: _documentType, recipientName, recipientEmail, companyName } = req.body;
 
   console.log('[send-signing-request] Sending to:', recipientEmail, '| doc:', documentName, '| company:', companyName);
 

@@ -15,7 +15,7 @@ On every commit it appends:
 From the project root:
 
 ```bash
-yarn agent:setup-hooks
+npm run agent:setup-hooks
 ```
 
 ## How to commit with an agent tag
@@ -29,7 +29,7 @@ export AGENT_NAME=nora
 Then commit using:
 
 ```bash
-yarn agent:commit -m "Fix token totals in virtual office"
+npm run agent:commit -- -m "Fix token totals in virtual office"
 ```
 
 or plain git commit (the hook still applies if `AGENT_NAME` is set in your shell):

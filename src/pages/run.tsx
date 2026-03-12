@@ -8,7 +8,6 @@ import {
   DistancePreset,
   TimePreset,
   DistancePresetMiles,
-  TimePresetSeconds,
   RunConfiguration,
   IntervalConfiguration,
   IntervalConfigurationPresets
@@ -65,7 +64,7 @@ const RunPage: React.FC = () => {
       if (saved.status === 'running' || saved.status === 'paused') {
         setResumeSession(saved);
       }
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
   }, [runSessionStorageKey]);
@@ -86,7 +85,7 @@ const RunPage: React.FC = () => {
   const handleResetResume = () => {
     try {
       localStorage.removeItem(runSessionStorageKey);
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
     setResumeSession(null);

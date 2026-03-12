@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GetServerSideProps } from 'next';
 import { useRouter } from 'next/router';
-import { ChevronLeft, BarChart2, Plus, Download } from 'lucide-react';
+import { ChevronLeft, Download } from 'lucide-react';
 import { Exercise } from '../../api/firebase/exercise';
 import { User } from '../../api/firebase/user';
 
@@ -13,11 +13,9 @@ interface ExerciseViewProps {
 export default function ExerciseView({ initialExerciseData, error: serverError }: ExerciseViewProps) {
   const router = useRouter();
   const [exercise, setExercise] = useState<Exercise | null>(initialExerciseData);
-  const [videoOwner, setVideoOwner] = useState<User | null>(null);
+  const [_videoOwner, setVideoOwner] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(!initialExerciseData);
   const [error, setError] = useState<string | null>(serverError);
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [showCaption, setShowCaption] = useState(false);
 
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
     ? 'http://localhost:8888/.netlify/functions'
@@ -270,16 +268,7 @@ export default function ExerciseView({ initialExerciseData, error: serverError }
 
   // Get the first video if available
   const hasVideos = exercise.videos && exercise.videos.length > 0;
-  const [selectedVideoIndex, setSelectedVideoIndex] = useState(0);
-  const selectedVideo = hasVideos ? exercise.videos[selectedVideoIndex] : null;
-
-  // Function to switch between videos
-  const switchVideo = (index: number) => {
-    if (exercise.videos && index >= 0 && index < exercise.videos.length) {
-      setSelectedVideoIndex(index);
-      console.log(`Switching to video ${index}:`, exercise.videos[index]);
-    }
-  };
+  const selectedVideo = hasVideos ? exercise.videos[0] : null;
 
   // Add download handler function
   const handleDownload = async () => {

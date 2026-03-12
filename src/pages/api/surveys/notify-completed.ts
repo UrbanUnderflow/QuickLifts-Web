@@ -1,5 +1,4 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import admin from '../../../lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 /**
@@ -247,4 +246,3 @@ export default async function handler(
     });
   }
 }
-

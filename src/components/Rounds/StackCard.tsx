@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronUp, ChevronDown, ChevronRight, Clock, User, CheckCircle } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronRight, Clock, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { Workout, WorkoutSummary } from '../../api/firebase/workout/types';
 import { GifImageViewer } from '../../components/GifImageViewer';
@@ -45,54 +45,6 @@ const StatView = ({ icon, value, label }: { icon: React.ReactNode; value: string
   </div>
 );
 
-// Navigation Arrows Component
-const NavigationArrows = ({
-  selectedOrder,
-  maxOrder,
-  workoutDate,
-  showCalendar,
-  onUpdateOrder,
-  onCalendarTap
-}: {
-  selectedOrder: number;
-  maxOrder: number;
-  workoutDate?: Date;
-  showCalendar: boolean;
-  onUpdateOrder: (newOrder: number) => void;
-  onCalendarTap?: (date: Date) => void;
-}) => (
-  <div className="flex flex-col justify-between py-2 px-4 bg-zinc-800">
-    <button
-      onClick={() => onUpdateOrder(selectedOrder - 1)}
-      disabled={selectedOrder <= 0}
-      className={`p-2 ${selectedOrder > 0 ? 'text-green-500 hover:text-green-400' : 'text-gray-600'}`}
-    >
-      <ChevronUp size={16} />
-    </button>
-
-    {showCalendar && workoutDate && (
-      <button
-        onClick={() => onCalendarTap?.(workoutDate)}
-        className="my-2"
-      >
-        <CalendarCell
-          month={format(workoutDate, 'MMM').toUpperCase()}
-          day={format(workoutDate, 'd')}
-          weekday={format(workoutDate, 'EEE').toUpperCase()}
-        />
-      </button>
-    )}
-
-    <button
-      onClick={() => onUpdateOrder(selectedOrder + 1)}
-      disabled={selectedOrder >= maxOrder - 1}
-      className={`p-2 ${selectedOrder < maxOrder - 1 ? 'text-green-500 hover:text-green-400' : 'text-gray-600'}`}
-    >
-      <ChevronDown size={16} />
-    </button>
-  </div>
-);
-
 const didUserCompleteWorkoutFromLogs = (
   workout: Workout,
   date: Date,
@@ -128,11 +80,6 @@ const didUserCompleteWorkoutFromLogs = (
   });
 };
 
-interface CompletedWorkout {
-  workoutId: string;
-  completedAt: Date;
-}
-
 // Saved Sweatlist Card Component
 export const StackCard: React.FC<{
   workout: Workout;
@@ -151,7 +98,6 @@ export const StackCard: React.FC<{
   isComplete: initialIsComplete = false,
   isChallengeEnabled = false,
   challengeStartDate,
-  challengeHasStarted,
   highlightBorder,
   currentDayIndex,
   userChallenge,
@@ -212,33 +158,6 @@ export const StackCard: React.FC<{
   
     setIsComplete(finalCompletionStatus);
   }, [workout, challengeStartDate, userChallenge, allWorkoutSummaries, workoutDate]);
-
-  const isToday = (index: number | undefined, startDate: Date | undefined) => {
-   
-    if (index === undefined || !startDate) {
-      return false;
-    }
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    
-    const diffTime = Math.abs(today.getTime() - start.getTime());
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  
-    return index === diffDays;
-  };
-
-  const arrowProps = {
-    selectedOrder: selectedOrder!,
-    maxOrder: maxOrder!,
-    workoutDate,
-    showCalendar: !!showCalendar,
-    onUpdateOrder: onUpdateOrder!,
-    onCalendarTap: onCalendarTap,
-  };
 
   // *** FIX: Calculate estimated duration correctly ***
   const estimatedDuration = Workout.estimatedDuration(workout.exercises || []);
@@ -366,7 +285,6 @@ export const RestDayCard: React.FC<CommonCardProps> = ({
   backgroundColor = 'bg-zinc-800',
   isComplete: initialIsComplete = false,
   challengeStartDate,
-  challengeHasStarted,
   highlightBorder,
   currentDayIndex,
   index,
@@ -386,29 +304,6 @@ export const RestDayCard: React.FC<CommonCardProps> = ({
     // Rest days are complete if the date has passed
     setIsComplete(workoutDate <= new Date());
   }, [workoutDate, challengeStartDate, initialIsComplete]);
-
-  const isToday = (index: number | undefined, startDate: Date | undefined) => {
-    if (index === undefined || !startDate) {
-      return false;
-    }
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    
-    const diffTime = Math.abs(today.getTime() - start.getTime());
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-  
-    return index === diffDays;
-  };
-
-  const debugClassName = `
-    rounded-lg overflow-hidden cursor-pointer ${backgroundColor}
-    ${index !== undefined && index < (currentDayIndex || 0) || isComplete ? 'opacity-70' : 'opacity-100'}
-    ${isToday(index, challengeStartDate) && challengeHasStarted ? 'ring-2 ring-green-500' : ''}
-  `;
 
   return (
     <div 

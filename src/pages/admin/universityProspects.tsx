@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, addDoc, getDocs, orderBy, query, updateDoc, doc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, orderBy, query, updateDoc, doc, writeBatch } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { Check, User, Mail, Globe, Users, Target, Loader2, Filter } from 'lucide-react';
+import { Check, User, Mail, Loader2, Filter } from 'lucide-react';
 import { convertFirestoreTimestamp, formatDate } from '../../utils/formatDate';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
@@ -118,6 +118,7 @@ const UniversityProspectsPage: React.FC = () => {
   const [scoutLimit, setScoutLimit] = useState<number>(10);
   // Temporary highlight for recently added scouted entries (clears on refresh/next batch)
   const [highlightEmails, setHighlightEmails] = useState<Set<string>>(new Set());
+  const emailDraftWasOpen = useRef(false);
 
   const extractFirstUrl = (text?: string): string => {
     if (!text) return '';
@@ -130,11 +131,11 @@ const UniversityProspectsPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (emailOpen && emailProspect) {
+    if (emailOpen && emailProspect && !emailDraftWasOpen.current) {
       setInitialEmailDraft({ subject: emailSubject, body: emailBody, pilot: pilotLength, slots: proposedSlots });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [emailOpen]);
+    emailDraftWasOpen.current = emailOpen;
+  }, [emailOpen, emailProspect, emailSubject, emailBody, pilotLength, proposedSlots]);
 
   const emailDirty = !!initialEmailDraft && (
     initialEmailDraft.subject !== emailSubject ||
@@ -1004,5 +1005,4 @@ const UniversityProspectsPage: React.FC = () => {
 };
 
 export default UniversityProspectsPage;
-
 

@@ -8,7 +8,6 @@ import { useScrollFade } from '../../hooks/useScrollFade';
 import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
-import { format, parseISO } from 'date-fns';
 
 interface PressRelease {
   id: string;
@@ -113,12 +112,6 @@ const PressReleases: NextPage<PressReleasesPageProps> = ({ mdxReleases }) => {
   const filteredReleases = categoryFilter === 'all' 
     ? pressReleases 
     : pressReleases.filter(release => release.category === categoryFilter);
-
-  // Format date to readable format
-  const formatDate = (dateString: string) => {
-    const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString('en-US', options);
-  };
 
   return (
     <div className="min-h-screen bg-zinc-900 text-white">

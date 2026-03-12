@@ -23,16 +23,15 @@ This document provides guidelines for contributing to the project. Please feel f
 - Fork the repository and create your branch from `main`.
 - If you've added code that should be tested, add tests.
 - If you've changed APIs, update the documentation.
-- Ensure the test suite passes (`yarn test`).
-- Make sure your code lints (`yarn lint`).
+- Run the validation steps relevant to your change. Common checks in this repo are `npm run build`, `npm run typecheck`, `npm run lint`, and `npm run test:e2e` when flows are covered by Playwright.
 - Issue that pull request!
 
 ## Development Setup
 
 1.  Fork the repo and create your branch from `main`.
-2.  Install dependencies: `yarn install`
+2.  Install dependencies: `npm install`
 3.  Create a `.env.local` file based on `.env.example` (if it exists) and fill in necessary environment variables.
-4.  Start the development server: `yarn dev`
+4.  Start the development server: `npm run dev`
 
 ## Coding Conventions
 

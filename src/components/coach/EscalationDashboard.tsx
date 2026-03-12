@@ -8,20 +8,14 @@ import {
   User,
   Clock,
   MessageCircle,
-  ChevronRight,
   RefreshCw,
   Bell,
-  Check,
-  X as CloseIcon
 } from 'lucide-react';
 import { useUser } from '../../hooks/useUser';
 import {
   EscalationTier,
-  EscalationCategory,
   EscalationRecord,
-  EscalationRecordStatus,
   HandoffStatus,
-  getTierLabel,
   getTierColor,
   getCategoryLabel,
   getCoachStatusLabel

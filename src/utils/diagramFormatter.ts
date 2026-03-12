@@ -213,7 +213,6 @@ export function extractSectionHeaders(content: string): string[] {
 function removeExistingDiagrams(content: string): string {
   const lines = content.split('\n');
   const result: string[] = [];
-  let skipUntilNextSection = false;
   let inCodeBlock = false;
   let codeBlockIsDiagram = false;
   

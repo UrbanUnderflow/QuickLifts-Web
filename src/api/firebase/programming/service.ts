@@ -9,9 +9,6 @@ import {
   orderBy,
   setDoc,
   deleteDoc,
-  DocumentData,
-  QueryDocumentSnapshot,
-  Timestamp
 } from 'firebase/firestore';
 
 import { db } from '../config';
@@ -25,7 +22,7 @@ import {
 } from './types';
 import { generateId } from '../../../utils/generateId';
 
-interface FirestoreError {
+interface _FirestoreError {
   code: string;
   message: string;
 }

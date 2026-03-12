@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 // createPortal removed - not used
 import { useRouter } from 'next/router';
-import type { GetServerSideProps, NextPage } from 'next'; // Added GetServerSideProps, NextPage
 import { 
     Users,
     Lock,
     Dumbbell,
-    Brain,
     UserCircle,
     Sparkles,
     X,
@@ -14,9 +12,6 @@ import {
     ChevronLeft,
     ChevronRight,
     Zap,
-    Layout,
-    Lightbulb,
-    Video,
     Check,
     Send,
     Loader2,
@@ -28,15 +23,7 @@ import {
     Share2,
     ArrowRight,
     Edit3,
-    MessageSquare,
-    Plus,
-    History,
-    Settings,
-    Home,
-    Trophy,
-    Target,
 } from 'lucide-react';
-import { Switch } from '@headlessui/react';
 import { useScrollFade } from '../hooks/useScrollFade';
 
 import { userService, User } from '../api/firebase/user';
@@ -48,12 +35,9 @@ import { collection, query, where, getDocs, documentId } from 'firebase/firestor
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../api/firebase/config';
 import { StackCard } from '../components/Rounds/StackCard'
-import { ExerciseGrid } from '../components/App/ExerciseGrid/ExerciseGrid';
-import { MultiUserSelector } from '../components/App/MultiSelectUser/MultiSelectUser';
 import { generateId } from '../utils/generateId';
 import { convertFirestoreTimestamp } from '../utils/formatDate';
 import { useUser } from '../hooks/useUser';
-import PageHead from '../components/PageHead'; // Added PageHead import
 import { adminMethods } from '../api/firebase/admin/methods'; // Added adminMethods
 import { PageMetaData as FirestorePageMetaData } from '../api/firebase/admin/types'; // Added PageMetaData
 import { 
@@ -73,7 +57,7 @@ const formatDateForInput = (date: Date | null | undefined): string => {
 };
 
 // Define a serializable version of PageMetaData for this page's props
-interface SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
+interface _SerializablePageMetaData extends Omit<FirestorePageMetaData, 'lastUpdated'> {
   lastUpdated: string; 
 }
 
@@ -374,7 +358,7 @@ class UserDataCard {
 }
 
 // Landing Page Components
-const LandingPage = ({ hasAccess, setShowEarlyAccessForm, onGetStarted }: { hasAccess: boolean, setShowEarlyAccessForm: (show: boolean) => void, onGetStarted?: () => void }) => {
+const _LandingPage = ({ hasAccess, setShowEarlyAccessForm, onGetStarted }: { hasAccess: boolean, setShowEarlyAccessForm: (show: boolean) => void, onGetStarted?: () => void }) => {
   const currentUser = useUser();
   const [_isLoadingAccess, setIsLoadingAccess] = useState(true);
   const [userHasAccess, setUserHasAccess] = useState(false);
@@ -712,7 +696,7 @@ const LandingPage = ({ hasAccess, setShowEarlyAccessForm, onGetStarted }: { hasA
 };
 
 // Early Access Form Component
-const EarlyAccessForm = () => {
+const _EarlyAccessForm = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -1264,7 +1248,7 @@ interface DayPreference {
   isSelected: boolean;
 }
 
-const MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
+const _MobileChallengeSetupView: React.FC<MobileChallengeSetupProps> = ({
     setChallengeData,
     currentChallengeData,
     selectedStacks,
@@ -1600,7 +1584,7 @@ interface StackDetailModalProps {
   stack: WorkoutWithRoundId | null;
 }
 
-const StackDetailModal: React.FC<StackDetailModalProps> = ({ isOpen, onClose, stack }) => {
+const _StackDetailModal: React.FC<StackDetailModalProps> = ({ isOpen, onClose, stack }) => {
   if (!isOpen || !stack) return null;
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -1781,7 +1765,7 @@ interface RoundSuccessModalProps {
   onContinueEditing: () => void;
 }
 
-const RoundSuccessModal: React.FC<RoundSuccessModalProps> = ({ 
+const _RoundSuccessModal: React.FC<RoundSuccessModalProps> = ({ 
   isOpen, 
   onClose, 
   roundData, 
@@ -2049,7 +2033,7 @@ const RoundSuccessModal: React.FC<RoundSuccessModalProps> = ({
 const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     challengeData,
     setChallengeData,
-    viewModel,
+    viewModel: _viewModel,
     autoSave,
     currentConversationId,
     setCurrentConversationId,
@@ -2058,17 +2042,17 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     setConversationHistory: setProgrammingConversationHistory,
     restoredUIState,
     isLoadingConversation,
-    allConversations,
-    handleCreateNewConversation,
-    handleSwitchConversation,
-    isConversationPanelCollapsed,
-    toggleConversationPanel,
-    isRightPanelCollapsed,
-    toggleRightPanel,
+    allConversations: _allConversations,
+    handleCreateNewConversation: _handleCreateNewConversation,
+    handleSwitchConversation: _handleSwitchConversation,
+    isConversationPanelCollapsed: _isConversationPanelCollapsed,
+    toggleConversationPanel: _toggleConversationPanel,
+    isRightPanelCollapsed: _isRightPanelCollapsed,
+    toggleRightPanel: _toggleRightPanel,
     isLeftPanelCollapsed,
     toggleLeftPanel,
   }) => {
-    const [searchTerm, setSearchTerm] = useState('');
+    const [searchTerm, _setSearchTerm] = useState('');
     const [allStacks, setAllStacks] = useState<Workout[]>([]);
     const [selectedStacks, setSelectedStacks] = useState<WorkoutWithRoundId[]>([]);
     const [isAIMode, setIsAIMode] = useState(true);
@@ -2096,13 +2080,13 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     // User tagging state
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [taggedUsers, setTaggedUsers] = useState<User[]>([]);
-    const [showUserDropdown, setShowUserDropdown] = useState(false);
+    const [_showUserDropdown, setShowUserDropdown] = useState(false);
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [cursorPosition, setCursorPosition] = useState(0);
 
     // Tagged users scroll state
-    const [canScrollLeft, setCanScrollLeft] = useState(false);
-    const [canScrollRight, setCanScrollRight] = useState(false);
+    const [_canScrollLeft, setCanScrollLeft] = useState(false);
+    const [_canScrollRight, setCanScrollRight] = useState(false);
     const taggedUsersScrollRef = useRef<HTMLDivElement>(null);
 
     // Effect to restore UI state from conversation
@@ -2226,17 +2210,17 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
       console.log('✅ Generate card is now visible');
     }
   }, [showGenerateCard]);
-    const [questionCount, setQuestionCount] = useState(0);
-    const [isAwaitingConfirmation, setIsAwaitingConfirmation] = useState(false);
+    const [_questionCount, setQuestionCount] = useState(0);
+    const [_isAwaitingConfirmation, setIsAwaitingConfirmation] = useState(false);
     const [finalPrompt, setFinalPrompt] = useState('');
     const [_suggestedDescription, setSuggestedDescription] = useState('');
 
     // Stack detail modal state
-    const [isStackModalOpen, setIsStackModalOpen] = useState(false);
-    const [selectedStackForModal, setSelectedStackForModal] = useState<WorkoutWithRoundId | null>(null);
+    const [_isStackModalOpen, setIsStackModalOpen] = useState(false);
+    const [_selectedStackForModal, setSelectedStackForModal] = useState<WorkoutWithRoundId | null>(null);
 
     // Round creation success modal state
-    const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
+    const [_isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
     const [createdRoundData, setCreatedRoundData] = useState<{
       collection: any;
       stacks: WorkoutWithRoundId[];
@@ -2685,7 +2669,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     };
 
     // Scroll tagged users container
-    const scrollTaggedUsers = (direction: 'left' | 'right') => {
+    const _scrollTaggedUsers = (direction: 'left' | 'right') => {
       const container = taggedUsersScrollRef.current;
       if (!container) return;
       
@@ -2773,7 +2757,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
     // Handle sending message to chatbot
     // In DesktopChallengeSetupView component, update the handleSendChatMessage function:
 
-const handleSendChatMessage = async (message: string) => {
+const _handleSendChatMessage = async (message: string) => {
   if (!message.trim() || isAIResponding) return;
 
   const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
@@ -3017,7 +3001,7 @@ const handleSendChatMessage = async (message: string) => {
   }
 };
 
-    const generalAiPreferencesOptions = [
+    const _generalAiPreferencesOptions = [
       "Exclusive to selected creators",
       "Use stacks I've created/saved in my library",
       // "Create unique stacks for each day." - REMOVED to prevent data explosion
@@ -3026,13 +3010,13 @@ const handleSendChatMessage = async (message: string) => {
     const [aiPromptText, setAiPromptText] = useState('');
 
     // Adjusted activeTab state and type
-    const [activeTab, setActiveTab] = useState<'moves' | 'creators'>('moves'); 
-    const [selectedCreators, setSelectedCreators] = useState<string[]>([]);
-    const [movesTabSelectedCreatorIds, setMovesTabSelectedCreatorIds] = useState<string[]>([]);
-    const [selectedMoves, setSelectedMoves] = useState<Exercise[]>([]);
+    const [_activeTab, _setActiveTab] = useState<'moves' | 'creators'>('moves'); 
+    const [selectedCreators, _setSelectedCreators] = useState<string[]>([]);
+    const [movesTabSelectedCreatorIds, _setMovesTabSelectedCreatorIds] = useState<string[]>([]);
+    const [selectedMoves, _setSelectedMoves] = useState<Exercise[]>([]);
     const [allExercises, setAllExercises] = useState<Exercise[]>([]);
-    const [movesSearchTerm, setMovesSearchTerm] = useState(''); // New state for moves search
-    const [isGeneralPreferencesCollapsed, setIsGeneralPreferencesCollapsed] = useState(false); // New state for collapsible section
+    const [movesSearchTerm, _setMovesSearchTerm] = useState(''); // New state for moves search
+    const [_isGeneralPreferencesCollapsed, _setIsGeneralPreferencesCollapsed] = useState(false); // New state for collapsible section
 
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -3097,7 +3081,7 @@ const handleSendChatMessage = async (message: string) => {
     stack.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-    const filteredStacksList = () => (
+    const _filteredStacksList = () => (
         <div className="space-y-4">
           {filteredStacks.map((stack: Workout) => (
             <div key={stack.id} className="border border-zinc-700/50 rounded-lg">
@@ -3152,7 +3136,7 @@ const handleSendChatMessage = async (message: string) => {
     }, []);
 
     // Handle @ symbol detection and user search
-    const handlePromptTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const _handlePromptTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const text = e.target.value;
       const cursorPos = e.target.selectionStart;
       
@@ -3171,14 +3155,14 @@ const handleSendChatMessage = async (message: string) => {
     };
 
     // Filter users based on search term
-    const filteredUsers = allUsers.filter(user => 
+    const _filteredUsers = allUsers.filter(user => 
       (user.displayName.toLowerCase().includes(userSearchTerm.toLowerCase()) || 
        user.username.toLowerCase().includes(userSearchTerm.toLowerCase())) && 
       !taggedUsers.some(tagged => tagged.id === user.id)
     );
 
     // Handle user selection from dropdown
-    const handleUserSelect = (user: User) => {
+    const _handleUserSelect = (user: User) => {
       const textBeforeCursor = aiPromptText.substring(0, cursorPosition);
       const textAfterCursor = aiPromptText.substring(cursorPosition);
       const lastAtIndex = textBeforeCursor.lastIndexOf('@');
@@ -3200,7 +3184,7 @@ const handleSendChatMessage = async (message: string) => {
     };
 
     // Remove tagged user
-    const handleRemoveTaggedUser = (userId: string) => {
+    const _handleRemoveTaggedUser = (userId: string) => {
       setTaggedUsers(prev => prev.filter(user => user.id !== userId));
       
       // Also remove from prompt text
@@ -3213,7 +3197,7 @@ const handleSendChatMessage = async (message: string) => {
     };
 
   // Updated Filter for Must-Have Moves
-  const filteredExercisesForSelection = allExercises
+  const _filteredExercisesForSelection = allExercises
     .filter((exercise) => { // Creator filter first (if active)
       if (movesTabSelectedCreatorIds.length > 0) {
         return exercise.videos?.some(video => movesTabSelectedCreatorIds.includes(video.userId));
@@ -3237,7 +3221,7 @@ const handleSendChatMessage = async (message: string) => {
   };
 
   // Helper function to update macro ranges safely
-  const updateMacroRange = (
+  const _updateMacroRange = (
     macroType: 'calorieRange' | 'proteinRange' | 'carbRange' | 'fatRange',
     property: 'min' | 'max',
     value: number
@@ -4052,7 +4036,7 @@ const handleSendChatMessage = async (message: string) => {
     }
   };
 
-  const handleCreateRound = async () => {
+  const _handleCreateRound = async () => {
     if (!validateChallengeInput()) return;
   
     try {
@@ -4311,7 +4295,7 @@ const handleSendChatMessage = async (message: string) => {
   }, [isGenerating, allExercises]);
 
   // --- Rest Day and AI Preference Handlers --- 
-  const getUiRestDayPreferences = (): DayPreference[] => {
+  const _getUiRestDayPreferences = (): DayPreference[] => {
     const currentSelectedDays = challengeData.restDayPreferences?.restDays || [];
     return ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => ({
         day,
@@ -4340,7 +4324,7 @@ const handleSendChatMessage = async (message: string) => {
     });
   };
 
-  const handleDesktopRestDayPreferencesChange = (updatedDay: string) => {
+  const _handleDesktopRestDayPreferencesChange = (updatedDay: string) => {
     const currentRestPrefs = challengeData.restDayPreferences || { includeRestDays: false, restDays: [], preferences: [] };
     const oldSelectedConcreteDays = currentRestPrefs.restDays;
     const newSelectedConcreteDays = oldSelectedConcreteDays.includes(updatedDay)
@@ -4365,7 +4349,7 @@ const handleSendChatMessage = async (message: string) => {
     });
   };
   
-  const handleGeneralAiPreferenceToggle = (preference: string) => {
+  const _handleGeneralAiPreferenceToggle = (preference: string) => {
     const currentRestPrefs = challengeData.restDayPreferences || { includeRestDays: false, restDays: [], preferences: [] };
     const currentAiPrefs = currentRestPrefs.preferences;
     const newAiPrefs = currentAiPrefs.includes(preference)
@@ -4613,7 +4597,7 @@ const handleSendChatMessage = async (message: string) => {
       setIsStackModalOpen(true);
     };
 
-    const handleCloseStackModal = () => {
+    const _handleCloseStackModal = () => {
       setIsStackModalOpen(false);
       setSelectedStackForModal(null);
     };
@@ -4667,13 +4651,13 @@ const handleSendChatMessage = async (message: string) => {
       setCreatedRoundData(null);
     };
 
-    const handleViewRound = () => {
+    const _handleViewRound = () => {
       if (createdRoundData?.collection?.id) {
         router.push(`/round/${createdRoundData.collection.id}`);
       }
     };
 
-    const handleContinueEditing = () => {
+    const _handleContinueEditing = () => {
       // Update the selected stacks with the created stacks for continued editing
       if (createdRoundData?.stacks) {
         if (createdRoundData.isUpdate) {
@@ -5034,7 +5018,7 @@ const handleSendChatMessage = async (message: string) => {
   }, [programmingConversationHistory]);
 
   // Handle scroll events to detect manual scrolling
-  const handleChatScroll = useCallback(() => {
+  const _handleChatScroll = useCallback(() => {
     if (chatMessagesRef.current) {
       const scrollContainer = chatMessagesRef.current;
       const isAtBottom = scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 10;

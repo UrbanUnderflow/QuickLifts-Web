@@ -1,22 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import OpenAI from 'openai';
 
-interface VCProspect {
-  person: string;
-  companies: string;
-  urls: string;
-  linkedin: string;
-  continent: string;
-  country: string;
-  location: string;
-  addresses: string;
-  email: string;
-  description: string;
-  stage: string;
-  founder: string;
-  numberOfExits: string;
-}
-
 interface ResearchVCO3Request {
   prompt: string;
   validateUrls?: boolean; // Whether to validate website URLs

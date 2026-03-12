@@ -67,7 +67,7 @@ const InactivityCheckPage: React.FC = () => {
   const [inactivateResult, setInactivateResult] = useState<{success: boolean, message: string} | null>(null);
   const [selectedUserChallenge, setSelectedUserChallenge] = useState<UserChallenge | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-    const [deleteResult, setDeleteResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [_deleteResult, setDeleteResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // State for workout detail modal
   const [isWorkoutDetailModalOpen, setIsWorkoutDetailModalOpen] = useState(false);
@@ -178,7 +178,7 @@ const InactivityCheckPage: React.FC = () => {
         if (!testMode && !simulationMode) {
           await loadAllUserChallenges();
         }
-      } catch (jsonError) {
+      } catch (_jsonError) {
         // If parsing fails, it's truly not JSON
         setUpdateError(`The server returned a non-JSON response: ${responseText}`);
       }
@@ -259,7 +259,7 @@ const InactivityCheckPage: React.FC = () => {
             message: data.message || 'Failed to mark user challenge as inactive'
           });
         }
-      } catch (jsonError) {
+      } catch (_jsonError) {
         setInactivateResult({
           success: false,
           message: `Failed to parse response: ${responseText}`

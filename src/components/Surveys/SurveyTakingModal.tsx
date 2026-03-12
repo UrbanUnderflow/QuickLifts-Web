@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Survey, SurveyQuestion } from '../../api/firebase/creatorPages/service';
+import { Survey } from '../../api/firebase/creatorPages/service';
 
 interface SurveyTakingModalProps {
   isOpen: boolean;
@@ -455,5 +455,4 @@ const SurveyTakingModal: React.FC<SurveyTakingModalProps> = ({
 };
 
 export default SurveyTakingModal;
-
 

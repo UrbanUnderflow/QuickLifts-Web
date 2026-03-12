@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import {
     X, FolderOpen, FileText, Download, Trash2,
-    ChevronRight, ChevronDown, Calendar, Clock,
-    Users, MessageSquare, Target, Lightbulb,
+    ChevronRight, ChevronDown,
+    MessageSquare, Target, Lightbulb,
     HelpCircle, CheckSquare, Sparkles, Archive,
 } from 'lucide-react';
 import { meetingMinutesService } from '../../api/firebase/meetingMinutes/service';

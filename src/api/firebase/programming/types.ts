@@ -1,6 +1,6 @@
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
 import { Exercise } from '../exercise/types';
-import { Challenge, SweatlistCollection } from '../workout/types';
+import { Challenge } from '../workout/types';
 
 // Programming Chat Message Interface
 export interface ProgrammingChatMessage {

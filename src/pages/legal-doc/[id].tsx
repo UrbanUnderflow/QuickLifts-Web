@@ -248,7 +248,7 @@ const exportAsXlsx = (document: LegalDocument & { id: string }) => {
   csvRows.push('');
 
   let inTable = false;
-  let isHeaderSeparator = false;
+  let _isHeaderSeparator = false;
 
   for (const line of lines) {
     const trimmedLine = line.trim();
@@ -259,7 +259,7 @@ const exportAsXlsx = (document: LegalDocument & { id: string }) => {
 
       // Skip header separator rows (|---|---|)
       if (/^\|[\s\-:]+\|/.test(trimmedLine) && trimmedLine.includes('---')) {
-        isHeaderSeparator = true;
+        _isHeaderSeparator = true;
         continue;
       }
 

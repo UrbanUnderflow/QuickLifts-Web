@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, doc, setDoc, getDocs, query, orderBy, updateDoc, addDoc, getDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, query, orderBy, updateDoc, addDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { Building2, Mail, User, MapPin, Globe, DollarSign, Calendar, Users, Trophy, FileText, Upload, Eye, Loader2, RefreshCw, Edit3, Check, X, AlertTriangle, Phone, Star, Target, Image as ImageIcon, Trash2, CheckSquare } from 'lucide-react';
+import { Building2, Mail, User, MapPin, Globe, DollarSign, Calendar, Users, Trophy, FileText, Upload, Eye, Loader2, RefreshCw, Edit3, Check, X, Phone, Star, Target, Image as ImageIcon, Trash2, CheckSquare } from 'lucide-react';
 import { FirebaseStorageService, UploadImageType } from '../../api/firebase/storage/service';
 
 interface PartnerFormData {
@@ -105,14 +105,11 @@ const CorporatePartnersPage: React.FC = () => {
   // Data table state
   const [partners, setPartners] = useState<PartnerProspect[]>([]);
   const [loadingPartners, setLoadingPartners] = useState(false);
-  const [editingStatus, setEditingStatus] = useState<string | null>(null);
-  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
   
   // Inline editing state
   const [editingPartner, setEditingPartner] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editingValues, setEditingValues] = useState<Partial<PartnerFormData>>({});
-  const [savingChanges, setSavingChanges] = useState(false);
 
   // Bulk editing state
   const [pendingChanges, setPendingChanges] = useState<Record<string, Partial<PartnerFormData>>>({});
@@ -719,7 +716,7 @@ const CorporatePartnersPage: React.FC = () => {
   };
 
   // Start inline editing
-  const startEditing = (partnerId: string, field: string, currentValue: any) => {
+  const startEditing = (partnerId: string, field: string, _currentValue: any) => {
     const partner = partners.find(p => p.id === partnerId);
     if (!partner) return;
 
@@ -1178,7 +1175,7 @@ const CorporatePartnersPage: React.FC = () => {
 
       // Revert each changed field to its original value
       const revertedPartner = { ...partner };
-      Object.keys(changes).forEach(field => {
+      Object.keys(changes).forEach(_field => {
         // This is a simplified revert - in a real app you'd want to store original values
         // For now, we'll just reload the data
       });
@@ -1194,33 +1191,6 @@ const CorporatePartnersPage: React.FC = () => {
     loadPartners();
 
     showToast('All pending changes discarded', 'info');
-  };
-
-  // Update partner status
-  const updatePartnerStatus = async (partnerId: string, newStatus: string) => {
-    try {
-      setUpdatingStatus(partnerId);
-      const partnerRef = doc(db, 'corporate-partners', partnerId);
-      await updateDoc(partnerRef, { 
-        status: newStatus,
-        updatedAt: new Date()
-      });
-      
-      // Update local state
-      setPartners(prev => prev.map(partner => 
-        partner.id === partnerId 
-          ? { ...partner, status: newStatus, updatedAt: new Date() }
-          : partner
-      ));
-      
-      showToast('Status updated successfully', 'success');
-    } catch (error) {
-      console.error('Error updating status:', error);
-      showToast('Error updating status', 'error');
-    } finally {
-      setUpdatingStatus(null);
-      setEditingStatus(null);
-    }
   };
 
   // Filter partners

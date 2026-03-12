@@ -2,6 +2,7 @@ import globals from "globals";
 import tsParser from "@typescript-eslint/parser";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import pluginReact from "eslint-plugin-react";
+import pluginReactHooks from "eslint-plugin-react-hooks";
 
 /** @type {import('eslint').Linter.Config} */
 const config = {
@@ -13,6 +14,7 @@ const config = {
   plugins: {
     "@typescript-eslint": tsPlugin,
     react: pluginReact,
+    "react-hooks": pluginReactHooks,
   },
   rules: {
     // Base ESLint rules

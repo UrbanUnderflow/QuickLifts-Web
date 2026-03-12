@@ -1,6 +1,5 @@
-import { Exercise, ExerciseReference, ExerciseLog, ExerciseAuthor, BodyPart } from '../exercise/types';
+import { Exercise, ExerciseReference, ExerciseLog, BodyPart } from '../exercise/types';
 import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
-import { workoutService } from '../workout/service';
 import { ShortUser, User } from '../user';
 
 // Meal Tracking Configuration Types
@@ -32,7 +31,7 @@ function stringToBodyPart(bodyPartString: string): BodyPart {
   const normalizedString = bodyPartString.toLowerCase();
   
   // Check if the string matches any enum value
-  for (const [key, value] of Object.entries(BodyPart)) {
+  for (const [, value] of Object.entries(BodyPart)) {
     if (value.toLowerCase() === normalizedString) {
       return value;
     }
@@ -237,7 +236,6 @@ export class Workout {
   // but would operate on ExerciseReference[] from the template.
   static estimatedDuration(exercises: ExerciseReference[]): number {
     let totalTimeSeconds = 0;
-    let restTimeSeconds = 0;
     let hasScreenTimeExercises = false;
 
     for (const exerciseRef of exercises) {
@@ -255,7 +253,6 @@ export class Workout {
         // Default for weight training without specific screen time
         const sets = (categoryDetails as any)?.sets || 3; // Default sets
         totalTimeSeconds += sets * (45 + 60); // 45s per set + 60s rest
-        restTimeSeconds += sets * 60;
       }
     }
 

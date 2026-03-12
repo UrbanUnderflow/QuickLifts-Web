@@ -3,7 +3,6 @@ import Head from 'next/head';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle,
-  Shield,
   AlertOctagon,
   Plus,
   Edit2,

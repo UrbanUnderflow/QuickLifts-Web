@@ -3,7 +3,7 @@ import Head from 'next/head';
 import React, { useState, useEffect } from 'react';
 // Remove Firebase imports if only displaying data fetched elsewhere
 // import { firebaseStorageService, UploadResult } from '../../api/firebase/storage/service'; 
-import { Download, FileImage, X, Loader2 } from 'lucide-react'; // Removed Upload, Trash2, Added X and Loader2
+import { Download, FileImage, X } from 'lucide-react'; // Removed Upload, Trash2, Added X and Loader2
 import Footer from '../../components/Footer/Footer';
 // import Header from '../../components/Header'; // Optional: Add header if needed
 import { doc, getDoc } from 'firebase/firestore'; // Added Firestore imports

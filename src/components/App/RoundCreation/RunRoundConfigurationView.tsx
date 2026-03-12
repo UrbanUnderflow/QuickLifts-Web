@@ -1,13 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { X, ChevronRight, ChevronLeft, Calendar, Target, Users, Lock, Globe } from 'lucide-react';
+import { X, ChevronRight, ChevronLeft, Calendar, Lock, Globe } from 'lucide-react';
 import { 
   RunRoundType, 
   RunRoundTypeInfo,
   RunRoundConfiguration,
   RaceDistancePreset,
   RaceDistancePresetInfo,
-  RunLeaderboardMetric,
-  RunLeaderboardMetricInfo,
   SweatlistType
 } from '../../../api/firebase/workout/types';
 

@@ -6,7 +6,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { User } from '../../api/firebase/user/types';
 import { SweatlistCollection } from '../../api/firebase/workout/types';
 import { workoutService } from '../../api/firebase/workout/service';
-import { Loader2, Search, CheckCircle, AlertTriangle, XCircle, User as UserIcon, AtSign, RefreshCw, ListChecks, Users, Gift } from 'lucide-react';
+import { Loader2, CheckCircle, AlertTriangle, XCircle, User as UserIcon, AtSign, RefreshCw, ListChecks, Gift } from 'lucide-react';
 
 const USER_CACHE_KEY = 'adminAllUsersCache';
 const CHALLENGE_CACHE_KEY = 'adminAllChallengesCache';

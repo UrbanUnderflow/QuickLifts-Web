@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import Head from 'next/head';
 import { useUser } from '../../hooks/useUser';
 import { coachService } from '../../api/firebase/coach';
-import { formatDate } from '../../utils/formatDate';
 
 const ManageCoachesPage: React.FC = () => {
   const currentUser = useUser();
@@ -64,5 +63,4 @@ const ManageCoachesPage: React.FC = () => {
 };
 
 export default ManageCoachesPage;
-
 

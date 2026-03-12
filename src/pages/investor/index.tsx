@@ -2,19 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
-import { GetServerSideProps } from 'next';
-import { ArrowUpRight, Download, ChevronRight, ChevronDown, ArrowLeft, TrendingUp, Lock, Loader2, Mail, AlertCircle, X, Copy, Check, FileText, Clock, Eye } from 'lucide-react';
+import { ArrowUpRight, Download, ChevronRight, TrendingUp, Lock, Loader2, Mail, AlertCircle, Copy, Check, FileText } from 'lucide-react';
 
-import Footer from '../../components/Footer/Footer';
 import PageHead from '../../components/PageHead';
-import { adminMethods } from '../../api/firebase/admin/methods';
 import { PageMetaData as FirestorePageMetaData } from '../../api/firebase/admin/types';
-import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp, orderBy, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, where, addDoc, serverTimestamp, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { UserChallenge } from '../../api/firebase/workout/types';
-import { convertFirestoreTimestamp } from '../../utils/formatDate';
 import { workoutService } from '../../api/firebase/workout';
-import { sampleGraph } from '../../components/ReferralGraph';
 
 // Lazy load heavy components
 const VideoDemo = dynamic(() => import('../../components/VideoDemo'), {
@@ -22,34 +17,34 @@ const VideoDemo = dynamic(() => import('../../components/VideoDemo'), {
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading video...</span></div>
 });
 
-const ReferralGraph = dynamic(() => import('../../components/ReferralGraph'), { ssr: false });
+const _ReferralGraph = dynamic(() => import('../../components/ReferralGraph'), { ssr: false });
 
-const ViralityChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.ViralityChart })), {
+const _ViralityChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.ViralityChart })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading chart...</span></div>
 });
 
-const UnitEconChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.UnitEconChart })), {
+const _UnitEconChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.UnitEconChart })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading chart...</span></div>
 });
 
-const SubscriptionOverview = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.SubscriptionOverview })), {
+const _SubscriptionOverview = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.SubscriptionOverview })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading chart...</span></div>
 });
 
-const RetentionRateChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.RetentionRateChart })), {
+const _RetentionRateChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.RetentionRateChart })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading chart...</span></div>
 });
 
-const ConversionChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.ConversionChart })), {
+const _ConversionChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.ConversionChart })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading chart...</span></div>
 });
 
-const EngagementChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.EngagementChart })), {
+const _EngagementChart = dynamic(() => import('../../components/MetricsCharts').then(mod => ({ default: mod.EngagementChart })), {
   ssr: false,
   loading: () => <div className="w-full h-64 bg-zinc-800 rounded-xl animate-pulse flex items-center justify-center"><span className="text-zinc-400">Loading chart...</span></div>
 });
@@ -146,33 +141,33 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   const [isMonthlyTableOpen, setIsMonthlyTableOpen] = useState(false);
   const [monthlyTableYear, setMonthlyTableYear] = useState<'2025' | '2024'>('2025');
   const [isPLModalOpen, setIsPLModalOpen] = useState(false);
-  const [activePLYear, setActivePLYear] = useState<'2025' | '2024'>('2025');
-  const [isBalanceSheetModalOpen, setIsBalanceSheetModalOpen] = useState(false);
-  const [activeBalanceSheetYear, setActiveBalanceSheetYear] = useState<'2025' | '2024'>('2025');
+  const [activePLYear, _setActivePLYear] = useState<'2025' | '2024'>('2025');
+  const [_isBalanceSheetModalOpen, setIsBalanceSheetModalOpen] = useState(false);
+  const [_activeBalanceSheetYear, _setActiveBalanceSheetYear] = useState<'2025' | '2024'>('2025');
   const [isExpenseReportModalOpen, setIsExpenseReportModalOpen] = useState(false);
   const [selectedExpenseMonths, setSelectedExpenseMonths] = useState<string[]>([]);
-  const [isExtendedPLModalOpen, setIsExtendedPLModalOpen] = useState(false);
+  const [_isExtendedPLModalOpen, _setIsExtendedPLModalOpen] = useState(false);
 
   const [activeSection, setActiveSection] = useState<string>('overview');
-  const [financialMetrics, setFinancialMetrics] = useState<FinancialMetrics | null>(null);
-  const [kEffectiveMetrics, setKEffectiveMetrics] = useState<KEffectiveMetrics | null>(null);
-  const [isLoadingData, setIsLoadingData] = useState(true);
-  const [isLoadingKMetrics, setIsLoadingKMetrics] = useState(true);
-  const [activeRetentionTab, setActiveRetentionTab] = useState<string>('retention');
+  const [_financialMetrics, setFinancialMetrics] = useState<FinancialMetrics | null>(null);
+  const [_kEffectiveMetrics, setKEffectiveMetrics] = useState<KEffectiveMetrics | null>(null);
+  const [_isLoadingData, setIsLoadingData] = useState(true);
+  const [_isLoadingKMetrics, setIsLoadingKMetrics] = useState(true);
+  const [_activeRetentionTab, _setActiveRetentionTab] = useState<string>('retention');
   const [activeRevenueYear, setActiveRevenueYear] = useState<'2025' | '2024'>('2025');
 
   // Legal documents state
-  const [legalDocuments, setLegalDocuments] = useState<any[]>([]);
-  const [isLoadingLegalDocs, setIsLoadingLegalDocs] = useState(false);
+  const [_legalDocuments, setLegalDocuments] = useState<any[]>([]);
+  const [_isLoadingLegalDocs, setIsLoadingLegalDocs] = useState(false);
 
   // Corporate equity documents state
   const [corporateEquityDocs, setCorporateEquityDocs] = useState<any[]>([]);
   const [isLoadingCorporateDocs, setIsLoadingCorporateDocs] = useState(false);
 
   // Cap table state
-  const [stakeholders, setStakeholders] = useState<any[]>([]);
-  const [equityPool, setEquityPool] = useState<any | null>(null);
-  const [isLoadingCapTable, setIsLoadingCapTable] = useState(false);
+  const [_stakeholders, setStakeholders] = useState<any[]>([]);
+  const [_equityPool, setEquityPool] = useState<any | null>(null);
+  const [_isLoadingCapTable, setIsLoadingCapTable] = useState(false);
 
   const monthlyRevenue2025 = [
     { month: 'Jan', label: 'January', value: 246 },
@@ -256,14 +251,14 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     { revenue: 0, recurring: 0, oneOff: 0, total: 0, net: 0 }
   );
 
-  const activePLData = activePLYear === '2025' ? pnl2025 : pnl2024;
-  const activePLTotals = activePLYear === '2025' ? pnlTotals2025 : pnlTotals2024;
+  const _activePLData = activePLYear === '2025' ? pnl2025 : pnl2024;
+  const _activePLTotals = activePLYear === '2025' ? pnlTotals2025 : pnlTotals2024;
 
-  const formatCurrency = (value: number) =>
+  const _formatCurrency = (value: number) =>
     `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // Generate P&L PDF
-  const generatePLPdf = () => {
+  const _generatePLPdf = () => {
     const data = activePLYear === '2025' ? pnl2025 : pnl2024;
     const totals = activePLYear === '2025' ? pnlTotals2025 : pnlTotals2024;
     const yearLabel = activePLYear === '2025' ? '2025 (Jan–Nov)' : '2024 (Full Year)';
@@ -438,7 +433,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   };
 
   // Generate Extended P&L PDF - uses same categorization as standard P&L
-  const generateExtendedPLPdf = () => {
+  const _generateExtendedPLPdf = () => {
     const fmt = (value: number) =>
       `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -607,7 +602,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   };
 
   // Generate Balance Sheet PDF (both years)
-  const generateBalanceSheetPdf = () => {
+  const _generateBalanceSheetPdf = () => {
     const fmt = (value: number) =>
       `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -772,7 +767,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   };
 
   // Generate Cap Table PDF
-  const generateCapTablePdf = () => {
+  const _generateCapTablePdf = () => {
     const html = `
       <!DOCTYPE html>
       <html>
@@ -929,7 +924,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
   };
 
   // Generate Founder RSPA PDF
-  const generateRSPAPdf = () => {
+  const _generateRSPAPdf = () => {
     const html = `
       <!DOCTYPE html>
       <html>
@@ -1400,8 +1395,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     totalLiabilitiesAndEquity: { y2024: -1193.60, y2025: 179 },
   };
 
-  const getBalanceSheetValue = (item: { y2024: number; y2025: number }) =>
-    activeBalanceSheetYear === '2025' ? item.y2025 : item.y2024;
+  const _getBalanceSheetValue = (item: { y2024: number; y2025: number }) =>
+    _activeBalanceSheetYear === '2025' ? item.y2025 : item.y2024;
 
   const revenueReports = [
     { id: 'jan', label: 'January', file: '/financial_report_Jan.csv' },
@@ -1478,7 +1473,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       if (storedSectionAccess) {
         try {
           setSectionAccess(JSON.parse(storedSectionAccess));
-        } catch (e) {
+        } catch (_e) {
           // Ignore parse errors
         }
       }
@@ -1959,7 +1954,7 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
     | 'travel_events'
     | 'other';
 
-  const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
+  const _EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
     software_tools: 'Software & Tools',
     contractors: 'Contractors',
     marketing_growth: 'Marketing & Growth',

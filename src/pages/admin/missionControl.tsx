@@ -343,7 +343,7 @@ export default function MissionControlPage() {
     const [modelUpgradeResult, setModelUpgradeResult] = useState<'success' | 'error' | null>(null);
     const [loadingObjectiveId, setLoadingObjectiveId] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [tick, setTick] = useState(0);
+    const [_tick, setTick] = useState(0);
     const [allModelUpgradeTarget, setAllModelUpgradeTarget] = useState(() => {
         return MODEL_UPGRADE_OPTIONS.some((option) => option.value === DEFAULT_MODEL_UPGRADE_TARGET)
             ? DEFAULT_MODEL_UPGRADE_TARGET

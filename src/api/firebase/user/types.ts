@@ -480,7 +480,6 @@ export enum CheckinsPrivacy {
     updatedAt: Date;
   
     constructor(data: Partial<BodyWeight>) {
-      const now = Date.now() / 1000;
       this.id = data.id || crypto.randomUUID();
       this.oldWeight = data.oldWeight || 0;
       this.newWeight = data.newWeight || 0;

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
-import { useRouter } from 'next/router';
 import {
   Users,
   UserCheck,
@@ -17,9 +16,8 @@ import {
   XCircleIcon,
   BarChart3,
 } from 'lucide-react';
-import { collection, getDocs, doc, updateDoc, query, where, getFirestore } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { useUser } from '../../hooks/useUser';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 
 // Type definitions
@@ -90,9 +88,6 @@ const BetaUsersPage: React.FC = () => {
   });
   const [showUserDetails, setShowUserDetails] = useState(false);
   const [detailUser, setDetailUser] = useState<BetaUser | null>(null);
-
-  const router = useRouter();
-  const user = useUser();
 
   useEffect(() => {
     fetchBetaUsers();
@@ -277,7 +272,7 @@ const BetaUsersPage: React.FC = () => {
         month: 'short',
         day: 'numeric'
       });
-    } catch (error) {
+    } catch (_error) {
       return 'Invalid date';
     }
   };

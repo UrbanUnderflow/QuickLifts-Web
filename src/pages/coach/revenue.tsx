@@ -98,8 +98,8 @@ const CoachRevenue: React.FC = () => {
   const monthlyGrowth = previousMonth ? 
     ((currentMonth.totalRevenue - previousMonth.totalRevenue) / previousMonth.totalRevenue) * 100 : 0;
 
-  const totalEarned = revenueData.reduce((sum, month) => sum + month.totalRevenue, 0);
-  const nextPayout = currentMonth.totalRevenue; // placeholder: most recent month total
+  const _totalEarned = revenueData.reduce((sum, month) => sum + month.totalRevenue, 0);
+  const _nextPayout = currentMonth.totalRevenue; // placeholder: most recent month total
 
   useEffect(() => {
     // We mark loading done once sections below have attempted fetch/render
@@ -470,7 +470,7 @@ const CoachRevenue: React.FC = () => {
         if (!currentUser?.id) return;
         setReferredLoading(true);
         const coaches = await coachService.getConnectedCoachesForCoach(currentUser.id);
-        const ATHLETE_MONTHLY = PRICING_INFO.ATHLETE.MONTHLY.amount;
+        const _ATHLETE_MONTHLY = PRICING_INFO.ATHLETE.MONTHLY.amount;
         const rows: ReferredCoach[] = await Promise.all(
           coaches.map(async (c: any) => {
             const athletes = await coachService.getConnectedAthletes(c.userId);

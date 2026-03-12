@@ -1,7 +1,12 @@
 # Local Netlify folder
+.DS_Store
 .netlify
 node_modules
+.npm-cache/
 .next/
+build/
+out/
+*.tsbuildinfo
 
 # Environment files
 .env*

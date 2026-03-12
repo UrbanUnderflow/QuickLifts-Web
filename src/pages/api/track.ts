@@ -57,7 +57,7 @@ async function sendBrevoEventViaApi(
       let errorBody = 'Unknown error';
       try {
         errorBody = await response.text();
-      } catch (e) { /* Ignore if reading body fails */ }
+      } catch (_e) { /* Ignore if reading body fails */ }
       console.error(
         `[API Route /api/track] Brevo API error (${response.status}):`, errorBody
       );

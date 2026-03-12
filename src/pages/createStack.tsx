@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 
-import { Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Layers, Search, Check, X } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, ArrowLeft, Layers, Search, X } from 'lucide-react';
 import {
   Exercise,
   ExerciseDetail,

@@ -47,7 +47,7 @@ const ReferralsPage: React.FC = () => {
         
         // Build coach-to-coach invite link (rich preview)
         setCoachInviteLink(`${baseUrl}/coach-invite/${profile.referralCode}`);
-      } catch (e) {
+      } catch (_e) {
         // noop
       }
     };
@@ -87,7 +87,7 @@ const ReferralsPage: React.FC = () => {
                         await navigator.clipboard.writeText(inviteLink); 
                         setCopySuccess(true); 
                         setTimeout(() => setCopySuccess(false), 2000);
-                      } catch(e) {} 
+                      } catch(_e) {} 
                     }}
                     className="bg-[#E0FE10] text-black px-5 py-3 rounded-xl font-medium hover:shadow-lg hover:shadow-[#E0FE10]/20 transition-all flex items-center gap-2"
                   >

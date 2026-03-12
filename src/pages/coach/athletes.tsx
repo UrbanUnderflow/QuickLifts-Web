@@ -8,7 +8,6 @@ import {
   FaPlus, 
   FaEye, 
   FaEdit,
-  FaTrash,
   FaChartLine,
   FaCalendarAlt,
   FaBell,
@@ -28,7 +27,7 @@ interface Athlete {
 }
 
 const CoachAthletes: React.FC = () => {
-  const currentUser = useUser();
+  const _currentUser = useUser();
   const [athletes, setAthletes] = useState<Athlete[]>([]);
   const [filteredAthletes, setFilteredAthletes] = useState<Athlete[]>([]);
   const [searchTerm, setSearchTerm] = useState('');

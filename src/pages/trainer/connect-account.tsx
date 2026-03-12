@@ -7,7 +7,6 @@ import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { userService } from '../../api/firebase/user';
 import { StripeOnboardingStatus } from '../../api/firebase/user/types';
-import { db } from '../../api/firebase/config';
 import { SubscriptionType } from '../../api/firebase/user/types';
 
 const ConnectAccountPage = () => {

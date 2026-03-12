@@ -30,7 +30,6 @@ import {
   SweatlistType as SweatlistTypeEnum,
   RoundType,
   RunRoundType,
-  RunRoundConfiguration
 } from '../api/firebase/workout/types';
 import { 
   RoundTypeSelector, 
@@ -1691,4 +1690,3 @@ const CreateRoundPage: React.FC = () => {
 };
 
 export default CreateRoundPage;
-

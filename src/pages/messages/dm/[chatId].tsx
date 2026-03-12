@@ -2,16 +2,14 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useUser } from '../../../hooks/useUser';
 import SideNav from '../../../components/Navigation/SideNav';
-import { Send, ArrowLeft, Image as ImageIcon, ClipboardList, CheckCircle, X } from 'lucide-react';
-import { collection, query, where, orderBy, getDocs, addDoc, serverTimestamp, doc, getDoc, onSnapshot, updateDoc, writeBatch, limit } from 'firebase/firestore';
+import { Send, ArrowLeft, X } from 'lucide-react';
+import { collection, query, orderBy, addDoc, serverTimestamp, doc, getDoc, onSnapshot, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '../../../api/firebase/config';
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 import { userService } from '../../../api/firebase/user/service';
 import { workoutService } from '../../../api/firebase/workout/service';
-import { creatorPagesService, Survey, SurveyResponse, CLIENT_QUESTIONNAIRES_PAGE_SLUG } from '../../../api/firebase/creatorPages/service';
-import { SurveyTakingModal, SurveyResponsesModal } from '../../../components/Surveys';
+import type { Survey, SurveyResponse } from '../../../api/firebase/creatorPages/service';
 // import { Exercise } from '../../../api/firebase/exercise/types'; // Not required for flexible move search rendering
-import { Workout, Challenge } from '../../../api/firebase/workout/types';
 
 interface ShortUser {
   id: string;
@@ -57,25 +55,25 @@ const DirectMessagePage: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
-  const [conversation, setConversation] = useState<DirectMessageConversation | null>(null);
+  const [_conversation, setConversation] = useState<DirectMessageConversation | null>(null);
   const [otherUser, setOtherUser] = useState<ShortUser | null>(null);
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [showSendMenu, setShowSendMenu] = useState(false);
+  const [_showSendMenu, setShowSendMenu] = useState(false);
   const [sendModalType, setSendModalType] = useState<'move' | 'stack' | 'round' | 'questionnaire' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const hasMarkedReadRef = useRef(false);
+  const _hasMarkedReadRef = useRef(false);
 
   // Questionnaire state
-  const [questionnaires, setQuestionnaires] = useState<Survey[]>([]);
-  const [loadingQuestionnaires, setLoadingQuestionnaires] = useState(false);
-  const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
-  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
-  const [viewingResponsesSurvey, setViewingResponsesSurvey] = useState<Survey | null>(null);
-  const [viewingResponses, setViewingResponses] = useState<SurveyResponse[]>([]);
-  const [loadingResponses, setLoadingResponses] = useState(false);
+  const [_questionnaires, _setQuestionnaires] = useState<Survey[]>([]);
+  const [_loadingQuestionnaires, _setLoadingQuestionnaires] = useState(false);
+  const [_activeSurvey, _setActiveSurvey] = useState<Survey | null>(null);
+  const [_activeMessageId, _setActiveMessageId] = useState<string | null>(null);
+  const [_viewingResponsesSurvey, _setViewingResponsesSurvey] = useState<Survey | null>(null);
+  const [_viewingResponses, _setViewingResponses] = useState<SurveyResponse[]>([]);
+  const [_loadingResponses, _setLoadingResponses] = useState(false);
 
   // Auto-scroll to bottom when messages change
   const scrollToBottom = () => {
@@ -676,4 +674,3 @@ const DirectMessagePage: React.FC = () => {
 };
 
 export default DirectMessagePage;
-

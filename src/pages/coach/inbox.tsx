@@ -34,7 +34,7 @@ const InboxPage: React.FC = () => {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
-  const [acceptedCoachId, setAcceptedCoachId] = useState<string | null>(null);
+  const [acceptedCoachId, _setAcceptedCoachId] = useState<string | null>(null);
   const [connectedCoaches, setConnectedCoaches] = useState<string[]>([]);
   const [chats, setChats] = useState<Array<{
     id: string;

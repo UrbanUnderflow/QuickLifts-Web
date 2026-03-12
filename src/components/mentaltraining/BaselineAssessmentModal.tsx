@@ -12,17 +12,11 @@ import {
   ChevronRight,
   ChevronLeft,
   Brain,
-  Zap,
-  Target,
-  Star,
-  Heart,
   AlertTriangle,
   CheckCircle,
 } from 'lucide-react';
 import {
   BaselineAssessment,
-  BiggestChallenge,
-  MentalPathway,
 } from '../../api/firebase/mentaltraining/types';
 import { athleteProgressService } from '../../api/firebase/mentaltraining';
 
@@ -139,7 +133,7 @@ export const BaselineAssessmentModal: React.FC<BaselineAssessmentModalProps> = (
   isOpen,
   onClose,
   athleteId,
-  athleteName = 'Athlete',
+  athleteName: _athleteName = 'Athlete',
   onComplete,
 }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);

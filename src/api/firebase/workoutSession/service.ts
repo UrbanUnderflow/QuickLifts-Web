@@ -5,8 +5,7 @@ import {
   ExerciseCategory, 
   WeightTrainingExercise, // Renamed from WeightTrainingDetails for clarity
   CardioExercise,       // Renamed from CardioDetails
-  MobilityExercise,      // Renamed from MobilityDetails
-  Exercise                // Ensure Exercise is imported if needed for type checks
+  MobilityExercise      // Renamed from MobilityDetails
 } from '../../firebase/exercise/types'; 
 import { User } from '../../firebase/user/types';
 import { workoutService } from '../../firebase/workout/service';
@@ -15,7 +14,7 @@ import { store } from '../../../redux/store';
 import { resetWorkoutState } from '../../../redux/workoutSlice';
 import { db } from '../../../api/firebase/config';
 import { doc, setDoc, writeBatch } from 'firebase/firestore';
-import { dateToUnixTimestamp, convertFirestoreTimestamp } from '../../../utils/formatDate';
+import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 
 interface CompletedWorkout {
   id: string;

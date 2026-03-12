@@ -1,5 +1,5 @@
 {
-  "name": "my-app",
+  "name": "quicklifts-web",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -68,14 +68,14 @@
     "tailwindcss": "^3.3.2",
     "typescript": "^5.6.3",
     "uuid": "^11.1.0",
-    "web-vitals": "^2.1.4",
     "xlsx": "^0.18.5"
   },
   "scripts": {
     "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint src/**/*.{ts,tsx} --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings 0",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install chromium",
@@ -97,21 +97,6 @@
     "promo:create-samples": "node scripts/create-promo-codes.js sample",
     "promo:create-custom": "node scripts/create-promo-codes.js custom",
     "heartbeat:tracker": "node scripts/hourlyObjectiveTracker.js"
-  },
-  "eslintConfig": {
-    "extends": [
-      "next/core-web-vitals"
-    ],
-    "rules": {
-      "@typescript-eslint/no-unused-vars": [
-        "error",
-        {
-          "argsIgnorePattern": "^_",
-          "varsIgnorePattern": "^_",
-          "caughtErrorsIgnorePattern": "^_"
-        }
-      ]
-    }
   },
   "browserslist": {
     "production": [
@@ -140,6 +125,7 @@
     "@typescript-eslint/parser": "^8.14.0",
     "eslint": "^9.15.0",
     "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "firebase-tools": "^13.34.0",
     "globals": "^15.12.0",
     "netlify-plugin-inline-functions-env": "^1.0.9"
