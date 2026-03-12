@@ -372,6 +372,10 @@ export class ClubMemberProfile {
   responses: Record<string, ClubActivationResponse>;
   completedQuestionIds: string[];
   completedAt?: Date;
+  pairingOptIn: boolean;
+  doNotPairUserIds: string[];
+  rematchRequestedAt?: Date;
+  rematchReason?: string;
   updatedAt: Date;
 
   constructor(data: any = {}) {
@@ -390,6 +394,10 @@ export class ClubMemberProfile {
 
     this.completedQuestionIds = data.completedQuestionIds || Object.keys(this.responses);
     this.completedAt = convertOptionalFirestoreTimestamp(data.completedAt);
+    this.pairingOptIn = data.pairingOptIn !== false;
+    this.doNotPairUserIds = Array.isArray(data.doNotPairUserIds) ? data.doNotPairUserIds : [];
+    this.rematchRequestedAt = convertOptionalFirestoreTimestamp(data.rematchRequestedAt);
+    this.rematchReason = data.rematchReason || undefined;
     this.updatedAt = convertOptionalFirestoreTimestamp(data.updatedAt) || new Date();
   }
 
@@ -403,6 +411,8 @@ export class ClubMemberProfile {
         return accumulator;
       }, {}),
       completedQuestionIds: this.completedQuestionIds,
+      pairingOptIn: this.pairingOptIn,
+      doNotPairUserIds: this.doNotPairUserIds,
       updatedAt: dateToUnixTimestamp(this.updatedAt),
     };
 
@@ -410,11 +420,145 @@ export class ClubMemberProfile {
       dict.completedAt = dateToUnixTimestamp(this.completedAt);
     }
 
+    if (this.rematchRequestedAt) {
+      dict.rematchRequestedAt = dateToUnixTimestamp(this.rematchRequestedAt);
+    }
+
+    if (this.rematchReason) {
+      dict.rematchReason = this.rematchReason;
+    }
+
     return dict;
   }
 
   static generateProfileId(clubId: string, userId: string): string {
     return `${clubId}_${userId}`;
+  }
+}
+
+export type ClubPairingSource = 'manual' | 'assisted';
+
+export class ClubPairing {
+  id: string;
+  clubId: string;
+  memberUserIds: string[];
+  source: ClubPairingSource;
+  reasons: string[];
+  score?: number;
+  createdByUserId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  isActive: boolean;
+
+  constructor(data: any = {}) {
+    this.clubId = data.clubId || '';
+    this.memberUserIds = Array.isArray(data.memberUserIds) ? data.memberUserIds : [];
+    this.id = data.id || ClubPairing.generatePairingId(this.clubId, this.memberUserIds);
+    this.source = data.source === 'assisted' ? 'assisted' : 'manual';
+    this.reasons = Array.isArray(data.reasons) ? data.reasons : [];
+    this.score = typeof data.score === 'number' ? data.score : undefined;
+    this.createdByUserId = data.createdByUserId || undefined;
+    this.createdAt = convertOptionalFirestoreTimestamp(data.createdAt) || new Date();
+    this.updatedAt = convertOptionalFirestoreTimestamp(data.updatedAt) || new Date();
+    this.isActive = data.isActive !== false;
+  }
+
+  toDictionary(): { [key: string]: any } {
+    const dict: { [key: string]: any } = {
+      id: this.id,
+      clubId: this.clubId,
+      memberUserIds: this.memberUserIds,
+      source: this.source,
+      reasons: this.reasons,
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
+      isActive: this.isActive,
+    };
+
+    if (typeof this.score === 'number') {
+      dict.score = this.score;
+    }
+
+    if (this.createdByUserId) {
+      dict.createdByUserId = this.createdByUserId;
+    }
+
+    return dict;
+  }
+
+  static generatePairingId(clubId: string, memberUserIds: string[]): string {
+    const sortedIds = [...memberUserIds].sort();
+    return `${clubId}_${sortedIds.join('_')}`;
+  }
+}
+
+export interface ClubPairingSuggestion {
+  id: string;
+  clubId: string;
+  memberUserIds: string[];
+  score: number;
+  reasons: string[];
+}
+
+export type ClubSafetyReportStatus = 'open' | 'resolved';
+export type ClubSafetyReportCategory =
+  | 'unsafe_behavior'
+  | 'harassment_or_discrimination'
+  | 'pairing_mismatch'
+  | 'other';
+
+export class ClubSafetyReport {
+  id: string;
+  clubId: string;
+  reporterUserId: string;
+  reportedUserId?: string;
+  pairingId?: string;
+  category: ClubSafetyReportCategory;
+  details: string;
+  status: ClubSafetyReportStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  resolvedAt?: Date;
+
+  constructor(data: any = {}) {
+    this.id = data.id || '';
+    this.clubId = data.clubId || '';
+    this.reporterUserId = data.reporterUserId || '';
+    this.reportedUserId = data.reportedUserId || undefined;
+    this.pairingId = data.pairingId || undefined;
+    this.category = data.category || 'other';
+    this.details = data.details || '';
+    this.status = data.status === 'resolved' ? 'resolved' : 'open';
+    this.createdAt = convertOptionalFirestoreTimestamp(data.createdAt) || new Date();
+    this.updatedAt = convertOptionalFirestoreTimestamp(data.updatedAt) || new Date();
+    this.resolvedAt = convertOptionalFirestoreTimestamp(data.resolvedAt);
+  }
+
+  toDictionary(): { [key: string]: any } {
+    const dict: { [key: string]: any } = {
+      id: this.id,
+      clubId: this.clubId,
+      reporterUserId: this.reporterUserId,
+      category: this.category,
+      details: this.details,
+      status: this.status,
+      createdAt: dateToUnixTimestamp(this.createdAt),
+      updatedAt: dateToUnixTimestamp(this.updatedAt),
+    };
+
+    if (this.reportedUserId) {
+      dict.reportedUserId = this.reportedUserId;
+    }
+
+    if (this.pairingId) {
+      dict.pairingId = this.pairingId;
+    }
+
+    if (this.resolvedAt) {
+      dict.resolvedAt = dateToUnixTimestamp(this.resolvedAt);
+    }
+
+    return dict;
   }
 }
 

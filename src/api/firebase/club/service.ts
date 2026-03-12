@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -13,7 +14,17 @@ import {
   writeBatch
 } from 'firebase/firestore';
 import { db } from '../config';
-import { Club, ClubEvent, ClubMember } from './types';
+import {
+  Club,
+  ClubActivationResponse,
+  ClubEvent,
+  ClubMember,
+  ClubMemberProfile,
+  ClubPairing,
+  ClubPairingSuggestion,
+  ClubSafetyReport,
+  ClubSafetyReportCategory,
+} from './types';
 import { ShortUser, userService } from '../user';
 import { workoutService } from '../workout/service';
 import { dateToUnixTimestamp } from '../../../utils/formatDate';
@@ -21,6 +32,9 @@ import { dateToUnixTimestamp } from '../../../utils/formatDate';
 class ClubService {
   private clubsCollection = collection(db, 'clubs');
   private clubMembersCollection = collection(db, 'clubMembers');
+  private clubMemberProfilesCollection = collection(db, 'clubMemberProfiles');
+  private clubPairingsCollection = collection(db, 'clubPairings');
+  private clubSafetyReportsCollection = collection(db, 'clubSafetyReports');
 
   // MARK: - Club CRUD Operations
 
@@ -238,6 +252,369 @@ class ClubService {
 
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => new ClubMember({ id: doc.id, ...doc.data() }));
+  }
+
+  async getClubMember(clubId: string, userId: string): Promise<ClubMember | null> {
+    const memberId = ClubMember.generateMemberId(clubId, userId);
+    const snapshot = await getDoc(doc(this.clubMembersCollection, memberId));
+
+    if (!snapshot.exists()) {
+      return null;
+    }
+
+    return new ClubMember({ id: snapshot.id, ...snapshot.data() });
+  }
+
+  async getClubMemberProfile(clubId: string, userId: string): Promise<ClubMemberProfile | null> {
+    const profileId = ClubMemberProfile.generateProfileId(clubId, userId);
+    const snapshot = await getDoc(doc(this.clubMemberProfilesCollection, profileId));
+
+    if (!snapshot.exists()) {
+      return null;
+    }
+
+    return new ClubMemberProfile({ id: snapshot.id, ...snapshot.data() });
+  }
+
+  async getClubMemberProfiles(clubId: string): Promise<ClubMemberProfile[]> {
+    const q = query(this.clubMemberProfilesCollection, where('clubId', '==', clubId));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map((profileDoc) => new ClubMemberProfile({ id: profileDoc.id, ...profileDoc.data() }));
+  }
+
+  async saveClubMemberProfile(profile: ClubMemberProfile): Promise<void> {
+    const profileRef = doc(this.clubMemberProfilesCollection, profile.id);
+    await setDoc(profileRef, profile.toDictionary(), { merge: true });
+  }
+
+  async updateClubMemberPairingPreferences(args: {
+    clubId: string;
+    userId: string;
+    pairingOptIn?: boolean;
+    doNotPairUserIds?: string[];
+  }): Promise<ClubMemberProfile> {
+    const existingProfile = await this.getOrCreateClubMemberProfile(args.clubId, args.userId);
+    const updatedProfile = new ClubMemberProfile({
+      ...existingProfile.toDictionary(),
+      pairingOptIn: args.pairingOptIn ?? existingProfile.pairingOptIn,
+      doNotPairUserIds: args.doNotPairUserIds ?? existingProfile.doNotPairUserIds,
+      updatedAt: new Date(),
+    });
+
+    await this.saveClubMemberProfile(updatedProfile);
+    return updatedProfile;
+  }
+
+  async requestClubMemberRematch(
+    clubId: string,
+    userId: string,
+    reason: string
+  ): Promise<ClubMemberProfile> {
+    const existingProfile = await this.getOrCreateClubMemberProfile(clubId, userId);
+    const updatedProfile = new ClubMemberProfile({
+      ...existingProfile.toDictionary(),
+      rematchRequestedAt: new Date(),
+      rematchReason: reason.trim(),
+      updatedAt: new Date(),
+    });
+
+    await this.saveClubMemberProfile(updatedProfile);
+    return updatedProfile;
+  }
+
+  async clearClubMemberRematch(clubId: string, userId: string): Promise<ClubMemberProfile> {
+    const existingProfile = await this.getOrCreateClubMemberProfile(clubId, userId);
+    const updatedProfile = new ClubMemberProfile({
+      ...existingProfile.toDictionary(),
+      rematchRequestedAt: undefined,
+      rematchReason: undefined,
+      updatedAt: new Date(),
+    });
+
+    await setDoc(
+      doc(this.clubMemberProfilesCollection, updatedProfile.id),
+      {
+        rematchRequestedAt: deleteField(),
+        rematchReason: deleteField(),
+        updatedAt: dateToUnixTimestamp(updatedProfile.updatedAt),
+      },
+      { merge: true }
+    );
+    return updatedProfile;
+  }
+
+  async completeClubMemberOnboarding(
+    clubId: string,
+    userId: string,
+    responses: Record<string, ClubActivationResponse>
+  ): Promise<ClubMemberProfile> {
+    const now = new Date();
+    const existingProfile = await this.getClubMemberProfile(clubId, userId);
+    const mergedResponses = {
+      ...(existingProfile?.responses || {}),
+      ...responses,
+    };
+
+    const profile = new ClubMemberProfile({
+      id: ClubMemberProfile.generateProfileId(clubId, userId),
+      clubId,
+      userId,
+      responses: Object.entries(mergedResponses).reduce<Record<string, any>>((accumulator, [questionId, response]) => {
+        accumulator[questionId] = response.toDictionary();
+        return accumulator;
+      }, {}),
+      completedQuestionIds: Object.keys(mergedResponses),
+      completedAt: now,
+      updatedAt: now,
+    });
+
+    await Promise.all([
+      this.saveClubMemberProfile(profile),
+      updateDoc(doc(this.clubMembersCollection, ClubMember.generateMemberId(clubId, userId)), {
+        onboardedAt: dateToUnixTimestamp(now),
+      }),
+    ]);
+
+    return profile;
+  }
+
+  async markClubMemberIntroduced(clubId: string, userId: string): Promise<void> {
+    await updateDoc(doc(this.clubMembersCollection, ClubMember.generateMemberId(clubId, userId)), {
+      introducedAt: dateToUnixTimestamp(new Date()),
+    });
+  }
+
+  async getClubPairings(clubId: string): Promise<ClubPairing[]> {
+    const q = query(this.clubPairingsCollection, where('clubId', '==', clubId));
+
+    const snapshot = await getDocs(q);
+    return snapshot.docs
+      .map((pairingDoc) => new ClubPairing({ id: pairingDoc.id, ...pairingDoc.data() }))
+      .filter((pairing) => pairing.isActive);
+  }
+
+  async getClubSafetyReports(clubId: string): Promise<ClubSafetyReport[]> {
+    const q = query(this.clubSafetyReportsCollection, where('clubId', '==', clubId));
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs
+      .map((reportDoc) => new ClubSafetyReport({ id: reportDoc.id, ...reportDoc.data() }))
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
+  }
+
+  async submitClubSafetyReport(args: {
+    clubId: string;
+    reporterUserId: string;
+    reportedUserId?: string;
+    pairingId?: string;
+    category: ClubSafetyReportCategory;
+    details: string;
+  }): Promise<ClubSafetyReport> {
+    const reportRef = doc(this.clubSafetyReportsCollection);
+    const now = new Date();
+    const report = new ClubSafetyReport({
+      id: reportRef.id,
+      clubId: args.clubId,
+      reporterUserId: args.reporterUserId,
+      reportedUserId: args.reportedUserId,
+      pairingId: args.pairingId,
+      category: args.category,
+      details: args.details.trim(),
+      status: 'open',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await setDoc(reportRef, report.toDictionary());
+    return report;
+  }
+
+  async resolveClubSafetyReport(clubId: string, reportId: string): Promise<void> {
+    await updateDoc(doc(this.clubSafetyReportsCollection, reportId), {
+      clubId,
+      status: 'resolved',
+      resolvedAt: dateToUnixTimestamp(new Date()),
+      updatedAt: dateToUnixTimestamp(new Date()),
+    });
+  }
+
+  async upsertClubPairing(args: {
+    clubId: string;
+    memberUserIds: string[];
+    createdByUserId: string;
+    source: 'manual' | 'assisted';
+    score?: number;
+    reasons?: string[];
+  }): Promise<ClubPairing> {
+    const sortedUserIds = [...new Set(args.memberUserIds)].sort();
+
+    if (sortedUserIds.length !== 2) {
+      throw new Error('A pairing must include exactly two unique members.');
+    }
+
+    const now = new Date();
+    const pairingId = ClubPairing.generatePairingId(args.clubId, sortedUserIds);
+    const existingPairings = await this.getClubPairings(args.clubId);
+    const memberProfiles = await Promise.all(
+      sortedUserIds.map((memberUserId) => this.getOrCreateClubMemberProfile(args.clubId, memberUserId))
+    );
+    const conflictingPairings = existingPairings.filter((pairing) =>
+      pairing.memberUserIds.some((memberUserId) => sortedUserIds.includes(memberUserId))
+    );
+
+    if (memberProfiles.some((profile) => !profile.pairingOptIn)) {
+      throw new Error('One or more members have opted out of pairing.');
+    }
+
+    if (this.hasPairingBlock(memberProfiles[0], memberProfiles[1])) {
+      throw new Error('These members have a do-not-pair restriction.');
+    }
+
+    const batch = writeBatch(db);
+    const membersToClear = new Set<string>();
+
+    conflictingPairings.forEach((pairing) => {
+      if (pairing.id !== pairingId) {
+        batch.set(doc(this.clubPairingsCollection, pairing.id), {
+          isActive: false,
+          updatedAt: dateToUnixTimestamp(now),
+        }, { merge: true });
+
+        pairing.memberUserIds.forEach((memberUserId) => {
+          if (!sortedUserIds.includes(memberUserId)) {
+            membersToClear.add(memberUserId);
+          }
+        });
+      }
+    });
+
+    sortedUserIds.forEach((memberUserId) => {
+      membersToClear.delete(memberUserId);
+    });
+
+    const pairing = new ClubPairing({
+      id: pairingId,
+      clubId: args.clubId,
+      memberUserIds: sortedUserIds,
+      source: args.source,
+      score: args.score,
+      reasons: args.reasons || [],
+      createdByUserId: args.createdByUserId,
+      createdAt: now,
+      updatedAt: now,
+      isActive: true,
+    });
+
+    batch.set(doc(this.clubPairingsCollection, pairing.id), pairing.toDictionary(), { merge: true });
+
+    sortedUserIds.forEach((memberUserId) => {
+      batch.set(doc(this.clubMembersCollection, ClubMember.generateMemberId(args.clubId, memberUserId)), {
+        pairedAt: dateToUnixTimestamp(now),
+      }, { merge: true });
+      batch.set(doc(this.clubMemberProfilesCollection, ClubMemberProfile.generateProfileId(args.clubId, memberUserId)), {
+        rematchRequestedAt: deleteField(),
+        rematchReason: deleteField(),
+        updatedAt: dateToUnixTimestamp(now),
+      }, { merge: true });
+    });
+
+    membersToClear.forEach((memberUserId) => {
+      batch.update(doc(this.clubMembersCollection, ClubMember.generateMemberId(args.clubId, memberUserId)), {
+        pairedAt: deleteField(),
+      });
+    });
+
+    await batch.commit();
+    return pairing;
+  }
+
+  async removeClubPairing(clubId: string, pairingId: string): Promise<void> {
+    const pairingRef = doc(this.clubPairingsCollection, pairingId);
+    const snapshot = await getDoc(pairingRef);
+
+    if (!snapshot.exists()) {
+      return;
+    }
+
+    const pairing = new ClubPairing({ id: snapshot.id, ...snapshot.data() });
+    const batch = writeBatch(db);
+
+    batch.set(pairingRef, {
+      isActive: false,
+      updatedAt: dateToUnixTimestamp(new Date()),
+    }, { merge: true });
+
+    pairing.memberUserIds.forEach((memberUserId) => {
+      batch.update(doc(this.clubMembersCollection, ClubMember.generateMemberId(clubId, memberUserId)), {
+        pairedAt: deleteField(),
+      });
+    });
+
+    await batch.commit();
+  }
+
+  async suggestClubPairings(clubId: string): Promise<ClubPairingSuggestion[]> {
+    const [club, members, profiles, activePairings] = await Promise.all([
+      this.getClubById(clubId),
+      this.getClubMembers(clubId),
+      this.getClubMemberProfiles(clubId),
+      this.getClubPairings(clubId),
+    ]);
+
+    if (!club || !club.activation.matchingEnabled) {
+      return [];
+    }
+
+    const pairedUserIds = new Set(activePairings.flatMap((pairing) => pairing.memberUserIds));
+    const profileMap = profiles.reduce<Record<string, ClubMemberProfile>>((accumulator, profile) => {
+      accumulator[profile.userId] = profile;
+      return accumulator;
+    }, {});
+
+    const eligibleMembers = members.filter((member) => {
+      if (member.userId === club.creatorId) return false;
+      if (!member.onboardedAt) return false;
+      if (club.activation.introRequired && !member.introducedAt) return false;
+      if (pairedUserIds.has(member.userId)) return false;
+      const profile = profileMap[member.userId];
+      return Boolean(profile && profile.pairingOptIn);
+    });
+
+    const candidates: ClubPairingSuggestion[] = [];
+
+    for (let index = 0; index < eligibleMembers.length; index += 1) {
+      for (let comparisonIndex = index + 1; comparisonIndex < eligibleMembers.length; comparisonIndex += 1) {
+        const leftMember = eligibleMembers[index];
+        const rightMember = eligibleMembers[comparisonIndex];
+        const suggestion = this.buildPairingSuggestion(
+          clubId,
+          leftMember.userId,
+          rightMember.userId,
+          profileMap[leftMember.userId],
+          profileMap[rightMember.userId]
+        );
+
+        if (suggestion) {
+          candidates.push(suggestion);
+        }
+      }
+    }
+
+    candidates.sort((left, right) => right.score - left.score);
+
+    const usedMemberIds = new Set<string>();
+    const finalSuggestions: ClubPairingSuggestion[] = [];
+
+    for (const candidate of candidates) {
+      if (candidate.memberUserIds.some((memberUserId) => usedMemberIds.has(memberUserId))) {
+        continue;
+      }
+
+      finalSuggestions.push(candidate);
+      candidate.memberUserIds.forEach((memberUserId) => usedMemberIds.add(memberUserId));
+    }
+
+    return finalSuggestions;
   }
 
   /**
@@ -461,6 +838,129 @@ class ClubService {
 
     console.log(`[ClubService] Backfill complete: added ${addedCount} members to club ${clubId}`);
     return addedCount;
+  }
+
+  private buildPairingSuggestion(
+    clubId: string,
+    leftUserId: string,
+    rightUserId: string,
+    leftProfile: ClubMemberProfile,
+    rightProfile: ClubMemberProfile
+  ): ClubPairingSuggestion | null {
+    if (this.hasPairingBlock(leftProfile, rightProfile)) {
+      return null;
+    }
+
+    let score = 0;
+    const reasons: string[] = [];
+
+    const primaryGoalMatch = this.hasMatchingSelections(leftProfile, rightProfile, 'primary_goal');
+    if (primaryGoalMatch) {
+      score += 4;
+      reasons.push('Shared primary goal');
+    }
+
+    const availabilityOverlap = this.countSharedSelections(leftProfile, rightProfile, 'weekly_availability');
+    if (availabilityOverlap > 0) {
+      score += Math.min(availabilityOverlap, 2) * 3;
+      reasons.push('Schedule overlap');
+    }
+
+    if (this.hasMatchingSelections(leftProfile, rightProfile, 'preferred_workout_type')) {
+      score += 2;
+      reasons.push('Similar workout preference');
+    }
+
+    if (this.hasMatchingSelections(leftProfile, rightProfile, 'fitness_level')) {
+      score += 2;
+      reasons.push('Comparable fitness level');
+    }
+
+    if (this.hasMatchingSelections(leftProfile, rightProfile, 'accountability_style')) {
+      score += 3;
+      reasons.push('Compatible accountability style');
+    }
+
+    if (this.hasMatchingText(leftProfile, rightProfile, 'location_neighborhood')) {
+      score += 1;
+      reasons.push('Same neighborhood');
+    }
+
+    if (score < 3) {
+      return null;
+    }
+
+    const memberUserIds = [leftUserId, rightUserId].sort();
+
+    return {
+      id: ClubPairing.generatePairingId(clubId, memberUserIds),
+      clubId,
+      memberUserIds,
+      score,
+      reasons,
+    };
+  }
+
+  private hasMatchingSelections(
+    leftProfile: ClubMemberProfile,
+    rightProfile: ClubMemberProfile,
+    questionId: string
+  ): boolean {
+    return this.countSharedSelections(leftProfile, rightProfile, questionId) > 0;
+  }
+
+  private countSharedSelections(
+    leftProfile: ClubMemberProfile,
+    rightProfile: ClubMemberProfile,
+    questionId: string
+  ): number {
+    const leftSelections = leftProfile.responses[questionId]?.selectedOptionIds || [];
+    const rightSelections = new Set(rightProfile.responses[questionId]?.selectedOptionIds || []);
+
+    return leftSelections.filter((selectionId) => rightSelections.has(selectionId)).length;
+  }
+
+  private hasMatchingText(
+    leftProfile: ClubMemberProfile,
+    rightProfile: ClubMemberProfile,
+    questionId: string
+  ): boolean {
+    const leftValue = leftProfile.responses[questionId]?.textValue?.trim().toLowerCase();
+    const rightValue = rightProfile.responses[questionId]?.textValue?.trim().toLowerCase();
+
+    if (!leftValue || !rightValue) {
+      return false;
+    }
+
+    return leftValue === rightValue;
+  }
+
+  private hasPairingBlock(leftProfile: ClubMemberProfile, rightProfile: ClubMemberProfile): boolean {
+    return (
+      leftProfile.doNotPairUserIds.includes(rightProfile.userId) ||
+      rightProfile.doNotPairUserIds.includes(leftProfile.userId)
+    );
+  }
+
+  private async getOrCreateClubMemberProfile(clubId: string, userId: string): Promise<ClubMemberProfile> {
+    const existingProfile = await this.getClubMemberProfile(clubId, userId);
+
+    if (existingProfile) {
+      return existingProfile;
+    }
+
+    const profile = new ClubMemberProfile({
+      clubId,
+      userId,
+      responses: {},
+      completedQuestionIds: [],
+      pairingOptIn: true,
+      doNotPairUserIds: [],
+      updatedAt: new Date(),
+    });
+
+    await this.saveClubMemberProfile(profile);
+    return profile;
   }
 }
 

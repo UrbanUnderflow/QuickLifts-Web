@@ -17,11 +17,25 @@ import {
 } from 'react-icons/fi';
 import { FaApple, FaGooglePlay } from 'react-icons/fa';
 import PageHead from '../PageHead';
-import { ClubEvent, ClubFeatures, ClubMember } from '../../api/firebase/club/types';
+import {
+  ClubActivationConfig,
+  ClubActivationQuestionDefinition,
+  ClubActivationResponse,
+  ClubEvent,
+  ClubFeatures,
+  ClubMember,
+  ClubMemberProfile,
+  ClubPairing,
+  ClubSafetyReportCategory,
+} from '../../api/firebase/club/types';
 import { clubService } from '../../api/firebase/club/service';
 import { clubChatService } from '../../api/firebase/club/chat';
 import { ClubLandingPageProps, RoundPreview } from '../../api/firebase/club/landingPage';
 import { getClubMemberOriginDisplayLabel, parseClubMemberOrigin } from '../../api/firebase/club/origin';
+import {
+  getClubActivationQuestionsByIds,
+  isClubActivationResponseComplete,
+} from '../../api/firebase/club/activation';
 import { ChatService } from '../../api/firebase/chat/service';
 import { GroupMessage, MessageMediaType } from '../../api/firebase/chat/types';
 import { creatorPagesService, Survey, SurveyResponse, CLIENT_QUESTIONNAIRES_PAGE_SLUG } from '../../api/firebase/creatorPages/service';
@@ -62,6 +76,84 @@ interface LeaderboardEntry {
   member: ClubMember;
   workoutCount: number;
 }
+
+const buildDefaultIntroTemplate = (clubName: string): string =>
+  `Hey everyone! I'm [your name]. Excited to join ${clubName} and train with you all. Right now I'm focused on [your goal].`;
+
+const CLUB_CONDUCT_GUIDELINES = [
+  'Respect personal boundaries, identities, and training preferences.',
+  'No harassment, discrimination, threats, or unwanted contact.',
+  'If a pairing or interaction feels wrong, opt out or request a rematch immediately.',
+  'Hosts may remove members or end participation for unsafe behavior at any time.',
+];
+
+const ActivationQuestionField: React.FC<{
+  accent: string;
+  question: ClubActivationQuestionDefinition;
+  response?: ClubActivationResponse;
+  onChange: (nextResponse: ClubActivationResponse) => void;
+}> = ({ accent, question, response, onChange }) => {
+  if (question.type === 'short_text') {
+    return (
+      <textarea
+        value={response?.textValue || ''}
+        onChange={(event) =>
+          onChange(
+            new ClubActivationResponse({
+              questionId: question.id,
+              type: question.type,
+              selectedOptionIds: [],
+              textValue: event.target.value,
+            })
+          )
+        }
+        placeholder={question.placeholder || 'Type your answer'}
+        rows={3}
+        className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30 focus:bg-black/40"
+      />
+    );
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {question.options.map((option) => {
+        const isSelected = response?.selectedOptionIds.includes(option.id) ?? false;
+
+        return (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => {
+              const nextSelectedOptionIds =
+                question.type === 'multi_select'
+                  ? isSelected
+                    ? (response?.selectedOptionIds || []).filter((optionId) => optionId !== option.id)
+                    : [...(response?.selectedOptionIds || []), option.id]
+                  : [option.id];
+
+              onChange(
+                new ClubActivationResponse({
+                  questionId: question.id,
+                  type: question.type,
+                  selectedOptionIds: nextSelectedOptionIds,
+                  textValue: '',
+                })
+              );
+            }}
+            className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
+              isSelected
+                ? 'text-black shadow-[0_20px_50px_rgba(0,0,0,0.3)]'
+                : 'border-white/10 bg-white/[0.03] text-white/75 hover:border-white/25 hover:bg-white/[0.06]'
+            }`}
+            style={isSelected ? { backgroundColor: accent, borderColor: accent } : undefined}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 const isMessageVisibleToUser = (message: GroupMessage, userId: string): boolean => {
   if (!message.visibility || message.visibility === 'public') {
@@ -466,6 +558,14 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
   const clubTypeLabel = clubData.clubType ? CLUB_TYPE_LABELS[clubData.clubType] || null : null;
   const shareUrl = `https://fitwithpulse.ai/club/${clubData.id}`;
   const features = new ClubFeatures(clubData.features || {});
+  const activationConfig = useMemo(
+    () => new ClubActivationConfig(clubData.activation?.toDictionary?.() ?? clubData.activation ?? {}),
+    [clubData.activation]
+  );
+  const requiredActivationQuestions = useMemo(
+    () => getClubActivationQuestionsByIds(activationConfig.requiredQuestionIds),
+    [activationConfig.requiredQuestionIds]
+  );
 
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const [showQuestionnaireModal, setShowQuestionnaireModal] = useState(false);
@@ -473,7 +573,6 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
   const [isLoadingQuestionnaires, setIsLoadingQuestionnaires] = useState(false);
 
   const [activeSurvey, setActiveSurvey] = useState<Survey | null>(null);
-  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [activeSurveyInstanceId, setActiveSurveyInstanceId] = useState<string | undefined>(undefined);
   const [activeMessage, setActiveMessage] = useState<ConsolidatedClubMessage | null>(null);
 
@@ -485,6 +584,28 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
   const [surveyIdentifier, setSurveyIdentifier] = useState('');
 
   const [surveysCache, setSurveysCache] = useState<Record<string, Survey>>({});
+  const [currentMember, setCurrentMember] = useState<ClubMember | null>(null);
+  const [currentMemberProfile, setCurrentMemberProfile] = useState<ClubMemberProfile | null>(null);
+  const [currentPairing, setCurrentPairing] = useState<ClubPairing | null>(null);
+  const [activationResponses, setActivationResponses] = useState<Record<string, ClubActivationResponse>>({});
+  const [isLoadingActivation, setIsLoadingActivation] = useState(false);
+  const [showActivationModal, setShowActivationModal] = useState(false);
+  const [showIntroPrompt, setShowIntroPrompt] = useState(false);
+  const [pendingIntroCompletion, setPendingIntroCompletion] = useState(false);
+  const [activationError, setActivationError] = useState<string | null>(null);
+  const [isSubmittingActivation, setIsSubmittingActivation] = useState(false);
+  const [showPairingSafetyModal, setShowPairingSafetyModal] = useState(false);
+  const [pairingOptInDraft, setPairingOptInDraft] = useState(true);
+  const [doNotPairUserIdsDraft, setDoNotPairUserIdsDraft] = useState<string[]>([]);
+  const [rematchReasonDraft, setRematchReasonDraft] = useState('');
+  const [pairingSafetyFeedback, setPairingSafetyFeedback] = useState<string | null>(null);
+  const [isSavingPairingSafety, setIsSavingPairingSafety] = useState(false);
+  const [showConductModal, setShowConductModal] = useState(false);
+  const [showSafetyReportModal, setShowSafetyReportModal] = useState(false);
+  const [safetyReportCategory, setSafetyReportCategory] = useState<ClubSafetyReportCategory>('unsafe_behavior');
+  const [safetyReportDetails, setSafetyReportDetails] = useState('');
+  const [safetyReportReportedUserId, setSafetyReportReportedUserId] = useState('');
+  const [isSubmittingSafetyReport, setIsSubmittingSafetyReport] = useState(false);
 
   const consolidatedMessages = useMemo<ConsolidatedClubMessage[]>(() => {
     const roundNameById = allRounds.reduce<Record<string, string>>((accumulator, round) => {
@@ -596,15 +717,118 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
   }, [clubData.id]);
 
   const handleIntroduceSelf = useCallback(() => {
-    const introTemplate = `Hey everyone! 👋 My name is [your name], I'm originally from [your city/country], and I'm passionate about [what drives you]. Excited to be here!`;
+    const introTemplate = activationConfig.introTemplate || buildDefaultIntroTemplate(clubData.name);
     setNewMessage(introTemplate);
     setShowCheckinModal(false);
+    setShowIntroPrompt(false);
+    setPendingIntroCompletion(true);
     setSelectedTab('pulse');
     // Focus the chat input after a brief delay so the tab switch renders
     setTimeout(() => {
       chatInputRef.current?.focus();
     }, 150);
-  }, []);
+  }, [activationConfig.introTemplate, clubData.name]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (isCreator || !activationConfig.enabled) {
+      setShowActivationModal(false);
+      setShowIntroPrompt(false);
+      setCurrentMember(null);
+      setCurrentMemberProfile(null);
+      setActivationResponses({});
+      return;
+    }
+
+    const loadActivationState = async () => {
+      setIsLoadingActivation(true);
+
+      try {
+        const [member, profile] = await Promise.all([
+          clubService.getClubMember(clubData.id, currentUser.id),
+          clubService.getClubMemberProfile(clubData.id, currentUser.id),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        setCurrentMember(member);
+        setCurrentMemberProfile(profile);
+        setActivationResponses(profile?.responses || {});
+
+        const needsOnboarding =
+          Boolean(member) &&
+          activationConfig.enabled &&
+          requiredActivationQuestions.length > 0 &&
+          !member?.onboardedAt;
+
+        const needsIntro =
+          Boolean(member) &&
+          activationConfig.enabled &&
+          activationConfig.introRequired &&
+          !member?.introducedAt &&
+          !needsOnboarding;
+
+        setShowActivationModal(needsOnboarding);
+        setShowIntroPrompt(needsIntro);
+      } catch (error) {
+        console.error('[ClubMemberApp] Failed to load activation state:', error);
+      } finally {
+        if (!cancelled) {
+          setIsLoadingActivation(false);
+        }
+      }
+    };
+
+    void loadActivationState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activationConfig.enabled,
+    activationConfig.introRequired,
+    clubData.id,
+    currentUser.id,
+    isCreator,
+    requiredActivationQuestions.length,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!activationConfig.matchingEnabled || isCreator) {
+      setCurrentPairing(null);
+      return;
+    }
+
+    const loadPairing = async () => {
+      try {
+        const pairings = await clubService.getClubPairings(clubData.id);
+        if (!cancelled) {
+          setCurrentPairing(
+            pairings.find((pairing) => pairing.memberUserIds.includes(currentUser.id)) || null
+          );
+        }
+      } catch (error) {
+        console.error('[ClubMemberApp] Failed to load pairing state:', error);
+      }
+    };
+
+    void loadPairing();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activationConfig.matchingEnabled, clubData.id, currentUser.id, isCreator]);
+
+  useEffect(() => {
+    setPairingOptInDraft(currentMemberProfile?.pairingOptIn ?? true);
+    setDoNotPairUserIdsDraft(currentMemberProfile?.doNotPairUserIds || []);
+    setRematchReasonDraft(currentMemberProfile?.rematchReason || '');
+  }, [currentMemberProfile]);
 
   useEffect(() => {
     let cancelled = false;
@@ -663,7 +887,7 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
         if (!cancelled) {
           setMemberWorkoutCounts(counts);
         }
-      } catch (error) {
+      } catch {
       }
     };
 
@@ -711,6 +935,250 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
       .sort((left, right) => right.workoutCount - left.workoutCount);
   }, [clubData.creatorId, memberWorkoutCounts, members]);
 
+  const isActivationComplete = useMemo(() => {
+    if (!requiredActivationQuestions.length) {
+      return true;
+    }
+
+    return requiredActivationQuestions.every((question) =>
+      isClubActivationResponseComplete(question, activationResponses[question.id])
+    );
+  }, [activationResponses, requiredActivationQuestions]);
+  const hasSavedActivationResponses = Boolean(currentMemberProfile?.completedQuestionIds.length);
+  const hasPendingRequiredIntro = Boolean(
+    !isCreator &&
+    activationConfig.enabled &&
+    activationConfig.introRequired &&
+    currentMember &&
+    !currentMember.introducedAt
+  );
+
+  const updateMemberLocally = useCallback((updater: (member: ClubMember) => ClubMember) => {
+    setCurrentMember((previous) => {
+      if (!previous) {
+        return previous;
+      }
+
+      const nextMember = updater(previous);
+      setMembers((existingMembers) =>
+        existingMembers.map((member) => (member.id === nextMember.id ? nextMember : member))
+      );
+      return nextMember;
+    });
+  }, []);
+
+  const handleSubmitActivation = useCallback(async () => {
+    if (!currentMember || !isActivationComplete) {
+      setActivationError('Please complete every required question.');
+      return;
+    }
+
+    setIsSubmittingActivation(true);
+    setActivationError(null);
+
+    try {
+      const profile = await clubService.completeClubMemberOnboarding(
+        clubData.id,
+        currentUser.id,
+        activationResponses
+      );
+
+      setCurrentMemberProfile(profile);
+      updateMemberLocally((member) => {
+        const nextMember = new ClubMember(member.toDictionary());
+        nextMember.onboardedAt = profile.completedAt || new Date();
+        return nextMember;
+      });
+      setShowActivationModal(false);
+
+      if (activationConfig.introRequired) {
+        setShowIntroPrompt(true);
+      }
+    } catch (error) {
+      console.error('[ClubMemberApp] Failed to submit onboarding:', error);
+      setActivationError('Could not save your onboarding answers. Please try again.');
+    } finally {
+      setIsSubmittingActivation(false);
+    }
+  }, [
+    activationConfig.introRequired,
+    activationResponses,
+    clubData.id,
+    currentMember,
+    currentUser.id,
+    isActivationComplete,
+    updateMemberLocally,
+  ]);
+
+  const handleSavePairingSafety = useCallback(async () => {
+    setIsSavingPairingSafety(true);
+    setPairingSafetyFeedback(null);
+
+    try {
+      const normalizedDoNotPairUserIds = [...new Set(doNotPairUserIdsDraft)].filter(
+        (userId) => userId !== currentUser.id
+      );
+
+      await clubService.updateClubMemberPairingPreferences({
+        clubId: clubData.id,
+        userId: currentUser.id,
+        pairingOptIn: pairingOptInDraft,
+        doNotPairUserIds: normalizedDoNotPairUserIds,
+      });
+
+      if (!pairingOptInDraft && currentPairing) {
+        await clubService.removeClubPairing(clubData.id, currentPairing.id);
+        setCurrentPairing(null);
+        updateMemberLocally((member) => {
+          const nextMember = new ClubMember(member.toDictionary());
+          nextMember.pairedAt = undefined;
+          return nextMember;
+        });
+      }
+
+      setCurrentMemberProfile((previous) => {
+        const baseProfile = previous
+          ? previous.toDictionary()
+          : {
+              clubId: clubData.id,
+              userId: currentUser.id,
+              responses: activationResponses,
+              completedQuestionIds: Object.keys(activationResponses),
+              completedAt: currentMember?.onboardedAt,
+            };
+
+        return new ClubMemberProfile({
+          ...baseProfile,
+          pairingOptIn: pairingOptInDraft,
+          doNotPairUserIds: normalizedDoNotPairUserIds,
+          updatedAt: new Date(),
+        });
+      });
+
+      setPairingSafetyFeedback('Safety preferences updated.');
+      setShowPairingSafetyModal(false);
+    } catch (error) {
+      console.error('[ClubMemberApp] Failed to save pairing safety:', error);
+      setPairingSafetyFeedback('Could not save pairing safety preferences.');
+    } finally {
+      setIsSavingPairingSafety(false);
+    }
+  }, [
+    activationResponses,
+    clubData.id,
+    currentMember?.onboardedAt,
+    currentPairing,
+    currentUser.id,
+    doNotPairUserIdsDraft,
+    pairingOptInDraft,
+    updateMemberLocally,
+  ]);
+
+  const handleRequestRematch = useCallback(async () => {
+    if (!currentPairing) {
+      return;
+    }
+
+    if (!rematchReasonDraft.trim()) {
+      setPairingSafetyFeedback('Add a short reason so the host knows what to fix.');
+      return;
+    }
+
+    setIsSavingPairingSafety(true);
+    setPairingSafetyFeedback(null);
+
+    try {
+      await Promise.all([
+        clubService.requestClubMemberRematch(clubData.id, currentUser.id, rematchReasonDraft),
+        clubService.removeClubPairing(clubData.id, currentPairing.id),
+      ]);
+
+      setCurrentPairing(null);
+      setCurrentMemberProfile((previous) => {
+        const baseProfile = previous
+          ? previous.toDictionary()
+          : {
+              clubId: clubData.id,
+              userId: currentUser.id,
+              responses: activationResponses,
+              completedQuestionIds: Object.keys(activationResponses),
+              completedAt: currentMember?.onboardedAt,
+            };
+
+        return new ClubMemberProfile({
+          ...baseProfile,
+          rematchRequestedAt: new Date(),
+          rematchReason: rematchReasonDraft.trim(),
+          updatedAt: new Date(),
+        });
+      });
+      updateMemberLocally((member) => {
+        const nextMember = new ClubMember(member.toDictionary());
+        nextMember.pairedAt = undefined;
+        return nextMember;
+      });
+      setPairingSafetyFeedback('Rematch requested. Your current pairing has been cleared.');
+      setShowPairingSafetyModal(false);
+    } catch (error) {
+      console.error('[ClubMemberApp] Failed to request rematch:', error);
+      setPairingSafetyFeedback('Could not submit your rematch request.');
+    } finally {
+      setIsSavingPairingSafety(false);
+    }
+  }, [
+    activationResponses,
+    clubData.id,
+    currentMember?.onboardedAt,
+    currentPairing,
+    currentUser.id,
+    rematchReasonDraft,
+    updateMemberLocally,
+  ]);
+
+  const handleOpenSafetyReport = useCallback(() => {
+    const pairedUserId = currentPairing?.memberUserIds.find((memberUserId) => memberUserId !== currentUser.id) || '';
+    setSafetyReportCategory('unsafe_behavior');
+    setSafetyReportDetails('');
+    setSafetyReportReportedUserId(pairedUserId);
+    setShowSafetyReportModal(true);
+  }, [currentPairing?.memberUserIds, currentUser.id]);
+
+  const handleSubmitSafetyReport = useCallback(async () => {
+    if (!safetyReportDetails.trim()) {
+      setPairingSafetyFeedback('Add a short description so the host can review the issue.');
+      return;
+    }
+
+    setIsSubmittingSafetyReport(true);
+    setPairingSafetyFeedback(null);
+
+    try {
+      await clubService.submitClubSafetyReport({
+        clubId: clubData.id,
+        reporterUserId: currentUser.id,
+        reportedUserId: safetyReportReportedUserId || undefined,
+        pairingId: currentPairing?.id,
+        category: safetyReportCategory,
+        details: safetyReportDetails,
+      });
+      setShowSafetyReportModal(false);
+      setPairingSafetyFeedback('Safety report submitted. The host can now review it.');
+      setSafetyReportDetails('');
+    } catch (error) {
+      console.error('[ClubMemberApp] Failed to submit safety report:', error);
+      setPairingSafetyFeedback('Could not submit your safety report.');
+    } finally {
+      setIsSubmittingSafetyReport(false);
+    }
+  }, [
+    clubData.id,
+    currentPairing?.id,
+    currentUser.id,
+    safetyReportCategory,
+    safetyReportDetails,
+    safetyReportReportedUserId,
+  ]);
+
   const handleShare = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
@@ -753,6 +1221,16 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
 
       if (!result) {
         throw new Error('Could not send message.');
+      }
+
+      if (pendingIntroCompletion && currentMember && !currentMember.introducedAt) {
+        await clubService.markClubMemberIntroduced(clubData.id, currentUser.id);
+        updateMemberLocally((member) => {
+          const nextMember = new ClubMember(member.toDictionary());
+          nextMember.introducedAt = new Date();
+          return nextMember;
+        });
+        setPendingIntroCompletion(false);
       }
 
       setNewMessage('');
@@ -806,6 +1284,12 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
 
   const activeMemberCount = members.filter((member) => member.isActive).length || clubData.memberCount || 0;
   const totalProgramCount = allRounds.length + events.length;
+  const pairedMember = currentPairing
+    ? members.find((member) => currentPairing.memberUserIds.includes(member.userId) && member.userId !== currentUser.id) || null
+    : null;
+  const doNotPairCandidates = members.filter(
+    (member) => member.userId !== currentUser.id && member.userId !== clubData.creatorId
+  );
   const creatorAvatar =
     creatorData?.profileImage?.profileImageURL ||
     clubData.logoURL ||
@@ -1095,6 +1579,76 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
               </div>
             </div>
 
+            {activationConfig.matchingEnabled ? (
+              <div className="mb-5 rounded-[1.6rem] border border-white/8 bg-black/18 p-5 backdrop-blur-xl">
+                {pairingSafetyFeedback ? (
+                  <div className={`mb-4 rounded-2xl border px-4 py-3 text-sm ${
+                    pairingSafetyFeedback.includes('Could not') || pairingSafetyFeedback.includes('Add a short reason')
+                      ? 'border-red-500/20 bg-red-500/10 text-red-100'
+                      : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                  }`}>
+                    {pairingSafetyFeedback}
+                  </div>
+                ) : null}
+                {pairedMember ? (
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-4">
+                      <img
+                        src={avatarForMember(pairedMember)}
+                        alt={pairedMember.userInfo.username}
+                        className="h-14 w-14 rounded-2xl object-cover"
+                      />
+                      <div>
+                        <div className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: `${accent}c5` }}>
+                          Accountability Partner
+                        </div>
+                        <div className="mt-1 text-xl font-black tracking-[-0.03em] text-white">
+                          {pairedMember.userInfo.displayName || pairedMember.userInfo.username}
+                        </div>
+                        <div className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
+                          @{pairedMember.userInfo.username || 'member'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowPairingSafetyModal(true)}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-white/80 transition hover:bg-white/10"
+                    >
+                      Safety options
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: `${accent}c5` }}>
+                        Pairing Status
+                      </div>
+                      <div className="mt-2 text-lg font-black tracking-[-0.03em] text-white">
+                        {hasPendingRequiredIntro
+                          ? 'Post your intro to become pairing-ready'
+                          : currentMemberProfile?.rematchRequestedAt
+                            ? 'Rematch request submitted'
+                            : currentMemberProfile?.pairingOptIn === false
+                              ? 'You are opted out of pairing'
+                              : currentMember?.onboardedAt
+                                ? 'The host is reviewing pairings'
+                                : 'Complete onboarding to unlock pairing'}
+                      </div>
+                      <p className="mt-2 max-w-2xl text-sm leading-6 text-white/50">
+                        Pairing is club-specific and host-managed. Once your match is confirmed, it will show up here.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowPairingSafetyModal(true)}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-white/80 transition hover:bg-white/10"
+                    >
+                      Safety options
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
             <div className="rounded-[1.6rem] border border-white/8 bg-black/18 shadow-[0_24px_90px_rgba(0,0,0,0.18)] backdrop-blur-xl">
               <div className="border-b border-white/8 bg-black/20 p-4">
                 {sendError ? (
@@ -1103,90 +1657,112 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
                   </div>
                 ) : null}
 
-                <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <button
-                      onClick={() => {
-                        if (isCreator) {
-                          setShowPlusMenu(!showPlusMenu);
-                        } else {
-                          uploadInputRef.current?.click();
+                {hasPendingRequiredIntro ? (
+                  <div className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="text-[11px] font-black uppercase tracking-[0.22em]" style={{ color: `${accent}c5` }}>
+                          Intro Required
+                        </div>
+                        <p className="mt-2 max-w-xl text-sm leading-6 text-white/60">
+                          Introduce yourself in chat to unlock normal club posting. This keeps the club feeling intentional instead of anonymous.
+                        </p>
+                      </div>
+                      <button
+                        onClick={handleIntroduceSelf}
+                        className="shrink-0 rounded-2xl px-5 py-3 text-sm font-black uppercase tracking-[0.18em] shadow-[0_18px_40px_rgba(0,0,0,0.22)] transition hover:scale-[1.01]"
+                        style={{ backgroundColor: accent, color: accentTextColor }}
+                      >
+                        Post intro
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <button
+                        onClick={() => {
+                          if (isCreator) {
+                            setShowPlusMenu(!showPlusMenu);
+                          } else {
+                            uploadInputRef.current?.click();
+                          }
+                        }}
+                        disabled={isSendingMessage || isUploadingMedia}
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full shadow-[0_12px_30px_rgba(0,0,0,0.26)] transition disabled:opacity-60"
+                        style={{ backgroundColor: accent, color: accentTextColor }}
+                        aria-label="Upload media"
+                      >
+                        {isUploadingMedia ? <FiImage className="animate-pulse" /> : <FiPlus />}
+                      </button>
+                      {showPlusMenu && isCreator && (
+                        <div className="absolute bottom-14 left-0 z-50 w-56 overflow-hidden rounded-2xl border border-white/10 bg-[#121212] shadow-2xl">
+                          <button
+                            onClick={() => {
+                              setShowPlusMenu(false);
+                              uploadInputRef.current?.click();
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors"
+                          >
+                            <FiImage className="text-lg opacity-80" /> Send Media
+                          </button>
+                          <button
+                            onClick={async () => {
+                              setShowPlusMenu(false);
+                              setShowQuestionnaireModal(true);
+                              setIsLoadingQuestionnaires(true);
+                              try {
+                                const surveys = await creatorPagesService.getAllSurveys(currentUser.id);
+                                setClubQuestionnaires(surveys);
+                                const cache = { ...surveysCache };
+                                surveys.forEach(s => cache[s.id] = s);
+                                setSurveysCache(cache);
+                              } catch (e) {
+                                console.error(e);
+                              } finally {
+                                setIsLoadingQuestionnaires(false);
+                              }
+                            }}
+                            className="w-full flex items-center gap-3 border-t border-white/5 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors"
+                          >
+                            <svg className="w-[18px] h-[18px] opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg> Send Questionnaire
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <input
+                      ref={uploadInputRef}
+                      type="file"
+                      accept="image/*,video/*,audio/*"
+                      className="hidden"
+                      onChange={handleUploadChange}
+                    />
+
+                    <input
+                      ref={chatInputRef}
+                      value={newMessage}
+                      onChange={(event) => setNewMessage(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault();
+                          void sendMessage();
                         }
                       }}
-                      disabled={isSendingMessage || isUploadingMedia}
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full shadow-[0_12px_30px_rgba(0,0,0,0.26)] transition disabled:opacity-60"
-                      style={{ backgroundColor: accent, color: accentTextColor }}
-                      aria-label="Upload media"
+                      placeholder="Message the club..."
+                      className="h-12 flex-1 rounded-full border border-white/8 bg-white/5 px-5 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/18"
+                    />
+
+                    <button
+                      onClick={() => void sendMessage()}
+                      disabled={isSendingMessage || isUploadingMedia || (!newMessage.trim() && !uploadInputRef.current?.files?.length)}
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:opacity-50"
+                      aria-label="Send message"
                     >
-                      {isUploadingMedia ? <FiImage className="animate-pulse" /> : <FiPlus />}
+                      {isSendingMessage ? <FiActivity className="animate-spin" /> : <FiSend />}
                     </button>
-                    {showPlusMenu && isCreator && (
-                      <div className="absolute bottom-14 left-0 w-56 rounded-2xl border border-white/10 bg-[#121212] shadow-2xl overflow-hidden z-50">
-                        <button
-                          onClick={() => {
-                            setShowPlusMenu(false);
-                            uploadInputRef.current?.click();
-                          }}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors"
-                        >
-                          <FiImage className="text-lg opacity-80" /> Send Media
-                        </button>
-                        <button
-                          onClick={async () => {
-                            setShowPlusMenu(false);
-                            setShowQuestionnaireModal(true);
-                            setIsLoadingQuestionnaires(true);
-                            try {
-                              const surveys = await creatorPagesService.getAllSurveys(currentUser.id);
-                              setClubQuestionnaires(surveys);
-                              const cache = { ...surveysCache };
-                              surveys.forEach(s => cache[s.id] = s);
-                              setSurveysCache(cache);
-                            } catch (e) {
-                              console.error(e);
-                            } finally {
-                              setIsLoadingQuestionnaires(false);
-                            }
-                          }}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/10 transition-colors border-t border-white/5"
-                        >
-                          <svg className="w-[18px] h-[18px] opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /></svg> Send Questionnaire
-                        </button>
-                      </div>
-                    )}
                   </div>
-
-                  <input
-                    ref={uploadInputRef}
-                    type="file"
-                    accept="image/*,video/*,audio/*"
-                    className="hidden"
-                    onChange={handleUploadChange}
-                  />
-
-                  <input
-                    ref={chatInputRef}
-                    value={newMessage}
-                    onChange={(event) => setNewMessage(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault();
-                        void sendMessage();
-                      }
-                    }}
-                    placeholder="Message the club..."
-                    className="h-12 flex-1 rounded-full border border-white/8 bg-white/5 px-5 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/18"
-                  />
-
-                  <button
-                    onClick={() => void sendMessage()}
-                    disabled={isSendingMessage || isUploadingMedia || (!newMessage.trim() && !uploadInputRef.current?.files?.length)}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition hover:bg-white/10 disabled:opacity-50"
-                    aria-label="Send message"
-                  >
-                    {isSendingMessage ? <FiActivity className="animate-spin" /> : <FiSend />}
-                  </button>
-                </div>
+                )}
               </div>
 
               <div className="max-h-[34rem] space-y-5 overflow-y-auto px-4 py-5 sm:px-5">
@@ -1494,6 +2070,526 @@ export const ClubMemberApp: React.FC<ClubMemberAppProps> = ({
           />
         ) : null}
       </div>
+
+      <AnimatePresence>
+        {showActivationModal ? (
+          <motion.div
+            key="activation-modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[65] flex items-center justify-center bg-black/75 px-4 py-8 backdrop-blur-md"
+          >
+            <motion.div
+              key="activation-modal-content"
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+              className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/12 bg-[#101012] shadow-[0_40px_120px_rgba(0,0,0,0.55)]"
+            >
+              <div
+                className="absolute -top-24 left-1/2 h-[18rem] w-[24rem] -translate-x-1/2 rounded-full opacity-20 blur-[120px]"
+                style={{ backgroundColor: accent }}
+              />
+
+              <div className="relative max-h-[85vh] overflow-y-auto px-6 pb-6 pt-8 sm:px-8 sm:pb-8">
+                <div className="mb-6 flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: `${accent}c5` }}>
+                      Club Onboarding
+                    </div>
+                    <h2 className="mt-2 text-3xl font-black tracking-[-0.04em] text-white">
+                      Finish joining {clubData.name}
+                    </h2>
+                    <p className="mt-3 max-w-xl text-sm leading-6 text-white/55">
+                      Answer the club setup questions so Pulse can personalize your experience and help the host make better matches.
+                    </p>
+                  </div>
+                  {hasSavedActivationResponses ? (
+                    <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-white/50">
+                      Resume
+                    </div>
+                  ) : null}
+                </div>
+
+                {isLoadingActivation ? (
+                  <div className="flex min-h-[18rem] items-center justify-center">
+                    <div
+                      className="h-12 w-12 animate-spin rounded-full border-2 border-transparent"
+                      style={{ borderTopColor: accent, borderRightColor: accent }}
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {requiredActivationQuestions.map((question) => (
+                      <div
+                        key={question.id}
+                        className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-5"
+                      >
+                        <div className="mb-3">
+                          <div className="text-base font-bold text-white">{question.title}</div>
+                          {question.description ? (
+                            <p className="mt-1 text-sm leading-6 text-white/45">{question.description}</p>
+                          ) : null}
+                        </div>
+
+                        <ActivationQuestionField
+                          accent={accent}
+                          question={question}
+                          response={activationResponses[question.id]}
+                          onChange={(nextResponse) => {
+                            setActivationResponses((previous) => ({
+                              ...previous,
+                              [question.id]: nextResponse,
+                            }));
+                            setActivationError(null);
+                          }}
+                        />
+                      </div>
+                    ))}
+
+                    {activationError ? (
+                      <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                        {activationError}
+                      </div>
+                    ) : null}
+
+                    <div className="flex flex-col gap-3 border-t border-white/8 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs uppercase tracking-[0.2em] text-white/35">
+                        {requiredActivationQuestions.length} required question{requiredActivationQuestions.length === 1 ? '' : 's'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void handleSubmitActivation()}
+                        disabled={!isActivationComplete || isSubmittingActivation}
+                        className="rounded-2xl px-5 py-3 text-sm font-black uppercase tracking-[0.18em] shadow-[0_18px_40px_rgba(0,0,0,0.22)] transition disabled:cursor-not-allowed disabled:opacity-50"
+                        style={{ backgroundColor: accent, color: accentTextColor }}
+                      >
+                        {isSubmittingActivation ? 'Saving...' : 'Complete onboarding'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showIntroPrompt ? (
+          <motion.div
+            key="intro-prompt-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[64] flex items-center justify-center bg-black/65 px-4 backdrop-blur-md"
+            onClick={() => setShowIntroPrompt(false)}
+          >
+            <motion.div
+              key="intro-prompt-content"
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+              onClick={(event) => event.stopPropagation()}
+              className="relative w-full max-w-lg overflow-hidden rounded-[2rem] border border-white/12 bg-[#101012] shadow-[0_40px_120px_rgba(0,0,0,0.55)]"
+            >
+              <div
+                className="absolute -top-16 left-1/2 h-[14rem] w-[18rem] -translate-x-1/2 rounded-full opacity-20 blur-[100px]"
+                style={{ backgroundColor: accent }}
+              />
+
+              <div className="relative px-6 pb-7 pt-8 text-center">
+                <div
+                  className="mx-auto flex h-20 w-20 items-center justify-center rounded-full"
+                  style={{ backgroundColor: `${accent}18`, boxShadow: `0 0 48px ${accent}24` }}
+                >
+                  <FiCheck className="text-3xl" style={{ color: accent }} />
+                </div>
+
+                <h2 className="mt-5 text-3xl font-black tracking-[-0.04em] text-white">
+                  You’re in
+                </h2>
+                <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-white/55">
+                  Your onboarding is complete. Next step: introduce yourself in the club chat so the rest of the crew knows who just joined.
+                </p>
+
+                <div className="mt-6 rounded-[1.4rem] border border-white/8 bg-white/[0.03] p-4 text-left text-sm leading-6 text-white/60">
+                  {activationConfig.introTemplate || buildDefaultIntroTemplate(clubData.name)}
+                </div>
+
+                <div className="mt-6 space-y-3">
+                  <button
+                    onClick={handleIntroduceSelf}
+                    className="w-full rounded-2xl px-5 py-4 text-sm font-black uppercase tracking-[0.14em] shadow-[0_18px_50px_rgba(0,0,0,0.25)] transition hover:scale-[1.01] active:scale-[0.99]"
+                    style={{ backgroundColor: accent, color: accentTextColor }}
+                  >
+                    Introduce yourself
+                  </button>
+                  <button
+                    onClick={() => setShowIntroPrompt(false)}
+                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-5 py-3.5 text-sm font-semibold text-white/60 transition hover:bg-white/10 hover:text-white/80"
+                  >
+                    Maybe later
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showPairingSafetyModal ? (
+          <motion.div
+            key="pairing-safety-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[64] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md"
+            onClick={() => setShowPairingSafetyModal(false)}
+          >
+            <motion.div
+              key="pairing-safety-content"
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+              onClick={(event) => event.stopPropagation()}
+              className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/12 bg-[#101012] shadow-[0_40px_120px_rgba(0,0,0,0.55)]"
+            >
+              <div
+                className="absolute -top-20 left-1/2 h-[16rem] w-[22rem] -translate-x-1/2 rounded-full opacity-20 blur-[110px]"
+                style={{ backgroundColor: accent }}
+              />
+
+              <div className="relative max-h-[85vh] overflow-y-auto px-6 pb-7 pt-8 sm:px-8">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: `${accent}c5` }}>
+                      Pairing Safety
+                    </div>
+                    <h2 className="mt-2 text-3xl font-black tracking-[-0.04em] text-white">
+                      Control your pairing experience
+                    </h2>
+                    <p className="mt-3 max-w-xl text-sm leading-6 text-white/55">
+                      Opt out, request a rematch, or flag people you do not want to be paired with in this club.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowPairingSafetyModal(false)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 transition hover:bg-white/10 hover:text-white"
+                  >
+                    <FiX />
+                  </button>
+                </div>
+
+                <div className="mt-6 space-y-5">
+                  <div className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-5">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <div className="text-base font-bold text-white">Opt into pairing</div>
+                        <p className="mt-1 text-sm leading-6 text-white/45">
+                          Turn this off if you do not want Pulse to match you with a partner right now.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setPairingOptInDraft((previous) => !previous)}
+                        className={`relative h-7 w-14 rounded-full transition ${pairingOptInDraft ? 'bg-[#E0FE10]' : 'bg-gray-700'}`}
+                      >
+                        <span
+                          className={`absolute top-1 h-5 w-5 rounded-full bg-black transition ${pairingOptInDraft ? 'left-8' : 'left-1'}`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-5">
+                    <div className="text-base font-bold text-white">Do not pair me with</div>
+                    <p className="mt-1 text-sm leading-6 text-white/45">
+                      These members will be excluded from assisted suggestions and manual pair confirmation.
+                    </p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {doNotPairCandidates.map((member) => {
+                        const isSelected = doNotPairUserIdsDraft.includes(member.userId);
+                        return (
+                          <button
+                            key={member.userId}
+                            type="button"
+                            onClick={() => {
+                              setDoNotPairUserIdsDraft((previous) =>
+                                isSelected
+                                  ? previous.filter((userId) => userId !== member.userId)
+                                  : [...previous, member.userId]
+                              );
+                            }}
+                            className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                              isSelected
+                                ? 'border-red-500/30 bg-red-500/10 text-red-100'
+                                : 'border-white/10 bg-black/25 text-white/75 hover:border-white/25 hover:bg-black/35'
+                            }`}
+                          >
+                            <div className="font-semibold">{member.userInfo.displayName || member.userInfo.username}</div>
+                            <div className="mt-1 text-xs uppercase tracking-[0.16em] opacity-60">@{member.userInfo.username || 'member'}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {pairedMember ? (
+                    <div className="rounded-[1.6rem] border border-white/8 bg-white/[0.03] p-5">
+                      <div className="text-base font-bold text-white">Request a rematch</div>
+                      <p className="mt-1 text-sm leading-6 text-white/45">
+                        If this pairing is not a fit, request a rematch. Your current pairing will be removed immediately.
+                      </p>
+                      <textarea
+                        value={rematchReasonDraft}
+                        onChange={(event) => setRematchReasonDraft(event.target.value)}
+                        placeholder="Ex. Scheduling conflict, not a fit, uncomfortable pairing"
+                        rows={3}
+                        className="mt-4 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30 focus:bg-black/40"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleRequestRematch()}
+                        disabled={isSavingPairingSafety || !rematchReasonDraft.trim()}
+                        className="mt-4 rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-3 text-sm font-black uppercase tracking-[0.18em] text-red-200 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Request rematch
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <div className="flex justify-end gap-3">
+                    <div className="mr-auto max-w-sm self-center text-xs leading-5 text-white/40">
+                      Pairing is host-managed. If something feels off, opt out or request a rematch and the host will review it.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPairingSafetyModal(false);
+                        setShowConductModal(true);
+                      }}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
+                    >
+                      Community guidelines
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPairingSafetyModal(false);
+                        handleOpenSafetyReport();
+                      }}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
+                    >
+                      Report an issue
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPairingSafetyModal(false)}
+                      className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSavePairingSafety()}
+                      disabled={isSavingPairingSafety}
+                      className="rounded-2xl px-5 py-3 text-sm font-black uppercase tracking-[0.18em] transition disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ backgroundColor: accent, color: accentTextColor }}
+                    >
+                      {isSavingPairingSafety ? 'Saving...' : 'Save safety preferences'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showConductModal ? (
+          <motion.div
+            key="conduct-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[64] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md"
+            onClick={() => setShowConductModal(false)}
+          >
+            <motion.div
+              key="conduct-content"
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+              onClick={(event) => event.stopPropagation()}
+              className="relative w-full max-w-xl overflow-hidden rounded-[2rem] border border-white/12 bg-[#101012] shadow-[0_40px_120px_rgba(0,0,0,0.55)]"
+            >
+              <div
+                className="absolute -top-20 left-1/2 h-[16rem] w-[22rem] -translate-x-1/2 rounded-full opacity-20 blur-[110px]"
+                style={{ backgroundColor: accent }}
+              />
+
+              <div className="relative px-6 pb-7 pt-8 sm:px-8">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: `${accent}c5` }}>
+                      Community Guidelines
+                    </div>
+                    <h2 className="mt-2 text-3xl font-black tracking-[-0.04em] text-white">
+                      How this club stays safe
+                    </h2>
+                  </div>
+                  <button
+                    onClick={() => setShowConductModal(false)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 transition hover:bg-white/10 hover:text-white"
+                  >
+                    <FiX />
+                  </button>
+                </div>
+
+                <div className="mt-6 space-y-3">
+                  {CLUB_CONDUCT_GUIDELINES.map((guideline) => (
+                    <div key={guideline} className="rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-4 text-sm leading-6 text-white/75">
+                      {guideline}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-6 rounded-[1.4rem] border border-white/8 bg-white/[0.03] p-4 text-sm leading-6 text-white/60">
+                  If you need help, use the safety tools to opt out, request a rematch, or report an issue for host review.
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={() => setShowConductModal(false)}
+                    className="rounded-2xl px-5 py-3 text-sm font-black uppercase tracking-[0.18em] transition"
+                    style={{ backgroundColor: accent, color: accentTextColor }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSafetyReportModal ? (
+          <motion.div
+            key="safety-report-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[64] flex items-center justify-center bg-black/70 px-4 backdrop-blur-md"
+            onClick={() => setShowSafetyReportModal(false)}
+          >
+            <motion.div
+              key="safety-report-content"
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ type: 'spring', stiffness: 320, damping: 28 }}
+              onClick={(event) => event.stopPropagation()}
+              className="relative w-full max-w-xl overflow-hidden rounded-[2rem] border border-white/12 bg-[#101012] shadow-[0_40px_120px_rgba(0,0,0,0.55)]"
+            >
+              <div
+                className="absolute -top-20 left-1/2 h-[16rem] w-[22rem] -translate-x-1/2 rounded-full opacity-20 blur-[110px]"
+                style={{ backgroundColor: accent }}
+              />
+
+              <div className="relative px-6 pb-7 pt-8 sm:px-8">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-[11px] font-black uppercase tracking-[0.24em]" style={{ color: `${accent}c5` }}>
+                      Safety Report
+                    </div>
+                    <h2 className="mt-2 text-3xl font-black tracking-[-0.04em] text-white">
+                      Tell the host what happened
+                    </h2>
+                    <p className="mt-3 max-w-lg text-sm leading-6 text-white/55">
+                      Use this for unsafe behavior, harassment, or any club interaction that needs review.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowSafetyReportModal(false)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white/60 transition hover:bg-white/10 hover:text-white"
+                  >
+                    <FiX />
+                  </button>
+                </div>
+
+                <div className="mt-6 space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Issue type</label>
+                    <select
+                      value={safetyReportCategory}
+                      onChange={(event) => setSafetyReportCategory(event.target.value as ClubSafetyReportCategory)}
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
+                    >
+                      <option value="unsafe_behavior">Unsafe behavior</option>
+                      <option value="harassment_or_discrimination">Harassment or discrimination</option>
+                      <option value="pairing_mismatch">Pairing mismatch</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Related member</label>
+                    <select
+                      value={safetyReportReportedUserId}
+                      onChange={(event) => setSafetyReportReportedUserId(event.target.value)}
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
+                    >
+                      <option value="">No specific member</option>
+                      {doNotPairCandidates.map((member) => (
+                        <option key={member.userId} value={member.userId}>
+                          {member.userInfo.displayName || member.userInfo.username}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-white/45">Details</label>
+                    <textarea
+                      value={safetyReportDetails}
+                      onChange={(event) => setSafetyReportDetails(event.target.value)}
+                      placeholder="Describe what happened and what you need from the host."
+                      rows={4}
+                      className="mt-2 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30 focus:bg-black/40"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-6 flex items-center justify-end gap-3">
+                  <button
+                    onClick={() => setShowSafetyReportModal(false)}
+                    className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold text-white/70 transition hover:bg-white/10"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void handleSubmitSafetyReport()}
+                    disabled={isSubmittingSafetyReport || !safetyReportDetails.trim()}
+                    className="rounded-2xl px-5 py-3 text-sm font-black uppercase tracking-[0.18em] transition disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{ backgroundColor: accent, color: accentTextColor }}
+                  >
+                    {isSubmittingSafetyReport ? 'Submitting...' : 'Submit report'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {/* Check-in welcome modal */}
       <AnimatePresence>

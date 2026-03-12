@@ -5,6 +5,7 @@ import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut, type User as FirebaseAuthUser } from 'firebase/auth';
 import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, LogIn, LogOut, MailPlus, ShieldPlus, UserPlus } from 'lucide-react';
 import admin from '../../../lib/firebase-admin';
+import { getFirestoreDocFallback } from '../../../lib/server-firestore-fallback';
 import { auth } from '../../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
 import { claimUsername, generateUsernameFromEmail, isUsernameAvailable, isValidUsernameFormat, normalizeUsername } from '../../../api/firebase/auth/username';
@@ -548,17 +549,41 @@ export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = 
   if (!token) return { notFound: true };
 
   try {
-    const inviteSnap = await admin.firestore().collection('pulsecheck-invite-links').doc(token).get();
-    if (!inviteSnap.exists) return { notFound: true };
+    let invite = await admin
+      .firestore()
+      .collection('pulsecheck-invite-links')
+      .doc(token)
+      .get()
+      .then((snapshot) => (snapshot.exists ? snapshot.data() || {} : null))
+      .catch(() => null);
 
-    const invite = inviteSnap.data() || {};
+    if (!invite) {
+      invite = await getFirestoreDocFallback('pulsecheck-invite-links', token);
+    }
+    if (!invite) return { notFound: true };
     if (invite.status && invite.status !== 'active') return { notFound: true };
     if (invite.inviteType !== 'admin-activation') return { notFound: true };
 
-    const [organizationSnap, teamSnap] = await Promise.all([
-      admin.firestore().collection('pulsecheck-organizations').doc(invite.organizationId || '').get(),
-      admin.firestore().collection('pulsecheck-teams').doc(invite.teamId || '').get(),
-    ]);
+    let organizationName = 'PulseCheck Organization';
+    let teamName = 'Initial Team';
+
+    try {
+      const [organizationSnap, teamSnap] = await Promise.all([
+        admin.firestore().collection('pulsecheck-organizations').doc(String(invite.organizationId || '')).get(),
+        admin.firestore().collection('pulsecheck-teams').doc(String(invite.teamId || '')).get(),
+      ]);
+
+      organizationName = organizationSnap.data()?.displayName || organizationName;
+      teamName = teamSnap.data()?.displayName || teamName;
+    } catch {
+      const [organizationDoc, teamDoc] = await Promise.all([
+        getFirestoreDocFallback('pulsecheck-organizations', String(invite.organizationId || '')),
+        getFirestoreDocFallback('pulsecheck-teams', String(invite.teamId || '')),
+      ]);
+
+      organizationName = String(organizationDoc?.displayName || organizationName);
+      teamName = String(teamDoc?.displayName || teamName);
+    }
 
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
 
@@ -566,12 +591,12 @@ export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = 
       props: {
         invite: {
           token,
-          organizationId: invite.organizationId || '',
-          teamId: invite.teamId || '',
-          targetEmail: invite.targetEmail || '',
-          organizationName: organizationSnap.data()?.displayName || 'PulseCheck Organization',
-          teamName: teamSnap.data()?.displayName || 'Initial Team',
-          status: invite.status || 'active',
+          organizationId: String(invite.organizationId || ''),
+          teamId: String(invite.teamId || ''),
+          targetEmail: String(invite.targetEmail || ''),
+          organizationName,
+          teamName,
+          status: String(invite.status || 'active'),
         },
       },
     };

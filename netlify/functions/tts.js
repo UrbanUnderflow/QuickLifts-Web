@@ -7,10 +7,19 @@ const { headers } = require('./config/firebase');
 // ElevenLabs voice IDs — these are built-in voices
 const ELEVEN_VOICES = {
     rachel: '21m00Tcm4TlvDq8ikWAM',   // Warm, calm female — great for coaching
+    elise: 'EST9Ui6982FZPSi7gCHi',     // Added custom ElevenLabs voice for Nora testing
+    ava: 'gJx1vCzNCD1EQHT212Ls',       // Added custom ElevenLabs voice for Nora testing
     bella: 'EXAVITQu4vr4xnSDxMaL',     // Soft, nurturing female
     elli: 'MF3mGyEYCl7XYWbV9V6O',      // Young, friendly female
     charlotte: 'XB0fDUnXU5powFXDhCwa',  // Mature, confident female
     nicole: 'piTKgcLEGmPE4e6mEKli',     // Whisper-soft female
+};
+
+const EXPRESSIVE_RACHEL_SETTINGS = {
+    stability: 0.34,
+    similarity_boost: 0.82,
+    style: 0.65,
+    use_speaker_boost: true,
 };
 
 exports.handler = async (event) => {
@@ -53,12 +62,7 @@ exports.handler = async (event) => {
                     body: JSON.stringify({
                         text,
                         model_id: 'eleven_multilingual_v2',
-                        voice_settings: {
-                            stability: 0.5,
-                            similarity_boost: 0.75,
-                            style: 0.3,
-                            use_speaker_boost: true,
-                        },
+                        voice_settings: EXPRESSIVE_RACHEL_SETTINGS,
                     }),
                 }
             );
@@ -96,7 +100,9 @@ exports.handler = async (event) => {
         }
 
         // Map voice name to OpenAI voice
-        const openAiVoice = voice === 'rachel' || voice === 'bella' ? 'nova' : 'shimmer';
+        const openAiVoice = voice === 'rachel' || voice === 'bella' || voice === 'elise' || voice === 'ava'
+            ? 'nova'
+            : 'shimmer';
 
         const response = await fetch('https://api.openai.com/v1/audio/speech', {
             method: 'POST',

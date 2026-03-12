@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, getDoc, getDocs, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, doc, getDoc, getDocs, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from '../config';
 import type {
   CompletePulseCheckAthleteOnboardingInput,
@@ -30,10 +30,16 @@ const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
 const CLINICIAN_PROFILES_COLLECTION = 'pulsecheck-auntedna-clinician-profiles';
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
+const ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 
 const normalizeString = (value?: string) => value?.trim() || '';
 const normalizeEmail = (value?: string) => normalizeString(value).toLowerCase();
+const shouldUseLocalRedeemFallback = () =>
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' ||
+    window.localStorage.getItem('forceDevFirebase') === 'true' ||
+    process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true');
 const defaultNotificationPreferences = (): PulseCheckNotificationPreferences => ({
   email: true,
   sms: false,
@@ -168,6 +174,38 @@ const toClinicianProfile = (id: string, data: Record<string, any>): PulseCheckAu
   createdAt: data.createdAt || null,
   updatedAt: data.updatedAt || null,
 });
+
+const permissionSetByRole: Record<PulseCheckTeamMembershipRole, string> = {
+  'team-admin': 'pulsecheck-team-admin-v1',
+  coach: 'pulsecheck-coach-v1',
+  'performance-staff': 'pulsecheck-performance-staff-v1',
+  'support-staff': 'pulsecheck-support-staff-v1',
+  clinician: 'pulsecheck-clinician-v1',
+  athlete: 'pulsecheck-athlete-v1',
+};
+
+const withLocalRedeemFallback = async <T>(
+  serverAction: () => Promise<T>,
+  fallbackAction: () => Promise<T>
+): Promise<T> => {
+  try {
+    return await serverAction();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    const canFallback =
+      shouldUseLocalRedeemFallback() &&
+      (message.includes('Could not load the default credentials') ||
+        message.includes('Authenticated session required.') ||
+        message.includes('Failed to redeem'));
+
+    if (!canFallback) {
+      throw error;
+    }
+
+    console.warn('[PulseCheck provisioning] Falling back to client-side invite redemption:', message);
+    return fallbackAction();
+  }
+};
 
 export const pulseCheckProvisioningService = {
   async listOrganizations(): Promise<PulseCheckOrganization[]> {
@@ -366,7 +404,7 @@ export const pulseCheckProvisioningService = {
       typeof window !== 'undefined'
         ? window.location.origin
         : process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai';
-    const activationUrl = `${baseUrl}/pulsecheck/admin-activation/${token}`;
+    const activationUrl = `${baseUrl}/PulseCheck/admin-activation/${token}`;
 
     const payload = {
       inviteType: 'admin-activation',
@@ -432,7 +470,7 @@ export const pulseCheckProvisioningService = {
       typeof window !== 'undefined'
         ? window.location.origin
         : process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai';
-    const activationUrl = `${baseUrl}/pulsecheck/clinician-onboarding/${token}`;
+    const activationUrl = `${baseUrl}/PulseCheck/clinician-onboarding/${token}`;
 
     const payload = {
       inviteType: 'clinician-onboarding',
@@ -484,7 +522,7 @@ export const pulseCheckProvisioningService = {
       typeof window !== 'undefined'
         ? window.location.origin
         : process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai';
-    const activationUrl = `${baseUrl}/pulsecheck/team-invite/${token}`;
+    const activationUrl = `${baseUrl}/PulseCheck/team-invite/${token}`;
 
     const existingActiveLinks = await getDocs(collection(db, INVITE_LINKS_COLLECTION));
     const linksToRevoke = existingActiveLinks.docs.filter((snapshot) => {
@@ -585,28 +623,187 @@ export const pulseCheckProvisioningService = {
     });
   },
 
+  async revokeInviteLink(inviteId: string): Promise<void> {
+    const inviteRef = doc(db, INVITE_LINKS_COLLECTION, normalizeString(inviteId));
+    await updateDoc(inviteRef, {
+      status: 'revoked',
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async updateTeamInvitePolicy(teamId: string, defaultInvitePolicy: PulseCheckTeam['defaultInvitePolicy']): Promise<void> {
+    const teamRef = doc(db, TEAMS_COLLECTION, normalizeString(teamId));
+    await updateDoc(teamRef, {
+      defaultInvitePolicy,
+      updatedAt: serverTimestamp(),
+    });
+  },
+
   async redeemAdminActivationInvite(token: string): Promise<RedeemPulseCheckAdminActivationResult> {
     const currentUser = auth.currentUser;
     if (!currentUser) {
       throw new Error('You must be signed in to redeem this invite.');
     }
 
-    const idToken = await currentUser.getIdToken();
-    const response = await fetch('/api/pulsecheck/admin-activation/redeem', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${idToken}`,
+    return withLocalRedeemFallback(
+      async () => {
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch('/api/pulsecheck/admin-activation/redeem', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ token: normalizeString(token) }),
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Failed to redeem admin activation invite.');
+        }
+
+        return payload as RedeemPulseCheckAdminActivationResult;
       },
-      body: JSON.stringify({ token: normalizeString(token) }),
-    });
+      async () => {
+        const userId = currentUser.uid;
+        const userEmail = normalizeEmail(currentUser.email || '');
+        if (!userEmail) {
+          throw new Error('Authenticated user must have an email address.');
+        }
 
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Error(payload?.error || 'Failed to redeem admin activation invite.');
-    }
+        return runTransaction(db, async (transaction) => {
+          const inviteRef = doc(db, INVITE_LINKS_COLLECTION, normalizeString(token));
+          const inviteSnap = await transaction.get(inviteRef);
+          if (!inviteSnap.exists()) {
+            throw new Error('Invite not found.');
+          }
 
-    return payload as RedeemPulseCheckAdminActivationResult;
+          const invite = inviteSnap.data() as Record<string, any>;
+          if ((invite.inviteType || '') !== 'admin-activation') {
+            throw new Error('Invite type is invalid for this route.');
+          }
+          if ((invite.status || '') !== 'active') {
+            throw new Error('Invite is no longer active.');
+          }
+
+          const targetEmail = normalizeEmail(invite.targetEmail);
+          if (targetEmail && targetEmail !== userEmail) {
+            throw new Error(`This invite is restricted to ${invite.targetEmail}.`);
+          }
+
+          const organizationId = normalizeString(invite.organizationId);
+          const teamId = normalizeString(invite.teamId);
+          if (!organizationId || !teamId) {
+            throw new Error('Invite is missing organization or team context.');
+          }
+
+          const organizationRef = doc(db, ORGANIZATIONS_COLLECTION, organizationId);
+          const teamRef = doc(db, TEAMS_COLLECTION, teamId);
+          const organizationMembershipRef = doc(db, ORGANIZATION_MEMBERSHIPS_COLLECTION, `${organizationId}_${userId}`);
+          const teamMembershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, `${teamId}_${userId}`);
+
+          const [organizationSnap, teamSnap] = await Promise.all([
+            transaction.get(organizationRef),
+            transaction.get(teamRef),
+          ]);
+
+          if (!organizationSnap.exists()) {
+            throw new Error('Organization not found.');
+          }
+          if (!teamSnap.exists()) {
+            throw new Error('Team not found.');
+          }
+
+          const organizationData = organizationSnap.data() as Record<string, any>;
+          const teamData = teamSnap.data() as Record<string, any>;
+          const organizationName = normalizeString(organizationData.displayName) || 'PulseCheck Organization';
+          const teamName = normalizeString(teamData.displayName) || 'Initial Team';
+
+          transaction.set(
+            organizationMembershipRef,
+            {
+              organizationId,
+              userId,
+              email: userEmail,
+              role: 'org-admin',
+              status: 'active',
+              grantedByInviteToken: token,
+              grantedAt: serverTimestamp(),
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+
+          transaction.set(
+            teamMembershipRef,
+            {
+              organizationId,
+              teamId,
+              userId,
+              email: userEmail,
+              role: 'team-admin',
+              title: 'Organization Admin',
+              permissionSetId: permissionSetByRole['team-admin'],
+              rosterVisibilityScope: 'team',
+              allowedAthleteIds: [],
+              onboardingStatus: 'pending-profile',
+              grantedByInviteToken: token,
+              grantedAt: serverTimestamp(),
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+
+          transaction.set(
+            organizationRef,
+            {
+              status: 'active',
+              activatedByUserId: userId,
+              activatedByEmail: userEmail,
+              activatedAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+
+          transaction.set(
+            teamRef,
+            {
+              status: 'active',
+              activatedByUserId: userId,
+              activatedByEmail: userEmail,
+              activatedAt: serverTimestamp(),
+              defaultAdminUserIds: arrayUnion(userId),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+
+          transaction.set(
+            inviteRef,
+            {
+              status: 'redeemed',
+              redeemedByUserId: userId,
+              redeemedByEmail: userEmail,
+              redeemedAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+
+          return {
+            organizationId,
+            organizationName,
+            teamId,
+            teamName,
+            organizationMembershipId: organizationMembershipRef.id,
+            teamMembershipId: teamMembershipRef.id,
+          } satisfies RedeemPulseCheckAdminActivationResult;
+        });
+      }
+    );
   },
 
   async redeemTeamInvite(token: string): Promise<RedeemPulseCheckTeamInviteResult> {
@@ -615,21 +812,157 @@ export const pulseCheckProvisioningService = {
       throw new Error('You must be signed in to redeem this invite.');
     }
 
-    const idToken = await currentUser.getIdToken();
-    const response = await fetch('/api/pulsecheck/team-invite/redeem', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${idToken}`,
+    return withLocalRedeemFallback(
+      async () => {
+        const idToken = await currentUser.getIdToken();
+        const response = await fetch('/api/pulsecheck/team-invite/redeem', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ token: normalizeString(token) }),
+        });
+
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Failed to redeem team invite.');
+        }
+
+        return payload as RedeemPulseCheckTeamInviteResult;
       },
-      body: JSON.stringify({ token: normalizeString(token) }),
-    });
+      async () => {
+        const userId = currentUser.uid;
+        const userEmail = normalizeEmail(currentUser.email || '');
+        if (!userEmail) {
+          throw new Error('Authenticated user must have an email address.');
+        }
 
-    const payload = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Error(payload?.error || 'Failed to redeem team invite.');
-    }
+        return runTransaction(db, async (transaction) => {
+          const inviteRef = doc(db, INVITE_LINKS_COLLECTION, normalizeString(token));
+          const inviteSnap = await transaction.get(inviteRef);
+          if (!inviteSnap.exists()) {
+            throw new Error('Invite not found.');
+          }
 
-    return payload as RedeemPulseCheckTeamInviteResult;
+          const invite = inviteSnap.data() as Record<string, any>;
+          if ((invite.inviteType || '') !== 'team-access') {
+            throw new Error('Invite type is invalid for this route.');
+          }
+          if ((invite.status || '') !== 'active') {
+            throw new Error('Invite is no longer active.');
+          }
+
+          const targetEmail = normalizeEmail(invite.targetEmail);
+          if (targetEmail && targetEmail !== userEmail) {
+            throw new Error(`This invite is restricted to ${invite.targetEmail}.`);
+          }
+
+          const organizationId = normalizeString(invite.organizationId);
+          const teamId = normalizeString(invite.teamId);
+          const teamMembershipRole = normalizeString(invite.teamMembershipRole) as PulseCheckTeamMembershipRole;
+          const invitedTitle = normalizeString(invite.invitedTitle);
+          if (!organizationId || !teamId || !teamMembershipRole) {
+            throw new Error('Invite is missing organization, team, or role context.');
+          }
+
+          const organizationRef = doc(db, ORGANIZATIONS_COLLECTION, organizationId);
+          const teamRef = doc(db, TEAMS_COLLECTION, teamId);
+          const organizationMembershipRef = doc(db, ORGANIZATION_MEMBERSHIPS_COLLECTION, `${organizationId}_${userId}`);
+          const teamMembershipRef = doc(db, TEAM_MEMBERSHIPS_COLLECTION, `${teamId}_${userId}`);
+
+          const [organizationSnap, teamSnap] = await Promise.all([
+            transaction.get(organizationRef),
+            transaction.get(teamRef),
+          ]);
+
+          if (!organizationSnap.exists()) {
+            throw new Error('Organization not found.');
+          }
+          if (!teamSnap.exists()) {
+            throw new Error('Team not found.');
+          }
+
+          const organizationData = organizationSnap.data() as Record<string, any>;
+          const teamData = teamSnap.data() as Record<string, any>;
+          const organizationName = normalizeString(organizationData.displayName) || 'PulseCheck Organization';
+          const teamName = normalizeString(teamData.displayName) || 'Team';
+
+          if (teamMembershipRole === 'team-admin') {
+            transaction.set(
+              organizationMembershipRef,
+              {
+                organizationId,
+                userId,
+                email: userEmail,
+                role: 'org-admin',
+                status: 'active',
+                grantedByInviteToken: token,
+                grantedAt: serverTimestamp(),
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true }
+            );
+
+            transaction.set(
+              teamRef,
+              {
+                defaultAdminUserIds: arrayUnion(userId),
+                updatedAt: serverTimestamp(),
+              },
+              { merge: true }
+            );
+          }
+
+          transaction.set(
+            teamMembershipRef,
+            {
+              organizationId,
+              teamId,
+              userId,
+              email: userEmail,
+              role: teamMembershipRole,
+              title: invitedTitle || null,
+              permissionSetId: permissionSetByRole[teamMembershipRole] || 'pulsecheck-team-member-v1',
+              rosterVisibilityScope: teamMembershipRole === 'athlete' ? 'none' : 'team',
+              allowedAthleteIds: [],
+              athleteOnboarding:
+                teamMembershipRole === 'athlete'
+                  ? defaultAthleteOnboardingState()
+                  : null,
+              onboardingStatus: teamMembershipRole === 'athlete' ? 'pending-consent' : 'pending-profile',
+              grantedByInviteToken: token,
+              grantedAt: serverTimestamp(),
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+
+          transaction.set(
+            inviteRef,
+            {
+              status: 'redeemed',
+              redeemedByUserId: userId,
+              redeemedByEmail: userEmail,
+              redeemedAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+
+          return {
+            organizationId,
+            organizationName,
+            teamId,
+            teamName,
+            teamMembershipId: teamMembershipRef.id,
+            teamMembershipRole,
+            invitedTitle,
+          } satisfies RedeemPulseCheckTeamInviteResult;
+        });
+      }
+    );
   },
 };

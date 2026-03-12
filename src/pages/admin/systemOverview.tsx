@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
-import { Activity, AlertTriangle, Brain, Check, Copy, Cpu, Database, ExternalLink, Gamepad2, Layers, Link2, Loader2, Server, Share2, Trash2, Users } from 'lucide-react';
+import { Activity, AlertTriangle, Brain, Check, Copy, Cpu, Database, ExternalLink, Gamepad2, Layers, Link2, Loader2, Server, Share2, Smartphone, TestTube2, Trash2, Users } from 'lucide-react';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import SectionNav from '../../components/admin/system-overview/SectionNav';
 import ProductHandbook from '../../components/admin/system-overview/ProductHandbook';
@@ -29,6 +29,8 @@ import PulseCheckTeamPilotCohortOnboardingArchitectureTab from '../../components
 import PulseCheckPermissionsVisibilityModelTab from '../../components/admin/system-overview/PulseCheckPermissionsVisibilityModelTab';
 import PulseCheckCoachDashboardInformationArchitectureTab from '../../components/admin/system-overview/PulseCheckCoachDashboardInformationArchitectureTab';
 import AuntEdnaIntegrationStrategyTab from '../../components/admin/system-overview/AuntEdnaIntegrationStrategyTab';
+import PlaywrightTestingStrategyTab from '../../components/admin/system-overview/PlaywrightTestingStrategyTab';
+import XCUITestingStrategyTab from '../../components/admin/system-overview/XCUITestingStrategyTab';
 import { systemOverviewShareService } from '../../api/systemOverviewShare/service';
 import type { SystemOverviewShareLink } from '../../api/systemOverviewShare/types';
 import { systemOverviewManifest } from '../../content/system-overview/manifest';
@@ -111,6 +113,20 @@ const SYSTEM_TABS: SystemTab[] = [
     icon: Gamepad2,
     accent: '#facc15',
     sectionIds: ['hunter-world-handbook'],
+  },
+  {
+    id: 'playwright',
+    label: 'Playwright',
+    icon: TestTube2,
+    accent: '#34d399',
+    sectionIds: ['playwright-testing-strategy'],
+  },
+  {
+    id: 'xcuitest',
+    label: 'XCUITest',
+    icon: Smartphone,
+    accent: '#f472b6',
+    sectionIds: ['xcuitest-testing-strategy'],
   },
 ];
 
@@ -750,6 +766,12 @@ const SystemOverviewPage: React.FC = () => {
 
       case 'auntedna-integration-strategy':
         return <AuntEdnaIntegrationStrategyTab />;
+
+      case 'playwright-testing-strategy':
+        return <PlaywrightTestingStrategyTab />;
+
+      case 'xcuitest-testing-strategy':
+        return <XCUITestingStrategyTab />;
 
       default:
         return null;

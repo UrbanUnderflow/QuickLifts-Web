@@ -7,6 +7,7 @@ import {
     Server,
     Search,
     X,
+    Send,
     ChevronDown,
     ChevronUp,
     Zap,
@@ -22,6 +23,9 @@ import {
     Watch,
     Home,
     Footprints,
+    Loader,
+    CheckCircle2,
+    AlertCircle,
 } from 'lucide-react';
 
 /* ─────────────────────────── Types ───────────────────────────── */
@@ -60,6 +64,20 @@ type NotificationRow = {
     adminLinkLabel?: string;
     notes?: string;
 };
+
+type TestTargetUser = {
+    id: string;
+    username: string;
+    displayName: string;
+    email: string;
+    hasFcmToken: boolean;
+    profileImageUrl?: string;
+};
+
+type TestStatus =
+    | { kind: 'success'; message: string }
+    | { kind: 'error'; message: string }
+    | null;
 
 /* ─────────────────────────── Data ────────────────────────────── */
 
@@ -419,12 +437,121 @@ const DELIVERY_META: Record<DeliveryMethod, { label: string; color: string }> = 
     'fcm-or-local': { label: 'FCM → Local Fallback', color: 'bg-cyan-900/40 text-cyan-300 border-cyan-800' },
 };
 
+const DEFAULT_TEMPLATE_VALUES: Record<string, string> = {
+    dayOfWeek: 'Friday',
+    challengeId: 'test-challenge',
+    challengeTitle: 'Test Challenge',
+    roundId: 'test-round',
+    roundName: 'Test Round',
+    roundTitle: 'Test Round',
+    clubId: 'test-club',
+    clubName: 'Test Club',
+    winnerUsername: 'Coach Demo',
+    passerUsername: 'Demo Athlete',
+    referredUserName: 'Demo Friend',
+    senderUsername: 'Demo Sender',
+    fromUsername: 'Demo Sender',
+    fromUserId: 'test-sender',
+    newUserId: 'test-new-user',
+    newUsername: 'demo_new_user',
+    messageId: 'test-message',
+    messageContent: 'Test message from admin',
+    workoutType: 'Strength',
+    equipment: 'treadmill',
+    duration: '30 min',
+    durationSeconds: '1800',
+    calories: '320',
+    distanceMiles: '3.25',
+    milestone: '10000',
+    steps: '10000',
+    hoursRemaining: '24',
+    newRank: '2',
+    recipientRank: '2',
+    rank: '2',
+    ordinal: 'nd',
+    metricLabel: 'pts',
+    endedBy: 'admin-test',
+    totalParticipants: '12',
+    daysLeft: '4',
+    isRunRound: 'false',
+    timestamp: String(Date.now()),
+    top3: JSON.stringify([
+        { rank: 1, username: 'leader_one', totalPoints: 540, todayPoints: 110, profileImage: '' },
+        { rank: 2, username: 'leader_two', totalPoints: 490, todayPoints: 90, profileImage: '' },
+        { rank: 3, username: 'leader_three', totalPoints: 430, todayPoints: 75, profileImage: '' },
+    ]),
+    todayTopScorer: JSON.stringify({ username: 'leader_one', points: 110 }),
+    todayTopRunner: JSON.stringify({ username: 'runner_one', distanceMiles: '4.10' }),
+};
+
+const getNormalizedNotificationType = (notificationId: string) =>
+    notificationId.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').toUpperCase();
+
+const renderTemplate = (template: string, values: Record<string, string>) =>
+    template.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, rawKey) => values[rawKey.trim()] ?? `{{${rawKey.trim()}}}`);
+
+const getTemplateValues = (notification: NotificationRow, user: TestTargetUser | null): Record<string, string> => {
+    const username = user?.username || 'test_user';
+    const displayName = user?.displayName || username || 'Test User';
+    return {
+        ...DEFAULT_TEMPLATE_VALUES,
+        type: getNormalizedNotificationType(notification.id),
+        userId: user?.id || 'test-user',
+        username,
+        displayName,
+        fromUsername: username,
+        senderUsername: username,
+        fromUserId: user?.id || 'test-user',
+        newUserId: user?.id || 'test-user',
+        newUsername: username,
+        referredUserName: displayName,
+        timestamp: String(Date.now()),
+    };
+};
+
+const buildDataPayload = (notification: NotificationRow, user: TestTargetUser | null): Record<string, string> => {
+    const values = getTemplateValues(notification, user);
+    const payload: Record<string, string> = {
+        type: getNormalizedNotificationType(notification.id),
+        testMode: 'true',
+        notificationId: notification.id,
+        notificationName: notification.name,
+        recipientUserId: user?.id || 'test-user',
+    };
+
+    for (const keyDef of notification.dataKeys || []) {
+        const separatorIndex = keyDef.indexOf(':');
+        const rawKey = separatorIndex >= 0 ? keyDef.slice(0, separatorIndex) : keyDef;
+        const rawValue = separatorIndex >= 0 ? keyDef.slice(separatorIndex + 1) : '';
+        const key = rawKey.trim().replace(/\?$/, '');
+
+        if (!key) continue;
+        payload[key] = rawValue.trim() || values[key] || '';
+    }
+
+    if (!payload.userId && user?.id) {
+        payload.userId = user.id;
+    }
+    if (!payload.challengeId && notification.category === 'round-activity') {
+        payload.challengeId = values.challengeId;
+    }
+
+    return payload;
+};
+
 /* ─────────────────────── Component ───────────────────────────── */
 
 const NotificationSequencesAdmin: React.FC = () => {
     const [search, setSearch] = useState('');
     const [categoryFilter, setCategoryFilter] = useState<NotificationCategory | 'all'>('all');
     const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [testNotification, setTestNotification] = useState<NotificationRow | null>(null);
+    const [testUserSearch, setTestUserSearch] = useState('');
+    const [testUserResults, setTestUserResults] = useState<TestTargetUser[]>([]);
+    const [selectedTestUser, setSelectedTestUser] = useState<TestTargetUser | null>(null);
+    const [testSearchLoading, setTestSearchLoading] = useState(false);
+    const [testSendLoading, setTestSendLoading] = useState(false);
+    const [testStatus, setTestStatus] = useState<TestStatus>(null);
 
     const categories = useMemo(() => {
         const uniqueCats = Array.from(new Set(NOTIFICATIONS.map((n) => n.category)));
@@ -457,6 +584,117 @@ const NotificationSequencesAdmin: React.FC = () => {
     const toggleExpand = (id: string) => {
         setExpandedId((prev) => (prev === id ? null : id));
     };
+
+    const closeTestModal = () => {
+        setTestNotification(null);
+        setTestUserSearch('');
+        setTestUserResults([]);
+        setSelectedTestUser(null);
+        setTestStatus(null);
+        setTestSearchLoading(false);
+        setTestSendLoading(false);
+    };
+
+    const openTestModal = (notification: NotificationRow) => {
+        setTestNotification(notification);
+        setTestUserSearch('');
+        setTestUserResults([]);
+        setSelectedTestUser(null);
+        setTestStatus(null);
+    };
+
+    React.useEffect(() => {
+        if (!testNotification) return;
+
+        const query = testUserSearch.trim();
+        if (query.length < 2) {
+            setTestUserResults([]);
+            setTestSearchLoading(false);
+            return;
+        }
+
+        let isCancelled = false;
+        setTestSearchLoading(true);
+
+        const timeoutId = window.setTimeout(async () => {
+            try {
+                const response = await fetch(`/.netlify/functions/admin-notification-test?q=${encodeURIComponent(query)}`);
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.message || 'Failed to search users');
+                }
+
+                if (!isCancelled) {
+                    setTestUserResults(result.users || []);
+                }
+            } catch (error) {
+                if (!isCancelled) {
+                    setTestUserResults([]);
+                    setTestStatus({
+                        kind: 'error',
+                        message: error instanceof Error ? error.message : 'Failed to search users',
+                    });
+                }
+            } finally {
+                if (!isCancelled) {
+                    setTestSearchLoading(false);
+                }
+            }
+        }, 300);
+
+        return () => {
+            isCancelled = true;
+            window.clearTimeout(timeoutId);
+        };
+    }, [testNotification, testUserSearch]);
+
+    const handleSendTest = async () => {
+        if (!testNotification || !selectedTestUser) return;
+
+        setTestSendLoading(true);
+        setTestStatus(null);
+
+        try {
+            const templateValues = getTemplateValues(testNotification, selectedTestUser);
+            const response = await fetch('/.netlify/functions/admin-notification-test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userId: selectedTestUser.id,
+                    notificationId: testNotification.id,
+                    notificationName: testNotification.name,
+                    title: `[TEST] ${renderTemplate(testNotification.title, templateValues)}`,
+                    body: renderTemplate(testNotification.body, templateValues),
+                    dataPayload: buildDataPayload(testNotification, selectedTestUser),
+                }),
+            });
+
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.message || 'Failed to send test notification');
+            }
+
+            setTestStatus({
+                kind: 'success',
+                message: `Sent "${testNotification.name}" to @${selectedTestUser.username || selectedTestUser.email}`,
+            });
+        } catch (error) {
+            setTestStatus({
+                kind: 'error',
+                message: error instanceof Error ? error.message : 'Failed to send test notification',
+            });
+        } finally {
+            setTestSendLoading(false);
+        }
+    };
+
+    const testPreviewValues = useMemo(
+        () => (testNotification ? getTemplateValues(testNotification, selectedTestUser) : null),
+        [testNotification, selectedTestUser]
+    );
 
     return (
         <AdminRouteGuard>
@@ -695,15 +933,26 @@ const NotificationSequencesAdmin: React.FC = () => {
                                             )}
 
                                             {/* Admin link */}
-                                            {n.adminLink && (
-                                                <a
-                                                    href={n.adminLink}
-                                                    className="inline-flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors"
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => openTestModal(n)}
+                                                    className="inline-flex items-center gap-2 px-3 py-2 bg-[#d7ff00] hover:bg-[#c4ea00] text-black rounded-lg text-sm font-semibold transition-colors"
                                                 >
-                                                    <Eye className="w-4 h-4" />
-                                                    {n.adminLinkLabel || 'Open in admin'}
-                                                </a>
-                                            )}
+                                                    <Send className="w-4 h-4" />
+                                                    Test Push
+                                                </button>
+
+                                                {n.adminLink && (
+                                                    <a
+                                                        href={n.adminLink}
+                                                        className="inline-flex items-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors"
+                                                    >
+                                                        <Eye className="w-4 h-4" />
+                                                        {n.adminLinkLabel || 'Open in admin'}
+                                                    </a>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -754,6 +1003,218 @@ const NotificationSequencesAdmin: React.FC = () => {
                     </div>
                 </div>
             </div>
+
+            {testNotification && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+                    <div className="w-full max-w-3xl bg-[#111417] border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden">
+                        <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-zinc-800">
+                            <div>
+                                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-semibold">Test Notification</p>
+                                <h2 className="text-xl font-semibold text-white mt-1">{testNotification.name}</h2>
+                                <p className="text-sm text-zinc-400 mt-1">
+                                    Search for a user, select them, and send a targeted test push from this sequence.
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={closeTestModal}
+                                className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-0">
+                            <div className="p-6 border-b lg:border-b-0 lg:border-r border-zinc-800 space-y-5">
+                                <div>
+                                    <label className="block text-sm font-medium text-zinc-300 mb-2">
+                                        Find Test User
+                                    </label>
+                                    <div className="relative">
+                                        <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <input
+                                            value={testUserSearch}
+                                            onChange={(e) => {
+                                                setTestUserSearch(e.target.value);
+                                                setTestStatus(null);
+                                            }}
+                                            placeholder="Search by username, display name, or email..."
+                                            className="w-full pl-9 pr-10 py-3 rounded-xl border border-zinc-700 bg-[#1a1e24] text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#d7ff00]/30 focus:border-[#d7ff00]/40 transition-all"
+                                        />
+                                        {testSearchLoading && (
+                                            <Loader className="w-4 h-4 text-zinc-400 absolute right-3 top-1/2 -translate-y-1/2 animate-spin" />
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-zinc-500 mt-2">
+                                        Searches live users and only sends if the selected account has an FCM token.
+                                    </p>
+                                </div>
+
+                                {selectedTestUser && (
+                                    <div className="rounded-xl border border-emerald-800/50 bg-emerald-900/10 p-4">
+                                        <div className="flex items-center gap-3">
+                                            {selectedTestUser.profileImageUrl ? (
+                                                <img
+                                                    src={selectedTestUser.profileImageUrl}
+                                                    alt={selectedTestUser.username || selectedTestUser.email}
+                                                    className="w-11 h-11 rounded-full object-cover border border-zinc-700"
+                                                />
+                                            ) : (
+                                                <div className="w-11 h-11 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-400">
+                                                    <Users className="w-5 h-5" />
+                                                </div>
+                                            )}
+                                            <div className="min-w-0">
+                                                <p className="text-white font-medium truncate">
+                                                    {selectedTestUser.displayName || selectedTestUser.username || selectedTestUser.email}
+                                                </p>
+                                                <p className="text-sm text-zinc-400 truncate">
+                                                    @{selectedTestUser.username || 'no-username'} · {selectedTestUser.email || 'No email'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 text-xs">
+                                            <span
+                                                className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border ${
+                                                    selectedTestUser.hasFcmToken
+                                                        ? 'border-emerald-700 bg-emerald-900/30 text-emerald-300'
+                                                        : 'border-red-800 bg-red-900/20 text-red-300'
+                                                }`}
+                                            >
+                                                {selectedTestUser.hasFcmToken ? 'Push token available' : 'No push token on file'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="space-y-2 max-h-[320px] overflow-y-auto">
+                                    {testUserResults.map((user) => {
+                                        const isSelected = selectedTestUser?.id === user.id;
+                                        return (
+                                            <button
+                                                key={user.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedTestUser(user);
+                                                    setTestStatus(null);
+                                                }}
+                                                className={`w-full text-left rounded-xl border px-4 py-3 transition-colors ${
+                                                    isSelected
+                                                        ? 'border-[#d7ff00]/60 bg-[#d7ff00]/10'
+                                                        : 'border-zinc-800 bg-[#1a1e24] hover:border-zinc-700 hover:bg-zinc-900'
+                                                }`}
+                                            >
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-medium text-white truncate">
+                                                            {user.displayName || user.username || user.email}
+                                                        </p>
+                                                        <p className="text-xs text-zinc-400 truncate">
+                                                            @{user.username || 'no-username'} · {user.email || 'No email'}
+                                                        </p>
+                                                    </div>
+                                                    <span
+                                                        className={`text-[10px] font-medium px-2 py-1 rounded-full border ${
+                                                            user.hasFcmToken
+                                                                ? 'border-emerald-800 bg-emerald-900/20 text-emerald-300'
+                                                                : 'border-zinc-700 bg-zinc-900 text-zinc-400'
+                                                        }`}
+                                                    >
+                                                        {user.hasFcmToken ? 'Push Ready' : 'No Token'}
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+
+                                    {!testSearchLoading && testUserSearch.trim().length >= 2 && testUserResults.length === 0 && (
+                                        <div className="rounded-xl border border-zinc-800 bg-[#1a1e24] px-4 py-6 text-center text-sm text-zinc-500">
+                                            No matching users found.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="p-6 space-y-5">
+                                {testStatus && (
+                                    <div
+                                        className={`rounded-xl border px-4 py-3 text-sm ${
+                                            testStatus.kind === 'success'
+                                                ? 'border-emerald-800 bg-emerald-900/20 text-emerald-300'
+                                                : 'border-red-800 bg-red-900/20 text-red-300'
+                                        }`}
+                                    >
+                                        <div className="flex items-start gap-2">
+                                            {testStatus.kind === 'success' ? (
+                                                <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                                            ) : (
+                                                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                                            )}
+                                            <span>{testStatus.message}</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="rounded-xl border border-zinc-800 bg-[#1a1e24] p-4">
+                                    <div className="flex items-center gap-2 mb-3 text-xs text-zinc-500 uppercase tracking-wider font-medium">
+                                        <Bell className="w-3.5 h-3.5" />
+                                        Preview
+                                    </div>
+                                    <div className="bg-zinc-950 rounded-lg p-3 border border-zinc-800">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className="w-5 h-5 rounded bg-[#d7ff00] flex items-center justify-center">
+                                                <span className="text-[8px] font-bold text-black">P</span>
+                                            </div>
+                                            <span className="text-xs text-zinc-500 font-medium">Pulse</span>
+                                            <span className="text-xs text-zinc-600 ml-auto">test</span>
+                                        </div>
+                                        <p className="text-white text-sm font-semibold">
+                                            {testPreviewValues ? `[TEST] ${renderTemplate(testNotification.title, testPreviewValues)}` : testNotification.title}
+                                        </p>
+                                        <p className="text-zinc-400 text-sm mt-0.5">
+                                            {testPreviewValues ? renderTemplate(testNotification.body, testPreviewValues) : testNotification.body}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 text-xs text-zinc-400 space-y-2">
+                                    <p>
+                                        This sends a remote push test using the sequence template and sample payload values.
+                                    </p>
+                                    {testNotification.deliveryMethod === 'local' && (
+                                        <p>
+                                            This does not validate on-device local scheduling; it only verifies the content can be delivered as a push.
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={handleSendTest}
+                                        disabled={!selectedTestUser || !selectedTestUser.hasFcmToken || testSendLoading}
+                                        className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                                            !selectedTestUser || !selectedTestUser.hasFcmToken || testSendLoading
+                                                ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                                                : 'bg-[#d7ff00] text-black hover:bg-[#c4ea00]'
+                                        }`}
+                                    >
+                                        {testSendLoading ? <Loader className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                        {testSendLoading ? 'Sending...' : 'Send Test Push'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={closeTestModal}
+                                        className="px-4 py-2.5 rounded-xl text-sm font-medium bg-zinc-800 text-white hover:bg-zinc-700 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </AdminRouteGuard>
     );
 };

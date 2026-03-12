@@ -5,10 +5,19 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 // ElevenLabs voice IDs
 const ELEVEN_VOICES: Record<string, string> = {
     rachel: '21m00Tcm4TlvDq8ikWAM',
+    elise: 'EST9Ui6982FZPSi7gCHi',
+    ava: 'gJx1vCzNCD1EQHT212Ls',
     bella: 'EXAVITQu4vr4xnSDxMaL',
     elli: 'MF3mGyEYCl7XYWbV9V6O',
     charlotte: 'XB0fDUnXU5powFXDhCwa',
     nicole: 'piTKgcLEGmPE4e6mEKli',
+};
+
+const EXPRESSIVE_RACHEL_SETTINGS = {
+    stability: 0.34,
+    similarity_boost: 0.82,
+    style: 0.65,
+    use_speaker_boost: true,
 };
 
 export default async function handler(
@@ -42,12 +51,7 @@ export default async function handler(
                     body: JSON.stringify({
                         text,
                         model_id: 'eleven_multilingual_v2',
-                        voice_settings: {
-                            stability: 0.5,
-                            similarity_boost: 0.75,
-                            style: 0.3,
-                            use_speaker_boost: true,
-                        },
+                        voice_settings: EXPRESSIVE_RACHEL_SETTINGS,
                     }),
                 }
             );
@@ -73,7 +77,9 @@ export default async function handler(
             });
         }
 
-        const openAiVoice = voice === 'rachel' || voice === 'bella' ? 'nova' : 'shimmer';
+        const openAiVoice = voice === 'rachel' || voice === 'bella' || voice === 'elise' || voice === 'ava'
+            ? 'nova'
+            : 'shimmer';
 
         const response = await fetch('https://api.openai.com/v1/audio/speech', {
             method: 'POST',

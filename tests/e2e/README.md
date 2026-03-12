@@ -2,6 +2,21 @@
 
 This harness targets the Variant Registry build/publish flow.
 
+It also now includes a PulseCheck onboarding/workspace smoke suite for:
+
+- internal provisioning surface load
+- post-activation setup load
+- team workspace roster/invite controls
+- optional write-path athlete invite create/revoke flow
+- optional write-path adult invite redemption through member setup
+- optional write-path athlete invite redemption through consent and baseline onboarding
+- optional write-path assigned-athlete scope enforcement for a coach recipient
+- optional write-path invite-policy matrix coverage across admin-only, admin-and-staff, and admin-staff-and-coaches
+- optional write-path revoked-invite negative-path coverage
+- optional write-path target-email mismatch coverage
+- optional write-path admin-activation regeneration invalidation coverage
+- optional write-path no-roster-visibility coverage for non-admin adults
+
 ## Safety defaults
 
 - Playwright-launched app sessions force the **dev Firebase** project.
@@ -74,6 +89,39 @@ PLAYWRIGHT_ALLOW_WRITE_TESTS=true \
 PLAYWRIGHT_E2E_NAMESPACE=e2e-registry \
 npm run test:e2e
 ```
+
+## PulseCheck workspace suite
+
+The new PulseCheck suite can run as a read-only smoke test or, optionally, as a write test for athlete invite creation/revocation.
+
+Required environment for team-specific coverage:
+
+```bash
+PLAYWRIGHT_PULSECHECK_ORG_ID=<firestore-org-id>
+PLAYWRIGHT_PULSECHECK_TEAM_ID=<firestore-team-id>
+```
+
+Read-only smoke run:
+
+```bash
+PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json \
+PLAYWRIGHT_PULSECHECK_ORG_ID=<firestore-org-id> \
+PLAYWRIGHT_PULSECHECK_TEAM_ID=<firestore-team-id> \
+npm run test:e2e -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts
+```
+
+Opt-in PulseCheck write-path and negative-path run:
+
+```bash
+PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json \
+PLAYWRIGHT_PULSECHECK_ORG_ID=<firestore-org-id> \
+PLAYWRIGHT_PULSECHECK_TEAM_ID=<firestore-team-id> \
+PLAYWRIGHT_ALLOW_WRITE_TESTS=true \
+npm run test:e2e -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts
+```
+
+The write test creates a unique athlete invite from the team workspace and then revokes it during the same run.
+It also covers negative-path protections for revoked links, wrong-email invite access, regenerated admin activation links, and `none` roster visibility behavior.
 
 ## Fixture lifecycle
 
