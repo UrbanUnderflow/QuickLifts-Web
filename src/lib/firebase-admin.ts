@@ -1,57 +1,115 @@
 import * as admin from 'firebase-admin';
 
 const isE2EDevFirebase = process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true';
-const firebaseSecretKey = process.env.FIREBASE_SECRET_KEY;
-const selectedProjectId = isE2EDevFirebase
-  ? process.env.NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID || 'quicklifts-dev-01'
-  : 'quicklifts-dd3f1';
-const shouldUseCertCredentials =
-  Boolean(firebaseSecretKey) && selectedProjectId === 'quicklifts-dd3f1';
+const defaultProjectId = isE2EDevFirebase ? 'quicklifts-dev-01' : 'quicklifts-dd3f1';
+const selectedProjectId =
+  (isE2EDevFirebase
+    ? process.env.NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID
+    : process.env.FIREBASE_PROJECT_ID) || defaultProjectId;
+const defaultClientEmail = isE2EDevFirebase
+  ? undefined
+  : 'firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com';
 
-// Initialize Firebase Admin if not already initialized
+function normalizePrivateKey(value?: string): string | undefined {
+  if (!value) return undefined;
+
+  let normalized = value.trim();
+
+  if (
+    (normalized.startsWith('"') && normalized.endsWith('"')) ||
+    (normalized.startsWith("'") && normalized.endsWith("'"))
+  ) {
+    normalized = normalized.slice(1, -1);
+  }
+
+  normalized = normalized.replace(/\\\\n/g, '\n').replace(/\\n/g, '\n');
+
+  return normalized || undefined;
+}
+
+function getPrivateKey(): string | undefined {
+  const inlinePrivateKey = process.env.FIREBASE_PRIVATE_KEY || process.env.FIREBASE_SECRET_KEY;
+  if (inlinePrivateKey) {
+    return normalizePrivateKey(inlinePrivateKey);
+  }
+
+  if (process.env.FIREBASE_PRIVATE_KEY_1) {
+    return normalizePrivateKey(
+      [
+        process.env.FIREBASE_PRIVATE_KEY_1 || '',
+        process.env.FIREBASE_PRIVATE_KEY_2 || '',
+        process.env.FIREBASE_PRIVATE_KEY_3 || '',
+        process.env.FIREBASE_PRIVATE_KEY_4 || '',
+      ].join('')
+    );
+  }
+
+  return undefined;
+}
+
+function getServiceAccount(): admin.ServiceAccount | null {
+  const serializedServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (serializedServiceAccount) {
+    try {
+      const parsed = JSON.parse(serializedServiceAccount) as admin.ServiceAccount;
+
+      return {
+        ...parsed,
+        projectId: parsed.projectId || selectedProjectId,
+        clientEmail: parsed.clientEmail || defaultClientEmail,
+        privateKey: normalizePrivateKey(parsed.privateKey),
+      };
+    } catch (error) {
+      console.warn('[Firebase Admin] Failed to parse FIREBASE_SERVICE_ACCOUNT, falling back');
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(error);
+      }
+    }
+  }
+
+  const privateKey = getPrivateKey();
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL || defaultClientEmail;
+
+  if (!privateKey || !clientEmail) {
+    return null;
+  }
+
+  return {
+    projectId: selectedProjectId,
+    clientEmail,
+    privateKey,
+  };
+}
+
+function initializeAdmin(): void {
+  const serviceAccount = getServiceAccount();
+
+  if (serviceAccount?.privateKey && serviceAccount.clientEmail) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: serviceAccount.projectId || selectedProjectId,
+    });
+    return;
+  }
+
+  admin.initializeApp({
+    projectId: selectedProjectId,
+    credential: admin.credential.applicationDefault(),
+  });
+}
+
 if (!admin.apps.length) {
   try {
-    if (!shouldUseCertCredentials) {
-      if (!firebaseSecretKey) {
-        console.error('ERROR: FIREBASE_SECRET_KEY environment variable is missing');
-      }
-
-      // For local/dev and Playwright E2E we rely on ADC plus an explicit project id.
-      admin.initializeApp({
-        projectId: selectedProjectId,
-        credential: admin.credential.applicationDefault(),
-      });
-    } else {
-      const serviceAccountPrivateKey = firebaseSecretKey as string;
-
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: selectedProjectId,
-          privateKey: serviceAccountPrivateKey.replace(/\\n/g, '\n'),
-          clientEmail: "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
-        }),
-        projectId: selectedProjectId,
-      });
-      console.log('[Firebase Admin] Initialization complete with credentials');
-    }
+    initializeAdmin();
   } catch (error) {
-    console.error('Firebase admin initialization error:', error);
-    if (error instanceof Error) {
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
-    }
-    // Initialize with a fallback in development mode
-    if (process.env.NODE_ENV === 'development') {
-      try {
-        admin.initializeApp({
-          projectId: selectedProjectId,
-        });
-        console.log('[Firebase Admin] Initialized with fallback options for development');
-      } catch (fallbackError) {
-        console.error('Even fallback initialization failed:', fallbackError);
-      }
+    console.error('[Firebase Admin] Initialization failed:', error);
+
+    if (!admin.apps.length) {
+      admin.initializeApp({
+        projectId: selectedProjectId,
+      });
     }
   }
 }
 
-export default admin; 
+export default admin;
