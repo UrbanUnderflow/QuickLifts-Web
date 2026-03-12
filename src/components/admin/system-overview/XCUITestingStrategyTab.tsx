@@ -4,7 +4,7 @@ import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentP
 
 const POSITION_ROWS = [
   ['Primary native iOS regression layer', 'XCUITest in the existing `QuickLiftsUITests` target', 'We already have the test target, and the new club activation flow now exposes stable accessibility ids for native automation.'],
-  ['Launch strategy', 'Deterministic mock-club launch scenario', 'UI tests should not depend on the full auth funnel or mutable production data just to reach club detail.'],
+  ['Launch strategy', 'Split between deterministic mock runs and live diagnostics runs', 'Regression tests should stay stable on mock data, while production investigations should use an explicit live harness instead of overloading the same suite.'],
   ['Fixture policy', 'Mock Wunna Run Club with activation enabled at launch', 'This keeps onboarding and intro tests stable while still exercising the real club detail surface.'],
   ['Manual QA role', 'Keep device walkthroughs for visual trust and gesture quality', 'Modal layering, chat readability, and creator confidence still need human review alongside automation.'],
 ];
@@ -13,6 +13,7 @@ const COMMAND_ROWS = [
   ['Open the test target in Xcode', '`QuickLiftsUITests`', 'Use for local iteration and screenshot-friendly debugging.'],
   ['Run the whole UI suite from CLI', '`xcodebuild test -scheme QuickLifts -destination \"platform=iOS Simulator,name=iPhone 16\" -only-testing:QuickLiftsUITests`', 'Runs the deterministic club activation suite without relying on manual navigation.'],
   ['Run a single club test', '`xcodebuild test -scheme QuickLifts -destination \"platform=iOS Simulator,name=iPhone 16\" -only-testing:QuickLiftsUITests/QuickLiftsUITests/testClubActivationFlowCompletesIntroFromComposer`', 'Useful when tightening one interaction at a time.'],
+  ['Run live club diagnostics on a selected project', '`QL_XCUITEST_FIREBASE_ENV=production QL_XCUITEST_ALLOW_PRODUCTION=1 QL_XCUITEST_LIVE_CLUB_ID=<clubId> xcodebuild test -scheme QuickLifts -destination \"platform=iOS Simulator,name=iPhone 16\" -only-testing:QuickLiftsUITests/QuickLiftsUITests/testClubActivationLiveDiagnosticsOpensRequestedClub`', 'Opens a real club through the app and lets the activation logs explain the current member state.'],
 ];
 
 const SCENARIO_ROWS = [
@@ -21,18 +22,21 @@ const SCENARIO_ROWS = [
   ['Viewer identity', '`tremaine.grant@gmail.com` mock-access tester', 'This email is allowed to view the mock club and to use host simulation mode inside the club detail screen.'],
   ['Club fixture', '`mock_club_wunna_run`', 'The deterministic launch path opens the mock Wunna Run Club directly.'],
   ['Activation fixture', 'Onboarding + intro required + manual pairing enabled', 'The launch helper turns on the activation layer so tests can hit the full creator-club flow immediately.'],
+  ['Live diagnostics override', '`QL_UI_TEST_SCENARIO=club_activation_live` + `QL_UI_TEST_CLUB_ID=<clubId>`', 'The app skips mock bootstrapping, loads a real club by id, and keeps the investigation focused on logs and UI state instead of fixture resets.'],
 ];
 
 const SUITE_ROWS = [
   ['Join triggers onboarding', '`testClubActivationJoinShowsRequiredOnboarding`', 'Verifies the member join action routes directly into the required activation sheet.'],
   ['Onboarding to intro composer', '`testClubActivationFlowCompletesIntroFromComposer`', 'Covers question selection, onboarding completion, intro prompt, composer modal, and successful intro send.'],
   ['Host settings entry point', '`testCreatorCanOpenActivationSettingsFromHostMode`', 'Verifies testers can simulate host access and reach the native club activation settings UI.'],
+  ['Live diagnostics opener', '`testClubActivationLiveDiagnosticsOpensRequestedClub`', 'Read-only diagnostics harness for opening a real club on dev or production and asserting the activation state snapshot without the mock fixture.'],
 ];
 
 const IDENTIFIER_ROWS = [
   ['Join flow', '`club-join-button`, `club-activation-onboarding-sheet`, `club-activation-complete-button`', 'Covers entry into the activation sequence and onboarding completion.'],
   ['Intro flow', '`club-intro-prompt-introduce-button`, `club-intro-composer-sheet`, `club-intro-composer-send-button`', 'Supports reliable intro gating and modal-composer automation.'],
   ['Host controls', '`club-toolbar-menu-button`, `club-edit-activation-enabled-toggle`, `club-edit-matching-mode-manual`', 'Makes the native creator setup path addressable without brittle coordinate taps.'],
+  ['Diagnostics surface', '`club-activation-diagnostics-root`, `club-activation-diagnostics-canPostToClubChat`, `club-message-text-field`', 'Gives live XCUITests a read-only assertion layer so failures include the actual activation state and composer visibility.'],
 ];
 
 const RUN_STEPS = [
@@ -132,6 +136,7 @@ const XCUITestingStrategyTab: React.FC = () => {
               'Configures Firebase from the bundled dev plist when the UI test asks for the dev environment.',
               'Applies club activation config to the mock club.',
               'Opens club detail directly so the test starts from the actual feature surface.',
+              'Exposes a read-only activation diagnostics snapshot to XCUITest when diagnostics mode is enabled.',
             ]} />}
           />
           <InfoCard
@@ -139,6 +144,7 @@ const XCUITestingStrategyTab: React.FC = () => {
             accent="amber"
             body={<BulletList items={[
               'The first XCUITests focus on onboarding, intro, and host entry points.',
+              'Live diagnostics on production should stay read-only and require explicit env opt-in.',
               'Pairing workflows and safety-report flows are not yet covered natively.',
               'Android still needs its own equivalent instrumentation strategy.',
             ]} />}

@@ -67,6 +67,7 @@ const implementationRows = [
   ['Web member activation', 'Required onboarding modal plus intro gate inside `ClubMemberApp`', 'Members join first, then complete onboarding. If intro is required, the normal composer stays locked until they post it.'],
   ['iOS member activation', '`ClubDetailView` + `ClubDetailViewModel` parity landed', 'Joining a configured club now triggers onboarding and then the intro requirement on native iOS instead of stopping at the legacy welcome state.'],
   ['iOS host configuration', '`Edit Club` now includes `Club Activation`', 'Creators can manage activation from the app, not only from web.'],
+  ['iOS diagnostics', 'Activation debug logs plus XCUITest live-club harness', 'When activation gating misbehaves, the native app now logs the exact membership and intro state and can open a real club by id for read-only diagnostics.'],
   ['Android status', 'Still a parity gap', 'The generic activation flow and creator config have not yet been brought to Android.'],
 ];
 
@@ -75,6 +76,7 @@ const patternRows = [
   ['Trust-preserving gating', 'Read-first, post-after-intro', 'Members can still read the club while intro is required; the gate applies to normal posting so the club does not feel fully blocked.'],
   ['Pinned action layout rule', 'Dynamic bottom clearance for required-action cards', 'When the intro gate is pinned over the feed, the chat timeline reserves additional bottom space so the latest message is not covered.'],
   ['Testability rule', 'Stable accessibility identifiers on activation surfaces', 'Onboarding questions, intro prompts, host config toggles, and composer actions now expose ids for XCUITest coverage.'],
+  ['Diagnostics rule', 'Read-only activation snapshot for native tests', 'Live club diagnostics now expose membership and intro gating state through accessibility identifiers so tests can assert exact bad states without mutating real data.'],
 ];
 
 const PulseClubActivationArchitectureTab: React.FC = () => {

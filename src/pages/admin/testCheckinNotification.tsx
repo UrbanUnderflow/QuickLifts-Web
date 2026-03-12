@@ -67,7 +67,7 @@ const TestCheckinNotificationPage: React.FC = () => {
   const [selectedChallenge, setSelectedChallenge] = useState<SweatlistCollection | null>(null);
   const [challengeSearchQuery, setChallengeSearchQuery] = useState('');
   const [challengeSearchResults, setChallengeSearchResults] = useState<SweatlistCollection[]>([]);
-  const challengeResultsRef = useRef<HTMLDivElement | null>(null);
+  const challengeResultsRef = useRef<HTMLDivElement>(null);
 
   // User Search State
   const [challengerSearchQuery, setChallengerSearchQuery] = useState('');
@@ -78,13 +78,13 @@ const TestCheckinNotificationPage: React.FC = () => {
   const [calloutUserSearchResults, setCalloutUserSearchResults] = useState<User[]>([]);
   const [selectedCalloutUser, setSelectedCalloutUser] = useState<User | null>(null);
 
-  const challengerResultsRef = useRef<HTMLDivElement | null>(null);
-  const calloutUserResultsRef = useRef<HTMLDivElement | null>(null);
+  const challengerResultsRef = useRef<HTMLDivElement>(null);
+  const calloutUserResultsRef = useRef<HTMLDivElement>(null);
 
   // Add the new refs for the input fields
-  const challengerInputRef = useRef<HTMLInputElement | null>(null);
-  const calloutUserInputRef = useRef<HTMLInputElement | null>(null);
-  const challengeInputRef = useRef<HTMLInputElement | null>(null);
+  const challengerInputRef = useRef<HTMLInputElement>(null);
+  const calloutUserInputRef = useRef<HTMLInputElement>(null);
+  const challengeInputRef = useRef<HTMLInputElement>(null);
 
   // Operation State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -968,8 +968,8 @@ export interface UserSearchInputProps {
   setSelectedUser: React.Dispatch<React.SetStateAction<User | null>>;
   selectedUser: User | null;
   isOverallLoading: boolean;
-  resultsRef: React.RefObject<HTMLDivElement | null>;
-  inputRef: React.RefObject<HTMLInputElement | null>;
+  resultsRef: React.RefObject<HTMLDivElement>;
+  inputRef: React.RefObject<HTMLInputElement>;
   clearSelectedUserAndQuery: () => void;
   allUsersCount: number;
 }
@@ -1054,8 +1054,8 @@ export interface ChallengeSearchInputProps {
   setSelectedChallenge: React.Dispatch<React.SetStateAction<SweatlistCollection | null>>;
   selectedChallenge: SweatlistCollection | null;
   isOverallLoading: boolean;
-  resultsRef: React.RefObject<HTMLDivElement | null>;
-  inputRef: React.RefObject<HTMLInputElement | null>;
+  resultsRef: React.RefObject<HTMLDivElement>;
+  inputRef: React.RefObject<HTMLInputElement>;
   clearSelectedChallengeAndQuery: () => void;
   allChallengesCount: number;
 }
