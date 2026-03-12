@@ -1,30 +1,41 @@
+import {
+  AiVoiceConfig,
+  OPENAI_VOICES,
+  VoiceChoice,
+  normalizeAiVoiceConfig,
+  normalizeElevenLabsSettings,
+  shouldUseElevenLabsVoiceDefaults,
+} from '../lib/aiVoice';
+
 type SpeakOptions = {
   /** Called when narration finishes successfully */
   onEnd?: () => void;
   /** Called when narration errors */
   onError?: (err: unknown) => void;
+  /** Disable browser speech fallback when exact provider fidelity matters */
+  fallbackToBrowser?: boolean;
 };
 
 type SpeakRequest = {
   text: string;
+  provider?: 'openai' | 'elevenlabs';
   voice?: string;
   format?: string;
+  presetId?: string | null;
+  settings?: {
+    stability: number;
+    similarityBoost: number;
+    style: number;
+    useSpeakerBoost: boolean;
+    speed: number;
+  } | null;
+  punctuationPauses?: boolean | null;
 };
 
-export type VoiceChoice =
-  | { provider: 'openai'; id: string; label: string }
-  | { provider: 'browser'; id: string; label: string };
+export type { AiVoiceConfig, VoiceChoice };
+export { OPENAI_VOICES };
 
-export const OPENAI_VOICES: VoiceChoice[] = [
-  { provider: 'openai', id: 'alloy', label: 'Nora (Alloy)' },
-  { provider: 'openai', id: 'echo', label: 'Echo' },
-  { provider: 'openai', id: 'fable', label: 'Fable' },
-  { provider: 'openai', id: 'onyx', label: 'Onyx' },
-  { provider: 'openai', id: 'nova', label: 'Nova' },
-  { provider: 'openai', id: 'shimmer', label: 'Shimmer' },
-];
-
-let cachedOpenAiVoiceId: string | null = null;
+let cachedVoiceConfig: AiVoiceConfig | null = null;
 let voiceFetchInFlight: Promise<void> | null = null;
 let lastFetchAttempt = 0;
 const REFETCH_INTERVAL_MS = 5000; // Retry every 5 seconds if no voice was cached
@@ -33,7 +44,7 @@ async function fetchGlobalVoiceIfNeeded() {
   if (typeof window === 'undefined') return;
   
   // If we already have a cached voice, use it
-  if (cachedOpenAiVoiceId) return;
+  if (cachedVoiceConfig) return;
   
   // If a fetch is in progress, wait for it
   if (voiceFetchInFlight) return voiceFetchInFlight;
@@ -47,18 +58,12 @@ async function fetchGlobalVoiceIfNeeded() {
     try {
       // Lazy import to avoid pulling firebase into initial bundles unless needed
       const { doc, getDoc } = await import('firebase/firestore');
-      // eslint-disable-next-line import/no-cycle
       const { db } = await import('../api/firebase/config');
       const ref = doc(db, 'app-config', 'ai-voice');
       const snap = await getDoc(ref);
       if (snap.exists()) {
-        const data = snap.data() as any;
-        if (typeof data?.voiceId === 'string' && data.voiceId.trim()) {
-          cachedOpenAiVoiceId = data.voiceId.trim();
-          console.log('[TTS] Loaded admin voice config:', cachedOpenAiVoiceId);
-        } else {
-          console.warn('[TTS] ai-voice doc exists but voiceId is missing or empty');
-        }
+        cachedVoiceConfig = normalizeAiVoiceConfig(snap.data() as any);
+        console.log('[TTS] Loaded admin voice config:', cachedVoiceConfig);
       } else {
         console.warn('[TTS] ai-voice config doc not found - using default voice');
       }
@@ -95,7 +100,6 @@ function cleanupAudio() {
   if (currentAudio) {
     try {
       currentAudio.pause();
-      // eslint-disable-next-line no-empty
     } catch {}
     currentAudio.onended = null;
     currentAudio.onerror = null;
@@ -104,7 +108,6 @@ function cleanupAudio() {
   if (currentObjectUrl) {
     try {
       URL.revokeObjectURL(currentObjectUrl);
-      // eslint-disable-next-line no-empty
     } catch {}
     currentObjectUrl = null;
   }
@@ -116,7 +119,6 @@ function stopBrowserSpeech() {
   if (!synth) return;
   try {
     synth.cancel();
-    // eslint-disable-next-line no-empty
   } catch {}
 }
 
@@ -191,7 +193,7 @@ function speakViaBrowserTTS(text: string, opts: SpeakOptions, voiceName?: string
  * Clear the cached voice ID (useful for testing or when admin updates the voice).
  */
 export function clearVoiceCache() {
-  cachedOpenAiVoiceId = null;
+  cachedVoiceConfig = null;
   lastFetchAttempt = 0;
   console.log('[TTS] Voice cache cleared');
 }
@@ -213,9 +215,22 @@ export async function speakStep(
   // If no explicit voiceChoice passed, use global admin-configured voice (when available).
   if (!voiceChoice) {
     await fetchGlobalVoiceIfNeeded();
-    if (cachedOpenAiVoiceId) {
-      voiceChoice = { provider: 'openai', id: cachedOpenAiVoiceId, label: cachedOpenAiVoiceId };
-      console.log('[TTS] Using admin-configured voice:', cachedOpenAiVoiceId);
+    if (cachedVoiceConfig) {
+      voiceChoice = cachedVoiceConfig.provider === 'elevenlabs'
+        ? {
+            provider: 'elevenlabs',
+            id: cachedVoiceConfig.voiceId,
+            label: cachedVoiceConfig.voiceId,
+            presetId: cachedVoiceConfig.presetId || null,
+            settings: cachedVoiceConfig.elevenLabsSettings || null,
+            punctuationPauses: cachedVoiceConfig.punctuationPauses ?? true,
+          }
+        : {
+            provider: 'openai',
+            id: cachedVoiceConfig.voiceId,
+            label: cachedVoiceConfig.voiceId,
+          };
+      console.log('[TTS] Using admin-configured voice:', cachedVoiceConfig);
     } else {
       console.log('[TTS] No admin voice configured, using default');
     }
@@ -239,12 +254,28 @@ export async function speakStep(
     await speakViaNetlifyTTS(
       {
         text: clean,
-        voice: chosen?.provider === 'openai' ? chosen.id : 'alloy',
+        provider: chosen?.provider === 'elevenlabs' ? 'elevenlabs' : 'openai',
+        voice: chosen?.id || 'alloy',
         format: 'mp3',
+        presetId: chosen?.provider === 'elevenlabs' ? chosen.presetId || null : null,
+        settings:
+          chosen?.provider === 'elevenlabs'
+            ? shouldUseElevenLabsVoiceDefaults(chosen.presetId, chosen.settings || undefined)
+              ? null
+              : normalizeElevenLabsSettings(chosen.settings || undefined, chosen.presetId)
+            : null,
+        punctuationPauses:
+          chosen?.provider === 'elevenlabs'
+            ? chosen.punctuationPauses ?? true
+            : null,
       },
       opts
     );
-  } catch (err) {
+  } catch (_err) {
+    if (opts.fallbackToBrowser === false) {
+      opts.onError?.(_err);
+      return;
+    }
     try {
       speakViaBrowserTTS(clean, opts);
     } catch (err2) {
@@ -252,4 +283,3 @@ export async function speakStep(
     }
   }
 }
-

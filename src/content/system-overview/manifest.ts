@@ -9,7 +9,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-03-11',
+  lastUpdated: '2026-03-12',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -45,6 +45,8 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-permissions-visibility-model', label: 'Permissions & Visibility', description: 'Role-based access, invite-linked permissions, and minimum-necessary visibility rules.' },
     { id: 'pulsecheck-coach-dashboard-information-architecture', label: 'Coach Dashboard IA', description: 'Coach-facing information hierarchy, workflows, and privacy boundaries for roster visibility.' },
     { id: 'auntedna-integration-strategy', label: 'Integration Strategy', description: 'API layer, webhook contract, profile mirror model, and MCP positioning for the AuntEdna clinical bridge.' },
+    { id: 'playwright-testing-strategy', label: 'Testing Strategy', description: 'Playwright harness model, suite inventory, run commands, and PulseCheck UI regression coverage.' },
+    { id: 'xcuitest-testing-strategy', label: 'XCUITest Strategy', description: 'Deterministic iOS launch model, native club activation suite inventory, and accessibility-id contract.' },
   ],
   executiveSummary: {
     mission:
@@ -52,9 +54,12 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Added the XCUITest Strategy artifact covering the deterministic mock-club launch path, current native club activation suite, and identifier contract for iOS automation.',
+      'Refreshed the Club Activation Architecture artifact to reflect current web + iOS implementation, including native host config, intro composer modal, and bottom-clearance layout rules.',
       'Added the Shared Link Preview Strategy artifact covering crawler metadata fallbacks, protected-share guardrails, and the branded default-image recommendation.',
       'Added the Smart Routes v1 Architecture artifact covering provider boundaries, route scoring, Firestore objects, API contracts, and AI limits.',
       'Added the AuntEdna Integration Strategy artifact covering APIs, webhooks, MCP role, and the local clinician-profile mirror model.',
+      'Added the Playwright Testing Strategy artifact covering the harness, auth capture flow, commands, environment controls, and PulseCheck suite coverage.',
       'Added Pulse Community Club Activation Architecture artifact for generic creator-club onboarding, introductions, and pairing.',
       'Replaced tab-driven architecture page with a full handbook structure and anchored navigation.',
       'Added complete feature inventories for QuickLifts iOS, Pulse Android, PulseCheck iOS, and QuickLifts Web.',

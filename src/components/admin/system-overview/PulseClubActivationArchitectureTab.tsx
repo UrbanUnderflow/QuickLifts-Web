@@ -62,6 +62,21 @@ const pairingRiskRows = [
   ['Misleading product claims', 'Marketing the feature as screened, verified, or guaranteed creates avoidable exposure.', 'Position pairing as community/accountability support, not safety certification.'],
 ];
 
+const implementationRows = [
+  ['Web host configuration', '`/club-studio?clubId=...` activation controls', 'Hosts can enable onboarding, choose required questions, require intros, and configure pairing from the existing web club studio.'],
+  ['Web member activation', 'Required onboarding modal plus intro gate inside `ClubMemberApp`', 'Members join first, then complete onboarding. If intro is required, the normal composer stays locked until they post it.'],
+  ['iOS member activation', '`ClubDetailView` + `ClubDetailViewModel` parity landed', 'Joining a configured club now triggers onboarding and then the intro requirement on native iOS instead of stopping at the legacy welcome state.'],
+  ['iOS host configuration', '`Edit Club` now includes `Club Activation`', 'Creators can manage activation from the app, not only from web.'],
+  ['Android status', 'Still a parity gap', 'The generic activation flow and creator config have not yet been brought to Android.'],
+];
+
+const patternRows = [
+  ['Intro capture pattern', 'Dedicated intro composer modal', 'On iOS, tapping `Post Intro` opens a focused modal with the host template so the member can write with guidance instead of editing inline in the chat bar.'],
+  ['Trust-preserving gating', 'Read-first, post-after-intro', 'Members can still read the club while intro is required; the gate applies to normal posting so the club does not feel fully blocked.'],
+  ['Pinned action layout rule', 'Dynamic bottom clearance for required-action cards', 'When the intro gate is pinned over the feed, the chat timeline reserves additional bottom space so the latest message is not covered.'],
+  ['Testability rule', 'Stable accessibility identifiers on activation surfaces', 'Onboarding questions, intro prompts, host config toggles, and composer actions now expose ids for XCUITest coverage.'],
+];
+
 const PulseClubActivationArchitectureTab: React.FC = () => {
   return (
     <div className="space-y-8">
@@ -82,6 +97,10 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
           {
             title: 'Host-configurable guardrails',
             body: 'Creators should be able to require onboarding, require introductions, and run pairing with simple settings rather than custom ops every time.',
+          },
+          {
+            title: 'Web + iOS now aligned',
+            body: 'The first implementation pass now exists on web and iOS, including host configuration and the member intro/onboarding flow. Android remains the major parity gap.',
           },
         ]}
       />
@@ -165,6 +184,20 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
             },
           ]}
         />
+      </SectionBlock>
+
+      <SectionBlock icon={GitBranch} title="Current Implementation Snapshot">
+        <div className="space-y-4">
+          <InfoCard
+            title="Where the system stands today"
+            accent="green"
+            body="The club activation layer is no longer only a concept artifact. Core onboarding and intro behavior now exist in production-facing web and iOS club surfaces, while Android still needs parity work."
+          />
+          <DataTable
+            columns={['Surface', 'Current implementation', 'Implication']}
+            rows={implementationRows}
+          />
+        </div>
       </SectionBlock>
 
       <SectionBlock icon={Compass} title="Event Acquisition and App Conversion">
@@ -294,6 +327,20 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
         />
       </SectionBlock>
 
+      <SectionBlock icon={Sparkles} title="Interaction Patterns From Implementation">
+        <div className="space-y-4">
+          <InfoCard
+            title="Patterns changed during implementation"
+            accent="blue"
+            body="A few implementation details became clear only after real device testing. These should now be treated as part of the club activation pattern, not incidental UI choices."
+          />
+          <DataTable
+            columns={['Pattern area', 'Current direction', 'Why it matters']}
+            rows={patternRows}
+          />
+        </div>
+      </SectionBlock>
+
       <SectionBlock icon={ShieldAlert} title="Pairing Risk and Mitigation Model">
         <div className="space-y-4">
           <InfoCard
@@ -310,6 +357,7 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
               'Pairing should be opt-in rather than automatically forced on every member.',
               'Hosts should be able to decline, unpair, or rematch members quickly.',
               'The product should support a basic do-not-pair control before scale.',
+              'The first trust layer should include a lightweight code-of-conduct entry point and member-submitted safety reports for host review.',
               'Every club using pairing should also have a code of conduct and clear event removal rights.',
               'Event waiver, terms, and conduct language should be reviewed by counsel before broad rollout.',
             ]}

@@ -1,25 +1,33 @@
 import * as admin from 'firebase-admin';
 
+const isE2EDevFirebase = process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true';
+const selectedProjectId = isE2EDevFirebase
+  ? process.env.NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID || 'quicklifts-dev-01'
+  : 'quicklifts-dd3f1';
+const shouldUseCertCredentials =
+  Boolean(process.env.FIREBASE_SECRET_KEY) && selectedProjectId === 'quicklifts-dd3f1';
+
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
   try {
-    // Check for required environment variables
-    if (!process.env.FIREBASE_SECRET_KEY) {
-      console.error('ERROR: FIREBASE_SECRET_KEY environment variable is missing');
-      // Instead of throwing an error, we'll create a mock credential for development
-      // This allows the app to initialize, but will still log errors for operations
+    if (!shouldUseCertCredentials) {
+      if (!process.env.FIREBASE_SECRET_KEY) {
+        console.error('ERROR: FIREBASE_SECRET_KEY environment variable is missing');
+      }
+
+      // For local/dev and Playwright E2E we rely on ADC plus an explicit project id.
       admin.initializeApp({
-        projectId: "quicklifts-dd3f1",
-        credential: admin.credential.applicationDefault()
+        projectId: selectedProjectId,
+        credential: admin.credential.applicationDefault(),
       });
     } else {
-      // Initialize with the actual credentials
       admin.initializeApp({
         credential: admin.credential.cert({
-          projectId: "quicklifts-dd3f1",
+          projectId: selectedProjectId,
           privateKey: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
           clientEmail: "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
-        })
+        }),
+        projectId: selectedProjectId,
       });
       console.log('[Firebase Admin] Initialization complete with credentials');
     }
@@ -33,7 +41,7 @@ if (!admin.apps.length) {
     if (process.env.NODE_ENV === 'development') {
       try {
         admin.initializeApp({
-          projectId: "quicklifts-dd3f1"
+          projectId: selectedProjectId,
         });
         console.log('[Firebase Admin] Initialized with fallback options for development');
       } catch (fallbackError) {

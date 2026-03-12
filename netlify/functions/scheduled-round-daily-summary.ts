@@ -17,6 +17,10 @@ import { getFirestore, initAdmin } from './utils/getServiceAccount';
  */
 
 const BATCH_LIMIT = 500;
+const PRIMARY_ROUNDS_COLLECTION = 'sweatlist-collection';
+const FALLBACK_ROUNDS_COLLECTION = 'collections';
+const PRIMARY_PARTICIPANTS_COLLECTION = 'user-challenge';
+const FALLBACK_PARTICIPANTS_COLLECTION = 'userChallenges';
 
 interface SummaryResult {
     success: boolean;
@@ -35,6 +39,11 @@ interface ParticipantSummary {
     profileImage?: string;
 }
 
+interface RoundDoc {
+    id: string;
+    data: any;
+}
+
 function utcDateString(d: Date): string {
     const y = d.getUTCFullYear();
     const m = String(d.getUTCMonth() + 1).padStart(2, '0');
@@ -51,6 +60,132 @@ function ordinalSuffix(n: number): string {
     const s = ['th', 'st', 'nd', 'rd'];
     const v = n % 100;
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+function isValidDate(value: unknown): value is Date {
+    return value instanceof Date && !Number.isNaN(value.getTime());
+}
+
+function toDate(value: any): Date | null {
+    if (!value) return null;
+    if (value instanceof Date) return isValidDate(value) ? value : null;
+    if (typeof value?.toDate === 'function') {
+        const converted = value.toDate();
+        return isValidDate(converted) ? converted : null;
+    }
+    if (typeof value === 'number') {
+        const asDate = new Date(value < 10000000000 ? value * 1000 : value);
+        return isValidDate(asDate) ? asDate : null;
+    }
+    if (typeof value === 'string') {
+        const asNumber = Number(value);
+        if (!Number.isNaN(asNumber) && value.trim() !== '') {
+            const asDate = new Date(asNumber < 10000000000 ? asNumber * 1000 : asNumber);
+            return isValidDate(asDate) ? asDate : null;
+        }
+        const parsed = new Date(value);
+        return isValidDate(parsed) ? parsed : null;
+    }
+    return null;
+}
+
+function getParticipantProfileImage(profileImage: any): string | undefined {
+    if (!profileImage) return undefined;
+    return profileImage.profileImageUrl || profileImage.profileImageURL || undefined;
+}
+
+function getTotalPoints(pulsePoints: Record<string, any> = {}): number {
+    if (typeof pulsePoints.totalPoints === 'number') {
+        return pulsePoints.totalPoints;
+    }
+
+    const pointKeys = [
+        'baseCompletion',
+        'firstCompletion',
+        'streakBonus',
+        'cumulativeStreakBonus',
+        'checkInBonus',
+        'effortRating',
+        'chatParticipation',
+        'locationCheckin',
+        'contentEngagement',
+        'encouragementSent',
+        'encouragementReceived',
+        'shareBonus',
+        'referralBonus',
+        'peerChallengeBonus',
+        'totalStackPoints',
+        'totalCommunityPoints',
+    ];
+
+    return pointKeys.reduce((sum, key) => {
+        const value = pulsePoints[key];
+        return sum + (typeof value === 'number' ? value : 0);
+    }, 0);
+}
+
+async function getRoundDoc(
+    db: FirebaseFirestore.Firestore,
+    challengeId: string
+): Promise<RoundDoc | null> {
+    const primarySnap = await db.collection(PRIMARY_ROUNDS_COLLECTION).doc(challengeId).get();
+    if (primarySnap.exists) {
+        return { id: primarySnap.id, data: primarySnap.data() };
+    }
+
+    const fallbackSnap = await db.collection(FALLBACK_ROUNDS_COLLECTION).doc(challengeId).get();
+    if (fallbackSnap.exists) {
+        return { id: fallbackSnap.id, data: fallbackSnap.data() };
+    }
+
+    return null;
+}
+
+async function getParticipantDocs(
+    db: FirebaseFirestore.Firestore,
+    challengeId: string
+): Promise<FirebaseFirestore.QueryDocumentSnapshot[]> {
+    const primarySnap = await db
+        .collection(PRIMARY_PARTICIPANTS_COLLECTION)
+        .where('challengeId', '==', challengeId)
+        .limit(BATCH_LIMIT)
+        .get();
+
+    if (!primarySnap.empty) {
+        return primarySnap.docs;
+    }
+
+    const fallbackSnap = await db
+        .collection(FALLBACK_PARTICIPANTS_COLLECTION)
+        .where('challengeId', '==', challengeId)
+        .limit(BATCH_LIMIT)
+        .get();
+
+    return fallbackSnap.docs;
+}
+
+async function getActiveRounds(
+    db: FirebaseFirestore.Firestore,
+    now: Date
+): Promise<RoundDoc[]> {
+    const collectionsToCheck = [PRIMARY_ROUNDS_COLLECTION, FALLBACK_ROUNDS_COLLECTION];
+    const roundsById = new Map<string, RoundDoc>();
+
+    for (const collectionName of collectionsToCheck) {
+        const snapshot = await db
+            .collection(collectionName)
+            .where('challenge.endDate', '>', now)
+            .limit(200)
+            .get();
+
+        for (const doc of snapshot.docs) {
+            if (!roundsById.has(doc.id)) {
+                roundsById.set(doc.id, { id: doc.id, data: doc.data() });
+            }
+        }
+    }
+
+    return Array.from(roundsById.values());
 }
 
 async function sendNotification(
@@ -103,31 +238,26 @@ async function computeRoundSummary(
     daysLeft: number;
     isRunRound: boolean;
 }> {
-    // Fetch the challenge/collection doc
-    const collectionSnap = await db.collection('collections').doc(challengeId).get();
-    if (!collectionSnap.exists) {
+    // Fetch the challenge/round doc using the live collection name first,
+    // with fallback support for older environments.
+    const roundDoc = await getRoundDoc(db, challengeId);
+    if (!roundDoc) {
         return { participants: [], roundTitle: '', daysLeft: 0, isRunRound: false };
     }
 
-    const collectionData = collectionSnap.data() as any;
+    const collectionData = roundDoc.data as any;
     const challenge = collectionData?.challenge;
     if (!challenge) {
         return { participants: [], roundTitle: collectionData?.title || '', daysLeft: 0, isRunRound: false };
     }
 
     const roundTitle = collectionData.title || challenge.title || 'your Round';
-    const endDate = challenge.endDate?.toDate?.() || new Date(challenge.endDate);
+    const endDate = toDate(challenge.endDate) || now;
     const daysLeft = daysRemaining(endDate, now);
     const isRunRound = collectionData.isRunRound === true;
 
-    // Fetch userChallenges for this round
-    const ucSnap = await db
-        .collection('userChallenges')
-        .where('challengeId', '==', challengeId)
-        .limit(BATCH_LIMIT)
-        .get();
-
-    if (ucSnap.empty) {
+    const participantDocs = await getParticipantDocs(db, challengeId);
+    if (participantDocs.length === 0) {
         return { participants: [], roundTitle, daysLeft, isRunRound };
     }
 
@@ -136,18 +266,11 @@ async function computeRoundSummary(
 
     const participants: ParticipantSummary[] = [];
 
-    for (const ucDoc of ucSnap.docs) {
+    for (const ucDoc of participantDocs) {
         const uc = ucDoc.data();
 
-        // Calculate total points
         const pulsePoints = uc.pulsePoints || {};
-        const totalPoints =
-            (pulsePoints.workoutPoints || 0) +
-            (pulsePoints.encouragementPointsReceived || 0) +
-            (pulsePoints.encouragementPointsGiven || 0) +
-            (pulsePoints.streakPoints || 0) +
-            (pulsePoints.sharePoints || 0) +
-            (pulsePoints.checkInPoints || 0);
+        const totalPoints = getTotalPoints(pulsePoints);
 
         // Count completed workouts and calculate today's points
         const completedWorkouts: any[] = uc.completedWorkouts || [];
@@ -155,14 +278,16 @@ async function computeRoundSummary(
         let todayDistance = 0;
 
         for (const cw of completedWorkouts) {
-            const cwDate = cw.completedAt?.toDate?.()
-                ? utcDateString(cw.completedAt.toDate())
-                : typeof cw.completedAt === 'number'
-                    ? utcDateString(new Date(cw.completedAt * 1000))
-                    : null;
+            const completedAt = toDate(cw.completedAt);
+            const cwDate = completedAt ? utcDateString(completedAt) : null;
 
             if (cwDate === todayStr) {
-                todayPoints += cw.points || 10; // Default 10 points per workout
+                const workoutPoints = typeof cw.points === 'number'
+                    ? cw.points
+                    : typeof cw.pulsePoints?.totalPoints === 'number'
+                        ? cw.pulsePoints.totalPoints
+                        : 100;
+                todayPoints += workoutPoints;
                 todayDistance += cw.distanceMiles || 0;
             }
         }
@@ -175,7 +300,7 @@ async function computeRoundSummary(
             completedWorkouts: completedWorkouts.length,
             currentStreak: uc.currentStreak || 0,
             todayDistance: isRunRound ? todayDistance : undefined,
-            profileImage: uc.profileImage?.profileImageUrl || undefined,
+            profileImage: getParticipantProfileImage(uc.profileImage),
         });
     }
 
@@ -282,13 +407,9 @@ export const handler: Handler = async (event) => {
         await configRef.set({ lastRunDateUtc: today, updatedAt: new Date(), enabled: true }, { merge: true });
 
         // Find all active rounds (challenges where endDate > now & startDate <= now)
-        const collectionsSnap = await db
-            .collection('collections')
-            .where('challenge.endDate', '>', now)
-            .limit(200)
-            .get();
+        const activeRounds = await getActiveRounds(db, now);
 
-        if (collectionsSnap.empty) {
+        if (activeRounds.length === 0) {
             console.log('[round-daily-summary] No active rounds found');
             return {
                 statusCode: 200,
@@ -301,14 +422,18 @@ export const handler: Handler = async (event) => {
         let roundsProcessed = 0;
         const errors: string[] = [];
 
-        for (const collDoc of collectionsSnap.docs) {
-            const collData = collDoc.data() as any;
+        for (const collDoc of activeRounds) {
+            const collData = collDoc.data as any;
             const challenge = collData?.challenge;
             if (!challenge) continue;
 
             // Skip rounds that haven't started yet
-            const startDate = challenge.startDate?.toDate?.() || new Date(challenge.startDate);
+            const startDate = toDate(challenge.startDate);
+            if (!startDate) continue;
             if (startDate > now) continue;
+
+            const status = String(challenge.status || '').toLowerCase();
+            if (status && status !== 'published' && status !== 'active') continue;
 
             const challengeId = collDoc.id;
 
@@ -335,13 +460,9 @@ export const handler: Handler = async (event) => {
                 : null;
 
             // Send to each participant
-            const ucSnap = await db
-                .collection('userChallenges')
-                .where('challengeId', '==', challengeId)
-                .limit(BATCH_LIMIT)
-                .get();
+            const participantDocs = await getParticipantDocs(db, challengeId);
 
-            for (const ucDoc of ucSnap.docs) {
+            for (const ucDoc of participantDocs) {
                 const uc = ucDoc.data();
                 const fcmToken = uc.fcmToken;
 

@@ -2,16 +2,18 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { ArrowRight, Bell, ChevronRight, ClipboardList, Loader2, Shield, Sparkles, UserRound, Users, Waves } from 'lucide-react';
+import { ArrowRight, Bell, ChevronRight, ClipboardList, Copy, Loader2, Mail, Shield, Sparkles, UserRound, Users, Waves, XCircle } from 'lucide-react';
 import { coachService } from '../../api/firebase/coach';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import type {
   PulseCheckInviteLink,
+  PulseCheckInvitePolicy,
   PulseCheckOperatingRole,
   PulseCheckOrganization,
   PulseCheckRosterVisibilityScope,
   PulseCheckTeam,
   PulseCheckTeamMembership,
+  PulseCheckTeamMembershipRole,
 } from '../../api/firebase/pulsecheckProvisioning/types';
 import { userService } from '../../api/firebase/user';
 import type { User } from '../../api/firebase/user';
@@ -34,6 +36,25 @@ type AthleteRosterEntry = {
   consentReady: boolean;
   baselineReady: boolean;
   source: 'team-membership' | 'legacy-coach-bridge';
+};
+
+const applyRosterScope = (
+  roster: AthleteRosterEntry[],
+  membership: PulseCheckTeamMembership | null
+) => {
+  if (!membership) return [];
+
+  const scope = membership.rosterVisibilityScope || (membership.role === 'athlete' ? 'none' : 'team');
+  if (scope === 'none') {
+    return [];
+  }
+
+  if (scope === 'assigned') {
+    const allowed = new Set(membership.allowedAthleteIds || []);
+    return roster.filter((athlete) => allowed.has(athlete.id));
+  }
+
+  return roster;
 };
 
 const focusByRole: Record<PulseCheckOperatingRole, { title: string; description: string; accent: string }> = {
@@ -78,6 +99,62 @@ const scopeLabel = (scope?: PulseCheckRosterVisibilityScope) => {
   }
 };
 
+const permissionOptionsByRole = (role: PulseCheckTeamMembershipRole) => {
+  switch (role) {
+    case 'coach':
+      return [
+        { value: 'pulsecheck-coach-full-v1', label: 'Coach Full' },
+        { value: 'pulsecheck-coach-limited-v1', label: 'Coach Limited' },
+      ];
+    case 'performance-staff':
+      return [
+        { value: 'pulsecheck-performance-full-v1', label: 'Performance Full' },
+        { value: 'pulsecheck-performance-limited-v1', label: 'Performance Limited' },
+      ];
+    case 'support-staff':
+      return [
+        { value: 'pulsecheck-support-full-v1', label: 'Support Full' },
+        { value: 'pulsecheck-support-limited-v1', label: 'Support Limited' },
+      ];
+    case 'clinician':
+      return [{ value: 'pulsecheck-clinician-bridge-v1', label: 'Clinician Bridge' }];
+    case 'team-admin':
+      return [{ value: 'pulsecheck-team-admin-v1', label: 'Team Admin' }];
+    default:
+      return [{ value: 'pulsecheck-athlete-v1', label: 'Athlete' }];
+  }
+};
+
+const invitePolicyLabel = (policy?: PulseCheckInvitePolicy) => {
+  switch (policy) {
+    case 'admin-and-staff':
+      return 'Admin and Staff';
+    case 'admin-staff-and-coaches':
+      return 'Admin, Staff, and Coaches';
+    default:
+      return 'Admin Only';
+  }
+};
+
+const canCreateAthleteInvite = (role: PulseCheckTeamMembershipRole, invitePolicy?: PulseCheckInvitePolicy) => {
+  if (role === 'team-admin') return true;
+  if (invitePolicy === 'admin-and-staff') {
+    return role === 'performance-staff' || role === 'support-staff';
+  }
+  if (invitePolicy === 'admin-staff-and-coaches') {
+    return role === 'performance-staff' || role === 'support-staff' || role === 'coach';
+  }
+  return false;
+};
+
+const buildMailto = (invite: PulseCheckInviteLink, teamName: string, organizationName: string) => {
+  const subject = encodeURIComponent(`PulseCheck invite for ${teamName}`);
+  const body = encodeURIComponent(
+    `You’ve been invited to PulseCheck for ${organizationName} / ${teamName}.\n\nOpen your onboarding link:\n${invite.activationUrl}`
+  );
+  return `mailto:${invite.targetEmail || ''}?subject=${subject}&body=${body}`;
+};
+
 export default function PulseCheckTeamWorkspacePage() {
   const router = useRouter();
   const currentUser = useUser();
@@ -94,9 +171,16 @@ export default function PulseCheckTeamWorkspacePage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [savingAccessFor, setSavingAccessFor] = useState<string | null>(null);
+  const [savingInvitePolicy, setSavingInvitePolicy] = useState(false);
+  const [creatingAthleteInvite, setCreatingAthleteInvite] = useState(false);
+  const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [scopeModalOpen, setScopeModalOpen] = useState(false);
   const [scopeTarget, setScopeTarget] = useState<TeamMemberView | null>(null);
   const [selectedAthletes, setSelectedAthletes] = useState<string[]>([]);
+  const [athleteInviteForm, setAthleteInviteForm] = useState({
+    recipientName: '',
+    targetEmail: '',
+  });
 
   const refreshWorkspace = async () => {
     if (!currentUser?.id || !teamId) return;
@@ -163,11 +247,13 @@ export default function PulseCheckTeamWorkspacePage() {
       });
     }
 
+    const scopedRoster = applyRosterScope(roster, myMembership);
+
     setMembership(myMembership);
     setOrganization(nextOrganization);
     setTeam(nextTeam);
     setTeamMembers(memberViews);
-    setAthleteRoster(roster);
+    setAthleteRoster(scopedRoster);
     setInviteLinks(nextInviteLinks);
   };
 
@@ -200,10 +286,22 @@ export default function PulseCheckTeamWorkspacePage() {
   const activeInviteLinks = useMemo(() => inviteLinks.filter((invite) => invite.status === 'active'), [inviteLinks]);
   const adultInviteCount = activeInviteLinks.filter((invite) => invite.teamMembershipRole && invite.teamMembershipRole !== 'athlete').length;
   const athleteInviteCount = activeInviteLinks.filter((invite) => invite.teamMembershipRole === 'athlete').length;
+  const athleteInviteLinks = activeInviteLinks.filter((invite) => invite.teamMembershipRole === 'athlete');
   const adultMembers = useMemo(() => teamMembers.filter((entry) => entry.membership.role !== 'athlete'), [teamMembers]);
   const isTeamAdmin = membership?.role === 'team-admin';
   const operatingRole = membership?.operatingRole || 'admin-only';
   const focus = focusByRole[operatingRole];
+  const canManageAthleteInvites = membership ? canCreateAthleteInvite(membership.role, team?.defaultInvitePolicy) : false;
+
+  const handleCopy = async (value: string, successText: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setMessage({ type: 'success', text: successText });
+    } catch (error) {
+      console.error('[PulseCheck team workspace] Clipboard copy failed:', error);
+      setMessage({ type: 'error', text: 'Failed to copy to clipboard.' });
+    }
+  };
 
   const handleScopeChange = async (target: TeamMemberView, scope: PulseCheckRosterVisibilityScope) => {
     setSavingAccessFor(target.membership.id);
@@ -221,6 +319,93 @@ export default function PulseCheckTeamWorkspacePage() {
       setMessage({ type: 'error', text: 'Failed to update roster visibility.' });
     } finally {
       setSavingAccessFor(null);
+    }
+  };
+
+  const handlePermissionSetChange = async (target: TeamMemberView, permissionSetId: string) => {
+    setSavingAccessFor(target.membership.id);
+    setMessage(null);
+    try {
+      await pulseCheckProvisioningService.updateTeamMembershipAccess({
+        teamMembershipId: target.membership.id,
+        rosterVisibilityScope: target.membership.rosterVisibilityScope || 'team',
+        allowedAthleteIds: target.membership.allowedAthleteIds || [],
+        permissionSetId,
+      });
+      await refreshWorkspace();
+      setMessage({ type: 'success', text: 'Member permission set updated.' });
+    } catch (error) {
+      console.error('[PulseCheck team workspace] Failed to update member permission set:', error);
+      setMessage({ type: 'error', text: 'Failed to update permission set.' });
+    } finally {
+      setSavingAccessFor(null);
+    }
+  };
+
+  const handleInvitePolicyChange = async (nextPolicy: PulseCheckInvitePolicy) => {
+    if (!team || !isTeamAdmin) return;
+    setSavingInvitePolicy(true);
+    setMessage(null);
+    try {
+      await pulseCheckProvisioningService.updateTeamInvitePolicy(team.id, nextPolicy);
+      await refreshWorkspace();
+      setMessage({ type: 'success', text: 'Team invite policy updated.' });
+    } catch (error) {
+      console.error('[PulseCheck team workspace] Failed to update invite policy:', error);
+      setMessage({ type: 'error', text: 'Failed to update team invite policy.' });
+    } finally {
+      setSavingInvitePolicy(false);
+    }
+  };
+
+  const handleCreateAthleteInvite = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!organization || !team || !currentUser) return;
+    if (!canManageAthleteInvites) {
+      setMessage({ type: 'error', text: 'Your current role and team invite policy do not allow athlete invites.' });
+      return;
+    }
+
+    setCreatingAthleteInvite(true);
+    setMessage(null);
+    try {
+      const inviteId = await pulseCheckProvisioningService.createTeamAccessInviteLink({
+        organizationId: organization.id,
+        teamId: team.id,
+        teamMembershipRole: 'athlete',
+        targetEmail: athleteInviteForm.targetEmail.trim().toLowerCase(),
+        recipientName: athleteInviteForm.recipientName.trim(),
+        createdByUserId: currentUser.id,
+        createdByEmail: currentUser.email,
+      });
+
+      await refreshWorkspace();
+      const createdInvite = (await pulseCheckProvisioningService.listTeamInviteLinks(team.id)).find((invite) => invite.id === inviteId);
+      if (createdInvite?.activationUrl) {
+        await navigator.clipboard.writeText(createdInvite.activationUrl);
+      }
+      setAthleteInviteForm({ recipientName: '', targetEmail: '' });
+      setMessage({ type: 'success', text: 'Athlete invite link created and copied.' });
+    } catch (error) {
+      console.error('[PulseCheck team workspace] Failed to create athlete invite:', error);
+      setMessage({ type: 'error', text: error instanceof Error ? error.message : 'Failed to create athlete invite.' });
+    } finally {
+      setCreatingAthleteInvite(false);
+    }
+  };
+
+  const handleRevokeInvite = async (inviteId: string) => {
+    setRevokingInviteId(inviteId);
+    setMessage(null);
+    try {
+      await pulseCheckProvisioningService.revokeInviteLink(inviteId);
+      await refreshWorkspace();
+      setMessage({ type: 'success', text: 'Invite link revoked.' });
+    } catch (error) {
+      console.error('[PulseCheck team workspace] Failed to revoke invite link:', error);
+      setMessage({ type: 'error', text: 'Failed to revoke invite link.' });
+    } finally {
+      setRevokingInviteId(null);
     }
   };
 
@@ -349,6 +534,30 @@ export default function PulseCheckTeamWorkspacePage() {
                   <div>Team memberships and team-access invites are now the primary source of truth for staff and athlete access.</div>
                   <div>Legacy `coachAthletes` is only used as a temporary bridge when the new team roster is still empty or to enrich athlete stats during migration.</div>
                   <div>Per-athlete staff assignment now lives on `TeamMembership.allowedAthleteIds` instead of `coach-staff`.</div>
+                  <div>Current athlete invite policy: <span className="font-medium text-white">{invitePolicyLabel(team.defaultInvitePolicy)}</span>.</div>
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-zinc-800 bg-[#091326] p-5">
+                <div className="flex items-center gap-3">
+                  <Users className="h-5 w-5 text-amber-300" />
+                  <div className="text-base font-semibold text-white">Team Invite Policy</div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px] md:items-center">
+                  <div className="text-sm leading-7 text-zinc-300">
+                    Control which roles are allowed to create athlete invite links from the team workspace.
+                  </div>
+                  <select
+                    aria-label="Team invite policy"
+                    value={team.defaultInvitePolicy}
+                    disabled={!isTeamAdmin || savingInvitePolicy}
+                    onChange={(event) => handleInvitePolicyChange(event.target.value as PulseCheckInvitePolicy)}
+                    className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white outline-none transition focus:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="admin-only">Admin Only</option>
+                    <option value="admin-and-staff">Admin and Staff</option>
+                    <option value="admin-staff-and-coaches">Admin, Staff, and Coaches</option>
+                  </select>
                 </div>
               </div>
 
@@ -369,6 +578,21 @@ export default function PulseCheckTeamWorkspacePage() {
                   </div>
                   <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
                     Weekly digest: {membership.notificationPreferences?.weeklyDigest ? 'On' : 'Off'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-zinc-800 bg-[#091326] p-5">
+                <div className="flex items-center gap-3">
+                  <Shield className="h-5 w-5 text-purple-300" />
+                  <div className="text-base font-semibold text-white">Roster Visibility Scope</div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
+                    Current scope: {scopeLabel(membership.rosterVisibilityScope)}
+                  </div>
+                  <div className="rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
+                    Visible athletes right now: {athleteRoster.length}
                   </div>
                 </div>
               </div>
@@ -459,7 +683,21 @@ export default function PulseCheckTeamWorkspacePage() {
                             </button>
                           </div>
                         </div>
-                        <div className="mt-3 text-xs text-zinc-500">{scopeLabel(entry.membership.rosterVisibilityScope)}</div>
+                        <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px] md:items-center">
+                          <div className="text-xs text-zinc-500">{scopeLabel(entry.membership.rosterVisibilityScope)}</div>
+                          <select
+                            value={entry.membership.permissionSetId || permissionOptionsByRole(entry.membership.role)[0]?.value || ''}
+                            disabled={!isTeamAdmin || savingAccessFor === entry.membership.id || entry.membership.role === 'team-admin'}
+                            onChange={(event) => handlePermissionSetChange(entry, event.target.value)}
+                            className="rounded-2xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white outline-none transition focus:border-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {permissionOptionsByRole(entry.membership.role).map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     );
                   })
@@ -483,6 +721,95 @@ export default function PulseCheckTeamWorkspacePage() {
                   Invite Athletes
                   <ChevronRight className="h-3.5 w-3.5" />
                 </Link>
+              </div>
+
+              <div className="mt-5 rounded-[24px] border border-zinc-800 bg-black/20 p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold text-white">Athlete Invite Controls</div>
+                    <div className="mt-1 text-sm text-zinc-400">
+                      Team admins can always invite athletes. Staff and coaches follow the team invite policy.
+                    </div>
+                  </div>
+                  <div className="rounded-full border border-zinc-700 px-3 py-1 text-xs uppercase tracking-[0.16em] text-zinc-400">
+                    {invitePolicyLabel(team.defaultInvitePolicy)}
+                  </div>
+                </div>
+
+                {canManageAthleteInvites ? (
+                  <form onSubmit={handleCreateAthleteInvite} className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                    <input
+                      value={athleteInviteForm.recipientName}
+                      onChange={(event) => setAthleteInviteForm((current) => ({ ...current, recipientName: event.target.value }))}
+                      placeholder="Athlete name"
+                      className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-300"
+                    />
+                    <input
+                      value={athleteInviteForm.targetEmail}
+                      onChange={(event) => setAthleteInviteForm((current) => ({ ...current, targetEmail: event.target.value }))}
+                      placeholder="athlete@school.edu"
+                      className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-3 text-sm text-white outline-none transition focus:border-emerald-300"
+                    />
+                    <button
+                      type="submit"
+                      disabled={creatingAthleteInvite}
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {creatingAthleteInvite ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                      Invite Athlete
+                    </button>
+                  </form>
+                ) : (
+                  <div className="mt-4 rounded-2xl border border-dashed border-zinc-800 px-4 py-4 text-sm text-zinc-500">
+                    Your role does not currently allow athlete invite creation under this team policy.
+                  </div>
+                )}
+
+                {athleteInviteLinks.length > 0 ? (
+                  <div className="mt-4 grid gap-3">
+                    {athleteInviteLinks.slice(0, 4).map((invite) => (
+                      <div key={invite.id} className="rounded-2xl border border-zinc-800 bg-zinc-950/60 p-4">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <div className="text-sm font-semibold text-white">{invite.recipientName || invite.targetEmail || 'Athlete invite'}</div>
+                            <div className="mt-1 text-xs text-zinc-500">{invite.targetEmail || 'No email captured'}</div>
+                            <div className="mt-2 break-all text-xs leading-6 text-zinc-400">{invite.activationUrl}</div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(invite.activationUrl, 'Athlete invite copied.')}
+                              className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-semibold text-white transition hover:border-zinc-500"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                              Copy
+                            </button>
+                            {invite.targetEmail ? (
+                              <a
+                                href={buildMailto(invite, team.displayName, organization?.displayName || 'PulseCheck')}
+                                className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 px-3 py-2 text-xs font-semibold text-white transition hover:border-zinc-500"
+                              >
+                                <Mail className="h-3.5 w-3.5" />
+                                Email
+                              </a>
+                            ) : null}
+                            {isTeamAdmin ? (
+                              <button
+                                type="button"
+                                disabled={revokingInviteId === invite.id}
+                                onClick={() => handleRevokeInvite(invite.id)}
+                                className="inline-flex items-center gap-2 rounded-xl border border-red-400/25 px-3 py-2 text-xs font-semibold text-red-200 transition hover:border-red-300 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {revokingInviteId === invite.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                                Revoke
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
               <div className="mt-5 space-y-3">

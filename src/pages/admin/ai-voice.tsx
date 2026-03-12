@@ -2,16 +2,22 @@ import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { motion } from 'framer-motion';
-import { Mic2, Play, Square, Save, Info, RefreshCw } from 'lucide-react';
+import { Mic2, Play, Square, Save, Info, RefreshCw, Sparkles, SlidersHorizontal } from 'lucide-react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { OPENAI_VOICES, speakStep, stopNarration, VoiceChoice, clearVoiceCache } from '../../utils/tts';
-
-type AiVoiceConfig = {
-  provider: 'openai';
-  voiceId: string; // e.g. alloy, nova, etc.
-  updatedAt: number;
-};
+import { clearVoiceCache, speakStep, stopNarration } from '../../utils/tts';
+import {
+  AiVoiceConfig,
+  ELEVENLABS_PRESETS,
+  ELEVENLABS_VOICES,
+  ElevenLabsVoiceSettings,
+  OPENAI_VOICES,
+  VoiceChoice,
+  getElevenLabsPreset,
+  normalizeAiVoiceConfig,
+  normalizeElevenLabsSettings,
+  shouldUseElevenLabsVoiceDefaults,
+} from '../../lib/aiVoice';
 
 const CONFIG_COLLECTION = 'app-config';
 const CONFIG_DOC_ID = 'ai-voice';
@@ -28,13 +34,25 @@ const AdminAiVoice: React.FC = () => {
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [provider, setProvider] = useState<AiVoiceConfig['provider']>('openai');
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('alloy');
+  const [selectedPresetId, setSelectedPresetId] = useState<string>(getElevenLabsPreset().id);
+  const [elevenLabsSettings, setElevenLabsSettings] = useState<ElevenLabsVoiceSettings>(
+    normalizeElevenLabsSettings(undefined, getElevenLabsPreset().id)
+  );
+  const [punctuationPauses, setPunctuationPauses] = useState(true);
   const [sampleText, setSampleText] = useState(sampleScripts[0]);
 
   const voiceLabel = useMemo(() => {
-    const found = OPENAI_VOICES.find((v) => v.provider === 'openai' && v.id === selectedVoiceId);
+    const source = provider === 'elevenlabs' ? ELEVENLABS_VOICES : OPENAI_VOICES;
+    const found = source.find((v) => v.id === selectedVoiceId);
     return found?.label || selectedVoiceId;
-  }, [selectedVoiceId]);
+  }, [provider, selectedVoiceId]);
+
+  const presetMeta = useMemo(
+    () => ELEVENLABS_PRESETS.find((preset) => preset.id === selectedPresetId) || getElevenLabsPreset(),
+    [selectedPresetId]
+  );
 
   const loadConfig = async () => {
     setLoading(true);
@@ -43,10 +61,14 @@ const AdminAiVoice: React.FC = () => {
       const ref = doc(db, CONFIG_COLLECTION, CONFIG_DOC_ID);
       const snap = await getDoc(ref);
       if (snap.exists()) {
-        const data = snap.data() as Partial<AiVoiceConfig>;
-        if (data.voiceId && typeof data.voiceId === 'string') {
-          setSelectedVoiceId(data.voiceId);
-        }
+        const data = normalizeAiVoiceConfig(snap.data() as Partial<AiVoiceConfig>);
+        setProvider(data.provider);
+        setSelectedVoiceId(data.voiceId);
+        setSelectedPresetId(data.presetId || getElevenLabsPreset().id);
+        setElevenLabsSettings(
+          normalizeElevenLabsSettings(data.elevenLabsSettings || undefined, data.presetId || undefined)
+        );
+        setPunctuationPauses(data.punctuationPauses !== false);
       }
     } catch (e: any) {
       console.error('Failed to load AI voice config', e);
@@ -67,14 +89,24 @@ const AdminAiVoice: React.FC = () => {
     stopNarration();
     setPlaying(true);
     try {
-      const choice: VoiceChoice = { provider: 'openai', id: selectedVoiceId, label: voiceLabel };
+      const choice: VoiceChoice = provider === 'elevenlabs'
+        ? {
+            provider: 'elevenlabs',
+            id: selectedVoiceId,
+            label: voiceLabel,
+            presetId: selectedPresetId,
+            settings: shouldUseElevenLabsVoiceDefaults(selectedPresetId) ? null : elevenLabsSettings,
+            punctuationPauses,
+          }
+        : { provider: 'openai', id: selectedVoiceId, label: voiceLabel };
       await speakStep(sampleText, {
         onEnd: () => setPlaying(false),
         onError: () => setPlaying(false),
+        fallbackToBrowser: false,
       }, choice);
     } catch (e: any) {
       console.error('Preview failed', e);
-      setError('Preview failed. If OPEN_AI_SECRET_KEY is not configured locally, it will fall back to browser TTS.');
+      setError('Preview failed. Check the selected provider API key and voice settings.');
       setPlaying(false);
     }
   };
@@ -90,8 +122,14 @@ const AdminAiVoice: React.FC = () => {
     try {
       const ref = doc(db, CONFIG_COLLECTION, CONFIG_DOC_ID);
       const payload: AiVoiceConfig = {
-        provider: 'openai',
+        provider,
         voiceId: selectedVoiceId,
+        presetId: provider === 'elevenlabs' ? selectedPresetId : null,
+        elevenLabsSettings:
+          provider === 'elevenlabs' && !shouldUseElevenLabsVoiceDefaults(selectedPresetId)
+            ? elevenLabsSettings
+            : null,
+        punctuationPauses: provider === 'elevenlabs' ? punctuationPauses : null,
         updatedAt: Date.now(),
       };
       await setDoc(ref, payload, { merge: true });
@@ -103,6 +141,24 @@ const AdminAiVoice: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const applyPreset = (presetId: string) => {
+    const preset = getElevenLabsPreset(presetId);
+    setSelectedPresetId(preset.id);
+    setElevenLabsSettings(normalizeElevenLabsSettings(preset.settings, preset.id));
+  };
+
+  const updateElevenLabsSetting = (
+    key: keyof Pick<ElevenLabsVoiceSettings, 'stability' | 'similarityBoost' | 'style'>,
+    
+    value: number
+  ) => {
+    setSelectedPresetId('custom');
+    setElevenLabsSettings((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
   };
 
   return (
@@ -160,23 +216,219 @@ const AdminAiVoice: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm text-zinc-400 mb-2">Default OpenAI Voice</label>
-                <select
-                  value={selectedVoiceId}
-                  onChange={(e) => setSelectedVoiceId(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-white/10"
-                  disabled={loading}
-                >
-                  {OPENAI_VOICES.filter((v) => v.provider === 'openai').map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.label}
-                    </option>
-                  ))}
-                </select>
-
-                <div className="mt-3 text-xs text-zinc-500">
-                  Selected: <span className="text-zinc-300">{voiceLabel}</span>
+                <div className="flex items-center gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProvider('openai');
+                      setSelectedVoiceId((current) =>
+                        OPENAI_VOICES.some((voice) => voice.id === current) ? current : OPENAI_VOICES[0].id
+                      );
+                    }}
+                    className={`flex-1 rounded-xl border px-4 py-3 text-left transition-colors ${
+                      provider === 'openai'
+                        ? 'border-[#E0FE10]/40 bg-[#E0FE10]/10 text-white'
+                        : 'border-zinc-700 bg-zinc-800 text-zinc-300'
+                    }`}
+                  >
+                    <div className="text-sm font-semibold">OpenAI</div>
+                    <div className="text-xs text-zinc-400 mt-1">Fast baseline previews and default fallback.</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProvider('elevenlabs');
+                      setSelectedVoiceId((current) =>
+                        ELEVENLABS_VOICES.some((voice) => voice.id === current) ? current : ELEVENLABS_VOICES[0].id
+                      );
+                    }}
+                    className={`flex-1 rounded-xl border px-4 py-3 text-left transition-colors ${
+                      provider === 'elevenlabs'
+                        ? 'border-[#E0FE10]/40 bg-[#E0FE10]/10 text-white'
+                        : 'border-zinc-700 bg-zinc-800 text-zinc-300'
+                    }`}
+                  >
+                    <div className="text-sm font-semibold flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      ElevenLabs
+                    </div>
+                    <div className="text-xs text-zinc-400 mt-1">Voice identity plus inflection control.</div>
+                  </button>
                 </div>
+
+                {provider === 'openai' ? (
+                  <>
+                    <label className="block text-sm text-zinc-400 mb-2">Default OpenAI Voice</label>
+                    <select
+                      value={selectedVoiceId}
+                      onChange={(e) => setSelectedVoiceId(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-white/10"
+                      disabled={loading}
+                    >
+                      {OPENAI_VOICES.filter((v) => v.provider === 'openai').map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="mt-3 text-xs text-zinc-500">
+                      Selected: <span className="text-zinc-300">{voiceLabel}</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <label className="block text-sm text-zinc-400 mb-2">ElevenLabs Voice</label>
+                    <select
+                      value={selectedVoiceId}
+                      onChange={(e) => setSelectedVoiceId(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-zinc-800 border border-zinc-700 text-white focus:outline-none focus:ring-2 focus:ring-white/10"
+                      disabled={loading}
+                    >
+                      {ELEVENLABS_VOICES.filter((v) => v.provider === 'elevenlabs').map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="mt-5 flex items-center gap-2 text-sm text-zinc-300">
+                      <SlidersHorizontal className="w-4 h-4 text-zinc-400" />
+                      Expression Presets
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 mt-3">
+                      {ELEVENLABS_PRESETS.map((preset) => {
+                        const active = selectedPresetId === preset.id;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => applyPreset(preset.id)}
+                            className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                              active
+                                ? 'border-[#E0FE10]/40 bg-[#E0FE10]/10'
+                                : 'border-zinc-700 bg-zinc-800 hover:bg-zinc-700/60'
+                            }`}
+                          >
+                            <div className="text-sm font-semibold text-white">{preset.label}</div>
+                            <div className="text-xs text-zinc-400 mt-1">{preset.description}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-5 space-y-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
+                      {shouldUseElevenLabsVoiceDefaults(selectedPresetId) && (
+                        <div className="rounded-lg border border-[#E0FE10]/20 bg-[#E0FE10]/8 px-3 py-2 text-xs text-zinc-300">
+                          Default sends no custom ElevenLabs overrides, so preview/save should match the voice library baseline more closely.
+                        </div>
+                      )}
+                      <div>
+                        <div className="flex items-center justify-between text-sm text-zinc-300 mb-2">
+                          <span>Stability</span>
+                          <span>{elevenLabsSettings.stability.toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={elevenLabsSettings.stability}
+                          onChange={(e) => updateElevenLabsSetting('stability', Number(e.target.value))}
+                          className="w-full"
+                          disabled={shouldUseElevenLabsVoiceDefaults(selectedPresetId)}
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between text-sm text-zinc-300 mb-2">
+                          <span>Similarity Boost</span>
+                          <span>{elevenLabsSettings.similarityBoost.toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={elevenLabsSettings.similarityBoost}
+                          onChange={(e) => updateElevenLabsSetting('similarityBoost', Number(e.target.value))}
+                          className="w-full"
+                          disabled={shouldUseElevenLabsVoiceDefaults(selectedPresetId)}
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between text-sm text-zinc-300 mb-2">
+                          <span>Style</span>
+                          <span>{elevenLabsSettings.style.toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.01"
+                          value={elevenLabsSettings.style}
+                          onChange={(e) => updateElevenLabsSetting('style', Number(e.target.value))}
+                          className="w-full"
+                          disabled={shouldUseElevenLabsVoiceDefaults(selectedPresetId)}
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between text-sm text-zinc-300 mb-2">
+                          <span>Speed</span>
+                          <span>{elevenLabsSettings.speed.toFixed(2)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.7"
+                          max="1.2"
+                          step="0.01"
+                          value={elevenLabsSettings.speed}
+                          onChange={(e) => {
+                            setSelectedPresetId('custom');
+                            setElevenLabsSettings((prev) => ({
+                              ...prev,
+                              speed: Number(e.target.value),
+                            }));
+                          }}
+                          className="w-full"
+                          disabled={shouldUseElevenLabsVoiceDefaults(selectedPresetId)}
+                        />
+                      </div>
+                      <label className="flex items-center justify-between rounded-lg border border-zinc-800 px-3 py-2">
+                        <span className="text-sm text-zinc-300">Speaker Boost</span>
+                        <input
+                          type="checkbox"
+                          checked={elevenLabsSettings.useSpeakerBoost}
+                          onChange={(e) => {
+                            setSelectedPresetId('custom');
+                            setElevenLabsSettings((prev) => ({
+                              ...prev,
+                              useSpeakerBoost: e.target.checked,
+                            }));
+                          }}
+                          className="h-4 w-4"
+                          disabled={shouldUseElevenLabsVoiceDefaults(selectedPresetId)}
+                        />
+                      </label>
+                      <label className="flex items-center justify-between rounded-lg border border-zinc-800 px-3 py-2">
+                        <div>
+                          <div className="text-sm text-zinc-300">Respect Punctuation</div>
+                          <div className="text-xs text-zinc-500">Adds short SSML pauses after commas and sentence endings.</div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={punctuationPauses}
+                          onChange={(e) => setPunctuationPauses(e.target.checked)}
+                          className="h-4 w-4"
+                        />
+                      </label>
+                      <div className="text-xs text-zinc-500">
+                        Active profile:{' '}
+                        <span className="text-zinc-300">
+                          {selectedPresetId === 'custom' ? 'Custom' : presetMeta.label}
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div>
@@ -197,6 +449,16 @@ const AdminAiVoice: React.FC = () => {
                       Sample
                     </button>
                   ))}
+                </div>
+                <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4 text-sm text-zinc-400">
+                  <div className="text-white font-medium mb-2">Active Preview</div>
+                  <div>Provider: <span className="text-zinc-200">{provider === 'elevenlabs' ? 'ElevenLabs' : 'OpenAI'}</span></div>
+                  <div>Voice: <span className="text-zinc-200">{voiceLabel}</span></div>
+                  {provider === 'elevenlabs' && (
+                    <div>
+                      Preset: <span className="text-zinc-200">{selectedPresetId === 'custom' ? 'Custom' : presetMeta.label}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -240,4 +502,3 @@ const AdminAiVoice: React.FC = () => {
 };
 
 export default AdminAiVoice;
-

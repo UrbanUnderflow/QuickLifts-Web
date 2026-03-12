@@ -100,6 +100,8 @@ const getAct1AudioPath = (audioId: string | null): string | null => {
     return entry ? `${ACT1_STATIC_AUDIO_BASE}/${entry.filename}` : null;
 };
 
+const NORA_THINKING_MS = 3500;
+
 // ─────────────────────────────────────────────────────────
 // DEMO SCRIPT — Act 1 Conversation Flow
 // ─────────────────────────────────────────────────────────
@@ -260,6 +262,68 @@ const FloatingOrb: React.FC<{
         transition={{ duration: 8, repeat: Infinity, delay, ease: 'easeInOut' }}
     />
 );
+
+const VoiceReactiveOrb: React.FC<{
+    active: boolean;
+    intensity: number;
+    pitch: number;
+}> = ({ active, intensity, pitch }) => {
+    const coreScale = 1 + intensity * 0.15;
+    const accentHue = 68 + pitch * 22;
+    const glowSize = active ? 20 + intensity * 30 : 12;
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: -20, filter: 'blur(12px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+            className="flex flex-col items-center justify-center py-6"
+        >
+            {/* Ambient glow behind orb */}
+            <div className="relative flex items-center justify-center">
+                <motion.div
+                    className="absolute rounded-full"
+                    animate={{
+                        scale: active ? [1, 1.3, 1] : [1, 1.1, 1],
+                        opacity: active ? [0.3, 0.6, 0.3] : [0.15, 0.25, 0.15],
+                    }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                    style={{
+                        width: 80,
+                        height: 80,
+                        background: `radial-gradient(circle, hsla(${accentHue}, 90%, 60%, 0.4) 0%, transparent 70%)`,
+                        filter: `blur(${glowSize}px)`,
+                    }}
+                />
+
+                {/* Core orb */}
+                <motion.div
+                    className="relative w-12 h-12 rounded-full"
+                    animate={{
+                        scale: coreScale,
+                    }}
+                    transition={{ duration: 0.15, ease: 'easeOut' }}
+                    style={{
+                        background: `radial-gradient(circle at 35% 30%, rgba(255,255,255,0.5) 0%, hsla(${accentHue}, 90%, 58%, 0.9) 50%, hsla(${accentHue}, 85%, 35%, 0.95) 100%)`,
+                        boxShadow: `0 0 ${glowSize}px hsla(${accentHue}, 92%, 64%, 0.3)`,
+                    }}
+                />
+            </div>
+
+            {/* Name label */}
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6, duration: 0.8 }}
+                className="mt-3 text-center"
+            >
+                <div className="text-[10px] font-medium uppercase tracking-[0.3em] text-white/40">
+                    Nora
+                </div>
+            </motion.div>
+        </motion.div>
+    );
+};
 
 // ─────────────────────────────────────────────────────────
 // BOX BREATHING ANIMATION
@@ -3428,12 +3492,110 @@ const PulseCheckDemo: React.FC = () => {
     const [sttEnabled, setSttEnabled] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const [isSpeaking, setIsSpeaking] = useState(false);
+    const [voiceOrbIntensity, setVoiceOrbIntensity] = useState(0.08);
+    const [voiceOrbPitch, setVoiceOrbPitch] = useState(0.22);
     const recognitionRef = useRef<any>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const narrationRunRef = useRef(0);
+    const orbAudioCtxRef = useRef<AudioContext | null>(null);
+    const orbAnalyserRef = useRef<AnalyserNode | null>(null);
+    const orbSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+    const orbAnimationRef = useRef<number | null>(null);
+    const orbFrequencyDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+    const orbTimeDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+
+    const stopVoiceOrb = useCallback(() => {
+        if (orbAnimationRef.current) {
+            cancelAnimationFrame(orbAnimationRef.current);
+            orbAnimationRef.current = null;
+        }
+        if (orbSourceRef.current) {
+            try {
+                orbSourceRef.current.disconnect();
+            } catch {}
+            orbSourceRef.current = null;
+        }
+        if (orbAnalyserRef.current) {
+            try {
+                orbAnalyserRef.current.disconnect();
+            } catch {}
+            orbAnalyserRef.current = null;
+        }
+        orbFrequencyDataRef.current = null;
+        orbTimeDataRef.current = null;
+        setVoiceOrbIntensity(0.08);
+        setVoiceOrbPitch(0.22);
+    }, []);
+
+    const attachVoiceOrb = useCallback((audio: HTMLAudioElement) => {
+        if (typeof window === 'undefined') return;
+
+        stopVoiceOrb();
+
+        try {
+            const AudioCtx =
+                window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+            if (!AudioCtx) return;
+
+            const ctx = orbAudioCtxRef.current ?? new AudioCtx();
+            orbAudioCtxRef.current = ctx;
+            if (ctx.state === 'suspended') {
+                ctx.resume().catch(() => undefined);
+            }
+
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.82;
+
+            const source = ctx.createMediaElementSource(audio);
+            source.connect(analyser);
+            analyser.connect(ctx.destination);
+
+            orbAnalyserRef.current = analyser;
+            orbSourceRef.current = source;
+            orbFrequencyDataRef.current = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+            orbTimeDataRef.current = new Uint8Array(new ArrayBuffer(analyser.fftSize));
+
+            const tick = () => {
+                const freqData = orbFrequencyDataRef.current;
+                const timeData = orbTimeDataRef.current;
+                const liveAnalyser = orbAnalyserRef.current;
+
+                if (!freqData || !timeData || !liveAnalyser) return;
+
+                liveAnalyser.getByteFrequencyData(freqData);
+                liveAnalyser.getByteTimeDomainData(timeData);
+
+                let rmsTotal = 0;
+                for (let i = 0; i < timeData.length; i += 1) {
+                    const normalized = (timeData[i] - 128) / 128;
+                    rmsTotal += normalized * normalized;
+                }
+                const rms = Math.sqrt(rmsTotal / timeData.length);
+
+                let weightedFreq = 0;
+                let totalFreq = 0;
+                for (let i = 0; i < freqData.length; i += 1) {
+                    weightedFreq += freqData[i] * i;
+                    totalFreq += freqData[i];
+                }
+                const centroid = totalFreq > 0 ? weightedFreq / totalFreq / freqData.length : 0;
+
+                setVoiceOrbIntensity((prev) => prev * 0.72 + Math.min(1, rms * 4.6 + 0.04) * 0.28);
+                setVoiceOrbPitch((prev) => prev * 0.7 + centroid * 0.3);
+                orbAnimationRef.current = requestAnimationFrame(tick);
+            };
+
+            orbAnimationRef.current = requestAnimationFrame(tick);
+        } catch (error) {
+            console.warn('[TTS] Voice orb visualizer setup failed:', error);
+            stopVoiceOrb();
+        }
+    }, [stopVoiceOrb]);
 
     const stopNarration = useCallback(() => {
         narrationRunRef.current += 1;
+        stopVoiceOrb();
 
         if (audioRef.current) {
             audioRef.current.onplay = null;
@@ -3446,7 +3608,7 @@ const PulseCheckDemo: React.FC = () => {
 
         window.speechSynthesis?.cancel();
         setIsSpeaking(false);
-    }, []);
+    }, [stopVoiceOrb]);
 
     const getNarrationAudioId = useCallback((scriptIdx: number, userText?: string) => {
         if (scriptIdx === 8) {
@@ -3455,6 +3617,11 @@ const PulseCheckDemo: React.FC = () => {
         return ACT1_AUDIO_ID_BY_SCRIPT_INDEX[scriptIdx] ?? null;
     }, []);
 
+    const waitForNoraThinking = useCallback(
+        () => new Promise((resolve) => setTimeout(resolve, NORA_THINKING_MS)),
+        []
+    );
+
     // ── Scroll to bottom on new messages ──────────────────
     useEffect(() => {
         scrollerRef.current?.scrollTo({
@@ -3462,33 +3629,6 @@ const PulseCheckDemo: React.FC = () => {
             behavior: 'smooth',
         });
     }, [messages, showBreathing]);
-
-    // ── Initial Nora greeting (only after intro dismissed) ─
-    useEffect(() => {
-        if (currentAct !== 'act1') return;
-        if (messages.length > 0) return; // already greeted
-        const firstMsg = DEMO_SCRIPT[0];
-        const timer = setTimeout(async () => {
-            setIsTyping(true);
-            // Preload audio while "typing" indicator is showing
-            const playFn = await preloadAudio(
-                getAct1AudioPath(getNarrationAudioId(0)),
-                firstMsg.ttsSpeed
-            );
-            setIsTyping(false);
-            const msg: ChatMsg = {
-                id: 'msg-0',
-                content: firstMsg.content,
-                isFromUser: false,
-                timestamp: Date.now(),
-            };
-            setMessages([msg]);
-            if (playFn) playFn(); // plays instantly — audio is already loaded
-            setScriptIndex(1);
-        }, 800);
-        return () => clearTimeout(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentAct]);
 
     // ── Demo narration: preload static MP3 and return a play() function ─────
     const preloadAudio = useCallback(
@@ -3529,15 +3669,20 @@ const PulseCheckDemo: React.FC = () => {
 
                 audioRef.current = audio;
 
-                audio.onplay = () => setIsSpeaking(true);
+                audio.onplay = () => {
+                    setIsSpeaking(true);
+                    attachVoiceOrb(audio);
+                };
                 audio.onended = () => {
                     setIsSpeaking(false);
+                    stopVoiceOrb();
                     if (audioRef.current === audio) {
                         audioRef.current = null;
                     }
                 };
                 audio.onerror = () => {
                     setIsSpeaking(false);
+                    stopVoiceOrb();
                     if (audioRef.current === audio) {
                         audioRef.current = null;
                     }
@@ -3553,6 +3698,7 @@ const PulseCheckDemo: React.FC = () => {
                                 audioRef.current = null;
                             }
                             setIsSpeaking(false);
+                            stopVoiceOrb();
                             console.warn('[TTS] Failed to play static demo narration', audioPath);
                         });
                 };
@@ -3563,6 +3709,34 @@ const PulseCheckDemo: React.FC = () => {
         },
         [stopNarration, ttsEnabled]
     );
+
+    // ── Initial Nora greeting (only after intro dismissed) ─
+    useEffect(() => {
+        if (currentAct !== 'act1') return;
+        if (messages.length > 0) return; // already greeted
+        const firstMsg = DEMO_SCRIPT[0];
+        const timer = setTimeout(async () => {
+            setIsTyping(true);
+            const [playFn] = await Promise.all([
+                preloadAudio(
+                    getAct1AudioPath(getNarrationAudioId(0)),
+                    firstMsg.ttsSpeed
+                ),
+                waitForNoraThinking(),
+            ]);
+            setIsTyping(false);
+            const msg: ChatMsg = {
+                id: 'msg-0',
+                content: firstMsg.content,
+                isFromUser: false,
+                timestamp: Date.now(),
+            };
+            setMessages([msg]);
+            if (playFn) playFn();
+            setScriptIndex(1);
+        }, 800);
+        return () => clearTimeout(timer);
+    }, [currentAct, getNarrationAudioId, messages.length, preloadAudio, waitForNoraThinking]);
 
 
     // ── STT: speech recognition ───────────────────────────
@@ -3676,11 +3850,13 @@ const PulseCheckDemo: React.FC = () => {
 
                     const contentToPlay = overrideContent ?? nextScript.content;
 
-                    // Preload audio WHILE typing indicator shows
-                    const playFn = await preloadAudio(
-                        getAct1AudioPath(getNarrationAudioId(nextIdx, userText)),
-                        nextScript.ttsSpeed
-                    );
+                    const [playFn] = await Promise.all([
+                        preloadAudio(
+                            getAct1AudioPath(getNarrationAudioId(nextIdx, userText)),
+                            nextScript.ttsSpeed
+                        ),
+                        waitForNoraThinking(),
+                    ]);
 
                     // Now reveal message and play audio simultaneously
                     setIsTyping(false);
@@ -3714,7 +3890,7 @@ const PulseCheckDemo: React.FC = () => {
 
             processNext();
         },
-        [getNarrationAudioId, preloadAudio, scriptIndex]
+        [getNarrationAudioId, preloadAudio, scriptIndex, waitForNoraThinking]
     );
 
     // ── Handle send ───────────────────────────────────────
@@ -3746,10 +3922,13 @@ const PulseCheckDemo: React.FC = () => {
             const nextScript = DEMO_SCRIPT[scriptIndex];
             if (nextScript.role === 'nora') {
                 setIsTyping(true);
-                const playFn = await preloadAudio(
-                    getAct1AudioPath(getNarrationAudioId(scriptIndex)),
-                    nextScript.ttsSpeed
-                );
+                const [playFn] = await Promise.all([
+                    preloadAudio(
+                        getAct1AudioPath(getNarrationAudioId(scriptIndex)),
+                        nextScript.ttsSpeed
+                    ),
+                    waitForNoraThinking(),
+                ]);
                 setIsTyping(false);
                 const msg: ChatMsg = {
                     id: `nora-${Date.now()}`,
@@ -3762,9 +3941,17 @@ const PulseCheckDemo: React.FC = () => {
                 setScriptIndex((prev) => prev + 1);
             }
         }
-    }, [getNarrationAudioId, preloadAudio, scriptIndex]);
+    }, [getNarrationAudioId, preloadAudio, scriptIndex, waitForNoraThinking]);
 
     useEffect(() => stopNarration, [stopNarration]);
+    useEffect(
+        () => () => {
+            stopVoiceOrb();
+            orbAudioCtxRef.current?.close().catch(() => undefined);
+            orbAudioCtxRef.current = null;
+        },
+        [stopVoiceOrb]
+    );
 
     // ── Render ────────────────────────────────────────────
     return (
@@ -3778,27 +3965,7 @@ const PulseCheckDemo: React.FC = () => {
             </Head>
 
             <div className="fixed inset-0 bg-[#0a0a0b] flex flex-col overflow-hidden">
-                {/* Ambient Orbs */}
-                <div className="absolute inset-0 pointer-events-none overflow-hidden">
-                    <FloatingOrb
-                        color="#E0FE10"
-                        size="w-[400px] h-[400px]"
-                        position={{ top: '-15%', left: '-10%' }}
-                        delay={0}
-                    />
-                    <FloatingOrb
-                        color="#3B82F6"
-                        size="w-[300px] h-[300px]"
-                        position={{ top: '40%', right: '-5%' }}
-                        delay={2}
-                    />
-                    <FloatingOrb
-                        color="#8B5CF6"
-                        size="w-[250px] h-[250px]"
-                        position={{ bottom: '10%', left: '20%' }}
-                        delay={4}
-                    />
-                </div>
+                {/* Ambient Orbs removed for minimal aesthetic */}
 
                 {/* Noise texture */}
                 <div className="absolute inset-0 opacity-[0.015] bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIgdHlwZT0iZnJhY3RhbE5vaXNlIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxwYXRoIGQ9Ik0wIDBoMzAwdjMwMEgweiIgZmlsdGVyPSJ1cmwoI2EpIiBvcGFjaXR5PSIuMDUiLz48L3N2Zz4=')]" />
@@ -4032,6 +4199,11 @@ const PulseCheckDemo: React.FC = () => {
                                 exit={{ opacity: 0, x: -100 }}
                                 className="h-full flex flex-col"
                             >
+                                <VoiceReactiveOrb
+                                    active={isSpeaking}
+                                    intensity={voiceOrbIntensity}
+                                    pitch={voiceOrbPitch}
+                                />
                                 {/* Chat messages */}
                                 <div
                                     ref={scrollerRef}
@@ -4110,44 +4282,29 @@ const PulseCheckDemo: React.FC = () => {
                                             {/* Typing indicator */}
                                             {isTyping && (
                                                 <motion.div
-                                                    initial={{ opacity: 0, y: 10 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    className="flex gap-4 items-start"
+                                                    initial={{ opacity: 0, filter: 'blur(10px)', y: 10, scale: 0.95 }}
+                                                    animate={{ opacity: 1, filter: 'blur(0px)', y: 0, scale: 1 }}
+                                                    transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
+                                                    className="flex gap-4 items-start py-4"
                                                 >
-                                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#E0FE10]/30 to-[#E0FE10]/10 border border-[#E0FE10]/20 flex items-center justify-center">
-                                                        <Brain className="w-3.5 h-3.5 text-[#E0FE10]" />
-                                                    </div>
-                                                    <div className="bg-zinc-800/60 border border-zinc-700/30 rounded-2xl px-4 py-3">
-                                                        <div className="flex gap-1">
-                                                            <motion.div
-                                                                className="w-2 h-2 rounded-full bg-zinc-500"
-                                                                animate={{ opacity: [0.3, 1, 0.3] }}
-                                                                transition={{
-                                                                    duration: 1,
-                                                                    repeat: Infinity,
-                                                                    delay: 0,
-                                                                }}
-                                                            />
-                                                            <motion.div
-                                                                className="w-2 h-2 rounded-full bg-zinc-500"
-                                                                animate={{ opacity: [0.3, 1, 0.3] }}
-                                                                transition={{
-                                                                    duration: 1,
-                                                                    repeat: Infinity,
-                                                                    delay: 0.2,
-                                                                }}
-                                                            />
-                                                            <motion.div
-                                                                className="w-2 h-2 rounded-full bg-zinc-500"
-                                                                animate={{ opacity: [0.3, 1, 0.3] }}
-                                                                transition={{
-                                                                    duration: 1,
-                                                                    repeat: Infinity,
-                                                                    delay: 0.4,
-                                                                }}
-                                                            />
-                                                        </div>
-                                                    </div>
+                                                    <motion.div 
+                                                        className="flex items-center gap-3 px-2"
+                                                        animate={{ opacity: [0.5, 1, 0.5] }}
+                                                        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                                                    >
+                                                        <motion.div
+                                                            className="w-4 h-4 rounded-full"
+                                                            style={{
+                                                                background: 'radial-gradient(circle, rgba(224,254,16,0.8) 0%, rgba(224,254,16,0) 70%)',
+                                                                boxShadow: '0 0 15px rgba(224,254,16,0.3)'
+                                                            }}
+                                                            animate={{ scale: [0.8, 1.2, 0.8] }}
+                                                            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                                                        />
+                                                        <span className="text-[11px] text-[#E0FE10]/70 uppercase tracking-[0.25em] font-light">
+                                                            Thinking...
+                                                        </span>
+                                                    </motion.div>
                                                 </motion.div>
                                             )}
                                         </div>
