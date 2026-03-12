@@ -3,7 +3,6 @@
 import React from 'react';
 import { SelectedRootTabs } from '../../types/DashboardTypes';
 import { useUser } from '../../hooks/useUser'; // Import useUser hook
-import { useRouter } from 'next/navigation';
 
 interface BottomNavProps {
   selectedTab: SelectedRootTabs;
@@ -15,7 +14,6 @@ const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
   console.log('[BottomNav] Hiding Search and Messages tabs');
 
   const currentUser = useUser(); // Use the hook
-  const router = useRouter();
 
   const allTabs = [
     {
@@ -60,12 +58,6 @@ const BottomNav: React.FC<BottomNavProps> = ({ selectedTab, onTabChange }) => {
 
   // Filter out hidden tabs
   const tabs = allTabs.filter(tab => !tab.hidden);
-
-  // Function to determine if Profile tab should be rendered
-  const shouldRenderProfileTab = () => {
-    const currentUser = useUser(); // Use the hook again for consistency
-    return currentUser && currentUser.username;
-  };
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-zinc-800/80 backdrop-blur-sm border-t border-zinc-700">

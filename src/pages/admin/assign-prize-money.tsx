@@ -65,7 +65,7 @@ const AssignPrizeMoneyPage: React.FC = () => {
   const [newPrizeAmount, setNewPrizeAmount] = useState('');
   const [justAssignedPrize, setJustAssignedPrize] = useState<PrizeAssignment | null>(null);
   const [sendingHostEmail, setSendingHostEmail] = useState(false);
-  const [depositorPrize, setDepositorPrize] = useState<PrizeAssignment | null>(null);
+  const [_depositorPrize, _setDepositorPrize] = useState<PrizeAssignment | null>(null);
   const [isDepositing, setIsDepositing] = useState(false);
   const [escrowRecords, setEscrowRecords] = useState<any[]>([]);
   const [dataLoaded, setDataLoaded] = useState(false);

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ArrowUpRight, Download, Search, Loader2, AlertTriangle, X, ChevronRight, ArrowLeft } from 'lucide-react'; // Added ChevronRight, ArrowLeft
-import { useScrollFade } from '../../hooks/useScrollFade';
+import { ArrowUpRight, Download, Search, Loader2, X, ChevronRight } from 'lucide-react';
 import Header from '../../components/Header';
 import Footer from '../../components/Footer/Footer';
 import { doc, getDoc } from 'firebase/firestore';
@@ -1021,7 +1020,7 @@ const PressKit: React.FC<PressKitPageProps> = ({ metaData }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [pressKitAssets, setPressKitAssets] = useState<PressKitAssets | null>(null);
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [_fetchError, setFetchError] = useState<string | null>(null);
   const [showFactSheetModal, setShowFactSheetModal] = useState(false);
   const [showOverviewModal, setShowOverviewModal] = useState(false);
   const [appScreenshots, setAppScreenshots] = useState<{
@@ -2149,7 +2148,7 @@ As a serial entrepreneur, he founded and scaled a previous fitness app called BU
   );
 };
 
-export const getServerSideProps: GetServerSideProps<PressKitPageProps> = async (context) => {
+export const getServerSideProps: GetServerSideProps<PressKitPageProps> = async (_context) => {
   let rawMetaData: FirestorePageMetaData | null = null;
   try {
     rawMetaData = await adminMethods.getPageMetaData('press');

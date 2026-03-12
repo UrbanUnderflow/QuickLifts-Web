@@ -32,7 +32,7 @@ export default async function handler(
       if (existingDoc.exists()) {
         existingSettings = existingDoc.data();
       }
-    } catch (error) {
+    } catch (_error) {
       console.log('No existing settings found, creating new document');
     }
 
@@ -53,10 +53,10 @@ export default async function handler(
       message: 'Email template saved successfully'
     });
 
-  } catch (error) {
-    console.error('Error saving admin settings:', error);
+  } catch (_error) {
+    console.error('Error saving admin settings:', _error);
     return res.status(500).json({ 
-      error: error instanceof Error ? error.message : 'Internal Server Error',
+      error: _error instanceof Error ? _error.message : 'Internal Server Error',
       success: false 
     });
   }

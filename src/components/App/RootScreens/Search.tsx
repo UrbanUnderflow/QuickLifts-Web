@@ -22,7 +22,7 @@ interface UserCardProps {
 }
 
 // Empty state card for different sections
-const SearchCard: React.FC<SearchCardProps> = ({ text, subText, icon }) => (
+const _SearchCard: React.FC<SearchCardProps> = ({ text, subText, icon }) => (
   <div className="bg-zinc-800 rounded-lg p-6 mx-4 mb-6">
     <div className="flex items-start space-x-4">
       <div className="bg-zinc-700 p-4 rounded-full">

@@ -8,7 +8,6 @@ import { getAuth, getIdToken } from 'firebase/auth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Dumbbell, Video, PlayCircle, RefreshCw, AlertCircle, CheckCircle, Loader2, Eye, XCircle, ImageIcon, Check, X, Search, Filter, Trash2, Copy, Sparkles, ArrowUpDown, ChevronDown } from 'lucide-react';
 import { convertFirestoreTimestamp } from '../../utils/formatDate';
-import { Exercise, ExerciseVideo } from '../../api/firebase/exercise/types'; // Assuming types are here
 
 // Define interfaces for display (can be expanded)
 interface ExerciseDisplay {
@@ -109,7 +108,7 @@ const MoveManagement: React.FC = () => {
   const [generatingGif, setGeneratingGif] = useState<{[videoId: string]: boolean}>({});
   const [normalizingVideos, setNormalizingVideos] = useState<{[videoId: string]: boolean}>({});
   const [inferringBodyParts, setInferringBodyParts] = useState(false);
-  const [inferredBodyParts, setInferredBodyParts] = useState<string[] | null>(null);
+  const [_inferredBodyParts, setInferredBodyParts] = useState<string[] | null>(null);
 
   // Show/hide toast
   useEffect(() => {
@@ -502,8 +501,8 @@ const MoveManagement: React.FC = () => {
                 }
               }
             }
-          } catch (e) {
-            console.warn('[MoveManagement] Failed to load metadata for', v.id, e);
+          } catch (_e) {
+            console.warn('[MoveManagement] Failed to load metadata for', v.id, _e);
           }
           return v;
         })
@@ -691,9 +690,9 @@ const MoveManagement: React.FC = () => {
             const ref = storageRef(storage, urlOrPath);
             await deleteObject(ref);
           }
-        } catch (e) {
+        } catch (_e) {
           // Best-effort: log but do not block deletion
-          console.warn('[MoveManagement] Failed to delete storage object:', urlOrPath, e);
+          console.warn('[MoveManagement] Failed to delete storage object:', urlOrPath, _e);
         }
       };
 
@@ -1003,7 +1002,7 @@ const MoveManagement: React.FC = () => {
             return date.toLocaleString();
         }
         return 'Invalid Date';
-    } catch (e) {
+    } catch (_e) {
         return 'Invalid Date';
     }
   };
@@ -1028,7 +1027,7 @@ const MoveManagement: React.FC = () => {
         const parsed = parseInt(len, 10);
         if (!isNaN(parsed)) return parsed;
       }
-    } catch (e) {
+    } catch (_e) {
       // ignore; best-effort fallback only
     }
     return undefined;

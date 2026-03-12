@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/router';
 import PageHead from '../components/PageHead';
-import { FiArrowLeft, FiPlus, FiChevronRight, FiEye, FiLayout, FiExternalLink, FiCopy, FiTrash2 } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiEye, FiLayout, FiExternalLink, FiCopy, FiTrash2 } from 'react-icons/fi';
 import { useUser } from '../hooks/useUser';
 import { creatorPagesService, CreatorLandingPage } from '../api/firebase/creatorPages/service';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -39,7 +39,6 @@ export default function ManageLandingPagesPage() {
         }
 
         loadPages();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentUser?.id]);
 
     const loadPages = async () => {

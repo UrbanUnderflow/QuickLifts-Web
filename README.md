@@ -1,132 +1,40 @@
-Here’s a comprehensive README.md template that outlines the setup process for your project, including installing dependencies, configuring your environment, and running the development server.
+# QuickLifts-Web
 
-Project Setup Guide
+QuickLifts-Web is the production Next.js web app for Pulse. The current app runs as a single Next Pages Router project under `src/pages`, with Netlify functions in `netlify/functions`.
 
-This guide outlines the steps required to set up and run the project on your local machine. Follow these instructions to ensure a smooth development experience.
+## Requirements
 
-Prerequisites
+- Node.js 20.x
+- npm
+- Netlify CLI if you need local function emulation
 
-Make sure the following tools are installed on your machine before proceeding:
-	1.	Node.js (v14 or higher)
-	•	Install from Node.js Official Website.
-	•	Verify installation:
+## Setup
 
-node --version
+```bash
+npm install
+cp .env.example .env.local
+```
 
+Fill in the values in `.env.local` before running the app.
 
-	2.	Yarn (Preferred package manager)
-	•	Install globally:
+## Common Commands
 
-npm install -g yarn
+```bash
+npm run dev
+npm run dev:fast
+npm run build
+npm run typecheck
+npm run lint
+npm run env-check
+npm run test:e2e
+```
 
+`npm run dev` starts the Next app directly.
 
-	•	Verify installation:
+`npm run dev:fast` starts the app through Netlify Dev and links the slim local functions setup used by this repo.
 
-yarn --version
+## Notes
 
-
-	3.	Netlify CLI (For local development with Netlify functions)
-	•	Install globally using Yarn:
-
-yarn global add netlify-cli
-
-
-	•	Verify installation:
-
-netlify --version
-
-
-	4.	Git
-	•	Install from Git Official Website.
-	•	Verify installation:
-
-git --version
-
-Project Setup
-
-Follow these steps to clone and set up the project:
-	1.	Clone the Repository
-
-git clone <repository-url>
-cd <project-directory>
-
-
-	2.	Install Dependencies
-Run the following command to install all necessary dependencies:
-
-yarn install
-
-
-
-Running the Development Server
-
-Netlify Dev
-
-Start the local development server with Netlify CLI:
-
-netlify dev
-
-This command:
-	•	Serves your app locally.
-	•	Simulates your serverless functions.
-	•	Proxies API requests (if configured in netlify.toml).
-
-
-
-
-TROUBLE SHOOTING STEPS:
-
-Additional Setup
-	1.	Yarn Global Path
-Ensure the global Yarn binaries are added to your PATH:
-	•	Add this to your shell configuration file (~/.zshrc or ~/.bashrc):
-
-export PATH="$(yarn global bin):$PATH"
-
-
-	•	Reload your shell:
-
-source ~/.zshrc
-
-
-	2.	Verify Installation
-Confirm netlify and other tools are correctly installed and accessible:
-
-netlify --version
-
-Common Commands
-
-Here are some commonly used commands for the project:
-	•	Install Dependencies:
-
-yarn install
-
-
-	•	Start Development Server:
-
-netlify dev
-
-
-	•	Build for Production:
-
-yarn build
-
-
-	•	Run Tests:
-
-yarn test
-
-Troubleshooting
-	•	Netlify Command Not Found:
-Ensure the global Yarn bin path is added to your PATH:
-
-yarn global bin
-export PATH="<output-of-yarn-global-bin>:$PATH"
-
-
-	•	Permission Errors with Yarn or npm:
-Change the ownership of the global modules directory:
-
-sudo chown -R $(whoami) /usr/local/lib/node_modules
-
-Feel free to modify this README.md to suit your project’s specific needs! Let me know if you want to refine it further.
+- The active web app lives in `src/pages` and `src/components`.
+- Deployment is configured through [`netlify.toml`](./netlify.toml).
+- Environment variables should be managed through local `.env` files and the Netlify UI, not committed into the repo.

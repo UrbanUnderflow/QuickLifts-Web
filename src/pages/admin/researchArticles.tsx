@@ -5,14 +5,12 @@ import {
     collection,
     getDocs,
     doc,
-    getDoc,
     setDoc,
     updateDoc,
     deleteDoc,
     query,
     orderBy,
     Timestamp,
-    serverTimestamp
 } from 'firebase/firestore';
 import { db, storage } from '../../api/firebase/config';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -31,7 +29,6 @@ import {
     Clock,
     ArrowLeft,
     Send,
-    Image as ImageIcon,
     Upload,
     Bold,
     Italic,

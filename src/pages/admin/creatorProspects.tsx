@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, addDoc, getDocs, orderBy, query, updateDoc, doc, getDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, updateDoc, doc, getDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
-import { Check, User, Mail, Globe, Users, Target, Loader2, Filter } from 'lucide-react';
+import { Check, User, Mail, Loader2, Filter } from 'lucide-react';
 import { convertFirestoreTimestamp, formatDate } from '../../utils/formatDate';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
@@ -128,15 +128,16 @@ const CreatorProspectsPage: React.FC = () => {
   const [bulkParsing, setBulkParsing] = useState(false);
   const [bulkPreview, setBulkPreview] = useState<Array<CreatorProspect & { __duplicate?: boolean; __selected?: boolean }>>([]);
   const [bulkSaving, setBulkSaving] = useState(false);
+  const emailDraftWasOpen = useRef(false);
 
   useEffect(() => {
-    if (emailOpen && emailProspect) {
+    if (emailOpen && emailProspect && !emailDraftWasOpen.current) {
       setInitialDraft({ body: emailBody, slots: proposedSlots, sender: senderType });
       setRevPrompt('');
       setRevText('');
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [emailOpen]);
+    emailDraftWasOpen.current = emailOpen;
+  }, [emailOpen, emailProspect, emailBody, proposedSlots, senderType]);
 
   const computeDuplicate = (p: Partial<CreatorProspect>) => {
     const byEmail = p.email?.toLowerCase().trim();
@@ -356,7 +357,6 @@ const CreatorProspectsPage: React.FC = () => {
   const generateEmail = (p: CreatorProspect, slots: string, from: 'tremaine' | 'brand'): { subject: string; body: string } => {
     const name = (p.displayName || p.handle || 'there').split(' ')[0];
     const subject = 'Creator outreach'; // unused for DM copy
-    const timeText = slots || 'before 12:45 PM most weekdays';
     const platform = pickPrimaryPlatform(p);
     const body = from === 'tremaine'
       ? `Hey ${name}! I’m Tremaine—loving your content. I’d love to hear more about how you’re building community and what your goals beyond ${platform} are. I’m a creator myself and I’m trying to be more intentional about building community among fitness creators, coaches, and trainers.\n\nI’m the founder of Pulse, a fitness app where creators, coaches, and instructors can create structured programs that turn into a kind of gamified, multiplayer group training. Your community can compete and connect with you through the program. They’re fully monetizable and a great way to identify your core people. We’ve already helped a couple of SoulCycle instructors launch their own Rounds and they each brought around 50 people into their first Round.\n\nWe’re still early and looking for like‑minded creators to grow with us. Would you be open to a conversation?`
@@ -972,5 +972,3 @@ const CreatorProspectsPage: React.FC = () => {
 };
 
 export default CreatorProspectsPage;
-
-

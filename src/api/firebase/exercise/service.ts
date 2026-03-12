@@ -10,7 +10,6 @@ import {
     where,
     getDoc,
     setDoc,
-    updateDoc,
     deleteDoc,
   } from 'firebase/firestore';
 import { db } from '../config';

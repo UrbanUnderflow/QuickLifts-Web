@@ -359,7 +359,7 @@ CRITICAL: Return ONLY valid JSON array format. No markdown, no explanations, no 
                   if (obj.companyName) {
                     validObjects.push(obj);
                   }
-                } catch (objError) {
+                } catch (_objError) {
                   // Skip invalid objects
                   continue;
                 }

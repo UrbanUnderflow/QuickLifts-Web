@@ -11,7 +11,6 @@ const ParticipantsSection: React.FC<ParticipantsSectionProps> = ({
   participants,
   onParticipantClick
 }) => {
-  const [previousRanks, setPreviousRanks] = React.useState<number[]>([]);
   const [showAllParticipants, setShowAllParticipants] = React.useState<boolean>(false);
 
   // Sort participants by total points
@@ -34,10 +33,6 @@ const ParticipantsSection: React.FC<ParticipantsSectionProps> = ({
       points.encouragementReceived
     );
   }
-
-  React.useEffect(() => {
-    setPreviousRanks(sortedParticipants.map((_, index) => index + 1));
-  }, [participants.length]);
 
   const toggleShowAll = () => {
     setShowAllParticipants((prev) => !prev);

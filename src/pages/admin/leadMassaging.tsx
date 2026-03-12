@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, updateDoc, writeBatch, where, limit, startAfter, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, addDoc, deleteDoc, doc, Timestamp, writeBatch, where, limit, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { 
-  Database, Upload, Trash2, Loader2, Sparkles, Clock, AlertCircle, CheckCircle, 
-  RefreshCw, Eye, ChevronLeft, ChevronRight, X, Columns, Send, Download,
+  Database, Upload, Trash2, Loader2, Sparkles, AlertCircle, CheckCircle,
+  RefreshCw, ChevronLeft, ChevronRight, X, Send,
   Plus, List, FileSpreadsheet, Wand2
 } from 'lucide-react';
 
@@ -466,14 +466,6 @@ OUTPUT:`;
       const listData = listDoc.data() as LeadList | undefined;
       const totalRows = listData?.rowCount || 0;
       setTotalPages(Math.ceil(totalRows / ROWS_PER_PAGE));
-
-      // Query items with pagination
-      const q = query(
-        collection(db, 'lead-list-items'),
-        where('listId', '==', listId),
-        orderBy('createdAt', 'asc'),
-        limit(ROWS_PER_PAGE)
-      );
 
       // For pages > 1, we need to get the last doc from previous page
       // For simplicity, we'll fetch all and slice (can optimize later with cursors)

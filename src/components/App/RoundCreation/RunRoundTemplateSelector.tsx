@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Check, ChevronRight, Map, Flame, Flag, Clock, TrendingUp, Calendar } from 'lucide-react';
+import { X, Check, ChevronRight, Map, Flame, Flag, TrendingUp, Calendar } from 'lucide-react';
 import { RunRoundType, RunRoundTypeInfo } from '../../../api/firebase/workout/types';
 
 interface RunRoundTemplateSelectorProps {

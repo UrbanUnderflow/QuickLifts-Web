@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronUp, ChevronDown, ChevronLeft, Users, Trophy, MessageCircle, BarChart3, BarChart2, Smartphone, Bell, MapPin, Globe, Zap, CheckCircle, Calendar, Phone, Mail, Download, Copy, Layers, Building2, Wrench, Dumbbell, Footprints, PersonStanding, X } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronLeft, Users, Trophy, MessageCircle, BarChart3, BarChart2, Smartphone, MapPin, Globe, Zap, CheckCircle, Calendar, Phone, Mail, Download, Copy, Layers, Wrench, Dumbbell, Footprints, PersonStanding, X } from 'lucide-react';
 import Header from '../components/Header';
 import PageHead from '../components/PageHead';
 import { GetServerSideProps } from 'next';

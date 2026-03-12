@@ -11,7 +11,6 @@ import { KanbanTask } from '../../api/firebase/kanban/types';
 import {
   ProgressTimelineEntry,
   ProgressBeat,
-  ConfidenceColor,
   NudgeLogEntry,
 } from '../../api/firebase/progressTimeline/types';
 import {
@@ -59,29 +58,6 @@ const FEED_BEAT_LIMIT = 200;
 const FEED_NUDGE_LIMIT = 80;
 const NORTH_STAR_DOC_PATH = 'company-config';
 const NORTH_STAR_DOC_ID = 'north-star';
-const UNLABELED_OBJECTIVE_LABEL = 'Untracked Objective';
-
-function objectiveCodeFromLabel(label: string, idx: number, usedCodes = new Set<string>()) {
-  const safe = String(label || '')
-    .trim()
-    .toLowerCase()
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 30)
-    .toUpperCase();
-
-  const base = `OBJ_${safe || `TRACK_${String(idx + 1).padStart(2, '0')}`}`;
-  let code = base;
-  let suffix = 2;
-  while (usedCodes.has(code)) {
-    code = `${base}_${suffix}`;
-    suffix += 1;
-  }
-  usedCodes.add(code);
-  return code;
-}
 
 interface NorthStarDoc { objectives?: string[] }
 
@@ -152,7 +128,6 @@ const MilestoneDot: React.FC<{
   const [hovered, setHovered] = useState(false);
 
   const statusIcon = completed ? '✓' : active ? '●' : '○';
-  const statusColor = completed ? '#34d399' : active ? '#fbbf24' : '#6b7280';
   const statusText = completed ? 'Done' : active ? 'In Progress' : 'Upcoming';
 
   // Determine visual state from richer status
@@ -557,7 +532,7 @@ const S = {
     marginBottom: 10,
     display: 'flex', alignItems: 'center', gap: 6,
   } as CSSProperties,
-  taskItem: (statusColor: string): CSSProperties => ({
+  taskItem: (_statusColor: string): CSSProperties => ({
     display: 'flex', alignItems: 'center', gap: 10,
     padding: '8px 12px', borderRadius: 10,
     background: 'rgba(255,255,255,0.02)',
@@ -604,7 +579,7 @@ const S = {
 };
 
 /* Keyframes injected once */
-const styleTag = typeof document !== 'undefined' ? (() => {
+const _styleTag = typeof document !== 'undefined' ? (() => {
   const existing = document.getElementById('obj-timeline-keyframes');
   if (existing) return existing;
   const tag = document.createElement('style');
@@ -627,7 +602,7 @@ const styleTag = typeof document !== 'undefined' ? (() => {
    Main Component
    ═══════════════════════════════════════════════════ */
 const ObjectiveTimelinePanel: React.FC<ObjectiveTimelinePanelProps> = ({
-  agents,
+  agents: _agents,
 }) => {
   const router = useRouter();
 

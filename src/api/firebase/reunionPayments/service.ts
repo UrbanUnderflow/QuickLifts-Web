@@ -3,13 +3,10 @@ import {
   doc, 
   getDocs, 
   getDoc, 
-  setDoc, 
   updateDoc, 
   addDoc, 
   query, 
   where, 
-  orderBy, 
-  serverTimestamp as fsServerTimestamp,
   deleteDoc
 } from 'firebase/firestore';
 import { db } from '../config';
@@ -152,5 +149,4 @@ export const reunionPaymentsService = {
     } as any);
   }
 };
-
 

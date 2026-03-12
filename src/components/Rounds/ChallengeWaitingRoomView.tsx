@@ -1,14 +1,13 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Challenge, ChallengeStatus, UserChallenge, SweatlistCollection } from '../../api/firebase/workout/types';
 import { userService, User } from '../../api/firebase/user';
 import { workoutService } from '../../api/firebase/workout/service';
 import { ChatService } from '../../api/firebase/chat/service';
 import { useRouter } from 'next/router';
-import { Calendar, ChevronDown, Users, Clock, Flag, Share2, X, MessageSquare } from 'lucide-react';
+import { ChevronDown, Users, Clock, Flag, Share2, X, MessageSquare } from 'lucide-react';
 import { useUser } from '../../hooks/useUser';
 import RoundChatView from './RoundChatView';
 import { GroupMessage, MessageMediaType } from '../../api/firebase/chat/types';
-import { ShortUser } from '../../api/firebase/user/types';
 import { useDispatch } from 'react-redux';
 import { showToast } from '../../redux/toastSlice';
 import { ThunkDispatch } from 'redux-thunk';
@@ -41,8 +40,6 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
     hours: 0,
     minutes: 0,
   });
-  const [showMenu, setShowMenu] = useState(false);
-
   // --- Chat State ---
   const [messages, setMessages] = useState<GroupMessage[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -267,10 +264,6 @@ export const ChallengeWaitingRoomView: React.FC<ChallengeWaitingRoomViewProps> =
         dispatch(hideLoader()); // Use correct loader action
     }
   };
-
-  const hasJoined = useMemo(() => {
-    return !!userChallenge;
-  }, [userChallenge]);
 
   // --- Share Handler ---
   const handleShare = async () => {

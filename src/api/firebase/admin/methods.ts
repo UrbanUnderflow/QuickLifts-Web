@@ -1,7 +1,7 @@
 import { setDoc, doc, getDoc, deleteDoc, Timestamp, collection, query, orderBy, limit as firestoreLimit, getDocs, addDoc, where } from 'firebase/firestore';
 import { db } from '../config';
 import { AdminService, PageMetaData, DailyPrompt, ProgrammingAccess, BetaApplication } from './types';
-import { dateToUnixTimestamp, convertFirestoreTimestamp } from '../../../utils/formatDate';
+import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 
 export const adminMethods: AdminService = {
   async addVersion(version, changeNotes, isCriticalUpdate) {

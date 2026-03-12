@@ -340,7 +340,7 @@ const OutreachCampaignsPage: React.FC = () => {
         }
     };
 
-    const readFileAsBase64 = async (file: File): Promise<string> => {
+    const _readFileAsBase64 = async (file: File): Promise<string> => {
         const arrayBuffer = await file.arrayBuffer();
         let binary = '';
         const bytes = new Uint8Array(arrayBuffer);
@@ -354,7 +354,7 @@ const OutreachCampaignsPage: React.FC = () => {
         return btoa(binary);
     };
 
-    const isLikelyReadableText = (raw: string): boolean => {
+    const _isLikelyReadableText = (raw: string): boolean => {
         if (!raw || raw.trim().length < 20) return false;
         const sample = raw.slice(0, 4000);
         let printable = 0;

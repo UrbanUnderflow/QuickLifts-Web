@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { db } from '../../api/firebase/config'; // Firestore instance
-import { collection, doc, setDoc, deleteDoc, getDocs, Timestamp, query, orderBy, limit, where } from 'firebase/firestore';
-import { User, ShortUser } from '../../api/firebase/user/types';
-import { SweatlistCollection, Challenge } from '../../api/firebase/workout/types'; // Added Challenge types
+import { collection, doc, setDoc, deleteDoc, getDocs, Timestamp, query, orderBy, limit } from 'firebase/firestore';
+import { User } from '../../api/firebase/user/types';
+import { SweatlistCollection } from '../../api/firebase/workout/types';
 import { workoutService } from '../../api/firebase/workout/service'; // Added workoutService
-import { Loader2, Search, CheckCircle, AlertTriangle, XCircle, User as UserIcon, AtSign, RefreshCw, ListChecks, ChevronDown, ChevronUp, Eye, Calendar, ChevronRight, Trash2 } from 'lucide-react'; // Added icons
+import { Loader2, Search, CheckCircle, AlertTriangle, XCircle, User as UserIcon, AtSign, RefreshCw, ListChecks, ChevronDown, ChevronUp, ChevronRight, Trash2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 
 const USER_CACHE_KEY = 'adminAllUsersCache';

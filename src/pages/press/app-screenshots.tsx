@@ -1,10 +1,9 @@
 import type { NextPage } from 'next';
 import Head from 'next/head';
 import React, { useState, useEffect } from 'react';
-import { Download, FileImage, X, Smartphone } from 'lucide-react'; // Changed icon
+import { Download, X, Smartphone } from 'lucide-react';
 import Footer from '../../components/Footer/Footer';
-// Import Firebase dependencies
-import { doc, getDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 
 // Define structure for screenshot data

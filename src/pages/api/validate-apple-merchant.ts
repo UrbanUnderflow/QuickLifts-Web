@@ -24,7 +24,7 @@ export default async function handler(
     }
     
     // Use Stripe to validate the Apple Pay merchant
-    const session = await stripe.applePayDomains.create({
+    const _session = await stripe.applePayDomains.create({
       domain_name: process.env.NEXT_PUBLIC_DOMAIN || req.headers.host || '',
     });
     

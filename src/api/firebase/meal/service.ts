@@ -14,7 +14,6 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config';
 import { Meal, MealData } from './types';
-import { userService } from '../user/service';
 
 class MealService {
   private static instance: MealService;

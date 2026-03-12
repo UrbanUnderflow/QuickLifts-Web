@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { FileText, Send, Check, Clock, Download, Eye, Trash2, Plus, X, Mail, RefreshCw, History } from 'lucide-react';
+import { FileText, Send, Check, Clock, Download, Eye, Trash2, X, Mail, RefreshCw, History } from 'lucide-react';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, orderBy, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 
@@ -580,7 +580,6 @@ const DocumentSigningAdmin: React.FC = () => {
 };
 
 export default DocumentSigningAdmin;
-
 
 
 

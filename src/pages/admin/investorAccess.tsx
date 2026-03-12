@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import {
-  Users,
   UserCheck,
   UserX,
   Loader2,
@@ -11,10 +10,8 @@ import {
   AlertCircle,
   Plus,
   Trash2,
-  Mail,
   Settings,
   Check,
-  Eye,
   Clock,
   Activity,
 } from 'lucide-react';
@@ -39,8 +36,6 @@ const INVESTOR_SECTIONS = [
   { id: 'legal', label: 'Legal Documents' },
   { id: 'documents', label: 'All Documents' },
 ] as const;
-
-type SectionId = typeof INVESTOR_SECTIONS[number]['id'];
 
 interface SectionAccess {
   overview: boolean;
@@ -215,7 +210,7 @@ const InvestorAccessPage: React.FC = () => {
         minute: '2-digit',
         hour12: true
       });
-    } catch (error) {
+    } catch (_error) {
       return 'Invalid date';
     }
   };
@@ -403,28 +398,6 @@ const InvestorAccessPage: React.FC = () => {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-  };
-
-  const formatDate = (date: any): string => {
-    if (!date) return 'Unknown';
-    
-    try {
-      if (date && typeof date.toDate === 'function') {
-        return date.toDate().toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric'
-        });
-      }
-      
-      return new Date(date).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    } catch (error) {
-      return 'Invalid date';
-    }
   };
 
   const countEnabledSections = (access?: SectionAccess): number => {

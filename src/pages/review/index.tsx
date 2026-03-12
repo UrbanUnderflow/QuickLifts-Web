@@ -28,7 +28,7 @@ interface ReviewsIndexProps {
 
 const ReviewsIndex: React.FC<ReviewsIndexProps> = ({ reviews: staticReviews }) => {
   const user = useUser();
-  const [drafts, setDrafts] = useState<DraftReview[]>([]);
+  const [_drafts, setDrafts] = useState<DraftReview[]>([]);
   const [allReviews, setAllReviews] = useState<Review[]>(staticReviews);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [checkingAdmin, setCheckingAdmin] = useState(true);

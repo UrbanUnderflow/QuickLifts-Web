@@ -54,10 +54,6 @@ const ActiveRunPage: React.FC = () => {
   const [phaseTimeRemaining, setPhaseTimeRemaining] = useState(0);
   const [currentRound, setCurrentRound] = useState(1);
   
-  // Countdown
-  const [showCountdown, setShowCountdown] = useState(false);
-  const [countdownValue, setCountdownValue] = useState(3);
-  
   // Modals
   const [showEndConfirmation, setShowEndConfirmation] = useState(false);
   const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
@@ -77,7 +73,7 @@ const ActiveRunPage: React.FC = () => {
   const persistRunSession = useCallback((payload: any) => {
     try {
       localStorage.setItem(runSessionStorageKey, JSON.stringify(payload));
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
   }, [runSessionStorageKey]);
@@ -85,7 +81,7 @@ const ActiveRunPage: React.FC = () => {
   const clearRunSession = useCallback(() => {
     try {
       localStorage.removeItem(runSessionStorageKey);
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
   }, [runSessionStorageKey]);
@@ -108,7 +104,7 @@ const ActiveRunPage: React.FC = () => {
               config: parsed,
             })
           );
-        } catch (e) {
+        } catch (_e) {
           // ignore
         }
         
@@ -116,8 +112,8 @@ const ActiveRunPage: React.FC = () => {
         if (parsed.runType === RunType.Intervals && parsed.intervalConfig) {
           setPhaseTimeRemaining(parsed.intervalConfig.runDurationSeconds);
         }
-      } catch (e) {
-        console.error('Failed to parse run config:', e);
+      } catch (_e) {
+        console.error('Failed to parse run config');
         router.back();
       }
     }
@@ -160,7 +156,7 @@ const ActiveRunPage: React.FC = () => {
         setRunState(RunState.Completed);
         if (savedElapsed !== null) setElapsedTime(savedElapsed);
       }
-    } catch (e) {
+    } catch (_e) {
       // ignore
     }
   }, [runSessionStorageKey, config]);
@@ -348,7 +344,6 @@ const ActiveRunPage: React.FC = () => {
             </div>
             <button
               onClick={() => {
-                setShowCountdown(false);
                 startRun();
               }}
               className="mt-6 w-full py-4 rounded-2xl font-bold text-lg text-white"
@@ -616,7 +611,7 @@ interface StatBoxProps {
   color: string;
 }
 
-const StatBox: React.FC<StatBoxProps> = ({ label, value, unit, color }) => (
+const StatBox: React.FC<StatBoxProps> = ({ label, value, unit }) => (
   <div className="bg-zinc-800/50 rounded-2xl p-4 text-center">
     <div className="text-xs text-zinc-500 uppercase tracking-wide mb-1">{label}</div>
     <div className="flex items-baseline justify-center gap-1">

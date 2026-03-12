@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Survey, SurveyQuestion, SurveyQuestionType, SurveyQuestionOption } from '../../api/firebase/creatorPages/service';
+import { Survey, SurveyQuestion, SurveyQuestionType } from '../../api/firebase/creatorPages/service';
 import { v4 as uuidv4 } from 'uuid';
 
 interface SurveyBuilderModalProps {
@@ -654,5 +654,4 @@ const SurveyBuilderModal: React.FC<SurveyBuilderModalProps> = ({
 };
 
 export default SurveyBuilderModal;
-
 

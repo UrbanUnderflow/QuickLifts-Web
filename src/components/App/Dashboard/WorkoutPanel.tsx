@@ -4,7 +4,6 @@ import { useSelector, useDispatch } from 'react-redux';
 import { X } from 'lucide-react';
 import { Workout, WorkoutStatus, WorkoutSummary } from '../../../api/firebase/workout/types';
 import {  
-  Challenge,
   UserChallenge
  } from '../../../api/firebase/workout/types';
 import WorkoutTypeSelector from '../../../components/App/Dashboard/WorkoutTypeSelector';
@@ -31,7 +30,6 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({
 }) => {
   const dispatch = useDispatch();
   const currentWorkout = useSelector((state: RootState) => state.workout.currentWorkout);
-  const currentExerciseLogs = useSelector((state: RootState) => state.workout.currentExerciseLogs);
   const currentUserId = useSelector((state: RootState) => state.user.currentUser?.id);
   
   const [loading, setLoading] = useState(true);
@@ -100,12 +98,6 @@ const WorkoutPanel: React.FC<WorkoutPanelProps> = ({
     } catch (error) {
       console.error('Error fetching recent workouts:', error);
     }
-  };
-
-  // Placeholder functions for data fetching
-  const fetchCurrentWorkout = async (): Promise<Workout | null> => {
-    // Implement your actual fetch logic here
-    return null; // Example
   };
 
   const fetchChallengesForUser = async (): Promise<UserChallenge[]> => {

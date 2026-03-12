@@ -17,7 +17,7 @@ import {
     RefreshCw,
 } from 'lucide-react';
 import { db } from '../../api/firebase/config';
-import { collection, query, where, orderBy, getDocs, limit, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, limit } from 'firebase/firestore';
 
 // ── Admin guard check ────────────────────────────────────────────────
 const ADMIN_EMAILS = [
@@ -143,7 +143,7 @@ const UserOnboarding: React.FC = () => {
 
             // Refresh the list
             loadRecentOnboardings();
-        } catch (err: any) {
+        } catch (_err: any) {
             setError('Network error. Please try again.');
         } finally {
             setIsCreating(false);
@@ -174,7 +174,7 @@ const UserOnboarding: React.FC = () => {
             }
 
             setEmailSent(true);
-        } catch (err: any) {
+        } catch (_err: any) {
             setError('Failed to send email. Try copying the link instead.');
         } finally {
             setIsSendingEmail(false);

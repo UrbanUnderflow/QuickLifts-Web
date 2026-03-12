@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, where, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import debounce from 'lodash.debounce';
 import { 
@@ -17,7 +17,6 @@ import {
   Target,
   Zap
 } from 'lucide-react';
-import { WorkoutSummary } from '../../api/firebase/workout/types';
 import { convertFirestoreTimestamp } from '../../utils/formatDate';
 
 // Define interface for display data

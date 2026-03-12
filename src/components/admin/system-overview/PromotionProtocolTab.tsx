@@ -4,7 +4,6 @@ import {
     Shield,
     FileText,
     GitMerge,
-    Cpu,
     BarChart3,
     ChevronDown,
     ChevronRight,
@@ -16,7 +15,6 @@ import {
     LineChart,
     Award,
     Eye,
-    AlertTriangle,
     RotateCcw,
     Tag,
     Compass,
@@ -24,7 +22,6 @@ import {
     SlidersHorizontal,
     ClipboardList,
     Layers,
-    RefreshCw,
 } from 'lucide-react';
 
 /* ---- COLLAPSIBLE ---- */

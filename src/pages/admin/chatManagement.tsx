@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { db } from '../../api/firebase/config';
-import { collection, query, orderBy, limit, getDocs, getDoc, doc, Timestamp, collectionGroup, deleteDoc, writeBatch } from 'firebase/firestore';
-import { formatDate, convertFirestoreTimestamp } from '../../utils/formatDate';
-import { Loader2, Search, RefreshCw, MessageCircle, Users, ChevronDown, ChevronUp, Eye, Calendar, User as UserIcon, Hash, Clock, AlertTriangle, CheckCircle, ChevronRight, Trash2, X } from 'lucide-react';
+import { collection, query, orderBy, limit, getDocs, getDoc, doc, Timestamp, collectionGroup, writeBatch } from 'firebase/firestore';
+import { convertFirestoreTimestamp } from '../../utils/formatDate';
+import { Loader2, Search, RefreshCw, MessageCircle, Users, ChevronDown, ChevronUp, Eye, Hash, AlertTriangle, CheckCircle, ChevronRight, Trash2, X } from 'lucide-react';
 
 // Interface for Group Messages (Challenge chats)
 interface GroupMessage {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import {
-  X, Clock, Activity, Calendar, ToggleLeft, ToggleRight,
+  X, Clock, Activity, ToggleLeft, ToggleRight,
   Users, Settings, Zap,
 } from 'lucide-react';
 import { db } from '../../api/firebase/config';
@@ -241,7 +241,7 @@ export const StandupConfigPanel: React.FC<StandupConfigPanelProps> = ({ onClose 
               <div className="scp-section">
                 <div className="scp-section-hdr"><Users className="w-3.5 h-3.5" /> Agents Monitored</div>
                 <div className="scp-chips">
-                  {Object.entries(AGENT_MAP).map(([id, { color, emoji }]) => {
+                  {Object.entries(AGENT_MAP).map(([id, { color, emoji: _emoji }]) => {
                     const active = config.agents.includes(id);
                     return (
                       <button

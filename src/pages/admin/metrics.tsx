@@ -1,20 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, where, getCountFromServer, writeBatch, doc, orderBy, limit, Timestamp, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, where, getCountFromServer, orderBy, Timestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../../api/firebase/config'; // Only import db
 import { getFunctions, httpsCallable } from 'firebase/functions'; // Import functions specific methods
-import { Dumbbell, Activity, Trophy, AlertCircle, RefreshCw, CheckCircle, Calendar, Clock, User, Eye, XCircle, Video, Image as ImageIcon, PlayCircle, Loader2 } from 'lucide-react'; // Added icons
+import { Dumbbell, Activity, Trophy, AlertCircle, RefreshCw, CheckCircle, Clock, User, Eye, XCircle, Video, Image as ImageIcon, PlayCircle, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import debounce from 'lodash.debounce';
-import { Exercise, ExerciseVideo } from '../../api/firebase/exercise/types'; // Import Exercise types
 
 // Define a type for the tabs
 type TabType = 'moves' | 'workouts' | 'rounds';
 
 const ROOT_SESSIONS_COLLECTION = "workout-sessions"; // Define root collection name
 const WORKOUT_SUMMARIES_COLLECTION = "workout-summaries"; // New collection name
-const BATCH_LIMIT = 100; // Firestore batch write limit
 
 // Utility function to correctly convert Firestore timestamps
 const convertFirestoreTimestamp = (timestamp: any): Date => {
@@ -112,7 +110,7 @@ const MetricsDashboard: React.FC = () => {
   const [workoutSummaries, setWorkoutSummaries] = useState<WorkoutSummaryDisplay[]>([]);
   const [filteredWorkoutSummaries, setFilteredWorkoutSummaries] = useState<WorkoutSummaryDisplay[]>([]);
   const [loadingWorkoutSummaries, setLoadingWorkoutSummaries] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [_searchTerm, setSearchTerm] = useState('');
   const [selectedWorkoutSummary, setSelectedWorkoutSummary] = useState<WorkoutSummaryDisplay | null>(null);
 
   // State for Moves Tab
@@ -284,8 +282,7 @@ const MetricsDashboard: React.FC = () => {
       console.log('[Metrics] Cleaning up thumbnail listener...');
       unsubscribeThumbnails(); 
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps 
-  }, []); // Run only on mount
+  }, [fetchCollectionCount, fetchWorkoutSummaries, setupThumbnailListener]);
 
   const handleTabChange = (tab: TabType) => {
     console.log(`[Metrics] Changing tab to: ${tab}`);

@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
 import { useDispatch } from 'react-redux';
 import { useUser } from '../../hooks/useUser';
 import { firebaseStorageService, UploadImageType } from '../../api/firebase/storage/service';
@@ -10,7 +9,6 @@ import CoachLayout from '../../components/CoachLayout';
 import { motion } from 'framer-motion';
 
 const CoachProfilePage: React.FC = () => {
-  const router = useRouter();
   const dispatch = useDispatch();
   const currentUser = useUser();
   const [bio, setBio] = useState('');
@@ -30,7 +28,7 @@ const CoachProfilePage: React.FC = () => {
   const [loaded, setLoaded] = useState(false);
   const [stripeStatus, setStripeStatus] = useState<'unknown'|'not_started'|'incomplete'|'active'>('unknown');
   const [stripeLoading, setStripeLoading] = useState(false);
-  const [onboardingLink, setOnboardingLink] = useState<string | null>(null);
+  const [_onboardingLink, setOnboardingLink] = useState<string | null>(null);
   const [earnings, setEarnings] = useState<{ totalEarned: number; pendingPayout: number; availableBalance: number; recentSales: Array<{date:string, amount:number, roundTitle:string}> } | null>(null);
   const [buyers, setBuyers] = useState<Record<string, { username?: string; email?: string }>>({});
 
@@ -551,5 +549,4 @@ const CoachProfilePage: React.FC = () => {
 };
 
 export default CoachProfilePage;
-
 

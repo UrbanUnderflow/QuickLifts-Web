@@ -1,17 +1,18 @@
 import * as admin from 'firebase-admin';
 
 const isE2EDevFirebase = process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true';
+const firebaseSecretKey = process.env.FIREBASE_SECRET_KEY;
 const selectedProjectId = isE2EDevFirebase
   ? process.env.NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID || 'quicklifts-dev-01'
   : 'quicklifts-dd3f1';
 const shouldUseCertCredentials =
-  Boolean(process.env.FIREBASE_SECRET_KEY) && selectedProjectId === 'quicklifts-dd3f1';
+  Boolean(firebaseSecretKey) && selectedProjectId === 'quicklifts-dd3f1';
 
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
   try {
     if (!shouldUseCertCredentials) {
-      if (!process.env.FIREBASE_SECRET_KEY) {
+      if (!firebaseSecretKey) {
         console.error('ERROR: FIREBASE_SECRET_KEY environment variable is missing');
       }
 
@@ -21,10 +22,12 @@ if (!admin.apps.length) {
         credential: admin.credential.applicationDefault(),
       });
     } else {
+      const serviceAccountPrivateKey = firebaseSecretKey as string;
+
       admin.initializeApp({
         credential: admin.credential.cert({
           projectId: selectedProjectId,
-          privateKey: process.env.FIREBASE_SECRET_KEY.replace(/\\n/g, '\n'),
+          privateKey: serviceAccountPrivateKey.replace(/\\n/g, '\n'),
           clientEmail: "firebase-adminsdk-1qxb0@quicklifts-dd3f1.iam.gserviceaccount.com",
         }),
         projectId: selectedProjectId,

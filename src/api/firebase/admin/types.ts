@@ -1,4 +1,3 @@
-import { UserCredential } from 'firebase/auth';
 import { Timestamp } from 'firebase/firestore';
 
 export interface DailyPrompt {

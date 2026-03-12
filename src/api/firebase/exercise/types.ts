@@ -73,7 +73,7 @@ export function isAdvancedBodyPart(bodyPart: BodyPart): boolean {
   return [BodyPart.Traps, BodyPart.Lats, BodyPart.Rhomboids, BodyPart.Deltoids].includes(bodyPart);
 }
 
-type ExerciseVisibility = 'limited' | 'secret' | 'live';
+type _ExerciseVisibility = 'limited' | 'secret' | 'live';
 
 export class ExerciseLog {
   id: string;

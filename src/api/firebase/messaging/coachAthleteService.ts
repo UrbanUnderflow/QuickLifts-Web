@@ -7,13 +7,11 @@ import {
   where, 
   orderBy, 
   onSnapshot, 
-  updateDoc, 
   serverTimestamp,
-  Timestamp,
   writeBatch
 } from 'firebase/firestore';
 import { db } from '../config';
-import { convertFirestoreTimestamp, dateToUnixTimestamp } from '../../../utils/formatDate';
+import { convertFirestoreTimestamp } from '../../../utils/formatDate';
 
 export interface CoachAthleteMessage {
   id: string;

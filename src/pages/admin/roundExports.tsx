@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, query, orderBy, getDocs, where } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { Loader2, Download, Search, Calendar, FileJson, Mail, ExternalLink } from 'lucide-react';
 
@@ -69,7 +69,7 @@ const RoundExportsPage: React.FC = () => {
     }
   };
 
-  const handleDownload = (downloadURL: string, fileName: string) => {
+  const handleDownload = (downloadURL: string, _fileName: string) => {
     window.open(downloadURL, '_blank');
   };
 
@@ -317,4 +317,3 @@ const RoundExportsPage: React.FC = () => {
 };
 
 export default RoundExportsPage;
-

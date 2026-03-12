@@ -55,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const system = 'You are a research assistant for finding university coach prospects with real emails. Always return strict JSON only and avoid duplicates.';
 
     const existingEmails = Array.isArray(existing?.emails) ? existing!.emails.slice(0, 2000) : [];
-    const existingNames = Array.isArray(existing?.decisionMakers) ? existing!.decisionMakers.slice(0, 2000) : [];
+    const _existingNames = Array.isArray(existing?.decisionMakers) ? existing!.decisionMakers.slice(0, 2000) : [];
     const existingUniversities = Array.isArray(existing?.universities) ? existing!.universities.slice(0, 2000) : [];
     const existingPairs = Array.isArray(existing?.pairs) ? existing!.pairs.slice(0, 4000) : [];
 
@@ -278,8 +278,8 @@ JSON only.`;
           const n = normalizeName(p.decisionMaker);
           const u = normalizeUniversity(p.university);
           const pairKey = makePair(n, u);
-          const lp = getLocal(e);
-          const uniCount = 0; // not tracking second pass duplication across locals
+          const _lp = getLocal(e);
+          const _uniCount = 0; // not tracking second pass duplication across locals
           if (!e) { debugReport2.push({ stage: 'secondExisting', reason: 'missingEmail', p }); continue; }
           if (existingEmailSet.has(e)) { debugReport2.push({ stage: 'secondExisting', reason: 'dupByEmail', p }); continue; }
           if (existingPairSet.has(pairKey)) { debugReport2.push({ stage: 'secondExisting', reason: 'dupByPair', p }); continue; }
@@ -318,5 +318,4 @@ JSON only.`;
     return res.status(500).json({ error: e?.message || 'Unexpected error' });
   }
 }
-
 

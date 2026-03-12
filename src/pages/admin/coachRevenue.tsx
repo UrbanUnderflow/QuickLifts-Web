@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
-import { useRouter } from 'next/router';
 import { db } from '../../api/firebase/config';
-import { collection, doc, getDoc, getDocs, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { convertFirestoreTimestamp } from '../../utils/formatDate';
 
 type CoachDoc = {
@@ -41,7 +40,6 @@ const DEFAULT_SPLIT_COACH = 0.6; // coach gets 60%
 const currency = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
 const CoachRevenueAdminPage: React.FC = () => {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<CoachRow[]>([]);
   const [search, setSearch] = useState('');
@@ -246,5 +244,3 @@ const CoachRevenueAdminPage: React.FC = () => {
 };
 
 export default CoachRevenueAdminPage;
-
-

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 
 const AddVersionPage = () => {

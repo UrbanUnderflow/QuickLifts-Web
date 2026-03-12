@@ -5,7 +5,7 @@ import { creatorPagesService, Survey, CLIENT_QUESTIONNAIRES_PAGE_SLUG, SurveyQue
 import { SurveyTakingModal } from '../../../components/Surveys';
 
 // Generate dynamic OG image URL based on page title
-const generateDynamicOgImage = (title: string, subtitle?: string): string => {
+const generateDynamicOgImage = (title: string, _subtitle?: string): string => {
   const baseUrl = 'https://fitwithpulse.ai/og-image.png';
   const params = new URLSearchParams({ title });
   // NOTE: intentionally not sending subtitle. Social previews should be title-only.

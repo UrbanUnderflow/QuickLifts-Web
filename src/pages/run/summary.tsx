@@ -31,8 +31,8 @@ const RunSummaryPage: React.FC = () => {
             triggerConfetti();
           }
         }, 300);
-      } catch (e) {
-        console.error('Failed to parse run summary:', e);
+      } catch (_e) {
+        console.error('Failed to parse run summary:', _e);
       }
     }
   }, [router.query.summary]);
@@ -96,7 +96,7 @@ const RunSummaryPage: React.FC = () => {
           text: shareText,
           url: window.location.origin
         });
-      } catch (e) {
+      } catch (_e) {
         // User cancelled or error
       }
     } else {

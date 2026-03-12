@@ -506,7 +506,7 @@ ${baseBody}`;
     alert('Survey link copied to clipboard!');
   };
 
-  const handleTakeSurvey = (survey: Survey) => {
+  const _handleTakeSurvey = (survey: Survey) => {
     setActiveSurveyForTaking(survey);
     setShowSurveyTaking(true);
     setShowSurveysList(false);
@@ -1724,5 +1724,4 @@ export const getServerSideProps: GetServerSideProps<CreatorLandingPageProps> = a
     },
   };
 };
-
 

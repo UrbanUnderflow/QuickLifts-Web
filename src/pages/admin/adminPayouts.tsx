@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import { collection, getDocs, query, orderBy, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../api/firebase/config';
 import { DollarSign, Search, Wallet, TrendingUp, History, ExternalLink, Activity, ArrowUpRight } from 'lucide-react';
 import { format } from 'date-fns';

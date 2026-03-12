@@ -7,7 +7,7 @@ import { userService } from '../api/firebase/user/service';
 import { privacyService } from '../api/firebase/privacy/service';
 import { User } from '../api/firebase/user/types';
 import { useUser } from '../hooks/useUser';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy } from 'firebase/firestore';
 import { db } from '../api/firebase/config';
 import { WorkoutSummary } from '../api/firebase/workout/types';
 
@@ -285,13 +285,8 @@ const AthleteDetailsModal: React.FC<AthleteDetailsModalProps> = ({
     }
 
     // Analyze sentiment patterns
-    const positiveDays = sentimentHistory.filter(r => r.sentimentScore > 0.3).length;
-    const negativeDays = sentimentHistory.filter(r => r.sentimentScore < -0.3).length;
-    const neutralDays = sentimentHistory.filter(r => r.sentimentScore >= -0.3 && r.sentimentScore <= 0.3).length;
-    
     // Analyze engagement patterns
     const avgMessagesPerDay = totalAIMessages / Math.max(activeDays, 1);
-    const avgSessionDuration = totalConversationMinutes / Math.max(totalConversationSessions, 1);
     const workoutFrequency = calculateWorkoutFrequency();
     
     // Calculate sentiment consistency

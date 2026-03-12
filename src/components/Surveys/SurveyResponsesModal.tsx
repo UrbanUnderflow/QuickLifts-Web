@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Survey, SurveyResponse, SurveyQuestion } from '../../api/firebase/creatorPages/service';
+import { Survey, SurveyResponse } from '../../api/firebase/creatorPages/service';
 
 interface SurveyResponsesModalProps {
   isOpen: boolean;
@@ -75,10 +75,6 @@ const SurveyResponsesModal: React.FC<SurveyResponsesModalProps> = ({
   const selectedResponse = selectedResponseId 
     ? responses.find(r => r.id === selectedResponseId) 
     : null;
-
-  const getQuestionById = (questionId: string): SurveyQuestion | undefined => {
-    return survey?.questions.find(q => q.id === questionId);
-  };
 
   const formatAnswer = (questionId: string, answer: string | number | string[] | undefined): string => {
     if (answer === undefined || answer === null) return '—';
@@ -357,5 +353,4 @@ const SurveyResponsesModal: React.FC<SurveyResponsesModalProps> = ({
 };
 
 export default SurveyResponsesModal;
-
 

@@ -71,7 +71,7 @@ interface CategoryCardProps {
 }
 
 const CategoryCard: React.FC<CategoryCardProps> = ({
-  category,
+  category: _category,
   displayName,
   description,
   icon,

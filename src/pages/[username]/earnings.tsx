@@ -4,7 +4,6 @@ import { useRouter } from 'next/router';
 import { useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { adminMethods } from '../../api/firebase/admin/methods';
-import { userService } from '../../api/firebase/user/service';
 import { User } from '../../api/firebase/user';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -163,7 +162,7 @@ function formatTransactions(recentSales: any[], prizeRecords: any[]) {
 
 const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({ 
   profileUser, 
-  isOwner, 
+  isOwner: _isOwner, 
   error: serverError 
 }) => {
   const router = useRouter();
@@ -271,7 +270,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
   const derivedPrizeLifetime = formattedTransactions
     .filter(t => t.type === 'prize_winning')
     .reduce((sum, t) => sum + (t.amount || 0), 0);
-  const derivedTotalLifetime = derivedCreatorLifetime + derivedPrizeLifetime;
+  const _derivedTotalLifetime = derivedCreatorLifetime + derivedPrizeLifetime;
 
   // Base URL for functions
   const API_BASE_URL = process.env.NODE_ENV === 'development' 
@@ -281,7 +280,7 @@ const UnifiedEarningsPage: React.FC<EarningsPageProps> = ({
   // Determine if current user is viewing their own earnings
   const isActualOwner = currentUser && profileUser && currentUser.id === profileUser.id;
   const isOwnerOrPublic = !!isActualOwner || (allowPublicView && isAdminViewer);
-  const isViewOnly = !isActualOwner && allowPublicView && isAdminViewer;
+  const _isViewOnly = !isActualOwner && allowPublicView && isAdminViewer;
 
   // Load connected athletes + subscription status when owner views their own page
   useEffect(() => {

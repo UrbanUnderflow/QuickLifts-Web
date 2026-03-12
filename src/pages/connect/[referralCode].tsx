@@ -527,7 +527,7 @@ const AthleteConnectPage: React.FC<AthleteConnectPageProps> = ({ initialCoachInf
                     </button>
                     <a
                       href={checkoutHref || '#'}
-                      onClick={async (e) => {
+                      onClick={async (_e) => {
                         if (!currentUser) return;
                         try {
                           setCreatingCheckout(true);
@@ -875,4 +875,3 @@ export const getServerSideProps: GetServerSideProps<AthleteConnectPageProps> = a
 };
 
 export default AthleteConnectPage;
-

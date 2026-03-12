@@ -2,12 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Tag, ChevronDown, Shield, Star } from 'lucide-react';
 import { useUser } from '../hooks/useUser';
-import { getStripePublishableKey, isLocalhost } from '../utils/stripeKey';
+import { isLocalhost } from '../utils/stripeKey';
 import SignInModal from '../components/SignInModal';
-import { loadStripe } from '@stripe/stripe-js';
 import Link from 'next/link';
-
-const stripePromise = loadStripe(getStripePublishableKey());
 
 // Floating orb for subtle background
 const FloatingOrb: React.FC<{

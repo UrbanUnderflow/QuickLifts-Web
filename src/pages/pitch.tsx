@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronUp, ChevronDown, ChevronLeft, Users, Trophy, MessageCircle, BarChart3, BarChart2, Smartphone, Bell, MapPin, Globe, Zap, CheckCircle, Calendar, Phone, Mail, Download, Copy, Layers, Building2, TrendingUp, DollarSign, Target, Sparkles, Play, Heart, UserPlus, Award, Briefcase, Rocket, X } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronLeft, Users, Trophy, BarChart2, Globe, CheckCircle, Phone, Mail, Download, Copy, Building2, TrendingUp, DollarSign, Target, Sparkles, Play, Heart, UserPlus, Award, Briefcase, Rocket, X } from 'lucide-react';
 import Header from '../components/Header';
 import PageHead from '../components/PageHead';
 import { GetServerSideProps } from 'next';
@@ -55,7 +55,7 @@ const Pitch = ({ metaData }: PitchProps) => {
   // Brand colors
   const pulseGreen = '#E0FE10';
   const pulsePurple = '#8B5CF6';
-  const pulseBlue = '#3B82F6';
+  const _pulseBlue = '#3B82F6';
 
   const linkedIn = {
     tremaine: 'https://linkedin.com/in/tremainegrant',

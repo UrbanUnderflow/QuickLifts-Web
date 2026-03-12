@@ -125,25 +125,12 @@ const CoachDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sharedAthletes, setSharedAthletes] = useState<any[]>([]);
-  const [sharedByCoach, setSharedByCoach] = useState<Array<{coachId: string; coachName?: string; athletes: any[]}>>([]);
+  const [_sharedByCoach, setSharedByCoach] = useState<Array<{coachId: string; coachName?: string; athletes: any[]}>>([]);
   const [pendingInvites, setPendingInvites] = useState<{ coachId: string; coachName?: string; permission: 'full'|'limited'; allowedAthletes?: string[] }[]>([]);
-  const [copiedCode, setCopiedCode] = useState(false);
-  const canSeeEarnings = !!(coachProfile?.earningsAccess === true || coachProfile?.userType === 'partner');
-  
-  const navItems = [
-    { href: '/coach/dashboard', label: 'Dashboard' },
-    { href: '/coach/referrals', label: 'Referrals' },
-    ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
-    { href: '/coach/staff', label: 'Staff' },
-    { href: '/coach/inbox', label: 'Inbox' },
-    { href: '/coach/profile', label: 'Profile' }
-  ];
 
   const handleCopyCode = async () => {
     if (coachProfile?.referralCode) {
       await navigator.clipboard.writeText(coachProfile.referralCode);
-      setCopiedCode(true);
-      setTimeout(() => setCopiedCode(false), 2000);
     }
   };
   
@@ -408,7 +395,6 @@ const CoachDashboard: React.FC = () => {
           if (!currentUser) throw err;
           const coachStaffRoot = collection(db, 'coach-staff');
           const coachIdsSnap = await getDocs(coachStaffRoot);
-          let found: { coachId: string; allowed: string[] } | null = null;
           const invites: { coachId: string; coachName?: string; permission: 'full'|'limited'; allowedAthletes?: string[] }[] = [];
           const groupedShared: Array<{coachId: string; coachName?: string; athletes: any[]}> = [];
           for (const coachDoc of coachIdsSnap.docs) {
@@ -418,7 +404,7 @@ const CoachDashboard: React.FC = () => {
               if (data.status === 'invited') {
                 invites.push({ coachId: coachDoc.id, coachName: undefined, permission: data.permission || 'limited', allowedAthletes: data.allowedAthletes || [] });
               } else if (data.permission === 'limited' && Array.isArray(data.allowedAthletes) && data.allowedAthletes.length) {
-                found = { coachId: coachDoc.id, allowed: data.allowedAthletes };
+                continue;
               } else if (data.permission === 'full') {
                 const connected = await coachService.getConnectedAthletes(coachDoc.id);
                 groupedShared.push({ coachId: coachDoc.id, coachName: undefined, athletes: connected });
@@ -462,7 +448,7 @@ const CoachDashboard: React.FC = () => {
           } catch (_) {}
           setError('Access denied. Coach account required.');
           setLoading(false);
-        } catch (subErr) {
+        } catch (_subErr) {
           console.error('Error fetching coach profile:', err);
           setError('Failed to load coach profile. Please try again.');
           setLoading(false);

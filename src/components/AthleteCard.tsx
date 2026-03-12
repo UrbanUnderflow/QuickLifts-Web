@@ -7,8 +7,6 @@ import {
   TrendingUp, 
   RefreshCw,
   Clock,
-  Sparkles,
-  ChevronRight,
   Activity
 } from 'lucide-react';
 import { coachService, DailySentimentRecord } from '../api/firebase/coach/service';
@@ -16,7 +14,7 @@ import ConversationModal from './ConversationModal';
 import CoachAthleteMessagingModal from './CoachAthleteMessagingModal';
 import AthleteDetailsModal from './AthleteDetailsModal';
 import { useUser } from '../hooks/useUser';
-import { EscalationTier, getTierLabel, getTierColor } from '../api/firebase/escalation/types';
+import { EscalationTier, getTierColor } from '../api/firebase/escalation/types';
 
 interface AthleteData {
   id: string;

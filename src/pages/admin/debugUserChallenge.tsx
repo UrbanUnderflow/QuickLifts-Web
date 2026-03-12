@@ -11,7 +11,7 @@ import { convertFirestoreTimestamp } from '../../utils/formatDate';
 const DebugUserChallenge: React.FC = () => {
   const [userSearchTerm, setUserSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [userChallenges, setUserChallenges] = useState<UserChallenge[]>([]);
+  const [_userChallenges, setUserChallenges] = useState<UserChallenge[]>([]);
   const [loading, setLoading] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -262,7 +262,7 @@ const DebugUserChallenge: React.FC = () => {
             <div className="bg-[#1a1d23] rounded-lg p-6">
               <h2 className="text-lg font-semibold mb-4">Challenge Details</h2>
               <div className="space-y-4">
-                {debugInfo.challengeDetails.map((challenge: any, index: number) => (
+                {debugInfo.challengeDetails.map((challenge: any, _index: number) => (
                   <div 
                     key={challenge.id} 
                     className={`p-4 rounded-lg border ${

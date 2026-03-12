@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, ChevronRight, Dumbbell, Flame } from 'lucide-react';
+import { X, ChevronRight, Flame } from 'lucide-react';
 import { RoundType, RoundTypeInfo } from '../../../api/firebase/workout/types';
 
 interface RoundTypeSelectorProps {

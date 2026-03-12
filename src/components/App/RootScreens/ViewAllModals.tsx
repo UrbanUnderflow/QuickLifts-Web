@@ -105,7 +105,7 @@ interface ViewAllMovelistsModalProps {
   onCreateNew: () => void;
 }
 
-export const ViewAllMovelistsModal: React.FC<ViewAllMovelistsModalProps> = ({ movelists, username, onClose, onSelectMovelist, onCreateNew }) => {
+export const ViewAllMovelistsModal: React.FC<ViewAllMovelistsModalProps> = ({ movelists, username: _username, onClose, onSelectMovelist, onCreateNew }) => {
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-zinc-900 rounded-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col">

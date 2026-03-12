@@ -2,7 +2,6 @@ import {
   GroupMessage,
   messageToFirestore,
   firestoreToMessage,
-  MessageMediaType,
 } from "./types";
 import { db, storage } from "../config";
 import {

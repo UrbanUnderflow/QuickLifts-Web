@@ -231,7 +231,7 @@ const WinnerConnectAccountPage: React.FC<WinnerConnectAccountPageProps> = ({ met
   );
 };
 
-export const getServerSideProps: GetServerSideProps<WinnerConnectAccountPageProps> = async (context) => {
+export const getServerSideProps: GetServerSideProps<WinnerConnectAccountPageProps> = async (_context) => {
   let rawMetaData: FirestorePageMetaData | null = null;
   try {
     rawMetaData = await adminMethods.getPageMetaData('winner--connect-account');

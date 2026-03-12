@@ -9,22 +9,6 @@ interface ExtractVCDataRequest {
   singleProspectResearch?: boolean; // Flag for stage research
 }
 
-interface VCProspect {
-  person: string;
-  companies: string;
-  urls: string;
-  linkedin: string;
-  continent: string;
-  country: string;
-  location: string; // NEW: More flexible location field
-  addresses: string;
-  email: string;
-  description: string;
-  stage: string;
-  founder: string;
-  numberOfExits: string;
-}
-
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse

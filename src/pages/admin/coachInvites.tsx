@@ -78,7 +78,7 @@ const CoachInvitesAdminPage: React.FC = () => {
       const snap = await getDocs(q);
       const rows: InviteLog[] = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
       setRecent(rows);
-    } catch (e: any) {
+    } catch (_e: any) {
       // Non-blocking; admin page still usable without this list
       setRecent([]);
     } finally {
@@ -412,5 +412,4 @@ const CoachInvitesAdminPage: React.FC = () => {
 };
 
 export default CoachInvitesAdminPage;
-
 

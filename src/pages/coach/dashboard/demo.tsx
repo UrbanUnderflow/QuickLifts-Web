@@ -1,6 +1,5 @@
 import React from 'react';
 import Head from 'next/head';
-import Link from 'next/link';
 import AthleteCard from '../../../components/AthleteCard';
 import { coachService, DailySentimentRecord } from '../../../api/firebase/coach/service';
 import { FaBars, FaTimes, FaUsers } from 'react-icons/fa';
@@ -18,7 +17,7 @@ type DemoAthlete = {
   demoSessions: DemoSession[];
 };
 
-const formatLastActive = (date?: Date): string => {
+const _formatLastActive = (date?: Date): string => {
   if (!date) return 'Never';
   const now = new Date();
   const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
@@ -233,7 +232,7 @@ const CoachDemoDashboard: React.FC = () => {
       if (!a) return originalGetConvos(athleteUserId);
       const now = new Date();
       // Build sessions from demoSessions with timestamps
-      return a.demoSessions.map((s, idx) => {
+      return a.demoSessions.map((s, _idx) => {
         const start = new Date(now);
         start.setDate(now.getDate() - s.daysAgo);
         start.setHours(10, 0, 0, 0);
@@ -455,5 +454,3 @@ const CoachDemoDashboard: React.FC = () => {
 };
 
 export default CoachDemoDashboard;
-
-

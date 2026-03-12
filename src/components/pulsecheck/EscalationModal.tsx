@@ -12,7 +12,7 @@ import {
   ExternalLink,
   Loader2
 } from 'lucide-react';
-import { EscalationTier, EscalationCategory, getCategoryLabel, getTierColor } from '../../api/firebase/escalation/types';
+import { EscalationTier, EscalationCategory, getCategoryLabel } from '../../api/firebase/escalation/types';
 
 // ============================================================================
 // Types
@@ -152,7 +152,7 @@ const Tier3Modal: React.FC<{
   category: EscalationCategory;
   reason?: string;
   isProcessing: boolean;
-}> = ({ category, reason, isProcessing }) => {
+}> = ({ category: _category, reason: _reason, isProcessing }) => {
   const [showResources, setShowResources] = useState(true);
 
   return (
@@ -301,7 +301,6 @@ const EscalationModal: React.FC<EscalationModalProps> = ({
     };
   }, [isOpen, tier, onClose]);
 
-  const tierColor = getTierColor(tier);
   const isCritical = tier === EscalationTier.CriticalRisk;
 
   return (
