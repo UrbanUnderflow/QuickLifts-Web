@@ -83,6 +83,8 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({ children }) => {
     '/onboarding/set-password',
     // PulseCheck demo (public for stakeholder demos)
     '/pulsecheckdemo',
+    // AuntEdna demo (public for stakeholder demos)
+    '/auntedna',
     // PulseCheck marketing landing (public)
     '/PulseCheck',
   ].map(route => route?.toLowerCase());
