@@ -8,23 +8,26 @@ import {
     GraduationCap, Handshake, DollarSign, Target, ArrowRight,
     MessageCircle, FileText, Calendar, AlertTriangle, Lock,
     Stethoscope, BarChart3, Globe, Award, Home, LogOut, ChevronRight, Pill,
+    Volume2, Phone,
 } from 'lucide-react';
 
-const TOTAL_STEPS = 11;
+const TOTAL_STEPS = 13;
 
 const STEP_META: Record<number, { section: string; label: string }> = {
     0: { section: 'intro', label: 'Title' },
-    1: { section: 'intro', label: 'Notification' },
-    2: { section: 'act1', label: "Maya's Profile" },
-    3: { section: 'act1', label: 'The Stat' },
-    4: { section: 'act1', label: 'The API' },
-    5: { section: 'act2', label: 'Handoff' },
-    6: { section: 'act2', label: 'Outcome' },
-    7: { section: 'act3', label: 'Traction' },
-    8: { section: 'act3', label: 'Unit Economics' },
-    9: { section: 'act3', label: 'Path to $100M' },
-    10: { section: 'act3', label: 'The Ask' },
-    11: { section: 'close', label: 'CTA' },
+    1: { section: 'intro', label: 'The Stat' },
+    2: { section: 'intro', label: 'Notification' },
+    3: { section: 'act1', label: "Maya's Profile" },
+    4: { section: 'act1', label: 'Welfare Check' },
+    5: { section: 'act1', label: 'The Pipeline' },
+    6: { section: 'act1', label: 'The API' },
+    7: { section: 'act2', label: 'Handoff' },
+    8: { section: 'act2', label: 'Outcome' },
+    9: { section: 'act3', label: 'Traction' },
+    10: { section: 'act3', label: 'Unit Economics' },
+    11: { section: 'act3', label: 'Path to $100M' },
+    12: { section: 'act3', label: 'The Ask' },
+    13: { section: 'close', label: 'CTA' },
 };
 
 // ─────────────────────────────────────────────────────────
@@ -398,7 +401,204 @@ const SceneStat: React.FC = () => (
 );
 
 // ─────────────────────────────────────────────────────────
-// STEP 4 — CLINICAL HANDOFF (API + HIPAA + Escalation + Pulse)
+// STEP 3 — WELFARE CHECK
+// ─────────────────────────────────────────────────────────
+
+const AECallTimer: React.FC = () => {
+    const [elapsed, setElapsed] = useState(0);
+    useEffect(() => { const i = setInterval(() => setElapsed(e => e + 1), 1000); return () => clearInterval(i); }, []);
+    return <div className="text-sm text-green-400 font-medium">Connected • {Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, '0')}</div>;
+};
+
+const AECallSim: React.FC<{ onRinging: () => void; onConnected: () => void; onEnded: () => void }> = ({ onRinging, onConnected, onEnded }) => {
+    const r1 = useRef(onRinging); r1.current = onRinging;
+    const r2 = useRef(onConnected); r2.current = onConnected;
+    const r3 = useRef(onEnded); r3.current = onEnded;
+    useEffect(() => {
+        try {
+            const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const ring = (t: number) => { const o = ctx.createOscillator(); const g = ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.type = 'sine'; o.frequency.value = 440; g.gain.setValueAtTime(0.12, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.4); o.start(t); o.stop(t + 0.4); };
+            ring(ctx.currentTime); ring(ctx.currentTime + 0.6); ring(ctx.currentTime + 1.8); ring(ctx.currentTime + 2.4);
+        } catch (_e) { /* silent */ }
+        r1.current();
+        const t1 = setTimeout(() => r2.current(), 4000);
+        const t2 = setTimeout(() => r3.current(), 9000);
+        return () => { clearTimeout(t1); clearTimeout(t2); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    return null;
+};
+
+const SceneWelfareCheck: React.FC = () => {
+    const [callStatus, setCallStatus] = useState<'ringing' | 'connected' | 'ended'>('ringing');
+    return (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="h-full flex flex-col items-center justify-center px-6">
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                className="w-[300px] rounded-[36px] overflow-hidden border border-[#F472B6]/30 p-8 text-center"
+                style={{ background: 'linear-gradient(180deg, #16161a 0%, #0c0c0e 100%)', boxShadow: '0 0 40px rgba(244,114,182,0.08)' }}>
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#F472B6]/25 to-[#E67E22]/25 border-2 border-[#F472B6]/30 flex items-center justify-center mx-auto mb-4">
+                    <span className="text-2xl font-bold text-[#F472B6]">MT</span>
+                </div>
+                <div className="text-lg font-bold text-white mb-1">Maya Thompson</div>
+                <div className="text-xs text-zinc-500 mb-6">Guard • Women&apos;s Basketball</div>
+
+                <motion.div animate={{ opacity: callStatus === 'ringing' ? [0.5, 1, 0.5] : 1 }}
+                    transition={{ duration: 2, repeat: callStatus === 'ringing' ? Infinity : 0 }} className="mb-6">
+                    {callStatus === 'ringing' && <div className="text-sm text-[#F472B6]">Calling&hellip;</div>}
+                    {callStatus === 'connected' && <AECallTimer />}
+                    {callStatus === 'ended' && <div className="text-sm text-zinc-400">Call Ended</div>}
+                </motion.div>
+
+                {callStatus === 'ringing' && (
+                    <div className="flex justify-center mb-4 relative">
+                        <motion.div animate={{ scale: [1, 1.6, 1], opacity: [0.4, 0, 0.4] }}
+                            transition={{ duration: 1.5, repeat: Infinity }}
+                            className="w-16 h-16 rounded-full bg-[#F472B6]/20 absolute" />
+                        <div className="w-16 h-16 rounded-full bg-[#F472B6]/15 flex items-center justify-center">
+                            <Volume2 className="w-6 h-6 text-[#F472B6]" />
+                        </div>
+                    </div>
+                )}
+
+                {callStatus === 'connected' && (
+                    <div className="flex flex-col items-center gap-3 mb-4">
+                        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>
+                            <div className="w-16 h-16 rounded-full bg-green-500/15 flex items-center justify-center border border-green-500/30 gap-[3px]">
+                                {[0.6, 1.0, 0.7, 0.9, 0.5].map((h, i) => (
+                                    <motion.div key={i} className="w-[3px] rounded-full bg-green-400"
+                                        animate={{ height: [`${h*8}px`, `${h*20}px`, `${h*6}px`, `${h*16}px`, `${h*10}px`] }}
+                                        transition={{ duration: 0.8 + i * 0.15, repeat: Infinity, ease: 'easeInOut' }} />
+                                ))}
+                            </div>
+                        </motion.div>
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }}>
+                            <div className="text-[10px] text-zinc-500">&quot;Hey Dr. Williams, thanks for reaching out...&quot;</div>
+                        </motion.div>
+                    </div>
+                )}
+
+                {callStatus === 'ended' && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center">
+                        <div className="text-xs text-green-400 mb-1">✓ Welfare check complete</div>
+                        <div className="text-[10px] text-zinc-600">Session scheduled for 10:00 AM Thursday</div>
+                    </motion.div>
+                )}
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
+                className="mt-6 text-xs text-zinc-500 uppercase tracking-widest">
+                AuntEdna Welfare Check
+            </motion.div>
+
+            <AECallSim onRinging={() => setCallStatus('ringing')} onConnected={() => setCallStatus('connected')} onEnded={() => setCallStatus('ended')} />
+        </motion.div>
+    );
+};
+
+// ─────────────────────────────────────────────────────────
+// STEP 4 — THE PIPELINE (How Did We Get Here?)
+// ─────────────────────────────────────────────────────────
+
+const DATA_LABELS = ['Sentiment Analysis', 'Biometric Flags', 'Coach Observations'];
+
+const ScenePipeline: React.FC = () => (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="h-full flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-3xl">
+            {/* Heading */}
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+                className="text-center mb-10">
+                <p className="text-sm text-zinc-500 uppercase tracking-widest mb-2">But how did we get here?</p>
+                <h2 className="text-2xl md:text-3xl font-black text-white">The Data Pipeline</h2>
+                <p className="text-sm text-zinc-400 mt-2 max-w-md mx-auto">Maya was using a partner’s software. It detected concern and sent her data into AuntEdna — triggering immediate clinical action.</p>
+            </motion.div>
+
+            {/* Pipeline Animation */}
+            <div className="relative flex items-center justify-center gap-0">
+                {/* PulseCheck Tower */}
+                <motion.div initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}
+                    className="flex flex-col items-center z-10">
+                    <div className="w-28 h-28 rounded-2xl border-2 border-[#E0FE10]/40 flex flex-col items-center justify-center"
+                        style={{ background: 'linear-gradient(135deg, rgba(224,254,16,0.08), rgba(224,254,16,0.02))' }}>
+                        <div className="text-2xl mb-1">🏋️</div>
+                        <div className="text-xs font-bold text-[#E0FE10]">PulseCheck</div>
+                        <div className="text-[8px] text-zinc-500 mt-0.5">Partner Software</div>
+                    </div>
+                    <div className="mt-2 space-y-0.5">
+                        {['AI Check-ins', 'Nora Conversations', 'Bio Tracking'].map(t => (
+                            <div key={t} className="text-[8px] text-zinc-600 text-center">{t}</div>
+                        ))}
+                    </div>
+                </motion.div>
+
+                {/* The Pipe */}
+                <div className="relative w-48 md:w-64 h-20 mx-2">
+                    {/* Pipe body */}
+                    <motion.div initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 0.6, duration: 0.6 }}
+                        className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-2 rounded-full origin-left"
+                        style={{ background: 'linear-gradient(90deg, rgba(224,254,16,0.25), rgba(244,114,182,0.25))' }} />
+                    <motion.div initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 0.6, duration: 0.6 }}
+                        className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-0.5 rounded-full origin-left"
+                        style={{ background: 'linear-gradient(90deg, #E0FE10, #F472B6)', marginTop: '-1px' }} />
+
+                    {/* Spark traveling through pipe */}
+                    <motion.div
+                        initial={{ left: '0%', opacity: 0 }}
+                        animate={{ left: ['0%', '100%'], opacity: [0, 1, 1, 0] }}
+                        transition={{ delay: 1.4, duration: 1.5, repeat: Infinity, repeatDelay: 2, ease: 'easeInOut' }}
+                        className="absolute top-1/2 -translate-y-1/2"
+                        style={{ marginTop: '-1px' }}>
+                        <div className="w-4 h-4 rounded-full -translate-x-1/2 -translate-y-1/4"
+                            style={{ background: 'radial-gradient(circle, #FBBF24, rgba(251,191,36,0) 70%)', boxShadow: '0 0 16px 4px rgba(251,191,36,0.5)' }} />
+                    </motion.div>
+
+                    {/* Data labels floating above pipe */}
+                    {DATA_LABELS.map((label, i) => (
+                        <motion.div key={label}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 1.8 + i * 0.4 }}
+                            className="absolute text-[8px] font-medium px-2 py-0.5 rounded-full border"
+                            style={{
+                                left: `${15 + i * 30}%`,
+                                top: i % 2 === 0 ? '-8px' : 'auto',
+                                bottom: i % 2 !== 0 ? '-8px' : 'auto',
+                                background: 'rgba(251,191,36,0.08)',
+                                borderColor: 'rgba(251,191,36,0.2)',
+                                color: '#FBBF24',
+                            }}>
+                            {label}
+                        </motion.div>
+                    ))}
+                </div>
+
+                {/* AuntEdna Tower */}
+                <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}
+                    className="flex flex-col items-center z-10">
+                    <div className="w-28 h-28 rounded-2xl border-2 border-[#F472B6]/40 flex flex-col items-center justify-center"
+                        style={{ background: 'linear-gradient(135deg, rgba(244,114,182,0.08), rgba(244,114,182,0.02))' }}>
+                        <div className="text-2xl mb-1">🧠</div>
+                        <div className="text-xs font-bold text-[#F472B6]">AuntEdna</div>
+                        <div className="text-[8px] text-zinc-500 mt-0.5">Clinical Intelligence</div>
+                    </div>
+                    <div className="mt-2 space-y-0.5">
+                        {['AI Triage', 'Clinician Match', 'Welfare Check'].map(t => (
+                            <div key={t} className="text-[8px] text-zinc-600 text-center">{t}</div>
+                        ))}
+                    </div>
+                </motion.div>
+            </div>
+
+            {/* Bottom tagline */}
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 3 }}
+                className="text-center text-sm text-[#F472B6] font-semibold mt-10">
+                Concern detected → Data transported → Action triggered. Automatically.
+            </motion.p>
+        </div>
+    </motion.div>
+);
+
 // ─────────────────────────────────────────────────────────
 
 const SceneClinicalHandoff: React.FC = () => (
@@ -763,13 +963,28 @@ const SceneCTA: React.FC = () => (
         <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}>
             <div className="text-5xl mb-4">🧠</div>
             <h1 className="text-4xl md:text-5xl font-black text-white mb-3">
-                aunt<span style={{ color: '#E67E22' }}>EDNA</span><span className="text-white/30">.ai</span>
+                aunt<span style={{ background: 'linear-gradient(135deg, #F472B6, #EC4899, #DB2777)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>EDNA</span><span className="text-white/30">.ai</span>
             </h1>
             <p className="text-xl text-zinc-300 max-w-lg mx-auto mt-4 leading-relaxed">
                 Every athlete deserves to be heard.<br />Every clinician deserves to show up prepared.
             </p>
             <p className="text-[#F472B6] font-bold mt-4">Let&apos;s bring AuntEdna to your organization.</p>
         </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}
+            className="mt-8 flex flex-col items-center gap-2">
+            <div className="flex items-center gap-6">
+                <a href="mailto:tracey@auntedna.ai" className="text-sm text-zinc-400 hover:text-white transition-colors font-medium">tracey@auntedna.ai</a>
+                <span className="text-zinc-600">•</span>
+                <a href="mailto:jelanna@auntedna.ai" className="text-sm text-zinc-400 hover:text-white transition-colors font-medium">jelanna@auntedna.ai</a>
+            </div>
+        </motion.div>
+
+        <motion.h2 initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 1.4, duration: 0.8 }}
+            className="mt-12 text-3xl md:text-5xl font-black leading-tight"
+            style={{ background: 'linear-gradient(135deg, #F472B6, #FBBF24, #A78BFA)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+            Our best and brightest<br />are waiting.
+        </motion.h2>
     </motion.div>
 );
 
@@ -802,17 +1017,19 @@ const AuntEdnaDemo: React.FC = () => {
     const renderScene = () => {
         switch (step) {
             case 0: return <SceneTitle />;
-            case 1: return <SceneNotification />;
-            case 2: return <SceneMayaProfile />;
-            case 3: return <SceneStat />;
-            case 4: return <SceneAPI />;
-            case 5: return <SceneClinicalHandoff />;
-            case 6: return <SceneOutcome />;
-            case 7: return <SceneTraction />;
-            case 8: return <SceneUnitEconomics />;
-            case 9: return <ScenePathTo100M />;
-            case 10: return <SceneAsk />;
-            case 11: return <SceneCTA />;
+            case 1: return <SceneStat />;
+            case 2: return <SceneNotification />;
+            case 3: return <SceneMayaProfile />;
+            case 4: return <SceneWelfareCheck />;
+            case 5: return <ScenePipeline />;
+            case 6: return <SceneAPI />;
+            case 7: return <SceneClinicalHandoff />;
+            case 8: return <SceneOutcome />;
+            case 9: return <SceneTraction />;
+            case 10: return <SceneUnitEconomics />;
+            case 11: return <ScenePathTo100M />;
+            case 12: return <SceneAsk />;
+            case 13: return <SceneCTA />;
             default: return <SceneTitle />;
         }
     };
@@ -825,6 +1042,53 @@ const AuntEdnaDemo: React.FC = () => {
             </Head>
             <div ref={containerRef} tabIndex={0} className="fixed inset-0 flex flex-col overflow-hidden cursor-pointer select-none outline-none" onClick={advance}
                 style={{ background: '#0C0A09' }}>
+                {/* Animated gradient background */}
+                <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+                    <div className="ae-orb ae-orb-1" />
+                    <div className="ae-orb ae-orb-2" />
+                    <div className="ae-orb ae-orb-3" />
+                </div>
+                <style jsx>{`
+                    .ae-orb {
+                        position: absolute;
+                        border-radius: 50%;
+                        filter: blur(120px);
+                        opacity: 0.12;
+                        will-change: transform;
+                    }
+                    .ae-orb-1 {
+                        width: 600px; height: 600px;
+                        background: radial-gradient(circle, #F472B6, transparent 70%);
+                        top: -10%; left: -10%;
+                        animation: ae-drift-1 18s ease-in-out infinite;
+                    }
+                    .ae-orb-2 {
+                        width: 500px; height: 500px;
+                        background: radial-gradient(circle, #FBBF24, transparent 70%);
+                        bottom: -10%; right: -10%;
+                        animation: ae-drift-2 22s ease-in-out infinite;
+                    }
+                    .ae-orb-3 {
+                        width: 450px; height: 450px;
+                        background: radial-gradient(circle, #A78BFA, transparent 70%);
+                        top: 40%; left: 50%;
+                        animation: ae-drift-3 25s ease-in-out infinite;
+                    }
+                    @keyframes ae-drift-1 {
+                        0%, 100% { transform: translate(0, 0) scale(1); }
+                        33% { transform: translate(30vw, 15vh) scale(1.2); }
+                        66% { transform: translate(10vw, 30vh) scale(0.9); }
+                    }
+                    @keyframes ae-drift-2 {
+                        0%, 100% { transform: translate(0, 0) scale(1); }
+                        33% { transform: translate(-25vw, -20vh) scale(1.1); }
+                        66% { transform: translate(-10vw, -35vh) scale(0.85); }
+                    }
+                    @keyframes ae-drift-3 {
+                        0%, 100% { transform: translate(-50%, 0) scale(1); }
+                        50% { transform: translate(-30%, -20vh) scale(1.3); }
+                    }
+                `}</style>
                 <div className="absolute top-0 left-0 right-0 z-30 h-1.5 bg-zinc-800">
                     <motion.div className="h-full" animate={{ width: `${(step / TOTAL_STEPS) * 100}%` }} transition={{ duration: 0.5 }}
                         style={{ background: 'linear-gradient(90deg, #F472B6, #E67E22)' }} />
