@@ -1,19 +1,22 @@
-import { setDoc, doc, getDoc, deleteDoc, Timestamp, collection, query, orderBy, limit as firestoreLimit, getDocs, addDoc, where } from 'firebase/firestore';
+import { setDoc, doc, getDoc, deleteDoc, Timestamp, collection, query, orderBy, limit as firestoreLimit, getDocs, addDoc, where, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config';
 import { AdminService, PageMetaData, DailyPrompt, ProgrammingAccess, BetaApplication } from './types';
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
+import { AppVersionMediaItem, buildAppVersionWritePayload } from '../../../utils/appVersioning';
 
 export const adminMethods: AdminService = {
-  async addVersion(version, changeNotes, isCriticalUpdate) {
+  async addVersion(version, changeNotes, isCriticalUpdate, media: AppVersionMediaItem[] = []) {
     try {
-      const notesObject: { [key: string]: string } = {};
-      changeNotes.forEach((note, idx) => {
-        notesObject[(idx + 1).toString()] = note;
-      });
-      await setDoc(doc(db, 'version', version), {
-        ...notesObject,
-        isCriticalUpdate,
-      });
+      const payload = {
+        ...buildAppVersionWritePayload(changeNotes, isCriticalUpdate, media),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      await Promise.all([
+        setDoc(doc(db, 'version', version), payload, { merge: true }),
+        setDoc(doc(db, 'versions', version), payload, { merge: true }),
+      ]);
       return true;
     } catch (error) {
       console.error('Error adding version:', error);

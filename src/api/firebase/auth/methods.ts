@@ -9,10 +9,11 @@ import {
   sendPasswordResetEmail,
   signOut as firebaseSignOut,
 } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../config';
 import { SignUpData, AuthService } from './types';
 import { claimUsername, normalizeUsername } from './username';
+import { AppVersionMediaItem, buildAppVersionWritePayload } from '../../../utils/appVersioning';
 
 export const authMethods: AuthService = {
   async signUpWithEmail({ email, password, username, profileImage, quizData }: SignUpData) {
@@ -119,17 +120,23 @@ export const authMethods: AuthService = {
     }
   },
 
-  async addVersion(version: string, changeNotes: string[], isCriticalUpdate: boolean) {
+  async addVersion(
+    version: string,
+    changeNotes: string[],
+    isCriticalUpdate: boolean,
+    media: AppVersionMediaItem[] = []
+  ) {
     try {
-      // Transform changeNotes array to numbered properties
-      const notesObject: { [key: string]: string } = {};
-      changeNotes.forEach((note, idx) => {
-        notesObject[(idx + 1).toString()] = note;
-      });
-      await setDoc(doc(db, 'versions', version), {
-        ...notesObject,
-        isCriticalUpdate,
-      });
+      const payload = {
+        ...buildAppVersionWritePayload(changeNotes, isCriticalUpdate, media),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      await Promise.all([
+        setDoc(doc(db, 'version', version), payload, { merge: true }),
+        setDoc(doc(db, 'versions', version), payload, { merge: true }),
+      ]);
       return true;
     } catch (error) {
       console.error('Error adding version:', error);
