@@ -2,6 +2,7 @@ import { QuizData } from "../../../types/AuthTypes";
 import { 
     UserCredential
 } from 'firebase/auth';
+import { AppVersionMediaItem } from '../../../utils/appVersioning';
 
 export interface SignUpData {
     email: string;
@@ -17,5 +18,10 @@ export interface SignUpData {
     signInWithGoogle: () => Promise<UserCredential>;
     signInWithApple: () => Promise<void>;
     resetPassword: (email: string) => Promise<boolean>;
-    addVersion: (version: string, changeNotes: string[], isCriticalUpdate: boolean) => Promise<boolean>;
+    addVersion: (
+      version: string,
+      changeNotes: string[],
+      isCriticalUpdate: boolean,
+      media?: AppVersionMediaItem[]
+    ) => Promise<boolean>;
   }

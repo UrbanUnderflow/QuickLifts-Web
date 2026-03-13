@@ -1,4 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
+import { AppVersionMediaItem } from '../../../utils/appVersioning';
 
 export interface DailyPrompt {
   id?: string;
@@ -90,7 +91,12 @@ export interface BetaApplication {
 }
 
 export interface AdminService {
-  addVersion: (version: string, changeNotes: string[], isCriticalUpdate: boolean) => Promise<boolean>;
+  addVersion: (
+    version: string,
+    changeNotes: string[],
+    isCriticalUpdate: boolean,
+    media?: AppVersionMediaItem[]
+  ) => Promise<boolean>;
   isAdmin: (email: string) => Promise<boolean>;
   setPageMetaData: (data: PageMetaData) => Promise<boolean>;
   getPageMetaData: (pageId: string) => Promise<PageMetaData | null>;
