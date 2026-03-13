@@ -68,7 +68,8 @@ const implementationRows = [
   ['iOS member activation', '`ClubDetailView` + `ClubDetailViewModel` parity landed', 'Joining a configured club now triggers onboarding and then the intro requirement on native iOS instead of stopping at the legacy welcome state.'],
   ['iOS host configuration', '`Edit Club` now includes `Club Activation`', 'Creators can manage activation from the app, not only from web.'],
   ['iOS diagnostics', 'Activation debug logs plus XCUITest live-club harness', 'When activation gating misbehaves, the native app now logs the exact membership and intro state and can open a real club by id for read-only diagnostics.'],
-  ['Android status', 'Still a parity gap', 'The generic activation flow and creator config have not yet been brought to Android.'],
+  ['Android member activation', '`ClubDetailScreen` + `ClubDetailViewModel` activation flow landed', 'Joining a configured club on Android now loads required onboarding, blocks normal chat until setup is complete, and uses a dedicated intro composer modal when an intro is required.'],
+  ['Android host configuration', 'Creator-only `Club Activation` sheet from the club menu', 'Android does not have a separate edit-club page, so creator settings now live in the existing club detail overflow menu as an in-context management sheet.'],
 ];
 
 const patternRows = [
@@ -101,8 +102,8 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
             body: 'Creators should be able to require onboarding, require introductions, and run pairing with simple settings rather than custom ops every time.',
           },
           {
-            title: 'Web + iOS now aligned',
-            body: 'The first implementation pass now exists on web and iOS, including host configuration and the member intro/onboarding flow. Android remains the major parity gap.',
+            title: 'Web + mobile now aligned',
+            body: 'The first implementation pass now exists on web, iOS, and Android, including host configuration and the member intro/onboarding flow. Native testing depth still differs by platform.',
           },
         ]}
       />
@@ -193,7 +194,7 @@ const PulseClubActivationArchitectureTab: React.FC = () => {
           <InfoCard
             title="Where the system stands today"
             accent="green"
-            body="The club activation layer is no longer only a concept artifact. Core onboarding and intro behavior now exist in production-facing web and iOS club surfaces, while Android still needs parity work."
+            body="The club activation layer is no longer only a concept artifact. Core onboarding and intro behavior now exist in production-facing web, iOS, and Android club surfaces, with Android using an in-context creator settings sheet rather than a separate edit page."
           />
           <DataTable
             columns={['Surface', 'Current implementation', 'Implication']}
