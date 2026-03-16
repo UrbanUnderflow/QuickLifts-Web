@@ -26,12 +26,17 @@ It also now includes a PulseCheck onboarding/workspace smoke suite for:
 - Write-path tests are **disabled by default**.
 - Authenticated registry smoke tests clone a temporary `[E2E]` namespaced variant fixture in the dev project and clean it up afterward.
 - When write-path tests are enabled, published module ids are prefixed with the same `e2e-` namespace and deleted during cleanup.
+- PulseCheck harness-seeded write fixtures also use the active `PLAYWRIGHT_E2E_NAMESPACE` and remove those records during cleanup.
+- PulseCheck UI-created invite artifacts use unique `e2e-...@pulsecheck.test` identities and are revoked or torn down within the same test run.
 
 ## Common commands
 
 ```bash
 npm run test:e2e:install
 npm run test:e2e:auth
+npm run test:e2e:smoke
+npm run test:e2e:pulsecheck:full
+npm run test:e2e:pulsecheck:write
 npm run test:e2e -- --list
 ```
 
@@ -104,14 +109,22 @@ PLAYWRIGHT_PULSECHECK_ORG_ID=<firestore-org-id>
 PLAYWRIGHT_PULSECHECK_TEAM_ID=<firestore-team-id>
 ```
 
+Recommended namespace for write-path runs:
+
+```bash
+PLAYWRIGHT_E2E_NAMESPACE=e2e-pulsecheck
+```
+
 Read-only smoke run:
 
 ```bash
 PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json \
 PLAYWRIGHT_PULSECHECK_ORG_ID=<firestore-org-id> \
 PLAYWRIGHT_PULSECHECK_TEAM_ID=<firestore-team-id> \
-npm run test:e2e -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts
+npm run test:e2e:smoke -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts
 ```
+
+The `test:e2e:smoke` command only executes tests tagged with `@smoke`, which keeps the run on the read-only route/render coverage defined in the system overview. Playwright-launched sessions still force the app onto the dev Firebase project.
 
 Opt-in PulseCheck write-path and negative-path run:
 
@@ -122,6 +135,36 @@ PLAYWRIGHT_PULSECHECK_TEAM_ID=<firestore-team-id> \
 PLAYWRIGHT_ALLOW_WRITE_TESTS=true \
 npm run test:e2e -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts
 ```
+
+Full PulseCheck regression run:
+
+```bash
+PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json \
+PLAYWRIGHT_PULSECHECK_ORG_ID=<firestore-org-id> \
+PLAYWRIGHT_PULSECHECK_TEAM_ID=<firestore-team-id> \
+PLAYWRIGHT_ALLOW_WRITE_TESTS=true \
+npm run test:e2e:pulsecheck:full
+```
+
+This command runs the PulseCheck onboarding/workspace suite and the athlete-journey suite together against the dev Firebase project.
+
+Explicit PulseCheck write-path run with namespaced cleanup:
+
+```bash
+PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json \
+PLAYWRIGHT_PULSECHECK_ORG_ID=<firestore-org-id> \
+PLAYWRIGHT_PULSECHECK_TEAM_ID=<firestore-team-id> \
+PLAYWRIGHT_E2E_NAMESPACE=e2e-pulsecheck \
+PLAYWRIGHT_ALLOW_WRITE_TESTS=true \
+npm run test:e2e:pulsecheck:write
+```
+
+Cleanup model:
+
+1. Harness-seeded PulseCheck fixtures use ids derived from `PLAYWRIGHT_E2E_NAMESPACE`.
+2. Athlete-journey cleanup removes check-ins, completions, daily assignments, coach notifications, memberships, and seeded org/team records.
+3. Legacy migration fixtures use namespaced ids and are removed through the E2E harness cleanup helpers.
+4. UI-created invite links use unique test emails and are revoked or consumed during the same run instead of being left behind.
 
 The write test creates a unique athlete invite from the team workspace and then revokes it during the same run.
 It also covers negative-path protections for revoked links, wrong-email invite access, regenerated admin activation links, and `none` roster visibility behavior.

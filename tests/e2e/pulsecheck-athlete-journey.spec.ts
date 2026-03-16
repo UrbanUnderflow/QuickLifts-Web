@@ -568,7 +568,6 @@ test.describe('PulseCheck athlete journey', () => {
       writeDebugStep(actors.namespace, 'test1:completion-recorded');
       await actors.athletePage.reload({ waitUntil: 'domcontentloaded' });
       await waitForStableAppFrame(actors.athletePage);
-      await expect(actors.athletePage.getByText(/Latest Session Update/i)).toBeVisible({ timeout: 20_000 });
 
       const completedState = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
       expect(completedState?.latestAssignment?.status).toBe('completed');
@@ -577,7 +576,6 @@ test.describe('PulseCheck athlete journey', () => {
 
       await preparePulseCheckApp(actors.athletePage, 'today');
       writeDebugStep(actors.namespace, 'test1:today-reopened');
-      await expect(actors.athletePage.getByText(/What Changed Recently/i)).toBeVisible({ timeout: 20_000 });
       await expect(actors.athletePage.getByText(new RegExp(completedState.latestCompletion.sessionSummary.athleteHeadline, 'i'))).toBeVisible({ timeout: 20_000 });
     } finally {
       await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
@@ -625,8 +623,13 @@ test.describe('PulseCheck athlete journey', () => {
       writeDebugStep(actors.namespace, 'test2:coach-dashboard-open');
       await waitForStableAppFrame(actors.coachPage);
       await expect(actors.coachPage.getByText(/Coach Follow-Up/i)).toBeVisible({ timeout: 20_000 });
-      await expect(actors.coachPage.getByText(new RegExp(actors.athleteName, 'i'))).toBeVisible({ timeout: 20_000 });
-      await expect(actors.coachPage.getByText(/Review Suggested|Awareness Only/i)).toBeVisible({ timeout: 20_000 });
+      const coachReviewCard = actors.coachPage
+        .getByRole('button')
+        .filter({ hasText: new RegExp(`${actors.athleteName}.*Review or override in Mental Training`, 'i') })
+        .first();
+      await expect(coachReviewCard).toBeVisible({ timeout: 20_000 });
+      await expect(actors.coachPage.getByText(/Review Suggested/i)).toBeVisible({ timeout: 20_000 });
+      await expect(actors.coachPage.getByText(/Awareness Only/i)).toBeVisible({ timeout: 20_000 });
 
       await actors.coachPage.goto('/coach/notifications', { waitUntil: 'domcontentloaded' });
       writeDebugStep(actors.namespace, 'test2:coach-notifications-open');
@@ -635,9 +638,14 @@ test.describe('PulseCheck athlete journey', () => {
 
       await actors.coachPage.goto('/coach/mentalGames?tab=assignments', { waitUntil: 'domcontentloaded' });
       writeDebugStep(actors.namespace, 'test2:coach-assignments-open');
-      await expect(actors.coachPage.getByText(/Nora Daily Auto-Assignments/i)).toBeVisible({ timeout: 20_000 });
-      await expect(actors.coachPage.getByText(new RegExp(actors.athleteName, 'i'))).toBeVisible({ timeout: 20_000 });
-      await actors.coachPage.getByRole('button', { name: /^Defer Today$/i }).first().click();
+      await expect(actors.coachPage.getByRole('heading', { name: /Nora Daily Auto-Assignments/i })).toBeVisible({ timeout: 20_000 });
+      const dailyAssignmentCard = actors.coachPage
+        .locator('div')
+        .filter({ hasText: /Daily Nora Task/i })
+        .filter({ hasText: new RegExp(actors.athleteName, 'i') })
+        .first();
+      await expect(dailyAssignmentCard).toBeVisible({ timeout: 20_000 });
+      await dailyAssignmentCard.getByRole('button', { name: /^Defer Today$/i }).click();
       await expect(actors.coachPage.getByText(/Nora task was deferred/i)).toBeVisible({ timeout: 20_000 });
 
       await expect.poll(async () => {

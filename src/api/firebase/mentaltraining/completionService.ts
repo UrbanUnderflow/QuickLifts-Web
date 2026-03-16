@@ -34,6 +34,7 @@ import {
   streakToFirestore,
   checkInFromFirestore,
   checkInToFirestore,
+  sanitizeFirestoreValue,
 } from './types';
 import {
   SIM_CHECKINS_ROOT,
@@ -238,7 +239,7 @@ export const completionService = {
     });
 
     await updateDoc(docRef, {
-      sessionSummary,
+      sessionSummary: sanitizeFirestoreValue(sessionSummary),
     });
 
     return {

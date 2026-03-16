@@ -948,24 +948,27 @@ export function assignmentFromFirestore(id: string, data: Record<string, any>): 
 }
 
 export function completionToFirestore(completion: ExerciseCompletion): Record<string, any> {
-  return {
+  const data: Record<string, any> = {
     userId: completion.userId,
     exerciseId: completion.exerciseId,
     exerciseName: completion.exerciseName,
     exerciseCategory: completion.exerciseCategory,
-    assignmentId: completion.assignmentId,
-    dailyAssignmentId: completion.dailyAssignmentId,
     completedAt: completion.completedAt,
     durationSeconds: completion.durationSeconds,
-    preExerciseMood: completion.preExerciseMood,
-    postExerciseMood: completion.postExerciseMood,
-    difficultyRating: completion.difficultyRating,
-    helpfulnessRating: completion.helpfulnessRating,
-    notes: completion.notes,
-    context: completion.context,
-    sessionSummary: completion.sessionSummary,
     createdAt: completion.createdAt,
   };
+
+  if (completion.assignmentId) data.assignmentId = completion.assignmentId;
+  if (completion.dailyAssignmentId) data.dailyAssignmentId = completion.dailyAssignmentId;
+  if (typeof completion.preExerciseMood === 'number') data.preExerciseMood = completion.preExerciseMood;
+  if (typeof completion.postExerciseMood === 'number') data.postExerciseMood = completion.postExerciseMood;
+  if (typeof completion.difficultyRating === 'number') data.difficultyRating = completion.difficultyRating;
+  if (typeof completion.helpfulnessRating === 'number') data.helpfulnessRating = completion.helpfulnessRating;
+  if (completion.notes) data.notes = completion.notes;
+  if (completion.context) data.context = completion.context;
+  if (completion.sessionSummary) data.sessionSummary = sanitizeFirestoreValue(completion.sessionSummary);
+
+  return data;
 }
 
 export function completionFromFirestore(id: string, data: Record<string, any>): ExerciseCompletion {

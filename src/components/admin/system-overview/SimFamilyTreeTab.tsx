@@ -230,7 +230,7 @@ interface VariantGroup {
 }
 
 const VARIANT_LIBRARY: VariantGroup[] = [
-    { parent: 'Reset', pillar: 'composure', isCandidate: false, variants: ['Aftershock (double disruption stacking)', 'Reset Window (shrinking recovery window)', 'Restart (emotional reset after simulated turnover)', 'Second Chance (immediate re-execution after failure)', 'Recovery Chain (repeated disruption-reengagement cycles)', 'Reset Chamber (immersive environmental disruption, Vision Pro football package)'] },
+    { parent: 'Reset', pillar: 'composure', isCandidate: false, variants: ['Aftershock (double disruption stacking)', 'Reset Window (shrinking recovery window)', 'Restart (emotional reset after simulated turnover)', 'Second Chance (immediate re-execution after failure)', 'Recovery Chain (repeated disruption-reengagement cycles)', 'Reset Chamber (immersive environmental disruption, Vision Pro football package)', 'Active Lock-In Reset (orbital-drift orb + pinch-hold during lockIn window — Vision Pro; exploratory candidate for Attentional Lock family)'] },
     { parent: 'Noise Gate', pillar: 'focus', isCandidate: false, variants: ['Crowd Tunnel (immersive crowd distraction)', 'Tunnel Line (narrow focus under peripheral competition)', 'Spotlight (rapid target identification among moving distractors)', 'Channel Filter (pressure rotating across visual, audio, social channels)', 'Peripheral Fade (ignore escalating peripheral decoys)', 'Crowd Control (performance under crowd noise and commentary)'] },
     { parent: 'Brake Point', pillar: 'decision', isCandidate: false, variants: ['Red Light (classic go/no-go at sport tempo)', 'False Start (prevent premature initiation under anticipation pressure)', 'False Key (high-temptation decoy before real cue)', 'Decoy Lane (spatial decoys pull toward wrong action)', 'Spatial Brake (cancel response to spatial decoy, Vision Pro-ready)'] },
     { parent: 'Signal Window', pillar: 'decision', isCandidate: false, variants: ['Snap Read (rapid correct choice from short cue window)', 'Split Second (compressed-time decision with speed-accuracy balance)', 'Shot Clock (decision under shrinking time window)', 'Window Close (correct option briefly available, rewarding controlled recognition)', 'Check Down (choose safer correct option over tempting decoy)', 'Spatial Read (3D cue discrimination, Vision Pro football package)'] },
@@ -500,7 +500,7 @@ const SimFamilyTreeTab: React.FC = () => {
                         {[
                             { label: 'Tier 1: Locked', count: '6', color: '#22c55e', desc: 'Permanent backbone families' },
                             { label: 'Tier 2: Candidate', count: '6', color: '#f59e0b', desc: 'In evaluation for promotion' },
-                            { label: 'Tier 3: Exploratory', count: '1', color: '#94a3b8', desc: 'Not yet ready for candidate' },
+                            { label: 'Tier 3: Exploratory', count: '2', color: '#94a3b8', desc: 'Not yet ready for candidate' },
                             { label: 'Tier 4: Variants', count: '60+', color: '#60a5fa', desc: 'Content layer expressions' },
                         ].map((t) => (
                             <div key={t.label} className="rounded-xl border p-3 text-center" style={{ borderColor: t.color + '30', background: t.color + '06' }}>
@@ -640,6 +640,42 @@ const SimFamilyTreeTab: React.FC = () => {
                     <div className="rounded-xl border border-zinc-700 bg-black/30 px-4 py-3">
                         <p className="text-[9px] uppercase tracking-widest text-zinc-600 font-bold mb-1">Recommended Next Step</p>
                         <p className="text-[11px] text-zinc-400">Prototype Mirror Read as an experimental branch within Signal Window or Chaos Read. If the prototype produces divergent performance patterns from both parent families, re-evaluate for formal candidate status through the Promotion Protocol.</p>
+                    </div>
+                </div>
+
+                <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3">
+                    <div className="flex items-center gap-2 mb-1">
+                        <h4 className="text-base font-bold text-white">Attentional Lock</h4>
+                        <TierBadge tier="exploratory" />
+                        <span className="text-[9px] px-2 py-0.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-400 font-bold uppercase tracking-widest">Vision Pro Origin</span>
+                    </div>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                        Originated from the Vision Pro Reset trial design review (March 2026). The core question: is a passive "watch the orb" lockIn window a meaningful composure test, or does valid composure require active attentional tracking?
+                    </p>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                        <span className="text-zinc-300 font-semibold">Proposed mechanic:</span> The target (orb) drifts in a slow orbital pattern during the lockIn window. The athlete must maintain a pinch-hold on it while it moves — an active focus-hold, not a passive stare. If they break the hold, it registers as an attentional lapse. Disruption fires mid-orbit. Recovery = re-establish the hold as quickly as possible after disruption.
+                    </p>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                        <span className="text-zinc-300 font-semibold">Distinction from Reset:</span> Reset measures recovery time from disruption with a passive pre-disruption composure window. Attentional Lock measures active attentional grip — can you hold focus on a moving target through disruption and re-lock after? The pre-disruption window is itself an active cognitive task, which changes the mechanism entirely. Reset = recovery from something that happens to you. Attentional Lock = maintaining and recovering a grip you were already sustaining.
+                    </p>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                        <span className="text-zinc-300 font-semibold">Pillar fit:</span> Composure (primary) with a Focus secondary signal. Could produce a distinct profile dimension from Reset: athletes who recover well from disruption may still have weak active attentional grip, and vice versa.
+                    </p>
+                    <div className="grid grid-cols-3 gap-2 pt-1">
+                        {[
+                            { label: 'Core Metric', value: 'Hold Duration + Re-lock Latency' },
+                            { label: 'Pillar', value: 'Composure / Focus' },
+                            { label: 'Platform Origin', value: 'Vision Pro (spatial pinch-hold)' },
+                        ].map((item) => (
+                            <div key={item.label} className="rounded-xl border border-zinc-700 bg-black/30 px-3 py-2">
+                                <p className="text-[9px] uppercase tracking-widest text-zinc-600 font-bold mb-0.5">{item.label}</p>
+                                <p className="text-[10px] text-zinc-300 font-semibold">{item.value}</p>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="rounded-xl border border-zinc-700 bg-black/30 px-4 py-3">
+                        <p className="text-[9px] uppercase tracking-widest text-zinc-600 font-bold mb-1">Recommended Next Step</p>
+                        <p className="text-[11px] text-zinc-400">Build a minimal Vision Pro prototype using the existing Reset Chamber environment — replace the passive lockIn orb with an orbital drift + pinch-hold mechanic on a single rep. Compare Hold Duration + Re-lock Latency against existing Reset Recovery Time across 20+ pilot athletes. If profiles diverge (r &lt; 0.5), advance to formal candidate via Promotion Protocol. If profiles correlate strongly, absorb as a Reset variant: &quot;Active Lock-In Reset.&quot;</p>
                     </div>
                 </div>
             </section>

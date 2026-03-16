@@ -316,7 +316,13 @@ const CoachMentalTraining: React.FC = () => {
 
           setAthletes(athletesWithProgress);
 
-          const [assignments, recs, currAssignments, visionProSessionSnap, dailyAssignments] = await Promise.all([
+          const [
+            assignmentsResult,
+            recommendationsResult,
+            curriculumAssignmentsResult,
+            visionProSessionsResult,
+            dailyAssignmentsResult,
+          ] = await Promise.allSettled([
             assignmentService.getByCoach(profile.id),
             recommendationService.getPendingForCoach(profile.id),
             curriculumAssignmentService.getActiveForCoach(profile.id),
@@ -330,16 +336,45 @@ const CoachMentalTraining: React.FC = () => {
             assignmentOrchestratorService.listRecentForCoach(profile.id, 24),
           ]);
 
-          setRecentAssignments(assignments.slice(0, 20));
-          setRecommendations(recs);
-          setCurriculumAssignments(currAssignments);
-          setNoraDailyAssignments(dailyAssignments);
-          setRecentVisionProSessions(
-            visionProSessionSnap.docs
-              .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, any>) } as VisionProTrialSession))
-              .sort((left, right) => (right.completedAt || right.createdAt || 0) - (left.completedAt || left.createdAt || 0))
-              .slice(0, 12)
-          );
+          if (assignmentsResult.status === 'fulfilled') {
+            setRecentAssignments(assignmentsResult.value.slice(0, 20));
+          } else {
+            console.error('Failed to load coach legacy assignments:', assignmentsResult.reason);
+            setRecentAssignments([]);
+          }
+
+          if (recommendationsResult.status === 'fulfilled') {
+            setRecommendations(recommendationsResult.value);
+          } else {
+            console.error('Failed to load coach recommendations:', recommendationsResult.reason);
+            setRecommendations([]);
+          }
+
+          if (curriculumAssignmentsResult.status === 'fulfilled') {
+            setCurriculumAssignments(curriculumAssignmentsResult.value);
+          } else {
+            console.error('Failed to load coach curriculum assignments:', curriculumAssignmentsResult.reason);
+            setCurriculumAssignments([]);
+          }
+
+          if (dailyAssignmentsResult.status === 'fulfilled') {
+            setNoraDailyAssignments(dailyAssignmentsResult.value);
+          } else {
+            console.error('Failed to load Nora daily assignments:', dailyAssignmentsResult.reason);
+            setNoraDailyAssignments([]);
+          }
+
+          if (visionProSessionsResult.status === 'fulfilled') {
+            setRecentVisionProSessions(
+              visionProSessionsResult.value.docs
+                .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, any>) } as VisionProTrialSession))
+                .sort((left, right) => (right.completedAt || right.createdAt || 0) - (left.completedAt || left.createdAt || 0))
+                .slice(0, 12)
+            );
+          } else {
+            console.error('Failed to load Vision Pro sessions:', visionProSessionsResult.reason);
+            setRecentVisionProSessions([]);
+          }
         }
 
         // Load exercise library
@@ -518,13 +553,22 @@ const CoachMentalTraining: React.FC = () => {
   useEffect(() => {
     if (activeTab !== 'assignments') return;
     if (!coachProfile?.id) return;
-    Promise.all([
+    Promise.allSettled([
       curriculumAssignmentService.getActiveForCoach(coachProfile.id),
       assignmentOrchestratorService.listRecentForCoach(coachProfile.id, 24),
     ])
-      .then(([currAssignments, dailyAssignments]) => {
-        setCurriculumAssignments(currAssignments);
-        setNoraDailyAssignments(dailyAssignments);
+      .then(([curriculumAssignmentsResult, dailyAssignmentsResult]) => {
+        if (curriculumAssignmentsResult.status === 'fulfilled') {
+          setCurriculumAssignments(curriculumAssignmentsResult.value);
+        } else {
+          console.error('Failed to refresh coach curriculum assignments:', curriculumAssignmentsResult.reason);
+        }
+
+        if (dailyAssignmentsResult.status === 'fulfilled') {
+          setNoraDailyAssignments(dailyAssignmentsResult.value);
+        } else {
+          console.error('Failed to refresh Nora daily assignments:', dailyAssignmentsResult.reason);
+        }
       })
       .catch((err) => console.error('Failed to refresh coach assignments:', err));
   }, [activeTab, coachProfile?.id]);

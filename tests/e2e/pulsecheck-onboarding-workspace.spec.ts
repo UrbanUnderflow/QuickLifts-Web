@@ -391,7 +391,7 @@ async function redeemAthleteInvite(
 }
 
 test.describe('PulseCheck onboarding and team workspace', () => {
-  test('internal provisioning surface loads', async ({ page }) => {
+  test('@smoke internal provisioning surface loads', async ({ page }) => {
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
 
     await ensureAdminSession(page, '/admin/pulsecheckProvisioning');
@@ -401,7 +401,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     await expect(page.getByRole('heading', { name: /^Create Team$/i })).toBeVisible({ timeout: 15_000 });
   });
 
-  test('legacy roster migration surface loads', async ({ page }) => {
+  test('@smoke legacy roster migration surface loads', async ({ page }) => {
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
 
     await ensureAdminSession(page, legacyRosterMigrationPath());
@@ -410,7 +410,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     await expect(page.getByRole('button', { name: /Refresh/i })).toBeVisible({ timeout: 15_000 });
   });
 
-  test('post-activation surface loads for an active team admin context', async ({ page }) => {
+  test('@smoke post-activation surface loads for an active team admin context', async ({ page }) => {
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
 
     const workspaceContext = await getPulseCheckWorkspaceContext(page);
@@ -421,7 +421,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     await expect(page.getByText(/3\. Invite Athletes/i)).toBeVisible({ timeout: 15_000 });
   });
 
-  test('team workspace loads core roster and invite controls', async ({ page }) => {
+  test('@smoke team workspace loads core roster and invite controls', async ({ page }) => {
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
 
     const workspaceContext = await getPulseCheckWorkspaceContext(page);
