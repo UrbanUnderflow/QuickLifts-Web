@@ -2,21 +2,28 @@ import { setDoc, doc, getDoc, deleteDoc, Timestamp, collection, query, orderBy, 
 import { db } from '../config';
 import { AdminService, PageMetaData, DailyPrompt, ProgrammingAccess, BetaApplication } from './types';
 import { convertFirestoreTimestamp } from '../../../utils/formatDate';
-import { AppVersionMediaItem, buildAppVersionWritePayload } from '../../../utils/appVersioning';
+import {
+  APP_VERSION_PRODUCT_CONFIGS,
+  AppVersionMediaItem,
+  buildAppVersionWritePayload,
+} from '../../../utils/appVersioning';
 
 export const adminMethods: AdminService = {
-  async addVersion(version, changeNotes, isCriticalUpdate, media: AppVersionMediaItem[] = []) {
+  async addVersion(product, version, buildNumber, changeNotes, isCriticalUpdate, media: AppVersionMediaItem[] = []) {
     try {
+      const productConfig = APP_VERSION_PRODUCT_CONFIGS[product];
       const payload = {
-        ...buildAppVersionWritePayload(changeNotes, isCriticalUpdate, media),
+        ...buildAppVersionWritePayload(changeNotes, isCriticalUpdate, media, buildNumber),
+        product,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
 
-      await Promise.all([
-        setDoc(doc(db, 'version', version), payload, { merge: true }),
-        setDoc(doc(db, 'versions', version), payload, { merge: true }),
-      ]);
+      await Promise.all(
+        productConfig.versionCollections.map((collectionName) =>
+          setDoc(doc(db, collectionName, version), payload, { merge: true })
+        )
+      );
       return true;
     } catch (error) {
       console.error('Error adding version:', error);
