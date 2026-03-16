@@ -5,6 +5,7 @@ import { useUser } from '../../hooks/useUser';
 import { simSessionService } from '../../api/firebase/mentaltraining/simSessionService';
 import {
   DurationMode,
+  type ProfileSnapshotMilestone,
   PressureType,
   SessionType,
   TaxonomySkill,
@@ -24,6 +25,7 @@ interface SimRuntimePlayerProps {
   onResume: () => void;
   onClose: () => void;
   onComplete: () => void;
+  profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
   previewMode?: boolean;
 }
 
@@ -319,6 +321,7 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
   onResume,
   onClose,
   onComplete,
+  profileSnapshotMilestone,
   previewMode = false,
 }) => {
   const currentUser = useUser();
@@ -366,6 +369,7 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
       normalizedScore: score.normalizedScore,
       targetSkills: telemetry.targetSkills,
       pressureTypes: telemetry.pressureTypes,
+      profileSnapshotMilestone,
       createdAt: Date.now(),
     }).catch((error) => {
       console.error('Failed to record sim runtime session:', error);
@@ -391,20 +395,22 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
 
   if (buildArtifact.engineKey === 'reset') {
     return (
-      <ResetGame
-        exercise={exercise}
-        onClose={onClose}
-        onComplete={() => onComplete()}
-        previewMode={previewMode}
+        <ResetGame
+          exercise={exercise}
+          profileSnapshotMilestone={profileSnapshotMilestone}
+          onClose={onClose}
+          onComplete={() => onComplete()}
+          previewMode={previewMode}
       />
     );
   }
 
   if (buildArtifact.engineKey === 'noise_gate') {
     return (
-      <NoiseGateGame
-        exercise={exercise}
-        isPaused={isPaused}
+        <NoiseGateGame
+          exercise={exercise}
+          profileSnapshotMilestone={profileSnapshotMilestone}
+          isPaused={isPaused}
         onPause={onPause}
         onResume={onResume}
         onClose={onClose}
@@ -416,9 +422,10 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
 
   if (buildArtifact.engineKey === 'brake_point') {
     return (
-      <BrakePointGame
-        exercise={exercise}
-        isPaused={isPaused}
+        <BrakePointGame
+          exercise={exercise}
+          profileSnapshotMilestone={profileSnapshotMilestone}
+          isPaused={isPaused}
         onPause={onPause}
         onResume={onResume}
         onClose={onClose}
@@ -430,9 +437,10 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
 
   if (buildArtifact.engineKey === 'signal_window') {
     return (
-      <SignalWindowGame
-        exercise={exercise}
-        isPaused={isPaused}
+        <SignalWindowGame
+          exercise={exercise}
+          profileSnapshotMilestone={profileSnapshotMilestone}
+          isPaused={isPaused}
         onPause={onPause}
         onResume={onResume}
         onClose={onClose}
@@ -444,9 +452,10 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
 
   if (buildArtifact.engineKey === 'sequence_shift') {
     return (
-      <SequenceShiftGame
-        exercise={exercise}
-        isPaused={isPaused}
+        <SequenceShiftGame
+          exercise={exercise}
+          profileSnapshotMilestone={profileSnapshotMilestone}
+          isPaused={isPaused}
         onPause={onPause}
         onResume={onResume}
         onClose={onClose}
@@ -458,9 +467,10 @@ export const SimRuntimePlayer: React.FC<SimRuntimePlayerProps> = ({
 
   if (buildArtifact.engineKey === 'endurance_lock') {
     return (
-      <EnduranceLockGame
-        exercise={exercise}
-        isPaused={isPaused}
+        <EnduranceLockGame
+          exercise={exercise}
+          profileSnapshotMilestone={profileSnapshotMilestone}
+          isPaused={isPaused}
         onPause={onPause}
         onResume={onResume}
         onClose={onClose}

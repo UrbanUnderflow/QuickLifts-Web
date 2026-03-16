@@ -1,5 +1,6 @@
 import type { NextPage } from 'next';
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/router';
 import { FaCheckCircle, FaChartLine, FaBrain, FaHeart, FaRocket, FaShieldAlt, FaBed, FaMoon, FaSun, FaLightbulb, FaUtensils, FaCamera, FaFire, FaWeight, FaExclamationTriangle, FaWrench, FaEye, FaBullseye, FaLungs, FaPlay, FaDumbbell, FaTrophy, FaCalendarAlt, FaArrowUp, FaUserTie, FaClock, FaThumbsUp, FaThumbsDown, FaComments, FaClipboardList } from 'react-icons/fa';
 import Footer from '../components/Footer/Footer';
 import PageHead from '../components/PageHead';
@@ -7,17 +8,19 @@ import { PulseCheckWaitlistForm } from '../components/PulseCheckWaitlistForm';
 import { useUser } from '../hooks/useUser';
 import SignInModal from '../components/SignInModal';
 import Chat from '../components/pulsecheck/Chat';
-import ConnectedCoachesBadge from '../components/pulsecheck/ConnectedCoachesBadge';
 import NoraOnboarding from '../components/pulsecheck/NoraOnboarding';
 import ProfilePhoto from '../components/pulsecheck/ProfilePhoto';
+import PulseCheckProfileView from '../components/pulsecheck/PulseCheckProfileView';
 import SideNav from '../components/Navigation/SideNav';
 import { ChevronDownIcon } from '@heroicons/react/24/outline';
 import PulseCheckMarketingLanding from '../components/pulsecheck/PulseCheckMarketingLanding';
+import PulseCheckTodayView from '../components/pulsecheck/PulseCheckTodayView';
 
 const STORAGE_KEY_PC = 'pulsecheck_has_seen_marketing';
 const STORAGE_KEY_NORA_ONBOARDING = 'pulsecheck_has_seen_nora_onboarding';
 
 const PulseCheckPage: NextPage = () => {
+    const router = useRouter();
     const currentUser = useUser();
     const [showMarketing, setShowMarketing] = useState(true);
     const [isLoading, setIsLoading] = useState(true);
@@ -180,18 +183,31 @@ const PulseCheckPage: NextPage = () => {
         setShowNoraOnboarding(false);
     };
 
+    const enterWebApp = () => {
+        localStorage.setItem(STORAGE_KEY_PC, 'true');
+        setShowMarketing(false);
+        setIsSignInModalOpen(false);
+    };
+
     const handleUseWebApp = () => {
-        if (currentUser) {
-            localStorage.setItem(STORAGE_KEY_PC, 'true');
-            setShowMarketing(false);
-        } else {
-            setIsSignInModalOpen(true);
+        if (!currentUser) {
+            // Route to PulseCheck-branded login page
+            router.push('/PulseCheck/login');
+            return;
         }
+        enterWebApp();
     };
 
     const handleBackToMarketing = () => {
         localStorage.removeItem(STORAGE_KEY_PC);
         setShowMarketing(true);
+    };
+
+    const requestedSection = typeof router.query.section === 'string' ? router.query.section : 'today';
+    const activeSection = requestedSection === 'nora' || requestedSection === 'profile' ? requestedSection : 'today';
+
+    const handleOpenNora = () => {
+        router.push('/PulseCheck?section=nora');
     };
 
     useEffect(() => {
@@ -1607,9 +1623,12 @@ const PulseCheckPage: NextPage = () => {
                                     <div className="hidden md:flex items-center gap-2">
                                         <div className="relative">
                                             <div className="absolute -inset-2 bg-[#E0FE10]/10 rounded-lg blur-lg" />
-                                            <h1 className="relative text-xl font-bold text-white tracking-tight">
-                                                PulseCheck
-                                            </h1>
+                                            <div className="relative">
+                                                <h1 className="text-xl font-bold text-white tracking-tight">PulseCheck</h1>
+                                                <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">
+                                                    {activeSection === 'nora' ? 'Nora' : activeSection === 'profile' ? 'Profile' : 'Today'}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -1620,7 +1639,12 @@ const PulseCheckPage: NextPage = () => {
                                             onClick={() => setShowMobileMoreMenu(v => !v)}
                                             className="group inline-flex items-center gap-1.5"
                                         >
-                                            <span className="text-xl font-bold text-white">PulseCheck</span>
+                                            <div className="text-left">
+                                                <span className="block text-xl font-bold text-white">PulseCheck</span>
+                                                <span className="block text-[10px] uppercase tracking-[0.22em] text-zinc-500">
+                                                    {activeSection === 'nora' ? 'Nora' : activeSection === 'profile' ? 'Profile' : 'Today'}
+                                                </span>
+                                            </div>
                                             <div className={`w-5 h-5 rounded-full bg-white/5 border border-white/10 flex items-center justify-center transition-transform ${showMobileMoreMenu ? 'rotate-180' : ''}`}>
                                                 <ChevronDownIcon className="w-3 h-3 text-zinc-400 group-hover:text-white transition-colors" />
                                             </div>
@@ -1685,7 +1709,7 @@ const PulseCheckPage: NextPage = () => {
                                                         {/* Settings */}
                                                         <button
                                                             onClick={() => {
-                                                                window.location.href = '/settings';
+                                                                window.location.href = '/PulseCheck?section=profile&settings=1';
                                                                 setShowMobileMoreMenu(false);
                                                             }}
                                                             className="w-full flex items-center gap-3 px-4 py-3 text-white hover:bg-white/5 transition-colors"
@@ -1721,7 +1745,6 @@ const PulseCheckPage: NextPage = () => {
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <ConnectedCoachesBadge />
                                     <div className="hidden md:block">
                                         <ProfilePhoto />
                                     </div>
@@ -1729,12 +1752,25 @@ const PulseCheckPage: NextPage = () => {
                             </div>
                         </div>
                     </div>
-                    <div className="h-screen pt-[52px] overflow-hidden">
-                        <Chat />
+                    <div className="h-screen pt-[52px]">
+                        {activeSection === 'nora' ? (
+                            <div className="h-full overflow-hidden">
+                                <Chat />
+                            </div>
+                        ) : activeSection === 'profile' ? (
+                            <PulseCheckProfileView />
+                        ) : (
+                            <PulseCheckTodayView onOpenNora={handleOpenNora} />
+                        )}
                     </div>
                 </div>
 
-                <SignInModal isVisible={isSignInModalOpen} onClose={() => setIsSignInModalOpen(false)} />
+                <SignInModal
+                    isVisible={isSignInModalOpen}
+                    onClose={() => setIsSignInModalOpen(false)}
+                    onSignInSuccess={enterWebApp}
+                    onSignUpSuccess={enterWebApp}
+                />
             </>
         );
     }
@@ -1757,6 +1793,8 @@ const PulseCheckPage: NextPage = () => {
                         setWaitlistUserType('athlete');
                         setShowWaitlistForm(true);
                     }}
+                    onOpenWebApp={handleUseWebApp}
+                    webAppLabel={currentUser ? 'Open App' : 'Log In'}
                 />
                 <PulseCheckWaitlistForm
                     isOpen={showWaitlistForm}

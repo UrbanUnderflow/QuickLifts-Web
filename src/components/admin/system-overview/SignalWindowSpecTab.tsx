@@ -151,7 +151,7 @@ const VARIANTS = [
     { name: 'Dynamic display', description: 'Moving or time-evolving cues. Intermediate variant.', status: 'Registered' },
     { name: 'Sport-context cue read', description: 'Sport-specific displays (formation reads, ball-flight cues). Applied variant.', status: 'Registered' },
     { name: 'Field-Read Trial Signal Window', description: 'Standardized 10–15 min at fixed Tier 3. Trial-layer assessment.', status: 'Registered' },
-    { name: '3D Spatial Read (Vision Pro)', description: 'Cues in spatial 3D environment. Immersive Transfer Trial.', status: 'Planned' },
+    { name: '3D Spatial Read (Vision Pro)', description: 'Active football package runtime for Signal Window / Spatial Read in the Vision Pro immersive transfer layer.', status: 'Football Package v1' },
 ];
 
 const MEASUREMENT_RULES = [
@@ -438,6 +438,11 @@ const SignalWindowSpecTab: React.FC = () => {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                    <div className="rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2">
+                        <p className="text-[10px] text-green-200">
+                            Current immersive build status: 3D Spatial Read is the live Signal Window surface inside the Vision Pro football package. The other immersive family variants across the system overview remain planned until they get their own runtime package.
+                        </p>
                     </div>
                 </div>
             </section>

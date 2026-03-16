@@ -65,6 +65,18 @@ const adminCardsData = [
     link: "/admin/pulsecheckProvisioning"
   },
   {
+    title: "Legacy Roster Migration",
+    description: "Migrate legacy coach-athlete rosters into PulseCheck organizations and teams before removing old connection code.",
+    icon: <Users2 className="w-5 h-5" />,
+    link: "/admin/pulsecheckLegacyRosterMigration"
+  },
+  {
+    title: "Vision Pro Reporting",
+    description: "Review Vision Pro session outcomes, Transfer Gap summaries, and filtered pilot exports for coach and research workflows.",
+    icon: <BarChart2 className="w-5 h-5" />,
+    link: "/admin/pulsecheckVisionProReporting"
+  },
+  {
 
     title: "Virtual Office",
     description: "Live status board for agents with animated desks and typing state.",

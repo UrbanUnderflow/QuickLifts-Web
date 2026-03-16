@@ -56,7 +56,7 @@ const PIPELINE = [
   },
   {
     title: 'Persist a Shared State Snapshot',
-    body: 'Store one authoritative state snapshot so Nora, coach tools, and escalation all consume the same runtime context.',
+    body: 'Store one authoritative state snapshot so Nora, coach tools, and escalation all consume the same runtime context, then let the execution layer materialize the daily task from it.',
   },
 ];
 
@@ -78,6 +78,7 @@ const SNAPSHOT_ROWS = [
   ['persistentRed', 'Repeated red-state pattern requiring staff-support visibility'],
   ['recommendedProtocolClass', 'Regulation, Priming, Recovery, or none'],
   ['recommendedRouting', 'Protocol only, Sim only, Trial only, Protocol -> Sim, Sim -> Protocol, Defer / alternate path'],
+  ['executionLink', 'Reference to the daily assignment artifact the coach and athlete now act from'],
 ];
 
 const FRESHNESS_ROWS = [
@@ -100,8 +101,8 @@ const PulseCheckStateSignalLayerTab: React.FC = () => {
       <DocHeader
         eyebrow="Pulse Check Runtime"
         title="State Signal Layer"
-        version="Version 1.2 | March 10, 2026"
-        summary="Foundation-layer artifact for the shared perception model. This page defines the canonical state dimensions, signal categories, confidence logic, freshness defaults, and the persisted snapshot that all downstream runtime systems should consume."
+        version="Version 1.3 | March 16, 2026"
+        summary="Foundation-layer artifact for the shared perception model. This page defines the canonical state dimensions, signal categories, confidence logic, freshness defaults, and the persisted snapshot that all downstream runtime systems should consume before daily assignment materialization."
         highlights={[
           {
             title: 'One Canonical State Model',
@@ -110,6 +111,10 @@ const PulseCheckStateSignalLayerTab: React.FC = () => {
           {
             title: 'Confidence-Governed Routing',
             body: 'Low-confidence or conflicting signals should trigger a lighter, more reversible decision rather than brittle assignment behavior.',
+          },
+          {
+            title: 'One Snapshot, Shared Execution Context',
+            body: 'The same state snapshot now feeds Nora routing, coach review, and the daily assignment artifact rather than separate copy-only hints.',
           },
           {
             title: 'Performance-Relevant, Not Diagnostic',

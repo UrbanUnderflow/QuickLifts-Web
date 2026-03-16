@@ -3,14 +3,27 @@ const {
   cleanupSessionState,
   getSessionDoc,
   json,
+  normalizeBaselineReferences,
+  normalizeCalibrationSummary,
+  normalizeFamilyMetricSummary,
+  normalizeReportSummary,
+  normalizeTransferGapSummary,
+  normalizeValiditySummary,
+  normalizeVersionMetadata,
   parseBody,
+  persistEventLog,
   recordCurriculumCompletion,
   recordLegacyAssignmentCompletion,
+  resolveVisionProBaselineContext,
   sanitizeSession,
   sha256,
+  syncTrialProfileSnapshot,
   withVisionProContext,
   writeSimSession,
   buildResultSummary,
+  buildTransferGapSummaryFromSources,
+  buildVisionProReportSummary,
+  determineImmersiveBaselineFlag,
 } = require('./vision-pro-trials-utils');
 
 exports.handler = async (event) => {
@@ -47,6 +60,59 @@ exports.handler = async (event) => {
       return json(403, { error: 'Invalid device session token' });
     }
 
+    const versionMetadata = normalizeVersionMetadata(
+      resultPayload.versionMetadata || sessionData.versionMetadata
+    );
+    const calibrationSummary = normalizeCalibrationSummary(
+      resultPayload.calibrationSummary || sessionData.calibrationSummary
+    );
+    const familyMetricSummary = normalizeFamilyMetricSummary(
+      resultPayload.familyMetricSummary || sessionData.familyMetricSummary
+    );
+    const validitySummary = normalizeValiditySummary(
+      resultPayload.validitySummary || sessionData.validitySummary
+    );
+    const baselineContext = await resolveVisionProBaselineContext(db, sessionData.athleteUserId, {
+      simId: resultPayload.simId || sessionData.simId,
+      baselineReferences: normalizeBaselineReferences(
+        resultPayload.baselineReferences || sessionData.baselineReferences
+      ),
+      familyMetricSummary,
+      currentSessionId: sessionId,
+    });
+    const baselineReferences = baselineContext.baselineReferences;
+    const eventLog = await persistEventLog(ref, resultPayload.eventLog, {
+      id: sessionId,
+      athleteUserId: sessionData.athleteUserId,
+    });
+    const sessionOutcome = resultPayload.sessionOutcome || validitySummary.status || sessionData.sessionOutcome || null;
+    const isImmersiveBaseline = determineImmersiveBaselineFlag({
+      requestedFlag: resultPayload.isImmersiveBaseline,
+      priorImmersiveBaselineSession: baselineContext.priorImmersiveBaselineSession,
+      sessionOutcome,
+    });
+    const immersiveBaselineReferenceId =
+      isImmersiveBaseline
+        ? (resultPayload.immersiveBaselineReferenceId || sessionId)
+        : (resultPayload.immersiveBaselineReferenceId ||
+          sessionData.immersiveBaselineReferenceId ||
+          baselineContext.priorImmersiveBaselineSession?.id ||
+          null);
+    const transferGapSummary = normalizeTransferGapSummary(
+      buildTransferGapSummaryFromSources(
+        familyMetricSummary,
+        baselineReferences,
+        baselineContext.baselineMetricSourceMap
+      )
+    );
+    const reportSummary = normalizeReportSummary(
+      buildVisionProReportSummary({
+        familyMetricSummary,
+        transferGapSummary,
+        isImmersiveBaseline,
+      })
+    );
+
     const createdAt = Date.now();
     const simSessionPayload = {
       userId: sessionData.athleteUserId,
@@ -62,6 +128,19 @@ exports.handler = async (event) => {
       normalizedScore: resultPayload.normalizedScore ?? 0,
       targetSkills: Array.isArray(resultPayload.targetSkills) ? resultPayload.targetSkills : [],
       pressureTypes: Array.isArray(resultPayload.pressureTypes) ? resultPayload.pressureTypes : [],
+      trialType: resultPayload.trialType || sessionData.trialType || null,
+      profileSnapshotMilestone: resultPayload.profileSnapshotMilestone || sessionData.profileSnapshotMilestone || null,
+      versionMetadata,
+      calibrationSummary,
+      baselineReferences,
+      familyMetricSummary,
+      validitySummary,
+      transferGapSummary,
+      eventLog,
+      reportSummary,
+      sessionOutcome,
+      isImmersiveBaseline,
+      immersiveBaselineReferenceId,
       createdAt,
       visionProTrialSessionId: sessionId,
       assignmentId: sessionData.assignmentId,
@@ -69,6 +148,12 @@ exports.handler = async (event) => {
     };
 
     const simSessionId = await writeSimSession(db, sessionData.athleteUserId, simSessionPayload);
+    await syncTrialProfileSnapshot(db, sessionData.athleteUserId, {
+      id: simSessionId,
+      createdAt,
+      trialType: simSessionPayload.trialType || null,
+      profileSnapshotMilestone: simSessionPayload.profileSnapshotMilestone || null,
+    });
 
     if (sessionData.assignmentCollection === CURRICULUM_ASSIGNMENTS_COLLECTION) {
       await recordCurriculumCompletion(
@@ -86,6 +171,17 @@ exports.handler = async (event) => {
       completedAt: createdAt,
       updatedAt: createdAt,
       deviceSessionTokenHash: null,
+      versionMetadata,
+      calibrationSummary,
+      baselineReferences,
+      familyMetricSummary,
+      validitySummary,
+      transferGapSummary,
+      eventLog,
+      reportSummary,
+      sessionOutcome,
+      isImmersiveBaseline,
+      immersiveBaselineReferenceId,
       resultSummary: {
         ...buildResultSummary(simSessionPayload),
         simSessionId,

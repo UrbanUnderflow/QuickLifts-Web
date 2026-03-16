@@ -7,6 +7,7 @@ const INPUT_ROWS = [
   ['Current escalation status', 'Tier 0 to Tier 3, safety mode, or support visibility state.', 'Yes'],
   ['Program intent', 'Whether today is a probe, training rep, pressure exposure, reassessment, or competition-day support moment.', 'Yes'],
   ['Athlete profile', 'Longer-term strengths, weaknesses, modifier sensitivities, fatigability, and protocol responsiveness.', 'Yes'],
+  ['Current active program and daily assignment state', 'Whether today already has an unstarted, started, completed, or coach-overridden Nora task.', 'Yes'],
   ['Recent session history', 'Recent exposures and whether family, duration, or difficulty should vary.', 'Yes'],
   ['Schedule / context window', 'Pre-game, post-trial, travel, return-to-play, high-stakes week.', 'Yes'],
   ['Coach assignment / manual constraints', 'Cases where a coach has locked or requested a specific family, duration, or trial window.', 'When present'],
@@ -43,6 +44,10 @@ const ROUTING_ROWS = [
 const SUPPORT_AND_STALE_ROWS = [
   ['Persistent red active, Tier 0', 'Reduce aggressiveness, prefer Protocol-first or lighter-load paths, and suppress high-pressure exposure by default.'],
   ['Snapshot stale at assignment time', 'Request a short check-in before assigning a non-trivial Protocol, Sim, or Trial.'],
+  ['Repeat same-day check-in with unstarted task', 'Assignment Orchestrator may refresh the same daily task in place instead of creating duplicates.'],
+  ['Repeat same-day check-in after start or coach override', 'Do not overwrite the existing daily task automatically.'],
+  ['Athlete launch handoff', 'Today view, Nora chat, and Mental Training should all reference the same daily assignment id so launch, start, and completion state stay aligned.'],
+  ['Coach manually defers or overrides today\'s task', 'Treat the coach action as execution truth for that date unless safety policy suppresses all training.'],
   ['Low confidence with no fresh self-report', 'Prefer reversible, lower-cost actions rather than aggressive performance routing.'],
   ['Coach lock plus safety conflict', 'Safety wins. The coach lock becomes advisory until the safety override clears.'],
 ];
@@ -53,12 +58,32 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
       <DocHeader
         eyebrow="Pulse Check Runtime"
         title="Nora Assignment Rules"
-        version="Version 1.1 | March 10, 2026"
-        summary="Execution-layer artifact for how Nora selects the next athlete action. This page formalizes the precedence ladder Nora uses after safety overrides are resolved and translates state, profile, program intent, and recent history into the next best performance move."
+        version="Version 1.2 | March 16, 2026"
+        summary="Execution-layer artifact for how Nora selects the next athlete action. This page formalizes the precedence ladder Nora uses after safety overrides are resolved and translates state, profile, program intent, recent history, and coach intervention state into the next best performance move."
         highlights={[
           {
             title: 'State Is a Routing Input',
             body: 'Protocols are assigned when current state is the bottleneck. Sims and Trials are assigned when skill or assessment timing is the bottleneck.',
+          },
+          {
+            title: 'Signal Layer v1 Materializes The Task',
+            body: 'After Nora resolves the routing decision, the Assignment Orchestrator writes one athlete-facing daily task rather than leaving the decision as copy only, and Nora chat should read from that same artifact.',
+          },
+          {
+            title: 'Launch Surfaces Stay In Sync',
+            body: 'Today view, Nora chat, and Mental Training should all advance the same Nora task through viewed, started, and completed states.',
+          },
+          {
+            title: 'Completion Should Explain The Update',
+            body: 'Finishing a rep should write an athlete-readable session summary and a coach-readable next-program update rather than silently changing the active program underneath them.',
+          },
+          {
+            title: 'Meaningful Shifts Deserve Follow-Up',
+            body: 'When a completed rep materially changes the next focus, Nora should offer an optional plain-language follow-up instead of expecting the athlete to infer the change alone.',
+          },
+          {
+            title: 'Coach Intervention Freezes The Date',
+            body: 'Once a coach overrides or defers a daily Nora task, same-day auto-refresh should stop unless a higher-priority safety rule takes over.',
           },
           {
             title: 'Safety Overrides First',
@@ -167,6 +192,14 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
             body="Preference and presentation can change how an assignment is framed to the athlete, but they should not change the core performance decision once the precedence ladder is resolved."
           />
         </CardGrid>
+      </SectionBlock>
+
+      <SectionBlock icon={Route} title="Signal Layer v1 Execution Scope">
+        <InfoCard
+          title="What V1 Actually Materializes"
+          accent="blue"
+          body="In the current implementation slice, the Assignment Orchestrator should materialize one Nora daily task after check-in using the resolved routing decision. V1 should stay honest: it can express sim, lighter-sim, or defer outcomes now, while full protocol and trial orchestration remain future execution lanes."
+        />
       </SectionBlock>
 
       <SectionBlock icon={TimerReset} title="Confidence and Fallback Behavior">

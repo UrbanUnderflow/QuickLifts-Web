@@ -17,11 +17,13 @@ const PANEL_ROWS = [
 
 const STRUCTURE_ROWS = [
   ['A. Header + filters', 'Set context', 'Team or unit selector, date range, practice or competition context, roster segment, readiness band, support flag, and escalation visibility filters.'],
-  ['B. Roster overview strip', 'Immediate scan', 'Counts of Green / Yellow / Red, persistent-red athletes, protocol demand, new Tier 1 alerts, active Tier 2 or Tier 3 visibility notices.'],
-  ['C. State / readiness panel', 'See current roster condition', 'State distribution, top movers, readiness map by unit, protocol demand patterns.'],
-  ['D. Performance / profile panel', 'See skill and trend context', 'Recent sim-family trends, trial movement, protocol responsiveness, athlete-level trend cards.'],
-  ['E. Escalation / safety panel', 'See authorized safety awareness', 'Privacy-safe escalation notifications, status by tier, safety mode markers, handoff state where authorized.'],
-  ['F. Athlete detail drawer / page', 'Investigate a specific athlete', 'Single-athlete state, profile, recent sessions, protocols, assigned work, support flags, and permitted safety visibility.'],
+  ['B. Follow-up summary block', 'Immediate first read', 'Unread counts, what changed most recently, suggested review items, awareness-only updates, privacy-safe safety visibility, and a clear path into the full coach notification center.'],
+  ['C. Roster overview strip', 'Immediate scan', 'Counts of Green / Yellow / Red, persistent-red athletes, protocol demand, new Tier 1 alerts, active Tier 2 or Tier 3 visibility notices.'],
+  ['D. State / readiness panel', 'See current roster condition', 'State distribution, top movers, readiness map by unit, protocol demand patterns.'],
+  ['E. Performance / profile panel', 'See skill and trend context', 'Recent sim-family trends, trial movement, protocol responsiveness, athlete-level trend cards.'],
+  ['F. Escalation / safety panel', 'See authorized safety awareness', 'Privacy-safe escalation notifications, status by tier, safety mode markers, handoff state where authorized.'],
+  ['G. Coach notification center', 'Review what changed and whether to intervene', 'Unread Nora auto-assignments, post-session updates, read/archive state, and deep links into the relevant coach surface.'],
+  ['H. Athlete detail drawer / page', 'Investigate a specific athlete', 'Single-athlete state, profile, recent sessions, protocols, assigned work, support flags, and permitted safety visibility.'],
 ];
 
 const PRIVACY_ROWS = [
@@ -31,7 +33,9 @@ const PRIVACY_ROWS = [
 ];
 
 const WORKFLOW_ROWS = [
+  ['Dashboard landing scan', 'Understand what needs attention before scanning the full roster.', 'Follow-up summary block -> open latest follow-up or notification center.'],
   ['Pre-practice scan', 'See if the roster is generally ready and who needs adjustment.', 'Header filters -> roster overview strip -> state/readiness panel.'],
+  ['Notification review', 'Review what Nora changed and whether the coach should intervene.', 'Coach notification center -> assignment or athlete destination surface.'],
   ['Pre-game scan', 'Understand readiness concentration, support flags, and any active escalation awareness before competition.', 'Roster overview strip -> state panel -> safety panel.'],
   ['Athlete follow-up', 'Open a single athlete to see recent state, work, and trend context.', 'Athlete card -> detail drawer/page.'],
   ['Support coordination', 'Identify repeated red-state patterns without collapsing into clinical alerting.', 'State panel persistent-red section -> staff support queue.'],
@@ -41,13 +45,22 @@ const WORKFLOW_ROWS = [
 const NOTIFICATION_ROWS = [
   ['Indicator', 'Roster readiness shifted slightly downward', 'Low-emphasis dashboard metric', 'Awareness only'],
   ['Action prompt', '5 athletes routed to Regulation before work', 'Medium-emphasis summary chip', 'Coach may adjust session framing'],
+  ['Coach follow-up item', 'Nora assigned a lighter sim after check-in', 'Notification-center card with rationale and direct open action', 'Coach reviews, overrides, or lets the assignment stand'],
+  ['Coach session update', 'Next rep moved to Reset after a completed session', 'Notification-center card plus push notification', 'Coach understands what changed and why before next contact'],
   ['Support flag', 'Athlete persistent-red for 3 sessions', 'Distinct support badge or queue', 'Follow-up or coordinate support'],
   ['Safety alert', 'Tier 2 or Tier 3 escalation visible to coach', 'High-emphasis but privacy-safe alert', 'Follow documented escalation workflow'],
+];
+
+const TRIAGE_ROWS = [
+  ['Review suggested', 'Actionable Nora auto-assignments or post-session changes that may warrant coach intervention.', 'Warm/high-emphasis lane with direct review CTA.'],
+  ['Awareness only', 'Informational athlete and Nora updates that matter, but do not imply intervention by default.', 'Cool/medium-emphasis lane that supports quick scanning.'],
+  ['Safety visibility', 'Privacy-safe Tier 1 to Tier 3 awareness that should never be confused with routine performance follow-up.', 'Separate red safety lane with minimum-necessary wording only.'],
 ];
 
 const DATA_ROWS = [
   ['State snapshot', 'State / readiness panel, support flags, athlete header cards.'],
   ['Nora assignment output', 'Recent work, protocol demand, assignment rationale, and current plan context.'],
+  ['Coach notifications', 'Coach notification center, unread badge, and deep links into assignment review.'],
   ['Performance-state flags', 'Athlete trend interpretation, readiness context, support diagnostics.'],
   ['Family and trial metrics', 'Performance / profile panel and athlete detail trends.'],
   ['Escalation status + coach notifications', 'Escalation / safety panel and roster strip notifications.'],
@@ -123,6 +136,10 @@ const PulseCheckCoachDashboardInformationArchitectureTab: React.FC = () => {
 
       <SectionBlock icon={BellRing} title="Notifications and Alert Treatments">
         <DataTable columns={['Type', 'Example', 'Display Treatment', 'Action Expectation']} rows={NOTIFICATION_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={BellRing} title="Dashboard Follow-Up Triage Lanes">
+        <DataTable columns={['Lane', 'What Belongs Here', 'Display Treatment']} rows={TRIAGE_ROWS} />
       </SectionBlock>
 
       <SectionBlock icon={BarChart3} title="Data-to-Display Mapping">

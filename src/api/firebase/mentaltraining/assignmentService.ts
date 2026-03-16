@@ -51,6 +51,7 @@ export const assignmentService = {
     isRecurring = false,
     recurringPattern,
     recurringDays,
+    profileSnapshotMilestone,
   }: {
     athleteUserId: string;
     exerciseId: string;
@@ -62,6 +63,7 @@ export const assignmentService = {
     isRecurring?: boolean;
     recurringPattern?: 'daily' | 'weekdays' | 'custom';
     recurringDays?: number[];
+    profileSnapshotMilestone?: ExerciseAssignment['profileSnapshotMilestone'];
   }): Promise<string> {
     // Get the exercise details
     const exercise = await simModuleLibraryService.getById(exerciseId);
@@ -78,6 +80,7 @@ export const assignmentService = {
       assignedBy: coachId,
       assignedByName: coachName,
       reason,
+      profileSnapshotMilestone,
       dueDate,
       scheduledTime,
       isRecurring,
@@ -338,6 +341,7 @@ export const assignmentService = {
     reason,
     dueDate,
     scheduledTime,
+    profileSnapshotMilestone,
   }: {
     athleteUserIds: string[];
     exerciseId: string;
@@ -346,6 +350,7 @@ export const assignmentService = {
     reason?: string;
     dueDate?: number;
     scheduledTime?: 'morning' | 'pre-workout' | 'post-workout' | 'evening';
+    profileSnapshotMilestone?: ExerciseAssignment['profileSnapshotMilestone'];
   }): Promise<string[]> {
     const assignmentIds: string[] = [];
 
@@ -358,6 +363,7 @@ export const assignmentService = {
         reason,
         dueDate,
         scheduledTime,
+        profileSnapshotMilestone,
       });
       assignmentIds.push(id);
     }

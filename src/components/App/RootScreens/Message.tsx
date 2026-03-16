@@ -1,5 +1,5 @@
 import React from 'react';
-import { UserCircle2, Users } from 'lucide-react';
+import { UserCircle, Users } from 'lucide-react';
 
 // Types
 interface User {
@@ -83,7 +83,7 @@ const MessageListItem: React.FC<MessageListItemProps> = ({
         />
       ) : (
         <div className="w-12 h-12 bg-zinc-700 rounded-full flex items-center justify-center">
-          <UserCircle2 className="w-8 h-8 text-zinc-400" />
+          <UserCircle className="w-8 h-8 text-zinc-400" />
         </div>
       )}
       

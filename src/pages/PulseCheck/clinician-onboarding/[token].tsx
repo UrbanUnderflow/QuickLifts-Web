@@ -3,6 +3,7 @@ import Head from 'next/head';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { MailPlus, ShieldPlus, Stethoscope } from 'lucide-react';
 import admin from '../../../lib/firebase-admin';
+import { getFirestoreDocFallback } from '../../../lib/server-firestore-fallback';
 
 type ClinicianOnboardingPageProps = {
   invite: {
@@ -69,23 +70,52 @@ const ClinicianOnboardingPage = ({ invite }: InferGetServerSidePropsType<typeof 
   );
 };
 
-export const getServerSideProps: GetServerSideProps<ClinicianOnboardingPageProps> = async ({ params, res }) => {
+export const getServerSideProps: GetServerSideProps<ClinicianOnboardingPageProps> = async ({ params, query, res }) => {
   const token = typeof params?.token === 'string' ? params.token : '';
+  const forceDevFirebase = query.devFirebase === '1';
   if (!token) return { notFound: true };
 
   try {
-    const inviteSnap = await admin.firestore().collection('pulsecheck-invite-links').doc(token).get();
-    if (!inviteSnap.exists) return { notFound: true };
+    let invite = await admin
+      .firestore()
+      .collection('pulsecheck-invite-links')
+      .doc(token)
+      .get()
+      .then((snapshot) => (snapshot.exists ? snapshot.data() || {} : null))
+      .catch(() => null);
 
-    const invite = inviteSnap.data() || {};
+    if (!invite) {
+      invite = await getFirestoreDocFallback('pulsecheck-invite-links', token, forceDevFirebase);
+    }
+    if (!invite) return { notFound: true };
     if (invite.status && invite.status !== 'active') return { notFound: true };
     if (invite.inviteType !== 'clinician-onboarding') return { notFound: true };
 
-    const [organizationSnap, teamSnap, clinicianSnap] = await Promise.all([
-      admin.firestore().collection('pulsecheck-organizations').doc(invite.organizationId || '').get(),
-      admin.firestore().collection('pulsecheck-teams').doc(invite.teamId || '').get(),
-      admin.firestore().collection('pulsecheck-auntedna-clinician-profiles').doc(invite.clinicianProfileId || '').get(),
-    ]);
+    let organizationName = 'PulseCheck Organization';
+    let teamName = 'Initial Team';
+    let clinicianProfileName = 'Clinician Profile';
+
+    try {
+      const [organizationSnap, teamSnap, clinicianSnap] = await Promise.all([
+        admin.firestore().collection('pulsecheck-organizations').doc(String(invite.organizationId || '')).get(),
+        admin.firestore().collection('pulsecheck-teams').doc(String(invite.teamId || '')).get(),
+        admin.firestore().collection('pulsecheck-auntedna-clinician-profiles').doc(String(invite.clinicianProfileId || '')).get(),
+      ]);
+
+      organizationName = organizationSnap.data()?.displayName || organizationName;
+      teamName = teamSnap.data()?.displayName || teamName;
+      clinicianProfileName = clinicianSnap.data()?.displayName || clinicianProfileName;
+    } catch {
+      const [organizationDoc, teamDoc, clinicianDoc] = await Promise.all([
+        getFirestoreDocFallback('pulsecheck-organizations', String(invite.organizationId || ''), forceDevFirebase),
+        getFirestoreDocFallback('pulsecheck-teams', String(invite.teamId || ''), forceDevFirebase),
+        getFirestoreDocFallback('pulsecheck-auntedna-clinician-profiles', String(invite.clinicianProfileId || ''), forceDevFirebase),
+      ]);
+
+      organizationName = String(organizationDoc?.displayName || organizationName);
+      teamName = String(teamDoc?.displayName || teamName);
+      clinicianProfileName = String(clinicianDoc?.displayName || clinicianProfileName);
+    }
 
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
 
@@ -94,9 +124,9 @@ export const getServerSideProps: GetServerSideProps<ClinicianOnboardingPageProps
         invite: {
           token,
           targetEmail: invite.targetEmail || '',
-          organizationName: organizationSnap.data()?.displayName || 'PulseCheck Organization',
-          teamName: teamSnap.data()?.displayName || 'Initial Team',
-          clinicianProfileName: clinicianSnap.data()?.displayName || 'Clinician Profile',
+          organizationName,
+          teamName,
+          clinicianProfileName,
           status: invite.status || 'active',
         },
       },

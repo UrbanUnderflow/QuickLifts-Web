@@ -74,6 +74,20 @@ export const simModuleLibraryService = {
     return exerciseFromFirestore(snap.id, snap.data());
   },
 
+  async getBySimSpecId(simSpecId: string): Promise<MentalExercise | null> {
+    const q = query(
+      collection(db, COLLECTION),
+      where('simSpecId', '==', simSpecId)
+    );
+    const snap = await getDocs(q);
+    const docSnap = snap.docs
+      .map((entry) => exerciseFromFirestore(entry.id, entry.data()))
+      .filter((exercise) => exercise.isActive)
+      .sort((left, right) => left.sortOrder - right.sortOrder)[0];
+    if (!docSnap) return null;
+    return docSnap;
+  },
+
   /**
    * Get exercises best for a specific use case
    */

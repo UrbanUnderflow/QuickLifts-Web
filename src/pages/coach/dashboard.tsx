@@ -16,13 +16,29 @@ import {
   TrendingUp,
   RefreshCw,
   UserPlus,
-  Copy
+  Copy,
+  BellRing,
+  ArrowRight
 } from 'lucide-react';
 import { db } from '../../api/firebase/config';
-import { doc, getDoc, collection, getDocs, query, where, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, onSnapshot, query, where, updateDoc } from 'firebase/firestore';
 import { EscalationRecordStatus } from '../../api/firebase/escalation/types';
 import { escalationRecordsService } from '../../api/firebase/escalation/service';
 import { EscalationTier } from '../../api/firebase/escalation/types';
+import { convertFirestoreTimestamp } from '../../utils/formatDate';
+
+type CoachNotificationDoc = {
+  id: string;
+  title?: string;
+  message?: string;
+  type: string;
+  coachId: string;
+  createdAt?: number;
+  read?: boolean;
+  archived?: boolean;
+  actionRequired?: boolean;
+  webUrl?: string;
+};
 
 // Floating Orb Component for loading/error states
 const FloatingOrb: React.FC<{
@@ -116,6 +132,45 @@ const StatCard: React.FC<{
   </motion.div>
 );
 
+const relativeTimestamp = (timestamp?: number) => {
+  if (!timestamp) return 'Just now';
+
+  const date = convertFirestoreTimestamp(timestamp);
+  const deltaMs = Date.now() - date.getTime();
+  const deltaMinutes = Math.floor(deltaMs / (1000 * 60));
+  const deltaHours = Math.floor(deltaMinutes / 60);
+  const deltaDays = Math.floor(deltaHours / 24);
+
+  if (deltaMinutes < 1) return 'Just now';
+  if (deltaMinutes < 60) return `${deltaMinutes} min ago`;
+  if (deltaHours < 24) return `${deltaHours} hr${deltaHours === 1 ? '' : 's'} ago`;
+  if (deltaDays < 7) return `${deltaDays} day${deltaDays === 1 ? '' : 's'} ago`;
+
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+const isSafetyNotification = (notification: CoachNotificationDoc) => {
+  const type = notification.type?.toLowerCase() || '';
+  return type.includes('escalation') || type.includes('safety') || type.includes('tier');
+};
+
+const getEscalationLaneLabel = (tier?: number) => {
+  if (tier === EscalationTier.CriticalRisk) return 'Tier 3';
+  if (tier === EscalationTier.ElevatedRisk) return 'Tier 2';
+  if (tier === EscalationTier.MonitorOnly) return 'Tier 1';
+  return 'Tier 0';
+};
+
+const getEscalationLaneCopy = (tier?: number) => {
+  if (tier === EscalationTier.CriticalRisk) return 'Immediate privacy-safe safety visibility is active.';
+  if (tier === EscalationTier.ElevatedRisk) return 'Clinical handoff visibility is active.';
+  if (tier === EscalationTier.MonitorOnly) return 'Coach-aware monitor state is active.';
+  return 'No safety visibility is active.';
+};
+
 const CoachDashboard: React.FC = () => {
   const currentUser = useUser();
   const userLoading = useUserLoading();
@@ -127,6 +182,7 @@ const CoachDashboard: React.FC = () => {
   const [sharedAthletes, setSharedAthletes] = useState<any[]>([]);
   const [_sharedByCoach, setSharedByCoach] = useState<Array<{coachId: string; coachName?: string; athletes: any[]}>>([]);
   const [pendingInvites, setPendingInvites] = useState<{ coachId: string; coachName?: string; permission: 'full'|'limited'; allowedAthletes?: string[] }[]>([]);
+  const [coachNotifications, setCoachNotifications] = useState<CoachNotificationDoc[]>([]);
 
   const handleCopyCode = async () => {
     if (coachProfile?.referralCode) {
@@ -145,6 +201,65 @@ const CoachDashboard: React.FC = () => {
       console.error('Error signing out:', err);
     }
   };
+
+  const scrollToAthletesSection = () => {
+    if (typeof window === 'undefined') return;
+    document.getElementById('coach-athletes-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const openCoachNotification = async (notification?: CoachNotificationDoc) => {
+    if (!notification?.webUrl) {
+      await router.push('/coach/notifications');
+      return;
+    }
+
+    if (notification.webUrl.startsWith('http')) {
+      const normalized = notification.webUrl.replace('https://fitwithpulse.ai', '');
+      await router.push(normalized || '/coach/notifications');
+      return;
+    }
+
+    await router.push(notification.webUrl);
+  };
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setCoachNotifications([]);
+      return;
+    }
+
+    const notificationsQuery = query(
+      collection(db, 'coach-notifications'),
+      where('coachId', '==', currentUser.id)
+    );
+
+    const unsubscribe = onSnapshot(
+      notificationsQuery,
+      (snapshot) => {
+        const docs = snapshot.docs
+          .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, any>) } as CoachNotificationDoc))
+          .filter((notification) => notification.archived !== true)
+          .sort((left, right) => (right.createdAt || 0) - (left.createdAt || 0));
+        setCoachNotifications(docs);
+      },
+      (notificationError) => {
+        console.error('Failed to load coach dashboard notifications:', notificationError);
+        setCoachNotifications([]);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [currentUser?.id]);
+
+  const unreadNotificationCount = coachNotifications.filter((notification) => !notification.read).length;
+  const actionNotificationCount = coachNotifications.filter((notification) => notification.actionRequired && !notification.read).length;
+  const recentCoachNotifications = coachNotifications.slice(0, 3);
+  const reviewNotifications = coachNotifications.filter((notification) => notification.actionRequired && !isSafetyNotification(notification)).slice(0, 2);
+  const awarenessNotifications = coachNotifications.filter((notification) => !notification.actionRequired && !isSafetyNotification(notification)).slice(0, 2);
+  const safetyVisibleAthletes = [...athletes]
+    .filter((athlete) => typeof athlete.activeEscalationTier === 'number' && athlete.activeEscalationTier >= EscalationTier.MonitorOnly)
+    .sort((left, right) => (right.activeEscalationTier || 0) - (left.activeEscalationTier || 0))
+    .slice(0, 3);
 
   useEffect(() => {
     const fetchCoachProfile = async () => {
@@ -599,6 +714,214 @@ const CoachDashboard: React.FC = () => {
           />
           </div>
 
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.45 }}
+          className="mb-10"
+        >
+          <GlassCard accentColor={actionNotificationCount > 0 ? '#F59E0B' : '#3B82F6'} hoverEffect={false}>
+            <div className="p-6 lg:p-7">
+              <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+                <div className="max-w-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-2xl border ${actionNotificationCount > 0 ? 'border-[#F59E0B]/40 bg-[#F59E0B]/15' : 'border-[#3B82F6]/40 bg-[#3B82F6]/15'}`}>
+                      <BellRing className={`h-5 w-5 ${actionNotificationCount > 0 ? 'text-[#F59E0B]' : 'text-[#3B82F6]'}`} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-zinc-500">Coach Follow-Up</p>
+                      <h2 className="mt-1 text-2xl font-semibold text-white">
+                        {actionNotificationCount > 0
+                          ? `${actionNotificationCount} item${actionNotificationCount === 1 ? '' : 's'} may need your review right now.`
+                          : unreadNotificationCount > 0
+                            ? `${unreadNotificationCount} new update${unreadNotificationCount === 1 ? '' : 's'} are ready to review.`
+                            : 'You are caught up on Nora and athlete follow-up.'}
+                      </h2>
+                    </div>
+                  </div>
+                  <p className="mt-4 text-sm leading-relaxed text-zinc-300">
+                    This is the first-read summary for what changed across Nora auto-assignments and athlete session updates, so you can decide quickly whether to step in or keep the day moving.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:min-w-[360px]">
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Needs Attention</p>
+                    <p className="mt-3 text-3xl font-semibold text-white">{actionNotificationCount}</p>
+                    <p className="mt-2 text-xs text-zinc-400">Unread items where review or intervention may be helpful.</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Unread Updates</p>
+                    <p className="mt-3 text-3xl font-semibold text-white">{unreadNotificationCount}</p>
+                    <p className="mt-2 text-xs text-zinc-400">New follow-up items waiting in your coach queue.</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">Latest Rhythm</p>
+                    <p className="mt-3 text-sm font-semibold text-white">
+                      {recentCoachNotifications[0]?.title || 'No new follow-up yet'}
+                    </p>
+                    <p className="mt-2 text-xs text-zinc-400">
+                      {recentCoachNotifications[0]?.createdAt
+                        ? relativeTimestamp(recentCoachNotifications[0].createdAt)
+                        : 'New coach follow-up will appear here.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-4 xl:grid-cols-3">
+                <div className="rounded-2xl border border-[#F59E0B]/20 bg-[#F59E0B]/[0.06] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#F59E0B]">Review Suggested</p>
+                      <p className="mt-2 text-sm text-zinc-300">Nora or the runtime thinks coach review may help.</p>
+                    </div>
+                    <span className="rounded-full bg-[#F59E0B]/15 px-3 py-1 text-sm font-semibold text-[#F59E0B]">
+                      {actionNotificationCount}
+                    </span>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {reviewNotifications.length > 0 ? reviewNotifications.map((notification) => (
+                      <button
+                        key={notification.id}
+                        type="button"
+                        onClick={() => openCoachNotification(notification)}
+                        className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-left transition-colors hover:bg-white/5"
+                      >
+                        <div className="flex items-center gap-2">
+                          {!notification.read ? <span className="h-2 w-2 rounded-full bg-[#E0FE10]" /> : null}
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#F59E0B]">Coach Review</span>
+                        </div>
+                        <p className="mt-3 text-sm font-semibold text-white">{notification.title || 'Coach review item'}</p>
+                        <p className="mt-1 text-sm leading-relaxed text-zinc-400">{notification.message || 'A review-worthy update is ready.'}</p>
+                        <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
+                          <span>{relativeTimestamp(notification.createdAt)}</span>
+                          <ArrowRight className="h-4 w-4" />
+                        </div>
+                      </button>
+                    )) : (
+                      <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-4">
+                        <p className="text-sm font-semibold text-white">Nothing needs review right now.</p>
+                        <p className="mt-2 text-sm text-zinc-400">Coach-review prompts will appear here when Nora wants a human check.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[#3B82F6]/20 bg-[#3B82F6]/[0.06] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#93C5FD]">Awareness Only</p>
+                      <p className="mt-2 text-sm text-zinc-300">Useful changes to know without implying intervention.</p>
+                    </div>
+                    <span className="rounded-full bg-[#3B82F6]/15 px-3 py-1 text-sm font-semibold text-[#93C5FD]">
+                      {Math.max(unreadNotificationCount - actionNotificationCount, 0)}
+                    </span>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {awarenessNotifications.length > 0 ? awarenessNotifications.map((notification) => (
+                      <button
+                        key={notification.id}
+                        type="button"
+                        onClick={() => openCoachNotification(notification)}
+                        className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-left transition-colors hover:bg-white/5"
+                      >
+                        <div className="flex items-center gap-2">
+                          {!notification.read ? <span className="h-2 w-2 rounded-full bg-[#E0FE10]" /> : null}
+                          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#93C5FD]">Awareness</span>
+                        </div>
+                        <p className="mt-3 text-sm font-semibold text-white">{notification.title || 'Coach update'}</p>
+                        <p className="mt-1 text-sm leading-relaxed text-zinc-400">{notification.message || 'A new athlete or Nora update is ready.'}</p>
+                        <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
+                          <span>{relativeTimestamp(notification.createdAt)}</span>
+                          <ArrowRight className="h-4 w-4" />
+                        </div>
+                      </button>
+                    )) : (
+                      <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-4">
+                        <p className="text-sm font-semibold text-white">No awareness-only updates right now.</p>
+                        <p className="mt-2 text-sm text-zinc-400">Routine athlete and Nora updates will collect here as the day unfolds.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[#EF4444]/20 bg-[#EF4444]/[0.06] p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#FCA5A5]">Safety Visibility</p>
+                      <p className="mt-2 text-sm text-zinc-300">Privacy-safe awareness when the safety lane is active.</p>
+                    </div>
+                    <span className="rounded-full bg-[#EF4444]/15 px-3 py-1 text-sm font-semibold text-[#FCA5A5]">
+                      {safetyVisibleAthletes.length}
+                    </span>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {safetyVisibleAthletes.length > 0 ? safetyVisibleAthletes.map((athlete) => (
+                      <button
+                        key={athlete.id}
+                        type="button"
+                        onClick={scrollToAthletesSection}
+                        className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-left transition-colors hover:bg-white/5"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-white">{athlete.displayName || 'Athlete'}</p>
+                          <span className="rounded-full bg-[#EF4444]/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#FCA5A5]">
+                            {getEscalationLaneLabel(athlete.activeEscalationTier)}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                          {getEscalationLaneCopy(athlete.activeEscalationTier)}
+                        </p>
+                        <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
+                          <span>Review roster safety context below</span>
+                          <ArrowRight className="h-4 w-4" />
+                        </div>
+                      </button>
+                    )) : (
+                      <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-4">
+                        <p className="text-sm font-semibold text-white">No privacy-safe safety visibility is active.</p>
+                        <p className="mt-2 text-sm text-zinc-400">If Tier 1 to Tier 3 awareness becomes active, it will appear here without exposing sensitive detail.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm text-zinc-300">
+                  {recentCoachNotifications[0]
+                    ? `Latest rhythm: ${recentCoachNotifications[0].title || 'Coach update'} · ${relativeTimestamp(recentCoachNotifications[0].createdAt)}`
+                    : 'Latest rhythm: New coach follow-up will appear here as athletes move through their daily loop.'}
+                </div>
+
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => router.push('/coach/notifications')}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-[#E0FE10] px-5 py-3 text-sm font-semibold text-black shadow-lg shadow-[#E0FE10]/15"
+                  >
+                    Open Notification Center
+                    <ArrowRight className="h-4 w-4" />
+                  </motion.button>
+                  {recentCoachNotifications[0]?.webUrl ? (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => openCoachNotification(recentCoachNotifications[0])}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-zinc-200 transition-colors hover:bg-white/10"
+                    >
+                      Open Latest Follow-Up
+                      <ArrowRight className="h-4 w-4" />
+                    </motion.button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </GlassCard>
+        </motion.div>
+
         {/* Pending Invites */}
         <AnimatePresence>
           {pendingInvites.length > 0 && (
@@ -674,6 +997,7 @@ const CoachDashboard: React.FC = () => {
 
         {/* Athletes Section */}
         <motion.div
+          id="coach-athletes-section"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}

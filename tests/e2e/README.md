@@ -5,8 +5,11 @@ This harness targets the Variant Registry build/publish flow.
 It also now includes a PulseCheck onboarding/workspace smoke suite for:
 
 - internal provisioning surface load
+- legacy roster migration surface load
 - post-activation setup load
 - team workspace roster/invite controls
+- optional write-path legacy roster migration into a new PulseCheck org/team
+- optional write-path legacy roster migration into an existing PulseCheck team
 - optional write-path athlete invite create/revoke flow
 - optional write-path adult invite redemption through member setup
 - optional write-path athlete invite redemption through consent and baseline onboarding
@@ -122,6 +125,7 @@ npm run test:e2e -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts
 
 The write test creates a unique athlete invite from the team workspace and then revokes it during the same run.
 It also covers negative-path protections for revoked links, wrong-email invite access, regenerated admin activation links, and `none` roster visibility behavior.
+It now also covers legacy coach-roster migration from `coachAthletes` into PulseCheck org/team memberships using namespaced E2E fixtures and cleanup.
 
 ## Fixture lifecycle
 

@@ -1,15 +1,75 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../../lib/firebase-admin';
-import type { PulseCheckTeamMembershipRole } from '../../../../api/firebase/pulsecheckProvisioning/types';
+import type {
+  PulseCheckPilotEnrollmentStatus,
+  PulseCheckPilotStudyMode,
+  PulseCheckResearchConsentStatus,
+  PulseCheckTeamMembershipRole,
+} from '../../../../api/firebase/pulsecheckProvisioning/types';
 
 const INVITE_LINKS_COLLECTION = 'pulsecheck-invite-links';
 const ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
 const TEAMS_COLLECTION = 'pulsecheck-teams';
 const ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
+const PILOTS_COLLECTION = 'pulsecheck-pilots';
+const PILOT_ENROLLMENTS_COLLECTION = 'pulsecheck-pilot-enrollments';
 
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const normalizeEmail = (value: unknown) => normalizeString(value).toLowerCase();
+const buildPilotEnrollmentId = (pilotId: string, userId: string) => `${normalizeString(pilotId)}_${normalizeString(userId)}`;
+const resolveResearchConsentStatusForStudyMode = (
+  studyMode: PulseCheckPilotStudyMode | null,
+  currentStatus?: unknown
+): PulseCheckResearchConsentStatus => {
+  const normalizedCurrentStatus = normalizeString(String(currentStatus || '')) as PulseCheckResearchConsentStatus;
+  if (normalizedCurrentStatus === 'accepted' || normalizedCurrentStatus === 'declined') {
+    return normalizedCurrentStatus;
+  }
+
+  return studyMode === 'research' ? 'pending' : 'not-required';
+};
+const buildAthleteOnboardingFromInvite = (
+  invite: Record<string, any>,
+  currentState?: Record<string, any> | null,
+  pilotStudyMode: PulseCheckPilotStudyMode | null = null
+) => {
+  const pilotId = normalizeString(invite.pilotId);
+  const cohortId = normalizeString(invite.cohortId);
+  const researchConsentStatus = resolveResearchConsentStatusForStudyMode(pilotStudyMode, currentState?.researchConsentStatus);
+  const isResearchMode = pilotStudyMode === 'research';
+
+  return {
+    productConsentAccepted: Boolean(currentState?.productConsentAccepted),
+    productConsentAcceptedAt: currentState?.productConsentAcceptedAt || null,
+    productConsentVersion: normalizeString(currentState?.productConsentVersion),
+    entryOnboardingStep: currentState?.entryOnboardingStep || 'name',
+    entryOnboardingName: normalizeString(currentState?.entryOnboardingName),
+    researchConsentStatus,
+    researchConsentVersion: normalizeString(currentState?.researchConsentVersion),
+    researchConsentRespondedAt: currentState?.researchConsentRespondedAt || null,
+    eligibleForResearchDataset:
+      researchConsentStatus === 'accepted'
+        ? true
+        : isResearchMode
+          ? false
+          : Boolean(currentState?.eligibleForResearchDataset),
+    enrollmentMode:
+      pilotId || cohortId
+        ? isResearchMode
+          ? researchConsentStatus === 'declined'
+            ? 'pilot'
+            : 'research'
+          : 'pilot'
+        : currentState?.enrollmentMode || 'product-only',
+    targetPilotId: pilotId || normalizeString(currentState?.targetPilotId),
+    targetPilotName: normalizeString(invite.pilotName) || normalizeString(currentState?.targetPilotName),
+    targetCohortId: cohortId || normalizeString(currentState?.targetCohortId),
+    targetCohortName: normalizeString(invite.cohortName) || normalizeString(currentState?.targetCohortName),
+    baselinePathStatus: currentState?.baselinePathStatus || 'pending',
+    baselinePathwayId: normalizeString(currentState?.baselinePathwayId),
+  };
+};
 
 const permissionSetByRole: Record<PulseCheckTeamMembershipRole, string> = {
   'team-admin': 'pulsecheck-team-admin-v1',
@@ -70,6 +130,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const organizationId = normalizeString(invite.organizationId);
       const teamId = normalizeString(invite.teamId);
+      const pilotId = normalizeString(invite.pilotId);
+      const cohortId = normalizeString(invite.cohortId);
       const teamMembershipRole = normalizeString(invite.teamMembershipRole) as PulseCheckTeamMembershipRole;
       const invitedTitle = normalizeString(invite.invitedTitle);
       if (!organizationId || !teamId || !teamMembershipRole) {
@@ -82,11 +144,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .collection(ORGANIZATION_MEMBERSHIPS_COLLECTION)
         .doc(`${organizationId}_${userId}`);
       const teamMembershipRef = firestore.collection(TEAM_MEMBERSHIPS_COLLECTION).doc(`${teamId}_${userId}`);
+      const pilotRef = pilotId ? firestore.collection(PILOTS_COLLECTION).doc(pilotId) : null;
+      const pilotEnrollmentRef = pilotId
+        ? firestore.collection(PILOT_ENROLLMENTS_COLLECTION).doc(buildPilotEnrollmentId(pilotId, userId))
+        : null;
 
       const [organizationSnap, teamSnap] = await Promise.all([
         transaction.get(organizationRef),
         transaction.get(teamRef),
       ]);
+      const existingTeamMembershipSnap = await transaction.get(teamMembershipRef);
+      const pilotSnap = pilotRef ? await transaction.get(pilotRef) : null;
+      const existingPilotEnrollmentSnap = pilotEnrollmentRef ? await transaction.get(pilotEnrollmentRef) : null;
 
       if (!organizationSnap.exists) {
         throw new Error('Organization not found.');
@@ -94,9 +163,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!teamSnap.exists) {
         throw new Error('Team not found.');
       }
+      if (pilotId && !pilotSnap?.exists) {
+        throw new Error('Pilot not found.');
+      }
 
       const organizationName = normalizeString(organizationSnap.data()?.displayName) || 'PulseCheck Organization';
       const teamName = normalizeString(teamSnap.data()?.displayName) || 'Team';
+      const existingTeamMembership = existingTeamMembershipSnap.exists ? existingTeamMembershipSnap.data() || {} : {};
+      const existingPilotEnrollment = existingPilotEnrollmentSnap?.exists ? existingPilotEnrollmentSnap.data() || {} : {};
+      const pilotStudyMode = pilotSnap?.data()?.studyMode as PulseCheckPilotStudyMode | undefined;
+      const nextAthleteOnboarding =
+        teamMembershipRole === 'athlete'
+          ? buildAthleteOnboardingFromInvite(
+              invite,
+              existingTeamMembership.athleteOnboarding || null,
+              pilotStudyMode || null
+            )
+          : null;
 
       if (teamMembershipRole === 'team-admin') {
         transaction.set(
@@ -137,19 +220,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           permissionSetId: permissionSetByRole[teamMembershipRole] || 'pulsecheck-team-member-v1',
           rosterVisibilityScope: teamMembershipRole === 'athlete' ? 'none' : 'team',
           allowedAthleteIds: [],
-          athleteOnboarding:
-            teamMembershipRole === 'athlete'
-              ? {
-                  productConsentAccepted: false,
-                  productConsentAcceptedAt: null,
-                  productConsentVersion: null,
-                  researchConsentStatus: 'not-required',
-                  eligibleForResearchDataset: false,
-                  enrollmentMode: 'product-only',
-                  baselinePathStatus: 'pending',
-                  baselinePathwayId: null,
-                }
-              : null,
+          athleteOnboarding: nextAthleteOnboarding,
           onboardingStatus: teamMembershipRole === 'athlete' ? 'pending-consent' : 'pending-profile',
           grantedByInviteToken: token,
           grantedAt: now,
@@ -158,6 +229,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
         { merge: true }
       );
+
+      if (teamMembershipRole === 'athlete' && pilotId && pilotEnrollmentRef && nextAthleteOnboarding) {
+        transaction.set(
+          pilotEnrollmentRef,
+          {
+            organizationId,
+            teamId,
+            pilotId,
+            cohortId,
+            userId,
+            teamMembershipId: teamMembershipRef.id,
+            studyMode: pilotStudyMode || 'operational',
+            enrollmentMode: nextAthleteOnboarding.enrollmentMode === 'research' ? 'research' : 'pilot',
+            status: (existingPilotEnrollment.status as PulseCheckPilotEnrollmentStatus) || 'pending-consent',
+            productConsentAccepted: Boolean(existingPilotEnrollment.productConsentAccepted),
+            productConsentAcceptedAt: existingPilotEnrollment.productConsentAcceptedAt || null,
+            productConsentVersion: normalizeString(existingPilotEnrollment.productConsentVersion),
+            researchConsentStatus: nextAthleteOnboarding.researchConsentStatus || 'not-required',
+            researchConsentVersion: normalizeString(existingPilotEnrollment.researchConsentVersion),
+            researchConsentRespondedAt: existingPilotEnrollment.researchConsentRespondedAt || null,
+            eligibleForResearchDataset:
+              nextAthleteOnboarding.researchConsentStatus === 'accepted'
+                ? true
+                : Boolean(existingPilotEnrollment.eligibleForResearchDataset),
+            grantedByInviteToken: token,
+            createdAt: existingPilotEnrollment.createdAt || now,
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+      }
 
       transaction.set(
         inviteRef,
@@ -176,6 +278,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         organizationName,
         teamId,
         teamName,
+        pilotId,
+        cohortId,
         teamMembershipId: teamMembershipRef.id,
         teamMembershipRole,
         invitedTitle,

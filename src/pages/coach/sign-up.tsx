@@ -63,7 +63,7 @@ const CoachSignUpPage: React.FC = () => {
       if (typeof window === 'undefined') return;
       const ref = localStorage.getItem('pulse_referring_coach_code');
       if (!ref) return;
-      await coachService.connectCoachToCoachByReferralCode(uid, inviteeUsername || '', inviteeEmail || '', ref);
+      await coachService.recordCoachReferralByReferralCode(uid, inviteeUsername || '', inviteeEmail || '', ref);
       try { localStorage.removeItem('pulse_referring_coach_code'); } catch (_) {}
     } catch (_) { /* ignore linking failure */ }
   };
@@ -402,5 +402,4 @@ const CoachSignUpPage: React.FC = () => {
 };
 
 export default CoachSignUpPage;
-
 

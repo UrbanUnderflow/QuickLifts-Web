@@ -9,7 +9,7 @@ import { FaTrophy, FaCoins, FaGamepad, FaChartLine, FaXmark, FaFire, FaStar, FaR
 import { FaUser, FaCheck} from 'react-icons/fa';
 import DirectionsBikeIcon from '@mui/icons-material/DirectionsBike';
 import SelfImprovementIcon from '@mui/icons-material/SelfImprovement';
-import HomeContent from './HomeContent';
+import HomeContent from '../components/home/HomeContent';
 import { useUser } from '../hooks/useUser';
 import SignInModal from '../components/SignInModal';
 import { exerciseService } from '../api/firebase/exercise/service';

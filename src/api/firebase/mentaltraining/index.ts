@@ -30,3 +30,16 @@ export * from './simBuild';
 export { curriculumAssignmentService } from './curriculumAssignmentService';
 export { athleteProgressService } from './athleteProgressService';
 export { recommendationService } from './recommendationService';
+export { assignmentOrchestratorService } from './assignmentOrchestratorService';
+export { profileSnapshotService } from './profileSnapshotService';
+export type {
+  CanonicalProfileSnapshot,
+  ProfileSnapshotExportJob,
+  ProfileSnapshotExportJobInput,
+  ProfileSnapshotMilestoneType,
+  ProfileSnapshotNarrative,
+  ProfileSnapshotPayload,
+  ProfileSnapshotRevision,
+  ProfileSnapshotWriteInput,
+  ProfileSnapshotWriteResult,
+} from './profileSnapshotService';

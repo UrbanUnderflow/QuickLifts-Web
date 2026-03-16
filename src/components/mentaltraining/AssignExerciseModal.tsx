@@ -24,6 +24,7 @@ import {
   SimModule,
   ExerciseCategory,
 } from '../../api/firebase/mentaltraining/types';
+import type { ProfileSnapshotMilestone } from '../../api/firebase/mentaltraining/taxonomy';
 import { simModuleLibraryService, assignmentService } from '../../api/firebase/mentaltraining';
 import { ExerciseCard } from './ExerciseCard';
 
@@ -32,6 +33,8 @@ interface Athlete {
   displayName?: string;
   username?: string;
   profileImageURL?: string;
+  assignmentLocked?: boolean;
+  assignmentLockReason?: string;
 }
 
 interface AssignExerciseModalProps {
@@ -45,6 +48,13 @@ interface AssignExerciseModalProps {
 }
 
 type Step = 'select-exercise' | 'select-athletes' | 'configure' | 'confirm';
+type TrialCheckpointMilestone = Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
+
+const TRIAL_MILESTONE_OPTIONS: Array<{ value: TrialCheckpointMilestone; label: string }> = [
+  { value: 'midpoint', label: 'Midpoint snapshot' },
+  { value: 'endpoint', label: 'Endpoint snapshot' },
+  { value: 'retention', label: 'Retention snapshot' },
+];
 
 export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
   isOpen,
@@ -71,8 +81,17 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
   const [scheduledTime, setScheduledTime] = useState<'morning' | 'pre-workout' | 'post-workout' | 'evening' | undefined>();
   const [dueDate, setDueDate] = useState<string>('');
   const [reason, setReason] = useState('');
+  const [profileSnapshotMilestone, setProfileSnapshotMilestone] = useState<TrialCheckpointMilestone | ''>('');
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const selectedExerciseIsTrial = selectedExercise?.buildArtifact?.sessionModel?.archetype === 'trial';
+
+  useEffect(() => {
+    if (!selectedExerciseIsTrial) {
+      setProfileSnapshotMilestone('');
+    }
+  }, [selectedExerciseIsTrial]);
 
   // Load exercises
   useEffect(() => {
@@ -101,8 +120,12 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
     const matchesCategory = selectedCategory === 'all' || ex.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+  const unlockedAthletes = athletes.filter((athlete) => !athlete.assignmentLocked);
 
   const toggleAthleteSelection = (athleteId: string) => {
+    const athlete = athletes.find((entry) => entry.id === athleteId);
+    if (athlete?.assignmentLocked) return;
+
     setSelectedAthleteIds((prev) =>
       prev.includes(athleteId)
         ? prev.filter((id) => id !== athleteId)
@@ -111,7 +134,7 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
   };
 
   const selectAllAthletes = () => {
-    setSelectedAthleteIds(athletes.map((a) => a.id));
+    setSelectedAthleteIds(unlockedAthletes.map((athlete) => athlete.id));
   };
 
   const deselectAllAthletes = () => {
@@ -120,6 +143,14 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
 
   const handleAssign = async () => {
     if (!selectedExercise || selectedAthleteIds.length === 0) return;
+
+    const lockedSelections = selectedAthleteIds.filter((athleteId) =>
+      athletes.find((athlete) => athlete.id === athleteId)?.assignmentLocked
+    );
+    if (lockedSelections.length > 0) {
+      setError('One or more selected athletes still need baseline tasks before they can receive standard sim assignments.');
+      return;
+    }
     
     setAssigning(true);
     setError(null);
@@ -133,6 +164,7 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
         reason: reason || undefined,
         dueDate: dueDate ? new Date(dueDate).getTime() : undefined,
         scheduledTime,
+        profileSnapshotMilestone: profileSnapshotMilestone || undefined,
       });
       
       onAssignmentComplete?.();
@@ -145,6 +177,7 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
       setScheduledTime(undefined);
       setDueDate('');
       setReason('');
+      setProfileSnapshotMilestone('');
     } catch (err: any) {
       setError(err.message || 'Failed to assign exercise');
     } finally {
@@ -341,7 +374,7 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
                 >
                   <div className="flex items-center justify-between mb-4">
                     <span className="text-sm text-zinc-400">
-                      {selectedAthleteIds.length} of {athletes.length} selected
+                      {selectedAthleteIds.length} of {unlockedAthletes.length} unlocked athletes selected
                     </span>
                     <div className="flex gap-2">
                       <button
@@ -364,7 +397,9 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
                       <div
                         key={athlete.id}
                         onClick={() => toggleAthleteSelection(athlete.id)}
-                        className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${
+                        className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
+                          athlete.assignmentLocked ? 'cursor-not-allowed opacity-55' : 'cursor-pointer'
+                        } ${
                           selectedAthleteIds.includes(athlete.id)
                             ? 'bg-[#E0FE10]/10 border-2 border-[#E0FE10]'
                             : 'bg-zinc-800/50 border border-zinc-700/50 hover:border-zinc-600'
@@ -401,6 +436,9 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
                           {athlete.username && athlete.displayName && (
                             <p className="text-sm text-zinc-400">@{athlete.username}</p>
                           )}
+                          {athlete.assignmentLockReason ? (
+                            <p className="text-xs text-amber-300">{athlete.assignmentLockReason}</p>
+                          ) : null}
                         </div>
                       </div>
                     ))}
@@ -468,6 +506,29 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
                       className="w-full px-4 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 focus:border-[#E0FE10] focus:outline-none resize-none"
                     />
                   </div>
+
+                  {selectedExerciseIsTrial && (
+                    <div>
+                      <label className="block text-sm font-medium text-zinc-400 mb-2">
+                        Official checkpoint milestone
+                      </label>
+                      <select
+                        value={profileSnapshotMilestone}
+                        onChange={(e) => setProfileSnapshotMilestone(e.target.value as TrialCheckpointMilestone | '')}
+                        className="w-full rounded-xl border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-white focus:border-[#E0FE10] focus:outline-none"
+                      >
+                        <option value="">No canonical snapshot</option>
+                        {TRIAL_MILESTONE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-2 text-sm text-zinc-500">
+                        Choose this only when the assignment is the athlete&apos;s official midpoint, endpoint, or retention trial.
+                      </p>
+                    </div>
+                  )}
                 </motion.div>
               )}
 
@@ -528,7 +589,12 @@ export const AssignExerciseModal: React.FC<AssignExerciseModalProps> = ({
                           Message: "{reason}"
                         </p>
                       )}
-                      {!scheduledTime && !dueDate && !reason && (
+                      {profileSnapshotMilestone && (
+                        <p className="text-white">
+                          Checkpoint: {TRIAL_MILESTONE_OPTIONS.find((option) => option.value === profileSnapshotMilestone)?.label}
+                        </p>
+                      )}
+                      {!scheduledTime && !dueDate && !reason && !profileSnapshotMilestone && (
                         <p className="text-zinc-400">No additional configuration</p>
                       )}
                     </div>

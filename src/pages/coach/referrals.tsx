@@ -24,7 +24,6 @@ const ReferralsPage: React.FC = () => {
   const [showQrCode, setShowQrCode] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [coachInviteLink, setCoachInviteLink] = useState('');
-  const [connectedCoaches, setConnectedCoaches] = useState<Array<{ userId: string; username: string; email: string; connectedAt?: number }>>([]);
   const [coachConnectStatus, setCoachConnectStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,12 +38,7 @@ const ReferralsPage: React.FC = () => {
         const athleteUrl = `${baseUrl}/connect/${profile.referralCode}`;
         setInviteLink(athleteUrl);
         setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(athleteUrl)}`);
-        
-        try {
-          const cc = await coachService.getConnectedCoachesForCoach(profile.id);
-          setConnectedCoaches(cc);
-        } catch (_) {}
-        
+
         // Build coach-to-coach invite link (rich preview)
         setCoachInviteLink(`${baseUrl}/coach-invite/${profile.referralCode}`);
       } catch (_e) {
@@ -55,7 +49,7 @@ const ReferralsPage: React.FC = () => {
   }, [currentUser?.id]);
 
   return (
-    <CoachLayout title="Coach Referrals" subtitle="Invite and track connected coaches" requiresActiveSubscription={false}>
+    <CoachLayout title="Coach Referrals" subtitle="Invite athletes and share coach referral links" requiresActiveSubscription={false}>
       <div className="space-y-8">
         {/* Invite Athletes */}
         <motion.div
@@ -136,7 +130,7 @@ const ReferralsPage: React.FC = () => {
               </div>
               <h3 className="text-lg font-semibold">Invite Coaches</h3>
             </div>
-            <p className="text-zinc-400 text-sm mb-4">Send this link to another coach. When they sign up, they'll be connected to you automatically.</p>
+            <p className="text-zinc-400 text-sm mb-4">Send this link to another coach so their signup is attributed back to your referral.</p>
             <div className="flex items-center gap-3 mb-6">
               <input 
                 value={coachInviteLink} 
@@ -163,35 +157,11 @@ const ReferralsPage: React.FC = () => {
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="text-xs text-[#E0FE10] mb-4"
+                className="text-xs text-[#E0FE10]"
               >
                 {coachConnectStatus}
               </motion.div>
             )}
-            <div>
-              <div className="text-sm text-zinc-400 mb-3">Connected Coaches</div>
-              {connectedCoaches.length === 0 ? (
-                <div className="text-zinc-500 text-sm py-4 text-center border border-dashed border-zinc-700/50 rounded-xl">
-                  No connected coaches yet
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {connectedCoaches.map((c) => (
-                    <motion.div 
-                      key={c.userId} 
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="flex items-center justify-between bg-zinc-800/40 border border-zinc-700/30 rounded-xl px-4 py-3 hover:bg-zinc-800/60 transition-colors"
-                    >
-                      <div>
-                        <div className="font-medium text-white">{c.username || c.email || c.userId}</div>
-                        <div className="text-xs text-zinc-500">{c.email}</div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </div>
           </GlassCard>
         </motion.div>
       </div>

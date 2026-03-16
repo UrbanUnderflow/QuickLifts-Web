@@ -1,8 +1,10 @@
 const {
+  buildVisionProProtocolIssues,
   cleanupSessionState,
   getSessionDoc,
   json,
   parseBody,
+  resolveVisionProProtocolContext,
   sanitizeSession,
   sha256,
   withVisionProContext,
@@ -19,7 +21,7 @@ exports.handler = async (event) => {
 
   try {
     const { db } = await withVisionProContext(event);
-    const { sessionId, deviceId, deviceSessionToken } = parseBody(event);
+    const { sessionId, deviceId, deviceSessionToken, comfortCleared } = parseBody(event);
 
     if (!sessionId || !deviceId || !deviceSessionToken) {
       return json(400, { error: 'sessionId, deviceId, and deviceSessionToken are required' });
@@ -40,10 +42,42 @@ exports.handler = async (event) => {
       return json(403, { error: 'Invalid device session token' });
     }
 
+    const protocolContext = await resolveVisionProProtocolContext(db, sessionData.athleteUserId);
+    const requiredFamilies =
+      Array.isArray(sessionData.protocolContext?.requiredFamilies) && sessionData.protocolContext.requiredFamilies.length
+        ? sessionData.protocolContext.requiredFamilies
+        : sessionData.simId === 'vision_pro_football_package'
+          ? ['reset', 'signal-window']
+          : [sessionData.simId];
+    const protocolIssues = buildVisionProProtocolIssues({
+      trackedFamilies: requiredFamilies.map((family) => ({ family })),
+      baselineReferences: sessionData.baselineReferences || [],
+      protocolContext,
+      comfortCleared: typeof comfortCleared === 'boolean' ? comfortCleared : sessionData.calibrationSummary?.comfortCleared,
+      calibrationStatus: sessionData.calibrationSummary?.status || null,
+      requireComfortScreen: true,
+    });
+
+    if (protocolIssues.length) {
+      return json(409, {
+        error: protocolIssues[0],
+        protocolIssues,
+      });
+    }
+
     const updates = {
       status: 'running',
       startedAt: Date.now(),
       updatedAt: Date.now(),
+      calibrationSummary: {
+        ...(sessionData.calibrationSummary || {}),
+        comfortCleared: typeof comfortCleared === 'boolean' ? comfortCleared : true,
+      },
+      protocolContext: {
+        ...(sessionData.protocolContext || {}),
+        requiredFamilies,
+        startValidatedAt: Date.now(),
+      },
     };
     await ref.update(updates);
 

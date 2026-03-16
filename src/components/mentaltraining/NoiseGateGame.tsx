@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { BarChart3, Pause, Play, Volume2, VolumeX, X } from 'lucide-react';
 import { useUser } from '../../hooks/useUser';
 import { simSessionService } from '../../api/firebase/mentaltraining/simSessionService';
-import { DurationMode, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
+import { DurationMode, type ProfileSnapshotMilestone, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
 import type { SimBuildArtifact, SimModule } from '../../api/firebase/mentaltraining/types';
 import { useInputIntegrity } from './useInputIntegrity';
 
@@ -14,6 +14,7 @@ interface NoiseGateGameProps {
   onResume: () => void;
   onClose: () => void;
   onComplete: () => void;
+  profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
   previewMode?: boolean;
 }
 
@@ -103,6 +104,7 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
   onResume,
   onClose,
   onComplete,
+  profileSnapshotMilestone,
   previewMode = false,
 }) => {
   const currentUser = useUser();
@@ -251,6 +253,7 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
         normalizedScore: spamDetected ? Math.max(0, normalizedScore - 25) : normalizedScore,
         targetSkills: [TaxonomySkill.SelectiveAttention, TaxonomySkill.CueDiscrimination],
         pressureTypes,
+        profileSnapshotMilestone,
         createdAt: Date.now(),
       }).catch((error) => {
         console.error('Failed to record Noise Gate session:', error);

@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Brain, Pause, Play, Shuffle, Volume2, VolumeX, X } from 'lucide-react';
 import { useUser } from '../../hooks/useUser';
 import { simSessionService } from '../../api/firebase/mentaltraining/simSessionService';
-import { DurationMode, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
+import { DurationMode, type ProfileSnapshotMilestone, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
 import type { SimBuildArtifact, SimModule } from '../../api/firebase/mentaltraining/types';
 import { useInputIntegrity } from './useInputIntegrity';
 
@@ -14,6 +14,7 @@ interface SequenceShiftGameProps {
   onResume: () => void;
   onClose: () => void;
   onComplete: () => void;
+  profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
   previewMode?: boolean;
 }
 
@@ -185,6 +186,7 @@ export const SequenceShiftGame: React.FC<SequenceShiftGameProps> = ({
   onResume,
   onClose,
   onComplete,
+  profileSnapshotMilestone,
   previewMode = false,
 }) => {
   const currentUser = useUser();
@@ -296,6 +298,7 @@ export const SequenceShiftGame: React.FC<SequenceShiftGameProps> = ({
         normalizedScore: spamDetected ? Math.max(0, normalizedScore - 25) : normalizedScore,
         targetSkills: [TaxonomySkill.WorkingMemoryUpdating, TaxonomySkill.PressureStability],
         pressureTypes: [PressureType.Uncertainty, PressureType.Time],
+        profileSnapshotMilestone,
         createdAt: Date.now(),
       }).catch((error) => {
         console.error('Failed to record Sequence Shift session:', error);

@@ -469,7 +469,7 @@ const CoachRevenue: React.FC = () => {
       try {
         if (!currentUser?.id) return;
         setReferredLoading(true);
-        const coaches = await coachService.getConnectedCoachesForCoach(currentUser.id);
+        const coaches = await coachService.getReferredCoachesForCoach(currentUser.id);
         const _ATHLETE_MONTHLY = PRICING_INFO.ATHLETE.MONTHLY.amount;
         const rows: ReferredCoach[] = await Promise.all(
           coaches.map(async (c: any) => {
@@ -839,7 +839,7 @@ const CoachRevenue: React.FC = () => {
                       {referredLoading ? (
                         <div className="text-zinc-400 text-sm p-3">Loading referred coaches…</div>
                       ) : referred.length === 0 ? (
-                        <div className="text-zinc-400 text-sm p-3">No connected coaches yet.</div>
+                        <div className="text-zinc-400 text-sm p-3">No referred coaches yet.</div>
                       ) : (
                         <table className="w-full text-sm">
                           <thead>

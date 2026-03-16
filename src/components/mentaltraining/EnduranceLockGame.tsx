@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Gauge, Pause, Play, Volume2, VolumeX, X } from 'lucide-react';
 import { useUser } from '../../hooks/useUser';
 import { simSessionService } from '../../api/firebase/mentaltraining/simSessionService';
-import { DurationMode, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
+import { DurationMode, type ProfileSnapshotMilestone, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
 import type { SimBuildArtifact, SimModule } from '../../api/firebase/mentaltraining/types';
 import { useInputIntegrity } from './useInputIntegrity';
 
@@ -14,6 +14,7 @@ interface EnduranceLockGameProps {
   onResume: () => void;
   onClose: () => void;
   onComplete: () => void;
+  profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
   previewMode?: boolean;
 }
 
@@ -94,6 +95,7 @@ export const EnduranceLockGame: React.FC<EnduranceLockGameProps> = ({
   onResume,
   onClose,
   onComplete,
+  profileSnapshotMilestone,
   previewMode = false,
 }) => {
   const currentUser = useUser();
@@ -213,6 +215,7 @@ export const EnduranceLockGame: React.FC<EnduranceLockGameProps> = ({
         normalizedScore,
         targetSkills: [TaxonomySkill.SustainedAttention, TaxonomySkill.PressureStability],
         pressureTypes: [PressureType.Fatigue, PressureType.Time],
+        profileSnapshotMilestone,
         createdAt: Date.now(),
       }).catch((error) => {
         console.error('Failed to record Endurance Lock session:', error);

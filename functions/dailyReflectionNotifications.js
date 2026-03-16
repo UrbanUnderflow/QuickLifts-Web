@@ -1,10 +1,10 @@
 /**
- * Daily Reflection Notifications
+ * Daily Check-In Notifications
  * 
- * Sends personalized "How was your day?" notifications to users
- * at their preferred time to encourage journaling with Nora.
+ * Sends personalized Pulse Check reminder pushes to the native iOS app
+ * at the user's preferred time so the athlete returns to the web Today task.
  * 
- * This is a core feature for building mental training habits.
+ * We keep the legacy export names for deployment compatibility.
  */
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
@@ -18,16 +18,16 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 const messaging = admin.messaging();
 
-// Reflection prompts - varied to keep engagement fresh
+// Daily check-in prompts - varied to keep engagement fresh
 const REFLECTION_PROMPTS = [
-  { title: "How was your day?", body: "Take a moment to reflect with Nora 🧠" },
-  { title: "Time to reflect", body: "What went well today? Let's talk about it ✨" },
-  { title: "Evening check-in", body: "Nora is ready to help you process your day 🌙" },
-  { title: "Daily reflection time", body: "2 minutes of reflection = stronger mental game 💪" },
-  { title: "How are you feeling?", body: "Share your wins and challenges with Nora 🎯" },
-  { title: "End your day strong", body: "A quick reflection builds tomorrow's mindset 🌟" },
-  { title: "Moment of clarity", body: "What did you learn today? Tell Nora 📝" },
-  { title: "Your mental check-in", body: "Processing today helps you win tomorrow 🏆" }
+  { title: "PulseCheck daily check-in", body: "Open today's web task and log how you're showing up." },
+  { title: "Time for your daily check-in", body: "Give PulseCheck one honest signal so Nora can guide the next rep." },
+  { title: "Your web check-in is ready", body: "Complete today's PulseCheck task and keep your signal fresh." },
+  { title: "Take today's PulseCheck read", body: "A quick check-in keeps your profile and assignments current." },
+  { title: "Check in before the day runs away", body: "Open the web task and capture today's mental readiness." },
+  { title: "Keep your PulseCheck rhythm alive", body: "Today's web check-in only takes a moment." },
+  { title: "Nora needs today's signal", body: "Open the web daily task and log your readiness." },
+  { title: "Stay in the PulseCheck loop", body: "Complete today's web check-in to keep training personalized." }
 ];
 
 /**
@@ -41,6 +41,7 @@ function getRandomPrompt() {
  * Send notification to a single user
  */
 async function sendReflectionNotification(userId, fcmToken, prompt) {
+  const webUrl = 'https://fitwithpulse.ai/PulseCheck?section=today&source=ios-push&task=daily-check-in';
   const message = {
     token: fcmToken,
     notification: {
@@ -48,10 +49,12 @@ async function sendReflectionNotification(userId, fcmToken, prompt) {
       body: prompt.body
     },
     data: {
-      type: 'DAILY_REFLECTION',
+      type: 'MENTAL_CHECKIN',
       prompt: prompt.title,
+      checkInType: 'morning',
       timestamp: String(Math.floor(Date.now() / 1000)),
-      screen: 'chat' // Deep link to chat
+      screen: 'web_checkin',
+      webUrl,
     },
     apns: {
       payload: {
@@ -70,7 +73,7 @@ async function sendReflectionNotification(userId, fcmToken, prompt) {
       priority: 'high',
       notification: {
         sound: 'default',
-        channelId: 'daily_reflection'
+        channelId: 'daily_check_in'
       }
     }
   };
@@ -82,9 +85,10 @@ async function sendReflectionNotification(userId, fcmToken, prompt) {
     // Log the notification
     await db.collection('notification-logs').add({
       userId,
-      type: 'DAILY_REFLECTION',
+      type: 'MENTAL_CHECKIN',
       title: prompt.title,
       body: prompt.body,
+      webUrl,
       success: true,
       sentAt: admin.firestore.FieldValue.serverTimestamp()
     });
@@ -97,7 +101,7 @@ async function sendReflectionNotification(userId, fcmToken, prompt) {
 }
 
 /**
- * Get users who should receive reflection notification at the current hour
+ * Get users who should receive daily check-in notification at the current hour
  * 
  * Users have timezone-specific preferences, so we need to:
  * 1. Find users whose preferred hour matches their local time
@@ -107,7 +111,7 @@ async function getUsersForCurrentHour() {
   const now = new Date();
   const currentUTCHour = now.getUTCHours();
   
-  // Get all users with daily reflection enabled
+  // Get all users with daily check-in reminders enabled
   const usersSnapshot = await db.collection('users')
     .where('dailyReflectionPreferences.enabled', '==', true)
     .get();
@@ -146,7 +150,7 @@ async function getUsersForCurrentHour() {
 }
 
 /**
- * Scheduled: Send daily reflection notifications
+ * Scheduled: Send daily check-in notifications
  * Runs every hour to catch users in different timezones
  * 
  * Deploy with: firebase deploy --only functions:scheduledDailyReflection
@@ -159,7 +163,7 @@ exports.scheduledDailyReflection = onSchedule(
     timeoutSeconds: 120
   },
   async (event) => {
-    console.log('🌙 Running daily reflection notification check');
+    console.log('🧠 Running daily check-in notification check');
     
     try {
       const usersToNotify = await getUsersForCurrentHour();
@@ -182,11 +186,11 @@ exports.scheduledDailyReflection = onSchedule(
       const successful = results.filter(r => r.success).length;
       const failed = results.filter(r => !r.success).length;
       
-      console.log(`✅ Daily reflection notifications sent. Success: ${successful}, Failed: ${failed}`);
+      console.log(`✅ Daily check-in notifications sent. Success: ${successful}, Failed: ${failed}`);
       
       // Record batch stats
       await db.collection('notification-batch-logs').add({
-        type: 'DAILY_REFLECTION',
+        type: 'MENTAL_CHECKIN',
         totalTargeted: usersToNotify.length,
         successful,
         failed,
@@ -203,7 +207,7 @@ exports.scheduledDailyReflection = onSchedule(
 );
 
 /**
- * HTTP Trigger: Send test reflection notification (for debugging)
+ * HTTP Trigger: Send test daily check-in notification (for debugging)
  * 
  * Usage: POST /sendTestReflection with body { userId: "xxx" }
  */

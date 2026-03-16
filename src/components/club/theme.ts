@@ -1,5 +1,6 @@
 export const CLUB_TYPE_LABELS: Record<string, string> = {
   runClub: 'Run Club',
+  trackClub: 'Track Club',
   trainingClub: 'Training Club',
   liftClub: 'Lift Club',
   stretchClub: 'Stretch Club',
@@ -15,6 +16,7 @@ export const CLUB_TYPE_LABELS: Record<string, string> = {
 
 export const CLUB_TYPE_ICON_NAMES: Record<string, string> = {
   runClub: 'figure.run',
+  trackClub: 'person.simple.run',
   trainingClub: 'figure.strengthtraining.traditional',
   liftClub: 'dumbbell',
   stretchClub: 'activity',

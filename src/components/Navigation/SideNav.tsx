@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { FaEnvelope, FaPlusSquare, FaBars, FaCog, FaSignOutAlt, FaInfoCircle, FaHome, FaUserTie, FaBrain } from 'react-icons/fa';
 import { useUser } from '../../hooks/useUser';
 import { signOut } from '../../api/firebase/auth/methods';
 import { SelectedRootTabs } from '../../types/DashboardTypes';
 import { motion, AnimatePresence } from 'framer-motion';
+import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
+import type { PulseCheckTeamMembership } from '../../api/firebase/pulsecheckProvisioning/types';
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -19,6 +21,26 @@ interface SideNavProps {
   onTabChange?: (tab: SelectedRootTabs) => void;
   onAbout?: () => void;
 }
+
+const coachMembershipPriority = (membership: PulseCheckTeamMembership) => {
+  switch (membership.role) {
+    case 'team-admin':
+      return 0;
+    case 'coach':
+      return 1;
+    case 'performance-staff':
+      return 2;
+    case 'support-staff':
+      return 3;
+    case 'clinician':
+      return 4;
+    default:
+      return 5;
+  }
+};
+
+const getCoachWorkspaceHref = (membership: PulseCheckTeamMembership) =>
+  `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(membership.organizationId)}&teamId=${encodeURIComponent(membership.teamId)}`;
 
 const NavItem: React.FC<NavItemProps> = ({ icon, label, href, isActive, onClick }) => {
   const router = useRouter();
@@ -84,6 +106,8 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
   const currentAsPath = router.asPath || router.pathname;
   const currentUser = useUser();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [coachMemberships, setCoachMemberships] = useState<PulseCheckTeamMembership[]>([]);
+  const [coachMembershipsLoaded, setCoachMembershipsLoaded] = useState(false);
 
   const handleSignOut = async () => {
     try {
@@ -104,18 +128,65 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
   const isCoachPage = currentAsPath.startsWith('/coach') || currentPath.startsWith('/coach');
   const isCreatePage = currentPath === '/create';
   const isPulseCheckNora = isPulseCheckPage && currentAsPath.includes('section=nora');
+  const isPulseCheckProfile = isPulseCheckPage && currentAsPath.includes('section=profile');
+  const isPulseCheckToday = currentPath === '/PulseCheck' && !isPulseCheckNora && !isPulseCheckProfile;
   const usePulseCheckNav = isPulseCheckPage || isCoachPage;
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setCoachMemberships([]);
+      setCoachMembershipsLoaded(true);
+      return;
+    }
+
+    let active = true;
+    setCoachMembershipsLoaded(false);
+
+    pulseCheckProvisioningService
+      .listUserTeamMemberships(currentUser.id)
+      .then((memberships) => {
+        if (!active) return;
+        setCoachMemberships(
+          memberships
+            .filter((membership) => membership.role !== 'athlete')
+            .sort((left, right) => coachMembershipPriority(left) - coachMembershipPriority(right))
+        );
+      })
+      .catch((error) => {
+        console.error('[SideNav] Failed to load PulseCheck team memberships for coach navigation:', error);
+        if (active) {
+          setCoachMemberships([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setCoachMembershipsLoaded(true);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [currentUser?.id]);
+
+  const primaryCoachMembership = coachMemberships[0] || null;
+  const coachDestinationHref = primaryCoachMembership ? getCoachWorkspaceHref(primaryCoachMembership) : '/PulseCheck';
+  const showCoachTab = useMemo(
+    () => isCoachPage || !coachMembershipsLoaded || Boolean(primaryCoachMembership),
+    [coachMembershipsLoaded, isCoachPage, primaryCoachMembership]
+  );
 
   // Define navigation items dynamically based on current page
   const navItems = usePulseCheckNav ? [
     // PulseCheck navigation (used for PulseCheck + Coach pages)
     { 
       icon: <FaHome />, 
-      label: 'Home', 
+      label: 'Today', 
       href: '/PulseCheck',
       onClick: () => {
         router.push('/PulseCheck');
-      }
+      },
+      isActive: isPulseCheckToday,
     },
     {
       icon: <FaBrain />,
@@ -126,20 +197,23 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
       },
       isActive: isPulseCheckNora,
     },
-    {
+    ...(showCoachTab ? [{
       icon: <FaUserTie />,
       label: 'Coach',
-      href: '/coach/dashboard',
+      href: coachDestinationHref,
       onClick: () => {
-        router.push('/coach/dashboard');
+        router.push(coachDestinationHref);
       },
-      isActive: currentAsPath.startsWith('/coach'),
-    },
+      isActive: currentAsPath.startsWith('/coach') || currentAsPath.startsWith('/PulseCheck/team-workspace'),
+    }] : []),
     { 
       icon: <FaEnvelope />, 
       label: 'Messages', 
-      href: '/messages',
-      tab: SelectedRootTabs.Messages
+      href: '/PulseCheck/messages',
+      onClick: () => {
+        router.push('/PulseCheck/messages');
+      },
+      isActive: currentAsPath.startsWith('/PulseCheck/messages'),
     },
   ] : [
     // Pulse/Home page navigation
@@ -272,7 +346,9 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
           {currentUser && (
             <motion.button
               onClick={() => {
-                if (isCreatePage) {
+                if (usePulseCheckNav) {
+                  router.push('/PulseCheck?section=profile');
+                } else if (isCreatePage) {
                   // On /create page, deep-link to home with Profile selected (since onTabChange isn't available here)
                   router.push('/?tab=profile');
                 } else if (isHomePage && onTabChange) {
@@ -286,14 +362,14 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
               whileTap={{ scale: 0.98 }}
               className={`
                 relative flex items-center gap-4 px-3 py-3 rounded-xl transition-all w-full group
-                ${isHomePage && selectedTab === SelectedRootTabs.Profile
+                ${(usePulseCheckNav ? isPulseCheckProfile : isHomePage && selectedTab === SelectedRootTabs.Profile)
                   ? 'text-white' 
                   : 'text-zinc-400 hover:text-white'
                 }
               `}
             >
               {/* Active indicator glow */}
-              {isHomePage && selectedTab === SelectedRootTabs.Profile && (
+              {(usePulseCheckNav ? isPulseCheckProfile : isHomePage && selectedTab === SelectedRootTabs.Profile) && (
                 <motion.div 
                   layoutId="activeNavGlow"
                   className="absolute inset-0 rounded-xl"
@@ -305,20 +381,20 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
               )}
               
               {/* Hover background */}
-              <div className={`absolute inset-0 rounded-xl bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity ${isHomePage && selectedTab === SelectedRootTabs.Profile ? 'hidden' : ''}`} />
+              <div className={`absolute inset-0 rounded-xl bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity ${(usePulseCheckNav ? isPulseCheckProfile : isHomePage && selectedTab === SelectedRootTabs.Profile) ? 'hidden' : ''}`} />
               
               <span className="relative text-2xl flex items-center justify-center">
                 {currentUser.profileImage?.profileImageURL ? (
                   <div className="relative">
                     {/* Profile glow when active */}
-                    {isHomePage && selectedTab === SelectedRootTabs.Profile && (
+                    {(usePulseCheckNav ? isPulseCheckProfile : isHomePage && selectedTab === SelectedRootTabs.Profile) && (
                       <div className="absolute -inset-1 rounded-full bg-[#E0FE10]/30 blur" />
                     )}
                     <img
                       src={currentUser.profileImage.profileImageURL}
                       alt="Profile"
                       className={`relative w-7 h-7 rounded-full object-cover border-2 ${
-                        isHomePage && selectedTab === SelectedRootTabs.Profile 
+                        (usePulseCheckNav ? isPulseCheckProfile : isHomePage && selectedTab === SelectedRootTabs.Profile)
                           ? 'border-[#E0FE10]' 
                           : 'border-transparent group-hover:border-white/30'
                       } transition-all`}
@@ -326,12 +402,12 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
                   </div>
                 ) : (
                   <div className={`relative w-7 h-7 rounded-full flex items-center justify-center ${
-                    isHomePage && selectedTab === SelectedRootTabs.Profile 
+                    (usePulseCheckNav ? isPulseCheckProfile : isHomePage && selectedTab === SelectedRootTabs.Profile)
                       ? 'bg-[#E0FE10]/20 border border-[#E0FE10]/50' 
                       : 'bg-zinc-700 border border-transparent group-hover:border-white/20'
                   } transition-all`}>
                     <span className={`text-xs font-semibold ${
-                      isHomePage && selectedTab === SelectedRootTabs.Profile ? 'text-[#E0FE10]' : 'text-white'
+                      (usePulseCheckNav ? isPulseCheckProfile : isHomePage && selectedTab === SelectedRootTabs.Profile) ? 'text-[#E0FE10]' : 'text-white'
                     }`}>
                       {currentUser.username?.[0]?.toUpperCase() || 'U'}
                     </span>
@@ -522,11 +598,11 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
               onClick={() => router.push('/PulseCheck')}
               whileTap={{ scale: 0.9 }}
               className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
-                currentPath === '/PulseCheck' ? 'text-[#E0FE10]' : 'text-zinc-400'
+                isPulseCheckToday ? 'text-[#E0FE10]' : 'text-zinc-400'
               }`}
-              aria-label="Home"
+              aria-label="Today"
             >
-              {currentPath === '/PulseCheck' && (
+              {isPulseCheckToday && (
                 <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
               )}
               <FaHome className="relative text-2xl" />
@@ -548,30 +624,32 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
             </motion.button>
 
             {/* Coach */}
-            <motion.button
-              onClick={() => router.push('/coach/dashboard')}
-              whileTap={{ scale: 0.9 }}
-              className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
-                currentAsPath.startsWith('/coach') ? 'text-[#E0FE10]' : 'text-zinc-400'
-              }`}
-              aria-label="Coach"
-            >
-              {currentAsPath.startsWith('/coach') && (
-                <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
-              )}
-              <FaUserTie className="relative text-2xl" />
-            </motion.button>
+            {showCoachTab && (
+              <motion.button
+                onClick={() => router.push(coachDestinationHref)}
+                whileTap={{ scale: 0.9 }}
+                className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
+                  currentAsPath.startsWith('/coach') || currentAsPath.startsWith('/PulseCheck/team-workspace') ? 'text-[#E0FE10]' : 'text-zinc-400'
+                }`}
+                aria-label="Coach"
+              >
+                {(currentAsPath.startsWith('/coach') || currentAsPath.startsWith('/PulseCheck/team-workspace')) && (
+                  <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
+                )}
+                <FaUserTie className="relative text-2xl" />
+              </motion.button>
+            )}
 
             {/* Messages */}
             <motion.button
-              onClick={() => router.push('/messages')}
+              onClick={() => router.push('/PulseCheck/messages')}
               whileTap={{ scale: 0.9 }}
               className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
-                currentPath === '/messages' ? 'text-[#E0FE10]' : 'text-zinc-400'
+                currentAsPath.startsWith('/PulseCheck/messages') ? 'text-[#E0FE10]' : 'text-zinc-400'
               }`}
               aria-label="Messages"
             >
-              {currentPath === '/messages' && (
+              {currentAsPath.startsWith('/PulseCheck/messages') && (
                 <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
               )}
               <FaEnvelope className="relative text-2xl" />
@@ -618,14 +696,14 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
               }}
               whileTap={{ scale: 0.9 }}
               className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
-                (isPulseCheckPage && currentPath === '/PulseCheck') || 
+                (isPulseCheckPage && isPulseCheckToday) ||
                 (isHomePage && selectedTab === SelectedRootTabs.Discover)
                   ? 'text-[#E0FE10]' 
                   : 'text-zinc-400'
               }`}
             >
               {/* Active glow */}
-              {((isPulseCheckPage && currentPath === '/PulseCheck') || 
+              {((isPulseCheckPage && isPulseCheckToday) || 
                 (isHomePage && selectedTab === SelectedRootTabs.Discover)) && (
                 <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
               )}
@@ -652,24 +730,25 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
             </motion.button>
             
             {isPulseCheckPage ? (
-              <motion.button
-                onClick={() => {
-                  router.push('/coach/dashboard');
-                }}
-                whileTap={{ scale: 0.9 }}
-                className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
-                  currentAsPath.startsWith('/coach')
-                    ? 'text-[#E0FE10]' 
-                    : 'text-zinc-400'
-                }`}
-                aria-label="Coach Dashboard"
-              >
-                {/* Active glow */}
-                {currentAsPath.startsWith('/coach') && (
-                  <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
-                )}
-                <FaUserTie className="relative text-2xl" />
-              </motion.button>
+              showCoachTab ? (
+                <motion.button
+                  onClick={() => {
+                    router.push(coachDestinationHref);
+                  }}
+                  whileTap={{ scale: 0.9 }}
+                  className={`relative flex flex-col items-center justify-center p-2 rounded-xl transition-colors ${
+                    currentAsPath.startsWith('/coach') || currentAsPath.startsWith('/PulseCheck/team-workspace')
+                      ? 'text-[#E0FE10]' 
+                      : 'text-zinc-400'
+                  }`}
+                  aria-label="Coach Workspace"
+                >
+                  {(currentAsPath.startsWith('/coach') || currentAsPath.startsWith('/PulseCheck/team-workspace')) && (
+                    <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
+                  )}
+                  <FaUserTie className="relative text-2xl" />
+                </motion.button>
+              ) : null
             ) : (
               <motion.button
                 onClick={() => {
@@ -701,7 +780,9 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
             
             <motion.button
               onClick={() => {
-                if (isCreatePage) {
+                if (usePulseCheckNav) {
+                  router.push('/PulseCheck?section=profile');
+                } else if (isCreatePage) {
                   // On /create page, deep-link to home with Profile selected
                   router.push('/?tab=profile');
                 } else if (isHomePage && onTabChange) {
@@ -715,7 +796,7 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
               className="relative flex flex-col items-center justify-center p-2"
             >
               {/* Active glow */}
-              {isHomePage && selectedTab === SelectedRootTabs.Profile && (
+              {(usePulseCheckNav ? isPulseCheckProfile : isHomePage && selectedTab === SelectedRootTabs.Profile) && (
                 <div className="absolute inset-0 bg-[#E0FE10]/10 rounded-xl blur" />
               )}
               {currentUser?.profileImage?.profileImageURL ? (
@@ -723,19 +804,19 @@ const SideNav: React.FC<SideNavProps> = ({ selectedTab, onTabChange, onAbout }) 
                   src={currentUser.profileImage.profileImageURL}
                   alt="Profile"
                   className={`relative w-8 h-8 rounded-full object-cover border-2 ${
-                    isHomePage && selectedTab === SelectedRootTabs.Profile 
+                    (usePulseCheckNav ? isPulseCheckProfile : isHomePage && selectedTab === SelectedRootTabs.Profile)
                       ? 'border-[#E0FE10] shadow-[0_0_10px_rgba(224,254,16,0.4)]' 
                       : 'border-transparent'
                   } transition-all`}
                 />
               ) : (
                 <div className={`relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                  isHomePage && selectedTab === SelectedRootTabs.Profile 
+                  (usePulseCheckNav ? isPulseCheckProfile : isHomePage && selectedTab === SelectedRootTabs.Profile)
                     ? 'bg-[#E0FE10]/20 border-2 border-[#E0FE10] shadow-[0_0_10px_rgba(224,254,16,0.4)]' 
                     : 'bg-zinc-700 border-2 border-transparent'
                 }`}>
                   <span className={`text-sm font-semibold ${
-                    isHomePage && selectedTab === SelectedRootTabs.Profile ? 'text-[#E0FE10]' : 'text-white'
+                    (usePulseCheckNav ? isPulseCheckProfile : isHomePage && selectedTab === SelectedRootTabs.Profile) ? 'text-[#E0FE10]' : 'text-white'
                   }`}>
                     {currentUser?.username?.[0]?.toUpperCase() || 'U'}
                   </span>

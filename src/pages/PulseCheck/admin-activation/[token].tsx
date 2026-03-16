@@ -544,8 +544,9 @@ const AdminActivationPage = ({ invite }: InferGetServerSidePropsType<typeof getS
   );
 };
 
-export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = async ({ params, res }) => {
+export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = async ({ params, query, res }) => {
   const token = typeof params?.token === 'string' ? params.token : '';
+  const forceDevFirebase = query.devFirebase === '1';
   if (!token) return { notFound: true };
 
   try {
@@ -558,7 +559,7 @@ export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = 
       .catch(() => null);
 
     if (!invite) {
-      invite = await getFirestoreDocFallback('pulsecheck-invite-links', token);
+      invite = await getFirestoreDocFallback('pulsecheck-invite-links', token, forceDevFirebase);
     }
     if (!invite) return { notFound: true };
     if (invite.status && invite.status !== 'active') return { notFound: true };
@@ -577,8 +578,8 @@ export const getServerSideProps: GetServerSideProps<AdminActivationPageProps> = 
       teamName = teamSnap.data()?.displayName || teamName;
     } catch {
       const [organizationDoc, teamDoc] = await Promise.all([
-        getFirestoreDocFallback('pulsecheck-organizations', String(invite.organizationId || '')),
-        getFirestoreDocFallback('pulsecheck-teams', String(invite.teamId || '')),
+        getFirestoreDocFallback('pulsecheck-organizations', String(invite.organizationId || ''), forceDevFirebase),
+        getFirestoreDocFallback('pulsecheck-teams', String(invite.teamId || ''), forceDevFirebase),
       ]);
 
       organizationName = String(organizationDoc?.displayName || organizationName);

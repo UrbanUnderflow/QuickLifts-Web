@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, Pause, Play, ScanSearch, Timer, Volume2, VolumeX, X } from 'lucide-react';
 import { useUser } from '../../hooks/useUser';
 import { simSessionService } from '../../api/firebase/mentaltraining/simSessionService';
-import { DurationMode, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
+import { DurationMode, type ProfileSnapshotMilestone, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
 import type { SimBuildArtifact, SimModule } from '../../api/firebase/mentaltraining/types';
 import { useInputIntegrity } from './useInputIntegrity';
 
@@ -14,6 +14,7 @@ interface SignalWindowGameProps {
   onResume: () => void;
   onClose: () => void;
   onComplete: () => void;
+  profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
   previewMode?: boolean;
 }
 
@@ -131,6 +132,7 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
   onResume,
   onClose,
   onComplete,
+  profileSnapshotMilestone,
   previewMode = false,
 }) => {
   const currentUser = useUser();
@@ -240,6 +242,7 @@ export const SignalWindowGame: React.FC<SignalWindowGameProps> = ({
         normalizedScore: spamDetected ? Math.max(0, normalizedScore - 25) : normalizedScore,
         targetSkills: [TaxonomySkill.CueDiscrimination, TaxonomySkill.PressureStability],
         pressureTypes: [PressureType.Time, PressureType.Uncertainty],
+        profileSnapshotMilestone,
         createdAt: Date.now(),
       }).catch((error) => {
         console.error('Failed to record Signal Window session:', error);

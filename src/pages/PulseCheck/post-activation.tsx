@@ -3,7 +3,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Bell, CheckCircle2, ChevronRight, Copy, Loader2, Mail, Shield, Sparkles, UserRound, Users, Waves, Waypoints } from 'lucide-react';
-import { firebaseStorageService, UploadImageType } from '../../api/firebase/storage/service';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import type {
   PulseCheckInviteLink,
@@ -263,6 +262,7 @@ export default function PulseCheckPostActivationPage() {
     try {
       let profileImageUrl = currentUser.profileImage?.profileImageURL || '';
       if (profileImageFile) {
+        const { firebaseStorageService, UploadImageType } = await import('../../api/firebase/storage/service');
         const upload = await firebaseStorageService.uploadImage(profileImageFile, UploadImageType.Profile);
         profileImageUrl = upload.downloadURL;
       }
@@ -833,7 +833,10 @@ export default function PulseCheckPostActivationPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <div className="text-sm font-semibold text-white">{invite.recipientName || invite.targetEmail || 'Open Athlete Link'}</div>
-                              <div className="mt-1 text-xs uppercase tracking-[0.16em] text-zinc-500">Athlete Invite</div>
+                              <div className="mt-1 text-xs uppercase tracking-[0.16em] text-zinc-500">
+                                {invite.cohortName ? `Cohort Invite · ${invite.cohortName}` : 'Team Athlete Invite'}
+                              </div>
+                              {invite.pilotName ? <div className="mt-1 text-xs text-zinc-500">Pilot: {invite.pilotName}</div> : null}
                             </div>
                             <div className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-400">Active</div>
                           </div>

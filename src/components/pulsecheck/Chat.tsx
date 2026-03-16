@@ -7,11 +7,63 @@ import { motion, AnimatePresence } from 'framer-motion';
 import EscalationModal from './EscalationModal';
 import NoraIntroCard from './NoraIntroCard';
 import { EscalationTier, EscalationCategory } from '../../api/firebase/escalation/types';
-import { SimModule } from '../../api/firebase/mentaltraining/types';
+import {
+  ExerciseCompletion,
+  PulseCheckDailyAssignment,
+  PulseCheckDailyAssignmentStatus,
+  SimModule,
+} from '../../api/firebase/mentaltraining/types';
+import { assignmentOrchestratorService, completionService } from '../../api/firebase/mentaltraining';
 import { ExerciseInstructionCard } from '../mentaltraining';
 
 const STORAGE_KEY_NORA_INTRO = 'pulsecheck_has_seen_nora_intro_card';
 const STORAGE_KEY_ACTIVE_EXERCISE = 'pulsecheck_active_exercise';
+const todayDateKey = () => new Date().toISOString().split('T')[0];
+
+const humanizeAssignmentLabel = (value?: string | null) => {
+  if (!value) return 'Nora task';
+  return value.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+const assignmentStatusLabel = (status: PulseCheckDailyAssignmentStatus) => {
+  switch (status) {
+    case PulseCheckDailyAssignmentStatus.Assigned:
+      return 'Assigned';
+    case PulseCheckDailyAssignmentStatus.Viewed:
+      return 'Viewed';
+    case PulseCheckDailyAssignmentStatus.Started:
+      return 'Started';
+    case PulseCheckDailyAssignmentStatus.Completed:
+      return 'Completed';
+    case PulseCheckDailyAssignmentStatus.Overridden:
+      return 'Coach adjusted';
+    case PulseCheckDailyAssignmentStatus.Deferred:
+      return 'Deferred';
+    case PulseCheckDailyAssignmentStatus.Superseded:
+      return 'Superseded';
+    default:
+      return 'Assigned';
+  }
+};
+
+const assignmentActionLabel = (assignment: PulseCheckDailyAssignment) => {
+  if (assignment.actionType === 'defer') return 'Pause for today';
+  if (assignment.simSpecId) return humanizeAssignmentLabel(assignment.simSpecId);
+  if (assignment.legacyExerciseId) return humanizeAssignmentLabel(assignment.legacyExerciseId);
+  if (assignment.sessionType) return humanizeAssignmentLabel(assignment.sessionType);
+  return assignment.actionType === 'lighter_sim' ? 'Lighter sim' : 'Sim';
+};
+
+const isLaunchableAssignment = (assignment: PulseCheckDailyAssignment | null) =>
+  Boolean(
+    assignment &&
+      assignment.actionType !== 'defer' &&
+      (
+        assignment.status === PulseCheckDailyAssignmentStatus.Assigned ||
+        assignment.status === PulseCheckDailyAssignmentStatus.Viewed ||
+        assignment.status === PulseCheckDailyAssignmentStatus.Started
+      )
+  );
 
 interface ChatMessage {
   id: string;
@@ -160,6 +212,8 @@ const Chat: React.FC = () => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(STORAGE_KEY_NORA_INTRO) !== 'true';
   });
+  const [todaysDailyAssignment, setTodaysDailyAssignment] = useState<PulseCheckDailyAssignment | null>(null);
+  const [latestCompletion, setLatestCompletion] = useState<ExerciseCompletion | null>(null);
   
   // Active exercise state (for writing exercises that redirect here)
   const [activeExercise, setActiveExercise] = useState<SimModule | null>(() => {
@@ -181,10 +235,16 @@ const Chat: React.FC = () => {
   };
   
   // Handle starting an exercise from external source (e.g., mental training page)
-  const handleStartExerciseInChat = useCallback((exercise: SimModule) => {
+  const handleStartExerciseInChat = useCallback((exercise: SimModule, dailyAssignmentId?: string) => {
     // Store in localStorage so it persists across page navigation
     localStorage.setItem(STORAGE_KEY_ACTIVE_EXERCISE, JSON.stringify(exercise));
     setActiveExercise(exercise);
+
+    if (dailyAssignmentId) {
+      assignmentOrchestratorService.markStarted(dailyAssignmentId).catch((error) => {
+        console.error('[PulseCheck] Failed to mark daily assignment started in chat', error);
+      });
+    }
     
     // Add the exercise instruction card to chat
     const exerciseMsg: ChatMessage = {
@@ -216,11 +276,12 @@ const Chat: React.FC = () => {
     // Check URL params for exercise data
     const urlParams = new URLSearchParams(window.location.search);
     const exerciseParam = urlParams.get('exercise');
+    const dailyAssignmentId = urlParams.get('dailyAssignmentId') || undefined;
     
     if (exerciseParam && !activeExercise) {
       try {
         const exercise = JSON.parse(decodeURIComponent(exerciseParam));
-        handleStartExerciseInChat(exercise);
+        handleStartExerciseInChat(exercise, dailyAssignmentId);
         // Clean up URL
         window.history.replaceState({}, '', window.location.pathname);
       } catch (e) {
@@ -228,6 +289,60 @@ const Chat: React.FC = () => {
       }
     }
   }, [activeExercise, handleStartExerciseInChat]);
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setTodaysDailyAssignment(null);
+      return;
+    }
+
+    let active = true;
+
+    assignmentOrchestratorService
+      .getForAthleteOnDate(currentUser.id, todayDateKey())
+      .then((assignment) => {
+        if (active) {
+          setTodaysDailyAssignment(assignment);
+        }
+      })
+      .catch((error) => {
+        console.error('[PulseCheck] Failed to load today assignment for chat', error);
+        if (active) {
+          setTodaysDailyAssignment(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setLatestCompletion(null);
+      return;
+    }
+
+    let active = true;
+
+    completionService
+      .getLatestCompletion(currentUser.id)
+      .then((completion) => {
+        if (active) {
+          setLatestCompletion(completion);
+        }
+      })
+      .catch((error) => {
+        console.error('[PulseCheck] Failed to load latest completion for chat', error);
+        if (active) {
+          setLatestCompletion(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [currentUser?.id]);
   
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: 'smooth' });
@@ -633,6 +748,18 @@ const Chat: React.FC = () => {
     });
   };
 
+  const handleLaunchDailyAssignment = useCallback(async () => {
+    if (!todaysDailyAssignment || typeof window === 'undefined') return;
+
+    try {
+      await assignmentOrchestratorService.markStarted(todaysDailyAssignment.id);
+    } catch (error) {
+      console.error('[PulseCheck] Failed to mark daily assignment started before launch', error);
+    }
+
+    window.location.assign(`/mental-training?dailyAssignmentId=${encodeURIComponent(todaysDailyAssignment.id)}`);
+  }, [todaysDailyAssignment]);
+
   return (
     <>
     <div className="flex flex-col h-full bg-[#0a0a0b] relative overflow-hidden">
@@ -779,6 +906,128 @@ const Chat: React.FC = () => {
               </div>
             )}
           </AnimatePresence>
+
+          {todaysDailyAssignment && (
+            <div className="max-w-3xl mx-auto px-4 pt-6">
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="relative overflow-hidden rounded-3xl border border-white/10 bg-zinc-900/60 backdrop-blur-xl"
+              >
+                <div
+                  className="absolute inset-x-0 top-0 h-[1px] opacity-60"
+                  style={{ background: 'linear-gradient(90deg, transparent, rgba(224,254,16,0.7), transparent)' }}
+                />
+                <div className="p-5 md:p-6">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-3">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-[#E0FE10]/20 bg-[#E0FE10]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#E0FE10]">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Today&apos;s Nora Task
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-white">
+                          {assignmentActionLabel(todaysDailyAssignment)}
+                        </h3>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">
+                          {todaysDailyAssignment.rationale || 'This task is based on your latest readiness signal and active program.'}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+                        <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                          {assignmentStatusLabel(todaysDailyAssignment.status)}
+                        </span>
+                        {todaysDailyAssignment.readinessBand ? (
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 capitalize">
+                            {todaysDailyAssignment.readinessBand} readiness
+                          </span>
+                        ) : null}
+                        {todaysDailyAssignment.durationSeconds ? (
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                            {Math.max(1, Math.round(todaysDailyAssignment.durationSeconds / 60))} min
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-stretch gap-2 md:w-[220px]">
+                      {isLaunchableAssignment(todaysDailyAssignment) ? (
+                        <button
+                          type="button"
+                          onClick={handleLaunchDailyAssignment}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#E0FE10] px-4 py-3 text-sm font-semibold text-black transition-transform hover:scale-[1.01]"
+                        >
+                          Open today&apos;s task
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      ) : (
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                          {todaysDailyAssignment.status === PulseCheckDailyAssignmentStatus.Completed
+                            ? 'Today’s task is already complete.'
+                            : 'This task isn’t launchable right now.'}
+                        </div>
+                      )}
+                      <p className="text-xs leading-5 text-zinc-500">
+                        Nora uses the same assignment record here, in Today, and in Mental Training.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+
+          {latestCompletion?.sessionSummary?.programChanged && (
+            <div className="max-w-3xl mx-auto px-4 pt-6">
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="relative overflow-hidden rounded-3xl border border-white/10 bg-zinc-900/60 backdrop-blur-xl"
+              >
+                <div
+                  className="absolute inset-x-0 top-0 h-[1px] opacity-60"
+                  style={{ background: 'linear-gradient(90deg, transparent, rgba(59,130,246,0.7), transparent)' }}
+                />
+                <div className="p-5 md:p-6">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-3">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-[#3B82F6]/20 bg-[#3B82F6]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#93C5FD]">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Nora Follow-Up
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-white">
+                          {latestCompletion.sessionSummary.athleteHeadline}
+                        </h3>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-300">
+                          {latestCompletion.sessionSummary.athleteBody}
+                        </p>
+                      </div>
+                      <p className="text-sm leading-6 text-zinc-400">
+                        If you want, ask me why your focus shifted. I can explain what changed without turning it into a systems lecture.
+                      </p>
+                    </div>
+
+                    {isLaunchableAssignment(todaysDailyAssignment) ? (
+                      <div className="flex flex-col items-stretch gap-2 md:w-[220px]">
+                        <button
+                          type="button"
+                          onClick={handleLaunchDailyAssignment}
+                          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#3B82F6] px-4 py-3 text-sm font-semibold text-white transition-transform hover:scale-[1.01]"
+                        >
+                          Open Next Task
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                        <p className="text-xs leading-5 text-zinc-500">
+                          Or stay here and ask Nora what changed before you launch.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
 
           {/* Messages */}
           {messages.length > 0 && (

@@ -29,7 +29,7 @@ import { SimModule, GameLevelProgress, TierAdvancementResult } from '../../api/f
 import { gameLevelProgressService } from '../../api/firebase/mentaltraining/gameLevelProgressService';
 import { simSessionService } from '../../api/firebase/mentaltraining/simSessionService';
 import { athleteProgressService } from '../../api/firebase/mentaltraining/athleteProgressService';
-import { DurationMode, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
+import { DurationMode, type ProfileSnapshotMilestone, PressureType, SessionType, TaxonomySkill } from '../../api/firebase/mentaltraining/taxonomy';
 import { useUser } from '../../hooks/useUser';
 import { useInputIntegrity } from './useInputIntegrity';
 
@@ -133,6 +133,7 @@ interface ResetGameProps {
         helpfulnessRating?: number;
     }) => void;
     onClose: () => void;
+    profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
     previewMode?: boolean;
 }
 
@@ -144,6 +145,7 @@ export const ResetGame: React.FC<ResetGameProps> = ({
     exercise,
     onComplete,
     onClose,
+    profileSnapshotMilestone,
     previewMode = false,
 }) => {
     const currentUser = useUser();
@@ -827,6 +829,7 @@ export const ResetGame: React.FC<ResetGameProps> = ({
                         PressureType.Evaluative,
                         PressureType.CompoundingError,
                     ],
+                    profileSnapshotMilestone,
                     createdAt: Date.now(),
                 }),
             ]);

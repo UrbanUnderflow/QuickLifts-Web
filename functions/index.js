@@ -105,6 +105,8 @@ exports.scheduledDailyReminder = require("./mentalCurriculumNotifications").sche
 exports.scheduledCheckpoints = require("./mentalCurriculumNotifications").scheduledCheckpoints;
 exports.generateRecommendations = require("./mentalCurriculumNotifications").generateRecommendations;
 exports.onAthleteSelfAssignment = require("./mentalCurriculumNotifications").onAthleteSelfAssignment;
+exports.onNoraAutoAssignmentCreated = require("./mentalCurriculumNotifications").onNoraAutoAssignmentCreated;
+exports.onPulseCheckSessionSummaryCreated = require("./mentalCurriculumNotifications").onPulseCheckSessionSummaryCreated;
 exports.processEmailQueue = require("./mentalCurriculumNotifications").processEmailQueue;
 
 // Export the Daily Reflection notification functions
