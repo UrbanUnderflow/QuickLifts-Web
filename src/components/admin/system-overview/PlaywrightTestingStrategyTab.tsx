@@ -205,7 +205,7 @@ npm run test:e2e:pulsecheck:full`}
           />
           <InfoCard
             title="PulseCheck Write Path"
-            accent="rose"
+            accent="red"
             body={
               <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
                 {`PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json
