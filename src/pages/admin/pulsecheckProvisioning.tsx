@@ -7,6 +7,8 @@ import { useUser } from '../../hooks/useUser';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import type {
   PulseCheckAdminContact,
+  CreatePulseCheckPilotCohortInput,
+  CreatePulseCheckPilotInput,
   CreatePulseCheckOrganizationInput,
   CreatePulseCheckTeamInput,
   PulseCheckAuntEdnaClinicianProfile,
@@ -16,6 +18,10 @@ import type {
   PulseCheckInvitePolicy,
   PulseCheckOrganization,
   PulseCheckOrganizationStatus,
+  PulseCheckPilot,
+  PulseCheckPilotCohort,
+  PulseCheckPilotCohortStatus,
+  PulseCheckPilotStudyMode,
   PulseCheckStudyPosture,
   PulseCheckTeam,
   PulseCheckTeamStatus,
@@ -61,6 +67,31 @@ const defaultTeamForm: CreatePulseCheckTeamInput = {
   notes: '',
 };
 
+const defaultPilotForm: CreatePulseCheckPilotInput = {
+  organizationId: '',
+  teamId: '',
+  name: '',
+  objective: '',
+  studyMode: 'operational',
+  checkpointCadence: 'weekly',
+  status: 'draft',
+  startAt: null,
+  endAt: null,
+  notes: '',
+};
+
+const defaultCohortForm: CreatePulseCheckPilotCohortInput = {
+  organizationId: '',
+  teamId: '',
+  pilotId: '',
+  name: '',
+  cohortType: 'intervention-group',
+  assignmentRule: 'manual-staff-assignment',
+  reportingTags: [],
+  status: 'draft',
+  notes: '',
+};
+
 const TEAM_TYPE_OPTIONS = [
   { value: 'sport-team', label: 'Sport Team' },
   { value: 'performance-staff-unit', label: 'Performance Staff Unit' },
@@ -73,6 +104,37 @@ const TEAM_TYPE_OPTIONS = [
   { value: 'other', label: 'Other' },
 ];
 
+const PILOT_STUDY_MODE_OPTIONS: Array<{ value: PulseCheckPilotStudyMode; label: string }> = [
+  { value: 'operational', label: 'Operational' },
+  { value: 'pilot', label: 'Pilot' },
+  { value: 'research', label: 'Research' },
+];
+
+const CHECKPOINT_CADENCE_OPTIONS = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'biweekly', label: 'Biweekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'custom', label: 'Custom / Manual' },
+];
+
+const PILOT_DURATION_OPTIONS = [
+  { value: '7', label: '1 Week' },
+  { value: '14', label: '2 Weeks' },
+  { value: '28', label: '4 Weeks' },
+  { value: 'custom', label: 'Custom' },
+];
+
+const COHORT_TYPE_OPTIONS = [
+  { value: 'intervention-group', label: 'Intervention Group' },
+  { value: 'control-group', label: 'Control Group' },
+  { value: 'position-group', label: 'Position Group' },
+  { value: 'rehab-group', label: 'Rehab Group' },
+  { value: 'return-to-play-group', label: 'Return to Play Group' },
+  { value: 'development-group', label: 'Development Group' },
+  { value: 'leadership-group', label: 'Leadership Group' },
+  { value: 'other', label: 'Other' },
+];
+
 const CLINICIAN_PROFILE_TYPE_OPTIONS: Array<{ value: PulseCheckClinicianProfileType; label: string }> = [
   { value: 'group', label: 'Clinical Group' },
   { value: 'individual', label: 'Individual Clinician' },
@@ -82,6 +144,13 @@ const CLINICIAN_PROFILE_TYPE_OPTIONS: Array<{ value: PulseCheckClinicianProfileT
 const formatTimestamp = (value?: Timestamp | null) => {
   if (!value || typeof value.toDate !== 'function') return 'Pending write';
   return value.toDate().toLocaleString();
+};
+
+const toDateValue = (value?: Timestamp | Date | null) => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value.toDate === 'function') return value.toDate();
+  return null;
 };
 
 const getOrganizationStatusDisplay = (status?: PulseCheckOrganizationStatus) => {
@@ -118,6 +187,62 @@ const getTeamStatusDisplay = (status?: PulseCheckTeamStatus) => {
   }
 };
 
+const getPilotStatusDisplay = (status?: PulseCheckPilot['status']) => {
+  switch (status) {
+    case 'active':
+      return { label: 'Active', tone: 'border-cyan-500/30 text-cyan-200 bg-cyan-500/10' };
+    case 'paused':
+      return { label: 'Paused', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+    case 'completed':
+      return { label: 'Completed', tone: 'border-green-500/30 text-green-200 bg-green-500/10' };
+    case 'archived':
+      return { label: 'Archived', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+    case 'draft':
+    default:
+      return { label: 'Draft', tone: 'border-violet-500/30 text-violet-200 bg-violet-500/10' };
+  }
+};
+
+const getDerivedPilotStatusDisplay = (pilot: PulseCheckPilot) => {
+  const derivedStatus = getDerivedPilotStatusValue(pilot);
+  return getPilotStatusDisplay(derivedStatus);
+};
+
+const getDerivedPilotStatusValue = (pilot: PulseCheckPilot): PulseCheckPilot['status'] => {
+  const now = new Date();
+  const startAt = toDateValue(pilot.startAt);
+  const endAt = toDateValue(pilot.endAt);
+
+  if (!startAt) return 'draft';
+  if (endAt && endAt.getTime() < now.getTime()) return 'completed';
+  if (startAt.getTime() <= now.getTime()) return 'active';
+  return 'draft';
+};
+
+const getCohortStatusDisplay = (status?: PulseCheckPilotCohortStatus) => {
+  switch (status) {
+    case 'active':
+      return { label: 'Active', tone: 'border-emerald-500/30 text-emerald-200 bg-emerald-500/10' };
+    case 'paused':
+      return { label: 'Paused', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+    case 'archived':
+      return { label: 'Archived', tone: 'border-zinc-700 text-zinc-300 bg-zinc-800/30' };
+    case 'draft':
+    default:
+      return { label: 'Draft', tone: 'border-fuchsia-500/30 text-fuchsia-200 bg-fuchsia-500/10' };
+  }
+};
+
+const getCohortTypeLabel = (value?: string) =>
+  COHORT_TYPE_OPTIONS.find((option) => option.value === value)?.label || value || 'Not set';
+
+const getCohortAssignmentRuleLabel = (value?: string) => {
+  if (!value || value === 'manual-staff-assignment') return 'Manual assignment by staff';
+  return value;
+};
+
+const normalizeCohortTag = (value: string) => value.trim().replace(/\s+/g, '-').toLowerCase();
+
 type OnboardingModalState =
   | {
       channel: 'admin';
@@ -136,11 +261,19 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const currentUser = useUser();
   const [organizations, setOrganizations] = useState<PulseCheckOrganization[]>([]);
   const [teams, setTeams] = useState<PulseCheckTeam[]>([]);
+  const [pilots, setPilots] = useState<PulseCheckPilot[]>([]);
+  const [pilotCohorts, setPilotCohorts] = useState<PulseCheckPilotCohort[]>([]);
   const [clinicianProfiles, setClinicianProfiles] = useState<PulseCheckAuntEdnaClinicianProfile[]>([]);
   const [inviteLinks, setInviteLinks] = useState<PulseCheckInviteLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [orgForm, setOrgForm] = useState<CreatePulseCheckOrganizationInput>(defaultOrganizationForm);
   const [teamForm, setTeamForm] = useState<CreatePulseCheckTeamInput>(defaultTeamForm);
+  const [pilotForm, setPilotForm] = useState<CreatePulseCheckPilotInput>(defaultPilotForm);
+  const [cohortForm, setCohortForm] = useState<CreatePulseCheckPilotCohortInput>(defaultCohortForm);
+  const [cohortTagsInput, setCohortTagsInput] = useState('');
+  const [pilotStartDate, setPilotStartDate] = useState('');
+  const [pilotDurationPreset, setPilotDurationPreset] = useState('14');
+  const [pilotCustomDays, setPilotCustomDays] = useState('');
   const [clinicianSearchTerm, setClinicianSearchTerm] = useState('');
   const [clinicianLinkMode, setClinicianLinkMode] = useState<'existing' | 'create'>('existing');
   const [clinicianSubmitting, setClinicianSubmitting] = useState(false);
@@ -152,6 +285,9 @@ const PulseCheckProvisioningPage: React.FC = () => {
   });
   const [orgSubmitting, setOrgSubmitting] = useState(false);
   const [teamSubmitting, setTeamSubmitting] = useState(false);
+  const [pilotSubmitting, setPilotSubmitting] = useState(false);
+  const [cohortSubmitting, setCohortSubmitting] = useState(false);
+  const [cohortInviteCreatingId, setCohortInviteCreatingId] = useState<string | null>(null);
   const [activationCreatingTeamId, setActivationCreatingTeamId] = useState<string | null>(null);
   const [clinicianLinkCreatingProfileId, setClinicianLinkCreatingProfileId] = useState<string | null>(null);
   const [adminLinkCreatingEmail, setAdminLinkCreatingEmail] = useState<string | null>(null);
@@ -163,6 +299,14 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const selectedOrganization = useMemo(
     () => organizations.find((organization) => organization.id === teamForm.organizationId) || null,
     [organizations, teamForm.organizationId]
+  );
+  const selectedPilotTeam = useMemo(
+    () => teams.find((team) => team.id === pilotForm.teamId) || null,
+    [teams, pilotForm.teamId]
+  );
+  const selectedCohortPilot = useMemo(
+    () => pilots.find((pilot) => pilot.id === cohortForm.pilotId) || null,
+    [pilots, cohortForm.pilotId]
   );
   const teamAdminOptions = useMemo(() => {
     if (!selectedOrganization) return [];
@@ -235,6 +379,21 @@ const PulseCheckProvisioningPage: React.FC = () => {
     });
     return nextMap;
   }, [inviteLinks]);
+  const athleteInviteLinksByCohortId = useMemo(() => {
+    const nextMap = new Map<string, PulseCheckInviteLink[]>();
+    inviteLinks.forEach((link) => {
+      if (link.status !== 'active') return;
+      if (link.inviteType !== 'team-access') return;
+      if (link.teamMembershipRole !== 'athlete') return;
+      if (!link.cohortId) return;
+
+      const current = nextMap.get(link.cohortId) || [];
+      current.push(link);
+      nextMap.set(link.cohortId, current);
+    });
+
+    return nextMap;
+  }, [inviteLinks]);
   const inviteLinksByClinicianProfileId = useMemo(() => {
     const nextMap = new Map<string, PulseCheckInviteLink[]>();
     inviteLinks.forEach((link) => {
@@ -245,6 +404,15 @@ const PulseCheckProvisioningPage: React.FC = () => {
     });
     return nextMap;
   }, [inviteLinks]);
+  const pilotCohortsByPilotId = useMemo(() => {
+    const nextMap = new Map<string, PulseCheckPilotCohort[]>();
+    pilotCohorts.forEach((cohort) => {
+      const current = nextMap.get(cohort.pilotId) || [];
+      current.push(cohort);
+      nextMap.set(cohort.pilotId, current);
+    });
+    return nextMap;
+  }, [pilotCohorts]);
   const organizationBundles = useMemo(
     () =>
       organizations.map((organization) => {
@@ -252,6 +420,12 @@ const PulseCheckProvisioningPage: React.FC = () => {
           .filter((team) => team.organizationId === organization.id)
           .map((team) => ({
             team,
+            pilots: pilots
+              .filter((pilot) => pilot.teamId === team.id)
+              .map((pilot) => ({
+                pilot,
+                cohorts: pilotCohortsByPilotId.get(pilot.id) || [],
+              })),
             clinicianProfile: team.defaultClinicianProfileId
               ? clinicianProfileById.get(team.defaultClinicianProfileId) || null
               : null,
@@ -270,7 +444,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
           teams: teamsForOrganization,
         };
       }),
-    [organizations, teams, clinicianProfileById, inviteLinksByTeamId, inviteLinksByClinicianProfileId]
+    [organizations, teams, pilots, clinicianProfileById, inviteLinksByTeamId, inviteLinksByClinicianProfileId, pilotCohortsByPilotId]
   );
   const onboardingModalLinks = useMemo(() => {
     if (!onboardingModal) return [];
@@ -292,14 +466,18 @@ const PulseCheckProvisioningPage: React.FC = () => {
     setLoading(true);
     setMessage(null);
     try {
-      const [organizationResults, teamResults, clinicianProfileResults, inviteLinkResults] = await Promise.all([
+      const [organizationResults, teamResults, pilotResults, pilotCohortResults, clinicianProfileResults, inviteLinkResults] = await Promise.all([
         pulseCheckProvisioningService.listOrganizations(),
         pulseCheckProvisioningService.listTeams(),
+        pulseCheckProvisioningService.listPilots(),
+        pulseCheckProvisioningService.listPilotCohorts(),
         pulseCheckProvisioningService.listClinicianProfiles(),
         pulseCheckProvisioningService.listInviteLinks(),
       ]);
       setOrganizations(organizationResults);
       setTeams(teamResults);
+      setPilots(pilotResults);
+      setPilotCohorts(pilotCohortResults);
       setClinicianProfiles(clinicianProfileResults);
       setInviteLinks(inviteLinkResults);
       setTeamForm((current) => ({
@@ -315,6 +493,18 @@ const PulseCheckProvisioningPage: React.FC = () => {
           organizationResults.find((organization) => organization.id === (current.organizationId || organizationResults[0]?.id))
             ?.primaryCustomerAdminEmail ||
           '',
+      }));
+      setPilotForm((current) => ({
+        ...current,
+        organizationId: current.organizationId || teamResults[0]?.organizationId || '',
+        teamId: current.teamId || teamResults[0]?.id || '',
+        status: 'draft',
+      }));
+      setCohortForm((current) => ({
+        ...current,
+        organizationId: current.organizationId || teamResults[0]?.organizationId || '',
+        teamId: current.teamId || teamResults[0]?.id || '',
+        pilotId: current.pilotId || pilotResults[0]?.id || '',
       }));
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to load provisioning data:', error);
@@ -423,6 +613,91 @@ const PulseCheckProvisioningPage: React.FC = () => {
     });
     setMessage(null);
   };
+
+  const handlePilotFieldChange = (
+    field: keyof CreatePulseCheckPilotInput,
+    value: string | PulseCheckPilotStudyMode | PulseCheckPilot['status']
+  ) => {
+    setPilotForm((current) => {
+      if (field === 'teamId') {
+        const nextTeam = teams.find((team) => team.id === value) || null;
+        return {
+          ...current,
+          teamId: String(value),
+          organizationId: nextTeam?.organizationId || current.organizationId,
+        };
+      }
+
+      return { ...current, [field]: value };
+    });
+    setMessage(null);
+  };
+
+  const handleCohortFieldChange = (
+    field: keyof CreatePulseCheckPilotCohortInput,
+    value: string | PulseCheckPilotCohortStatus
+  ) => {
+    setCohortForm((current) => {
+      if (field === 'pilotId') {
+        const nextPilot = pilots.find((pilot) => pilot.id === value) || null;
+        return {
+          ...current,
+          pilotId: String(value),
+          teamId: nextPilot?.teamId || current.teamId,
+          organizationId: nextPilot?.organizationId || current.organizationId,
+        };
+      }
+
+      return { ...current, [field]: value };
+    });
+    setMessage(null);
+  };
+
+  const addCohortTag = useCallback((rawValue: string) => {
+    const normalizedTag = normalizeCohortTag(rawValue);
+    if (!normalizedTag) return false;
+
+    let added = false;
+    setCohortForm((current) => {
+      if ((current.reportingTags || []).some((tag) => tag.toLowerCase() === normalizedTag)) {
+        return current;
+      }
+
+      added = true;
+      return {
+        ...current,
+        reportingTags: [...(current.reportingTags || []), normalizedTag],
+      };
+    });
+
+    if (added) {
+      setMessage(null);
+    }
+
+    return added;
+  }, []);
+
+  const removeCohortTag = useCallback((tagToRemove: string) => {
+    setCohortForm((current) => ({
+      ...current,
+      reportingTags: (current.reportingTags || []).filter((tag) => tag !== tagToRemove),
+    }));
+    setMessage(null);
+  }, []);
+
+  const commitCohortTagsInput = useCallback(() => {
+    if (!cohortTagsInput.trim()) return;
+
+    const segments = cohortTagsInput.split(',');
+    let addedAny = false;
+    segments.forEach((segment) => {
+      addedAny = addCohortTag(segment) || addedAny;
+    });
+
+    if (addedAny || segments.some((segment) => segment.trim())) {
+      setCohortTagsInput('');
+    }
+  }, [addCohortTag, cohortTagsInput]);
 
   const handleTeamAdminSelection = (email: string) => {
     const selectedAdmin = teamAdminOptions.find((option) => option.value === email);
@@ -548,7 +823,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
     setMessage(null);
 
     try {
-      await pulseCheckProvisioningService.createTeam(teamForm);
+      const createdTeamId = await pulseCheckProvisioningService.createTeam(teamForm);
       const selectedOrganizationId = teamForm.organizationId;
       const selectedOrganization = organizations.find((organization) => organization.id === selectedOrganizationId);
       setTeamForm({
@@ -565,16 +840,142 @@ const PulseCheckProvisioningPage: React.FC = () => {
         organizationName: selectedOrganization?.displayName || '',
         profileType: 'group',
       }));
+      setPilotForm({
+        ...defaultPilotForm,
+        organizationId: selectedOrganizationId,
+        teamId: createdTeamId,
+        checkpointCadence: 'weekly',
+        status: 'draft',
+      });
+      setPilotStartDate('');
+      setPilotDurationPreset('14');
+      setPilotCustomDays('');
+      setCohortForm({
+        ...defaultCohortForm,
+        organizationId: selectedOrganizationId,
+        teamId: createdTeamId,
+        pilotId: '',
+        cohortType: 'intervention-group',
+      });
+      setCohortTagsInput('');
       await loadData();
       setMessage({
         type: 'success',
-        text: 'Team created with its default clinician profile attached. The next slice should generate the admin activation link from this team record.',
+        text: 'Team created with its default clinician profile attached. You can now add pilots and cohorts before issuing onboarding links.',
       });
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to create team:', error);
       setMessage({ type: 'error', text: 'Failed to create team.' });
     } finally {
       setTeamSubmitting(false);
+    }
+  };
+
+  const handleCreatePilot = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!pilotForm.organizationId || !pilotForm.teamId || !pilotForm.name.trim()) {
+      setMessage({ type: 'error', text: 'Select a team and enter a pilot name before creating a pilot.' });
+      return;
+    }
+
+    setPilotSubmitting(true);
+    setMessage(null);
+
+    try {
+      const startAt = pilotStartDate ? new Date(`${pilotStartDate}T00:00:00`) : null;
+      const durationDays =
+        pilotDurationPreset === 'custom'
+          ? Number.parseInt(pilotCustomDays, 10)
+          : Number.parseInt(pilotDurationPreset, 10);
+
+      if (pilotDurationPreset === 'custom' && (!Number.isFinite(durationDays) || durationDays <= 0)) {
+        setMessage({ type: 'error', text: 'Enter a valid number of days for a custom pilot duration.' });
+        setPilotSubmitting(false);
+        return;
+      }
+
+      const endAt = startAt && Number.isFinite(durationDays) && durationDays > 0
+        ? new Date(startAt.getTime() + (durationDays - 1) * 24 * 60 * 60 * 1000 + (23 * 60 * 60 + 59 * 60 + 59) * 1000)
+        : null;
+
+      const createdPilotId = await pulseCheckProvisioningService.createPilot({
+        ...pilotForm,
+        status: 'draft',
+        startAt,
+        endAt,
+        ownerInternalUserId: currentUser?.id || '',
+        ownerInternalEmail: currentUser?.email || '',
+      });
+      setCohortForm((current) => ({
+        ...current,
+        organizationId: pilotForm.organizationId,
+        teamId: pilotForm.teamId,
+        pilotId: createdPilotId,
+      }));
+      setPilotForm((current) => ({
+        ...defaultPilotForm,
+        organizationId: current.organizationId,
+        teamId: current.teamId,
+        studyMode: current.studyMode,
+        checkpointCadence: current.checkpointCadence || 'weekly',
+        status: 'draft',
+      }));
+      setPilotStartDate('');
+      setPilotDurationPreset('14');
+      setPilotCustomDays('');
+      await loadData();
+      setMessage({ type: 'success', text: 'Pilot created in draft. Display status now follows the pilot start date and duration window, and you can add cohorts under it.' });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to create pilot:', error);
+      setMessage({ type: 'error', text: 'Failed to create pilot.' });
+    } finally {
+      setPilotSubmitting(false);
+    }
+  };
+
+  const handleCreateCohort = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!cohortForm.organizationId || !cohortForm.teamId || !cohortForm.pilotId || !cohortForm.name.trim()) {
+      setMessage({ type: 'error', text: 'Select a pilot and enter a cohort name before creating a cohort.' });
+      return;
+    }
+
+    const pendingTags = cohortTagsInput
+      .split(',')
+      .map((tag) => normalizeCohortTag(tag))
+      .filter(Boolean);
+    const reportingTags = Array.from(new Set([...(cohortForm.reportingTags || []), ...pendingTags]));
+    const selectedPilotStatus = selectedCohortPilot ? getDerivedPilotStatusValue(selectedCohortPilot) : null;
+    const inheritedStatus: PulseCheckPilotCohortStatus = selectedPilotStatus === 'active' ? 'active' : 'draft';
+
+    setCohortSubmitting(true);
+    setMessage(null);
+
+    try {
+      await pulseCheckProvisioningService.createPilotCohort({
+        ...cohortForm,
+        reportingTags,
+        status: inheritedStatus,
+      });
+      setCohortForm((current) => ({
+        ...defaultCohortForm,
+        organizationId: current.organizationId,
+        teamId: current.teamId,
+        pilotId: current.pilotId,
+        cohortType: current.cohortType || 'intervention-group',
+        assignmentRule: current.assignmentRule || 'manual-staff-assignment',
+      }));
+      setCohortTagsInput('');
+      await loadData();
+      setMessage({
+        type: 'success',
+        text: `Cohort created and linked to the selected pilot. It inherited a ${inheritedStatus} status from the pilot at creation time.`,
+      });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to create cohort:', error);
+      setMessage({ type: 'error', text: 'Failed to create cohort.' });
+    } finally {
+      setCohortSubmitting(false);
     }
   };
 
@@ -618,6 +1019,52 @@ const PulseCheckProvisioningPage: React.FC = () => {
     } catch (error) {
       console.error('[PulseCheckProvisioning] Failed to copy admin activation link:', error);
       setMessage({ type: 'error', text: 'Failed to copy admin activation link.' });
+    }
+  };
+
+  const handleCopyInviteLink = async (activationUrl: string, successText = 'Invite link copied to clipboard.') => {
+    try {
+      await navigator.clipboard.writeText(activationUrl);
+      setMessage({ type: 'success', text: successText });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to copy invite link:', error);
+      setMessage({ type: 'error', text: 'Failed to copy invite link.' });
+    }
+  };
+
+  const handleCreateCohortInviteLink = async (pilot: PulseCheckPilot, cohort: PulseCheckPilotCohort) => {
+    setCohortInviteCreatingId(cohort.id);
+    setMessage(null);
+
+    try {
+      const inviteId = await pulseCheckProvisioningService.createTeamAccessInviteLink({
+        organizationId: cohort.organizationId,
+        teamId: cohort.teamId,
+        teamMembershipRole: 'athlete',
+        pilotId: pilot.id,
+        pilotName: pilot.name,
+        cohortId: cohort.id,
+        cohortName: cohort.name,
+        createdByUserId: currentUser?.id || '',
+        createdByEmail: currentUser?.email || '',
+      });
+
+      const refreshedInviteLinks = await pulseCheckProvisioningService.listInviteLinks();
+      setInviteLinks(refreshedInviteLinks);
+      const createdInvite = refreshedInviteLinks.find((invite) => invite.id === inviteId);
+      if (createdInvite?.activationUrl) {
+        await navigator.clipboard.writeText(createdInvite.activationUrl);
+      }
+
+      setMessage({
+        type: 'success',
+        text: `Cohort athlete invite created for ${cohort.name} and copied to the clipboard.`,
+      });
+    } catch (error) {
+      console.error('[PulseCheckProvisioning] Failed to create cohort athlete invite:', error);
+      setMessage({ type: 'error', text: 'Failed to create cohort athlete invite.' });
+    } finally {
+      setCohortInviteCreatingId(null);
     }
   };
 
@@ -727,8 +1174,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
                 <h1 className="text-3xl font-semibold text-white">PulseCheck Provisioning</h1>
                 <p className="mt-2 max-w-4xl text-sm text-zinc-300">
                   First implementation slice for the provisioning model. This page lets Pulse Check admins create the
-                  top-level organization and its initial team before we add admin activation links, invite generation,
-                  and pilot controls.
+                  top-level organization, persistent team container, pilot structure, cohort structure, clinical route,
+                  and onboarding links in one connected setup flow.
                 </p>
               </div>
               <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] px-4 py-3 text-sm text-zinc-300">
@@ -779,6 +1226,28 @@ const PulseCheckProvisioningPage: React.FC = () => {
             </article>
           </section>
 
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <article className="rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4">
+              <div className="flex items-center gap-3">
+                <ClipboardList className="h-5 w-5 text-cyan-300" />
+                <h2 className="text-sm font-semibold text-white">Step 5: Create Pilot</h2>
+              </div>
+              <p className="mt-2 text-sm text-zinc-300">
+                Add the time-bound pilot layer inside the team when the rollout needs checkpointing, study posture, or internal evaluation structure.
+              </p>
+            </article>
+
+            <article className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] p-4">
+              <div className="flex items-center gap-3">
+                <Clipboard className="h-5 w-5 text-fuchsia-300" />
+                <h2 className="text-sm font-semibold text-white">Step 6: Create Cohorts</h2>
+              </div>
+              <p className="mt-2 text-sm text-zinc-300">
+                Add cohorts inside the pilot for intervention arms, reporting groups, position clusters, or other subgroup logic.
+              </p>
+            </article>
+          </section>
+
           <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-3xl">
@@ -803,6 +1272,61 @@ const PulseCheckProvisioningPage: React.FC = () => {
                 <div className="rounded-2xl border border-green-500/20 bg-green-500/[0.06] p-4">
                   <p className="text-xs uppercase tracking-wide text-green-200">Active</p>
                   <p className="mt-2 text-sm text-zinc-300">Customer admin redeemed the link and owns the container.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
+            <div className="flex flex-col gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Modeling Rules</p>
+                <h2 className="mt-2 text-xl font-semibold text-white">Organization vs Team vs Pilot vs Cohort</h2>
+                <p className="mt-2 max-w-4xl text-sm leading-7 text-zinc-300">
+                  Start with the top-level organization, then define the persistent team container, then add the time-bound pilot layer, then any subgrouping inside it.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+                <article className="rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] p-4">
+                  <p className="text-sm font-semibold text-white">Organization</p>
+                  <p className="mt-2 text-sm text-zinc-300">
+                    The top-level customer container. Organizations hold the legal identity, primary admin handoff, and the set of teams that belong to the same partner.
+                  </p>
+                </article>
+
+                <article className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.06] p-4">
+                  <p className="text-sm font-semibold text-white">Team</p>
+                  <p className="mt-2 text-sm text-zinc-300">
+                    The long-lived container for a sport, program, or operational unit. Teams own the roster, invite policy, and default routing setup.
+                  </p>
+                </article>
+
+                <article className="rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4">
+                  <p className="text-sm font-semibold text-white">Pilot</p>
+                  <p className="mt-2 text-sm text-zinc-300">
+                    A time-bound initiative inside a team. Use a pilot for rollout structure, checkpoint cadence, or a defined study or evaluation window.
+                  </p>
+                </article>
+
+                <article className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] p-4">
+                  <p className="text-sm font-semibold text-white">Cohort</p>
+                  <p className="mt-2 text-sm text-zinc-300">
+                    A subgroup inside a pilot. Use cohorts for intervention groups, control groups, position clusters, rehab groups, or reporting splits.
+                  </p>
+                </article>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-300">
+                  <p className="font-semibold text-white">Simple rule</p>
+                  <p className="mt-2">
+                    If something needs its own customer identity or legal/admin umbrella, it should probably be a separate organization. If it needs its own long-term roster, admins, or invite flow inside that customer, it should probably be a separate team. If it is just a subgroup inside a pilot, it should be a cohort.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-300">
+                  <p className="font-semibold text-white">Hierarchy</p>
+                  <p className="mt-2 font-medium text-white">Organization -&gt; Team -&gt; Pilot -&gt; Cohort</p>
                 </div>
               </div>
             </div>
@@ -1107,6 +1631,296 @@ const PulseCheckProvisioningPage: React.FC = () => {
 
               <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
                 <div className="mb-5 flex items-center gap-3">
+                  <ClipboardList className="h-5 w-5 text-cyan-300" />
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Create Pilot</h2>
+                    <p className="text-sm text-zinc-400">Internal-only pilot layer inside a team for study posture, checkpoints, and rollout structure.</p>
+                  </div>
+                </div>
+
+                <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreatePilot}>
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Team</span>
+                    <select
+                      value={pilotForm.teamId}
+                      onChange={(event) => handlePilotFieldChange('teamId', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
+                    >
+                      <option value="">Select a team</option>
+                      {teams.map((team) => {
+                        const organization = organizations.find((item) => item.id === team.organizationId);
+                        return (
+                          <option key={team.id} value={team.id}>
+                            {organization ? `${organization.displayName} -> ${team.displayName}` : team.displayName}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Pilot Name</span>
+                    <input
+                      value={pilotForm.name}
+                      onChange={(event) => handlePilotFieldChange('name', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
+                      placeholder="Spring Pilot 2026"
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Study Mode</span>
+                    <select
+                      value={pilotForm.studyMode}
+                      onChange={(event) => handlePilotFieldChange('studyMode', event.target.value as PulseCheckPilotStudyMode)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
+                    >
+                      {PILOT_STUDY_MODE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Checkpoint Cadence</span>
+                    <select
+                      value={pilotForm.checkpointCadence || 'weekly'}
+                      onChange={(event) => handlePilotFieldChange('checkpointCadence', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
+                    >
+                      {CHECKPOINT_CADENCE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Start Date</span>
+                    <input
+                      type="date"
+                      value={pilotStartDate}
+                      onChange={(event) => setPilotStartDate(event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Pilot Length</span>
+                    <select
+                      value={pilotDurationPreset}
+                      onChange={(event) => setPilotDurationPreset(event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
+                    >
+                      {PILOT_DURATION_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {pilotDurationPreset === 'custom' ? (
+                    <label className="space-y-2">
+                      <span className="text-xs uppercase tracking-wide text-zinc-500">Custom Days</span>
+                      <input
+                        type="number"
+                        min={1}
+                        value={pilotCustomDays}
+                        onChange={(event) => setPilotCustomDays(event.target.value)}
+                        className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
+                        placeholder="21"
+                      />
+                    </label>
+                  ) : null}
+
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Objective</span>
+                    <textarea
+                      value={pilotForm.objective || ''}
+                      onChange={(event) => handlePilotFieldChange('objective', event.target.value)}
+                      rows={3}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
+                      placeholder="Why this pilot exists, what it is measuring, and what the team should align around."
+                    />
+                  </label>
+
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Notes</span>
+                    <textarea
+                      value={pilotForm.notes || ''}
+                      onChange={(event) => handlePilotFieldChange('notes', event.target.value)}
+                      rows={3}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
+                      placeholder="Internal study setup notes, staffing assumptions, or rollout constraints."
+                    />
+                  </label>
+
+                  <div className="md:col-span-2 rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
+                    {selectedPilotTeam
+                      ? `This pilot will attach to ${selectedPilotTeam.displayName} and inherit that team's organization context.`
+                      : 'Select a team first. Pilots are nested inside teams rather than replacing the team layer.'}
+                  </div>
+
+                  <div className="md:col-span-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] px-4 py-3 text-sm text-zinc-300">
+                    New pilots are created in draft. The provisioning view now derives display status from the start date and pilot length:
+                    no start date means draft, an active date window means active, and the pilot moves to completed once the derived duration window ends.
+                    {pilotStartDate
+                      ? ` With the current inputs, the projected end date is ${
+                          (() => {
+                            const durationDays =
+                              pilotDurationPreset === 'custom'
+                                ? Number.parseInt(pilotCustomDays, 10)
+                                : Number.parseInt(pilotDurationPreset, 10);
+                            if (!Number.isFinite(durationDays) || durationDays <= 0) return 'not available';
+                            const startAt = new Date(`${pilotStartDate}T00:00:00`);
+                            const projectedEnd = new Date(startAt.getTime() + (durationDays - 1) * 24 * 60 * 60 * 1000);
+                            return projectedEnd.toLocaleDateString();
+                          })()
+                        }.`
+                      : ''}
+                  </div>
+
+                  <div className="md:col-span-2 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={pilotSubmitting || teams.length === 0}
+                      className="inline-flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {pilotSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardList className="h-4 w-4" />}
+                      {pilotSubmitting ? 'Creating Pilot...' : 'Create Pilot'}
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
+                <div className="mb-5 flex items-center gap-3">
+                  <Clipboard className="h-5 w-5 text-fuchsia-300" />
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Create Cohort</h2>
+                    <p className="text-sm text-zinc-400">Subgroup layer inside a pilot for reporting, experimentation, or differentiated programming.</p>
+                  </div>
+                </div>
+
+                <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={handleCreateCohort}>
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Pilot</span>
+                    <select
+                      value={cohortForm.pilotId}
+                      onChange={(event) => handleCohortFieldChange('pilotId', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-fuchsia-400"
+                    >
+                      <option value="">Select a pilot</option>
+                      {pilots.map((pilot) => {
+                        const team = teams.find((item) => item.id === pilot.teamId);
+                        return (
+                          <option key={pilot.id} value={pilot.id}>
+                            {team ? `${team.displayName} -> ${pilot.name}` : pilot.name}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Cohort Name</span>
+                    <input
+                      value={cohortForm.name}
+                      onChange={(event) => handleCohortFieldChange('name', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-fuchsia-400"
+                      placeholder="Intervention Group"
+                    />
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Cohort Type</span>
+                    <select
+                      value={cohortForm.cohortType || 'intervention-group'}
+                      onChange={(event) => handleCohortFieldChange('cohortType', event.target.value)}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-fuchsia-400"
+                    >
+                      {COHORT_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Reporting Tags</span>
+                    <div className="rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 transition focus-within:border-fuchsia-400">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {(cohortForm.reportingTags || []).map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center gap-1 rounded-full border border-fuchsia-400/30 bg-fuchsia-500/10 px-2.5 py-1 text-xs font-medium text-fuchsia-100"
+                          >
+                            {tag}
+                            <button
+                              type="button"
+                              onClick={() => removeCohortTag(tag)}
+                              className="text-fuchsia-200 transition hover:text-white"
+                              aria-label={`Remove ${tag}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                        <input
+                          value={cohortTagsInput}
+                          onChange={(event) => setCohortTagsInput(event.target.value)}
+                          onBlur={commitCohortTagsInput}
+                          onKeyDown={(event) => {
+                            if (event.key === ',' || event.key === 'Enter') {
+                              event.preventDefault();
+                              commitCohortTagsInput();
+                            }
+                          }}
+                          className="min-w-[180px] flex-1 bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+                          placeholder={(cohortForm.reportingTags || []).length > 0 ? 'Add another tag' : 'control, spring-2026, returners'}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-zinc-500">Type a tag and press comma or enter to turn it into a chip for reporting, comparisons, or export filters.</p>
+                  </label>
+
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs uppercase tracking-wide text-zinc-500">Notes</span>
+                    <textarea
+                      value={cohortForm.notes || ''}
+                      onChange={(event) => handleCohortFieldChange('notes', event.target.value)}
+                      rows={3}
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-fuchsia-400"
+                      placeholder="What distinguishes this subgroup and how it should be treated operationally."
+                    />
+                  </label>
+
+                  <div className="md:col-span-2 rounded-2xl border border-zinc-800 bg-black/20 px-4 py-3 text-sm text-zinc-300">
+                    {selectedCohortPilot
+                      ? `This cohort will attach to ${selectedCohortPilot.name} inside its parent team. Use cohorts for subgroups inside a pilot, not as a substitute for teams. It will inherit the pilot's current ${getDerivedPilotStatusDisplay(selectedCohortPilot).label.toLowerCase()} state when it is created.`
+                      : 'Select a pilot first. Cohorts only exist inside pilots.'}
+                  </div>
+
+                  <div className="md:col-span-2 flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={cohortSubmitting || pilots.length === 0}
+                      className="inline-flex items-center gap-2 rounded-xl bg-fuchsia-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {cohortSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clipboard className="h-4 w-4" />}
+                      {cohortSubmitting ? 'Creating Cohort...' : 'Create Cohort'}
+                    </button>
+                  </div>
+                </form>
+              </section>
+
+              <section className="rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
+                <div className="mb-5 flex items-center gap-3">
                   <Stethoscope className="h-5 w-5 text-purple-300" />
                   <div>
                     <h2 className="text-lg font-semibold text-white">Connect Clinical Profile</h2>
@@ -1332,7 +2146,7 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                   No teams attached yet.
                                 </div>
                               ) : (
-                                bundledTeams.map(({ team, clinicianProfile, adminActivationLinks, clinicianOnboardingLink }) => {
+                                bundledTeams.map(({ team, pilots: bundledPilots, clinicianProfile, adminActivationLinks, clinicianOnboardingLink }) => {
                                   const teamStatus = getTeamStatusDisplay(team.status);
 
                                   return (
@@ -1468,6 +2282,149 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                               </div>
                                             )}
                                           </div>
+                                        </div>
+
+                                        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.05] p-4">
+                                          <div className="flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-2">
+                                              <ClipboardList className="h-4 w-4 text-cyan-300" />
+                                              <p className="text-sm font-semibold text-white">Pilot and Cohort Structure</p>
+                                            </div>
+                                            <span className="text-[11px] uppercase tracking-wide text-zinc-500">
+                                              {bundledPilots.length} pilot{bundledPilots.length === 1 ? '' : 's'}
+                                            </span>
+                                          </div>
+
+                                          {bundledPilots.length === 0 ? (
+                                            <p className="mt-3 text-xs text-zinc-500">No pilots created for this team yet.</p>
+                                          ) : (
+                                            <div className="mt-3 space-y-3">
+                                              {bundledPilots.map(({ pilot, cohorts }) => {
+                                                const pilotStatus = getDerivedPilotStatusDisplay(pilot);
+                                                return (
+                                                  <div key={pilot.id} className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                                                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                                      <div>
+                                                        <div className="flex items-center gap-2">
+                                                          <p className="text-sm font-semibold text-white">{pilot.name}</p>
+                                                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide ${pilotStatus.tone}`}>
+                                                            {pilotStatus.label}
+                                                          </span>
+                                                        </div>
+                                                        <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-zinc-400 md:grid-cols-2">
+                                                          <p>Study mode: {pilot.studyMode}</p>
+                                                          <p>Checkpoint cadence: {pilot.checkpointCadence || 'Not set'}</p>
+                                                          <p>Starts: {toDateValue(pilot.startAt)?.toLocaleDateString() || 'Not set'}</p>
+                                                          <p>Ends: {toDateValue(pilot.endAt)?.toLocaleDateString() || 'Not set'}</p>
+                                                          <p>Owner: {pilot.ownerInternalEmail || 'Not set'}</p>
+                                                          <p>Created: {formatTimestamp(pilot.createdAt)}</p>
+                                                        </div>
+                                                        {pilot.objective ? (
+                                                          <p className="mt-3 text-xs leading-6 text-zinc-300">{pilot.objective}</p>
+                                                        ) : null}
+                                                      </div>
+                                                      <span className="text-[11px] uppercase tracking-wide text-zinc-500">
+                                                        {cohorts.length} cohort{cohorts.length === 1 ? '' : 's'}
+                                                      </span>
+                                                    </div>
+
+                                                    {cohorts.length === 0 ? (
+                                                      <p className="mt-3 text-xs text-zinc-500">No cohorts attached yet.</p>
+                                                    ) : (
+                                                      <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
+                                                        {cohorts.map((cohort) => {
+                                                          const cohortStatus = getCohortStatusDisplay(cohort.status);
+                                                          const cohortInviteLinks = athleteInviteLinksByCohortId.get(cohort.id) || [];
+                                                          const activeCohortInvite = cohortInviteLinks[0] || null;
+                                                          return (
+                                                            <div key={cohort.id} className="rounded-2xl border border-fuchsia-500/15 bg-fuchsia-500/[0.05] p-3">
+                                                              <div className="flex items-center justify-between gap-2">
+                                                                <p className="text-sm font-medium text-white">{cohort.name}</p>
+                                                                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cohortStatus.tone}`}>
+                                                                  {cohortStatus.label}
+                                                                </span>
+                                                              </div>
+                                                              <div className="mt-2 space-y-1 text-xs text-zinc-400">
+                                                                <p>Type: {getCohortTypeLabel(cohort.cohortType)}</p>
+                                                                <p>Assignment: {getCohortAssignmentRuleLabel(cohort.assignmentRule)}</p>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                  {cohort.reportingTags && cohort.reportingTags.length > 0 ? (
+                                                                    cohort.reportingTags.map((tag) => (
+                                                                      <span
+                                                                        key={tag}
+                                                                        className="inline-flex rounded-full border border-fuchsia-400/20 bg-black/20 px-2 py-0.5 text-[10px] uppercase tracking-wide text-fuchsia-100"
+                                                                      >
+                                                                        {tag}
+                                                                      </span>
+                                                                    ))
+                                                                  ) : (
+                                                                    <span>Tags: None</span>
+                                                                  )}
+                                                                </div>
+                                                              </div>
+                                                              <div className="mt-3 rounded-xl border border-zinc-800 bg-black/20 p-3">
+                                                                <div className="flex items-center justify-between gap-3">
+                                                                  <div>
+                                                                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">Cohort Athlete Invite</p>
+                                                                    <p className="mt-1 text-xs leading-5 text-zinc-400">
+                                                                      Athletes using this link join the team and are automatically placed into this cohort. Team athlete links without cohort context only add them to the team.
+                                                                    </p>
+                                                                  </div>
+                                                                  <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                      activeCohortInvite
+                                                                        ? handleCopyInviteLink(activeCohortInvite.activationUrl, 'Cohort athlete invite copied to clipboard.')
+                                                                        : handleCreateCohortInviteLink(pilot, cohort)
+                                                                    }
+                                                                    disabled={cohortInviteCreatingId === cohort.id}
+                                                                    className="inline-flex items-center gap-1.5 rounded-xl border border-fuchsia-400/30 px-3 py-2 text-[11px] font-semibold text-fuchsia-100 transition hover:border-fuchsia-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                                                  >
+                                                                    {cohortInviteCreatingId === cohort.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clipboard className="h-3.5 w-3.5" />}
+                                                                    {cohortInviteCreatingId === cohort.id
+                                                                      ? 'Creating...'
+                                                                      : activeCohortInvite
+                                                                        ? 'Copy Invite Link'
+                                                                        : 'Create Invite Link'}
+                                                                  </button>
+                                                                </div>
+                                                                {activeCohortInvite ? (
+                                                                  <div className="mt-3 rounded-xl border border-zinc-800 bg-[#090f1c] px-3 py-3">
+                                                                    <p className="truncate text-xs text-white">{activeCohortInvite.activationUrl}</p>
+                                                                    <div className="mt-2 flex items-center gap-2">
+                                                                      <button
+                                                                        type="button"
+                                                                        onClick={() => handleCopyInviteLink(activeCohortInvite.activationUrl, 'Cohort athlete invite copied to clipboard.')}
+                                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:border-zinc-500"
+                                                                      >
+                                                                        <Clipboard className="h-3.5 w-3.5" />
+                                                                        Copy
+                                                                      </button>
+                                                                      <a
+                                                                        href={activeCohortInvite.activationUrl}
+                                                                        target="_blank"
+                                                                        rel="noreferrer"
+                                                                        className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] font-semibold text-white transition hover:border-zinc-500"
+                                                                      >
+                                                                        <ExternalLink className="h-3.5 w-3.5" />
+                                                                        Open
+                                                                      </a>
+                                                                    </div>
+                                                                  </div>
+                                                                ) : (
+                                                                  <p className="mt-3 text-xs text-zinc-500">No cohort-specific athlete invite has been created yet.</p>
+                                                                )}
+                                                              </div>
+                                                            </div>
+                                                          );
+                                                        })}
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     </div>

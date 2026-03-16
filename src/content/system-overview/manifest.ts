@@ -9,7 +9,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-03-12',
+  lastUpdated: '2026-03-15',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -41,12 +41,19 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-nora-qa-edge-case-matrix', label: 'Nora QA Matrix', description: 'Conflict, override, and edge-case scenarios for testing runtime behavior before pilot.' },
     { id: 'pulsecheck-state-escalation-orchestration', label: 'State & Escalation Orchestration', description: 'Shared upstream state perception with separate performance, support, and safety lanes.' },
     { id: 'pulsecheck-escalation-integration-spec', label: 'Escalation Integration Spec', description: 'Execution-layer bridge between state snapshots and the escalation workflow.' },
+    { id: 'pulsecheck-member-onboarding-guide', label: 'Member Onboarding Guide', description: 'Step-by-step guide for onboarding a new PulseCheck member from account creation through baseline completion.' },
     { id: 'pulsecheck-team-pilot-cohort-onboarding-architecture', label: 'Team & Pilot Onboarding', description: 'How organizations, teams, pilots, cohorts, clinicians, and enrollments enter the system.' },
     { id: 'pulsecheck-permissions-visibility-model', label: 'Permissions & Visibility', description: 'Role-based access, invite-linked permissions, and minimum-necessary visibility rules.' },
     { id: 'pulsecheck-coach-dashboard-information-architecture', label: 'Coach Dashboard IA', description: 'Coach-facing information hierarchy, workflows, and privacy boundaries for roster visibility.' },
+    { id: 'pulsecheck-profile-architecture', label: 'Profile Architecture', description: 'Profile IA, field schema, milestone snapshots, and template-bound Nora explanation rules.' },
+    { id: 'pulsecheck-profile-snapshot-export-spec', label: 'Profile Snapshot & Export Spec', description: 'Canonical snapshot storage, idempotent write protocol, revision history, and canonical-first research export contract.' },
+    { id: 'pulsecheck-vision-pro-immersive-tests', label: 'Vision Pro - Immersive Tests', description: 'Spec stack for the football Vision Pro package, including immersive trial positioning, environment design, event schema, protocol rules, and pilot operations.' },
+    { id: 'system-design-language', label: 'System Design & Language', description: 'Voice, copy posture, and human-centered UI rules for how Pulse speaks to users across products.' },
     { id: 'auntedna-integration-strategy', label: 'Integration Strategy', description: 'API layer, webhook contract, profile mirror model, and MCP positioning for the AuntEdna clinical bridge.' },
     { id: 'playwright-testing-strategy', label: 'Testing Strategy', description: 'Playwright harness model, suite inventory, run commands, and PulseCheck UI regression coverage.' },
+    { id: 'android-testing-strategy', label: 'Android Testing Strategy', description: 'Native Android instrumentation baseline, dev-Firebase E2E contract, and namespaced cleanup policy.' },
     { id: 'xcuitest-testing-strategy', label: 'XCUITest Strategy', description: 'Deterministic iOS launch model, native club activation suite inventory, and accessibility-id contract.' },
+    { id: 'workout-share-cards', label: 'Workout Share Cards', description: 'Transparent PNG share card system for Run, Bike, Lift, Stretch, and Fat Burn categories — PHPhotoLibrary save path, story card layouts, and color-coded category branding.' },
   ],
   executiveSummary: {
     mission:
@@ -54,6 +61,17 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Added a Noise Gate Milestone 1 Plan artifact to the Vision Pro - Immersive Tests chapter, translating the Crowd Tunnel design brief into a concrete build contract for one complete playable loop with score and closeout.',
+      'Added a Noise Gate Design Brief artifact inside the Vision Pro - Immersive Tests chapter, locking the design-first north star for Crowd Tunnel before more runtime work proceeds.',
+      'Expanded the Vision Pro - Immersive Tests artifact with a dedicated RealityKit Implementation Guide explaining the exact gap between the current runtime and the football immersive spec, plus the build sequence required to make the headset experience truly immersive.',
+      'Added Workout Share Cards artifact documenting the transparent PNG share card system (PHPhotoLibrary save path) and branded story card layouts for Run, Bike, Lift, Stretch, and Fat Burn categories with per-category color coding.',
+      'Added the Vision Pro - Immersive Tests artifact under PulseCheck, grouping the five football pilot documents into one structured spec stack with internal doc toggles and implementation alignment notes.',
+      'Logged the Vision UI Design Language artifact into the Vision Pro - Immersive Tests chapter so prompts and implementation work can reference the in-repo chromatic-glass, authority-level, and Level C HUD rules directly.',
+      'Added the System Design & Language artifact establishing the cross-product voice, copy posture, and the anchor question “What is happening to me right now?” for human-centered UI reviews.',
+      'Added the PulseCheck Profile Snapshot & Export Spec artifact covering canonical snapshot storage, deterministic write rules, Nora template validation, revision audit handling, and canonical-default export behavior.',
+      'Added the PulseCheck Profile Architecture artifact covering the new profile information architecture, data model, milestone snapshots, research export defaults, and template-bound Nora explanation rules.',
+      'Added the Android Testing Strategy artifact covering the current instrumentation baseline, the recommended dev-Firebase E2E harness, and the shared `e2e-android-*` cleanup model.',
+      'Added the PulseCheck Member Onboarding Guide artifact covering the live athlete onboarding path from account creation through automatic baseline completion.',
       'Added the XCUITest Strategy artifact covering the deterministic mock-club launch path, current native club activation suite, and identifier contract for iOS automation.',
       'Refreshed the Club Activation Architecture artifact to reflect current web + iOS implementation, including native host config, intro composer modal, and bottom-clearance layout rules.',
       'Added the Shared Link Preview Strategy artifact covering crawler metadata fallbacks, protected-share guardrails, and the branded default-image recommendation.',

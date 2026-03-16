@@ -8,6 +8,8 @@ import CoachProtectedRoute from './CoachProtectedRoute';
 import { useUser } from '../hooks/useUser';
 import { coachService } from '../api/firebase/coach';
 import { CoachModel } from '../types/Coach';
+import { db } from '../api/firebase/config';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 
 // Floating Orb Component for background ambiance
 const FloatingOrb: React.FC<{
@@ -51,6 +53,7 @@ const CoachLayout: React.FC<Props> = ({
   const currentUser = useUser();
   const [coachProfile, setCoachProfile] = useState<CoachModel | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   const canSeeEarnings = !!(coachProfile?.earningsAccess === true || coachProfile?.userType === 'partner');
 
@@ -61,6 +64,7 @@ const CoachLayout: React.FC<Props> = ({
     ...(canSeeEarnings ? [{ href: '/coach/revenue', label: 'Earnings' }] : []),
     { href: '/coach/staff', label: 'Staff' },
     { href: '/coach/inbox', label: 'Inbox' },
+    { href: '/coach/notifications', label: 'Notifications', badgeCount: unreadNotificationCount },
     { href: '/coach/profile', label: 'Profile' }
   ];
 
@@ -75,6 +79,38 @@ const CoachLayout: React.FC<Props> = ({
       }
     };
     loadCoachProfile();
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setUnreadNotificationCount(0);
+      return;
+    }
+
+    const notificationsQuery = query(
+      collection(db, 'coach-notifications'),
+      where('coachId', '==', currentUser.id)
+    );
+
+    const unsubscribe = onSnapshot(
+      notificationsQuery,
+      (snapshot) => {
+        const unreadCount = snapshot.docs.reduce((count, docSnap) => {
+          const data = docSnap.data() as { read?: boolean; archived?: boolean };
+          if (data.archived === true || data.read === true) {
+            return count;
+          }
+          return count + 1;
+        }, 0);
+        setUnreadNotificationCount(unreadCount);
+      },
+      (error) => {
+        console.error('Failed to load coach notification count:', error);
+        setUnreadNotificationCount(0);
+      }
+    );
+
+    return () => unsubscribe();
   }, [currentUser?.id]);
 
   const handleCopyCode = async () => {
@@ -177,7 +213,16 @@ const CoachLayout: React.FC<Props> = ({
                                 : 'text-zinc-400 hover:text-white hover:bg-white/5'
                             }`}
                           >
-                            {item.label}
+                            <span>{item.label}</span>
+                            {item.badgeCount ? (
+                              <span
+                                className={`ml-2 inline-flex min-w-[1.5rem] items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                  isActive ? 'bg-black/15 text-black' : 'bg-[#E0FE10]/15 text-[#E0FE10]'
+                                }`}
+                              >
+                                {item.badgeCount > 99 ? '99+' : item.badgeCount}
+                              </span>
+                            ) : null}
                           </Link>
                         </motion.div>
                       );

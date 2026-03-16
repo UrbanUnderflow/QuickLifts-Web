@@ -43,7 +43,7 @@ import {
 // TYPES
 // ─────────────────────────────────────────────────────────
 
-type DemoAct = 'intro' | 'act1' | 'act2' | 'act3' | 'act4';
+type DemoAct = 'intro' | 'act1' | 'act2' | 'act2b' | 'act3' | 'act4';
 
 interface ScriptMessage {
     role: 'nora' | 'athlete' | 'system';
@@ -1091,7 +1091,7 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                                             animate={{ opacity: 1, x: 0 }}
                                             transition={{ delay: i * 0.03 }}
                                             className={`grid grid-cols-[44px_1fr_44px_1fr_64px] gap-0 items-center px-3 py-2 border-b border-zinc-800/50 text-sm transition-colors ${p.hl ? 'bg-orange-500/5' : ''} ${p.status === 'critical' ? 'cursor-pointer hover:bg-red-500/10' : 'hover:bg-zinc-800/40'}`}
-                                            onClick={() => { if (p.status === 'critical') { onContinue(); } }}
+                                            onClick={() => { if (p.status === 'critical') { onContinue(); } }} // onContinue now navigates to act2b
                                         >
                                             <div className="text-zinc-500 font-mono text-xs">{p.num}</div>
                                             <div className={`font-medium ${p.hl ? 'text-orange-400' : 'text-white'}`}>{p.name}</div>
@@ -1116,6 +1116,374 @@ const CoachDashboard: React.FC<{ onContinue: () => void; notifiedStaff: { name: 
                     </motion.div>
                 )}
 
+            </AnimatePresence>
+        </motion.div>
+    );
+};
+
+// ─────────────────────────────────────────────────────────
+// ESCALATION SIGNAL LAYER EXPLAINER — Act 2b
+// ─────────────────────────────────────────────────────────
+
+const AnimatedDataStream: React.FC<{ delay?: number; duration?: number; color?: string }> = ({ delay = 0, duration = 2.5, color = '#E0FE10' }) => (
+    <motion.div
+        className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full pointer-events-none"
+        style={{ backgroundColor: color, boxShadow: `0 0 10px ${color}80`, left: 0 }}
+        initial={{ left: '0%', opacity: 0, scale: 0.5 }}
+        animate={{ left: '100%', opacity: [0, 1, 1, 0], scale: [0.5, 1, 1, 0.5] }}
+        transition={{ duration, delay, repeat: Infinity, ease: 'easeInOut', repeatDelay: 0.5 }}
+    />
+);
+
+const PulseCheckToAuntEdnaFlow: React.FC = () => {
+    const streams = [
+        { delay: 0, color: '#E0FE10', duration: 2.8 },
+        { delay: 0.7, color: '#10b981', duration: 3.1 },
+        { delay: 1.4, color: '#ef4444', duration: 2.6 },
+        { delay: 2.1, color: '#f59e0b', duration: 3.3 },
+        { delay: 2.8, color: '#8b5cf6', duration: 2.9 },
+    ];
+
+    return (
+        <div className="relative w-full flex items-center gap-4" style={{ minHeight: 120 }}>
+            {/* PulseCheck Node */}
+            <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.6 }}
+                className="flex-shrink-0 flex flex-col items-center gap-2"
+            >
+                <div className="relative">
+                    <motion.div
+                        className="absolute inset-0 rounded-2xl"
+                        animate={{ opacity: [0.3, 0.7, 0.3] }}
+                        transition={{ duration: 3, repeat: Infinity }}
+                        style={{ background: 'radial-gradient(circle, rgba(224,254,16,0.3) 0%, transparent 70%)', filter: 'blur(12px)' }}
+                    />
+                    <div className="relative w-[100px] h-[100px] rounded-2xl border border-[#E0FE10]/30 bg-zinc-900/80 flex flex-col items-center justify-center gap-1.5 backdrop-blur-xl">
+                        <Brain className="w-7 h-7 text-[#E0FE10]" />
+                        <div className="text-[10px] font-bold text-[#E0FE10] uppercase tracking-widest">Pulse</div>
+                        <div className="text-[8px] text-zinc-500 uppercase tracking-wider">Check</div>
+                    </div>
+                </div>
+                <div className="text-[9px] text-zinc-600 uppercase tracking-widest text-center">
+                    Athlete Check-in<br/>Biometric Data
+                </div>
+            </motion.div>
+
+            {/* First data stream connector */}
+            <div className="flex-1 relative h-12 overflow-visible">
+                {/* Track line */}
+                <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-px bg-gradient-to-r from-[#E0FE10]/40 via-[#E0FE10]/20 to-zinc-700/60" />
+                {streams.slice(0, 3).map((s, i) => (
+                    <AnimatedDataStream key={i} delay={s.delay} duration={s.duration} color={s.color} />
+                ))}
+            </div>
+
+            {/* Signal Layer Node */}
+            <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                className="flex-shrink-0 flex flex-col items-center gap-2"
+            >
+                <div className="relative">
+                    <motion.div
+                        className="absolute inset-0 rounded-full"
+                        animate={{ opacity: [0.3, 0.8, 0.3], scale: [1, 1.2, 1] }}
+                        transition={{ duration: 2.5, repeat: Infinity }}
+                        style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.4) 0%, transparent 70%)', filter: 'blur(16px)' }}
+                    />
+                    <div className="relative w-[120px] h-[120px] rounded-full border-2 border-purple-500/40 bg-zinc-900/90 flex flex-col items-center justify-center gap-1 backdrop-blur-xl"
+                        style={{ boxShadow: '0 0 30px rgba(139,92,246,0.2), inset 0 0 20px rgba(139,92,246,0.05)' }}
+                    >
+                        <Zap className="w-7 h-7 text-purple-400" />
+                        <div className="text-[10px] font-bold text-purple-300 uppercase tracking-widest">Signal</div>
+                        <div className="text-[8px] text-zinc-500 uppercase tracking-wider">Layer</div>
+                        {/* Rotating ring */}
+                        <motion.div
+                            className="absolute inset-1 rounded-full border border-purple-500/20"
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                        />
+                    </div>
+                </div>
+                <div className="text-[9px] text-zinc-600 uppercase tracking-widest text-center">
+                    Tier Classification<br/>AI Analysis Engine
+                </div>
+            </motion.div>
+
+            {/* Second data stream connector */}
+            <div className="flex-1 relative h-12 overflow-visible">
+                <div className="absolute top-1/2 -translate-y-1/2 left-0 right-0 h-px bg-gradient-to-r from-purple-500/40 via-red-500/30 to-red-500/60" />
+                {streams.slice(2).map((s, i) => (
+                    <AnimatedDataStream key={i} delay={s.delay} duration={s.duration} color={s.color} />
+                ))}
+            </div>
+
+            {/* AuntEdna Node */}
+            <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.6, delay: 0.6 }}
+                className="flex-shrink-0 flex flex-col items-center gap-2"
+            >
+                <div className="relative">
+                    <motion.div
+                        className="absolute inset-0 rounded-2xl"
+                        animate={{ opacity: [0.4, 0.9, 0.4] }}
+                        transition={{ duration: 2.8, repeat: Infinity, delay: 0.5 }}
+                        style={{ background: 'radial-gradient(circle, rgba(239,68,68,0.35) 0%, transparent 70%)', filter: 'blur(14px)' }}
+                    />
+                    <div className="relative w-[100px] h-[100px] rounded-2xl border border-red-500/40 bg-zinc-900/80 flex flex-col items-center justify-center gap-1.5 backdrop-blur-xl"
+                        style={{ boxShadow: '0 0 20px rgba(239,68,68,0.15)' }}
+                    >
+                        <Shield className="w-7 h-7 text-red-400" />
+                        <div className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Aunt</div>
+                        <div className="text-[8px] text-red-400/70 uppercase tracking-wider">Edna</div>
+                    </div>
+                </div>
+                <div className="text-[9px] text-zinc-600 uppercase tracking-widest text-center">
+                    Clinical Platform<br/>HIPAA Compliant
+                </div>
+            </motion.div>
+        </div>
+    );
+};
+
+const EscalationExplainer: React.FC<{ onContinue: () => void }> = ({ onContinue }) => {
+    const [visibleTiers, setVisibleTiers] = useState<number[]>([]);
+    const [showFlow, setShowFlow] = useState(false);
+    const [showCTA, setShowCTA] = useState(false);
+
+    useEffect(() => {
+        const t0 = setTimeout(() => setShowFlow(true), 400);
+        const t1 = setTimeout(() => setVisibleTiers([0]), 1200);
+        const t2 = setTimeout(() => setVisibleTiers([0, 1]), 1900);
+        const t3 = setTimeout(() => setVisibleTiers([0, 1, 2]), 2600);
+        const t4 = setTimeout(() => setVisibleTiers([0, 1, 2, 3]), 3300);
+        const t5 = setTimeout(() => setShowCTA(true), 4500);
+        return () => { clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4); clearTimeout(t5); };
+    }, []);
+
+    const tiers = [
+        {
+            number: 0,
+            label: 'Monitor-Only',
+            sublabel: 'Tier 0',
+            desc: 'Normal check-in flagged for passive tracking. Nora logs the sentiment and continues the conversation. No action taken.',
+            color: '#10b981',
+            glow: 'rgba(16,185,129,0.25)',
+            border: 'border-emerald-500/30',
+            bg: 'bg-emerald-500/5',
+            dot: 'bg-emerald-400',
+            tag: 'No Action',
+            tagColor: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
+        },
+        {
+            number: 1,
+            label: 'Coach Notified',
+            sublabel: 'Tier 1',
+            desc: 'Low-risk signals detected. Nora quietly notifies the support staff with full context — sleep data, HRV, conversation sentiment.',
+            color: '#f59e0b',
+            glow: 'rgba(245,158,11,0.25)',
+            border: 'border-amber-500/30',
+            bg: 'bg-amber-500/5',
+            dot: 'bg-amber-400',
+            tag: 'Staff Notice',
+            tagColor: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+        },
+        {
+            number: 2,
+            label: 'Consent-Based Escalation',
+            sublabel: 'Tier 2',
+            desc: 'Elevated psychological risk. Nora surfaces a consent modal — athlete chooses whether to initiate a clinical handoff to AuntEdna.',
+            color: '#f97316',
+            glow: 'rgba(249,115,22,0.25)',
+            border: 'border-orange-500/30',
+            bg: 'bg-orange-500/5',
+            dot: 'bg-orange-400',
+            tag: 'Consent Required',
+            tagColor: 'bg-orange-500/15 text-orange-400 border-orange-500/25',
+        },
+        {
+            number: 3,
+            label: 'Mandatory Clinical',
+            sublabel: 'Tier 3',
+            desc: 'Critical risk detected. No consent required. Pulse automatically packages the full case and initiates an immediate clinical handoff to AuntEdna.',
+            color: '#ef4444',
+            glow: 'rgba(239,68,68,0.3)',
+            border: 'border-red-500/35',
+            bg: 'bg-red-500/8',
+            dot: 'bg-red-400 animate-pulse',
+            tag: 'Immediate',
+            tagColor: 'bg-red-500/20 text-red-400 border-red-500/30 font-bold',
+        },
+    ];
+
+    return (
+        <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, x: -80 }}
+            className="max-w-4xl mx-auto px-6 py-8 h-full overflow-y-auto"
+        >
+            {/* Ambient background glows */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden">
+                <motion.div
+                    className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full"
+                    animate={{ opacity: [0.04, 0.1, 0.04], scale: [1, 1.15, 1] }}
+                    transition={{ duration: 8, repeat: Infinity }}
+                    style={{ background: 'radial-gradient(circle, rgba(139,92,246,1) 0%, transparent 70%)', filter: 'blur(60px)' }}
+                />
+                <motion.div
+                    className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full"
+                    animate={{ opacity: [0.04, 0.08, 0.04], scale: [1, 1.2, 1] }}
+                    transition={{ duration: 6, repeat: Infinity, delay: 2 }}
+                    style={{ background: 'radial-gradient(circle, rgba(239,68,68,1) 0%, transparent 70%)', filter: 'blur(50px)' }}
+                />
+            </div>
+
+            {/* Header */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6 }}
+                className="mb-8 relative"
+            >
+                <div className="text-[10px] font-bold text-purple-400 uppercase tracking-[0.3em] mb-2">
+                    Pulse Signal Architecture
+                </div>
+                <h2 className="text-2xl font-bold text-white leading-snug">
+                    How Pulse Knows When to Escalate
+                </h2>
+                <p className="text-sm text-zinc-400 mt-2 leading-relaxed max-w-2xl">
+                    Behind every Nora conversation, a real-time classification engine monitors athlete signals across
+                    four escalation tiers — automatically deciding when to keep it internal and when to call in clinical support.
+                </p>
+            </motion.div>
+
+            {/* Data Flow Visualization */}
+            <AnimatePresence>
+                {showFlow && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.7 }}
+                        className="mb-8 rounded-2xl bg-zinc-900/60 border border-zinc-700/30 p-6 relative overflow-hidden"
+                    >
+                        <div className="absolute inset-0 bg-gradient-to-br from-purple-500/3 via-transparent to-red-500/3" />
+                        <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-6">
+                            Live Escalation Pipeline
+                        </div>
+                        <PulseCheckToAuntEdnaFlow />
+                        <div className="mt-4 pt-4 border-t border-zinc-800/60 grid grid-cols-3 gap-3 text-center">
+                            <div>
+                                <div className="text-xs text-zinc-500">Data Sources</div>
+                                <div className="text-[11px] text-zinc-300 mt-1">HRV · Sleep · Chat Sentiment · RHR</div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-zinc-500">Classification</div>
+                                <div className="text-[11px] text-zinc-300 mt-1">GPT-4o · Real-time · 4-Tier System</div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-zinc-500">Handoff Protocol</div>
+                                <div className="text-[11px] text-zinc-300 mt-1">HIPAA-Compliant · Encrypted · Instant</div>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Tier Cards */}
+            <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4">
+                Escalation Tier System
+            </div>
+            <div className="space-y-3 mb-8">
+                {tiers.map((tier, i) => (
+                    <AnimatePresence key={tier.number}>
+                        {visibleTiers.includes(tier.number) && (
+                            <motion.div
+                                initial={{ opacity: 0, x: -30, filter: 'blur(8px)' }}
+                                animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                                className={`rounded-2xl ${tier.bg} ${tier.border} border p-4 relative overflow-hidden`}
+                            >
+                                {/* Glow edge */}
+                                <div
+                                    className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl"
+                                    style={{ backgroundColor: tier.color, boxShadow: `0 0 12px ${tier.color}` }}
+                                />
+                                {tier.number === 3 && (
+                                    <motion.div
+                                        className="absolute inset-0 rounded-2xl"
+                                        animate={{ opacity: [0, 0.04, 0] }}
+                                        transition={{ duration: 2, repeat: Infinity }}
+                                        style={{ background: `radial-gradient(circle at 20% 50%, ${tier.glow} 0%, transparent 70%)` }}
+                                    />
+                                )}
+                                <div className="flex items-start gap-4 pl-3">
+                                    {/* Tier badge */}
+                                    <div className="flex-shrink-0 flex flex-col items-center gap-1 mt-0.5">
+                                        <div
+                                            className="w-8 h-8 rounded-xl flex items-center justify-center text-sm font-black"
+                                            style={{ backgroundColor: `${tier.color}20`, color: tier.color }}
+                                        >
+                                            {tier.number}
+                                        </div>
+                                        <div className={`w-2 h-2 rounded-full ${tier.dot}`} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                                            <span className="text-xs font-bold" style={{ color: tier.color }}>
+                                                {tier.sublabel}
+                                            </span>
+                                            <span className="text-sm font-semibold text-white">
+                                                {tier.label}
+                                            </span>
+                                            <span className={`ml-auto text-[9px] px-2 py-0.5 rounded-full border ${tier.tagColor}`}>
+                                                {tier.tag}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-zinc-400 leading-relaxed">{tier.desc}</p>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                ))}
+            </div>
+
+            {/* CTA — Continue to live Tier 3 example */}
+            <AnimatePresence>
+                {showCTA && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6 }}
+                        className="rounded-2xl bg-gradient-to-br from-red-500/10 to-red-900/5 border border-red-500/25 p-5 flex items-center justify-between gap-4"
+                    >
+                        <div>
+                            <div className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-1">
+                                What happens next
+                            </div>
+                            <p className="text-sm text-zinc-300">
+                                K. Thompson triggered a <span className="text-red-400 font-semibold">Tier 3 — Mandatory Clinical</span> escalation at 6:50 AM.
+                                Watch what that looks like on the clinician's side.
+                            </p>
+                        </div>
+                        <motion.button
+                            onClick={onContinue}
+                            whileHover={{ scale: 1.04 }}
+                            whileTap={{ scale: 0.97 }}
+                            className="flex-shrink-0 px-5 py-2.5 rounded-xl text-sm font-bold text-black flex items-center gap-2"
+                            style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)' }}
+                        >
+                            See Clinical Alert
+                            <ChevronRight className="w-4 h-4" />
+                        </motion.button>
+                    </motion.div>
+                )}
             </AnimatePresence>
         </motion.div>
     );
@@ -3610,6 +3978,16 @@ const PulseCheckDemo: React.FC = () => {
         setIsSpeaking(false);
     }, [stopVoiceOrb]);
 
+    // ── Nora wakeup chime — plays whenever Nora comes online to respond ──────
+    const playNoraWakeup = useCallback(() => {
+        if (!ttsEnabled) return;
+        try {
+            const chime = new Audio('/audio/sfx/mind-coach-greeting.mp3');
+            chime.volume = 0.55;
+            chime.play().catch(() => { /* silent fail */ });
+        } catch { /* silent fail */ }
+    }, [ttsEnabled]);
+
     const getNarrationAudioId = useCallback((scriptIdx: number, userText?: string) => {
         if (scriptIdx === 8) {
             return ACT1_STAFF_AUDIO_ID_BY_SELECTION[userText || ''] ?? null;
@@ -3716,6 +4094,7 @@ const PulseCheckDemo: React.FC = () => {
         if (messages.length > 0) return; // already greeted
         const firstMsg = DEMO_SCRIPT[0];
         const timer = setTimeout(async () => {
+            playNoraWakeup();
             setIsTyping(true);
             const [playFn] = await Promise.all([
                 preloadAudio(
@@ -3736,7 +4115,7 @@ const PulseCheckDemo: React.FC = () => {
             setScriptIndex(1);
         }, 800);
         return () => clearTimeout(timer);
-    }, [currentAct, getNarrationAudioId, messages.length, preloadAudio, waitForNoraThinking]);
+    }, [currentAct, getNarrationAudioId, messages.length, playNoraWakeup, preloadAudio, waitForNoraThinking]);
 
 
     // ── STT: speech recognition ───────────────────────────
@@ -3984,7 +4363,9 @@ const PulseCheckDemo: React.FC = () => {
                                         ? 'Athlete Experience'
                                         : currentAct === 'act2'
                                             ? 'Coach Dashboard'
-                                            : ''}
+                                            : currentAct === 'act2b'
+                                                ? 'Escalation System'
+                                                : ''}
                                 </p>
                             </div>
                         </div>
@@ -4053,11 +4434,11 @@ const PulseCheckDemo: React.FC = () => {
 
                             {/* Act indicator pills */}
                             <div className="flex gap-1 ml-3">
-                                {(['act1', 'act2', 'act3'] as DemoAct[]).map((act) => (
+                                {(['act1', 'act2', 'act2b', 'act3'] as DemoAct[]).map((act) => (
                                     <div
                                         key={act}
                                         className={`w-2 h-2 rounded-full transition-all duration-500 ${act === currentAct
-                                            ? 'bg-[#E0FE10] scale-125'
+                                            ? act === 'act2b' ? 'bg-purple-400 scale-125' : 'bg-[#E0FE10] scale-125'
                                             : act < currentAct
                                                 ? 'bg-zinc-500'
                                                 : 'bg-zinc-700'
@@ -4405,7 +4786,7 @@ const PulseCheckDemo: React.FC = () => {
                                 className="h-full overflow-y-auto"
                             >
                                 <CoachDashboard
-                                    onContinue={() => setCurrentAct('act3')}
+                                    onContinue={() => setCurrentAct('act2b')}
                                     notifiedStaff={(() => {
                                         const staffMap: Record<string, { name: string; initials: string; role: string }> = {
                                             'Coach Mayo (Head Coach)': { name: 'Coach Mayo', initials: 'JM', role: 'Head Coach' },
@@ -4417,6 +4798,18 @@ const PulseCheckDemo: React.FC = () => {
                                         return staffMap[selectedStaff] ?? { name: 'Coach Mayo', initials: 'JM', role: 'Head Coach' };
                                     })()}
                                 />
+                            </motion.div>
+                        )}
+
+                        {currentAct === 'act2b' && (
+                            <motion.div
+                                key="act2b"
+                                initial={{ opacity: 0, x: 100 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -100 }}
+                                className="h-full overflow-y-auto"
+                            >
+                                <EscalationExplainer onContinue={() => setCurrentAct('act3')} />
                             </motion.div>
                         )}
 

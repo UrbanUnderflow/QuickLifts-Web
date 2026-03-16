@@ -35,7 +35,6 @@ const InboxPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
   const [acceptedCoachId, _setAcceptedCoachId] = useState<string | null>(null);
-  const [connectedCoaches, setConnectedCoaches] = useState<string[]>([]);
   const [chats, setChats] = useState<Array<{
     id: string;
     title: string;
@@ -72,13 +71,8 @@ const InboxPage: React.FC = () => {
           rows.push({ coachId: data.coachId, coachName, permission: data.permission || 'limited', allowedAthletes: Array.isArray(data.allowedAthletes) ? data.allowedAthletes : [] });
         }
         setInvites(rows);
-        // Also compute connected coaches
-        const acceptedQ = query(invitesRef, where('memberEmail', '==', currentUser.email.toLowerCase()), where('status', '==', 'accepted'));
-        const acceptedSnap = await getDocs(acceptedQ);
-        setConnectedCoaches(acceptedSnap.docs.map(doc=> (doc.data() as any).coachId));
       } catch (_) {
         setInvites([]);
-        setConnectedCoaches([]);
       } finally {
         setLoading(false);
       }
@@ -206,11 +200,6 @@ const InboxPage: React.FC = () => {
           {acceptedCoachId && (
             <div className="mb-3 bg-green-600/15 border border-green-700 text-green-300 px-4 py-2 rounded-lg text-sm">
               You're now connected to the coach who invited you.
-            </div>
-          )}
-          {connectedCoaches.length > 0 && (
-            <div className="mb-3 bg-green-600/10 border border-green-700/50 text-green-300 px-4 py-2 rounded-lg text-sm">
-              Connected to {connectedCoaches.length} coach{connectedCoaches.length > 1 ? 'es' : ''}. Visit the Dashboard to see shared athletes.
             </div>
           )}
           {invites.length === 0 ? (

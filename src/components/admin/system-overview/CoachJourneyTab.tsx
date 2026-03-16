@@ -44,7 +44,7 @@ const COACH_PHASES: CoachPhase[] = [
     accent: '#a78bfa',
     description: 'Coach configures notifications, visibility scope, and operating preferences.',
     detail:
-      'Day-1 setup should establish dashboard defaults, team or unit scope, and notification preferences. This is where the coach learns the three-panel model and understands that support and safety visibility are bounded by permissions.',
+      'Day-1 setup should establish dashboard defaults, team or unit scope, and notification preferences. This is where the coach learns the three-panel model, understands that support and safety visibility are bounded by permissions, and knows that the notification center is the follow-up queue for Nora auto-assignments plus post-session updates.',
   },
   {
     id: 'pilot-context',
@@ -64,7 +64,7 @@ const COACH_PHASES: CoachPhase[] = [
     accent: '#f59e0b',
     description: 'Coach lands on a useful roster overview rather than a blank analytics shell.',
     detail:
-      'The first meaningful coach moment should be an immediate scan of who is Green, Yellow, or Red, where protocol demand is concentrating, and whether there are support or safety items requiring attention.',
+      'The first meaningful coach moment should be an immediate scan of who is Green, Yellow, or Red, where protocol demand is concentrating, whether there are support or safety items requiring attention, and what new Nora or athlete follow-up items need review right now. That first scan should separate coach-review prompts, awareness-only updates, and privacy-safe safety visibility so the coach does not have to decode urgency from one mixed feed.',
   },
   {
     id: 'daily-rhythm',
@@ -74,7 +74,7 @@ const COACH_PHASES: CoachPhase[] = [
     accent: '#38bdf8',
     description: 'Coach settles into a repeatable loop of scan, adjust, follow up, and review.',
     detail:
-      'The dashboard should support pre-practice scan, pre-game scan, athlete follow-up, and support coordination as repeatable operational moves rather than one-off analytics tasks.',
+      'The dashboard should support pre-practice scan, pre-game scan, athlete follow-up, and support coordination as repeatable operational moves rather than one-off analytics tasks. That daily rhythm now includes coach notification review: Nora can auto-assign the next task, notify the coach immediately, and then send a post-session update when the athlete finishes the rep.',
   },
   {
     id: 'support-coordination',
@@ -111,11 +111,15 @@ const COACH_PHASES: CoachPhase[] = [
 const COACH_PRINCIPLES = [
   {
     title: 'Useful on day 1',
-    body: 'The coach should land on a roster view that immediately answers what is happening today, not a configuration-heavy analytics shell.',
+    body: 'The coach should land on a roster view that immediately answers what is happening today, including what changed most recently and whether anything needs review, not a configuration-heavy analytics shell.',
   },
   {
     title: 'Action before analysis overload',
     body: 'The experience should prioritize who needs adjustment, who needs support, and what changed before exposing deeper trend detail.',
+  },
+  {
+    title: 'Follow-up lives in one queue',
+    body: 'Auto-assignments, athlete session updates, and other coach prompts should collect into one readable follow-up center instead of being scattered across push-only moments.',
   },
   {
     title: 'Support and safety stay separate',
@@ -131,12 +135,14 @@ const DAY_ONE_CHECKLIST = [
   'Confirm team and pilot context.',
   'Confirm role and scoped visibility.',
   'Set notification preferences and unit defaults.',
+  'Know where follow-up lives: coach notifications should answer what changed, why it matters, and what to open next.',
   'Show one clean roster overview with state, support, and safety separated.',
   'Make the first action obvious: review roster, follow up, or coordinate support.',
 ];
 
 const DAILY_RHYTHMS = [
   ['Pre-practice scan', 'Check readiness concentration, support flags, and protocol demand before the session starts.'],
+  ['Coach notification review', 'Open the follow-up queue to review Nora auto-assignments, post-session changes, and items suggesting intervention.'],
   ['Pre-game scan', 'Review readiness concentration, support visibility, and any privacy-safe escalation awareness before competition.'],
   ['Athlete follow-up', 'Open a single athlete to review recent state, assigned work, and trend context.'],
   ['Staff coordination', 'Hand off or coordinate around recurring instability, support flags, or pilot checkpoint follow-up.'],

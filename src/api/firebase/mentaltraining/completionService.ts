@@ -27,6 +27,7 @@ import {
   CheckInType,
   ExerciseCategory,
   Achievement,
+  SessionProgramUpdateSummary,
   completionFromFirestore,
   completionToFirestore,
   streakFromFirestore,
@@ -41,11 +42,116 @@ import {
 } from './collections';
 import { assignmentService } from './assignmentService';
 import { athleteProgressService } from './athleteProgressService';
+import { assignmentOrchestratorService } from './assignmentOrchestratorService';
 import { buildTaxonomyCheckInState } from './taxonomyProfileService';
+import type { ProgramPrescription } from './taxonomy';
 
 const COMPLETIONS_ROOT = SIM_COMPLETIONS_ROOT;
 const STREAKS_COLLECTION = SIM_STREAKS_COLLECTION;
 const CHECKINS_ROOT = SIM_CHECKINS_ROOT;
+
+function humanizeRuntimeLabel(value?: string | null): string {
+  if (!value) return '';
+  return value.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function describeProgram(program?: ProgramPrescription | null): string {
+  if (!program) return 'next task';
+  return (
+    humanizeRuntimeLabel(program.recommendedSimId) ||
+    humanizeRuntimeLabel(program.recommendedLegacyExerciseId) ||
+    humanizeRuntimeLabel(program.sessionType) ||
+    'next task'
+  );
+}
+
+function formatMoodDelta(preExerciseMood?: number, postExerciseMood?: number): {
+  delta?: number;
+  athleteText: string;
+  coachText: string;
+} {
+  if (typeof preExerciseMood !== 'number' || typeof postExerciseMood !== 'number') {
+    return { athleteText: '', coachText: '' };
+  }
+
+  const delta = postExerciseMood - preExerciseMood;
+  if (delta > 0) {
+    return {
+      delta,
+      athleteText: ` You finished feeling ${delta} point${delta === 1 ? '' : 's'} better.`,
+      coachText: ` Mood moved +${delta}.`,
+    };
+  }
+  if (delta < 0) {
+    const absolute = Math.abs(delta);
+    return {
+      delta,
+      athleteText: ` Your post-session mood came in ${absolute} point${absolute === 1 ? '' : 's'} lower.`,
+      coachText: ` Mood moved ${delta}.`,
+    };
+  }
+
+  return {
+    delta,
+    athleteText: ' Your post-session mood held steady.',
+    coachText: ' Mood was unchanged.',
+  };
+}
+
+function buildSessionProgramUpdateSummary({
+  completion,
+  previousProgram,
+  nextProgram,
+}: {
+  completion: Omit<ExerciseCompletion, 'id'>;
+  previousProgram?: ProgramPrescription | null;
+  nextProgram?: ProgramPrescription | null;
+}): SessionProgramUpdateSummary {
+  const completedActionLabel = completion.exerciseName || 'session';
+  const previousActionLabel = previousProgram ? describeProgram(previousProgram) : undefined;
+  const nextActionLabel = describeProgram(nextProgram);
+  const programChanged =
+    Boolean(previousProgram && nextProgram) &&
+    (
+      previousProgram?.recommendedSimId !== nextProgram?.recommendedSimId ||
+      previousProgram?.recommendedLegacyExerciseId !== nextProgram?.recommendedLegacyExerciseId ||
+      previousProgram?.sessionType !== nextProgram?.sessionType ||
+      previousProgram?.durationSeconds !== nextProgram?.durationSeconds
+    );
+  const minutes = Math.max(1, Math.round((completion.durationSeconds || 60) / 60));
+  const moodDelta = formatMoodDelta(completion.preExerciseMood, completion.postExerciseMood);
+  const targetSkills = nextProgram?.targetSkills?.map((skill) => humanizeRuntimeLabel(skill)) || [];
+  const nextRationale = nextProgram?.rationale;
+
+  const athleteHeadline = programChanged
+    ? `Nora updated your next rep to ${nextActionLabel}.`
+    : `Nora ${nextProgram ? 'kept your next rep focused' : 'captured this rep'}${nextProgram ? ` on ${nextActionLabel}` : ''}.`;
+
+  const athleteBody = nextProgram
+    ? `You completed ${completedActionLabel} in ${minutes} min.${moodDelta.athleteText} ${programChanged ? `Your next emphasis shifted to ${nextActionLabel}.` : `Your next emphasis stays ${nextActionLabel}.`}${nextRationale ? ` ${nextRationale}` : ''}`
+    : `You completed ${completedActionLabel} in ${minutes} min.${moodDelta.athleteText} Nora will use this rep the next time your program refreshes.`;
+
+  const skillsSentence = targetSkills.length > 0 ? ` Focus skills: ${targetSkills.join(', ')}.` : '';
+  const coachHeadline = programChanged ? 'Post-session program updated' : 'Post-session program confirmed';
+  const coachBody = nextProgram
+    ? `Completed ${completedActionLabel} in ${minutes} min.${moodDelta.coachText} Next action ${programChanged ? 'shifted to' : 'remains'} ${nextActionLabel}.${skillsSentence}${nextRationale ? ` ${nextRationale}` : ''}`
+    : `Completed ${completedActionLabel} in ${minutes} min.${moodDelta.coachText} Next action will refresh on the next program sync.`;
+
+  return {
+    completedActionLabel,
+    previousActionLabel,
+    nextActionLabel,
+    athleteHeadline,
+    athleteBody,
+    coachHeadline,
+    coachBody,
+    nextRationale,
+    targetSkills,
+    moodDelta: moodDelta.delta,
+    programChanged,
+    generatedAt: Date.now(),
+  };
+}
 
 // ============================================================================
 // COMPLETION SERVICE
@@ -61,6 +167,7 @@ export const completionService = {
     exerciseName,
     exerciseCategory,
     assignmentId,
+    dailyAssignmentId,
     durationSeconds,
     preExerciseMood,
     postExerciseMood,
@@ -74,6 +181,7 @@ export const completionService = {
     exerciseName: string;
     exerciseCategory: ExerciseCategory;
     assignmentId?: string;
+    dailyAssignmentId?: string;
     durationSeconds: number;
     preExerciseMood?: number;
     postExerciseMood?: number;
@@ -81,8 +189,9 @@ export const completionService = {
     helpfulnessRating?: number;
     notes?: string;
     context?: 'morning' | 'pre-workout' | 'post-workout' | 'evening' | 'competition';
-  }): Promise<string> {
+  }): Promise<ExerciseCompletion> {
     const now = Date.now();
+    const priorProgress = await athleteProgressService.get(userId);
     
     const completion: Omit<ExerciseCompletion, 'id'> = {
       userId,
@@ -90,6 +199,7 @@ export const completionService = {
       exerciseName,
       exerciseCategory,
       assignmentId,
+      dailyAssignmentId,
       completedAt: now,
       durationSeconds,
       preExerciseMood,
@@ -110,13 +220,32 @@ export const completionService = {
       await assignmentService.markCompleted(assignmentId);
     }
 
+    if (dailyAssignmentId) {
+      await assignmentOrchestratorService.markCompleted(dailyAssignmentId);
+    }
+
     // Update streak
     await this.updateStreak(userId, exerciseCategory, durationSeconds);
 
     // Check for achievements
     await this.checkAndAwardAchievements(userId);
 
-    return docRef.id;
+    const refreshedProgress = await athleteProgressService.syncTaxonomyProfile(userId);
+    const sessionSummary = buildSessionProgramUpdateSummary({
+      completion,
+      previousProgram: priorProgress?.activeProgram,
+      nextProgram: refreshedProgress?.activeProgram,
+    });
+
+    await updateDoc(docRef, {
+      sessionSummary,
+    });
+
+    return {
+      id: docRef.id,
+      ...completion,
+      sessionSummary,
+    };
   },
 
   /**
@@ -134,6 +263,11 @@ export const completionService = {
     
     const snap = await getDocs(q);
     return snap.docs.map(d => completionFromFirestore(d.id, d.data()));
+  },
+
+  async getLatestCompletion(userId: string): Promise<ExerciseCompletion | null> {
+    const completions = await this.getCompletions(userId, 1);
+    return completions[0] || null;
   },
 
   /**
@@ -444,6 +578,11 @@ export const completionService = {
     const docRef = await addDoc(checkInsRef, checkInToFirestore(checkIn as MentalCheckIn));
 
     await athleteProgressService.syncTaxonomyProfile(userId);
+    await assignmentOrchestratorService.orchestratePostCheckIn({
+      athleteId: userId,
+      sourceCheckInId: docRef.id,
+      sourceDate: checkIn.date,
+    });
 
     return docRef.id;
   },

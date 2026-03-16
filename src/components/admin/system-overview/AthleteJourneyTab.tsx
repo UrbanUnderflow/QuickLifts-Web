@@ -29,9 +29,16 @@ interface Phase {
     label: string;
     icon: React.ElementType;
     accent: string;
+    status: 'live' | 'partial' | 'target';
     description: string;
     detail: string;
 }
+
+type JourneyChecklistItem = {
+    title: string;
+    detail: string;
+    priority: 'Now' | 'Next' | 'Later';
+};
 
 const PHASES: Phase[] = [
     {
@@ -40,9 +47,10 @@ const PHASES: Phase[] = [
         label: 'Entry',
         icon: UserCheck,
         accent: '#60a5fa',
-        description: 'Athlete joins through a team, pilot, cohort-linked invite, coach-led invite, or direct sign-up.',
+        status: 'live',
+        description: 'Athlete joins today through a team invite or a pilot/cohort-linked team invite.',
         detail:
-            'The system captures only the minimum setup needed to personalize the first experience: team context, pilot participation, sport, season context, and current goal. The athlete should feel like they are entering one guided system, even when onboarding truth is being stored across team, pilot, cohort, and enrollment objects behind the scenes.',
+            'Current v1 is team-container first. Pilot and cohort context now attach correctly behind the scenes, but a true direct-signup or fully standalone product-only athlete path is still future-state.',
     },
     {
         id: 'onboarding',
@@ -50,9 +58,10 @@ const PHASES: Phase[] = [
         label: 'First-Run Onboarding',
         icon: BookOpen,
         accent: '#a78bfa',
+        status: 'partial',
         description: 'Pulse Check explains itself in plain language and confirms why this athlete is here.',
         detail:
-            'Nora is introduced as the guide who learns the athlete and assigns the right daily work. The product introduces its mission clearly, confirms team branding and pilot context when applicable, and keeps product consent, research consent, and clinical escalation consent in separate lanes.',
+            'Current v1 covers name capture, product consent, and research consent when a pilot requires it. Nora-as-guide language is still directionally right, but Nora is not yet the true onboarding orchestrator, and clinical consent remains future safety-lane work.',
     },
     {
         id: 'baseline',
@@ -60,9 +69,10 @@ const PHASES: Phase[] = [
         label: 'Starting Baseline',
         icon: BarChart3,
         accent: '#34d399',
+        status: 'partial',
         description: 'A short baseline session that samples the major pillars without overwhelming detail.',
         detail:
-            'This should be positioned as a "starting read" or "mental baseline," not a high-stakes test. The athlete completes a clean first rep across key mechanisms so Nora can build an initial profile signal. If the athlete entered through a pilot, the system should branch them into the correct baseline path automatically: standard product path or research-aligned path.',
+            'This is mostly live now, and the framing should stay calm and low-stakes. The remaining gap is that all athletes still route into the same core baseline path; research-aware enrollment truth exists, but research-specific baseline branching is still not implemented.',
     },
     {
         id: 'program',
@@ -70,9 +80,10 @@ const PHASES: Phase[] = [
         label: 'First Program Assignment',
         icon: Layers,
         accent: '#f59e0b',
+        status: 'partial',
         description: 'Immediately after baseline, Nora returns a first Program and assigns a single next session.',
         detail:
-            'The athlete should leave the first experience knowing what the system learned and what it wants them to train next. Programs prescribe; sessions deliver.',
+            'The underlying data model already supports active programs and recommendation logic, and the workspace can preview what comes next. The missing piece is a true athlete-facing first-session handoff that feels prescribed, obvious, and launchable.',
     },
     {
         id: 'daily-rhythm',
@@ -80,9 +91,10 @@ const PHASES: Phase[] = [
         label: 'Daily Rhythm',
         icon: Repeat2,
         accent: '#38bdf8',
+        status: 'partial',
         description: 'The athlete settles into a repeatable loop.',
         detail:
-            'Check-In, assigned sim, summary, and automatic Program update. Most daily work should remain short and high-compliance. The loop is designed to be low-overhead so adherence is maintained across a full competitive season.',
+            'This loop now exists in partial form. Today view persists the daily check-in, Nora materializes one shared task, Mental Training can launch that task directly, and completion now writes a session summary plus next-program update. Athlete history, coach push updates, and Nora follow-up now exist in lightweight form. The remaining gap is making that rhythm feel fully end-to-end across every athlete and coach surface.',
     },
     {
         id: 'contextualization',
@@ -90,9 +102,10 @@ const PHASES: Phase[] = [
         label: 'Contextualization',
         icon: Globe,
         accent: '#c084fc',
+        status: 'target',
         description: 'Nora begins to localize the same mechanisms through pressure-type and sport-specific variants.',
         detail:
-            'Once the system has enough signal, the experience starts to feel increasingly tailored to the athlete\'s world. Generic mechanisms are gradually wrapped in sport-relevant scenarios without changing the underlying science.',
+            'This remains a good north star. It should stay in the spec, but the product does not yet expose a visible athlete progression from generic mechanism work into pressure-type and sport-context variants.',
     },
     {
         id: 'transfer',
@@ -100,9 +113,10 @@ const PHASES: Phase[] = [
         label: 'Transfer Testing',
         icon: FlaskConical,
         accent: '#fb923c',
+        status: 'target',
         description: 'At meaningful intervals, the athlete enters a Trial layer.',
         detail:
-            'Trials test whether improvements survive higher fidelity, longer duration, or more realistic pressure. Trials should feel earned, not constant. They serve as credible checkpoints separated from the noise of daily sims.',
+            'This remains target-state on web. We have some related foundations in the mental training and Vision Pro systems, but we do not yet have a clear athlete-facing cadence of earned trials and transfer checkpoints.',
     },
     {
         id: 'competition',
@@ -110,9 +124,10 @@ const PHASES: Phase[] = [
         label: 'Competition Support',
         icon: Trophy,
         accent: '#facc15',
+        status: 'target',
         description: 'Pulse Check serves as a readiness and development layer before, during, and between competition windows.',
         detail:
-            'The product\'s role is to sharpen, detect, and guide — not to compete with competition itself. In-competition and post-competition modes provide targeted sessions tied to the athlete\'s current performance context.',
+            'This is still a future product layer. The current athlete flow has no true competition-mode surface yet beyond general readiness language and optional Vision Pro checkpoint messaging.',
     },
 ];
 
@@ -172,13 +187,13 @@ const VARIANT_ORDER = [
 const ENTRY_CONTEXTS = [
     { label: 'Standard team onboarding', description: 'Athlete enters through a team invite, sees team branding, and is linked to the persistent team container.', accent: '#60a5fa' },
     { label: 'Pilot-linked onboarding', description: 'Athlete enters through a pilot-aware invite and is automatically connected to the correct pilot and cohort context.', accent: '#a78bfa' },
-    { label: 'Product-only onboarding', description: 'Athlete uses Pulse Check without study enrollment and still receives the normal baseline and daily rhythm.', accent: '#34d399' },
+    { label: 'Product-only onboarding (target)', description: 'Still planned, but not yet a first-class athlete entry path in the current team-centered provisioning flow.', accent: '#34d399' },
 ];
 
 const CONSENT_BRANCHES = [
     { lane: 'Product consent', meaning: 'Required for Pulse Check use and should happen in every athlete path.' },
     { lane: 'Research consent', meaning: 'Shown only when the pilot or cohort requires it. Decline should not necessarily block product use.' },
-    { lane: 'Escalation / clinical consent', meaning: 'Separate event-driven workflow inside the safety lane, never merged into generic onboarding.' },
+    { lane: 'Escalation / clinical consent', meaning: 'Still future safety-lane work. Keep separate from onboarding, but do not treat it as live athlete flow until the clinical stack exists.' },
 ];
 
 const DAY_ONE_RULES = [
@@ -188,11 +203,89 @@ const DAY_ONE_RULES = [
     'Keep research / product branching invisible to the athlete unless consent or study posture requires explanation.',
 ];
 
+const CURRENT_V1_FLOW = [
+    'Athlete redeems a team invite or pilot-linked team invite.',
+    'Athlete completes onboarding: name, product consent, and research choice when required.',
+    'System marks the athlete baseline-ready and routes them into the shared team workspace.',
+    'Athlete completes the in-app baseline to unlock training.',
+    'After baseline, the athlete can move between Today, Nora, Profile, and the team workspace, but the full daily training rhythm is still partial.',
+];
+
+const BUILD_CHECKLIST: JourneyChecklistItem[] = [
+    {
+        title: 'Persist the daily check-in as real product state',
+        detail: 'Replace the Today-view local readiness tap with a true stored check-in event that Nora, profile, and coach surfaces can all reason over.',
+        priority: 'Now',
+    },
+    {
+        title: 'Deliver one clear assigned session after baseline',
+        detail: 'Turn active program and pending assignment data into a real athlete-facing launch surface instead of summary copy only.',
+        priority: 'Now',
+    },
+    {
+        title: 'Add session summary and program-update loop',
+        detail: 'Now partial: completion writes a durable session summary and next-program update, and those updates are visible to the athlete and coach. The remaining work is tightening the rhythm across all surfaces and follow-up notifications.',
+        priority: 'Now',
+    },
+    {
+        title: 'Keep the athlete journey green in automated regression',
+        detail: 'The daily loop now needs Playwright coverage as part of the standard PulseCheck suite: post-baseline fixture seeding, Today check-in, Nora task visibility, mental-training handoff, session-summary rendering, and coach follow-up surfaces.',
+        priority: 'Now',
+    },
+    {
+        title: 'Branch baseline by enrollment truth',
+        detail: 'Use product-only vs pilot vs research enrollment to route into the correct baseline path instead of one global baseline id.',
+        priority: 'Next',
+    },
+    {
+        title: 'Make product-only entry real or remove it from surrounding specs',
+        detail: 'Decide whether standalone athlete onboarding exists in v1.x, then align the docs and routes to that decision.',
+        priority: 'Next',
+    },
+    {
+        title: 'Introduce contextualized variants and explicit trials',
+        detail: 'Expose the progression from generic reps into pressure-type, sport-context, and transfer-checkpoint experiences.',
+        priority: 'Later',
+    },
+    {
+        title: 'Define competition-support modes',
+        detail: 'Specify what changes before, during, and after competition so the athlete experience can adapt to real performance windows.',
+        priority: 'Later',
+    },
+    {
+        title: 'Re-introduce clinical consent only when the safety lane is live',
+        detail: 'Keep it out of the current journey until AuntEdna and escalation workflows are operational.',
+        priority: 'Later',
+    },
+];
+
+const phaseStatusMeta: Record<Phase['status'], { label: string; textColor: string; borderColor: string; background: string }> = {
+    live: {
+        label: 'Live',
+        textColor: '#86efac',
+        borderColor: 'rgba(134,239,172,0.28)',
+        background: 'rgba(134,239,172,0.08)',
+    },
+    partial: {
+        label: 'Partial',
+        textColor: '#fcd34d',
+        borderColor: 'rgba(252,211,77,0.26)',
+        background: 'rgba(252,211,77,0.08)',
+    },
+    target: {
+        label: 'Target',
+        textColor: '#93c5fd',
+        borderColor: 'rgba(147,197,253,0.24)',
+        background: 'rgba(147,197,253,0.08)',
+    },
+};
+
 /* ─────────────────────────────────────────────
    SUB-COMPONENTS
 ───────────────────────────────────────────── */
 function PhaseCard({ phase, isExpanded, onToggle }: { phase: Phase; isExpanded: boolean; onToggle: () => void }) {
     const Icon = phase.icon;
+    const status = phaseStatusMeta[phase.status];
     return (
         <div
             className="rounded-xl border transition-all duration-200 overflow-hidden"
@@ -215,7 +308,19 @@ function PhaseCard({ phase, isExpanded, onToggle }: { phase: Phase; isExpanded: 
                     {phase.number}
                 </div>
                 <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{phase.label}</p>
+                    <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-white truncate">{phase.label}</p>
+                        <span
+                            className="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em]"
+                            style={{
+                                color: status.textColor,
+                                borderColor: status.borderColor,
+                                background: status.background,
+                            }}
+                        >
+                            {status.label}
+                        </span>
+                    </div>
                     <p className="text-[11px] text-zinc-500 line-clamp-1 mt-0.5">{phase.description}</p>
                 </div>
                 <Icon
@@ -281,10 +386,38 @@ const AthleteJourneyTab: React.FC = () => {
                     <div>
                         <p className="text-sm font-semibold text-white mb-1">Purpose</p>
                         <p className="text-sm text-zinc-300 leading-relaxed">
-                            This document formalizes the recommended athlete entry and progression flow for Pulse Check.
+                            This document now distinguishes between the current athlete journey that is actually live in the web product and the target journey that still serves as the longer-range north star.
                             The system should feel like guided mental training, not like a lab assessment on first touch.
                         </p>
                     </div>
+                </div>
+            </div>
+
+            {/* ── CURRENT STATUS ── */}
+            <div className="bg-emerald-500/[0.07] border border-emerald-500/20 rounded-2xl p-5">
+                <div className="flex items-start gap-3">
+                    <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-sm font-semibold text-white mb-1">Current V1 Status</p>
+                        <p className="text-sm text-zinc-300 leading-relaxed">
+                            Phases 0 through 2 are mostly live, Phase 3 is partially live through program and assignment data, and Phases 4 through 7 should be treated as target-state rather than current shipped behavior.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── CURRENT FLOW ── */}
+            <div>
+                <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wide mb-3">Current V1 Athlete Flow</h3>
+                <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3">
+                    {CURRENT_V1_FLOW.map((step, i) => (
+                        <div key={step} className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[11px] font-bold text-[#E0FE10] border border-[#E0FE10]/25 bg-[#E0FE10]/10 mt-0.5">
+                                {i + 1}
+                            </div>
+                            <p className="text-sm text-zinc-300">{step}</p>
+                        </div>
+                    ))}
                 </div>
             </div>
 
@@ -538,14 +671,45 @@ const AthleteJourneyTab: React.FC = () => {
                 </div>
             </div>
 
+            {/* ── BUILD CHECKLIST ── */}
+            <div>
+                <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wide mb-3">Build Checklist</h3>
+                <div className="space-y-3">
+                    {BUILD_CHECKLIST.map((item) => (
+                        <div key={item.title} className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-4">
+                            <div className="flex items-center gap-3">
+                                <span
+                                    className="rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]"
+                                    style={{
+                                        color: item.priority === 'Now' ? '#86efac' : item.priority === 'Next' ? '#fcd34d' : '#93c5fd',
+                                        borderColor: item.priority === 'Now'
+                                            ? 'rgba(134,239,172,0.28)'
+                                            : item.priority === 'Next'
+                                                ? 'rgba(252,211,77,0.26)'
+                                                : 'rgba(147,197,253,0.24)',
+                                        background: item.priority === 'Now'
+                                            ? 'rgba(134,239,172,0.08)'
+                                            : item.priority === 'Next'
+                                                ? 'rgba(252,211,77,0.08)'
+                                                : 'rgba(147,197,253,0.08)',
+                                    }}
+                                >
+                                    {item.priority}
+                                </span>
+                                <p className="text-sm font-semibold text-white">{item.title}</p>
+                            </div>
+                            <p className="mt-3 text-sm leading-relaxed text-zinc-400">{item.detail}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
             {/* ── SUMMARY ── */}
             <div className="bg-gradient-to-br from-purple-500/10 to-sky-500/5 border border-purple-500/20 rounded-2xl p-6">
                 <h3 className="text-sm font-semibold text-white mb-2">Summary</h3>
                 <p className="text-sm text-zinc-300 leading-relaxed">
-                    The easiest athlete entry for Pulse Check is not a menu of all possible sims, variants, and taxonomy objects.
-                    It is a guided flow where Nora meets the athlete, learns the athlete quickly, prescribes one clean first rep,
-                    and then proves over time that the system is getting smarter and more specific. That flow should remain simple to the athlete even when the system is storing team, pilot, cohort, and enrollment truth behind the scenes. That is the journey most likely
-                    to support adoption, adherence, and believable performance progress.
+                    The current athlete journey is now clearer: invite or enrollment entry, athlete onboarding, baseline unlock, baseline completion, and then movement between Today, Nora, Profile, and the team workspace.
+                    The longer-range journey still matters, but it should be treated as the target system we are building toward rather than the system we have already shipped.
                 </p>
             </div>
 

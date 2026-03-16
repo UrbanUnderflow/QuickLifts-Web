@@ -9,18 +9,29 @@ import {
   where,
 } from 'firebase/firestore';
 import type { SimSessionRecord } from './taxonomy';
+import { athleteProgressService } from './athleteProgressService';
 
 const ROOT = 'sim-sessions';
 
 export const simSessionService = {
   async recordSession(session: SimSessionRecord): Promise<string> {
+    const createdAt = session.createdAt || Date.now();
     const docRef = await addDoc(
       collection(db, ROOT, session.userId, 'sessions'),
       {
         ...session,
-        createdAt: session.createdAt || Date.now(),
+        createdAt,
       }
     );
+
+    if (session.trialType || session.profileSnapshotMilestone) {
+      await athleteProgressService.syncTrialSnapshotFromSession(session.userId, {
+        id: docRef.id,
+        createdAt,
+        trialType: session.trialType,
+        profileSnapshotMilestone: session.profileSnapshotMilestone,
+      });
+    }
 
     return docRef.id;
   },

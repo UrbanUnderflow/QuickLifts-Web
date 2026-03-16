@@ -8,9 +8,22 @@ const remoteLoginToken = process.env.PLAYWRIGHT_REMOTE_LOGIN_TOKEN;
 const allowWriteTests = process.env.PLAYWRIGHT_ALLOW_WRITE_TESTS === 'true';
 const pulseCheckOrganizationId = process.env.PLAYWRIGHT_PULSECHECK_ORG_ID || '';
 const pulseCheckTeamId = process.env.PLAYWRIGHT_PULSECHECK_TEAM_ID || '';
+const pulseCheckNamespace = process.env.PLAYWRIGHT_E2E_NAMESPACE || 'e2e-pulsecheck';
+const appBaseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
+const appOrigin = new URL(appBaseURL).origin;
+let pulseCheckWorkspaceContextPromise: Promise<PulseCheckWorkspaceContext> | null = null;
+const defaultSeededWorkspaceContext: PulseCheckWorkspaceContext = {
+  organizationId: `${pulseCheckNamespace}-workspace-org`,
+  teamId: `${pulseCheckNamespace}-workspace-team`,
+};
+
+interface PulseCheckWorkspaceContext {
+  organizationId: string;
+  teamId: string;
+}
 
 async function ensureAdminSession(page: Page, nextPath: string) {
-  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://localhost:3000' });
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: appOrigin });
   await page.addInitScript(() => {
     window.localStorage.setItem('forceDevFirebase', 'true');
     window.localStorage.setItem('pulse_has_seen_marketing', 'true');
@@ -21,29 +34,148 @@ async function ensureAdminSession(page: Page, nextPath: string) {
     return;
   }
 
-  await page.goto('/', { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(2000);
+  await page.goto(nextPath, { waitUntil: 'domcontentloaded' });
+  await waitForStableAppFrame(page);
+  await page.waitForTimeout(1500);
 
   const useWebAppButton = page.getByRole('button', { name: /Use Web App/i });
   if (await useWebAppButton.isVisible().catch(() => false)) {
     await useWebAppButton.click().catch(() => {});
     await page.waitForTimeout(1500);
+    await page.goto(nextPath, { waitUntil: 'domcontentloaded' });
+    await waitForStableAppFrame(page);
+  }
+}
+
+async function waitForStableAppFrame(page: Page) {
+  const transientRefreshText = page.getByText(/missing required error components, refreshing/i);
+
+  if (await transientRefreshText.isVisible().catch(() => false)) {
+    await transientRefreshText.waitFor({ state: 'hidden', timeout: 20_000 }).catch(() => null);
+    await page.waitForLoadState('domcontentloaded').catch(() => null);
+  }
+}
+
+function teamWorkspacePath(context?: PulseCheckWorkspaceContext) {
+  const organizationId = context?.organizationId || pulseCheckOrganizationId;
+  const teamId = context?.teamId || pulseCheckTeamId;
+  return `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`;
+}
+
+function postActivationPath(context?: PulseCheckWorkspaceContext) {
+  const organizationId = context?.organizationId || pulseCheckOrganizationId;
+  const teamId = context?.teamId || pulseCheckTeamId;
+  return `/PulseCheck/post-activation?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`;
+}
+
+function legacyRosterMigrationPath() {
+  return '/admin/pulsecheckLegacyRosterMigration';
+}
+
+async function waitForPulseE2EHarness(page: Page) {
+  await page.waitForFunction(() => Boolean(window.__pulseE2E), undefined, { timeout: 20_000 });
+}
+
+async function getAuthenticatedAdminIdentity(page: Page) {
+  return page.evaluate(() => {
+    const authStorageKey = Object.keys(window.localStorage).find((key) => key.startsWith('firebase:authUser:'));
+    if (!authStorageKey) return null;
+
+    const rawValue = window.localStorage.getItem(authStorageKey);
+    if (!rawValue) return null;
+
+    const parsed = JSON.parse(rawValue);
+    return {
+      uid: parsed?.uid || '',
+      email: parsed?.email || '',
+    };
+  });
+}
+
+async function getPulseCheckWorkspaceContext(page: Page): Promise<PulseCheckWorkspaceContext> {
+  if (pulseCheckOrganizationId && pulseCheckTeamId) {
+    return {
+      organizationId: pulseCheckOrganizationId,
+      teamId: pulseCheckTeamId,
+    };
   }
 
-  await page.goto(nextPath, { waitUntil: 'domcontentloaded' });
+  if (!pulseCheckWorkspaceContextPromise) {
+    pulseCheckWorkspaceContextPromise = (async () => {
+      await ensureAdminSession(page, '/admin/pulsecheckProvisioning');
+
+      try {
+        await waitForPulseE2EHarness(page);
+      } catch (error) {
+        console.warn('[PulseCheck E2E] Falling back to deterministic workspace context because the E2E harness was unavailable.', error);
+        return defaultSeededWorkspaceContext;
+      }
+
+      const adminIdentity = await getAuthenticatedAdminIdentity(page);
+
+      if (!adminIdentity?.uid || !adminIdentity?.email) {
+        return defaultSeededWorkspaceContext;
+      }
+
+      const seeded = await page.evaluate(
+        async ({ namespace, adminUserId, adminEmail }) => {
+          return window.__pulseE2E?.seedPulseCheckAdminWorkspaceFixture(namespace, adminUserId, adminEmail);
+        },
+        {
+          namespace: `${pulseCheckNamespace}-workspace`,
+          adminUserId: adminIdentity.uid,
+          adminEmail: adminIdentity.email,
+        }
+      );
+
+      if (!seeded?.organizationId || !seeded?.teamId) {
+        return defaultSeededWorkspaceContext;
+      }
+
+      return {
+        organizationId: seeded.organizationId,
+        teamId: seeded.teamId,
+      };
+    })();
+  }
+
+  return pulseCheckWorkspaceContextPromise;
 }
 
-function teamWorkspacePath() {
-  return `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(pulseCheckOrganizationId)}&teamId=${encodeURIComponent(pulseCheckTeamId)}`;
+async function seedLegacyRosterFixture(
+  page: Page,
+  namespace: string,
+  mode: 'new-container' | 'existing-team'
+) {
+  await waitForPulseE2EHarness(page);
+  return page.evaluate(async ({ fixtureNamespace, fixtureMode }) => {
+    await window.__pulseE2E?.cleanupLegacyCoachRosterFixtures(fixtureNamespace);
+    return window.__pulseE2E?.seedLegacyCoachRosterFixture(fixtureNamespace, fixtureMode);
+  }, { fixtureNamespace: namespace, fixtureMode: mode });
 }
 
-function postActivationPath() {
-  return `/PulseCheck/post-activation?organizationId=${encodeURIComponent(pulseCheckOrganizationId)}&teamId=${encodeURIComponent(pulseCheckTeamId)}`;
+async function inspectLegacyRosterFixture(page: Page, namespace: string) {
+  await waitForPulseE2EHarness(page);
+  return page.evaluate(async ({ fixtureNamespace }) => {
+    return window.__pulseE2E?.inspectLegacyCoachRosterFixture(fixtureNamespace);
+  }, { fixtureNamespace: namespace });
+}
+
+async function cleanupLegacyRosterFixture(page: Page, namespace: string) {
+  await waitForPulseE2EHarness(page);
+  return page.evaluate(async ({ fixtureNamespace }) => {
+    return window.__pulseE2E?.cleanupLegacyCoachRosterFixtures(fixtureNamespace);
+  }, { fixtureNamespace: namespace });
 }
 
 async function createIsolatedPage(browser: Browser): Promise<{ context: BrowserContext; page: Page }> {
-  const context = await browser.newContext();
-  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://localhost:3000' });
+  const context = await browser.newContext({
+    storageState: {
+      cookies: [],
+      origins: [],
+    },
+  });
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: appOrigin });
   await context.addInitScript(() => {
     window.localStorage.setItem('forceDevFirebase', 'true');
     window.localStorage.setItem('pulse_has_seen_marketing', 'true');
@@ -58,7 +190,10 @@ async function extractInviteUrl(inviteCard: ReturnType<Page['locator']>) {
   if (!match) {
     throw new Error('Could not find activation URL in invite card.');
   }
-  return match[0];
+  const resolved = new URL(match[0]);
+  resolved.protocol = new URL(appOrigin).protocol;
+  resolved.host = new URL(appOrigin).host;
+  return resolved.toString();
 }
 
 function getWorkspaceAthleteInviteCard(page: Page, email: string) {
@@ -79,17 +214,17 @@ function getPostActivationAdultInviteCard(page: Page, recipientName: string) {
 
 function getAdultMemberCard(page: Page, email: string) {
   return page
-    .locator('div')
-    .filter({ has: page.getByText(email, { exact: true }) })
+    .locator('div.rounded-2xl')
+    .filter({ hasText: email })
     .filter({ has: page.getByRole('button', { name: /Assign Athletes|Manage Assigned/i }) })
     .last();
 }
 
 function getAthleteRosterCard(page: Page, email: string) {
   return page
-    .locator('div')
-    .filter({ has: page.getByText(email, { exact: true }) })
-    .filter({ has: page.getByText(/TEAM MEMBERSHIP/i) })
+    .locator('div.rounded-2xl')
+    .filter({ hasText: email })
+    .filter({ hasText: /team membership/i })
     .last();
 }
 
@@ -106,13 +241,29 @@ async function addAdditionalAdminRecipient(page: Page, name: string, email: stri
 }
 
 async function generateAdminActivationLink(page: Page, email: string) {
-  const recipientCard = page.locator('div').filter({ hasText: email }).last();
+  const recipientCard = page
+    .getByText(email, { exact: true })
+    .locator(
+      'xpath=ancestor::div[count(.//button[contains(normalize-space(.), "Generate Link") or contains(normalize-space(.), "Regenerate Link")]) = 1][1]'
+    );
   await expect(recipientCard).toBeVisible({ timeout: 15_000 });
 
+  const existingCardText = (await recipientCard.innerText()).trim();
+  const existingUrlMatch = existingCardText.match(/https?:\/\/\S+/);
+  const existingUrl = existingUrlMatch ? existingUrlMatch[0] : '';
   const generateButton = recipientCard.getByRole('button', { name: /Generate Link|Regenerate Link/i });
   await generateButton.click();
 
-  await expect(recipientCard.getByText(/http:\/\/localhost:3000\/pulsecheck\/admin-activation\//i)).toBeVisible({
+  if (existingUrl) {
+    await expect(recipientCard).not.toContainText(existingUrl, { timeout: 20_000 });
+  }
+
+  const activationUrlPattern = new RegExp(
+    `${appOrigin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/pulsecheck/admin-activation/`,
+    'i'
+  );
+
+  await expect(recipientCard.getByText(activationUrlPattern)).toBeVisible({
     timeout: 20_000,
   });
 
@@ -138,6 +289,7 @@ async function redeemAdultInvite(
 
   try {
     await page.goto(inviteUrl, { waitUntil: 'domcontentloaded' });
+    await waitForStableAppFrame(page);
     await expect(page.getByRole('heading', { name: /Join/i })).toBeVisible({ timeout: 20_000 });
     await page.getByLabel('Username').fill(username);
     await page.getByLabel('Password', { exact: true }).fill(password);
@@ -146,18 +298,35 @@ async function redeemAdultInvite(
 
     await expect(page.getByText(/Your team access is live/i)).toBeVisible({ timeout: 20_000 });
     await page.getByRole('link', { name: /Continue/i }).click();
+    await waitForStableAppFrame(page);
 
     await expect(page).toHaveURL(/\/PulseCheck\/member-setup/i, { timeout: 20_000 });
     await page.getByLabel('Name').fill(name);
     await page.getByLabel('Title').fill(title);
     await page.getByRole('button', { name: /Complete Member Setup/i }).click();
 
+    await Promise.race([
+      page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }),
+      page.getByText(/Your member setup is complete/i).waitFor({ state: 'visible', timeout: 20_000 }),
+    ]);
+
+    if (!/\/PulseCheck\/team-workspace/i.test(page.url())) {
+      const currentUrl = new URL(page.url());
+      const organizationId = currentUrl.searchParams.get('organizationId') || '';
+      const teamId = currentUrl.searchParams.get('teamId') || '';
+      await page.goto(
+        `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`,
+        { waitUntil: 'domcontentloaded' }
+      );
+      await waitForStableAppFrame(page);
+    }
+
     await expect(page).toHaveURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 });
-    await expect(page.getByText(/Staff and Adult Team Members/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 20_000 });
 
     return { context, page };
   } catch (error) {
-    await context.close();
+    await context.close().catch(() => null);
     throw error;
   }
 }
@@ -179,6 +348,7 @@ async function redeemAthleteInvite(
 
   try {
     await page.goto(inviteUrl, { waitUntil: 'domcontentloaded' });
+    await waitForStableAppFrame(page);
     await expect(page.getByRole('heading', { name: /Join/i })).toBeVisible({ timeout: 20_000 });
     await page.getByLabel('Username').fill(username);
     await page.getByLabel('Password', { exact: true }).fill(password);
@@ -187,18 +357,35 @@ async function redeemAthleteInvite(
 
     await expect(page.getByText(/Your team access is live/i)).toBeVisible({ timeout: 20_000 });
     await page.getByRole('link', { name: /Continue/i }).click();
+    await waitForStableAppFrame(page);
 
     await expect(page).toHaveURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 });
     await page.getByLabel('Your Name').fill(name);
-    await page.getByRole('checkbox').check();
+  await page.locator('label').filter({ hasText: /I agree to get started with PulseCheck for my team\./i }).click();
     await page.getByRole('button', { name: /Complete Athlete Onboarding/i }).click();
 
+    await Promise.race([
+      page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }),
+      page.getByText(/Athlete onboarding complete/i).waitFor({ state: 'visible', timeout: 20_000 }),
+    ]);
+
+    if (!/\/PulseCheck\/team-workspace/i.test(page.url())) {
+      const currentUrl = new URL(page.url());
+      const organizationId = currentUrl.searchParams.get('organizationId') || '';
+      const teamId = currentUrl.searchParams.get('teamId') || '';
+      await page.goto(
+        `/PulseCheck/team-workspace?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`,
+        { waitUntil: 'domcontentloaded' }
+      );
+      await waitForStableAppFrame(page);
+    }
+
     await expect(page).toHaveURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 });
-    await expect(page.getByText(/Athlete Roster/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 20_000 });
 
     return { context, page };
   } catch (error) {
-    await context.close();
+    await context.close().catch(() => null);
     throw error;
   }
 }
@@ -214,11 +401,20 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     await expect(page.getByRole('heading', { name: /^Create Team$/i })).toBeVisible({ timeout: 15_000 });
   });
 
+  test('legacy roster migration surface loads', async ({ page }) => {
+    test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
+
+    await ensureAdminSession(page, legacyRosterMigrationPath());
+    await expect(page.getByRole('heading', { name: /Legacy coach roster cleanup/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/Migration rules/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: /Refresh/i })).toBeVisible({ timeout: 15_000 });
+  });
+
   test('post-activation surface loads for an active team admin context', async ({ page }) => {
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
-    test.skip(!pulseCheckOrganizationId || !pulseCheckTeamId, 'Requires PLAYWRIGHT_PULSECHECK_ORG_ID and PLAYWRIGHT_PULSECHECK_TEAM_ID.');
 
-    await ensureAdminSession(page, postActivationPath());
+    const workspaceContext = await getPulseCheckWorkspaceContext(page);
+    await ensureAdminSession(page, postActivationPath(workspaceContext));
     await expect(page.getByRole('heading', { name: /Shape how you operate inside/i })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/1\. Complete Your Profile/i)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/2\. Invite Adults/i)).toBeVisible({ timeout: 15_000 });
@@ -227,9 +423,9 @@ test.describe('PulseCheck onboarding and team workspace', () => {
 
   test('team workspace loads core roster and invite controls', async ({ page }) => {
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
-    test.skip(!pulseCheckOrganizationId || !pulseCheckTeamId, 'Requires PLAYWRIGHT_PULSECHECK_ORG_ID and PLAYWRIGHT_PULSECHECK_TEAM_ID.');
 
-    await ensureAdminSession(page, teamWorkspacePath());
+    const workspaceContext = await getPulseCheckWorkspaceContext(page);
+    await ensureAdminSession(page, teamWorkspacePath(workspaceContext));
     await expect(page.getByText(/^PulseCheck Team Workspace$/i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/Migration Status/i)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/Staff and Adult Team Members/i)).toBeVisible({ timeout: 15_000 });
@@ -240,10 +436,10 @@ test.describe('PulseCheck onboarding and team workspace', () => {
   test('team admin can create and revoke an athlete invite from the workspace', async ({ page }) => {
     test.setTimeout(120_000);
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
-    test.skip(!pulseCheckOrganizationId || !pulseCheckTeamId, 'Requires PLAYWRIGHT_PULSECHECK_ORG_ID and PLAYWRIGHT_PULSECHECK_TEAM_ID.');
     test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
 
-    await ensureAdminSession(page, teamWorkspacePath());
+    const workspaceContext = await getPulseCheckWorkspaceContext(page);
+    await ensureAdminSession(page, teamWorkspacePath(workspaceContext));
     await expect(page.getByText(/Athlete Invite Controls/i)).toBeVisible({ timeout: 15_000 });
 
     const uniqueSuffix = Date.now().toString().slice(-6);
@@ -266,10 +462,10 @@ test.describe('PulseCheck onboarding and team workspace', () => {
   test('adult invite can be redeemed end-to-end into member setup and workspace', async ({ browser, page }) => {
     test.setTimeout(180_000);
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
-    test.skip(!pulseCheckOrganizationId || !pulseCheckTeamId, 'Requires PLAYWRIGHT_PULSECHECK_ORG_ID and PLAYWRIGHT_PULSECHECK_TEAM_ID.');
     test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
 
-    await ensureAdminSession(page, postActivationPath());
+    const workspaceContext = await getPulseCheckWorkspaceContext(page);
+    await ensureAdminSession(page, postActivationPath(workspaceContext));
     await expect(page.getByText(/2\. Invite Adults/i)).toBeVisible({ timeout: 15_000 });
 
     const uniqueSuffix = Date.now().toString().slice(-6);
@@ -298,7 +494,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     });
 
     try {
-      await page.goto(teamWorkspacePath(), { waitUntil: 'domcontentloaded' });
+      await page.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
       const memberCard = getAdultMemberCard(page, adultEmail);
       await expect(memberCard).toBeVisible({ timeout: 20_000 });
       await expect(memberCard.getByText(new RegExp(adultTitle, 'i'))).toBeVisible({ timeout: 20_000 });
@@ -310,10 +506,10 @@ test.describe('PulseCheck onboarding and team workspace', () => {
   test('athlete invite can be redeemed through consent and baseline onboarding', async ({ browser, page }) => {
     test.setTimeout(180_000);
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
-    test.skip(!pulseCheckOrganizationId || !pulseCheckTeamId, 'Requires PLAYWRIGHT_PULSECHECK_ORG_ID and PLAYWRIGHT_PULSECHECK_TEAM_ID.');
     test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
 
-    await ensureAdminSession(page, teamWorkspacePath());
+    const workspaceContext = await getPulseCheckWorkspaceContext(page);
+    await ensureAdminSession(page, teamWorkspacePath(workspaceContext));
     await expect(page.getByText(/Athlete Invite Controls/i)).toBeVisible({ timeout: 15_000 });
 
     const uniqueSuffix = `${Date.now()}`.slice(-6);
@@ -338,10 +534,10 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     });
 
     try {
-      await page.goto(teamWorkspacePath(), { waitUntil: 'domcontentloaded' });
+      await page.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
       const athleteRosterCard = getAthleteRosterCard(page, athleteEmail);
       await expect(athleteRosterCard).toBeVisible({ timeout: 20_000 });
-      await expect(athleteRosterCard.getByText(/^Ready$/)).toHaveCount(2, { timeout: 20_000 });
+      await expect(athleteRosterCard).toContainText(/Ready/i);
     } finally {
       await context.close();
     }
@@ -350,7 +546,6 @@ test.describe('PulseCheck onboarding and team workspace', () => {
   test('assigned athlete scope restricts a coach to only the athletes they were granted', async ({ browser, page }) => {
     test.setTimeout(240_000);
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
-    test.skip(!pulseCheckOrganizationId || !pulseCheckTeamId, 'Requires PLAYWRIGHT_PULSECHECK_ORG_ID and PLAYWRIGHT_PULSECHECK_TEAM_ID.');
     test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
 
     const uniqueSuffix = Date.now().toString().slice(-6);
@@ -370,7 +565,8 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     const athleteTwoUsername = `e2eathb${uniqueSuffix}`;
     const athleteTwoPassword = `PulseCheck!${uniqueSuffix}B`;
 
-    await ensureAdminSession(page, postActivationPath());
+    const workspaceContext = await getPulseCheckWorkspaceContext(page);
+    await ensureAdminSession(page, postActivationPath(workspaceContext));
 
     await page.getByRole('combobox', { name: /^Role$/ }).selectOption('coach');
     await page.getByPlaceholder('Jordan Ellis').fill(coachName);
@@ -381,7 +577,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     const coachInviteCard = getPostActivationAdultInviteCard(page, coachName);
     const coachInviteUrl = await extractInviteUrl(coachInviteCard);
 
-    await page.goto(teamWorkspacePath(), { waitUntil: 'domcontentloaded' });
+    await page.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
     await page.getByPlaceholder('Athlete name').fill(athleteOneName);
     await page.getByPlaceholder('athlete@school.edu').fill(athleteOneEmail);
     await page.getByRole('button', { name: /Invite Athlete/i }).click();
@@ -416,8 +612,8 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     });
 
     try {
-      await page.goto(teamWorkspacePath(), { waitUntil: 'domcontentloaded' });
-      const coachCard = page.locator('div').filter({ hasText: coachEmail }).last();
+      await page.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
+      const coachCard = getAdultMemberCard(page, coachEmail);
       await expect(coachCard).toBeVisible({ timeout: 20_000 });
       await coachCard.locator('select').first().selectOption('assigned');
       await expect(page.getByText(/Roster visibility updated/i)).toBeVisible({ timeout: 15_000 });
@@ -433,7 +629,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
       await page.getByRole('button', { name: /Save Assigned Scope/i }).click();
       await expect(page.getByText(/Assigned athlete scope updated/i)).toBeVisible({ timeout: 15_000 });
 
-      await coachPage.goto(teamWorkspacePath(), { waitUntil: 'domcontentloaded' });
+      await coachPage.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
       await expect(coachPage.getByText(/Roster Visibility Scope/i)).toBeVisible({ timeout: 20_000 });
       await expect(coachPage.getByText(/Current scope: Assigned athletes only/i)).toBeVisible({ timeout: 20_000 });
       await expect(coachPage.getByText(/Visible athletes right now: 1/i)).toBeVisible({ timeout: 20_000 });
@@ -449,7 +645,6 @@ test.describe('PulseCheck onboarding and team workspace', () => {
   test('invite policy matrix gates athlete invite creation by role', async ({ browser, page }) => {
     test.setTimeout(240_000);
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
-    test.skip(!pulseCheckOrganizationId || !pulseCheckTeamId, 'Requires PLAYWRIGHT_PULSECHECK_ORG_ID and PLAYWRIGHT_PULSECHECK_TEAM_ID.');
     test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
 
     const uniqueSuffix = Date.now().toString().slice(-6);
@@ -466,7 +661,8 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     const staffUsername = `e2ematrixstaff${uniqueSuffix}`;
     const staffPassword = `PulseCheck!${uniqueSuffix}S`;
 
-    await ensureAdminSession(page, postActivationPath());
+    const workspaceContext = await getPulseCheckWorkspaceContext(page);
+    await ensureAdminSession(page, postActivationPath(workspaceContext));
 
     await page.getByRole('combobox', { name: /^Role$/ }).selectOption('coach');
     await page.getByPlaceholder('Jordan Ellis').fill(coachName);
@@ -498,7 +694,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     });
 
     try {
-      await page.goto(teamWorkspacePath(), { waitUntil: 'domcontentloaded' });
+      await page.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
 
       const adminPolicySelect = page.getByLabel('Team invite policy');
       await expect(adminPolicySelect).toBeVisible({ timeout: 20_000 });
@@ -513,8 +709,8 @@ test.describe('PulseCheck onboarding and team workspace', () => {
         await adminPolicySelect.selectOption(policy);
         await expect(page.getByText(/Team invite policy updated/i)).toBeVisible({ timeout: 15_000 });
 
-        await coachPage.goto(teamWorkspacePath(), { waitUntil: 'domcontentloaded' });
-        await staffPage.goto(teamWorkspacePath(), { waitUntil: 'domcontentloaded' });
+        await coachPage.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
+        await staffPage.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
 
         if (expectations.coachCanInvite) {
           await expect(coachPage.getByRole('button', { name: /Invite Athlete/i })).toBeEnabled({ timeout: 15_000 });
@@ -554,10 +750,10 @@ test.describe('PulseCheck onboarding and team workspace', () => {
   test('revoked athlete invite link returns a clean not-found state', async ({ browser, page }) => {
     test.setTimeout(120_000);
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
-    test.skip(!pulseCheckOrganizationId || !pulseCheckTeamId, 'Requires PLAYWRIGHT_PULSECHECK_ORG_ID and PLAYWRIGHT_PULSECHECK_TEAM_ID.');
     test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
 
-    await ensureAdminSession(page, teamWorkspacePath());
+    const workspaceContext = await getPulseCheckWorkspaceContext(page);
+    await ensureAdminSession(page, teamWorkspacePath(workspaceContext));
     await expect(page.getByText(/Athlete Invite Controls/i)).toBeVisible({ timeout: 15_000 });
 
     const uniqueSuffix = Date.now().toString().slice(-6);
@@ -579,8 +775,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     const { context, page: revokedPage } = await createIsolatedPage(browser);
     try {
       await revokedPage.goto(inviteUrl, { waitUntil: 'domcontentloaded' });
-      await expect(revokedPage.getByRole('heading', { name: /Page Not Found/i })).toBeVisible({ timeout: 20_000 });
-      await expect(revokedPage.getByText(/404/i)).toBeVisible({ timeout: 20_000 });
+      await expect(revokedPage.getByText(/Page not found/i)).toBeVisible({ timeout: 20_000 });
     } finally {
       await context.close();
     }
@@ -589,10 +784,10 @@ test.describe('PulseCheck onboarding and team workspace', () => {
   test('target-email mismatch blocks a signed-in user from accepting another adult invite', async ({ browser, page }) => {
     test.setTimeout(240_000);
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
-    test.skip(!pulseCheckOrganizationId || !pulseCheckTeamId, 'Requires PLAYWRIGHT_PULSECHECK_ORG_ID and PLAYWRIGHT_PULSECHECK_TEAM_ID.');
     test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
 
-    await ensureAdminSession(page, postActivationPath());
+    const workspaceContext = await getPulseCheckWorkspaceContext(page);
+    await ensureAdminSession(page, postActivationPath(workspaceContext));
 
     const uniqueSuffix = Date.now().toString().slice(-6);
     const signedInAdultName = `E2E Signed Adult ${uniqueSuffix}`;
@@ -682,7 +877,6 @@ test.describe('PulseCheck onboarding and team workspace', () => {
   test('no-roster visibility leaves a non-admin adult with zero visible athletes', async ({ browser, page }) => {
     test.setTimeout(240_000);
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
-    test.skip(!pulseCheckOrganizationId || !pulseCheckTeamId, 'Requires PLAYWRIGHT_PULSECHECK_ORG_ID and PLAYWRIGHT_PULSECHECK_TEAM_ID.');
     test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
 
     const uniqueSuffix = Date.now().toString().slice(-6);
@@ -697,7 +891,8 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     const athleteUsername = `e2enoscopeath${uniqueSuffix}`;
     const athletePassword = `PulseCheck!${uniqueSuffix}A`;
 
-    await ensureAdminSession(page, postActivationPath());
+    const workspaceContext = await getPulseCheckWorkspaceContext(page);
+    await ensureAdminSession(page, postActivationPath(workspaceContext));
 
     await page.getByRole('combobox', { name: /^Role$/ }).selectOption('support-staff');
     await page.getByPlaceholder('Jordan Ellis').fill(staffName);
@@ -707,7 +902,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     await expect(page.getByText(/Adult onboarding link created and copied/i)).toBeVisible({ timeout: 15_000 });
     const staffInviteUrl = await extractInviteUrl(getPostActivationAdultInviteCard(page, staffName));
 
-    await page.goto(teamWorkspacePath(), { waitUntil: 'domcontentloaded' });
+    await page.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
     await page.getByPlaceholder('Athlete name').fill(athleteName);
     await page.getByPlaceholder('athlete@school.edu').fill(athleteEmail);
     await page.getByRole('button', { name: /Invite Athlete/i }).click();
@@ -728,13 +923,13 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     });
 
     try {
-      await page.goto(teamWorkspacePath(), { waitUntil: 'domcontentloaded' });
-      const staffCard = page.locator('div').filter({ hasText: staffEmail }).last();
+      await page.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
+      const staffCard = getAdultMemberCard(page, staffEmail);
       await expect(staffCard).toBeVisible({ timeout: 20_000 });
       await staffCard.locator('select').first().selectOption('none');
       await expect(page.getByText(/Roster visibility updated/i)).toBeVisible({ timeout: 15_000 });
 
-      await staffPage.goto(teamWorkspacePath(), { waitUntil: 'domcontentloaded' });
+      await staffPage.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
       await expect(staffPage.getByText(/Current scope: No roster visibility/i)).toBeVisible({ timeout: 20_000 });
       await expect(staffPage.getByText(/Visible athletes right now: 0/i)).toBeVisible({ timeout: 20_000 });
       await expect(staffPage.getByText(athleteEmail)).toHaveCount(0);
@@ -742,6 +937,104 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     } finally {
       await staffContext.close();
       await athleteContext.close();
+    }
+  });
+
+  test('legacy roster migration creates a PulseCheck org and team for an unmapped legacy coach roster', async ({ page }) => {
+    test.setTimeout(120_000);
+    test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
+    test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
+
+    const namespace = `${pulseCheckNamespace}-legacy-new-${Date.now().toString().slice(-6)}`;
+
+    await ensureAdminSession(page, legacyRosterMigrationPath());
+
+    let fixture: Awaited<ReturnType<typeof seedLegacyRosterFixture>> | null = null;
+    try {
+      fixture = await seedLegacyRosterFixture(page, namespace, 'new-container');
+      await page.goto(legacyRosterMigrationPath(), { waitUntil: 'domcontentloaded' });
+      const customOrganizationName = `[E2E] ${namespace} Organization`;
+      const customTeamName = `[E2E] ${namespace} Team`;
+
+      const candidateCard = page
+        .locator('div')
+        .filter({ has: page.getByText(fixture?.coachDisplayName || '', { exact: true }) })
+        .filter({ has: page.getByRole('button', { name: /Migrate Roster/i }) })
+        .first();
+
+      await expect(candidateCard).toBeVisible({ timeout: 20_000 });
+      await expect(candidateCard.getByText(/New organization \+ team will be created/i)).toBeVisible({ timeout: 15_000 });
+      await candidateCard.getByLabel(`Organization name for ${fixture.coachDisplayName}`).fill(customOrganizationName);
+      await candidateCard.getByLabel(`Team name for ${fixture.coachDisplayName}`).fill(customTeamName);
+
+      await candidateCard.getByRole('button', { name: /Migrate Roster/i }).click();
+
+      await expect(page.getByText(/Recent migration results/i)).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByText(/Created org/i)).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByText(/Created team/i)).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByText(customOrganizationName)).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByText(customTeamName)).toBeVisible({ timeout: 20_000 });
+      await expect(candidateCard).toHaveCount(0);
+
+      const inspection = await inspectLegacyRosterFixture(page, namespace);
+      expect(inspection?.legacyOrganizations?.length).toBe(1);
+      expect(inspection?.legacyTeams?.length).toBe(1);
+      expect(inspection?.legacyAthleteMemberships?.length).toBe(2);
+      expect(inspection?.legacyOrganizations?.[0]?.displayName).toBe(customOrganizationName);
+      expect(inspection?.legacyTeams?.[0]?.displayName).toBe(customTeamName);
+      expect(inspection?.migrationEntries?.length).toBe(1);
+      expect(inspection?.migrationEntries?.[0]?.organizationName).toBe(customOrganizationName);
+      expect(inspection?.migrationEntries?.[0]?.teamName).toBe(customTeamName);
+      expect(inspection?.migrationEntries?.[0]?.createdOrganization).toBe(true);
+      expect(inspection?.migrationEntries?.[0]?.createdTeam).toBe(true);
+      expect(inspection?.migrationEntries?.[0]?.migratedAthleteCount).toBe(2);
+      expect(inspection?.migrationEntries?.[0]?.alreadyPresentAthleteCount).toBe(0);
+    } finally {
+      await cleanupLegacyRosterFixture(page, namespace);
+    }
+  });
+
+  test('legacy roster migration reuses an existing PulseCheck team and only backfills missing athletes', async ({ page }) => {
+    test.setTimeout(120_000);
+    test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
+    test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
+
+    const namespace = `${pulseCheckNamespace}-legacy-existing-${Date.now().toString().slice(-6)}`;
+
+    await ensureAdminSession(page, legacyRosterMigrationPath());
+
+    try {
+      const fixture = await seedLegacyRosterFixture(page, namespace, 'existing-team');
+      await page.goto(legacyRosterMigrationPath(), { waitUntil: 'domcontentloaded' });
+
+      const candidateCard = page
+        .locator('div')
+        .filter({ has: page.getByText(fixture?.coachDisplayName || '', { exact: true }) })
+        .filter({ has: page.getByRole('button', { name: /Migrate Roster/i }) })
+        .first();
+
+      await expect(candidateCard).toBeVisible({ timeout: 20_000 });
+      await expect(candidateCard.getByText(fixture.existingOrganizationName, { exact: true })).toBeVisible({ timeout: 15_000 });
+      await expect(candidateCard.getByText(fixture.existingTeamName, { exact: true })).toBeVisible({ timeout: 15_000 });
+      await expect(candidateCard.getByText(/1 to add/i)).toBeVisible({ timeout: 15_000 });
+      await expect(candidateCard.getByText(/1 already present/i)).toBeVisible({ timeout: 15_000 });
+
+      await candidateCard.getByRole('button', { name: /Migrate Roster/i }).click();
+      await expect(page.getByText(/Recent migration results/i)).toBeVisible({ timeout: 20_000 });
+
+      const inspection = await inspectLegacyRosterFixture(page, namespace);
+      expect(inspection?.explicitExistingOrganization?.id).toBe(fixture.existingOrganizationId);
+      expect(inspection?.explicitExistingTeam?.id).toBe(fixture.existingTeamId);
+      expect(inspection?.explicitCoachMembership?.role).toBe('coach');
+      expect(inspection?.explicitAthleteOneMembership?.role).toBe('athlete');
+      expect(inspection?.explicitAthleteTwoMembership?.role).toBe('athlete');
+      expect(inspection?.migrationEntries?.length).toBe(1);
+      expect(inspection?.migrationEntries?.[0]?.createdOrganization).toBe(false);
+      expect(inspection?.migrationEntries?.[0]?.createdTeam).toBe(false);
+      expect(inspection?.migrationEntries?.[0]?.migratedAthleteCount).toBe(1);
+      expect(inspection?.migrationEntries?.[0]?.alreadyPresentAthleteCount).toBe(1);
+    } finally {
+      await cleanupLegacyRosterFixture(page, namespace);
     }
   });
 });

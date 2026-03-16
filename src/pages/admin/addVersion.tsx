@@ -335,7 +335,7 @@ const AddVersionPage = () => {
               <div>
                 <h2 className="text-lg font-semibold text-white">Global Update Modal Switch</h2>
                 <p className="text-sm text-gray-400 mt-1">
-                  Use this kill switch to hide the update modal everywhere if a release note or media payload malfunctions.
+                  Use this failsafe to hide the update modal everywhere if a release note or media payload malfunctions.
                 </p>
               </div>
 

@@ -1,11 +1,19 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
-type Props = { onJoinWaitlist: () => void };
+type Props = {
+  onJoinWaitlist: () => void;
+  onOpenWebApp: () => void;
+  webAppLabel?: string;
+};
 
 // Lerp helper
 const lerp = (a: number, b: number, t: number) => a + (b - a) * Math.max(0, Math.min(1, t));
 
-const PulseCheckMarketingLanding: React.FC<Props> = ({ onJoinWaitlist }) => {
+const PulseCheckMarketingLanding: React.FC<Props> = ({
+  onJoinWaitlist,
+  onOpenWebApp,
+  webAppLabel = 'Log In',
+}) => {
   const [scrollY, setScrollY] = useState(0);
   const [activeTab, setActiveTab] = useState<'preflight' | 'game' | 'coach' | 'clinical'>('preflight');
   const heroRef = useRef<HTMLDivElement>(null);
@@ -110,6 +118,9 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({ onJoinWaitlist }) => {
           <a href="#nora">Nora AI</a>
           <a href="#coach">Coach Dashboard</a>
           <a href="#clinical">Clinical Safety</a>
+          <button type="button" className="pc2-nav-login" onClick={onOpenWebApp}>
+            {webAppLabel}
+          </button>
           <a href="#pilot" className="pc2-nav-cta">Request Pilot</a>
         </div>
       </nav>
@@ -131,6 +142,9 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({ onJoinWaitlist }) => {
               PulseCheck turns a 2-minute daily check-in into real-time readiness intelligence — for athletes, coaches, and clinical staff.
             </p>
             <div className="pc2-hero-ctas">
+              <button type="button" onClick={onOpenWebApp} className="pc2-btn-secondary">
+                {webAppLabel}
+              </button>
               <a href="mailto:pulsefitnessapp@gmail.com?subject=PulseCheck%20Pilot%20Inquiry" className="pc2-btn-primary">
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
                 Request Department Pilot
@@ -589,6 +603,22 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({ onJoinWaitlist }) => {
           );
         }
         .pc2-nav-links a:hover { opacity: 1; }
+        .pc2-nav-login {
+          border: 0;
+          background: transparent;
+          padding: 0;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: color 0.5s, opacity 0.2s;
+          color: rgba(
+            calc(255 - var(--pc2-nav-dark,0) * 199),
+            calc(255 - var(--pc2-nav-dark,0) * 199),
+            calc(255 - var(--pc2-nav-dark,0) * 199),
+            0.75
+          );
+        }
+        .pc2-nav-login:hover { opacity: 1; }
         .pc2-nav-cta {
           background: linear-gradient(135deg,#6A9AFA,#A05EF8) !important;
           color: #fff !important; padding: 9px 20px !important;
@@ -1177,6 +1207,7 @@ const PulseCheckMarketingLanding: React.FC<Props> = ({ onJoinWaitlist }) => {
           .pc2-nav{padding:14px 20px;}
           .pc2-nav--scrolled{padding:12px 20px;}
           .pc2-nav-links a:not(.pc2-nav-cta){display:none;}
+          .pc2-nav-login{display:none;}
           .pc2-section{padding:80px 24px;}
           .pc2-hero-inner{padding:90px 24px 60px;}
           /* Even smaller phone on tiny screens */

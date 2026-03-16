@@ -3,7 +3,6 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Bell, CheckCircle2, ChevronRight, Loader2, UserRound } from 'lucide-react';
-import { firebaseStorageService, UploadImageType } from '../../api/firebase/storage/service';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import type { PulseCheckNotificationPreferences, PulseCheckOrganization, PulseCheckTeam, PulseCheckTeamMembership } from '../../api/firebase/pulsecheckProvisioning/types';
 import { userService } from '../../api/firebase/user';
@@ -104,6 +103,7 @@ export default function PulseCheckMemberSetupPage() {
     try {
       let profileImageUrl = currentUser.profileImage?.profileImageURL || '';
       if (profileImageFile) {
+        const { firebaseStorageService, UploadImageType } = await import('../../api/firebase/storage/service');
         const upload = await firebaseStorageService.uploadImage(profileImageFile, UploadImageType.Profile);
         profileImageUrl = upload.downloadURL;
       }

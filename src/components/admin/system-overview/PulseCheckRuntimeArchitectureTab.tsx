@@ -7,6 +7,7 @@ const SOURCE_OF_TRUTH = [
   ['Lane orchestration', 'State & Escalation Orchestration governs lane boundaries and override behavior.', 'Use when performance, support, and safety logic intersect.'],
   ['Shared perception', 'State Signal Layer defines the state snapshot schema and routing vocabulary.', 'Downstream systems consume one shared state view.'],
   ['Performance routing', 'Nora Assignment Rules govern Protocol, Sim, Trial, and defer decisions.', 'Applies only after safety and lane boundaries are resolved.'],
+  ['Execution truth', 'Signal Layer v1 Assignment Orchestrator writes one Nora daily assignment after check-in and profile sync, then exposes it for athlete surfaces, chat, and coach review.', 'Use this as the task source instead of copy-only next-step hints.'],
   ['Safety integration', 'Escalation Integration Spec governs the bridge into classify-escalation and write-back.', 'Use for payload shape and runtime field updates.'],
 ];
 
@@ -19,7 +20,7 @@ const RUNTIME_LAYERS = [
   {
     title: 'Performance Lane',
     accent: 'green' as const,
-    body: 'Nora decides whether the athlete needs a Protocol, Sim, Trial, mixed sequence, or defer path based on state-fit and program intent.',
+    body: 'Nora decides whether the athlete needs a Protocol, Sim, Trial, mixed sequence, or defer path based on state-fit and program intent. Signal Layer v1 then materializes the athlete-facing daily assignment from that decision and opens the coach intervention window.',
   },
   {
     title: 'Support Lane',
@@ -34,6 +35,11 @@ const RUNTIME_LAYERS = [
 ];
 
 const FLOW_STEPS = [
+  {
+    title: 'Athlete Entry Gate',
+    body: 'Before standard performance assignment begins, PulseCheck should confirm the athlete has cleared the required task gate: consent is complete, the in-app baseline is complete, and any optional Vision Pro session remains explicitly non-blocking. Shared gate resolution accepts either web baselineAssessment or native baselineProbe, then synchronizes membership task state.',
+    owner: 'Onboarding shell / workspace',
+  },
   {
     title: 'Signal Intake',
     body: 'The Check-In and state builder collect structured self-report, context windows, recent performance, sentiment, and biometrics when available.',
@@ -55,13 +61,18 @@ const FLOW_STEPS = [
     owner: 'Nora Assignment Rules',
   },
   {
+    title: 'Assignment Materialization',
+    body: 'After the routing decision resolves, the Assignment Orchestrator writes one Nora daily assignment for that athlete and date, preserves idempotency for repeat same-day check-ins, triggers coach notification, preserves coach override state for that day, and gives athlete surfaces plus Nora chat one shared execution artifact. The coach notification center becomes the durable read/archive layer for that follow-up.',
+    owner: 'Assignment Orchestrator',
+  },
+  {
     title: 'Session Execution',
-    body: 'The runtime executes the assigned protocol, sim, trial, or alternate path with the appropriate difficulty, modifier, and framing.',
+    body: 'Today view and Nora chat can launch the same Nora task into the runtime. Launch moves the task into started state, the runtime executes the assigned protocol, sim, trial, or alternate path with the appropriate difficulty, modifier, and framing, and completion closes the loop on that same task.',
     owner: 'Runtime / App',
   },
   {
     title: 'Outcome Update',
-    body: 'Performance results, state changes, support flags, and escalation outcomes are written back for the next decision cycle.',
+    body: 'Performance results, state changes, support flags, and escalation outcomes are written back for the next decision cycle. Completion also writes an athlete-readable session summary, a coach-readable next-program update, and an optional Nora follow-up moment so the loop does not end as a silent database change. That update also feeds the coach notification center so the coach can see what changed and open the right surface immediately.',
     owner: 'Runtime + Escalation Handler',
   },
 ];
@@ -98,7 +109,12 @@ const PILOT_DEFAULT_ROWS = [
   ['Persistent red activation', 'Support flag turns on after 3 consecutive red snapshots or 4 red snapshots within the 7 most recent state-bearing sessions.'],
   ['Support-flag clear rule', 'Clear after 2 consecutive non-red snapshots and no active Tier 1-3 escalation state.'],
   ['Stale assignment behavior', 'If the latest snapshot is stale, Nora should request a brief check-in before non-trivial Protocol, Sim, or Trial assignment.'],
+  ['Daily auto-assignment behavior', 'Signal Layer v1 writes one Nora daily assignment per athlete per date. Repeat check-ins may update an unstarted assignment, but should not overwrite started, completed, or coach-overridden work.'],
+  ['Daily task lifecycle behavior', 'Athlete surfaces should move the same Nora task through viewed, started, and completed states rather than spawning disconnected next-step affordances.'],
+  ['Coach intervention behavior', 'New Nora daily assignments notify the coach immediately. Coach defer and override decisions become the source of truth for the rest of that date unless safety policy says otherwise.'],
+  ['Coach follow-up behavior', 'Coach notifications should accumulate into one readable follow-up queue with unread count, read state, archive state, and direct links into assignment review or athlete follow-up surfaces.'],
   ['Stale escalation behavior', 'If the latest snapshot is stale, classify-escalation may read it as context but cannot increase confidence because of it.'],
+  ['Pre-training unlock behavior', 'Standard coach or Nora sim assignment should stay locked until consent and the in-app baseline are complete. Optional Vision Pro sessions do not block unlock unless the rollout explicitly says otherwise. Shared completion truth can come from web baselineAssessment or native baselineProbe.'],
 ];
 
 const PulseCheckRuntimeArchitectureTab: React.FC = () => {
@@ -107,8 +123,8 @@ const PulseCheckRuntimeArchitectureTab: React.FC = () => {
       <DocHeader
         eyebrow="Pulse Check Runtime"
         title="Runtime Architecture"
-        version="Version 1.0 | March 10, 2026"
-        summary="Top-level operating model for the perception-to-action stack. This artifact explains how the State Signal Layer, Nora Assignment Rules, State & Escalation Orchestration, and the Escalation Integration Spec work together without collapsing performance and safety into one system."
+        version="Version 1.3 | March 16, 2026"
+        summary="Top-level operating model for the perception-to-action stack. This artifact explains how the athlete entry gate, State Signal Layer, Nora Assignment Rules, the Signal Layer v1 Assignment Orchestrator, coach intervention, State & Escalation Orchestration, and the Escalation Integration Spec work together without collapsing onboarding, performance, and safety into one system."
         highlights={[
           {
             title: 'Shared Perception, Separate Lanes',
@@ -122,6 +138,10 @@ const PulseCheckRuntimeArchitectureTab: React.FC = () => {
             title: 'Pilot-Ready Operations Layer',
             body: 'Freshness windows, persistent-red behavior, implementation phases, and QA edge cases are all defined in one artifact.',
           },
+          {
+            title: 'Entry Gate Before Runtime',
+            body: 'Required onboarding tasks clear before standard training assignment begins, while optional Vision Pro transfer remains a separate lane.',
+          },
         ]}
       />
 
@@ -130,6 +150,8 @@ const PulseCheckRuntimeArchitectureTab: React.FC = () => {
         sourceOfTruth="This document is authoritative for system-level ordering, runtime sequencing, and cross-document precedence. It does not replace the detailed runtime artifacts inside their own scopes."
         masterReference="Use this page first when a reader needs the top-level map, conflict-resolution order, or phased rollout plan. Then drill into the governing document for the specific layer."
         relatedDocs={[
+          'Profile Architecture v1.3',
+          'Profile Snapshot & Export Spec v1.0',
           'State Signal Layer v1.2',
           'State Snapshot Freshness & Decay Policy v1.0',
           'Performance-State Flag Definitions v1.0',

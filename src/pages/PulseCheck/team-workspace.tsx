@@ -1,9 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { ArrowRight, Bell, ChevronRight, ClipboardList, Copy, Loader2, Mail, Shield, Sparkles, UserRound, Users, Waves, XCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ArrowRight, Bell, Brain, CheckCircle2, ChevronRight, ClipboardList, Copy, Loader2, Lock, Mail, ScanLine, Shield, Sparkles, UserRound, Users, Waves, XCircle } from 'lucide-react';
+import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import { coachService } from '../../api/firebase/coach';
+import { resolvePulseCheckAthleteTaskState } from '../../api/firebase/pulsecheckProvisioning/athleteTaskState';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import type {
   PulseCheckInviteLink,
@@ -15,9 +18,69 @@ import type {
   PulseCheckTeamMembership,
   PulseCheckTeamMembershipRole,
 } from '../../api/firebase/pulsecheckProvisioning/types';
+import { db } from '../../api/firebase/config';
+import {
+  assignmentOrchestratorService,
+  assignmentService,
+  athleteProgressService,
+  PulseCheckDailyAssignmentStatus,
+} from '../../api/firebase/mentaltraining';
+import type { AthleteMentalProgress, PulseCheckDailyAssignment } from '../../api/firebase/mentaltraining/types';
+import { BaselineAssessmentModal } from '../../components/mentaltraining';
 import { userService } from '../../api/firebase/user';
 import type { User } from '../../api/firebase/user';
 import { useUser, useUserLoading } from '../../hooks/useUser';
+
+// ─── Chromatic Glass Primitives ───────────────────────────────────────────────
+const FloatingOrb: React.FC<{ color: string; size: string; style: React.CSSProperties; delay?: number }> = ({ color, size, style, delay = 0 }) => (
+  <motion.div
+    className={`absolute ${size} rounded-full blur-3xl pointer-events-none`}
+    style={{ backgroundColor: color, ...style }}
+    animate={{ scale: [1, 1.15, 1], opacity: [0.2, 0.38, 0.2] }}
+    transition={{ duration: 10, repeat: Infinity, delay, ease: 'easeInOut' }}
+  />
+);
+
+const GlassCard: React.FC<{ children: React.ReactNode; accentColor?: string; className?: string; delay?: number; animate?: boolean }> = ({
+  children, accentColor = '#E0FE10', className = '', delay = 0, animate = true,
+}) => {
+  const inner = (
+    <div className={`relative group ${className}`}>
+      <div className="absolute -inset-1 rounded-[30px] blur-xl opacity-0 group-hover:opacity-25 transition-all duration-700 pointer-events-none" style={{ background: `linear-gradient(135deg, ${accentColor}50, transparent 60%)` }} />
+      <div className="relative rounded-[30px] overflow-hidden backdrop-blur-xl bg-zinc-900/40 border border-white/10">
+        <div className="absolute top-0 left-0 right-0 h-[1px] opacity-50" style={{ background: `linear-gradient(90deg, transparent, ${accentColor}60, transparent)` }} />
+        <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] via-transparent to-transparent pointer-events-none" />
+        {children}
+      </div>
+    </div>
+  );
+  if (!animate) return inner;
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55, delay, ease: [0.22, 1, 0.36, 1] }}>
+      {inner}
+    </motion.div>
+  );
+};
+
+const InfoCard: React.FC<{ icon: React.ReactNode; title: string; accentColor?: string; children: React.ReactNode; delay?: number }> = ({
+  icon, title, accentColor = '#E0FE10', children, delay = 0,
+}) => (
+  <motion.div
+    initial={{ opacity: 0, y: 12 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.45, delay, ease: [0.22, 1, 0.36, 1] }}
+    className="rounded-[22px] border border-white/8 bg-black/20 p-5 backdrop-blur-sm"
+    style={{ borderColor: `${accentColor}18` }}
+  >
+    <div className="flex items-center gap-3 mb-4">
+      <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${accentColor}18`, border: `1px solid ${accentColor}30` }}>
+        {icon}
+      </div>
+      <span className="text-base font-semibold text-white">{title}</span>
+    </div>
+    {children}
+  </motion.div>
+);
 
 type TeamMemberView = {
   membership: PulseCheckTeamMembership;
@@ -37,6 +100,50 @@ type AthleteRosterEntry = {
   baselineReady: boolean;
   source: 'team-membership' | 'legacy-coach-bridge';
 };
+
+type VisionProTaskState = 'not-queued' | 'queued' | 'completed';
+
+const todayDateKey = () => new Date().toISOString().split('T')[0];
+
+const humanizeDailyTaskLabel = (assignment: PulseCheckDailyAssignment | null) => {
+  if (!assignment) return null;
+  if (assignment.actionType === 'defer') return 'Coach review in progress';
+  if (assignment.simSpecId) return assignment.simSpecId.split('_').join(' ');
+  if (assignment.legacyExerciseId) return assignment.legacyExerciseId.split('_').join(' ');
+  if (assignment.sessionType) return assignment.sessionType.split('_').join(' ');
+  return assignment.actionType === 'lighter_sim' ? 'lighter sim' : 'sim';
+};
+
+const dailyTaskStatusLabel = (status: PulseCheckDailyAssignmentStatus) => {
+  switch (status) {
+    case PulseCheckDailyAssignmentStatus.Assigned:
+      return 'Assigned';
+    case PulseCheckDailyAssignmentStatus.Viewed:
+      return 'Viewed';
+    case PulseCheckDailyAssignmentStatus.Started:
+      return 'Started';
+    case PulseCheckDailyAssignmentStatus.Completed:
+      return 'Completed';
+    case PulseCheckDailyAssignmentStatus.Overridden:
+      return 'Coach adjusted';
+    case PulseCheckDailyAssignmentStatus.Deferred:
+      return 'Deferred';
+    case PulseCheckDailyAssignmentStatus.Superseded:
+      return 'Superseded';
+    default:
+      return 'Assigned';
+  }
+};
+
+const isActiveDailyTask = (assignment: PulseCheckDailyAssignment | null) =>
+  Boolean(
+    assignment &&
+      (
+        assignment.status === PulseCheckDailyAssignmentStatus.Assigned ||
+        assignment.status === PulseCheckDailyAssignmentStatus.Viewed ||
+        assignment.status === PulseCheckDailyAssignmentStatus.Started
+      )
+  );
 
 const applyRosterScope = (
   roster: AthleteRosterEntry[],
@@ -177,6 +284,12 @@ export default function PulseCheckTeamWorkspacePage() {
   const [scopeModalOpen, setScopeModalOpen] = useState(false);
   const [scopeTarget, setScopeTarget] = useState<TeamMemberView | null>(null);
   const [selectedAthletes, setSelectedAthletes] = useState<string[]>([]);
+  const [athleteProgress, setAthleteProgress] = useState<AthleteMentalProgress | null>(null);
+  const [todayDailyAssignment, setTodayDailyAssignment] = useState<PulseCheckDailyAssignment | null>(null);
+  const [athleteTaskLoading, setAthleteTaskLoading] = useState(false);
+  const [baselineModalOpen, setBaselineModalOpen] = useState(false);
+  const [pendingAssignmentCount, setPendingAssignmentCount] = useState(0);
+  const [visionProTaskState, setVisionProTaskState] = useState<VisionProTaskState>('not-queued');
   const [athleteInviteForm, setAthleteInviteForm] = useState({
     recipientName: '',
     targetEmail: '',
@@ -212,7 +325,7 @@ export default function PulseCheckTeamWorkspacePage() {
       onboardingStatus: entry.membership.onboardingStatus || 'pending',
       workoutCount: entry.user?.workoutCount || 0,
       consentReady: Boolean(entry.membership.athleteOnboarding?.productConsentAccepted),
-      baselineReady: entry.membership.athleteOnboarding?.baselinePathStatus === 'ready' || entry.membership.athleteOnboarding?.baselinePathStatus === 'complete',
+      baselineReady: entry.membership.athleteOnboarding?.baselinePathStatus === 'complete',
       source: 'team-membership',
     }));
 
@@ -249,7 +362,76 @@ export default function PulseCheckTeamWorkspacePage() {
 
     const scopedRoster = applyRosterScope(roster, myMembership);
 
-    setMembership(myMembership);
+    let resolvedMembership = myMembership;
+
+    if (myMembership?.role === 'athlete' && currentUser.id) {
+      setAthleteTaskLoading(true);
+      try {
+        const [nextProgress, pendingAssignments, visionProSessions, nextDailyAssignment] = await Promise.all([
+          athleteProgressService.get(currentUser.id),
+          assignmentService.getPendingForAthlete(currentUser.id),
+          getDocs(
+            query(
+              collection(db, 'vision-pro-trial-sessions'),
+              where('athleteUserId', '==', currentUser.id),
+              limit(8)
+            )
+          ),
+          assignmentOrchestratorService.getForAthleteOnDate(currentUser.id, todayDateKey()),
+        ]);
+
+        const sessionStatuses = visionProSessions.docs.map((docSnap) => String(docSnap.data()?.status || ''));
+        const nextVisionProTaskState: VisionProTaskState = sessionStatuses.includes('completed')
+          ? 'completed'
+          : sessionStatuses.some((status) => ['queued', 'claimed', 'running'].includes(status))
+          ? 'queued'
+          : 'not-queued';
+
+        const taskState = resolvePulseCheckAthleteTaskState({
+          athleteOnboarding: myMembership.athleteOnboarding,
+          progress: nextProgress,
+        });
+
+        if (taskState.baselineStatus === 'complete' && myMembership.athleteOnboarding?.baselinePathStatus !== 'complete') {
+          await pulseCheckProvisioningService.updateAthleteBaselineStatus({
+            teamMembershipId: myMembership.id,
+            baselinePathStatus: 'complete',
+            baselinePathwayId: nextProgress?.currentPathway,
+          });
+          const nextAthleteOnboarding = {
+            productConsentAccepted: Boolean(myMembership.athleteOnboarding?.productConsentAccepted),
+            ...myMembership.athleteOnboarding,
+            baselinePathStatus: 'complete' as const,
+            baselinePathwayId: nextProgress?.currentPathway || myMembership.athleteOnboarding?.baselinePathwayId,
+          };
+          resolvedMembership = {
+            ...myMembership,
+            athleteOnboarding: nextAthleteOnboarding,
+          };
+        }
+
+        setAthleteProgress(nextProgress);
+        setTodayDailyAssignment(nextDailyAssignment);
+        setPendingAssignmentCount(pendingAssignments.length);
+        setVisionProTaskState(nextVisionProTaskState);
+      } catch (error) {
+        console.error('[PulseCheck team workspace] Failed to load athlete task state:', error);
+        setAthleteProgress(null);
+        setTodayDailyAssignment(null);
+        setPendingAssignmentCount(0);
+        setVisionProTaskState('not-queued');
+      } finally {
+        setAthleteTaskLoading(false);
+      }
+    } else {
+      setAthleteProgress(null);
+      setTodayDailyAssignment(null);
+      setPendingAssignmentCount(0);
+      setVisionProTaskState('not-queued');
+      setAthleteTaskLoading(false);
+    }
+
+    setMembership(resolvedMembership);
     setOrganization(nextOrganization);
     setTeam(nextTeam);
     setTeamMembers(memberViews);
@@ -289,9 +471,81 @@ export default function PulseCheckTeamWorkspacePage() {
   const athleteInviteLinks = activeInviteLinks.filter((invite) => invite.teamMembershipRole === 'athlete');
   const adultMembers = useMemo(() => teamMembers.filter((entry) => entry.membership.role !== 'athlete'), [teamMembers]);
   const isTeamAdmin = membership?.role === 'team-admin';
+  const isAthleteWorkspace = membership?.role === 'athlete';
   const operatingRole = membership?.operatingRole || 'admin-only';
   const focus = focusByRole[operatingRole];
   const canManageAthleteInvites = membership ? canCreateAthleteInvite(membership.role, team?.defaultInvitePolicy) : false;
+  const athleteTaskState = resolvePulseCheckAthleteTaskState({
+    athleteOnboarding: membership?.athleteOnboarding,
+    progress: athleteProgress,
+  });
+  const consentComplete = athleteTaskState.consentComplete;
+  const baselineComplete = athleteTaskState.baselineComplete;
+  const baselineStarted = athleteTaskState.baselineStatus === 'started';
+  const requiredTasksComplete = athleteTaskState.requiredTasksComplete;
+  const showAthleteVisionProSummary = visionProTaskState === 'queued' || visionProTaskState === 'completed';
+  const nextProgramName = athleteProgress?.activeProgram?.recommendedSimId
+    ? athleteProgress.activeProgram.recommendedSimId.split('_').join(' ')
+    : null;
+  const todayTaskName = humanizeDailyTaskLabel(todayDailyAssignment);
+  const todayTaskIsActive = isActiveDailyTask(todayDailyAssignment);
+  const athleteCurrentAssignmentCount = requiredTasksComplete
+    ? todayTaskIsActive
+      ? 1
+      : pendingAssignmentCount
+    : 0;
+  const todayTaskSubtitle = !todayDailyAssignment
+    ? requiredTasksComplete
+      ? athleteProgress?.activeProgram?.rationale || 'Profile-driven recommendation'
+      : 'We will recommend your first training focus'
+    : todayDailyAssignment.status === PulseCheckDailyAssignmentStatus.Deferred
+    ? todayDailyAssignment.overrideReason || 'Your coach paused today\'s task while they adjust the plan.'
+    : todayDailyAssignment.rationale || 'Built from today\'s readiness signal.';
+
+  const handleLaunchBaseline = useCallback(async () => {
+    if (!membership || !currentUser?.id) return;
+
+    setMessage(null);
+    try {
+      await pulseCheckProvisioningService.updateAthleteBaselineStatus({
+        teamMembershipId: membership.id,
+        baselinePathStatus: baselineComplete ? 'complete' : 'started',
+      });
+      await refreshWorkspace();
+      setBaselineModalOpen(true);
+    } catch (error) {
+      console.error('[PulseCheck team workspace] Failed to prepare baseline task:', error);
+      setMessage({ type: 'error', text: 'Failed to launch the baseline task.' });
+    }
+  }, [baselineComplete, currentUser?.id, membership]);
+
+  const athleteHeroSummary = !consentComplete
+    ? `You are in the right place. We have added you to ${team?.displayName || 'your team'}. First, finish setup so we can get you ready to begin.`
+    : !baselineComplete
+    ? `You are in the right place. We have added you to ${team?.displayName || 'your team'}. Your next step is to complete your baseline so we can personalize your starting point.`
+    : todayDailyAssignment
+    ? `You are all set in ${team?.displayName || 'your team'}. Your consent and baseline are complete, and today\'s Nora task is now your source of truth.`
+    : `You are all set in ${team?.displayName || 'your team'}. Your consent and baseline are complete, and you are ready for what comes next.`;
+
+  const handleBaselineComplete = useCallback(async (progress: AthleteMentalProgress) => {
+    if (!membership) return;
+
+    setBaselineModalOpen(false);
+    setAthleteProgress(progress);
+
+    try {
+      await pulseCheckProvisioningService.updateAthleteBaselineStatus({
+        teamMembershipId: membership.id,
+        baselinePathStatus: 'complete',
+        baselinePathwayId: progress.currentPathway,
+      });
+      await refreshWorkspace();
+      setMessage({ type: 'success', text: 'Baseline completed. Required tasks are now unlocked for training.' });
+    } catch (error) {
+      console.error('[PulseCheck team workspace] Failed to mark baseline complete:', error);
+      setMessage({ type: 'error', text: 'Baseline finished, but the task status failed to refresh. Reload and verify the unlock state.' });
+    }
+  }, [membership]);
 
   const handleCopy = async (value: string, successText: string) => {
     try {
@@ -433,8 +687,11 @@ export default function PulseCheckTeamWorkspacePage() {
 
   if (currentUserLoading || loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#05070c] text-white">
-        <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
+      <div className="flex min-h-screen items-center justify-center" style={{ background: '#05070c' }}>
+        <div className="relative">
+          <div className="absolute inset-0 rounded-full bg-[#E0FE10]/20 blur-2xl" />
+          <Loader2 className="relative h-8 w-8 animate-spin text-[#E0FE10]" />
+        </div>
       </div>
     );
   }
@@ -444,52 +701,265 @@ export default function PulseCheckTeamWorkspacePage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#05070c] text-white">
+    <div className="min-h-screen text-white overflow-hidden" style={{ background: '#05070c' }}>
       <Head>
-        <title>PulseCheck Team Workspace</title>
+        <title>{team.displayName} | PulseCheck Workspace</title>
         <meta name="robots" content="noindex,nofollow" />
       </Head>
 
-      <main className="mx-auto w-full max-w-7xl px-4 py-8 md:px-6 md:py-10">
-        <section className="rounded-[36px] border border-zinc-800 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.10),_transparent_35%),#07101d] p-6 shadow-2xl md:p-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">PulseCheck Team Workspace</p>
-              <h1 className="mt-3 text-4xl font-semibold tracking-tight">{team.displayName}</h1>
-              <p className="mt-4 max-w-3xl text-sm leading-7 text-zinc-300">
-                {organization?.displayName || 'Organization'} is active. Staff, athletes, and invite state now live in the same team-scoped workspace.
-              </p>
+      {/* Ambient background orbs */}
+      <div className="fixed inset-0 pointer-events-none">
+        <FloatingOrb color="#E0FE10" size="w-[550px] h-[550px]" style={{ top: '-10%', left: '-8%' }} delay={0} />
+        <FloatingOrb color="#3B82F6" size="w-[420px] h-[420px]" style={{ top: '25%', right: '-6%' }} delay={3} />
+        <FloatingOrb color="#8B5CF6" size="w-[380px] h-[380px]" style={{ bottom: '5%', left: '20%' }} delay={6} />
+        <div className="absolute inset-0 opacity-[0.018]" style={{ backgroundImage: `url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIgdHlwZT0iZnJhY3RhbE5vaXNlIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxwYXRoIGQ9Ik0wIDBoMzAwdjMwMEgweiIgZmlsdGVyPSJ1cmwoI2EpIiBvcGFjaXR5PSIuMDUiLz48L3N2Zz4=")` }} />
+      </div>
+
+      <main className="relative z-10 mx-auto w-full max-w-7xl px-4 py-8 md:px-6 md:py-10">
+        {/* Hero Header */}
+        <GlassCard accentColor="#3B82F6" delay={0.05}>
+          <div className="p-6 md:p-8">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="text-xs uppercase tracking-[0.24em] text-zinc-500">
+                  {isAthleteWorkspace ? 'You are joining' : 'PulseCheck Team Workspace'}
+                </motion.p>
+                <motion.h1 initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-3 text-4xl font-bold tracking-tight">
+                  <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(90deg, #ffffff, #94a3b8)' }}>
+                    {team.displayName}
+                  </span>
+                </motion.h1>
+                <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="mt-3 max-w-3xl text-sm leading-7 text-zinc-400">
+                  {isAthleteWorkspace
+                    ? athleteHeroSummary
+                    : `${organization?.displayName || 'Organization'} is active. Staff, athletes, and invite state now live in the same team-scoped workspace.`}
+                </motion.p>
+              </div>
+
+              <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="flex flex-wrap gap-3">
+                {isAthleteWorkspace ? (
+                  !consentComplete ? (
+                    <Link
+                      href={`/PulseCheck/post-activation?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
+                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90"
+                      style={{ background: '#E0FE10' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(224,254,16,0.35)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+                    >
+                      Finish Setup
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  ) : !baselineComplete ? (
+                    <button
+                      type="button"
+                      onClick={handleLaunchBaseline}
+                      disabled={athleteTaskLoading}
+                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                      style={{ background: '#E0FE10' }}
+                      onMouseEnter={(e) => { if (!athleteTaskLoading) (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(224,254,16,0.35)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+                    >
+                      {athleteTaskLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+                      {baselineStarted ? 'Resume Baseline' : 'Start Baseline'}
+                    </button>
+                  ) : (
+                    <Link
+                      href="/PulseCheck"
+                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90"
+                      style={{ background: '#E0FE10' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(224,254,16,0.35)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+                    >
+                      Go to Today
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  )
+                ) : (
+                  <>
+                    <Link
+                      href={`/PulseCheck/post-activation?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-300 transition-all hover:border-white/20 hover:text-white hover:bg-white/[0.07] backdrop-blur-sm"
+                    >
+                      Manage Onboarding
+                    </Link>
+                    <Link
+                      href="/PulseCheck"
+                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90"
+                      style={{ background: '#E0FE10' }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(224,254,16,0.35)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+                    >
+                      Open PulseCheck
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </>
+                )}
+              </motion.div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href={`/PulseCheck/post-activation?organizationId=${encodeURIComponent(organizationId)}&teamId=${encodeURIComponent(teamId)}`}
-                className="inline-flex items-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
-              >
-                Manage Onboarding
-              </Link>
-              <Link
-                href="/PulseCheck"
-                className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
-              >
-                Open PulseCheck
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
+            <AnimatePresence>
+              {message ? (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: 'auto' }}
+                  exit={{ opacity: 0, y: -8, height: 0 }}
+                  className={`mt-6 rounded-2xl border px-4 py-3 text-sm ${
+                    message.type === 'success'
+                      ? 'border-[#E0FE10]/20 bg-[#E0FE10]/[0.06] text-[#E0FE10]'
+                      : 'border-red-500/20 bg-red-500/[0.06] text-red-300'
+                  }`}
+                >
+                  {message.text}
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
           </div>
+        </GlassCard>
 
-          {message ? (
-            <div
-              className={`mt-6 rounded-2xl border px-4 py-3 text-sm ${
-                message.type === 'success'
-                  ? 'border-green-500/20 bg-green-500/[0.06] text-green-200'
-                  : 'border-red-500/20 bg-red-500/[0.06] text-red-200'
-              }`}
-            >
-              {message.text}
+          {isAthleteWorkspace ? (
+            <div className="mt-8 space-y-6">
+              <div className={`grid gap-6 ${showAthleteVisionProSummary ? 'xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]' : ''}`}>
+                <div className="rounded-[30px] border border-zinc-800 bg-[radial-gradient(circle_at_top_left,_rgba(224,254,16,0.12),_transparent_38%),#091326] p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="rounded-2xl border border-[#E0FE10]/25 bg-[#E0FE10]/10 p-3">
+                      {requiredTasksComplete ? (
+                        <CheckCircle2 className="h-6 w-6 text-[#E0FE10]" />
+                      ) : (
+                        <Lock className="h-6 w-6 text-[#E0FE10]" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">What Happens Next</div>
+                      <h2 className="mt-3 text-2xl font-semibold text-white">
+                        {requiredTasksComplete ? (todayDailyAssignment ? 'Today\'s task is ready.' : 'You are ready to begin.') : 'One more step before training begins.'}
+                      </h2>
+                      <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-300">
+                        {requiredTasksComplete
+                          ? todayDailyAssignment
+                            ? todayTaskSubtitle
+                            : 'Your consent and baseline are complete. Nora and your team can now start personalizing what comes next.'
+                          : 'Before training starts, we need your baseline. It gives us a starting point so Nora and your team can personalize what comes next. A Vision Pro session may be offered later, but it is optional.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 grid gap-4 md:grid-cols-3">
+                    {[
+                      { label: 'Required Tasks', value: requiredTasksComplete || baselineComplete ? '2 / 2' : '1 / 2', sub: 'Consent plus in-app baseline', accent: '#E0FE10' },
+                      { label: 'Current Assignments', value: athleteCurrentAssignmentCount, sub: requiredTasksComplete ? 'Ready for you now' : 'These appear after your baseline', accent: '#3B82F6' },
+                      { label: 'Today\'s Nora Task', value: requiredTasksComplete && todayTaskName ? todayTaskName : requiredTasksComplete && nextProgramName ? nextProgramName : 'After your baseline', sub: todayTaskSubtitle, accent: '#8B5CF6' },
+                    ].map((stat) => (
+                      <div key={stat.label} className="rounded-[20px] border border-white/8 bg-black/25 p-4" style={{ borderColor: `${stat.accent}18` }}>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{stat.label}</div>
+                        <div className="mt-3 text-2xl font-bold capitalize" style={{ color: stat.accent !== '#E0FE10' ? '#fff' : stat.accent }}>{stat.value}</div>
+                        <div className="mt-1 text-sm text-zinc-400">{stat.sub}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {showAthleteVisionProSummary ? (
+                  <div className="grid gap-4">
+                    <InfoCard icon={<ScanLine className="h-4 w-4 text-[#8B5CF6]" />} title="Optional Vision Pro Session" accentColor="#8B5CF6" delay={0.5}>
+                      <p className="text-sm leading-7 text-zinc-400">
+                        {visionProTaskState === 'completed'
+                          ? 'Your optional Vision Pro session is complete. If your team uses it, they may count it as an extra checkpoint.'
+                          : 'Your team has scheduled an optional Vision Pro session for you. Complete it when prompted, but you do not need it to begin training.'}
+                      </p>
+                    </InfoCard>
+                  </div>
+                ) : null}
+              </div>
+
+              <div className="rounded-[30px] border border-zinc-800 bg-[#091326] p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs uppercase tracking-[0.2em] text-zinc-500">Before Training Begins</div>
+                    <div className="mt-2 text-2xl font-semibold text-white">Finish these to unlock your first training session.</div>
+                  </div>
+                  {requiredTasksComplete ? (
+                    <Link
+                      href={todayDailyAssignment ? '/PulseCheck?section=today' : '/PulseCheck?section=profile'}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-zinc-700 px-4 py-3 text-sm font-semibold text-white transition hover:border-zinc-500"
+                    >
+                      {todayDailyAssignment ? 'Open Today' : 'Review Profile'}
+                      <ChevronRight className="h-4 w-4" />
+                    </Link>
+                  ) : null}
+                </div>
+
+                <div className="mt-6 grid gap-4 lg:grid-cols-3">
+                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: consentComplete ? 'rgba(224,254,16,0.2)' : 'rgba(255,255,255,0.07)' }}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Required</div>
+                        <div className="mt-2 text-lg font-semibold text-white">Getting Started Consent</div>
+                      </div>
+                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: consentComplete ? '#E0FE10' : '#FCD34D', background: consentComplete ? 'rgba(224,254,16,0.1)' : 'rgba(252,211,77,0.1)', border: `1px solid ${consentComplete ? 'rgba(224,254,16,0.25)' : 'rgba(252,211,77,0.2)'}` }}>
+                        {consentComplete ? 'Complete' : 'Pending'}
+                      </div>
+                    </div>
+                    <p className="mt-4 text-sm leading-7 text-zinc-400">
+                      You already completed this at the start of onboarding. It gives us permission to set up PulseCheck for your team.
+                    </p>
+                  </div>
+
+                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: baselineComplete ? 'rgba(224,254,16,0.2)' : baselineStarted ? 'rgba(59,130,246,0.2)' : 'rgba(255,255,255,0.07)' }}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Required</div>
+                        <div className="mt-2 text-lg font-semibold text-white">In-App Baseline</div>
+                      </div>
+                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: baselineComplete ? '#E0FE10' : baselineStarted ? '#3B82F6' : '#a1a1aa', background: baselineComplete ? 'rgba(224,254,16,0.1)' : baselineStarted ? 'rgba(59,130,246,0.1)' : 'rgba(255,255,255,0.06)', border: `1px solid ${baselineComplete ? 'rgba(224,254,16,0.25)' : baselineStarted ? 'rgba(59,130,246,0.25)' : 'rgba(255,255,255,0.1)'}` }}>
+                        {baselineComplete ? 'Complete' : baselineStarted ? 'In Progress' : 'Ready'}
+                      </div>
+                    </div>
+                    <p className="mt-4 text-sm leading-7 text-zinc-400">
+                      Your baseline gives us a starting point so Nora and your team can personalize what comes next.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={athleteTaskLoading || baselineComplete}
+                      onClick={handleLaunchBaseline}
+                      className="mt-5 inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                      style={{ background: '#E0FE10' }}
+                      onMouseEnter={(e) => { if (!baselineComplete) (e.currentTarget as HTMLElement).style.boxShadow = '0 0 18px rgba(224,254,16,0.4)'; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+                    >
+                      {athleteTaskLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+                      {baselineComplete ? 'Baseline complete' : baselineStarted ? 'Resume baseline' : 'Start baseline'}
+                    </button>
+                  </div>
+
+                  <div className="rounded-[22px] border bg-black/25 p-5" style={{ borderColor: visionProTaskState === 'completed' ? 'rgba(224,254,16,0.2)' : visionProTaskState === 'queued' ? 'rgba(139,92,246,0.2)' : 'rgba(255,255,255,0.07)' }}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Optional</div>
+                        <div className="mt-2 text-lg font-semibold text-white">Vision Pro Session</div>
+                      </div>
+                      <div className="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: visionProTaskState === 'completed' ? '#E0FE10' : visionProTaskState === 'queued' ? '#8B5CF6' : '#71717a', background: visionProTaskState === 'completed' ? 'rgba(224,254,16,0.1)' : visionProTaskState === 'queued' ? 'rgba(139,92,246,0.1)' : 'rgba(255,255,255,0.05)', border: `1px solid ${visionProTaskState === 'completed' ? 'rgba(224,254,16,0.25)' : visionProTaskState === 'queued' ? 'rgba(139,92,246,0.25)' : 'rgba(255,255,255,0.08)'}` }}>
+                        {visionProTaskState === 'completed' ? 'Complete' : visionProTaskState === 'queued' ? 'Queued' : 'Optional'}
+                      </div>
+                    </div>
+                    <p className="mt-4 text-sm leading-7 text-zinc-400">
+                      Some teams add an optional Vision Pro session after baseline. It does not block training.
+                    </p>
+                  </div>
+                </div>
+
+                <div className={`mt-6 rounded-[20px] border px-5 py-4 text-sm ${ requiredTasksComplete ? 'border-[#E0FE10]/20 bg-[#E0FE10]/[0.05] text-[#E0FE10]' : 'border-amber-500/20 bg-amber-500/[0.05] text-amber-200' }`}>
+                  {requiredTasksComplete
+                    ? todayDailyAssignment
+                      ? `Today's Nora task is ${todayTaskIsActive ? 'ready' : dailyTaskStatusLabel(todayDailyAssignment.status).toLowerCase()}: ${todayTaskName || 'Nora task'}.`
+                      : pendingAssignmentCount > 0
+                      ? `You are ready to begin. You currently have ${pendingAssignmentCount} assignment${pendingAssignmentCount === 1 ? '' : 's'} waiting for you.`
+                      : 'You are ready to begin. Your training can now be added here.'
+                    : 'Complete the steps above and we will unlock your training.'}
+                </div>
+              </div>
             </div>
-          ) : null}
-
+          ) : (
+          <>
           <div className="mt-8 grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
             <div className={`rounded-[30px] border bg-gradient-to-br p-6 ${focus.accent}`}>
               <div className="flex items-center gap-3">
@@ -773,6 +1243,10 @@ export default function PulseCheckTeamWorkspacePage() {
                           <div>
                             <div className="text-sm font-semibold text-white">{invite.recipientName || invite.targetEmail || 'Athlete invite'}</div>
                             <div className="mt-1 text-xs text-zinc-500">{invite.targetEmail || 'No email captured'}</div>
+                            <div className="mt-1 text-xs uppercase tracking-[0.16em] text-zinc-500">
+                              {invite.cohortName ? `Cohort Invite · ${invite.cohortName}` : 'Team Athlete Invite'}
+                            </div>
+                            {invite.pilotName ? <div className="mt-1 text-xs text-zinc-500">Pilot: {invite.pilotName}</div> : null}
                             <div className="mt-2 break-all text-xs leading-6 text-zinc-400">{invite.activationUrl}</div>
                           </div>
                           <div className="flex flex-wrap gap-2">
@@ -867,7 +1341,16 @@ export default function PulseCheckTeamWorkspacePage() {
               </div>
             </div>
           </div>
-        </section>
+          </>
+          )}
+
+        <BaselineAssessmentModal
+          isOpen={baselineModalOpen}
+          onClose={() => setBaselineModalOpen(false)}
+          athleteId={currentUser.id}
+          athleteName={currentUser.displayName || currentUser.username || currentUser.email || 'Athlete'}
+          onComplete={handleBaselineComplete}
+        />
 
         {scopeModalOpen && scopeTarget ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">

@@ -1,8 +1,8 @@
 // src/services/FirebaseStorageService.ts
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from "firebase/storage";
-import { User } from "../../../api/firebase/user";
-import { userService } from "../../../api/firebase/user";
-import { auth } from "../../../api/firebase/config";
+import { auth } from "../config";
+import { userService } from "../user/service";
+import { User } from "../user/types";
 
 export enum UploadImageType {
   Profile = "profile_images",

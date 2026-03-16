@@ -31,6 +31,38 @@ function formatDate(date) {
   return `${year}-${month}-${day}`;
 }
 
+function humanizeAssignmentLabel(value) {
+  if (!value || typeof value !== 'string') {
+    return 'Nora task';
+  }
+
+  return value
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function buildNoraAssignmentLabel(assignment) {
+  if (assignment.actionType === 'defer') {
+    return "deferred today's training task";
+  }
+
+  if (assignment.simSpecId) {
+    return `assigned ${humanizeAssignmentLabel(assignment.simSpecId)}`;
+  }
+
+  if (assignment.legacyExerciseId) {
+    return `assigned ${humanizeAssignmentLabel(assignment.legacyExerciseId)}`;
+  }
+
+  if (assignment.sessionType) {
+    return `assigned a ${humanizeAssignmentLabel(assignment.sessionType)} rep`;
+  }
+
+  return 'assigned a new Nora task';
+}
+
 /**
  * Get current day number in an assignment
  */
@@ -107,6 +139,45 @@ async function getUserDisplayName(userId) {
     console.error(`Error getting user ${userId} name:`, error);
   }
   return 'Athlete';
+}
+
+async function resolveCompletionCoachId(completion) {
+  if (completion.dailyAssignmentId) {
+    try {
+      const assignmentDoc = await db.collection('pulsecheck-daily-assignments').doc(completion.dailyAssignmentId).get();
+      if (assignmentDoc.exists) {
+        const assignmentData = assignmentDoc.data();
+        if (assignmentData?.coachId) {
+          return assignmentData.coachId;
+        }
+      }
+    } catch (error) {
+      console.error('Error resolving coach from Nora daily assignment:', error);
+    }
+  }
+
+  try {
+    const progressDoc = await db.collection('athlete-mental-progress').doc(completion.userId).get();
+    if (progressDoc.exists) {
+      return progressDoc.data()?.coachId || null;
+    }
+  } catch (error) {
+    console.error('Error resolving coach from athlete progress:', error);
+  }
+
+  return null;
+}
+
+async function upsertCoachNotification(notificationId, payload) {
+  const basePayload = {
+    read: false,
+    archived: false,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    ...payload,
+  };
+
+  await db.collection('coach-notifications').doc(notificationId).set(basePayload, { merge: true });
 }
 
 // ============================================================================
@@ -565,6 +636,175 @@ exports.onAthleteSelfAssignment = onDocumentCreated(
       return { success: true };
     } catch (error) {
       console.error('Error processing athlete self-assignment notification:', error);
+      return { success: false, error: error.message };
+    }
+  }
+);
+
+/**
+ * Triggered when Nora materializes a new daily assignment after check-in
+ * Sends push notification to the coach so they can review or intervene.
+ */
+exports.onNoraAutoAssignmentCreated = onDocumentCreated(
+  'pulsecheck-daily-assignments/{assignmentId}',
+  async (event) => {
+    const assignment = event.data?.data();
+    if (!assignment) {
+      console.log('No Nora daily assignment data found');
+      return null;
+    }
+
+    if (assignment.assignedBy !== 'nora') {
+      return null;
+    }
+
+    const assignmentId = event.params.assignmentId;
+    const { coachId, athleteId } = assignment;
+
+    if (!coachId || !athleteId) {
+      console.log(`Skipping Nora auto-assignment ${assignmentId}: missing coachId or athleteId`);
+      return null;
+    }
+
+    try {
+      const athleteName = await getUserDisplayName(athleteId);
+      const assignmentLabel = buildNoraAssignmentLabel(assignment);
+      const pushTitle =
+        assignment.actionType === 'defer'
+          ? 'Pulse Check paused today\'s task'
+          : 'Nora assigned today\'s task';
+      const pushBody = `${athleteName}: Nora ${assignmentLabel}. Review or override in Mental Training.`;
+      const notificationId = `pulsecheck_nora_auto_assignment_${assignmentId}`;
+
+      await upsertCoachNotification(notificationId, {
+        type: 'pulsecheck_nora_auto_assignment',
+        category: 'athlete',
+        coachId,
+        athleteId,
+        title: pushTitle,
+        message: pushBody,
+        actionRequired: assignment.actionType !== 'defer',
+        sourceId: assignmentId,
+        target: 'coach_mental_training',
+        webUrl: 'https://fitwithpulse.ai/coach/mentalGames?tab=assignments',
+        metadata: {
+          sourceDate: assignment.sourceDate || formatDate(Date.now()),
+          actionType: assignment.actionType || 'sim',
+        },
+      });
+
+      const result = await sendNotificationToUser(
+        coachId,
+        pushTitle,
+        pushBody,
+        {
+          assignmentId,
+          athleteId,
+          sourceDate: assignment.sourceDate || formatDate(Date.now()),
+          actionType: assignment.actionType || 'sim',
+          target: 'coach_mental_training',
+          webUrl: 'https://fitwithpulse.ai/coach/mentalGames?tab=assignments',
+        },
+        'NORA_AUTO_ASSIGNMENT'
+      );
+
+      if (result.success) {
+        await db.collection('coach-notifications').doc(notificationId).set({
+          processed: true,
+          processedAt: Date.now(),
+          updatedAt: Date.now(),
+        }, { merge: true });
+        await event.data.ref.update({
+          coachNotifiedAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error processing Nora auto-assignment notification:', error);
+      return { success: false, error: error.message };
+    }
+  }
+);
+
+/**
+ * Triggered when a completion receives its post-session summary.
+ * Sends a coach push so the coach sees what changed and what Nora pointed to next.
+ */
+exports.onPulseCheckSessionSummaryCreated = onDocumentUpdated(
+  'sim-completions/{userId}/completions/{completionId}',
+  async (event) => {
+    const before = event.data?.before?.data();
+    const after = event.data?.after?.data();
+
+    if (!before || !after) {
+      return null;
+    }
+
+    if (before.sessionSummary || !after.sessionSummary) {
+      return null;
+    }
+
+    try {
+      const coachId = await resolveCompletionCoachId(after);
+      if (!coachId) {
+        console.log('Skipping session summary coach notification: no coachId resolved');
+        return null;
+      }
+
+      const athleteName = await getUserDisplayName(after.userId);
+      const summary = after.sessionSummary || {};
+      const title = summary.programChanged
+        ? 'Pulse Check updated the next rep'
+        : 'Pulse Check logged a completed rep';
+      const body = `${athleteName}: ${summary.coachBody || 'A new session update is ready in Mental Training.'}`;
+      const notificationId = `pulsecheck_session_update_${event.params.completionId}`;
+
+      await upsertCoachNotification(notificationId, {
+        type: 'pulsecheck_session_update',
+        category: 'athlete',
+        coachId,
+        athleteId: after.userId,
+        title,
+        message: body,
+        actionRequired: Boolean(summary.programChanged),
+        sourceId: event.params.completionId,
+        target: 'coach_mental_training',
+        webUrl: 'https://fitwithpulse.ai/coach/mentalGames',
+        metadata: {
+          dailyAssignmentId: after.dailyAssignmentId || '',
+          completedActionLabel: summary.completedActionLabel || '',
+          nextActionLabel: summary.nextActionLabel || '',
+          programChanged: Boolean(summary.programChanged),
+        },
+      });
+
+      const result = await sendNotificationToUser(
+        coachId,
+        title,
+        body,
+        {
+          athleteId: after.userId,
+          completionId: event.params.completionId,
+          dailyAssignmentId: after.dailyAssignmentId || '',
+          target: 'coach_mental_training',
+          webUrl: 'https://fitwithpulse.ai/coach/mentalGames',
+        },
+        'PULSECHECK_SESSION_UPDATE'
+      );
+
+      if (result.success) {
+        await db.collection('coach-notifications').doc(notificationId).set({
+          processed: true,
+          processedAt: Date.now(),
+          updatedAt: Date.now(),
+        }, { merge: true });
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error processing Pulse Check session summary notification:', error);
       return { success: false, error: error.message };
     }
   }

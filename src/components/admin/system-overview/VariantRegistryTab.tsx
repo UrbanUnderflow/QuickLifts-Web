@@ -46,7 +46,10 @@ import {
 } from '../../../api/firebase/mentaltraining';
 import {
     type SimVariantArchetype,
+    buildDefaultVisionRuntimePlan,
+    buildVisionRuntimePackageManifest,
     buildSimVariantId,
+    resolveDefaultVisionPackageId,
     type SimVariantHistoryEntry,
     type SimVariantFamilyStatus,
     type SimVariantLockedSpec,
@@ -55,6 +58,12 @@ import {
     type SimVariantRecord,
     type SimVariantSeed,
     type SimVariantSpecStatus,
+    type SimVariantVisionStatus,
+    type VisionRuntimePackageRecord,
+    type VisionRuntimeNoiseGateBlockManifest,
+    type VisionRuntimeResetBlockManifest,
+    type VisionRuntimeSignalBlockManifest,
+    type VisionRuntimeTrialPlanManifest,
 } from '../../../api/firebase/mentaltraining/variantRegistryService';
 import {
     applyDraftSyncState,
@@ -208,6 +217,13 @@ const BUILD_STATUS_CONFIG: Record<SimBuildStatus, { label: string; color: string
     build_error: { label: 'Build Error', color: '#ef4444' },
 };
 
+const VISION_STATUS_CONFIG: Record<SimVariantVisionStatus, { label: string; color: string }> = {
+    spec_only: { label: 'Spec Only', color: '#71717a' },
+    runtime_mapped: { label: 'Runtime Mapped', color: '#38bdf8' },
+    in_package: { label: 'In Package', color: '#a855f7' },
+    validated: { label: 'Validated', color: '#22c55e' },
+};
+
 const SYNC_STATUS_CONFIG: Record<SimSyncStatus, { label: string; color: string }> = {
     in_sync: { label: 'In Sync', color: '#22c55e' },
     spec_changed: { label: 'Spec Changed', color: '#f59e0b' },
@@ -242,6 +258,64 @@ function displayVariantName(name: string) {
 
 function displayCopy(text: string) {
     return getDisplaySimText(text);
+}
+
+const EMPTY_VISION_RUNTIME_PLAN: VisionRuntimeTrialPlanManifest = {
+    controlledBreakSeconds: 60,
+    totalSessionCapSeconds: 20 * 60,
+    resetBlocks: [],
+    signalWindowBlocks: [],
+    noiseGateBlocks: [],
+};
+
+function buildEditableVisionRuntimePlan(variant: SimVariantRecord, packageId: string | null) {
+    if (variant.visionRuntimePlan) return variant.visionRuntimePlan;
+    if (packageId) {
+        const defaultPlan = buildDefaultVisionRuntimePlan(packageId);
+        if (defaultPlan) return defaultPlan;
+    }
+    return EMPTY_VISION_RUNTIME_PLAN;
+}
+
+function buildDefaultResetBlock(): VisionRuntimeResetBlockManifest {
+    return {
+        pressureTags: [],
+        disruptionLabel: 'New reset pressure block',
+        lockInSeconds: 4.5,
+        disruptionSeconds: 1.3,
+        responseWindowSeconds: 3.0,
+        interBlockGapSeconds: 2.0,
+    };
+}
+
+function buildDefaultSignalBlock(): VisionRuntimeSignalBlockManifest {
+    return {
+        correctChoice: 'left',
+        decoyChoice: 'right',
+        pressureTags: [],
+        cueWindowSeconds: 1.2,
+        readySeconds: 2.0,
+        responseWindowSeconds: 2.0,
+        interBlockGapSeconds: 2.0,
+    };
+}
+
+function buildDefaultNoiseGateBlock(): VisionRuntimeNoiseGateBlockManifest {
+    return {
+        targetChoice: 'center',
+        distractorChoice: 'right',
+        noiseLabel: 'Crowd tunnel surge',
+        noiseIntensity: 0.7,
+        pressureTags: [],
+        readySeconds: 2.0,
+        exposureSeconds: 1.4,
+        responseWindowSeconds: 2.2,
+        interBlockGapSeconds: 2.0,
+    };
+}
+
+function parseCommaTags(raw: string) {
+    return raw.split(',').map((tag) => tag.trim()).filter(Boolean);
 }
 
 const FAMILY_SPEC_BASES: Record<string, FamilySpecBase> = {
@@ -1600,7 +1674,7 @@ const ARCHETYPE_LABELS: Record<SimVariantArchetype, string> = {
     decoy_discrimination: 'Decoy / Discrimination Variant',
 };
 
-function resolveVariantArchetype(variant: VariantEntry): SimVariantArchetype {
+function resolveVariantArchetype(variant: Pick<SimVariantRecord, 'name' | 'archetypeOverride'>): SimVariantArchetype {
     if (variant.archetypeOverride) {
         return variant.archetypeOverride;
     }
@@ -1608,7 +1682,7 @@ function resolveVariantArchetype(variant: VariantEntry): SimVariantArchetype {
     const name = variant.name.toLowerCase();
     if (name.includes('short daily')) return 'short_daily';
     if (name.includes('extended trial') || name.includes('trial-only') || name.includes('field-read trial')) return 'trial';
-    if (name.includes('immersive') || name.includes('chamber') || name.includes('tunnel')) return 'immersive';
+    if (name.includes('immersive') || name.includes('vision pro') || name.includes('chamber') || name.includes('tunnel')) return 'immersive';
     if (name.includes('sport') || name.includes('playbook') || name.includes('pre-shot') || name.includes('field-read') || name.includes('shot-clock')) return 'sport_context';
     if (name.includes('visual') || name.includes('clutter') || name.includes('spotlight') || name.includes('peripheral')) return 'visual_channel';
     if (name.includes('audio') || name.includes('crowd') || name.includes('whistle') || name.includes('commentary')) return 'audio_channel';
@@ -1617,6 +1691,23 @@ function resolveVariantArchetype(variant: VariantEntry): SimVariantArchetype {
     if (name.includes('fatigue') || name.includes('late') || name.includes('long') || name.includes('burn') || name.includes('endurance')) return 'fatigue_load';
     if (name.includes('false') || name.includes('fakeout') || name.includes('decoy') || name.includes('bait') || name.includes('go/no-go')) return 'decoy_discrimination';
     return 'baseline';
+}
+
+function isVisionVariantEntry(variant: Pick<SimVariantRecord, 'name' | 'archetypeOverride'>) {
+    const name = variant.name.toLowerCase();
+    return resolveVariantArchetype(variant) === 'immersive' || name.includes('vision pro');
+}
+
+function resolveVisionPackageStatus(variant: Pick<SimVariantRecord, 'visionPackageStatus' | 'name' | 'family' | 'archetypeOverride'> & Partial<Pick<SimVariantRecord, 'specRaw'>>) {
+    if (!isVisionVariantEntry(variant)) return null;
+    return variant.visionPackageStatus ?? 'spec_only';
+}
+
+function resolveWorkspaceSpecStatus(variant: SimVariantRecord, rawSpec: string) {
+    if (variant.mode === 'hybrid') return 'not-required' as const;
+    if (!rawSpec.trim()) return 'needs-spec' as const;
+    if (isVisionVariantEntry(variant)) return 'complete' as const;
+    return variant.publishedModuleId ? 'complete' : 'in-progress';
 }
 
 function buildArchetypeProfile(
@@ -3704,6 +3795,28 @@ function VariantWorkspaceModal({
     const effectiveSyncStatus = variantMeta.syncStatus ?? 'in_sync';
     const buildStatusConf = BUILD_STATUS_CONFIG[effectiveBuildStatus];
     const syncStatusConf = SYNC_STATUS_CONFIG[effectiveSyncStatus];
+    const isVisionVariant = isVisionVariantEntry(variantMeta);
+    const effectiveVisionStatus = resolveVisionPackageStatus(variantMeta);
+    const visionStatusConf = effectiveVisionStatus ? VISION_STATUS_CONFIG[effectiveVisionStatus] : null;
+    const effectiveVisionPackageId = isVisionVariant ? (variantMeta.visionPackageId ?? resolveDefaultVisionPackageId(variantMeta)) : null;
+    const editableVisionRuntimePlan = useMemo(
+        () => (isVisionVariant ? buildEditableVisionRuntimePlan(variantMeta, effectiveVisionPackageId) : null),
+        [effectiveVisionPackageId, isVisionVariant, variantMeta]
+    );
+    const visionPackagePreview = isVisionVariant && effectiveVisionPackageId
+        ? buildVisionRuntimePackageManifest(
+            [{
+                ...variantMeta,
+                visionPackageId: effectiveVisionPackageId,
+                visionPackageStatus: effectiveVisionStatus ?? 'spec_only',
+            }],
+            effectiveVisionPackageId,
+            {
+                preferredSurface: variantMeta.visionSurface,
+                authoredRuntimePlan: variantMeta.visionRuntimePlan ?? editableVisionRuntimePlan,
+            }
+        )
+        : null;
     const workspaceBusy = Boolean(workspaceActionLabel);
 
     useEffect(() => {
@@ -3836,6 +3949,81 @@ function VariantWorkspaceModal({
         }));
     };
 
+    const updateVisionRuntimePlan = (updater: (current: VisionRuntimeTrialPlanManifest) => VisionRuntimeTrialPlanManifest) => {
+        if (!isVisionVariant) return;
+        setVariantMeta((current) => {
+            const packageId = current.visionPackageId ?? resolveDefaultVisionPackageId(current);
+            const nextPlan = updater(buildEditableVisionRuntimePlan(current, packageId));
+            return {
+                ...current,
+                visionRuntimePlan: nextPlan,
+            };
+        });
+    };
+
+    const updateResetBlock = (index: number, updater: (block: VisionRuntimeResetBlockManifest) => VisionRuntimeResetBlockManifest) => {
+        updateVisionRuntimePlan((current) => ({
+            ...current,
+            resetBlocks: current.resetBlocks.map((block, blockIndex) => (blockIndex === index ? updater(block) : block)),
+        }));
+    };
+
+    const updateSignalBlock = (index: number, updater: (block: VisionRuntimeSignalBlockManifest) => VisionRuntimeSignalBlockManifest) => {
+        updateVisionRuntimePlan((current) => ({
+            ...current,
+            signalWindowBlocks: current.signalWindowBlocks.map((block, blockIndex) => (blockIndex === index ? updater(block) : block)),
+        }));
+    };
+
+    const updateNoiseGateBlock = (index: number, updater: (block: VisionRuntimeNoiseGateBlockManifest) => VisionRuntimeNoiseGateBlockManifest) => {
+        updateVisionRuntimePlan((current) => ({
+            ...current,
+            noiseGateBlocks: current.noiseGateBlocks.map((block, blockIndex) => (blockIndex === index ? updater(block) : block)),
+        }));
+    };
+
+    const addResetBlock = () => {
+        updateVisionRuntimePlan((current) => ({
+            ...current,
+            resetBlocks: [...current.resetBlocks, buildDefaultResetBlock()],
+        }));
+    };
+
+    const removeResetBlock = (index: number) => {
+        updateVisionRuntimePlan((current) => ({
+            ...current,
+            resetBlocks: current.resetBlocks.filter((_, blockIndex) => blockIndex !== index),
+        }));
+    };
+
+    const addSignalBlock = () => {
+        updateVisionRuntimePlan((current) => ({
+            ...current,
+            signalWindowBlocks: [...current.signalWindowBlocks, buildDefaultSignalBlock()],
+        }));
+    };
+
+    const removeSignalBlock = (index: number) => {
+        updateVisionRuntimePlan((current) => ({
+            ...current,
+            signalWindowBlocks: current.signalWindowBlocks.filter((_, blockIndex) => blockIndex !== index),
+        }));
+    };
+
+    const addNoiseGateBlock = () => {
+        updateVisionRuntimePlan((current) => ({
+            ...current,
+            noiseGateBlocks: [...current.noiseGateBlocks, buildDefaultNoiseGateBlock()],
+        }));
+    };
+
+    const removeNoiseGateBlock = (index: number) => {
+        updateVisionRuntimePlan((current) => ({
+            ...current,
+            noiseGateBlocks: current.noiseGateBlocks.filter((_, blockIndex) => blockIndex !== index),
+        }));
+    };
+
     const buildNextRecord = (nextSpecRaw: string = rawSpec): SimVariantRecord | null => {
         try {
             const runtimeConfig = JSON.parse(configText);
@@ -3845,11 +4033,7 @@ function VariantWorkspaceModal({
                 lockedSpec: isTrialVariant(variantMeta) ? (variantMeta.lockedSpec ?? buildDefaultLockedSpec(variantMeta)) : undefined,
                 specStatus: variantMeta.mode === 'hybrid'
                     ? 'not-required'
-                    : nextSpecRaw.trim()
-                        ? variantMeta.publishedModuleId
-                            ? 'complete'
-                            : 'in-progress'
-                        : 'needs-spec',
+                    : resolveWorkspaceSpecStatus(variantMeta, nextSpecRaw),
                 runtimeConfig: {
                     ...runtimeConfig,
                     lockedSpec: isTrialVariant(variantMeta) ? (variantMeta.lockedSpec ?? buildDefaultLockedSpec(variantMeta)) : null,
@@ -3976,6 +4160,34 @@ function VariantWorkspaceModal({
         }
     };
 
+    const handleSaveVisionPackage = async (nextStatus?: SimVariantVisionStatus) => {
+        if (!isVisionVariant) return;
+        setWorkspaceActionError(null);
+        setWorkspaceActionLabel('Saving Vision package state...');
+        try {
+            const audit = handleRunAudit();
+            if (audit.status === 'needs_input') {
+                setActiveTab('spec');
+                return;
+            }
+            const next = buildNextRecord(audit.fixedRaw);
+            if (!next) return;
+            const nextRecord = applyDraftSyncState({
+                ...next,
+                visionPackageStatus: nextStatus ?? resolveVisionPackageStatus(next) ?? 'spec_only',
+                visionPackageId: next.visionPackageId?.trim() ? next.visionPackageId : resolveDefaultVisionPackageId(next),
+                visionSurface: next.visionSurface?.trim() ? next.visionSurface : 'football_stadium',
+                visionRuntimePlan: next.visionRuntimePlan ?? editableVisionRuntimePlan ?? undefined,
+            });
+            setVariantMeta(nextRecord);
+            await simVariantRegistryService.saveVisionPackage(nextRecord);
+        } catch (error: any) {
+            setWorkspaceActionError(error?.message || 'Failed to save Vision package state.');
+        } finally {
+            setWorkspaceActionLabel(null);
+        }
+    };
+
     const handleCopySpec = async () => {
         if (!rawSpec.trim()) return;
         try {
@@ -4093,6 +4305,13 @@ function VariantWorkspaceModal({
                                     This is the canonical variant metadata. Edit it here so the spec, runtime config, and published module all stay aligned to one registry record.
                                 </p>
                             </div>
+                            {isVisionVariant && (
+                                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3">
+                                    <p className="text-xs text-cyan-300 leading-relaxed">
+                                        Vision variants use the same spec workflow as app and web sims, but after the spec stage they branch into a Vision package track instead of ending only at <span className="font-mono">sim-modules</span>.
+                                    </p>
+                                </div>
+                            )}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="md:col-span-2">
                                     <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Variant Name</label>
@@ -4153,18 +4372,10 @@ function VariantWorkspaceModal({
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Current Spec Status</label>
-                                    <div className="rounded-xl bg-black/40 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-300">
-                                        {SPEC_STATUS_CONFIG[
-                                            variantMeta.mode === 'hybrid'
-                                                ? 'not-required'
-                                                : rawSpec.trim()
-                                                    ? variantMeta.publishedModuleId
-                                                        ? 'complete'
-                                                        : 'in-progress'
-                                                    : 'needs-spec'
-                                        ].label}
+                                        <div className="rounded-xl bg-black/40 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-300">
+                                        {SPEC_STATUS_CONFIG[resolveWorkspaceSpecStatus(variantMeta, rawSpec)].label}
+                                        </div>
                                     </div>
-                                </div>
                                 <div>
                                     <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Archetype</label>
                                     <select
@@ -4189,6 +4400,334 @@ function VariantWorkspaceModal({
                                         {variantMeta.id}
                                     </div>
                                 </div>
+                                {isVisionVariant && (
+                                    <>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Vision Package Status</label>
+                                            <select
+                                                value={effectiveVisionStatus ?? 'spec_only'}
+                                                onChange={(event) => setVariantMeta((current) => ({
+                                                    ...current,
+                                                    visionPackageStatus: event.target.value as SimVariantVisionStatus,
+                                                }))}
+                                                className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                            >
+                                                {Object.entries(VISION_STATUS_CONFIG).map(([value, config]) => (
+                                                    <option key={value} value={value}>{config.label}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Vision Surface</label>
+                                            <input
+                                                value={variantMeta.visionSurface ?? 'football_stadium'}
+                                                onChange={(event) => setVariantMeta((current) => ({ ...current, visionSurface: event.target.value }))}
+                                                className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                            />
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Vision Package Id</label>
+                                            <input
+                                                value={variantMeta.visionPackageId ?? resolveDefaultVisionPackageId(variantMeta)}
+                                                onChange={(event) => setVariantMeta((current) => ({ ...current, visionPackageId: event.target.value }))}
+                                                className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500 font-mono"
+                                            />
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Vision Validation Notes</label>
+                                            <textarea
+                                                value={variantMeta.visionValidationNotes ?? ''}
+                                                onChange={(event) => setVariantMeta((current) => ({ ...current, visionValidationNotes: event.target.value }))}
+                                                className="w-full min-h-[96px] rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500 resize-y"
+                                            />
+                                        </div>
+                                        {editableVisionRuntimePlan && (
+                                            <div className="md:col-span-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-4">
+                                                <div className="flex items-start justify-between gap-3 flex-wrap">
+                                                    <div>
+                                                        <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300">Vision Runtime Plan</p>
+                                                        <p className="text-sm text-white mt-1">Author the immersive package flow here so the headset runtime reads this plan instead of only falling back to the default football template.</p>
+                                                        <p className="text-[11px] text-cyan-100/70 mt-1">This is package-level structure: session cap, controlled break, reset blocks, noise gate blocks, and signal window blocks.</p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setVariantMeta((current) => ({
+                                                            ...current,
+                                                            visionRuntimePlan: buildDefaultVisionRuntimePlan(current.visionPackageId ?? resolveDefaultVisionPackageId(current))
+                                                                ?? EMPTY_VISION_RUNTIME_PLAN,
+                                                        }))}
+                                                        className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/15 transition-colors"
+                                                    >
+                                                        Load Package Default
+                                                    </button>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Controlled Break (Seconds)</label>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            step="1"
+                                                            value={editableVisionRuntimePlan.controlledBreakSeconds}
+                                                            onChange={(event) => updateVisionRuntimePlan((current) => ({
+                                                                ...current,
+                                                                controlledBreakSeconds: Number(event.target.value || 0),
+                                                            }))}
+                                                            className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Session Cap (Seconds)</label>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            step="1"
+                                                            value={editableVisionRuntimePlan.totalSessionCapSeconds}
+                                                            onChange={(event) => updateVisionRuntimePlan((current) => ({
+                                                                ...current,
+                                                                totalSessionCapSeconds: Number(event.target.value || 0),
+                                                            }))}
+                                                            className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <div>
+                                                                <p className="text-xs font-semibold text-white">Reset Blocks</p>
+                                                                <p className="text-[11px] text-zinc-500 mt-1">{editableVisionRuntimePlan.resetBlocks.length} authored blocks in the reset sequence.</p>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={addResetBlock}
+                                                                className="rounded-lg border border-zinc-700 bg-black/30 px-3 py-2 text-xs font-semibold text-white hover:border-zinc-500 transition-colors"
+                                                            >
+                                                                Add Reset Block
+                                                            </button>
+                                                        </div>
+                                                        <div className="space-y-3 max-h-[540px] overflow-y-auto pr-1">
+                                                            {editableVisionRuntimePlan.resetBlocks.map((block, index) => (
+                                                                <div key={`reset-${index}`} className="rounded-xl border border-zinc-800 bg-black/20 p-3 space-y-3">
+                                                                    <div className="flex items-center justify-between gap-3">
+                                                                        <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Reset Block {index + 1}</p>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => removeResetBlock(index)}
+                                                                            className="rounded-md border border-red-500/20 bg-red-500/10 p-1.5 text-red-300 hover:bg-red-500/15 transition-colors"
+                                                                        >
+                                                                            <X className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Disruption Label</label>
+                                                                        <input
+                                                                            value={block.disruptionLabel}
+                                                                            onChange={(event) => updateResetBlock(index, (current) => ({ ...current, disruptionLabel: event.target.value }))}
+                                                                            className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Pressure Tags</label>
+                                                                        <input
+                                                                            value={block.pressureTags.join(', ')}
+                                                                            onChange={(event) => updateResetBlock(index, (current) => ({ ...current, pressureTags: parseCommaTags(event.target.value) }))}
+                                                                            className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="grid grid-cols-2 gap-3">
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Lock In</label>
+                                                                            <input type="number" step="0.1" min={0} value={block.lockInSeconds} onChange={(event) => updateResetBlock(index, (current) => ({ ...current, lockInSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Disruption</label>
+                                                                            <input type="number" step="0.1" min={0} value={block.disruptionSeconds} onChange={(event) => updateResetBlock(index, (current) => ({ ...current, disruptionSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Response Window</label>
+                                                                            <input type="number" step="0.1" min={0} value={block.responseWindowSeconds} onChange={(event) => updateResetBlock(index, (current) => ({ ...current, responseWindowSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Gap</label>
+                                                                            <input type="number" step="0.1" min={0} value={block.interBlockGapSeconds} onChange={(event) => updateResetBlock(index, (current) => ({ ...current, interBlockGapSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <div>
+                                                                <p className="text-xs font-semibold text-white">Noise Gate Blocks</p>
+                                                                <p className="text-[11px] text-zinc-500 mt-1">{editableVisionRuntimePlan.noiseGateBlocks.length} authored blocks in the distractor-filter sequence.</p>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={addNoiseGateBlock}
+                                                                className="rounded-lg border border-zinc-700 bg-black/30 px-3 py-2 text-xs font-semibold text-white hover:border-zinc-500 transition-colors"
+                                                            >
+                                                                Add Noise Gate Block
+                                                            </button>
+                                                        </div>
+                                                        <div className="space-y-3 max-h-[540px] overflow-y-auto pr-1">
+                                                            {editableVisionRuntimePlan.noiseGateBlocks.map((block, index) => (
+                                                                <div key={`noise-${index}`} className="rounded-xl border border-zinc-800 bg-black/20 p-3 space-y-3">
+                                                                    <div className="flex items-center justify-between gap-3">
+                                                                        <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Noise Gate Block {index + 1}</p>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => removeNoiseGateBlock(index)}
+                                                                            className="rounded-md border border-red-500/20 bg-red-500/10 p-1.5 text-red-300 hover:bg-red-500/15 transition-colors"
+                                                                        >
+                                                                            <X className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-2 gap-3">
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Target Choice</label>
+                                                                            <select value={block.targetChoice} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, targetChoice: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500">
+                                                                                <option value="left">Left</option>
+                                                                                <option value="center">Center</option>
+                                                                                <option value="right">Right</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Distractor Choice</label>
+                                                                            <select value={block.distractorChoice} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, distractorChoice: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500">
+                                                                                <option value="left">Left</option>
+                                                                                <option value="center">Center</option>
+                                                                                <option value="right">Right</option>
+                                                                            </select>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Noise Label</label>
+                                                                        <input
+                                                                            value={block.noiseLabel}
+                                                                            onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, noiseLabel: event.target.value }))}
+                                                                            className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                                                        />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Pressure Tags</label>
+                                                                        <input
+                                                                            value={block.pressureTags.join(', ')}
+                                                                            onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, pressureTags: parseCommaTags(event.target.value) }))}
+                                                                            className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="grid grid-cols-2 gap-3">
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Noise Intensity</label>
+                                                                            <input type="number" step="0.1" min={0} max={1} value={block.noiseIntensity} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, noiseIntensity: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Ready</label>
+                                                                            <input type="number" step="0.1" min={0} value={block.readySeconds} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, readySeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Exposure</label>
+                                                                            <input type="number" step="0.1" min={0} value={block.exposureSeconds} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, exposureSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Response Window</label>
+                                                                            <input type="number" step="0.1" min={0} value={block.responseWindowSeconds} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, responseWindowSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                                        </div>
+                                                                        <div className="col-span-2">
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Gap</label>
+                                                                            <input type="number" step="0.1" min={0} value={block.interBlockGapSeconds} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, interBlockGapSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <div>
+                                                                <p className="text-xs font-semibold text-white">Signal Window Blocks</p>
+                                                                <p className="text-[11px] text-zinc-500 mt-1">{editableVisionRuntimePlan.signalWindowBlocks.length} authored blocks in the cue-read sequence.</p>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={addSignalBlock}
+                                                                className="rounded-lg border border-zinc-700 bg-black/30 px-3 py-2 text-xs font-semibold text-white hover:border-zinc-500 transition-colors"
+                                                            >
+                                                                Add Signal Block
+                                                            </button>
+                                                        </div>
+                                                        <div className="space-y-3 max-h-[540px] overflow-y-auto pr-1">
+                                                            {editableVisionRuntimePlan.signalWindowBlocks.map((block, index) => (
+                                                                <div key={`signal-${index}`} className="rounded-xl border border-zinc-800 bg-black/20 p-3 space-y-3">
+                                                                    <div className="flex items-center justify-between gap-3">
+                                                                        <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Signal Block {index + 1}</p>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => removeSignalBlock(index)}
+                                                                            className="rounded-md border border-red-500/20 bg-red-500/10 p-1.5 text-red-300 hover:bg-red-500/15 transition-colors"
+                                                                        >
+                                                                            <X className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-2 gap-3">
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Correct Choice</label>
+                                                                            <select value={block.correctChoice} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, correctChoice: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500">
+                                                                                <option value="left">Left</option>
+                                                                                <option value="center">Center</option>
+                                                                                <option value="right">Right</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Decoy Choice</label>
+                                                                            <select value={block.decoyChoice} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, decoyChoice: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500">
+                                                                                <option value="left">Left</option>
+                                                                                <option value="center">Center</option>
+                                                                                <option value="right">Right</option>
+                                                                            </select>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Pressure Tags</label>
+                                                                        <input
+                                                                            value={block.pressureTags.join(', ')}
+                                                                            onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, pressureTags: parseCommaTags(event.target.value) }))}
+                                                                            className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="grid grid-cols-2 gap-3">
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Cue Window</label>
+                                                                            <input type="number" step="0.1" min={0} value={block.cueWindowSeconds} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, cueWindowSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Ready</label>
+                                                                            <input type="number" step="0.1" min={0} value={block.readySeconds} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, readySeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Response Window</label>
+                                                                            <input type="number" step="0.1" min={0} value={block.responseWindowSeconds} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, responseWindowSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Gap</label>
+                                                                            <input type="number" step="0.1" min={0} value={block.interBlockGapSeconds} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, interBlockGapSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
                             </div>
                         </div>
                     )}
@@ -4562,7 +5101,9 @@ function VariantWorkspaceModal({
                         <div className="space-y-5">
                             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
                                 <p className="text-xs text-emerald-300 leading-relaxed">
-                                    Publish now compiles a playable build artifact first, then writes the derived `sim-module`. The registry stays canonical; the module is runtime output.
+                                    {isVisionVariant
+                                        ? 'Vision variants still use the shared spec and runtime-config workflow, but their downstream path also needs a Vision package state. Treat sim-modules as the app/web artifact and the Vision package track as the headset-runtime artifact.'
+                                        : 'Publish now compiles a playable build artifact first, then writes the derived `sim-module`. The registry stays canonical; the module is runtime output.'}
                                 </p>
                             </div>
 
@@ -4592,6 +5133,66 @@ function VariantWorkspaceModal({
                                     <p className="text-[11px] text-zinc-500 mt-1">{variantMeta.publishedModuleId ?? 'No live module'}</p>
                                 </div>
                             </div>
+
+                            {isVisionVariant && visionStatusConf && (
+                                <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-4 space-y-3">
+                                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300">Vision Package Track</p>
+                                            <p className="text-sm text-white mt-1">
+                                                Current immersive pipeline status: <span style={{ color: visionStatusConf.color }} className="font-semibold">{visionStatusConf.label}</span>
+                                            </p>
+                                            <p className="text-[11px] text-cyan-100/70 mt-1">
+                                                Package id: <span className="font-mono">{effectiveVisionPackageId}</span>
+                                                {visionPackagePreview && (
+                                                    <>
+                                                        <br />
+                                                        Runtime manifest target: <span className="font-mono">vision-runtime-packages/{visionPackagePreview.packageId}</span>
+                                                        <br />
+                                                        Package metadata: <span className="font-mono">{visionPackagePreview.environmentVersion}</span> / <span className="font-mono">{visionPackagePreview.trialPackageVersion}</span>
+                                                        {visionPackagePreview.runtimePlan && (
+                                                            <>
+                                                                <br />
+                                                                Runtime plan: <span className="font-mono">{visionPackagePreview.runtimePlan.resetBlocks.length}</span> reset blocks / <span className="font-mono">{visionPackagePreview.runtimePlan.noiseGateBlocks.length}</span> noise gate blocks / <span className="font-mono">{visionPackagePreview.runtimePlan.signalWindowBlocks.length}</span> signal blocks / <span className="font-mono">{visionPackagePreview.runtimePlan.controlledBreakSeconds}s</span> controlled break
+                                                            </>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleSaveVisionPackage()}
+                                            disabled={saving || !!configError || workspaceBusy}
+                                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 transition-colors"
+                                        >
+                                            <Save className="w-3.5 h-3.5" />
+                                            Save Vision State
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        {(Object.entries(VISION_STATUS_CONFIG) as Array<[SimVariantVisionStatus, { label: string; color: string }]>).map(([status, config]) => (
+                                            <button
+                                                key={status}
+                                                onClick={() => handleSaveVisionPackage(status)}
+                                                disabled={workspaceBusy}
+                                                className={`rounded-lg border px-3 py-3 text-left transition-colors ${
+                                                    effectiveVisionStatus === status
+                                                        ? 'border-cyan-400/40 bg-cyan-500/10'
+                                                        : 'border-zinc-800 bg-black/20 hover:border-zinc-600'
+                                                } disabled:opacity-40`}
+                                            >
+                                                <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: config.color }}>{config.label}</p>
+                                                <p className="text-[11px] text-zinc-500 mt-1">
+                                                    {status === 'spec_only' && 'Spec exists, but not yet mapped into the Vision runtime.'}
+                                                    {status === 'runtime_mapped' && 'The spec has a real runtime target in the immersive package manifest.'}
+                                                    {status === 'in_package' && 'This variant is bundled into a named immersive package.'}
+                                                    {status === 'validated' && 'The runtime package has passed live validation or pilot checks.'}
+                                                </p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="rounded-xl border border-zinc-800 bg-black/20 px-4 py-4 space-y-3">
                                 <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -4912,9 +5513,11 @@ function VariantWorkspaceModal({
 
                 <div className="flex items-center justify-between px-5 py-4 border-t border-zinc-800 bg-black/20 flex-shrink-0">
                     <div className="text-[10px] text-zinc-500">
-                        {variantMeta.publishedAt
-                            ? `Last published ${new Date(variantMeta.publishedAt).toLocaleString()}`
-                            : 'This variant has not been published to sim-modules yet'}
+                        {isVisionVariant
+                            ? `Vision package status: ${visionStatusConf?.label ?? 'Spec Only'}${variantMeta.visionPublishedAt ? ` · updated ${new Date(variantMeta.visionPublishedAt).toLocaleString()}` : ''}`
+                            : variantMeta.publishedAt
+                                ? `Last published ${new Date(variantMeta.publishedAt).toLocaleString()}`
+                                : 'This variant has not been published to sim-modules yet'}
                     </div>
                     <div className="flex items-center gap-2">
                         <button
@@ -5070,6 +5673,8 @@ function FamilyGroup({
                                 const SpecIcon = specConf.icon;
                                 const priConf = PRIORITY_CONFIG[v.priority];
                                 const buildConf = BUILD_STATUS_CONFIG[v.buildStatus ?? 'not_built'];
+                                const visionStatus = resolveVisionPackageStatus(v);
+                                const visionStatusConf = visionStatus ? VISION_STATUS_CONFIG[visionStatus] : null;
                                 return (
                                     <div
                                         key={v.name}
@@ -5086,8 +5691,17 @@ function FamilyGroup({
                                         </span>
                                         <span className="text-[10px] font-semibold" style={{ color: priConf.color }}>{priConf.label}</span>
                                         <span className="flex items-center gap-1.5">
-                                            <span className="w-1.5 h-1.5 rounded-full" style={{ background: buildConf.color }} />
-                                            <span className="text-[10px] font-semibold" style={{ color: buildConf.color }}>{buildConf.label}</span>
+                                            <div className="space-y-0.5">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: buildConf.color }} />
+                                                    <span className="text-[10px] font-semibold" style={{ color: buildConf.color }}>{buildConf.label}</span>
+                                                </div>
+                                                {visionStatusConf && (
+                                                    <div className="text-[9px] font-semibold" style={{ color: visionStatusConf.color }}>
+                                                        {visionStatusConf.label}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </span>
                                         <div className="flex items-center justify-end gap-1">
                                             <button
@@ -5331,9 +5945,303 @@ function VariantSpecTemplate() {
     );
 }
 
+function VisionPackageWorkspaceModal({
+    packageRecord,
+    variants,
+    saving,
+    onClose,
+    onSave,
+}: {
+    packageRecord: VisionRuntimePackageRecord;
+    variants: SimVariantRecord[];
+    saving: boolean;
+    onClose: () => void;
+    onSave: (record: VisionRuntimePackageRecord) => Promise<void>;
+}) {
+    const [draft, setDraft] = useState<VisionRuntimePackageRecord>(packageRecord);
+
+    useEffect(() => {
+        setDraft(packageRecord);
+    }, [packageRecord]);
+
+    const updateResetBlock = (index: number, updater: (block: VisionRuntimeResetBlockManifest) => VisionRuntimeResetBlockManifest) => {
+        setDraft((current) => ({
+            ...current,
+            runtimePlan: current.runtimePlan ? {
+                ...current.runtimePlan,
+                resetBlocks: current.runtimePlan.resetBlocks.map((block, blockIndex) => (blockIndex === index ? updater(block) : block)),
+            } : current.runtimePlan,
+        }));
+    };
+
+    const updateSignalBlock = (index: number, updater: (block: VisionRuntimeSignalBlockManifest) => VisionRuntimeSignalBlockManifest) => {
+        setDraft((current) => ({
+            ...current,
+            runtimePlan: current.runtimePlan ? {
+                ...current.runtimePlan,
+                signalWindowBlocks: current.runtimePlan.signalWindowBlocks.map((block, blockIndex) => (blockIndex === index ? updater(block) : block)),
+            } : current.runtimePlan,
+        }));
+    };
+
+    const updateNoiseGateBlock = (index: number, updater: (block: VisionRuntimeNoiseGateBlockManifest) => VisionRuntimeNoiseGateBlockManifest) => {
+        setDraft((current) => ({
+            ...current,
+            runtimePlan: current.runtimePlan ? {
+                ...current.runtimePlan,
+                noiseGateBlocks: current.runtimePlan.noiseGateBlocks.map((block, blockIndex) => (blockIndex === index ? updater(block) : block)),
+            } : current.runtimePlan,
+        }));
+    };
+
+    const toggleVariant = (variantId: string) => {
+        setDraft((current) => {
+            const included = current.includedVariantIds.includes(variantId)
+                ? current.includedVariantIds.filter((id) => id !== variantId)
+                : [...current.includedVariantIds, variantId];
+            return {
+                ...current,
+                includedVariantIds: included,
+            };
+        });
+    };
+
+    const packageVariants = variants.filter((variant) => draft.includedVariantIds.includes(variant.id));
+
+    return (
+        <motion.div
+            className="fixed inset-0 z-[110] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+        >
+            <motion.div
+                initial={{ scale: 0.96, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.96, opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-3xl border border-cyan-500/20 bg-[#060b14] shadow-2xl flex flex-col"
+            >
+                <div className="px-6 py-5 border-b border-zinc-800 flex items-start justify-between gap-4">
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300">Vision Package</p>
+                        <h3 className="text-2xl font-semibold text-white mt-1">{draft.packageName}</h3>
+                        <p className="text-sm text-zinc-400 mt-2">Edit the immersive runtime package directly: metadata, included variants, and the authored block plan the headset will run.</p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="w-9 h-9 rounded-xl border border-zinc-700 bg-black/30 text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors flex items-center justify-center"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                        <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Package Name</label>
+                            <input value={draft.packageName} onChange={(event) => setDraft((current) => ({ ...current, packageName: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Surface</label>
+                            <input value={draft.surface} onChange={(event) => setDraft((current) => ({ ...current, surface: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Package Status</label>
+                            <select value={draft.packageStatus} onChange={(event) => setDraft((current) => ({ ...current, packageStatus: event.target.value as SimVariantVisionStatus }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500">
+                                {Object.entries(VISION_STATUS_CONFIG).map(([value, config]) => (
+                                    <option key={value} value={value}>{config.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Package Id</label>
+                            <div className="rounded-xl bg-black/40 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-400 font-mono">{draft.packageId}</div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                        <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Environment Version</label>
+                            <input value={draft.environmentVersion} onChange={(event) => setDraft((current) => ({ ...current, environmentVersion: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Trial Package Version</label>
+                            <input value={draft.trialPackageVersion} onChange={(event) => setDraft((current) => ({ ...current, trialPackageVersion: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Event Script Version</label>
+                            <input value={draft.eventScriptVersion} onChange={(event) => setDraft((current) => ({ ...current, eventScriptVersion: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Metric Mapping Version</label>
+                            <input value={draft.metricMappingVersion} onChange={(event) => setDraft((current) => ({ ...current, metricMappingVersion: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr] gap-4">
+                        <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Seed / Script Id</label>
+                            <input value={draft.seedOrScriptId} onChange={(event) => setDraft((current) => ({ ...current, seedOrScriptId: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Validation Notes</label>
+                            <textarea value={draft.validationNotes ?? ''} onChange={(event) => setDraft((current) => ({ ...current, validationNotes: event.target.value }))} className="w-full min-h-[96px] rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500 resize-y" />
+                        </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                            <div>
+                                <p className="text-xs font-semibold text-white">Included Vision Variants</p>
+                                <p className="text-[11px] text-zinc-500 mt-1">Packages own composition now. Choose which immersive variants are assembled into this runtime.</p>
+                            </div>
+                            <div className="text-[11px] text-cyan-300 font-semibold">{packageVariants.length} included</div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {variants.map((variant) => {
+                                const included = draft.includedVariantIds.includes(variant.id);
+                                return (
+                                    <label key={variant.id} className={`rounded-xl border px-3 py-3 flex items-start gap-3 cursor-pointer transition-colors ${included ? 'border-cyan-500/30 bg-cyan-500/10' : 'border-zinc-800 bg-zinc-950/40 hover:border-zinc-700'}`}>
+                                        <input type="checkbox" checked={included} onChange={() => toggleVariant(variant.id)} className="mt-1" />
+                                        <div>
+                                            <p className="text-sm font-semibold text-white">{displayVariantName(variant.name)}</p>
+                                            <p className="text-[11px] text-zinc-500 mt-1">{displayFamilyName(variant.family)} · {MODE_CONFIG[variant.mode].label}</p>
+                                        </div>
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {draft.runtimePlan && (
+                        <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4 space-y-4">
+                            <div>
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300">Authored Runtime Plan</p>
+                                <p className="text-sm text-white mt-1">This package-level plan is what the headset runtime should execute.</p>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Controlled Break (Seconds)</label>
+                                    <input type="number" min={0} step="1" value={draft.runtimePlan.controlledBreakSeconds} onChange={(event) => setDraft((current) => ({ ...current, runtimePlan: current.runtimePlan ? { ...current.runtimePlan, controlledBreakSeconds: Number(event.target.value || 0) } : current.runtimePlan }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">Session Cap (Seconds)</label>
+                                    <input type="number" min={0} step="1" value={draft.runtimePlan.totalSessionCapSeconds} onChange={(event) => setDraft((current) => ({ ...current, runtimePlan: current.runtimePlan ? { ...current.runtimePlan, totalSessionCapSeconds: Number(event.target.value || 0) } : current.runtimePlan }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <p className="text-xs font-semibold text-white">Reset Blocks</p>
+                                        <button type="button" onClick={() => setDraft((current) => ({ ...current, runtimePlan: current.runtimePlan ? { ...current.runtimePlan, resetBlocks: [...current.runtimePlan.resetBlocks, buildDefaultResetBlock()] } : current.runtimePlan }))} className="rounded-lg border border-zinc-700 bg-black/30 px-3 py-2 text-xs font-semibold text-white hover:border-zinc-500 transition-colors">Add Reset Block</button>
+                                    </div>
+                                    <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                                        {draft.runtimePlan.resetBlocks.map((block, index) => (
+                                            <div key={`pkg-reset-${index}`} className="rounded-xl border border-zinc-800 bg-black/20 p-3 space-y-3">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Reset Block {index + 1}</p>
+                                                    <button type="button" onClick={() => setDraft((current) => ({ ...current, runtimePlan: current.runtimePlan ? { ...current.runtimePlan, resetBlocks: current.runtimePlan.resetBlocks.filter((_, blockIndex) => blockIndex !== index) } : current.runtimePlan }))} className="rounded-md border border-red-500/20 bg-red-500/10 p-1.5 text-red-300 hover:bg-red-500/15 transition-colors"><X className="w-3.5 h-3.5" /></button>
+                                                </div>
+                                                <input value={block.disruptionLabel} onChange={(event) => updateResetBlock(index, (current) => ({ ...current, disruptionLabel: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                <input value={block.pressureTags.join(', ')} onChange={(event) => updateResetBlock(index, (current) => ({ ...current, pressureTags: parseCommaTags(event.target.value) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <input type="number" step="0.1" min={0} value={block.lockInSeconds} onChange={(event) => updateResetBlock(index, (current) => ({ ...current, lockInSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                    <input type="number" step="0.1" min={0} value={block.disruptionSeconds} onChange={(event) => updateResetBlock(index, (current) => ({ ...current, disruptionSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                    <input type="number" step="0.1" min={0} value={block.responseWindowSeconds} onChange={(event) => updateResetBlock(index, (current) => ({ ...current, responseWindowSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                    <input type="number" step="0.1" min={0} value={block.interBlockGapSeconds} onChange={(event) => updateResetBlock(index, (current) => ({ ...current, interBlockGapSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <p className="text-xs font-semibold text-white">Noise Gate Blocks</p>
+                                        <button type="button" onClick={() => setDraft((current) => ({ ...current, runtimePlan: current.runtimePlan ? { ...current.runtimePlan, noiseGateBlocks: [...current.runtimePlan.noiseGateBlocks, buildDefaultNoiseGateBlock()] } : current.runtimePlan }))} className="rounded-lg border border-zinc-700 bg-black/30 px-3 py-2 text-xs font-semibold text-white hover:border-zinc-500 transition-colors">Add Noise Gate Block</button>
+                                    </div>
+                                    <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                                        {draft.runtimePlan.noiseGateBlocks.map((block, index) => (
+                                            <div key={`pkg-noise-${index}`} className="rounded-xl border border-zinc-800 bg-black/20 p-3 space-y-3">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Noise Gate Block {index + 1}</p>
+                                                    <button type="button" onClick={() => setDraft((current) => ({ ...current, runtimePlan: current.runtimePlan ? { ...current.runtimePlan, noiseGateBlocks: current.runtimePlan.noiseGateBlocks.filter((_, blockIndex) => blockIndex !== index) } : current.runtimePlan }))} className="rounded-md border border-red-500/20 bg-red-500/10 p-1.5 text-red-300 hover:bg-red-500/15 transition-colors"><X className="w-3.5 h-3.5" /></button>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <select value={block.targetChoice} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, targetChoice: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select>
+                                                    <select value={block.distractorChoice} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, distractorChoice: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select>
+                                                </div>
+                                                <input value={block.noiseLabel} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, noiseLabel: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                <input value={block.pressureTags.join(', ')} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, pressureTags: parseCommaTags(event.target.value) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <input type="number" step="0.1" min={0} max={1} value={block.noiseIntensity} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, noiseIntensity: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                    <input type="number" step="0.1" min={0} value={block.readySeconds} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, readySeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                    <input type="number" step="0.1" min={0} value={block.exposureSeconds} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, exposureSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                    <input type="number" step="0.1" min={0} value={block.responseWindowSeconds} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, responseWindowSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                    <div className="col-span-2">
+                                                        <input type="number" step="0.1" min={0} value={block.interBlockGapSeconds} onChange={(event) => updateNoiseGateBlock(index, (current) => ({ ...current, interBlockGapSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <p className="text-xs font-semibold text-white">Signal Window Blocks</p>
+                                        <button type="button" onClick={() => setDraft((current) => ({ ...current, runtimePlan: current.runtimePlan ? { ...current.runtimePlan, signalWindowBlocks: [...current.runtimePlan.signalWindowBlocks, buildDefaultSignalBlock()] } : current.runtimePlan }))} className="rounded-lg border border-zinc-700 bg-black/30 px-3 py-2 text-xs font-semibold text-white hover:border-zinc-500 transition-colors">Add Signal Block</button>
+                                    </div>
+                                    <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                                        {draft.runtimePlan.signalWindowBlocks.map((block, index) => (
+                                            <div key={`pkg-signal-${index}`} className="rounded-xl border border-zinc-800 bg-black/20 p-3 space-y-3">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <p className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">Signal Block {index + 1}</p>
+                                                    <button type="button" onClick={() => setDraft((current) => ({ ...current, runtimePlan: current.runtimePlan ? { ...current.runtimePlan, signalWindowBlocks: current.runtimePlan.signalWindowBlocks.filter((_, blockIndex) => blockIndex !== index) } : current.runtimePlan }))} className="rounded-md border border-red-500/20 bg-red-500/10 p-1.5 text-red-300 hover:bg-red-500/15 transition-colors"><X className="w-3.5 h-3.5" /></button>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <select value={block.correctChoice} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, correctChoice: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select>
+                                                    <select value={block.decoyChoice} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, decoyChoice: event.target.value }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select>
+                                                </div>
+                                                <input value={block.pressureTags.join(', ')} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, pressureTags: parseCommaTags(event.target.value) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <input type="number" step="0.1" min={0} value={block.cueWindowSeconds} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, cueWindowSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                    <input type="number" step="0.1" min={0} value={block.readySeconds} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, readySeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                    <input type="number" step="0.1" min={0} value={block.responseWindowSeconds} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, responseWindowSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                    <input type="number" step="0.1" min={0} value={block.interBlockGapSeconds} onChange={(event) => updateSignalBlock(index, (current) => ({ ...current, interBlockGapSeconds: Number(event.target.value || 0) }))} className="w-full rounded-xl bg-black/40 border border-zinc-700 text-sm text-white px-3 py-2.5 focus:outline-none focus:border-zinc-500" />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="px-6 py-4 border-t border-zinc-800 bg-black/20 flex items-center justify-between">
+                    <div className="text-[11px] text-zinc-500">
+                        {draft.includedVariantIds.length} variants · {draft.runtimePlan?.resetBlocks.length ?? 0} reset blocks · {draft.runtimePlan?.noiseGateBlocks.length ?? 0} noise gate blocks · {draft.runtimePlan?.signalWindowBlocks.length ?? 0} signal blocks
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button onClick={onClose} className="px-4 py-2 rounded-lg text-xs font-semibold text-zinc-400 hover:text-zinc-200 transition-colors">Close</button>
+                        <button onClick={() => void onSave(draft)} disabled={saving} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/15 disabled:opacity-40 transition-colors">
+                            <Save className="w-3.5 h-3.5" />
+                            {saving ? 'Saving...' : 'Save Package'}
+                        </button>
+                    </div>
+                </div>
+            </motion.div>
+        </motion.div>
+    );
+}
+
 /* ---- MAIN TAB ---- */
 const VariantRegistryTab: React.FC = () => {
     const [registryVariants, setRegistryVariants] = useState<SimVariantRecord[]>([]);
+    const [visionPackages, setVisionPackages] = useState<VisionRuntimePackageRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
     const [creatingVariant, setCreatingVariant] = useState(false);
@@ -5341,6 +6249,7 @@ const VariantRegistryTab: React.FC = () => {
     const [savingVariantId, setSavingVariantId] = useState<string | null>(null);
     const [buildingVariantId, setBuildingVariantId] = useState<string | null>(null);
     const [publishingVariantId, setPublishingVariantId] = useState<string | null>(null);
+    const [savingVisionPackageId, setSavingVisionPackageId] = useState<string | null>(null);
     const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterFamilyStatus, setFilterFamilyStatus] = useState<'all' | FamilyStatus>('all');
@@ -5351,6 +6260,7 @@ const VariantRegistryTab: React.FC = () => {
         initialTab?: 'general' | 'locks' | 'spec' | 'config' | 'publish' | 'history';
         initialRaw?: string;
     } | null>(null);
+    const [packageWorkspaceId, setPackageWorkspaceId] = useState<string | null>(null);
 
     const loadRegistry = async (showSeedToast: boolean = false) => {
         setLoading(true);
@@ -5365,7 +6275,10 @@ const VariantRegistryTab: React.FC = () => {
                 .filter((record) => !seededIds.has(record.id))
                 .map((record) => applyDraftSyncState(record))
                 .sort((a, b) => a.family.localeCompare(b.family) || a.name.localeCompare(b.name));
-            setRegistryVariants([...merged, ...customVariants]);
+            const mergedVariants = [...merged, ...customVariants];
+            setRegistryVariants(mergedVariants);
+            const packages = await simVariantRegistryService.listVisionPackages();
+            setVisionPackages(packages);
 
             if (created > 0 && showSeedToast) {
                 setToast({
@@ -5427,6 +6340,27 @@ const VariantRegistryTab: React.FC = () => {
         });
     }, [filteredVariants]);
 
+    const visionVariants = useMemo(
+        () => filteredVariants.filter((variant) => isVisionVariantEntry(variant)),
+        [filteredVariants]
+    );
+
+    const visionFamilyGroups = useMemo(() => {
+        const groups: Record<string, { familyStatus: FamilyStatus; variants: SimVariantRecord[] }> = {};
+        visionVariants.forEach((variant) => {
+            if (!groups[variant.family]) {
+                groups[variant.family] = { familyStatus: variant.familyStatus, variants: [] };
+            }
+            groups[variant.family].variants.push(variant);
+        });
+
+        return Object.entries(groups).sort(([, a], [, b]) => {
+            if (a.familyStatus === 'locked' && b.familyStatus === 'candidate') return -1;
+            if (a.familyStatus === 'candidate' && b.familyStatus === 'locked') return 1;
+            return 0;
+        });
+    }, [visionVariants]);
+
     // Summary stats
     const stats = useMemo(() => {
         const total = registryVariants.length;
@@ -5440,9 +6374,31 @@ const VariantRegistryTab: React.FC = () => {
         return { total, needsSpec, inProgress, complete, notRequired, lockedFamilies, candidateFamilies, published };
     }, [registryVariants]);
 
+    const visionStats = useMemo(() => {
+        const total = visionVariants.length;
+        const families = new Set(visionVariants.map((variant) => variant.family)).size;
+        const complete = visionVariants.filter((variant) => resolveSpecStatus(variant) === 'complete').length;
+        const needsSpec = visionVariants.filter((variant) => resolveSpecStatus(variant) === 'needs-spec').length;
+        const runtimeMapped = visionVariants.filter((variant) => resolveVisionPackageStatus(variant) === 'runtime_mapped').length;
+        const inPackage = visionVariants.filter((variant) => resolveVisionPackageStatus(variant) === 'in_package').length;
+        const validated = visionVariants.filter((variant) => resolveVisionPackageStatus(variant) === 'validated').length;
+        return { total, families, complete, needsSpec, runtimeMapped, inPackage, validated };
+    }, [visionVariants]);
+
+    const visionPackageStats = useMemo(() => {
+        const total = visionPackages.length;
+        const validated = visionPackages.filter((record) => record.packageStatus === 'validated').length;
+        const inPackage = visionPackages.filter((record) => record.packageStatus === 'in_package').length;
+        const runtimeMapped = visionPackages.filter((record) => record.packageStatus === 'runtime_mapped').length;
+        return { total, validated, inPackage, runtimeMapped };
+    }, [visionPackages]);
+
     const activeFilters = [filterFamilyStatus, filterMode, filterSpecStatus].filter((f) => f !== 'all').length + (searchQuery ? 1 : 0);
     const selectedVariant = workspaceModalState
         ? registryVariants.find((variant) => variant.id === workspaceModalState.variantId) ?? null
+        : null;
+    const selectedVisionPackage = packageWorkspaceId
+        ? visionPackages.find((record) => record.packageId === packageWorkspaceId) ?? null
         : null;
 
     const handleSaveWorkspace = async (next: SimVariantRecord) => {
@@ -5537,6 +6493,26 @@ const VariantRegistryTab: React.FC = () => {
             });
         } finally {
             setCreatingVariant(false);
+        }
+    };
+
+    const handleSaveVisionPackageWorkspace = async (next: VisionRuntimePackageRecord) => {
+        setSavingVisionPackageId(next.packageId);
+        try {
+            await simVariantRegistryService.saveVisionPackageRecord(next);
+            await loadRegistry(false);
+            setToast({
+                type: 'success',
+                message: `${next.packageName} saved as a Vision package.`,
+            });
+        } catch (error) {
+            console.error('Failed to save Vision package:', error);
+            setToast({
+                type: 'error',
+                message: `Failed to save ${next.packageName}.`,
+            });
+        } finally {
+            setSavingVisionPackageId(null);
         }
     };
 
@@ -5711,6 +6687,162 @@ const VariantRegistryTab: React.FC = () => {
                     </div>
                 </div>
 
+                {/* VISION PACKAGES */}
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-widest text-cyan-400 font-bold">Immersive Assembly</p>
+                            <h3 className="text-lg font-semibold text-white">Vision Packages</h3>
+                            <p className="text-xs text-zinc-500">First-class immersive package objects for runtime composition, metadata, and authored block plans.</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                            <span className="px-2 py-1 rounded-full border border-cyan-500/20 bg-cyan-500/10 text-cyan-300 font-semibold">
+                                {visionPackageStats.total} packages
+                            </span>
+                            <span className="px-2 py-1 rounded-full border border-purple-500/20 bg-purple-500/10 text-purple-300 font-semibold">
+                                {visionPackageStats.inPackage} in package
+                            </span>
+                            <span className="px-2 py-1 rounded-full border border-green-500/20 bg-green-500/10 text-green-300 font-semibold">
+                                {visionPackageStats.validated} validated
+                            </span>
+                        </div>
+                    </div>
+
+                    {visionPackages.length > 0 ? (
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                            {visionPackages.map((record) => {
+                                const statusConf = VISION_STATUS_CONFIG[record.packageStatus];
+                                return (
+                                    <button
+                                        key={record.packageId}
+                                        onClick={() => setPackageWorkspaceId(record.packageId)}
+                                        className="text-left rounded-2xl border border-zinc-800 bg-[#090f1c] p-5 hover:border-cyan-500/30 hover:bg-white/[0.02] transition-colors"
+                                    >
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div>
+                                                <p className="text-sm font-semibold text-white">{record.packageName}</p>
+                                                <p className="text-[11px] text-zinc-500 mt-1 font-mono">{record.packageId}</p>
+                                            </div>
+                                            <span className="px-2 py-1 rounded-full border text-[10px] font-semibold" style={{ color: statusConf.color, borderColor: `${statusConf.color}40`, background: `${statusConf.color}12` }}>
+                                                {statusConf.label}
+                                            </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-4">
+                                            <div className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-2">
+                                                <p className="text-[9px] uppercase tracking-widest text-zinc-600 font-bold">Variants</p>
+                                                <p className="text-lg font-semibold text-white mt-1">{record.includedVariantIds.length}</p>
+                                            </div>
+                                            <div className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-2">
+                                                <p className="text-[9px] uppercase tracking-widest text-zinc-600 font-bold">Reset Blocks</p>
+                                                <p className="text-lg font-semibold text-white mt-1">{record.runtimePlan?.resetBlocks.length ?? 0}</p>
+                                            </div>
+                                            <div className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-2">
+                                                <p className="text-[9px] uppercase tracking-widest text-zinc-600 font-bold">Signal Blocks</p>
+                                                <p className="text-lg font-semibold text-white mt-1">{record.runtimePlan?.signalWindowBlocks.length ?? 0}</p>
+                                            </div>
+                                            <div className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-2">
+                                                <p className="text-[9px] uppercase tracking-widest text-zinc-600 font-bold">Noise Blocks</p>
+                                                <p className="text-lg font-semibold text-white mt-1">{record.runtimePlan?.noiseGateBlocks.length ?? 0}</p>
+                                            </div>
+                                            <div className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-2">
+                                                <p className="text-[9px] uppercase tracking-widest text-zinc-600 font-bold">Surface</p>
+                                                <p className="text-sm font-semibold text-white mt-1">{record.surface}</p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-4 flex items-center justify-between gap-3 text-[11px] text-zinc-500">
+                                            <span>{record.environmentVersion}</span>
+                                            <span>{record.runtimePlan?.controlledBreakSeconds ?? 0}s break</span>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-8 text-center">
+                            <p className="text-sm text-zinc-400">No Vision packages have been assembled yet.</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* VISION VARIANTS */}
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-widest text-cyan-400 font-bold">Immersive Layer</p>
+                            <h3 className="text-lg font-semibold text-white">Vision Variants</h3>
+                            <p className="text-xs text-zinc-500">Dedicated registry slice for Vision Pro and immersive trial expressions.</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                            <span className="px-2 py-1 rounded-full border border-cyan-500/20 bg-cyan-500/10 text-cyan-300 font-semibold">
+                                {visionStats.total} variants
+                            </span>
+                            <span className="px-2 py-1 rounded-full border border-zinc-700 bg-black/30 text-zinc-400 font-semibold">
+                                {visionStats.families} families
+                            </span>
+                            <span className="px-2 py-1 rounded-full border border-purple-500/20 bg-purple-500/10 text-purple-300 font-semibold">
+                                {visionStats.inPackage} in package
+                            </span>
+                            <span className="px-2 py-1 rounded-full border border-green-500/20 bg-green-500/10 text-green-300 font-semibold">
+                                {visionStats.validated} validated
+                            </span>
+                        </div>
+                    </div>
+
+                    {visionVariants.length > 0 ? (
+                        <>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div className="bg-[#090f1c] border border-cyan-500/20 rounded-xl px-4 py-3">
+                                    <p className="text-[9px] uppercase tracking-widest text-cyan-400 font-bold">Vision Variants</p>
+                                    <p className="text-2xl font-bold text-white mt-1">{visionStats.total}</p>
+                                    <p className="text-[10px] text-zinc-500">Immersive and headset-linked expressions</p>
+                                </div>
+                                <div className="bg-[#090f1c] border border-zinc-800 rounded-xl px-4 py-3">
+                                    <p className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">Families</p>
+                                    <p className="text-2xl font-bold text-white mt-1">{visionStats.families}</p>
+                                    <p className="text-[10px] text-zinc-500">Represented in the immersive slice</p>
+                                </div>
+                                <div className="bg-[#090f1c] border border-green-500/20 rounded-xl px-4 py-3">
+                                    <p className="text-[9px] uppercase tracking-widest text-green-400 font-bold">Complete</p>
+                                    <p className="text-2xl font-bold text-green-400 mt-1">{visionStats.complete}</p>
+                                    <p className="text-[10px] text-zinc-500">Build-ready immersive specs</p>
+                                </div>
+                                <div className="bg-[#090f1c] border border-red-500/20 rounded-xl px-4 py-3">
+                                    <p className="text-[9px] uppercase tracking-widest text-red-400 font-bold">Need Spec</p>
+                                    <p className="text-2xl font-bold text-red-400 mt-1">{visionStats.needsSpec}</p>
+                                    <p className="text-[10px] text-zinc-500">Still missing immersive spec work</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                {visionFamilyGroups.map(([familyName, group]) => (
+                                    <FamilyGroup
+                                        key={`vision-${familyName}`}
+                                        familyName={familyName}
+                                        familyStatus={group.familyStatus}
+                                        variants={group.variants}
+                                        familyColor={FAMILY_COLORS[familyName] || '#06b6d4'}
+                                        onOpenWorkspace={(variant, options) => setWorkspaceModalState({
+                                            variantId: variant.id,
+                                            initialTab: options?.initialTab,
+                                            initialRaw: options?.initialSpecRaw,
+                                        })}
+                                        onPasteSpec={(variant) => setWorkspaceModalState({ variantId: variant.id, initialTab: 'spec' })}
+                                        onGenerateSpec={(variant) => setWorkspaceModalState({
+                                            variantId: variant.id,
+                                            initialTab: 'spec',
+                                            initialRaw: buildGeneratedVariantSpec(variant),
+                                        })}
+                                    />
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-8 text-center">
+                            <p className="text-sm text-zinc-400">No Vision variants match the current filters yet.</p>
+                        </div>
+                    )}
+                </div>
+
                 {/* REGISTRY TABLE — GROUPED BY FAMILY */}
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -5835,6 +6967,18 @@ const VariantRegistryTab: React.FC = () => {
                         onBuild={handleBuildWorkspace}
                         onPublish={handlePublishWorkspace}
                         onClose={() => setWorkspaceModalState(null)}
+                    />
+                )}
+            </AnimatePresence>
+
+            <AnimatePresence>
+                {selectedVisionPackage && (
+                    <VisionPackageWorkspaceModal
+                        packageRecord={selectedVisionPackage}
+                        variants={visionVariants}
+                        saving={savingVisionPackageId === selectedVisionPackage.packageId}
+                        onSave={handleSaveVisionPackageWorkspace}
+                        onClose={() => setPackageWorkspaceId(null)}
                     />
                 )}
             </AnimatePresence>

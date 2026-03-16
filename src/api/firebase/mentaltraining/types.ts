@@ -5,8 +5,11 @@
  */
 
 import type {
+  DurationMode,
   PressureType,
+  ProfileSnapshotMilestone,
   ProgramPrescription,
+  SessionType,
   SimEvidenceStatus,
   SimPrescriptionRole,
   TaxonomyCheckInState,
@@ -208,6 +211,7 @@ export interface ExerciseAssignment {
   assignedBy?: string; // Coach ID or 'nora' or 'self'
   assignedByName?: string;
   reason?: string; // Why this was assigned
+  profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
 
   // Scheduling
   dueDate?: number; // Unix timestamp
@@ -235,6 +239,21 @@ export interface ExerciseAssignment {
  * ExerciseCompletion - Record of a completed sim module
  * Collection: sim-completions/{userId}/completions
  */
+export interface SessionProgramUpdateSummary {
+  completedActionLabel: string;
+  previousActionLabel?: string;
+  nextActionLabel: string;
+  athleteHeadline: string;
+  athleteBody: string;
+  coachHeadline: string;
+  coachBody: string;
+  nextRationale?: string;
+  targetSkills: string[];
+  moodDelta?: number;
+  programChanged: boolean;
+  generatedAt: number;
+}
+
 export interface ExerciseCompletion {
   id: string;
   userId: string;
@@ -242,6 +261,7 @@ export interface ExerciseCompletion {
   exerciseName: string;
   exerciseCategory: ExerciseCategory;
   assignmentId?: string; // If completed from an assignment
+  dailyAssignmentId?: string; // If completed from a Nora daily assignment
 
   // Completion details
   completedAt: number;
@@ -256,6 +276,7 @@ export interface ExerciseCompletion {
 
   // Context
   context?: 'morning' | 'pre-workout' | 'post-workout' | 'evening' | 'competition';
+  sessionSummary?: SessionProgramUpdateSummary;
 
   createdAt: number;
 }
@@ -548,6 +569,17 @@ export interface BaselineAssessment {
   completedAt: number;
 }
 
+export interface BaselineProbe {
+  completedAt?: number | { seconds?: number; nanoseconds?: number; toMillis?: () => number } | null;
+  composureRecoveryMs?: number;
+  composureConsistency?: number;
+  focusAccuracy?: number;
+  focusDistractorCost?: number;
+  decisionAccuracy?: number;
+  decisionFalseStarts?: number;
+  sessionType?: string;
+}
+
 /**
  * MentalRecommendation - Nora's exercise recommendation for an athlete
  * Collection: mental-recommendations
@@ -648,6 +680,53 @@ export interface CurriculumAssignment {
   updatedAt: number;
 }
 
+export enum PulseCheckDailyAssignmentStatus {
+  Assigned = 'assigned',
+  Viewed = 'viewed',
+  Started = 'started',
+  Completed = 'completed',
+  Overridden = 'overridden',
+  Deferred = 'deferred',
+  Superseded = 'superseded',
+}
+
+export type PulseCheckDailyAssignmentActionType = 'sim' | 'lighter_sim' | 'defer';
+
+/**
+ * PulseCheckDailyAssignment - Nora's concrete post-check-in daily task
+ * Collection: pulsecheck-daily-assignments
+ */
+export interface PulseCheckDailyAssignment {
+  id: string;
+  athleteId: string;
+  teamId: string;
+  teamMembershipId: string;
+  coachId?: string;
+  sourceCheckInId: string;
+  sourceDate: string; // YYYY-MM-DD
+  assignedBy: 'nora';
+  status: PulseCheckDailyAssignmentStatus;
+  actionType: PulseCheckDailyAssignmentActionType;
+  simSpecId?: string;
+  legacyExerciseId?: string;
+  sessionType?: SessionType;
+  durationMode?: DurationMode;
+  durationSeconds?: number;
+  rationale: string;
+  readinessScore?: number;
+  readinessBand?: 'low' | 'medium' | 'high';
+  escalationTier?: number;
+  supportFlag?: boolean;
+  programSnapshot?: ProgramPrescription;
+  coachNotifiedAt?: number;
+  startedAt?: number;
+  completedAt?: number;
+  overriddenBy?: string;
+  overrideReason?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 /**
  * AthleteMentalProgress - Athlete's overall mental training progress
  * Collection: athlete-mental-progress/{athleteId}
@@ -672,6 +751,7 @@ export interface AthleteMentalProgress {
 
   // Assessment
   baselineAssessment?: BaselineAssessment;
+  baselineProbe?: BaselineProbe;
   assessmentNeeded: boolean;
 
   // Stats
@@ -713,6 +793,28 @@ export interface PathwayDefinition {
 // ============================================================================
 // FIRESTORE HELPERS
 // ============================================================================
+
+export function sanitizeFirestoreValue<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => sanitizeFirestoreValue(entry))
+      .filter((entry) => entry !== undefined) as T;
+  }
+
+  if (value && typeof value === 'object') {
+    const cleaned = Object.entries(value as Record<string, unknown>).reduce<Record<string, unknown>>((accumulator, [key, entry]) => {
+      const sanitized = sanitizeFirestoreValue(entry);
+      if (sanitized !== undefined) {
+        accumulator[key] = sanitized;
+      }
+      return accumulator;
+    }, {});
+
+    return cleaned as T;
+  }
+
+  return value;
+}
 
 export function exerciseToFirestore(exercise: MentalExercise): Record<string, any> {
   const data: Record<string, any> = {
@@ -805,6 +907,7 @@ export function assignmentToFirestore(assignment: ExerciseAssignment): Record<st
     assignedBy: assignment.assignedBy,
     assignedByName: assignment.assignedByName,
     reason: assignment.reason,
+    profileSnapshotMilestone: assignment.profileSnapshotMilestone,
     dueDate: assignment.dueDate,
     scheduledTime: assignment.scheduledTime,
     isRecurring: assignment.isRecurring,
@@ -829,6 +932,7 @@ export function assignmentFromFirestore(id: string, data: Record<string, any>): 
     assignedBy: data.assignedBy,
     assignedByName: data.assignedByName,
     reason: data.reason,
+    profileSnapshotMilestone: data.profileSnapshotMilestone,
     dueDate: data.dueDate,
     scheduledTime: data.scheduledTime,
     isRecurring: data.isRecurring ?? false,
@@ -850,6 +954,7 @@ export function completionToFirestore(completion: ExerciseCompletion): Record<st
     exerciseName: completion.exerciseName,
     exerciseCategory: completion.exerciseCategory,
     assignmentId: completion.assignmentId,
+    dailyAssignmentId: completion.dailyAssignmentId,
     completedAt: completion.completedAt,
     durationSeconds: completion.durationSeconds,
     preExerciseMood: completion.preExerciseMood,
@@ -858,6 +963,7 @@ export function completionToFirestore(completion: ExerciseCompletion): Record<st
     helpfulnessRating: completion.helpfulnessRating,
     notes: completion.notes,
     context: completion.context,
+    sessionSummary: completion.sessionSummary,
     createdAt: completion.createdAt,
   };
 }
@@ -870,6 +976,7 @@ export function completionFromFirestore(id: string, data: Record<string, any>): 
     exerciseName: data.exerciseName || '',
     exerciseCategory: data.exerciseCategory || ExerciseCategory.Breathing,
     assignmentId: data.assignmentId,
+    dailyAssignmentId: data.dailyAssignmentId,
     completedAt: data.completedAt || Date.now(),
     durationSeconds: data.durationSeconds || 0,
     preExerciseMood: data.preExerciseMood,
@@ -878,6 +985,7 @@ export function completionFromFirestore(id: string, data: Record<string, any>): 
     helpfulnessRating: data.helpfulnessRating,
     notes: data.notes,
     context: data.context,
+    sessionSummary: data.sessionSummary,
     createdAt: data.createdAt || Date.now(),
   };
 }
@@ -915,21 +1023,24 @@ export function streakFromFirestore(userId: string, data: Record<string, any>): 
 }
 
 export function checkInToFirestore(checkIn: MentalCheckIn): Record<string, any> {
-  return {
+  const data: Record<string, any> = {
     userId: checkIn.userId,
     type: checkIn.type,
     readinessScore: checkIn.readinessScore,
-    moodWord: checkIn.moodWord,
-    energyLevel: checkIn.energyLevel,
-    stressLevel: checkIn.stressLevel,
-    sleepQuality: checkIn.sleepQuality,
-    notes: checkIn.notes,
-    suggestedExerciseId: checkIn.suggestedExerciseId,
-    exerciseCompleted: checkIn.exerciseCompleted,
-    taxonomyState: checkIn.taxonomyState,
     createdAt: checkIn.createdAt,
     date: checkIn.date,
   };
+
+  if (checkIn.moodWord) data.moodWord = checkIn.moodWord;
+  if (typeof checkIn.energyLevel === 'number') data.energyLevel = checkIn.energyLevel;
+  if (typeof checkIn.stressLevel === 'number') data.stressLevel = checkIn.stressLevel;
+  if (typeof checkIn.sleepQuality === 'number') data.sleepQuality = checkIn.sleepQuality;
+  if (checkIn.notes) data.notes = checkIn.notes;
+  if (checkIn.suggestedExerciseId) data.suggestedExerciseId = checkIn.suggestedExerciseId;
+  if (typeof checkIn.exerciseCompleted === 'boolean') data.exerciseCompleted = checkIn.exerciseCompleted;
+  if (checkIn.taxonomyState) data.taxonomyState = sanitizeFirestoreValue(checkIn.taxonomyState);
+
+  return data;
 }
 
 export function checkInFromFirestore(id: string, data: Record<string, any>): MentalCheckIn {
@@ -1078,6 +1189,79 @@ export function curriculumAssignmentFromFirestore(id: string, data: Record<strin
   };
 }
 
+export function pulseCheckDailyAssignmentToFirestore(
+  assignment: PulseCheckDailyAssignment
+): Record<string, any> {
+  const data: Record<string, any> = {
+    athleteId: assignment.athleteId,
+    teamId: assignment.teamId,
+    teamMembershipId: assignment.teamMembershipId,
+    sourceCheckInId: assignment.sourceCheckInId,
+    sourceDate: assignment.sourceDate,
+    assignedBy: assignment.assignedBy,
+    status: assignment.status,
+    actionType: assignment.actionType,
+    rationale: assignment.rationale,
+    createdAt: assignment.createdAt,
+    updatedAt: assignment.updatedAt,
+  };
+
+  if (assignment.coachId) data.coachId = assignment.coachId;
+  if (assignment.simSpecId) data.simSpecId = assignment.simSpecId;
+  if (assignment.legacyExerciseId) data.legacyExerciseId = assignment.legacyExerciseId;
+  if (assignment.sessionType) data.sessionType = assignment.sessionType;
+  if (assignment.durationMode) data.durationMode = assignment.durationMode;
+  if (typeof assignment.durationSeconds === 'number') data.durationSeconds = assignment.durationSeconds;
+  if (typeof assignment.readinessScore === 'number') data.readinessScore = assignment.readinessScore;
+  if (assignment.readinessBand) data.readinessBand = assignment.readinessBand;
+  if (typeof assignment.escalationTier === 'number') data.escalationTier = assignment.escalationTier;
+  if (typeof assignment.supportFlag === 'boolean') data.supportFlag = assignment.supportFlag;
+  if (assignment.programSnapshot) data.programSnapshot = sanitizeFirestoreValue(assignment.programSnapshot);
+  if (typeof assignment.coachNotifiedAt === 'number') data.coachNotifiedAt = assignment.coachNotifiedAt;
+  if (typeof assignment.startedAt === 'number') data.startedAt = assignment.startedAt;
+  if (typeof assignment.completedAt === 'number') data.completedAt = assignment.completedAt;
+  if (assignment.overriddenBy) data.overriddenBy = assignment.overriddenBy;
+  if (assignment.overrideReason) data.overrideReason = assignment.overrideReason;
+
+  return data;
+}
+
+export function pulseCheckDailyAssignmentFromFirestore(
+  id: string,
+  data: Record<string, any>
+): PulseCheckDailyAssignment {
+  return {
+    id,
+    athleteId: data.athleteId || '',
+    teamId: data.teamId || '',
+    teamMembershipId: data.teamMembershipId || '',
+    coachId: data.coachId,
+    sourceCheckInId: data.sourceCheckInId || '',
+    sourceDate: data.sourceDate || '',
+    assignedBy: 'nora',
+    status: data.status || PulseCheckDailyAssignmentStatus.Assigned,
+    actionType: data.actionType || 'sim',
+    simSpecId: data.simSpecId,
+    legacyExerciseId: data.legacyExerciseId,
+    sessionType: data.sessionType,
+    durationMode: data.durationMode,
+    durationSeconds: data.durationSeconds,
+    rationale: data.rationale || '',
+    readinessScore: data.readinessScore,
+    readinessBand: data.readinessBand,
+    escalationTier: data.escalationTier,
+    supportFlag: data.supportFlag,
+    programSnapshot: data.programSnapshot,
+    coachNotifiedAt: data.coachNotifiedAt,
+    startedAt: data.startedAt,
+    completedAt: data.completedAt,
+    overriddenBy: data.overriddenBy,
+    overrideReason: data.overrideReason,
+    createdAt: data.createdAt || Date.now(),
+    updatedAt: data.updatedAt || Date.now(),
+  };
+}
+
 export function dailyCompletionToFirestore(completion: DailyCompletion): Record<string, any> {
   return {
     date: completion.date,
@@ -1130,6 +1314,9 @@ export function athleteProgressToFirestore(progress: AthleteMentalProgress): Rec
   if (progress.baselineAssessment) {
     data.baselineAssessment = progress.baselineAssessment;
   }
+  if (progress.baselineProbe) {
+    data.baselineProbe = progress.baselineProbe;
+  }
   if (progress.activeAssignmentId) {
     data.activeAssignmentId = progress.activeAssignmentId;
   }
@@ -1137,10 +1324,10 @@ export function athleteProgressToFirestore(progress: AthleteMentalProgress): Rec
     data.activeAssignmentExerciseName = progress.activeAssignmentExerciseName;
   }
   if (progress.taxonomyProfile) {
-    data.taxonomyProfile = progress.taxonomyProfile;
+    data.taxonomyProfile = sanitizeFirestoreValue(progress.taxonomyProfile);
   }
   if (progress.activeProgram) {
-    data.activeProgram = progress.activeProgram;
+    data.activeProgram = sanitizeFirestoreValue(progress.activeProgram);
   }
   if (typeof progress.lastProfileSyncAt === 'number') {
     data.lastProfileSyncAt = progress.lastProfileSyncAt;
@@ -1152,12 +1339,33 @@ export function athleteProgressToFirestore(progress: AthleteMentalProgress): Rec
   return data;
 }
 
+function coerceMillis(value: unknown, fallback: number): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+  if (value && typeof value === 'object') {
+    const candidate = value as { toMillis?: () => number; seconds?: number; nanoseconds?: number };
+    if (typeof candidate.toMillis === 'function') {
+      return candidate.toMillis();
+    }
+    if (typeof candidate.seconds === 'number') {
+      const nanos = typeof candidate.nanoseconds === 'number' ? candidate.nanoseconds : 0;
+      return candidate.seconds * 1000 + Math.floor(nanos / 1_000_000);
+    }
+  }
+  return fallback;
+}
+
 export function athleteProgressFromFirestore(athleteId: string, data: Record<string, any>): AthleteMentalProgress {
+  const now = Date.now();
   return {
     athleteId,
     coachId: data.coachId,
     mprScore: data.mprScore || 1,
-    mprLastCalculated: data.mprLastCalculated || Date.now(),
+    mprLastCalculated: coerceMillis(data.mprLastCalculated, now),
     currentPathway: data.currentPathway || MentalPathway.Foundation,
     pathwayStep: data.pathwayStep || 0,
     completedPathways: data.completedPathways || [],
@@ -1165,6 +1373,7 @@ export function athleteProgressFromFirestore(athleteId: string, data: Record<str
     foundationBoxBreathingComplete: data.foundationBoxBreathingComplete || false,
     foundationCheckInsComplete: data.foundationCheckInsComplete || false,
     baselineAssessment: data.baselineAssessment,
+    baselineProbe: data.baselineProbe,
     assessmentNeeded: data.assessmentNeeded ?? true,
     totalExercisesMastered: data.totalExercisesMastered || 0,
     totalAssignmentsCompleted: data.totalAssignmentsCompleted || 0,
@@ -1174,9 +1383,9 @@ export function athleteProgressFromFirestore(athleteId: string, data: Record<str
     activeAssignmentExerciseName: data.activeAssignmentExerciseName,
     taxonomyProfile: data.taxonomyProfile,
     activeProgram: data.activeProgram,
-    lastProfileSyncAt: data.lastProfileSyncAt,
+    lastProfileSyncAt: data.lastProfileSyncAt ? coerceMillis(data.lastProfileSyncAt, now) : undefined,
     profileVersion: data.profileVersion,
-    createdAt: data.createdAt || Date.now(),
-    updatedAt: data.updatedAt || Date.now(),
+    createdAt: coerceMillis(data.createdAt, now),
+    updatedAt: coerceMillis(data.updatedAt, now),
   };
 }

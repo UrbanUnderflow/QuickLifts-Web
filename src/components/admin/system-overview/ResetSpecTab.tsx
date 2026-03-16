@@ -197,7 +197,7 @@ const VARIANTS = [
     { name: 'Combined Disruption', description: 'Multi-channel disruptions. Default for Tier 3–4.', status: 'Registered' },
     { name: 'Basketball Reset', description: 'Basketball-context disruptions (buzzer, turnover cue, crowd). Sport-specific variant.', status: 'Registered' },
     { name: 'Extended Recovery Trial', description: 'Standardized 10–15 min session at fixed Tier 3. Trial-layer assessment variant.', status: 'Registered' },
-    { name: 'Reset Chamber (Vision Pro)', description: 'Immersive spatial audio + environmental disruptions. Transfer fidelity variant.', status: 'Planned' },
+    { name: 'Reset Chamber (Vision Pro)', description: 'Active football package runtime for Reset / Next Play in the Vision Pro immersive transfer layer.', status: 'Football Package v1' },
 ];
 
 /* ---- MEASUREMENT RULES ---- */
@@ -512,6 +512,11 @@ const ResetSpecTab: React.FC = () => {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                    <div className="rounded-lg border border-green-500/20 bg-green-500/5 px-3 py-2">
+                        <p className="text-[10px] text-green-200">
+                            Current immersive build status: Reset Chamber is the live Reset surface inside the Vision Pro football package. Other family-level immersive variants elsewhere in the handbook are still roadmap items unless they are explicitly marked otherwise.
+                        </p>
                     </div>
                     <div className="rounded-lg border border-zinc-700 bg-black/30 px-3 py-2">
                         <p className="text-[10px] text-zinc-500">New variants can be added without taxonomy changes. If any variant produces divergent performance patterns (per the Promotion Protocol), it will be flagged for evaluation.</p>

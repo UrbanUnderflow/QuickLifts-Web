@@ -29,16 +29,25 @@ const ENV_ROWS = [
 
 const SUITE_ROWS = [
   ['Variant Registry', '`tests/e2e/registry-build-publish.spec.ts`', 'Registry sync/build/preview/publish smoke with fixture cloning and cleanup.'],
-  ['PulseCheck Onboarding + Workspace', '`tests/e2e/pulsecheck-onboarding-workspace.spec.ts`', 'Provisioning page load, post-activation load, workspace load, and opt-in athlete invite create/revoke.'],
+  ['PulseCheck Onboarding + Workspace', '`tests/e2e/pulsecheck-onboarding-workspace.spec.ts`', 'Provisioning, legacy roster migration, post-activation, workspace load, and opt-in onboarding/invite mutation coverage.'],
+  ['PulseCheck Athlete Journey', '`tests/e2e/pulsecheck-athlete-journey.spec.ts`', 'Daily check-in, Nora daily assignment creation, Today/Nora shared-task rendering, mental-training launch handoff, session-summary loop, and coach follow-up surfaces.'],
 ];
 
 const PULSECHECK_ROWS = [
   ['Provisioning surface load', '`/admin/pulsecheckProvisioning` renders internal setup containers and connected provisioning map.', 'Smoke'],
+  ['Legacy roster migration load', '`/admin/pulsecheckLegacyRosterMigration` renders the operator review surface for migrating `coachAthletes` into PulseCheck teams.', 'Smoke'],
   ['Post-activation setup load', '`/PulseCheck/post-activation` resolves a live admin handoff context.', 'Smoke'],
   ['Team workspace load', '`/PulseCheck/team-workspace` renders roster, invite controls, and migration-state panels.', 'Smoke'],
+  ['Legacy roster migration create-path', 'Seeds an unmapped legacy coach roster, runs migration, and verifies a new PulseCheck organization/team plus athlete memberships are created.', 'Write-path'],
+  ['Legacy roster migration existing-team path', 'Seeds a legacy coach roster that already has a PulseCheck team, runs migration, and verifies only the missing athlete is backfilled.', 'Write-path'],
   ['Athlete invite create + revoke', 'Creates a unique athlete invite from the workspace and revokes it in the same run.', 'Write-path'],
   ['Adult invite redemption', 'Creates a coach/staff invite, redeems it in a clean browser context, completes member setup, and confirms the member appears in the team workspace.', 'Write-path'],
   ['Athlete onboarding completion', 'Creates an athlete invite, redeems it in a clean browser context, completes consent/baseline onboarding, and confirms roster readiness in the team workspace.', 'Write-path'],
+  ['Athlete daily check-in -> Nora task', 'Redeems a real athlete account, seeds post-baseline runtime state, saves a Today-view readiness check-in, and verifies a Nora daily assignment materializes from the real orchestration path.', 'Write-path'],
+  ['Shared assignment surfaces', 'Confirms the same daily assignment renders in Today and Nora chat and launches the same task into Mental Training.', 'Write-path'],
+  ['Session summary loop', 'Completes a Nora daily assignment, verifies the assignment lifecycle advances, and confirms the athlete receives a durable session summary plus next-action copy.', 'Write-path'],
+  ['Coach follow-up queue', 'Confirms coach dashboard and notification-center surfaces reflect Nora auto-assignment and post-session follow-up artifacts.', 'Write-path'],
+  ['Coach same-day intervention', 'Confirms the coach assignments tab can defer the Nora daily assignment and that the assignment state updates accordingly.', 'Write-path'],
   ['Assigned-athlete scope enforcement', 'Creates a scoped coach plus two athletes, assigns only one athlete to that coach, and confirms the coach workspace only shows the granted athlete.', 'Write-path'],
   ['Invite-policy matrix', 'Creates coach and staff recipients, flips the team through each invite-policy mode, and verifies who can create athlete invites in each state.', 'Write-path'],
   ['Revoked invite protection', 'Revokes an athlete invite and confirms the old link resolves to the shared not-found state instead of rendering a redeemable invite.', 'Write-path'],
@@ -53,6 +62,7 @@ const MANUAL_ROWS = [
   ['Athlete onboarding', 'Redeem an athlete invite in a third session, accept consent, and verify baseline readiness appears in the workspace.'],
   ['Invite policy enforcement', 'Switch team invite policy scenarios and confirm who can or cannot create athlete invites.'],
   ['Assigned athlete scope', 'Set a staff member to assigned visibility and verify only selected athletes are tied to that member.'],
+  ['Legacy roster migration QA', 'Confirm the operator page clearly distinguishes new-container migrations from existing-team migrations and that post-migration roster placement matches expectations.'],
   ['Negative invite paths', 'Confirm revoked links, wrong-email invite access, and regenerated admin links all fail cleanly and predictably.'],
 ];
 
@@ -99,7 +109,7 @@ const PlaywrightTestingStrategyTab: React.FC = () => {
           },
           {
             title: 'PulseCheck Coverage Is Now First-Class',
-            body: 'PulseCheck provisioning, post-activation, and workspace flows should live beside the Variant Registry suite as another canonical E2E surface.',
+            body: 'PulseCheck provisioning, onboarding, workspace, and the athlete daily rhythm should live beside the Variant Registry suite as canonical E2E surfaces.',
           },
           {
             title: 'Write Paths Stay Intentional',
@@ -160,6 +170,19 @@ PLAYWRIGHT_PULSECHECK_ORG_ID=<org-id>
 PLAYWRIGHT_PULSECHECK_TEAM_ID=<team-id>
 PLAYWRIGHT_ALLOW_WRITE_TESTS=true
 npm run test:e2e -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts`}
+              </pre>
+            }
+          />
+          <InfoCard
+            title="Athlete Journey Regression Run"
+            accent="green"
+            body={
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
+                {`PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json
+PLAYWRIGHT_PULSECHECK_ORG_ID=<org-id>
+PLAYWRIGHT_PULSECHECK_TEAM_ID=<team-id>
+PLAYWRIGHT_ALLOW_WRITE_TESTS=true
+npm run test:e2e -- tests/e2e/pulsecheck-athlete-journey.spec.ts`}
               </pre>
             }
           />

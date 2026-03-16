@@ -13,8 +13,14 @@ const ProfilePhoto: React.FC<ProfilePhotoProps> = ({ onTabChange }) => {
   const router = useRouter();
   const currentPath = router.pathname;
   const isHomePage = currentPath === '/';
+  const isPulseCheckPage = router.asPath.startsWith('/PulseCheck') || currentPath.startsWith('/PulseCheck');
 
   const handleProfileClick = () => {
+    if (isPulseCheckPage) {
+      router.push('/PulseCheck?section=profile');
+      return;
+    }
+
     if (isHomePage && onTabChange) {
       // If on home page, use tab navigation to show private profile
       onTabChange(SelectedRootTabs.Profile);

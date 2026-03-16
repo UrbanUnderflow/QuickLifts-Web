@@ -11,6 +11,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { motion, AnimatePresence } from 'framer-motion';
+import { collection, getDocs, limit, query, where } from 'firebase/firestore';
 import {
   Brain,
   Users,
@@ -25,16 +26,19 @@ import {
   Flame,
   Sparkles,
   RefreshCw,
+  Lock,
   TrendingUp,
   ScanLine,
+  FileBarChart2,
 } from 'lucide-react';
 import { useUser } from '../../hooks/useUser';
-import { auth } from '../../api/firebase/config';
+import { auth, db } from '../../api/firebase/config';
 import { coachService } from '../../api/firebase/coach';
 import { CoachModel } from '../../types/Coach';
 import {
   simModuleLibraryService,
   assignmentService,
+  assignmentOrchestratorService,
   completionService,
   curriculumAssignmentService,
   athleteProgressService,
@@ -47,10 +51,14 @@ import {
   MentalRecommendation,
   CurriculumAssignment,
   AthleteMentalProgress,
+  ExerciseCompletion,
+  PulseCheckDailyAssignment,
+  PulseCheckDailyAssignmentStatus,
   visionProTrialService,
   VISION_PRO_CURRICULUM_ASSIGNMENTS_COLLECTION,
   VISION_PRO_LEGACY_ASSIGNMENTS_COLLECTION,
 } from '../../api/firebase/mentaltraining';
+import type { VisionProTrialSession } from '../../api/firebase/mentaltraining/visionProTrialService';
 import CoachLayout from '../../components/CoachLayout';
 import Head from 'next/head';
 import {
@@ -60,6 +68,7 @@ import {
   RecommendationCard,
   CurriculumProgressCard,
 } from '../../components/mentaltraining';
+import { TrialType } from '../../api/firebase/mentaltraining/taxonomy';
 
 interface AthleteWithProgress {
   id: string;
@@ -72,12 +81,110 @@ interface AthleteWithProgress {
   completedThisWeek: number;
   mentalProgress?: AthleteMentalProgress;
   curriculumAssignment?: CurriculumAssignment;
+  latestSessionCompletion?: ExerciseCompletion;
 }
 
 type TabType = 'recommendations' | 'athletes' | 'exercises' | 'assignments';
 
 function humanizeTaxonomyLabel(value: string): string {
   return value.split('_').join(' ');
+}
+
+function humanizeRuntimeLabel(value?: string | null): string {
+  if (!value) return 'Nora task';
+  return value.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function athleteNeedsBaseline(athlete: AthleteWithProgress): boolean {
+  return athlete.mentalProgress?.assessmentNeeded !== false;
+}
+
+function getTransferReadinessLabel(value?: string | null): string {
+  switch (value) {
+    case 'strong_transfer':
+      return 'Strong transfer';
+    case 'emerging_transfer':
+      return 'Emerging transfer';
+    case 'needs_transfer_work':
+      return 'Needs transfer work';
+    default:
+      return 'Awaiting baseline';
+  }
+}
+
+function getTransferReadinessTone(value?: string | null): string {
+  switch (value) {
+    case 'strong_transfer':
+      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
+    case 'emerging_transfer':
+      return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+    case 'needs_transfer_work':
+      return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
+    default:
+      return 'border-zinc-700 bg-zinc-800/80 text-zinc-300';
+  }
+}
+
+function getDailyAssignmentStatusLabel(status: PulseCheckDailyAssignmentStatus): string {
+  switch (status) {
+    case PulseCheckDailyAssignmentStatus.Assigned:
+      return 'Assigned';
+    case PulseCheckDailyAssignmentStatus.Viewed:
+      return 'Viewed';
+    case PulseCheckDailyAssignmentStatus.Started:
+      return 'Started';
+    case PulseCheckDailyAssignmentStatus.Completed:
+      return 'Completed';
+    case PulseCheckDailyAssignmentStatus.Overridden:
+      return 'Coach overridden';
+    case PulseCheckDailyAssignmentStatus.Deferred:
+      return 'Deferred';
+    case PulseCheckDailyAssignmentStatus.Superseded:
+      return 'Superseded';
+    default:
+      return 'Assigned';
+  }
+}
+
+function getDailyAssignmentStatusTone(status: PulseCheckDailyAssignmentStatus): string {
+  switch (status) {
+    case PulseCheckDailyAssignmentStatus.Assigned:
+      return 'border-[#E0FE10]/30 bg-[#E0FE10]/10 text-[#E0FE10]';
+    case PulseCheckDailyAssignmentStatus.Viewed:
+      return 'border-blue-500/30 bg-blue-500/10 text-blue-300';
+    case PulseCheckDailyAssignmentStatus.Started:
+      return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300';
+    case PulseCheckDailyAssignmentStatus.Completed:
+      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+    case PulseCheckDailyAssignmentStatus.Overridden:
+      return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+    case PulseCheckDailyAssignmentStatus.Deferred:
+      return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
+    case PulseCheckDailyAssignmentStatus.Superseded:
+      return 'border-zinc-700 bg-zinc-800/80 text-zinc-300';
+    default:
+      return 'border-zinc-700 bg-zinc-800/80 text-zinc-300';
+  }
+}
+
+function getDailyAssignmentActionLabel(assignment: PulseCheckDailyAssignment): string {
+  if (assignment.actionType === 'defer') {
+    return 'Defer';
+  }
+
+  if (assignment.simSpecId) {
+    return humanizeRuntimeLabel(assignment.simSpecId);
+  }
+
+  if (assignment.legacyExerciseId) {
+    return humanizeRuntimeLabel(assignment.legacyExerciseId);
+  }
+
+  if (assignment.sessionType) {
+    return humanizeRuntimeLabel(assignment.sessionType);
+  }
+
+  return assignment.actionType === 'lighter_sim' ? 'Lighter sim' : 'Sim';
 }
 
 const CoachMentalTraining: React.FC = () => {
@@ -88,12 +195,15 @@ const CoachMentalTraining: React.FC = () => {
   const [athletes, setAthletes] = useState<AthleteWithProgress[]>([]);
   const [exercises, setExercises] = useState<SimModule[]>([]);
   const [recentAssignments, setRecentAssignments] = useState<SimAssignment[]>([]);
+  const [recentVisionProSessions, setRecentVisionProSessions] = useState<VisionProTrialSession[]>([]);
 
   // Curriculum state
   const [recommendations, setRecommendations] = useState<MentalRecommendation[]>([]);
   const [curriculumAssignments, setCurriculumAssignments] = useState<CurriculumAssignment[]>([]);
+  const [noraDailyAssignments, setNoraDailyAssignments] = useState<PulseCheckDailyAssignment[]>([]);
   const [generatingRecommendations, setGeneratingRecommendations] = useState(false);
   const [actioningRecommendation, setActioningRecommendation] = useState<string | null>(null);
+  const [actioningDailyAssignment, setActioningDailyAssignment] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -126,6 +236,20 @@ const CoachMentalTraining: React.FC = () => {
 
   const visibleRecommendations = recommendations.filter(r => !assignedAthleteIds.has(r.athleteId));
 
+  const refreshNoraDailyAssignments = useCallback(async (coachId: string) => {
+    const assignments = await assignmentOrchestratorService.listRecentForCoach(coachId, 24);
+    setNoraDailyAssignments(assignments);
+  }, []);
+
+  useEffect(() => {
+    if (!router.isReady) return;
+
+    const tab = router.query.tab;
+    if (tab === 'recommendations' || tab === 'athletes' || tab === 'exercises' || tab === 'assignments') {
+      setActiveTab(tab);
+    }
+  }, [router.isReady, router.query.tab]);
+
   // Load coach profile and data
   useEffect(() => {
     const loadData = async () => {
@@ -146,11 +270,12 @@ const CoachMentalTraining: React.FC = () => {
             connectedAthletes.map(async (athlete: any) => {
               try {
                 const athleteId = athlete.id || athlete.userId;
-                const [streak, assignments, mentalProgress, curriculumAssignment] = await Promise.all([
+                const [streak, assignments, mentalProgress, curriculumAssignment, latestSessionCompletion] = await Promise.all([
                   completionService.getStreak(athleteId),
                   assignmentService.getForAthleteByCoach(athleteId, profile.id),
                   athleteProgressService.get(athleteId),
                   curriculumAssignmentService.getActiveForAthlete(athleteId),
+                  completionService.getLatestCompletion(athleteId),
                 ]);
 
                 const pending = assignments.filter(
@@ -173,6 +298,7 @@ const CoachMentalTraining: React.FC = () => {
                   completedThisWeek,
                   mentalProgress: mentalProgress || undefined,
                   curriculumAssignment: curriculumAssignment || undefined,
+                  latestSessionCompletion: latestSessionCompletion || undefined,
                 };
               } catch {
                 return {
@@ -190,17 +316,30 @@ const CoachMentalTraining: React.FC = () => {
 
           setAthletes(athletesWithProgress);
 
-          // Get recent assignments by this coach
-          const assignments = await assignmentService.getByCoach(profile.id);
+          const [assignments, recs, currAssignments, visionProSessionSnap, dailyAssignments] = await Promise.all([
+            assignmentService.getByCoach(profile.id),
+            recommendationService.getPendingForCoach(profile.id),
+            curriculumAssignmentService.getActiveForCoach(profile.id),
+            getDocs(
+              query(
+                collection(db, 'vision-pro-trial-sessions'),
+                where('createdByUserId', '==', profile.id),
+                limit(20)
+              )
+            ),
+            assignmentOrchestratorService.listRecentForCoach(profile.id, 24),
+          ]);
+
           setRecentAssignments(assignments.slice(0, 20));
-
-          // Get pending recommendations
-          const recs = await recommendationService.getPendingForCoach(profile.id);
           setRecommendations(recs);
-
-          // Get active curriculum assignments
-          const currAssignments = await curriculumAssignmentService.getActiveForCoach(profile.id);
           setCurriculumAssignments(currAssignments);
+          setNoraDailyAssignments(dailyAssignments);
+          setRecentVisionProSessions(
+            visionProSessionSnap.docs
+              .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, any>) } as VisionProTrialSession))
+              .sort((left, right) => (right.completedAt || right.createdAt || 0) - (left.completedAt || left.createdAt || 0))
+              .slice(0, 12)
+          );
         }
 
         // Load exercise library
@@ -379,10 +518,15 @@ const CoachMentalTraining: React.FC = () => {
   useEffect(() => {
     if (activeTab !== 'assignments') return;
     if (!coachProfile?.id) return;
-    curriculumAssignmentService
-      .getActiveForCoach(coachProfile.id)
-      .then(setCurriculumAssignments)
-      .catch((err) => console.error('Failed to refresh curriculum assignments:', err));
+    Promise.all([
+      curriculumAssignmentService.getActiveForCoach(coachProfile.id),
+      assignmentOrchestratorService.listRecentForCoach(coachProfile.id, 24),
+    ])
+      .then(([currAssignments, dailyAssignments]) => {
+        setCurriculumAssignments(currAssignments);
+        setNoraDailyAssignments(dailyAssignments);
+      })
+      .catch((err) => console.error('Failed to refresh coach assignments:', err));
   }, [activeTab, coachProfile?.id]);
 
   // Handle modifying a recommendation
@@ -422,6 +566,11 @@ const CoachMentalTraining: React.FC = () => {
   const activeStreaks = athletes.filter(a => a.streak && a.streak.currentStreak > 0).length;
   const pendingRecommendations = visibleRecommendations.length;
   const activeCurriculumAssignments = curriculumAssignments.length;
+  const activeDailyAssignments = noraDailyAssignments.filter((assignment) =>
+    assignment.status === PulseCheckDailyAssignmentStatus.Assigned ||
+    assignment.status === PulseCheckDailyAssignmentStatus.Viewed ||
+    assignment.status === PulseCheckDailyAssignmentStatus.Started
+  ).length;
   const profiledAthletes = athletes.filter(a => a.mentalProgress?.taxonomyProfile);
   const averagePulseCheckScore =
     profiledAthletes.length > 0
@@ -435,8 +584,23 @@ const CoachMentalTraining: React.FC = () => {
   const lowReadinessCount = profiledAthletes.filter(
     a => (a.mentalProgress?.taxonomyProfile?.modifierScores.readiness ?? 100) < 50
   ).length;
+  const recentSessionUpdates = [...athletes]
+    .filter((athlete) => athlete.latestSessionCompletion?.sessionSummary)
+    .sort(
+      (left, right) =>
+        (right.latestSessionCompletion?.completedAt || 0) - (left.latestSessionCompletion?.completedAt || 0)
+    )
+    .slice(0, 6);
 
   const handleAssignToAthlete = (athleteId: string) => {
+    const athlete = athletes.find((entry) => entry.id === athleteId);
+    if (athlete && athleteNeedsBaseline(athlete)) {
+      showToast({
+        message: `${athlete.displayName || athlete.username || 'This athlete'} still needs baseline tasks before standard sim assignment.`,
+      });
+      return;
+    }
+
     setSelectedAthleteId(athleteId);
     setShowAssignModal(true);
   };
@@ -446,6 +610,60 @@ const CoachMentalTraining: React.FC = () => {
     setShowAssignModal(true);
   };
 
+  const openManualAssignmentForAthlete = useCallback((athleteId: string) => {
+    setSelectedAthleteId(athleteId);
+    setShowAssignModal(true);
+  }, []);
+
+  const handleOverrideDailyAssignment = useCallback(async (assignmentId: string) => {
+    if (!currentUser?.id || !coachProfile?.id) return;
+
+    const assignment = noraDailyAssignments.find((entry) => entry.id === assignmentId);
+    if (!assignment) return;
+
+    setActioningDailyAssignment(assignmentId);
+    try {
+      await assignmentOrchestratorService.overrideAssignment({
+        id: assignmentId,
+        overriddenBy: currentUser.id,
+        reason: 'Coach manually overrode Nora auto-assignment.',
+      });
+
+      await refreshNoraDailyAssignments(coachProfile.id);
+      showToast({
+        message: 'Nora task marked overridden for today.',
+        actionLabel: 'Replace Now',
+        onAction: () => openManualAssignmentForAthlete(assignment.athleteId),
+      });
+    } catch (error) {
+      console.error('Failed to override Nora daily assignment:', error);
+      showToast({ message: 'Failed to override Nora task. Check console for details.' });
+    } finally {
+      setActioningDailyAssignment(null);
+    }
+  }, [currentUser?.id, coachProfile?.id, noraDailyAssignments, refreshNoraDailyAssignments, showToast, openManualAssignmentForAthlete]);
+
+  const handleDeferDailyAssignment = useCallback(async (assignmentId: string) => {
+    if (!currentUser?.id || !coachProfile?.id) return;
+
+    setActioningDailyAssignment(assignmentId);
+    try {
+      await assignmentOrchestratorService.deferAssignment({
+        id: assignmentId,
+        overriddenBy: currentUser.id,
+        reason: 'Coach deferred today\'s Nora auto-assignment.',
+      });
+
+      await refreshNoraDailyAssignments(coachProfile.id);
+      showToast({ message: 'Today\'s Nora task was deferred.' });
+    } catch (error) {
+      console.error('Failed to defer Nora daily assignment:', error);
+      showToast({ message: 'Failed to defer Nora task. Check console for details.' });
+    } finally {
+      setActioningDailyAssignment(null);
+    }
+  }, [currentUser?.id, coachProfile?.id, refreshNoraDailyAssignments, showToast]);
+
   const handleQueueVisionPro = useCallback(async ({
     assignmentId,
     assignmentCollection,
@@ -453,6 +671,7 @@ const CoachMentalTraining: React.FC = () => {
     athleteName,
     simId,
     simName,
+    profileSnapshotMilestone,
   }: {
     assignmentId: string;
     assignmentCollection: typeof VISION_PRO_CURRICULUM_ASSIGNMENTS_COLLECTION | typeof VISION_PRO_LEGACY_ASSIGNMENTS_COLLECTION;
@@ -460,6 +679,7 @@ const CoachMentalTraining: React.FC = () => {
     athleteName: string;
     simId?: string;
     simName?: string;
+    profileSnapshotMilestone?: SimAssignment['profileSnapshotMilestone'];
   }) => {
     if (!coachProfile?.id) return;
 
@@ -479,6 +699,8 @@ const CoachMentalTraining: React.FC = () => {
         simId,
         simName,
         createdByName: currentUser?.displayName || currentUser?.username || 'Coach',
+        trialType: profileSnapshotMilestone ? TrialType.ImmersiveTransfer : undefined,
+        profileSnapshotMilestone,
       });
 
       showToast({
@@ -634,13 +856,65 @@ const CoachMentalTraining: React.FC = () => {
           </div>
         )}
 
+        {recentSessionUpdates.length > 0 && (
+          <div className="mb-8">
+            <div className="mb-4 flex items-center gap-2">
+              <FileBarChart2 className="h-5 w-5 text-emerald-300" />
+              <h2 className="text-lg font-semibold text-white">Recent Athlete Session Updates</h2>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              {recentSessionUpdates.map((athlete) => {
+                const completion = athlete.latestSessionCompletion;
+                const summary = completion?.sessionSummary;
+                if (!completion || !summary) return null;
+
+                return (
+                  <div key={athlete.id} className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white">
+                          {athlete.displayName || athlete.username || 'Athlete'}
+                        </p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.18em] text-emerald-300">
+                          {summary.coachHeadline}
+                        </p>
+                      </div>
+                      <div className="text-right text-xs text-zinc-400">
+                        {new Date(completion.completedAt).toLocaleDateString()}
+                      </div>
+                    </div>
+
+                    <p className="mt-3 text-sm leading-6 text-zinc-200">
+                      {summary.coachBody}
+                    </p>
+
+                    <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-300">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                        Completed {summary.completedActionLabel}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                        Next {summary.nextActionLabel}
+                      </span>
+                      {summary.targetSkills.slice(0, 2).map((skill) => (
+                        <span key={skill} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="flex gap-2 mb-6 border-b border-zinc-700/50 pb-2 overflow-x-auto">
           {([
             { id: 'recommendations' as const, label: 'Nora Recommendations', badge: pendingRecommendations },
             { id: 'athletes' as const, label: 'Athletes', badge: 0 },
             { id: 'exercises' as const, label: 'Sim Modules', badge: 0 },
-            { id: 'assignments' as const, label: 'Assignments', badge: activeCurriculumAssignments },
+            { id: 'assignments' as const, label: 'Assignments', badge: activeCurriculumAssignments + activeDailyAssignments },
           ]).map((tab) => (
             <button
               key={tab.id}
@@ -801,6 +1075,12 @@ const CoachMentalTraining: React.FC = () => {
                         {athlete.displayName || athlete.username || 'Unknown'}
                       </p>
                       <div className="flex items-center gap-4 mt-1 text-sm">
+                        {athleteNeedsBaseline(athlete) && (
+                          <span className="flex items-center gap-1 text-amber-300">
+                            <Lock className="w-4 h-4" />
+                            baseline required
+                          </span>
+                        )}
                         {athlete.streak && athlete.streak.currentStreak > 0 && (
                           <span className="flex items-center gap-1 text-orange-400">
                             <Flame className="w-4 h-4" />
@@ -841,9 +1121,10 @@ const CoachMentalTraining: React.FC = () => {
                     {/* Actions */}
                     <button
                       onClick={() => handleAssignToAthlete(athlete.id)}
-                      className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black font-medium hover:bg-[#c8e40e] transition-colors"
+                      disabled={athleteNeedsBaseline(athlete)}
+                      className="px-4 py-2 rounded-lg bg-[#E0FE10] text-black font-medium hover:bg-[#c8e40e] transition-colors disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-400"
                     >
-                      Assign
+                      {athleteNeedsBaseline(athlete) ? 'Baseline Locked' : 'Assign'}
                     </button>
                   </motion.div>
                 ))}
@@ -907,8 +1188,169 @@ const CoachMentalTraining: React.FC = () => {
             <div ref={assignmentsTabTopRef} />
 
             <p className="text-zinc-400 mb-6">
-              Active curriculum assignments (14-day cycles) and recent legacy assignments.
+              Nora daily auto-assignments, active curriculum cycles, and recent legacy assignments.
             </p>
+
+            <div className="mb-10">
+              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-[#E0FE10]" />
+                Nora Daily Auto-Assignments ({noraDailyAssignments.length})
+              </h3>
+
+              {noraDailyAssignments.length === 0 ? (
+                <div className="text-center py-10 rounded-xl bg-zinc-800/30 border border-zinc-700/50 text-zinc-400">
+                  Nora has not auto-assigned any daily tasks for this coach yet.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  {noraDailyAssignments.map((assignment) => {
+                    const athlete = athletes.find((entry) => entry.id === assignment.athleteId);
+                    const isActionable =
+                      assignment.status === PulseCheckDailyAssignmentStatus.Assigned ||
+                      assignment.status === PulseCheckDailyAssignmentStatus.Viewed;
+                    const isBusy = actioningDailyAssignment === assignment.id;
+
+                    return (
+                      <div
+                        key={assignment.id}
+                        className="rounded-2xl border border-zinc-700/50 bg-zinc-900/70 p-5 space-y-4"
+                      >
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <div className="text-xs uppercase tracking-[0.25em] text-zinc-500">Daily Nora Task</div>
+                            <div className="mt-2 text-lg font-semibold text-white">
+                              {athlete?.displayName || athlete?.username || 'Unknown Athlete'}
+                            </div>
+                            <div className="text-sm text-zinc-400 capitalize">
+                              {getDailyAssignmentActionLabel(assignment)}
+                            </div>
+                          </div>
+                          <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getDailyAssignmentStatusTone(assignment.status)}`}>
+                            {getDailyAssignmentStatusLabel(assignment.status)}
+                          </div>
+                        </div>
+
+                        <div className="text-sm leading-6 text-zinc-300">
+                          {assignment.rationale || 'Nora generated this task from the latest check-in and profile state.'}
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-zinc-300">
+                            {assignment.sourceDate}
+                          </span>
+                          {assignment.readinessBand && (
+                            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-zinc-300 capitalize">
+                              {assignment.readinessBand} readiness
+                            </span>
+                          )}
+                          {assignment.sessionType && (
+                            <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-zinc-300 capitalize">
+                              {humanizeRuntimeLabel(assignment.sessionType)}
+                            </span>
+                          )}
+                          {assignment.coachNotifiedAt && (
+                            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-emerald-300">
+                              Coach push sent
+                            </span>
+                          )}
+                        </div>
+
+                        {isActionable ? (
+                          <div className="flex flex-wrap gap-3">
+                            <button
+                              onClick={() => handleOverrideDailyAssignment(assignment.id)}
+                              disabled={isBusy}
+                              className="px-4 py-2 rounded-xl bg-amber-500/15 text-amber-200 border border-amber-500/20 font-medium hover:bg-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isBusy ? 'Saving...' : 'Override'}
+                            </button>
+                            <button
+                              onClick={() => handleDeferDailyAssignment(assignment.id)}
+                              disabled={isBusy}
+                              className="px-4 py-2 rounded-xl bg-zinc-800 text-white border border-zinc-700 font-medium hover:border-zinc-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isBusy ? 'Saving...' : 'Defer Today'}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-sm text-zinc-500">
+                            {assignment.status === PulseCheckDailyAssignmentStatus.Overridden && 'Coach override is now the source of truth for today.'}
+                            {assignment.status === PulseCheckDailyAssignmentStatus.Deferred && 'Today\'s Nora task is paused until a coach or later cycle creates the next step.'}
+                            {assignment.status === PulseCheckDailyAssignmentStatus.Started && 'The athlete has already started this task, so Nora will not replace it automatically.'}
+                            {assignment.status === PulseCheckDailyAssignmentStatus.Completed && 'This task is already complete.'}
+                            {assignment.status === PulseCheckDailyAssignmentStatus.Superseded && 'A newer daily task replaced this assignment.'}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="mb-10">
+              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <FileBarChart2 className="w-5 h-5 text-cyan-300" />
+                Recent Vision Pro Transfer Reports ({recentVisionProSessions.length})
+              </h3>
+
+              {recentVisionProSessions.length === 0 ? (
+                <div className="text-center py-10 rounded-xl bg-zinc-800/30 border border-zinc-700/50 text-zinc-400">
+                  No Vision Pro sessions have been completed by this coach yet.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  {recentVisionProSessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className="rounded-2xl border border-zinc-700/50 bg-zinc-900/70 p-5 space-y-4"
+                    >
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="text-xs uppercase tracking-[0.25em] text-zinc-500">Vision Pro Session</div>
+                          <div className="mt-2 text-lg font-semibold text-white">
+                            {session.athleteDisplayName || session.athleteUserId}
+                          </div>
+                          <div className="text-sm text-zinc-400">{session.simName}</div>
+                        </div>
+                        <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${getTransferReadinessTone(session.reportSummary?.transferReadiness)}`}>
+                          {getTransferReadinessLabel(session.reportSummary?.transferReadiness)}
+                        </div>
+                      </div>
+
+                      <div className="text-sm text-zinc-300">
+                        {session.reportSummary?.coachHeadline || 'Coach-facing Vision Pro summary will appear here after the session is scored.'}
+                      </div>
+
+                      {session.reportSummary?.coachBody ? (
+                        <div className="text-sm leading-6 text-zinc-400">{session.reportSummary.coachBody}</div>
+                      ) : null}
+
+                      {session.reportSummary?.familyCards?.length ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {session.reportSummary.familyCards.map((card, index) => (
+                            <div key={`${session.id}-${card.family || index}`} className="rounded-xl border border-white/8 bg-black/20 p-3">
+                              <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">{card.label || card.family || 'Family'}</div>
+                              <div className="mt-2 text-sm font-semibold text-white">{card.trialName || 'Vision Pro trial'}</div>
+                              <div className="mt-1 text-xs text-zinc-400">{card.metricName || 'Core metric'}</div>
+                              <div className="mt-3 text-xs text-zinc-400">
+                                Gap: {typeof card.transferGap === 'number' ? card.transferGap.toFixed(2) : 'n/a'} • {card.interpretation || 'awaiting_baseline'}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
+                        <span>Status: {session.status}</span>
+                        <span>Outcome: {session.sessionOutcome || 'n/a'}</span>
+                        <span>{new Date(session.completedAt || session.createdAt || Date.now()).toLocaleString()}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Active Curriculum Assignments */}
             <div className="mb-10">
@@ -1017,6 +1459,7 @@ const CoachMentalTraining: React.FC = () => {
                             athleteName: athlete?.displayName || athlete?.username || 'Unknown Athlete',
                             simId: assignment.exercise?.simSpecId || assignment.exerciseId,
                             simName: assignment.exercise?.name,
+                            profileSnapshotMilestone: assignment.profileSnapshotMilestone,
                           })}
                           disabled={queueingVisionProKey === queueKey}
                           className="shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-900 border border-zinc-700 text-white text-sm font-medium hover:border-[#E0FE10]/40 hover:text-[#E0FE10] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1041,7 +1484,13 @@ const CoachMentalTraining: React.FC = () => {
           setShowAssignModal(false);
           setSelectedAthleteId(undefined);
         }}
-        athletes={athletes}
+        athletes={athletes.map((athlete) => ({
+          ...athlete,
+          assignmentLocked: athleteNeedsBaseline(athlete),
+          assignmentLockReason: athleteNeedsBaseline(athlete)
+            ? 'Baseline tasks must finish before standard sim assignment.'
+            : undefined,
+        }))}
         coachId={coachProfile?.id || currentUser?.id || ''}
         coachName={currentUser?.displayName || currentUser?.username}
         preSelectedAthleteId={selectedAthleteId}
@@ -1049,6 +1498,9 @@ const CoachMentalTraining: React.FC = () => {
           // Reload assignments
           if (coachProfile) {
             assignmentService.getByCoach(coachProfile.id).then(a => setRecentAssignments(a.slice(0, 20)));
+            refreshNoraDailyAssignments(coachProfile.id).catch((err) =>
+              console.error('Failed to refresh Nora daily assignments after manual assign:', err)
+            );
           }
         }}
       />

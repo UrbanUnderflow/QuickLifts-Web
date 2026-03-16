@@ -31,6 +31,7 @@ import {
   SimModule,
   ExerciseCategory,
 } from '../../api/firebase/mentaltraining/types';
+import type { ProfileSnapshotMilestone } from '../../api/firebase/mentaltraining/taxonomy';
 import { ResetGame } from './ResetGame';
 import { SimRuntimePlayer } from './SimRuntimePlayer';
 
@@ -77,6 +78,7 @@ interface ExercisePlayerProps {
   }) => void;
   onClose: () => void;
   assignmentId?: string;
+  profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
   /** Called when a writing exercise should be started in Nora chat */
   onStartInChat?: (exercise: SimModule) => void;
   previewMode?: boolean;
@@ -98,6 +100,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   onComplete,
   onClose,
   assignmentId: _assignmentId,
+  profileSnapshotMilestone,
   onStartInChat,
   previewMode = false,
 }) => {
@@ -295,6 +298,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
               soundEnabled={soundEnabled}
               requiresWriting={requiresWriting}
               onStartInChat={onStartInChat}
+              profileSnapshotMilestone={profileSnapshotMilestone}
               previewMode={previewMode}
             />
           )}
@@ -467,6 +471,7 @@ interface ActiveExerciseProps {
   soundEnabled: boolean;
   requiresWriting?: boolean;
   onStartInChat?: (exercise: SimModule) => void;
+  profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
   previewMode?: boolean;
 }
 
@@ -482,6 +487,7 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
   soundEnabled,
   requiresWriting,
   onStartInChat,
+  profileSnapshotMilestone,
   previewMode,
 }) => {
   if (exercise.buildArtifact?.engineKey) {
@@ -493,6 +499,7 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
         onResume={onResume}
         onClose={onClose}
         onComplete={onComplete}
+        profileSnapshotMilestone={profileSnapshotMilestone}
         previewMode={previewMode}
       />
     );
@@ -518,6 +525,7 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
       return (
         <ResetGame
           exercise={exercise}
+          profileSnapshotMilestone={profileSnapshotMilestone}
           onComplete={onComplete}
           onClose={onClose}
           previewMode={previewMode}

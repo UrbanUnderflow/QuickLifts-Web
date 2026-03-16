@@ -20,15 +20,20 @@ import {
 import {
   AthleteMentalProgress,
   BaselineAssessment,
-  MentalPathway,
   BiggestChallenge,
+  MentalPathway,
   athleteProgressFromFirestore,
   athleteProgressToFirestore,
+  sanitizeFirestoreValue,
 } from './types';
 import { bootstrapTaxonomyProfile, deriveTaxonomyProfile, prescribeNextSession } from './taxonomyProfileService';
+import type { SimSessionRecord } from './taxonomy';
 import { TaxonomyModifier } from './taxonomy';
+import { profileSnapshotService } from './profileSnapshotService';
+const profileSnapshotRuntime = require('./profileSnapshotRuntime');
 
 const COLLECTION = 'athlete-mental-progress';
+const PROFILE_VERSION: string = profileSnapshotRuntime.PROFILE_VERSION;
 
 function humanizeTaxonomyLabel(value: string): string {
   return value.split('_').join(' ');
@@ -142,27 +147,9 @@ export const athleteProgressService = {
 
     const now = Date.now();
     const progress: AthleteMentalProgress = {
-      athleteId,
+      ...profileSnapshotRuntime.buildInitialAthleteProgress(athleteId, now),
       coachId,
-      mprScore: 1,
-      mprLastCalculated: now,
       currentPathway: MentalPathway.Foundation,
-      pathwayStep: 0,
-      completedPathways: [],
-      foundationComplete: false,
-      foundationBoxBreathingComplete: false,
-      foundationCheckInsComplete: false,
-      assessmentNeeded: true,
-      totalExercisesMastered: 0,
-      totalAssignmentsCompleted: 0,
-      currentStreak: 0,
-      longestStreak: 0,
-      taxonomyProfile: bootstrapTaxonomyProfile(),
-      activeProgram: prescribeNextSession({ profile: bootstrapTaxonomyProfile() }),
-      lastProfileSyncAt: now,
-      profileVersion: 'taxonomy-v1',
-      createdAt: now,
-      updatedAt: now,
     };
 
     await setDoc(doc(db, COLLECTION, athleteId), athleteProgressToFirestore(progress));
@@ -183,6 +170,7 @@ export const athleteProgressService = {
     };
 
     const mprScore = calculateInitialMPR(fullAssessment);
+    const taxonomyProfile = bootstrapTaxonomyProfile(fullAssessment);
     // Get or create progress
     let progress = await this.get(athleteId);
     if (!progress) {
@@ -197,17 +185,68 @@ export const athleteProgressService = {
       mprLastCalculated: now,
       currentPathway: MentalPathway.Foundation, // Always start with foundation
       pathwayStep: 0,
-      taxonomyProfile: bootstrapTaxonomyProfile(fullAssessment),
+      taxonomyProfile,
       activeProgram: prescribeNextSession({
-        profile: bootstrapTaxonomyProfile(fullAssessment),
+        profile: taxonomyProfile,
       }),
       lastProfileSyncAt: now,
-      profileVersion: 'taxonomy-v1',
+      profileVersion: PROFILE_VERSION,
       updatedAt: now,
     };
 
     await setDoc(doc(db, COLLECTION, athleteId), athleteProgressToFirestore(updatedProgress));
+    await profileSnapshotService.writeCanonicalSnapshot(
+      profileSnapshotRuntime.buildProfileSnapshotWriteInput({
+        athleteId,
+        progress: updatedProgress,
+        milestoneType: 'baseline',
+        capturedAt: fullAssessment.completedAt,
+        sourceEventId: `baseline_assessment:${athleteId}:${fullAssessment.completedAt}`,
+      })
+    );
     return updatedProgress;
+  },
+
+  async syncOnboardingSnapshot(athleteId: string): Promise<AthleteMentalProgress> {
+    let progress = await this.get(athleteId);
+    if (!progress) {
+      progress = await this.initialize(athleteId);
+    }
+
+    await profileSnapshotService.writeCanonicalSnapshot(
+      profileSnapshotRuntime.buildProfileSnapshotWriteInput({
+        athleteId,
+        progress,
+        milestoneType: 'onboarding',
+        capturedAt: progress.updatedAt,
+        sourceEventId: `onboarding_snapshot:${athleteId}:${progress.updatedAt}`,
+      })
+    );
+
+    return progress;
+  },
+
+  async syncTrialSnapshotFromSession(
+    athleteId: string,
+    session: Pick<SimSessionRecord, 'id' | 'createdAt' | 'trialType' | 'profileSnapshotMilestone'>
+  ): Promise<AthleteMentalProgress | null> {
+    const milestoneType = profileSnapshotRuntime.resolveMilestoneFromSession(session);
+    if (!milestoneType) {
+      return null;
+    }
+
+    const progress = await this.syncTaxonomyProfile(athleteId);
+    await profileSnapshotService.writeCanonicalSnapshot(
+      profileSnapshotRuntime.buildProfileSnapshotWriteInput({
+        athleteId,
+        progress,
+        milestoneType,
+        capturedAt: session.createdAt,
+        sourceEventId: session.id ? `sim_session:${session.id}` : undefined,
+      })
+    );
+
+    return progress;
   },
 
   /**
@@ -338,11 +377,11 @@ export const athleteProgressService = {
       taxonomyProfile,
       activeProgram,
       lastProfileSyncAt: now,
-      profileVersion: 'taxonomy-v1',
+      profileVersion: PROFILE_VERSION,
       updatedAt: now,
     };
 
-    await updateDoc(doc(db, COLLECTION, athleteId), updates);
+    await updateDoc(doc(db, COLLECTION, athleteId), sanitizeFirestoreValue(updates));
     return { ...progress, ...updates };
   },
 

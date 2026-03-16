@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
-import { Activity, AlertTriangle, Brain, Check, Copy, Cpu, Database, ExternalLink, Gamepad2, Layers, Link2, Loader2, Server, Share2, Smartphone, TestTube2, Trash2, Users } from 'lucide-react';
+import { Activity, AlertTriangle, Brain, Check, Copy, Cpu, Database, ExternalLink, Gamepad2, Layers, Link2, Loader2, MessageSquareQuote, Server, Share2, Smartphone, TestTube2, Trash2, Users } from 'lucide-react';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import SectionNav from '../../components/admin/system-overview/SectionNav';
 import ProductHandbook from '../../components/admin/system-overview/ProductHandbook';
@@ -25,11 +25,17 @@ import PulseCheckNoraAssignmentRulesTab from '../../components/admin/system-over
 import PulseCheckNoraQaEdgeCaseScenarioMatrixTab from '../../components/admin/system-overview/PulseCheckNoraQaEdgeCaseScenarioMatrixTab';
 import PulseCheckStateEscalationOrchestrationTab from '../../components/admin/system-overview/PulseCheckStateEscalationOrchestrationTab';
 import PulseCheckEscalationIntegrationSpecTab from '../../components/admin/system-overview/PulseCheckEscalationIntegrationSpecTab';
+import PulseCheckMemberOnboardingGuideTab from '../../components/admin/system-overview/PulseCheckMemberOnboardingGuideTab';
 import PulseCheckTeamPilotCohortOnboardingArchitectureTab from '../../components/admin/system-overview/PulseCheckTeamPilotCohortOnboardingArchitectureTab';
 import PulseCheckPermissionsVisibilityModelTab from '../../components/admin/system-overview/PulseCheckPermissionsVisibilityModelTab';
 import PulseCheckCoachDashboardInformationArchitectureTab from '../../components/admin/system-overview/PulseCheckCoachDashboardInformationArchitectureTab';
+import PulseCheckProfileArchitectureTab from '../../components/admin/system-overview/PulseCheckProfileArchitectureTab';
+import PulseCheckProfileSnapshotExportSpecTab from '../../components/admin/system-overview/PulseCheckProfileSnapshotExportSpecTab';
+import PulseCheckVisionProImmersiveTestsTab from '../../components/admin/system-overview/PulseCheckVisionProImmersiveTestsTab';
+import PulseSystemDesignLanguageTab from '../../components/admin/system-overview/PulseSystemDesignLanguageTab';
 import AuntEdnaIntegrationStrategyTab from '../../components/admin/system-overview/AuntEdnaIntegrationStrategyTab';
 import PlaywrightTestingStrategyTab from '../../components/admin/system-overview/PlaywrightTestingStrategyTab';
+import AndroidTestingStrategyTab from '../../components/admin/system-overview/AndroidTestingStrategyTab';
 import XCUITestingStrategyTab from '../../components/admin/system-overview/XCUITestingStrategyTab';
 import { systemOverviewShareService } from '../../api/systemOverviewShare/service';
 import type { SystemOverviewShareLink } from '../../api/systemOverviewShare/types';
@@ -64,7 +70,7 @@ const SYSTEM_TABS: SystemTab[] = [
     label: 'Pulse Community',
     icon: Users,
     accent: '#60a5fa',
-    sectionIds: ['executive-summary', 'ecosystem-map', 'product-handbooks', 'pulse-club-activation-architecture', 'smart-routes-v1-architecture', 'shared-link-preview-strategy', 'backend-data', 'integrations', 'end-to-end-flows', 'ownership-release-matrix', 'risks-gaps', 'glossary'],
+    sectionIds: ['executive-summary', 'ecosystem-map', 'product-handbooks', 'pulse-club-activation-architecture', 'smart-routes-v1-architecture', 'shared-link-preview-strategy', 'workout-share-cards', 'backend-data', 'integrations', 'end-to-end-flows', 'ownership-release-matrix', 'risks-gaps', 'glossary'],
   },
   {
     id: 'pulsecheck',
@@ -88,10 +94,21 @@ const SYSTEM_TABS: SystemTab[] = [
       'pulsecheck-nora-qa-edge-case-matrix',
       'pulsecheck-state-escalation-orchestration',
       'pulsecheck-escalation-integration-spec',
+      'pulsecheck-member-onboarding-guide',
       'pulsecheck-team-pilot-cohort-onboarding-architecture',
       'pulsecheck-permissions-visibility-model',
       'pulsecheck-coach-dashboard-information-architecture',
+      'pulsecheck-profile-architecture',
+      'pulsecheck-profile-snapshot-export-spec',
+      'pulsecheck-vision-pro-immersive-tests',
     ],
+  },
+  {
+    id: 'design-language',
+    label: 'Design Language',
+    icon: MessageSquareQuote,
+    accent: '#f97316',
+    sectionIds: ['system-design-language'],
   },
   {
     id: 'agent-swarm',
@@ -120,6 +137,13 @@ const SYSTEM_TABS: SystemTab[] = [
     icon: TestTube2,
     accent: '#34d399',
     sectionIds: ['playwright-testing-strategy'],
+  },
+  {
+    id: 'android-test',
+    label: 'Android',
+    icon: Activity,
+    accent: '#84cc16',
+    sectionIds: ['android-testing-strategy'],
   },
   {
     id: 'xcuitest',
@@ -755,6 +779,9 @@ const SystemOverviewPage: React.FC = () => {
       case 'pulsecheck-escalation-integration-spec':
         return <PulseCheckEscalationIntegrationSpecTab />;
 
+      case 'pulsecheck-member-onboarding-guide':
+        return <PulseCheckMemberOnboardingGuideTab />;
+
       case 'pulsecheck-team-pilot-cohort-onboarding-architecture':
         return <PulseCheckTeamPilotCohortOnboardingArchitectureTab />;
 
@@ -764,14 +791,109 @@ const SystemOverviewPage: React.FC = () => {
       case 'pulsecheck-coach-dashboard-information-architecture':
         return <PulseCheckCoachDashboardInformationArchitectureTab />;
 
+      case 'pulsecheck-profile-architecture':
+        return <PulseCheckProfileArchitectureTab />;
+
+      case 'pulsecheck-profile-snapshot-export-spec':
+        return <PulseCheckProfileSnapshotExportSpecTab />;
+
+      case 'pulsecheck-vision-pro-immersive-tests':
+        return <PulseCheckVisionProImmersiveTestsTab />;
+
+      case 'system-design-language':
+        return <PulseSystemDesignLanguageTab />;
+
       case 'auntedna-integration-strategy':
         return <AuntEdnaIntegrationStrategyTab />;
 
       case 'playwright-testing-strategy':
         return <PlaywrightTestingStrategyTab />;
 
+      case 'android-testing-strategy':
+        return <AndroidTestingStrategyTab />;
+
       case 'xcuitest-testing-strategy':
         return <XCUITestingStrategyTab />;
+
+      case 'workout-share-cards':
+        return (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-6">
+              <h2 className="text-xl font-bold text-white mb-1">Workout Share Cards</h2>
+              <p className="text-sm text-zinc-400">Branded 1080×1350 (4:5) shareable image cards for each workout category. Supports two export modes: a dark-background <strong className="text-white">Story Card</strong> (saved as JPEG) and a fully transparent <strong className="text-white">Sticker PNG</strong> (alpha channel preserved via <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">PHPhotoLibrary</code>) that can be overlaid on any photo.</p>
+            </div>
+
+            {/* Why PHPhotoLibrary for transparent PNGs */}
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-6">
+              <h3 className="font-semibold text-amber-300 mb-2">💡 Transparent PNG Save Implementation</h3>
+              <p className="text-sm text-zinc-300 mb-3"><code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">UIImageWriteToSavedPhotosAlbum</code> always re-encodes as JPEG and silently strips the alpha channel — so a transparent card would save with a black background.</p>
+              <p className="text-sm text-zinc-300">To preserve transparency we use <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">PHPhotoLibrary.shared().performChanges</code> with a <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">PHAssetCreationRequest</code> supplying raw <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">img.pngData()</code> and <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">uniformTypeIdentifier: &quot;public.png&quot;</code>. This writes a real PNG asset with full alpha channel intact.</p>
+            </div>
+
+            {/* Category cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {[
+                { label: 'Run', color: '#3b82f6', icon: '🏃', file: 'RunSummaryView.swift / RunShareStoryView.swift', stats: 'Distance · Pace · Time · Calories', note: 'Swipeable Map Route + Stats-Only cards. Stats-only center uses subtle radial glow; icon moves to stats bar corner.' },
+                { label: 'Bike', color: '#06b6d4', icon: '🚴', file: 'BikeSummaryView.swift / BikeShareStoryView.swift', stats: 'Distance · Speed · Biking Time · Calories', note: 'GPS route shown when available. Indoor/no-GPS sessions use stats-only center + icon in stats bar.' },
+                { label: 'Lift', color: '#22c55e', icon: '🏋', file: 'WorkoutShareStoryView.swift / WorkoutSummaryView.swift', stats: 'Duration · Exercises · Calories', note: 'Workout title as center hero. Category icon in stats bar corner. Dark teal-green background.' },
+                { label: 'Stretch', color: '#a855f7', icon: '🧘', file: 'WorkoutShareStoryView.swift / WorkoutSummaryView.swift', stats: 'Duration · Stretches · Calories', note: 'Same WorkoutShareStoryView as Lift, themed purple. inferredHistoryType == .stretch triggers purple palette.' },
+                { label: 'Fat Burn', color: '#ef4444', icon: '🔥', file: 'FatBurnShareStoryView.swift / FatBurnSummaryView.swift', stats: 'Duration · Floors or Distance · Calories', note: 'Equipment-specific middle stat: Floors (Stairmaster), Distance (elliptical/treadmill/bike). Equipment icon in stats bar.' },
+              ].map((cat) => (
+                <div key={cat.label} className="rounded-xl border p-4 space-y-2" style={{ borderColor: `${cat.color}30`, background: `${cat.color}08` }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">{cat.icon}</span>
+                    <span className="font-semibold text-white">{cat.label}</span>
+                    <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${cat.color}20`, color: cat.color }}>active</span>
+                  </div>
+                  <p className="text-xs text-zinc-400 font-mono">{cat.file}</p>
+                  <p className="text-xs text-zinc-300"><span className="font-medium" style={{ color: cat.color }}>Stats: </span>{cat.stats}</p>
+                  <p className="text-xs text-zinc-400">{cat.note}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Code architecture */}
+            <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-6 space-y-4">
+              <h3 className="font-semibold text-white">Code Architecture Pattern</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-4">
+                  <p className="font-medium text-zinc-200 mb-2">*ShareStoryView</p>
+                  <p className="text-zinc-400 text-xs">Pure SwiftUI view, 1080×1350 frame. Accepts a <code className="text-amber-400">style: RunShareStyle</code> param (.story | .transparent). Rendered off-screen via <code className="text-amber-400">ImageRenderer</code>. No state.</p>
+                </div>
+                <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-4">
+                  <p className="font-medium text-zinc-200 mb-2">prepare*ShareImages()</p>
+                  <p className="text-zinc-400 text-xs"><code className="text-amber-400">@MainActor</code> function on the summary view. Calls <code className="text-amber-400">ImageRenderer</code> twice (story + sticker), caches <code className="text-amber-400">UIImage</code> in <code className="text-amber-400">@State</code>, then sets <code className="text-amber-400">show*ShareComposer = true</code>.</p>
+                </div>
+                <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-4">
+                  <p className="font-medium text-zinc-200 mb-2">*ShareComposerSheet</p>
+                  <p className="text-zinc-400 text-xs">Bottom sheet with preview card, style picker (Story / Transparent), Share (UIActivityViewController), Save Story Card (UIImageWriteToSavedPhotosAlbum — JPEG), and Save Transparent PNG (PHPhotoLibrary — PNG).</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Key files */}
+            <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-6">
+              <h3 className="font-semibold text-white mb-3">Key Source Files</h3>
+              <div className="space-y-2">
+                {[
+                  ['RunShareStoryView.swift', 'Run story card. Supports GPS map route + stats-only center.'],
+                  ['RunSummaryView.swift', 'Run composer sheet, saveTransparentImageToPhotos, saveImageToPhotos helpers.'],
+                  ['BikeShareStoryView.swift', 'Bike story card. GPS route or stats-only center (no large icon). Cyan theme.'],
+                  ['BikeSummaryView.swift', 'Bike composer sheet with Save Transparent PNG (PHPhotoLibrary).'],
+                  ['WorkoutShareStoryView.swift', 'Lift + Stretch card. Workout title as hero, category icon in stats bar. Green / Purple theme.'],
+                  ['WorkoutSummaryView.swift', 'Lift/Stretch composer sheet + prepareWorkoutShareImages().'],
+                  ['FatBurnShareStoryView.swift', 'Fat Burn card. Equipment chip + equipment-specific middle stat. Red theme.'],
+                  ['FatBurnSummaryView.swift', 'Fat Burn composer sheet + prepareFatBurnShareImages().'],
+                ].map(([file, desc]) => (
+                  <div key={file} className="flex gap-3 items-start">
+                    <code className="text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded shrink-0">{file}</code>
+                    <p className="text-xs text-zinc-400">{desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
 
       default:
         return null;

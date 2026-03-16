@@ -140,10 +140,10 @@ class CoachService {
   }
 
   /**
-   * Connect a coach to another coach using referral code.
-   * Adds each other to connectedCoaches array on both coach documents.
+   * Record a coach referral using the inviter's referral code.
+   * New writes go to coachReferrals and referredByCoachId instead of the legacy connectedCoaches array.
    */
-  async connectCoachToCoachByReferralCode(inviteeUserId: string, inviteeUsername: string, inviteeEmail: string, referralCode: string): Promise<{ success: boolean; message?: string }> {
+  async recordCoachReferralByReferralCode(inviteeUserId: string, inviteeUsername: string, inviteeEmail: string, referralCode: string): Promise<{ success: boolean; message?: string }> {
     try {
       const clean = referralCode.toUpperCase().trim();
       if (!clean) return { success: false, message: 'Missing referral code' };
@@ -167,57 +167,105 @@ class CoachService {
       if (!inviteeSnap.exists()) return { success: false, message: 'Invitee coach profile missing' };
 
       const now = dateToUnixTimestamp(new Date());
-      const inviteeEntry = { userId: inviteeUserId, username: inviteeUsername || '', email: inviteeEmail || '', connectedAt: now };
-
-      // Get inviter basic info for reciprocal entry
-      const inviterData = inviterDoc.data() as any;
-      const inviterEntry = { userId: inviterId, username: inviterData?.username || '', email: inviterData?.email || '', connectedAt: now };
-
-      // Read existing arrays and enforce idempotency (avoid duplicates by userId)
-      const inviterExisting = Array.isArray((inviterDoc.data() as any)?.connectedCoaches) ? (inviterDoc.data() as any).connectedCoaches : [];
-      const inviteeExisting = Array.isArray((inviteeSnap.data() as any)?.connectedCoaches) ? (inviteeSnap.data() as any).connectedCoaches : [];
-
-      const inviterMap = new Map<string, any>();
-      inviterExisting.forEach((e: any) => { if (e?.userId) inviterMap.set(e.userId, e); });
-      if (!inviterMap.has(inviteeEntry.userId)) inviterMap.set(inviteeEntry.userId, inviteeEntry);
-
-      const inviteeMap = new Map<string, any>();
-      inviteeExisting.forEach((e: any) => { if (e?.userId) inviteeMap.set(e.userId, e); });
-      if (!inviteeMap.has(inviterEntry.userId)) inviteeMap.set(inviterEntry.userId, inviterEntry);
-
+      const referralRef = doc(db, 'coachReferrals', `${inviterId}_${inviteeUserId}`);
       await Promise.all([
-        setDoc(inviterDoc.ref, { connectedCoaches: Array.from(inviterMap.values()), updatedAt: now }, { merge: true }),
-        setDoc(inviteeRef, { connectedCoaches: Array.from(inviteeMap.values()), updatedAt: now }, { merge: true })
+        setDoc(
+          referralRef,
+          {
+            referrerCoachId: inviterId,
+            referredCoachId: inviteeUserId,
+            referredCoachUsername: inviteeUsername || '',
+            referredCoachEmail: inviteeEmail || '',
+            referralCode: clean,
+            createdAt: now,
+            updatedAt: now,
+          },
+          { merge: true }
+        ),
+        setDoc(inviteeRef, { referredByCoachId: inviterId, updatedAt: now }, { merge: true }),
       ]);
       return { success: true };
     } catch (error: any) {
-      console.error('Error connecting coach-to-coach:', error);
+      console.error('Error recording coach referral:', error);
       return { success: false, message: error?.message || 'Unknown error' };
     }
   }
 
   /**
-   * List connected coaches for a coach (reads the connectedCoaches array)
+   * List coaches referred by a coach.
+   * Falls back to legacy fields while we phase out connectedCoaches.
    */
-  async getConnectedCoachesForCoach(coachId: string): Promise<Array<{ userId: string; username: string; email: string; connectedAt?: number }>> {
+  async getReferredCoachesForCoach(coachId: string): Promise<Array<{ userId: string; username: string; email: string; connectedAt?: number }>> {
     try {
-      const ref = doc(db, 'coaches', coachId);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) return [];
-      const data = snap.data() as any;
-      const list = Array.isArray(data?.connectedCoaches) ? data.connectedCoaches : [];
-      // Dedupe by userId in case multiple entries were appended with different timestamps
       const byId = new Map<string, { userId: string; username: string; email: string; connectedAt?: number }>();
-      list.forEach((e: any) => {
-        if (!e || !e.userId) return;
-        const existing = byId.get(e.userId);
-        if (!existing || (typeof e.connectedAt === 'number' && (existing.connectedAt || 0) < e.connectedAt)) {
-          byId.set(e.userId, { userId: e.userId, username: e.username || '', email: e.email || '', connectedAt: e.connectedAt });
+
+      const referralSnap = await getDocs(query(collection(db, 'coachReferrals'), where('referrerCoachId', '==', coachId)));
+      referralSnap.docs.forEach((referralDoc) => {
+        const referral = referralDoc.data() as any;
+        const referredCoachId = referral?.referredCoachId;
+        if (!referredCoachId) return;
+        byId.set(referredCoachId, {
+          userId: referredCoachId,
+          username: referral?.referredCoachUsername || '',
+          email: referral?.referredCoachEmail || '',
+          connectedAt: typeof referral?.createdAt === 'number' ? referral.createdAt : undefined,
+        });
+      });
+
+      const referredCoachSnap = await getDocs(query(collection(db, 'coaches'), where('referredByCoachId', '==', coachId)));
+      referredCoachSnap.docs.forEach((coachDoc) => {
+        const data = coachDoc.data() as any;
+        const existing = byId.get(coachDoc.id);
+        if (!existing) {
+          byId.set(coachDoc.id, {
+            userId: coachDoc.id,
+            username: data?.username || '',
+            email: data?.email || '',
+            connectedAt: typeof data?.createdAt === 'number' ? data.createdAt : undefined,
+          });
         }
       });
-      return Array.from(byId.values()).sort((a, b) => (b.connectedAt || 0) - (a.connectedAt || 0));
+
+      const legacyCoachSnap = await getDoc(doc(db, 'coaches', coachId));
+      if (legacyCoachSnap.exists()) {
+        const legacyData = legacyCoachSnap.data() as any;
+        const legacyList = Array.isArray(legacyData?.connectedCoaches) ? legacyData.connectedCoaches : [];
+        legacyList.forEach((entry: any) => {
+          if (!entry?.userId) return;
+          const existing = byId.get(entry.userId);
+          if (!existing || (typeof entry.connectedAt === 'number' && (existing.connectedAt || 0) < entry.connectedAt)) {
+            byId.set(entry.userId, {
+              userId: entry.userId,
+              username: entry.username || '',
+              email: entry.email || '',
+              connectedAt: entry.connectedAt,
+            });
+          }
+        });
+      }
+
+      const hydrated = await Promise.all(
+        Array.from(byId.values()).map(async (entry) => {
+          try {
+            const coachSnap = await getDoc(doc(db, 'coaches', entry.userId));
+            const userSnap = await getDoc(doc(db, 'users', entry.userId));
+            const coachData = coachSnap.exists() ? (coachSnap.data() as any) : {};
+            const userData = userSnap.exists() ? (userSnap.data() as any) : {};
+            return {
+              userId: entry.userId,
+              username: entry.username || userData?.username || userData?.displayName || coachData?.username || '',
+              email: entry.email || userData?.email || coachData?.email || '',
+              connectedAt: entry.connectedAt,
+            };
+          } catch (_) {
+            return entry;
+          }
+        })
+      );
+
+      return hydrated.sort((a, b) => (b.connectedAt || 0) - (a.connectedAt || 0));
     } catch (error) {
-      console.error('Error reading connected coaches:', error);
+      console.error('Error reading referred coaches:', error);
       return [];
     }
   }

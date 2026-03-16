@@ -25,6 +25,7 @@ import { useUser } from '../hooks/useUser';
 import Head from 'next/head';
 import SideNav from '../components/Navigation/SideNav';
 import {
+  assignmentOrchestratorService,
   simModuleLibraryService,
   assignmentService,
   completionService,
@@ -36,9 +37,11 @@ import {
   AthleteMentalProgress,
   ExerciseCategory,
   AssignmentStatus,
+  PulseCheckDailyAssignmentStatus,
 } from '../api/firebase/mentaltraining';
 import { ExerciseCard, ExercisePlayer, MentalProgressCard, exerciseRequiresWriting } from '../components/mentaltraining';
 import { useRouter } from 'next/router';
+import type { ProfileSnapshotMilestone } from '../api/firebase/mentaltraining/taxonomy';
 
 type TabType = 'today' | 'library' | 'history';
 
@@ -57,10 +60,13 @@ const MentalTrainingPage: React.FC = () => {
   const [streak, setStreak] = useState<MentalTrainingStreak | null>(null);
   const [averageReadiness, setAverageReadiness] = useState<{ average: number; trend: 'up' | 'down' | 'stable' } | undefined>();
   const [athleteProgress, setAthleteProgress] = useState<AthleteMentalProgress | null>(null);
+  const [latestSessionCompletion, setLatestSessionCompletion] = useState<SimCompletion | null>(null);
 
   // Exercise player
   const [selectedExercise, setSelectedExercise] = useState<SimModule | null>(null);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | undefined>();
+  const [selectedDailyAssignmentId, setSelectedDailyAssignmentId] = useState<string | undefined>();
+  const [selectedProfileSnapshotMilestone, setSelectedProfileSnapshotMilestone] = useState<Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'> | undefined>();
 
   // Load data
   useEffect(() => {
@@ -78,6 +84,7 @@ const MentalTrainingPage: React.FC = () => {
         setExercises(exerciseData);
         setStreak(progressData.streak);
         setCompletions(progressData.recentCompletions);
+        setLatestSessionCompletion(progressData.recentCompletions[0] || null);
         setAverageReadiness(progressData.averageReadiness);
         setAthleteProgress(athleteProfile || null);
 
@@ -95,6 +102,42 @@ const MentalTrainingPage: React.FC = () => {
     loadData();
   }, [currentUser?.id]);
 
+  useEffect(() => {
+    const loadDailyAssignmentLaunch = async () => {
+      if (!currentUser?.id || !router.isReady) return;
+
+      const dailyAssignmentId = typeof router.query.dailyAssignmentId === 'string' ? router.query.dailyAssignmentId : '';
+      if (!dailyAssignmentId) return;
+
+      try {
+        const resolved = await assignmentOrchestratorService.resolveExercise(dailyAssignmentId);
+        if (!resolved) return;
+
+        const { assignment, exercise } = resolved;
+        if (
+          assignment.status === PulseCheckDailyAssignmentStatus.Deferred ||
+          assignment.status === PulseCheckDailyAssignmentStatus.Overridden ||
+          assignment.status === PulseCheckDailyAssignmentStatus.Superseded ||
+          assignment.status === PulseCheckDailyAssignmentStatus.Completed
+        ) {
+          return;
+        }
+
+        await assignmentOrchestratorService.markStarted(dailyAssignmentId);
+        setSelectedExercise(exercise);
+        setSelectedAssignmentId(undefined);
+        setSelectedDailyAssignmentId(dailyAssignmentId);
+        setActiveTab('today');
+      } catch (error) {
+        console.error('Failed to launch Nora daily assignment:', error);
+      } finally {
+        router.replace('/mental-training', undefined, { shallow: true }).catch(() => undefined);
+      }
+    };
+
+    loadDailyAssignmentLaunch();
+  }, [currentUser?.id, router, router.isReady, router.query.dailyAssignmentId]);
+
   // Filter exercises by category
   const filteredExercises = exercises.filter(
     ex => selectedCategory === 'all' || ex.category === selectedCategory
@@ -105,18 +148,32 @@ const MentalTrainingPage: React.FC = () => {
     a => a.status === AssignmentStatus.Pending || a.status === AssignmentStatus.InProgress
   );
 
-  const handleStartExercise = (exercise: SimModule, assignmentId?: string) => {
+  const handleStartExercise = (
+    exercise: SimModule,
+    assignmentId?: string,
+    profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>,
+    dailyAssignmentId?: string
+  ) => {
     // Check if exercise requires writing - redirect to Nora chat
     if (exerciseRequiresWriting(exercise)) {
       // Store exercise in localStorage for the chat to pick up
       localStorage.setItem('pulsecheck_active_exercise', JSON.stringify(exercise));
       // Navigate to PulseCheck chat with exercise data
-      router.push(`/PulseCheck?exercise=${encodeURIComponent(JSON.stringify(exercise))}`);
+      const dailyParam = dailyAssignmentId ? `&dailyAssignmentId=${encodeURIComponent(dailyAssignmentId)}` : '';
+      router.push(`/PulseCheck?exercise=${encodeURIComponent(JSON.stringify(exercise))}${dailyParam}`);
       return;
+    }
+
+    if (dailyAssignmentId) {
+      assignmentOrchestratorService.markStarted(dailyAssignmentId).catch((error) => {
+        console.error('Failed to mark daily assignment started:', error);
+      });
     }
 
     setSelectedExercise(exercise);
     setSelectedAssignmentId(assignmentId);
+    setSelectedDailyAssignmentId(dailyAssignmentId);
+    setSelectedProfileSnapshotMilestone(profileSnapshotMilestone);
   };
 
   // Handle redirect to chat for writing exercises from ExercisePlayer
@@ -136,12 +193,13 @@ const MentalTrainingPage: React.FC = () => {
     if (!selectedExercise || !currentUser?.id) return;
 
     try {
-      await completionService.recordCompletion({
+      const recordedCompletion = await completionService.recordCompletion({
         userId: currentUser.id,
         exerciseId: selectedExercise.id,
         exerciseName: selectedExercise.name,
         exerciseCategory: selectedExercise.category,
         assignmentId: selectedAssignmentId,
+        dailyAssignmentId: selectedDailyAssignmentId,
         ...data,
       });
 
@@ -149,11 +207,12 @@ const MentalTrainingPage: React.FC = () => {
       const [newStreak, newCompletions, refreshedProgress] = await Promise.all([
         completionService.getStreak(currentUser.id),
         completionService.getCompletions(currentUser.id, 10),
-        athleteProgressService.syncTaxonomyProfile(currentUser.id).catch(() => athleteProgress),
+        athleteProgressService.get(currentUser.id).catch(() => athleteProgress),
       ]);
 
       setStreak(newStreak);
       setCompletions(newCompletions);
+      setLatestSessionCompletion(recordedCompletion);
       setAthleteProgress(refreshedProgress || null);
 
       // Remove from assignments if applicable
@@ -167,6 +226,8 @@ const MentalTrainingPage: React.FC = () => {
 
     setSelectedExercise(null);
     setSelectedAssignmentId(undefined);
+    setSelectedDailyAssignmentId(undefined);
+    setSelectedProfileSnapshotMilestone(undefined);
   };
 
   const getCategoryIcon = (category: ExerciseCategory) => {
@@ -256,6 +317,40 @@ const MentalTrainingPage: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
               >
+                {latestSessionCompletion?.sessionSummary && (
+                  <div className="mb-8 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-xl bg-emerald-500/15 p-2.5">
+                        <CheckCircle className="h-5 w-5 text-emerald-300" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">
+                          Latest Session Update
+                        </p>
+                        <h2 className="mt-2 text-xl font-semibold text-white">
+                          {latestSessionCompletion.sessionSummary.athleteHeadline}
+                        </h2>
+                        <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-200">
+                          {latestSessionCompletion.sessionSummary.athleteBody}
+                        </p>
+                        <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-300">
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                            Completed {latestSessionCompletion.sessionSummary.completedActionLabel}
+                          </span>
+                          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                            Next up {latestSessionCompletion.sessionSummary.nextActionLabel}
+                          </span>
+                          {latestSessionCompletion.sessionSummary.targetSkills.slice(0, 2).map((skill) => (
+                            <span key={skill} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Assigned Exercises */}
                 {todaysExercises.length > 0 && (
                   <div className="mb-8">
@@ -267,7 +362,14 @@ const MentalTrainingPage: React.FC = () => {
                       {todaysExercises.map((assignment) => (
                         <div
                           key={assignment.id}
-                          onClick={() => assignment.exercise && handleStartExercise(assignment.exercise, assignment.id)}
+                          onClick={() =>
+                            assignment.exercise &&
+                            handleStartExercise(
+                              assignment.exercise,
+                              assignment.id,
+                              assignment.profileSnapshotMilestone
+                            )
+                          }
                           className="flex items-center gap-4 p-4 rounded-xl bg-zinc-800/50 border border-[#E0FE10]/30 cursor-pointer hover:border-[#E0FE10]/50 transition-colors"
                         >
                           <div className="p-3 rounded-xl bg-[#E0FE10]/10">
@@ -436,10 +538,13 @@ const MentalTrainingPage: React.FC = () => {
           <ExercisePlayer
             exercise={selectedExercise}
             assignmentId={selectedAssignmentId}
+            profileSnapshotMilestone={selectedProfileSnapshotMilestone}
             onComplete={handleExerciseComplete}
             onClose={() => {
               setSelectedExercise(null);
               setSelectedAssignmentId(undefined);
+              setSelectedDailyAssignmentId(undefined);
+              setSelectedProfileSnapshotMilestone(undefined);
             }}
             onStartInChat={handleStartInChat}
           />

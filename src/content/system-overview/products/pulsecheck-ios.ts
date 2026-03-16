@@ -170,6 +170,27 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       ],
     },
     {
+      id: 'pulsecheck-profile-snapshots-export',
+      name: 'Canonical Profile Snapshot Pipeline',
+      persona: 'Athletes, staff, and research operators',
+      outcome: 'Persist milestone-based canonical profile snapshots with revision history and export them through a stable research-safe contract.',
+      entryPoints: ['Baseline completion', 'midpoint and endpoint trials', 'retention trials', 'admin research export'],
+      dependentServices: ['Athlete progress service', 'profile snapshot writer', 'research export service'],
+      firestoreCollections: [
+        'athlete-mental-progress',
+        'athlete-mental-progress/{uid}/profile-snapshots',
+        'research-export-jobs',
+      ],
+      integrations: [],
+      owner: 'PulseCheck Team + Mental Performance',
+      releaseChannel: 'Planned',
+      status: 'planned',
+      sourceRefs: [
+        { label: 'Profile Snapshot & Export Spec', path: '../QuickLifts-Web/src/components/admin/system-overview/PulseCheckProfileSnapshotExportSpecTab.tsx' },
+        { label: 'Athlete Progress Service', path: '../QuickLifts-Web/src/api/firebase/mentaltraining/athleteProgressService.ts' },
+      ],
+    },
+    {
       id: 'pulsecheck-daily-reflection-settings',
       name: 'Daily Reflection and Settings Controls',
       persona: 'Athletes',

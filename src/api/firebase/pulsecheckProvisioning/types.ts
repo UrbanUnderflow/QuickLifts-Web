@@ -3,6 +3,10 @@ import type { Timestamp } from 'firebase/firestore';
 export type PulseCheckOrganizationStatus = 'draft' | 'provisioning' | 'ready-for-activation' | 'active' | 'archived' | 'implementation-hold';
 export type PulseCheckTeamStatus = 'draft' | 'provisioning' | 'ready-for-activation' | 'active' | 'paused' | 'archived';
 export type PulseCheckStudyPosture = 'operational' | 'pilot' | 'research-eligible';
+export type PulseCheckPilotStatus = 'draft' | 'active' | 'paused' | 'completed' | 'archived';
+export type PulseCheckPilotStudyMode = 'operational' | 'pilot' | 'research';
+export type PulseCheckPilotCohortStatus = 'draft' | 'active' | 'paused' | 'archived';
+export type PulseCheckPilotEnrollmentStatus = 'pending-consent' | 'active' | 'withdrawn';
 export type PulseCheckClinicianBridgeMode = 'none' | 'optional' | 'required';
 export type PulseCheckInvitePolicy = 'admin-only' | 'admin-and-staff' | 'admin-staff-and-coaches';
 export type PulseCheckClinicianProfileType = 'individual' | 'group' | 'provider';
@@ -13,6 +17,8 @@ export type PulseCheckInviteLinkType = 'admin-activation' | 'clinician-onboardin
 export type PulseCheckOrganizationMembershipRole = 'org-admin' | 'implementation-observer';
 export type PulseCheckOperatingRole = 'admin-only' | 'admin-plus-coach' | 'admin-plus-support-staff';
 export type PulseCheckRosterVisibilityScope = 'team' | 'assigned' | 'none';
+export type PulseCheckAthleteEntryOnboardingStep = 'name' | 'consent' | 'starting-point' | 'complete';
+export type PulseCheckResearchConsentStatus = 'not-required' | 'pending' | 'accepted' | 'declined';
 export type PulseCheckTeamMembershipRole =
   | 'team-admin'
   | 'coach'
@@ -32,9 +38,17 @@ export interface PulseCheckAthleteOnboardingState {
   productConsentAccepted: boolean;
   productConsentAcceptedAt?: Timestamp | null;
   productConsentVersion?: string;
-  researchConsentStatus?: 'not-required' | 'pending' | 'accepted' | 'declined';
+  entryOnboardingStep?: PulseCheckAthleteEntryOnboardingStep;
+  entryOnboardingName?: string;
+  researchConsentStatus?: PulseCheckResearchConsentStatus;
+  researchConsentVersion?: string;
+  researchConsentRespondedAt?: Timestamp | null;
   eligibleForResearchDataset?: boolean;
   enrollmentMode?: 'product-only' | 'pilot' | 'research';
+  targetPilotId?: string;
+  targetPilotName?: string;
+  targetCohortId?: string;
+  targetCohortName?: string;
   baselinePathStatus?: 'pending' | 'ready' | 'started' | 'complete';
   baselinePathwayId?: string;
 }
@@ -50,6 +64,8 @@ export interface PulseCheckOrganization {
   legalName: string;
   organizationType: string;
   status: PulseCheckOrganizationStatus;
+  legacySource?: 'legacy-coach-roster';
+  legacyCoachId?: string;
   implementationOwnerUserId?: string;
   implementationOwnerEmail?: string;
   primaryCustomerAdminName?: string;
@@ -67,6 +83,8 @@ export interface CreatePulseCheckOrganizationInput {
   legalName: string;
   organizationType: string;
   status?: PulseCheckOrganizationStatus;
+  legacySource?: 'legacy-coach-roster';
+  legacyCoachId?: string;
   implementationOwnerUserId?: string;
   implementationOwnerEmail?: string;
   primaryCustomerAdminName?: string;
@@ -83,6 +101,8 @@ export interface PulseCheckTeam {
   displayName: string;
   teamType: string;
   sportOrProgram: string;
+  legacySource?: 'legacy-coach-roster';
+  legacyCoachId?: string;
   siteLabel?: string;
   defaultAdminName?: string;
   defaultAdminEmail?: string;
@@ -103,6 +123,8 @@ export interface CreatePulseCheckTeamInput {
   displayName: string;
   teamType: string;
   sportOrProgram: string;
+  legacySource?: 'legacy-coach-roster';
+  legacyCoachId?: string;
   siteLabel?: string;
   defaultAdminName?: string;
   defaultAdminEmail?: string;
@@ -113,6 +135,89 @@ export interface CreatePulseCheckTeamInput {
   defaultClinicianProfileName?: string;
   defaultClinicianProfileType?: PulseCheckClinicianProfileType;
   defaultClinicianProfileSource?: PulseCheckClinicianProfileSource;
+  notes?: string;
+}
+
+export interface PulseCheckPilot {
+  id: string;
+  organizationId: string;
+  teamId: string;
+  name: string;
+  objective?: string;
+  status: PulseCheckPilotStatus;
+  studyMode: PulseCheckPilotStudyMode;
+  ownerInternalUserId?: string;
+  ownerInternalEmail?: string;
+  checkpointCadence?: string;
+  startAt?: Timestamp | null;
+  endAt?: Timestamp | null;
+  notes?: string;
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+}
+
+export interface CreatePulseCheckPilotInput {
+  organizationId: string;
+  teamId: string;
+  name: string;
+  objective?: string;
+  status?: PulseCheckPilotStatus;
+  studyMode: PulseCheckPilotStudyMode;
+  ownerInternalUserId?: string;
+  ownerInternalEmail?: string;
+  checkpointCadence?: string;
+  startAt?: Timestamp | Date | null;
+  endAt?: Timestamp | Date | null;
+  notes?: string;
+}
+
+export interface PulseCheckPilotCohort {
+  id: string;
+  organizationId: string;
+  teamId: string;
+  pilotId: string;
+  name: string;
+  cohortType?: string;
+  assignmentRule?: string;
+  reportingTags?: string[];
+  status: PulseCheckPilotCohortStatus;
+  notes?: string;
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+}
+
+export interface PulseCheckPilotEnrollment {
+  id: string;
+  organizationId: string;
+  teamId: string;
+  pilotId: string;
+  cohortId?: string;
+  userId: string;
+  teamMembershipId: string;
+  studyMode: PulseCheckPilotStudyMode;
+  enrollmentMode: 'pilot' | 'research';
+  status: PulseCheckPilotEnrollmentStatus;
+  productConsentAccepted: boolean;
+  productConsentAcceptedAt?: Timestamp | null;
+  productConsentVersion?: string;
+  researchConsentStatus: PulseCheckResearchConsentStatus;
+  researchConsentVersion?: string;
+  researchConsentRespondedAt?: Timestamp | null;
+  eligibleForResearchDataset: boolean;
+  grantedByInviteToken?: string;
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+}
+
+export interface CreatePulseCheckPilotCohortInput {
+  organizationId: string;
+  teamId: string;
+  pilotId: string;
+  name: string;
+  cohortType?: string;
+  assignmentRule?: string;
+  reportingTags?: string[];
+  status?: PulseCheckPilotCohortStatus;
   notes?: string;
 }
 
@@ -159,6 +264,10 @@ export interface PulseCheckInviteLink {
   status: PulseCheckInviteLinkStatus;
   organizationId: string;
   teamId: string;
+  pilotId?: string;
+  pilotName?: string;
+  cohortId?: string;
+  cohortName?: string;
   clinicianProfileId?: string;
   teamMembershipRole?: PulseCheckTeamMembershipRole;
   invitedTitle?: string;
@@ -194,6 +303,10 @@ export interface PulseCheckTeamMembership {
   teamId: string;
   userId: string;
   email?: string;
+  legacySource?: 'coach-athletes';
+  legacyCoachId?: string;
+  legacyConnectionId?: string;
+  legacyLinkedAt?: Timestamp | null;
   role: PulseCheckTeamMembershipRole;
   title?: string;
   permissionSetId?: string;
@@ -210,6 +323,49 @@ export interface PulseCheckTeamMembership {
   updatedAt?: Timestamp | null;
 }
 
+export interface PulseCheckLegacyCoachRosterAthlete {
+  legacyConnectionId: string;
+  athleteUserId: string;
+  athleteDisplayName: string;
+  athleteEmail?: string;
+  linkedAt?: Timestamp | Date | null;
+  updatedAt?: Timestamp | Date | null;
+  alreadyOnTargetTeam: boolean;
+}
+
+export interface PulseCheckLegacyCoachRosterCandidate {
+  coachId: string;
+  coachDisplayName: string;
+  coachEmail?: string;
+  coachReferralCode?: string;
+  athleteCount: number;
+  athletes: PulseCheckLegacyCoachRosterAthlete[];
+  existingOrganizationId?: string;
+  existingOrganizationName?: string;
+  existingTeamId?: string;
+  existingTeamName?: string;
+  existingTeamMembershipRole?: PulseCheckTeamMembershipRole;
+}
+
+export interface MigrateLegacyCoachRosterInput {
+  coachId: string;
+  organizationName?: string;
+  teamName?: string;
+}
+
+export interface PulseCheckLegacyCoachRosterMigrationResult {
+  coachId: string;
+  coachDisplayName: string;
+  organizationId: string;
+  organizationName: string;
+  teamId: string;
+  teamName: string;
+  createdOrganization: boolean;
+  createdTeam: boolean;
+  migratedAthleteCount: number;
+  alreadyPresentAthleteCount: number;
+}
+
 export interface RedeemPulseCheckAdminActivationResult {
   organizationId: string;
   organizationName: string;
@@ -223,6 +379,10 @@ export interface CreatePulseCheckTeamAccessInviteInput {
   organizationId: string;
   teamId: string;
   teamMembershipRole: PulseCheckTeamMembershipRole;
+  pilotId?: string;
+  cohortId?: string;
+  pilotName?: string;
+  cohortName?: string;
   targetEmail?: string;
   recipientName?: string;
   invitedTitle?: string;
@@ -251,6 +411,16 @@ export interface CompletePulseCheckAthleteOnboardingInput {
   teamMembershipId: string;
   consentVersion: string;
   baselinePathwayId: string;
+  researchConsentStatus?: PulseCheckResearchConsentStatus;
+  researchConsentVersion?: string;
+}
+
+export interface SavePulseCheckAthleteOnboardingProgressInput {
+  teamMembershipId: string;
+  entryOnboardingStep: PulseCheckAthleteEntryOnboardingStep;
+  entryOnboardingName?: string;
+  productConsentAccepted?: boolean;
+  researchConsentStatus?: PulseCheckResearchConsentStatus;
 }
 
 export interface UpdatePulseCheckTeamMembershipAccessInput {
@@ -265,6 +435,8 @@ export interface RedeemPulseCheckTeamInviteResult {
   organizationName: string;
   teamId: string;
   teamName: string;
+  pilotId?: string;
+  cohortId?: string;
   teamMembershipId: string;
   teamMembershipRole: PulseCheckTeamMembershipRole;
   invitedTitle?: string;

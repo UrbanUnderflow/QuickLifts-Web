@@ -76,6 +76,14 @@ export enum TrialType {
   FieldTransfer = 'field_transfer_trial',
 }
 
+export type ProfileSnapshotMilestone =
+  | 'onboarding'
+  | 'baseline'
+  | 'midpoint'
+  | 'endpoint'
+  | 'retention'
+  | 'manual_staff_checkpoint';
+
 export interface SimSpec {
   id: string;
   legacyExerciseId?: string;
@@ -143,6 +151,7 @@ export interface SimSessionRecord {
   durationMode: DurationMode;
   durationSeconds: number;
   trialType?: TrialType;
+  profileSnapshotMilestone?: ProfileSnapshotMilestone;
   coreMetricName: string;
   coreMetricValue: number;
   supportingMetrics: Record<string, number>;

@@ -74,6 +74,47 @@ async function getActiveMentalAssignments(db, userId) {
   return snap.empty ? [] : snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+function humanizeAssignmentField(value) {
+  if (!value || typeof value !== 'string') {
+    return null;
+  }
+
+  return value
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getDailyAssignmentActionLabel(assignment) {
+  if (!assignment) {
+    return null;
+  }
+
+  if (assignment.actionType === 'defer') {
+    return 'pause for today';
+  }
+
+  return (
+    humanizeAssignmentField(assignment.simSpecId) ||
+    humanizeAssignmentField(assignment.legacyExerciseId) ||
+    humanizeAssignmentField(assignment.sessionType) ||
+    (assignment.actionType === 'lighter_sim' ? 'lighter sim' : 'sim')
+  );
+}
+
+async function getTodaysNoraAssignment(db, userId) {
+  const todayId = `${userId}_${new Date().toISOString().split('T')[0]}`;
+  const snap = await db.collection('pulsecheck-daily-assignments').doc(todayId).get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...snap.data() };
+}
+
+async function getAthleteMentalProgress(db, userId) {
+  const snap = await db.collection('athlete-mental-progress').doc(userId).get();
+  if (!snap.exists) return null;
+  return snap.data() || null;
+}
+
 exports.handler = async (event, context) => {
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 200, headers, body: '' };
@@ -204,6 +245,17 @@ exports.handler = async (event, context) => {
       recentMessages = Array.isArray(convo?.messages) ? convo.messages.slice(-20) : [];
     }
 
+    let todaysNoraAssignment = null;
+    let athleteMentalProgress = null;
+    try {
+      [todaysNoraAssignment, athleteMentalProgress] = await Promise.all([
+        getTodaysNoraAssignment(db, userId),
+        getAthleteMentalProgress(db, userId),
+      ]);
+    } catch (contextError) {
+      console.warn('[pulsecheck-chat] Failed to load Nora assignment context (non-blocking):', contextError?.message || contextError);
+    }
+
     // =========================================================================
     // Response Context Detection (for natural conversation flow)
     // =========================================================================
@@ -320,6 +372,30 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
     if (healthContext) {
       healthContextSection = `\n\n## Health & Fitness Context:\n${healthContext}\n\nUse this health data to provide personalized insights and recommendations. Reference specific patterns, trends, and achievements when relevant to the conversation. Be encouraging about positive trends and supportive about areas for improvement.`;
     }
+
+    let assignmentContextSection = '';
+    if (todaysNoraAssignment) {
+      const assignmentAction = getDailyAssignmentActionLabel(todaysNoraAssignment) || 'nora task';
+      assignmentContextSection = `\n\n## Today's Nora Assignment (Execution Truth):\n- Status: ${todaysNoraAssignment.status || 'assigned'}\n- Action: ${assignmentAction}\n- Rationale: ${todaysNoraAssignment.rationale || 'No rationale saved.'}`;
+
+      if (todaysNoraAssignment.readinessBand) {
+        assignmentContextSection += `\n- Readiness Band: ${todaysNoraAssignment.readinessBand}`;
+      }
+      if (todaysNoraAssignment.sourceDate) {
+        assignmentContextSection += `\n- Source Date: ${todaysNoraAssignment.sourceDate}`;
+      }
+
+      assignmentContextSection += `\nRules:\n- Treat this assignment as the source of truth for today's performance task.\n- If the status is deferred, superseded, or coach-adjusted, do not speak as if the original task is still active.\n- If the athlete asks what they should do today, anchor your answer to this assignment before offering broader coaching context.\n- Do not invent a different assignment unless you clearly frame it as separate brainstorming and not the active task.`;
+    } else if (athleteMentalProgress?.activeProgram) {
+      const activeProgram = athleteMentalProgress.activeProgram;
+      const recommendedAction =
+        humanizeAssignmentField(activeProgram.recommendedSimId) ||
+        humanizeAssignmentField(activeProgram.recommendedLegacyExerciseId) ||
+        humanizeAssignmentField(activeProgram.sessionType) ||
+        'next best rep';
+
+      assignmentContextSection = `\n\n## Current Program Recommendation (No Daily Task Materialized Yet):\n- Recommended Focus: ${recommendedAction}\n- Rationale: ${activeProgram.rationale || 'No rationale saved.'}\nRules:\n- This is recommendation context, not a confirmed assigned task.\n- If the athlete asks what is assigned today, be honest that no daily Nora task is materialized yet.`;
+    }
     
     // Add context-specific instructions
     let contextInstructions = '';
@@ -342,7 +418,7 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
     }
     
     // Build final system prompt
-    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${contextInstructions}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nInstead, acknowledge their answer and advance the topic.`;
+    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${assignmentContextSection}${contextInstructions}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nInstead, acknowledge their answer and advance the topic.`;
     
     // Legacy support: If iOS still sends systemPromptContext (old version), use it but log a warning
     if (systemPromptContext && !healthContext) {
@@ -1363,4 +1439,3 @@ async function notifyCoachForEscalation(db, escalationId, userId, tier) {
 
   return { success: true, coachId: targetCoachId };
 }
-

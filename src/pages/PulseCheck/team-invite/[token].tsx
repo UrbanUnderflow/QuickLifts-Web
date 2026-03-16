@@ -17,6 +17,10 @@ type TeamInvitePageProps = {
     token: string;
     organizationId: string;
     teamId: string;
+    pilotId: string;
+    pilotName: string;
+    cohortId: string;
+    cohortName: string;
     targetEmail: string;
     organizationName: string;
     teamName: string;
@@ -120,6 +124,8 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
         token: invite.token,
         organizationId: invite.organizationId,
         teamId: invite.teamId,
+        pilotId: invite.pilotId,
+        cohortId: invite.cohortId,
         teamMembershipRole: invite.teamMembershipRole,
         capturedAt: Math.floor(Date.now() / 1000),
       },
@@ -313,11 +319,26 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 </div>
               ) : null}
 
+              {invite.cohortId ? (
+                <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] p-4 text-sm leading-7 text-zinc-200">
+                  This athlete invite is linked to{' '}
+                  <span className="font-medium text-white">{invite.cohortName || 'a cohort'}</span>
+                  {invite.pilotName ? (
+                    <>
+                      {' '}inside <span className="font-medium text-white">{invite.pilotName}</span>
+                    </>
+                  ) : null}
+                  . Redeeming this link joins the athlete to the team and preserves that cohort assignment automatically.
+                </div>
+              ) : null}
+
               <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4 text-sm text-zinc-400">
                 <p className="font-medium text-white">What happens on redemption</p>
                 <p className="mt-2 leading-7">
-                  Your team membership is created and this invite is marked redeemed. Team admins continue into setup,
-                  while other roles land in the shared team workspace.
+                  Your team membership is created and this invite is marked redeemed.
+                  {invite.cohortId
+                    ? ' Because this link is cohort-linked, your athlete onboarding will also carry pilot and cohort context into the baseline flow.'
+                    : ' Team admins continue into setup, while other roles land in the shared team workspace.'}
                 </p>
               </div>
             </div>
@@ -556,8 +577,9 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   );
 };
 
-export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async ({ params, res }) => {
+export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async ({ params, query, res }) => {
   const token = typeof params?.token === 'string' ? params.token : '';
+  const forceDevFirebase = query.devFirebase === '1';
   if (!token) return { notFound: true };
 
   try {
@@ -570,7 +592,7 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
       .catch(() => null);
 
     if (!invite) {
-      invite = await getFirestoreDocFallback('pulsecheck-invite-links', token);
+      invite = await getFirestoreDocFallback('pulsecheck-invite-links', token, forceDevFirebase);
     }
     if (!invite) return { notFound: true };
     if (invite.status && invite.status !== 'active') return { notFound: true };
@@ -589,8 +611,8 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
       teamName = teamSnap.data()?.displayName || teamName;
     } catch {
       const [organizationDoc, teamDoc] = await Promise.all([
-        getFirestoreDocFallback('pulsecheck-organizations', String(invite.organizationId || '')),
-        getFirestoreDocFallback('pulsecheck-teams', String(invite.teamId || '')),
+        getFirestoreDocFallback('pulsecheck-organizations', String(invite.organizationId || ''), forceDevFirebase),
+        getFirestoreDocFallback('pulsecheck-teams', String(invite.teamId || ''), forceDevFirebase),
       ]);
 
       organizationName = String(organizationDoc?.displayName || organizationName);
@@ -605,6 +627,10 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
           token,
           organizationId: String(invite.organizationId || ''),
           teamId: String(invite.teamId || ''),
+          pilotId: String(invite.pilotId || ''),
+          pilotName: String(invite.pilotName || ''),
+          cohortId: String(invite.cohortId || ''),
+          cohortName: String(invite.cohortName || ''),
           targetEmail: String(invite.targetEmail || ''),
           organizationName,
           teamName,
