@@ -9,7 +9,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-03-15',
+  lastUpdated: '2026-03-16',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -61,6 +61,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Added Attentional Lock as a new Tier 3 Exploratory concept in the Sim Family Tree, originating from the Vision Pro Reset trial design review. Logged Active Lock-In Reset as a named variant in the Reset family variant library with an exploratory candidate note.',
       'Added a Noise Gate Milestone 1 Plan artifact to the Vision Pro - Immersive Tests chapter, translating the Crowd Tunnel design brief into a concrete build contract for one complete playable loop with score and closeout.',
       'Added a Noise Gate Design Brief artifact inside the Vision Pro - Immersive Tests chapter, locking the design-first north star for Crowd Tunnel before more runtime work proceeds.',
       'Expanded the Vision Pro - Immersive Tests artifact with a dedicated RealityKit Implementation Guide explaining the exact gap between the current runtime and the football immersive spec, plus the build sequence required to make the headset experience truly immersive.',

@@ -900,19 +900,30 @@ async function recordPulseCheckJourneyCompletion(
   }
 ) {
   const resolved = await assignmentOrchestratorService.resolveExercise(input.dailyAssignmentId);
+  const assignment = resolved?.assignment || await assignmentOrchestratorService.getById(input.dailyAssignmentId);
   const exercise = resolved?.exercise;
-
-  if (!exercise && !input.exerciseId) {
-    throw new Error(`Unable to resolve an exercise for daily assignment ${input.dailyAssignmentId}.`);
-  }
+  const fallbackExerciseId =
+    input.exerciseId ||
+    exercise?.id ||
+    assignment?.legacyExerciseId ||
+    assignment?.simSpecId ||
+    'focus-3-second-reset';
+  const fallbackExerciseName =
+    input.exerciseName ||
+    exercise?.name ||
+    assignment?.legacyExerciseId ||
+    assignment?.simSpecId ||
+    assignment?.sessionType ||
+    assignment?.actionType ||
+    'Reset';
 
   return completionService.recordCompletion({
     userId: input.athleteUserId,
-    exerciseId: input.exerciseId || exercise?.id || 'focus-3-second-reset',
-    exerciseName: input.exerciseName || exercise?.name || 'Reset',
+    exerciseId: fallbackExerciseId,
+    exerciseName: fallbackExerciseName,
     exerciseCategory: exercise?.category || ExerciseCategory.Focus,
     dailyAssignmentId: input.dailyAssignmentId,
-    durationSeconds: input.durationSeconds || Math.max(60, resolved?.assignment.durationSeconds || 180),
+    durationSeconds: input.durationSeconds || Math.max(60, assignment?.durationSeconds || 180),
     helpfulnessRating: input.helpfulnessRating || 4,
   });
 }

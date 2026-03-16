@@ -13,6 +13,9 @@ const COMMAND_ROWS = [
   ['Install browser', '`npm run test:e2e:install`', 'Installs Chromium for Playwright.'],
   ['Capture admin auth state', '`npm run test:e2e:auth`', 'Opens a browser, lets an admin log in, and saves `.playwright/admin-storage-state.json`.'],
   ['Grant dev admin from saved auth', '`npm run test:e2e:grant-admin`', 'Utility for local/dev admin bootstrap when needed.'],
+  ['Run read-only smoke coverage', '`npm run test:e2e:smoke`', 'Runs only tests tagged `@smoke`, keeping the default pass on route/render validation without mutation paths.'],
+  ['Run full PulseCheck regression', '`npm run test:e2e:pulsecheck:full`', 'Runs the onboarding/workspace suite and athlete-journey suite together for the full PulseCheck regression pass.'],
+  ['Run PulseCheck write-path regression', '`npm run test:e2e:pulsecheck:write`', 'Runs the dev-db write suite with namespaced fixtures and cleanup when `PLAYWRIGHT_ALLOW_WRITE_TESTS=true` is set.'],
   ['List all E2E tests', '`npm run test:e2e -- --list`', 'Confirms suite registration without executing the flows.'],
   ['Run all E2E tests', '`npm run test:e2e`', 'Runs the configured Playwright suite set.'],
   ['Open Playwright UI', '`npm run test:e2e:ui`', 'Useful for local debugging and stepping through flows interactively.'],
@@ -22,6 +25,7 @@ const ENV_ROWS = [
   ['`PLAYWRIGHT_STORAGE_STATE`', 'Path to saved authenticated browser state', 'Lets suites reuse admin login instead of re-authing every run.'],
   ['`PLAYWRIGHT_REMOTE_LOGIN_TOKEN`', 'Remote-login token fallback', 'Alternative auth path when storage state is not used.'],
   ['`PLAYWRIGHT_ALLOW_WRITE_TESTS=true`', 'Enables mutation paths', 'Required before suites are allowed to create/revoke invites or publish artifacts.'],
+  ['`PLAYWRIGHT_E2E_NAMESPACE`', 'Namespace prefix for seeded fixture ids', 'Keeps dev-db write records identifiable and lets cleanup helpers remove the exact test namespace afterward.'],
   ['`PLAYWRIGHT_PULSECHECK_ORG_ID`', 'PulseCheck organization id under test', 'Required for team-specific PulseCheck onboarding/workspace coverage.'],
   ['`PLAYWRIGHT_PULSECHECK_TEAM_ID`', 'PulseCheck team id under test', 'Required for post-activation and workspace path resolution.'],
   ['`PLAYWRIGHT_USE_EXISTING_SERVER=true`', 'Reuse an already-running local app', 'Skips Playwright launching its own dev server when preferred.'],
@@ -156,7 +160,7 @@ const PlaywrightTestingStrategyTab: React.FC = () => {
                 {`PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json
 PLAYWRIGHT_PULSECHECK_ORG_ID=<org-id>
 PLAYWRIGHT_PULSECHECK_TEAM_ID=<team-id>
-npm run test:e2e -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts`}
+npm run test:e2e:smoke -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts`}
               </pre>
             }
           />
@@ -183,6 +187,33 @@ PLAYWRIGHT_PULSECHECK_ORG_ID=<org-id>
 PLAYWRIGHT_PULSECHECK_TEAM_ID=<team-id>
 PLAYWRIGHT_ALLOW_WRITE_TESTS=true
 npm run test:e2e -- tests/e2e/pulsecheck-athlete-journey.spec.ts`}
+              </pre>
+            }
+          />
+          <InfoCard
+            title="Full PulseCheck Regression"
+            accent="amber"
+            body={
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
+                {`PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json
+PLAYWRIGHT_PULSECHECK_ORG_ID=<org-id>
+PLAYWRIGHT_PULSECHECK_TEAM_ID=<team-id>
+PLAYWRIGHT_ALLOW_WRITE_TESTS=true
+npm run test:e2e:pulsecheck:full`}
+              </pre>
+            }
+          />
+          <InfoCard
+            title="PulseCheck Write Path"
+            accent="rose"
+            body={
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
+                {`PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json
+PLAYWRIGHT_PULSECHECK_ORG_ID=<org-id>
+PLAYWRIGHT_PULSECHECK_TEAM_ID=<team-id>
+PLAYWRIGHT_E2E_NAMESPACE=e2e-pulsecheck
+PLAYWRIGHT_ALLOW_WRITE_TESTS=true
+npm run test:e2e:pulsecheck:write`}
               </pre>
             }
           />
@@ -215,6 +246,7 @@ npm run test:e2e -- tests/e2e/pulsecheck-athlete-journey.spec.ts`}
             body={<BulletList items={[
               'Default to smoke coverage before mutation coverage.',
               'Use stable ids and explicit env vars for PulseCheck teams under test.',
+              'For write-path runs, use a visible `PLAYWRIGHT_E2E_NAMESPACE` so seeded dev-db records are easy to identify and clean.',
               'Revoke or clean up transient invite artifacts when a write-path test creates them.',
             ]} />}
           />
