@@ -13,7 +13,11 @@ import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../config';
 import { SignUpData, AuthService } from './types';
 import { claimUsername, normalizeUsername } from './username';
-import { AppVersionMediaItem, buildAppVersionWritePayload } from '../../../utils/appVersioning';
+import {
+  APP_VERSION_PRODUCT_CONFIGS,
+  AppVersionMediaItem,
+  buildAppVersionWritePayload,
+} from '../../../utils/appVersioning';
 
 export const authMethods: AuthService = {
   async signUpWithEmail({ email, password, username, profileImage, quizData }: SignUpData) {
@@ -121,22 +125,27 @@ export const authMethods: AuthService = {
   },
 
   async addVersion(
+    product,
     version: string,
+    buildNumber: string,
     changeNotes: string[],
     isCriticalUpdate: boolean,
     media: AppVersionMediaItem[] = []
   ) {
     try {
+      const productConfig = APP_VERSION_PRODUCT_CONFIGS[product];
       const payload = {
-        ...buildAppVersionWritePayload(changeNotes, isCriticalUpdate, media),
+        ...buildAppVersionWritePayload(changeNotes, isCriticalUpdate, media, buildNumber),
+        product,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
 
-      await Promise.all([
-        setDoc(doc(db, 'version', version), payload, { merge: true }),
-        setDoc(doc(db, 'versions', version), payload, { merge: true }),
-      ]);
+      await Promise.all(
+        productConfig.versionCollections.map((collectionName) =>
+          setDoc(doc(db, collectionName, version), payload, { merge: true })
+        )
+      );
       return true;
     } catch (error) {
       console.error('Error adding version:', error);

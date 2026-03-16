@@ -5,9 +5,13 @@ import { db } from '../../api/firebase/config';
 import { adminMethods } from '../../api/firebase/admin/methods';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import {
+  APP_VERSION_PRODUCT_CONFIGS,
+  AppVersionProduct,
   AppVersionDocument,
   AppVersionMediaItem,
+  compareBuildNumbers,
   compareSemanticVersions,
+  incrementBuildNumber,
   normalizeAppVersionDocument,
 } from '../../utils/appVersioning';
 
@@ -22,19 +26,21 @@ type SelectedImage = {
   previewUrl: string;
 };
 
-const VERSION_COLLECTIONS = ['version', 'versions'];
-const UPDATE_MODAL_CONFIG_PATH = ['company-config', 'app-update-modal'] as const;
-
 const sanitizeStorageSegment = (value: string) =>
   value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'release';
 
 const sanitizeFileName = (value: string) =>
   value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-');
 
-const getLatestVersionFromCollections = async (): Promise<AppVersionDocument | null> => {
-  const versionsById = new Map<string, AppVersionDocument>();
+const PRODUCT_TABS: AppVersionProduct[] = ['fitWithPulse', 'pulseCheck'];
 
-  for (const collectionName of VERSION_COLLECTIONS) {
+const getLatestVersionFromCollections = async (
+  product: AppVersionProduct
+): Promise<AppVersionDocument | null> => {
+  const versionsById = new Map<string, AppVersionDocument>();
+  const productConfig = APP_VERSION_PRODUCT_CONFIGS[product];
+
+  for (const collectionName of productConfig.versionCollections) {
     try {
       const snapshot = await getDocs(collection(db, collectionName));
 
@@ -59,15 +65,20 @@ const getLatestVersionFromCollections = async (): Promise<AppVersionDocument | n
     }
   }
 
-  const sortedVersions = Array.from(versionsById.values()).sort((lhs, rhs) =>
-    compareSemanticVersions(rhs.version, lhs.version)
-  );
+  const sortedVersions = Array.from(versionsById.values()).sort((lhs, rhs) => {
+    const versionComparison = compareSemanticVersions(rhs.version, lhs.version);
+    if (versionComparison !== 0) {
+      return versionComparison;
+    }
+
+    return compareBuildNumbers(rhs.buildNumber, lhs.buildNumber);
+  });
 
   return sortedVersions[0] ?? null;
 };
 
-const getUpdateModalConfig = async (): Promise<boolean> => {
-  const snapshot = await getDoc(doc(db, ...UPDATE_MODAL_CONFIG_PATH));
+const getUpdateModalConfig = async (product: AppVersionProduct): Promise<boolean> => {
+  const snapshot = await getDoc(doc(db, ...APP_VERSION_PRODUCT_CONFIGS[product].updateModalConfigPath));
   if (!snapshot.exists()) {
     return true;
   }
@@ -76,7 +87,9 @@ const getUpdateModalConfig = async (): Promise<boolean> => {
 };
 
 const AddVersionPage = () => {
+  const [activeProduct, setActiveProduct] = useState<AppVersionProduct>('fitWithPulse');
   const [version, setVersion] = useState('');
+  const [buildNumber, setBuildNumber] = useState('');
   const [changeNotes, setChangeNotes] = useState<string[]>(['']);
   const [isCriticalUpdate, setIsCriticalUpdate] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<SelectedVideo | null>(null);
@@ -96,8 +109,8 @@ const AddVersionPage = () => {
       try {
         setLoadingLatest(true);
         const [latest, modalEnabled] = await Promise.all([
-          getLatestVersionFromCollections(),
-          getUpdateModalConfig(),
+          getLatestVersionFromCollections(activeProduct),
+          getUpdateModalConfig(activeProduct),
         ]);
         setLatestVersion(latest);
         setIsUpdateModalEnabled(modalEnabled);
@@ -109,7 +122,7 @@ const AddVersionPage = () => {
     };
 
     fetchLatestVersion();
-  }, [success]);
+  }, [activeProduct, success]);
 
   const clearSelectedMedia = () => {
     if (selectedVideo) {
@@ -189,10 +202,11 @@ const AddVersionPage = () => {
   const uploadReleaseMedia = async (targetVersion: string): Promise<AppVersionMediaItem[]> => {
     const safeVersion = sanitizeStorageSegment(targetVersion);
     const uploadedMedia: AppVersionMediaItem[] = [];
+    const storageRoot = APP_VERSION_PRODUCT_CONFIGS[activeProduct].storageRoot;
 
     if (selectedVideo) {
       setLoadingMessage('Uploading update video...');
-      const storagePath = `press_assets/app_updates/${safeVersion}/video/${Date.now()}-${sanitizeFileName(selectedVideo.file.name)}`;
+      const storagePath = `${storageRoot}/${safeVersion}/video/${Date.now()}-${sanitizeFileName(selectedVideo.file.name)}`;
       const uploadResult = await firebaseStorageService.uploadFileToStorage(selectedVideo.file, storagePath);
 
       uploadedMedia.push({
@@ -207,7 +221,7 @@ const AddVersionPage = () => {
 
     for (const [index, image] of selectedImages.entries()) {
       setLoadingMessage(`Uploading image ${index + 1} of ${selectedImages.length}...`);
-      const storagePath = `press_assets/app_updates/${safeVersion}/images/${Date.now()}-${index}-${sanitizeFileName(image.file.name)}`;
+      const storagePath = `${storageRoot}/${safeVersion}/images/${Date.now()}-${index}-${sanitizeFileName(image.file.name)}`;
       const uploadResult = await firebaseStorageService.uploadFileToStorage(image.file, storagePath);
 
       uploadedMedia.push({
@@ -231,10 +245,11 @@ const AddVersionPage = () => {
     setError('');
 
     const normalizedVersion = version.trim();
+    const normalizedBuildNumber = buildNumber.trim();
     const notesArray = changeNotes.map((note) => note.trim()).filter((note) => note.length > 0);
 
-    if (!normalizedVersion || notesArray.length === 0) {
-      setError('Version and at least one change note are required.');
+    if (!normalizedVersion || !normalizedBuildNumber || notesArray.length === 0) {
+      setError('Version, build number, and at least one change note are required.');
       setLoading(false);
       setLoadingMessage('');
       return;
@@ -243,10 +258,18 @@ const AddVersionPage = () => {
     try {
       const uploadedMedia = await uploadReleaseMedia(normalizedVersion);
       setLoadingMessage('Writing release notes...');
-      await adminMethods.addVersion(normalizedVersion, notesArray, isCriticalUpdate, uploadedMedia);
+      await adminMethods.addVersion(
+        activeProduct,
+        normalizedVersion,
+        normalizedBuildNumber,
+        notesArray,
+        isCriticalUpdate,
+        uploadedMedia
+      );
 
       setSuccess('Version added successfully!');
       setVersion('');
+      setBuildNumber('');
       setChangeNotes(['']);
       setIsCriticalUpdate(false);
       clearSelectedMedia();
@@ -283,6 +306,10 @@ const AddVersionPage = () => {
     }
   };
 
+  const autoIncrementBuild = () => {
+    setBuildNumber(incrementBuildNumber(latestVersion?.buildNumber));
+  };
+
   const latestVideoCount = latestVersion?.media.filter((item) => item.type === 'video').length ?? 0;
   const latestImageCount = latestVersion?.media.filter((item) => item.type === 'image').length ?? 0;
 
@@ -293,7 +320,7 @@ const AddVersionPage = () => {
 
     try {
       await setDoc(
-        doc(db, ...UPDATE_MODAL_CONFIG_PATH),
+        doc(db, ...APP_VERSION_PRODUCT_CONFIGS[activeProduct].updateModalConfigPath),
         {
           isEnabled: nextValue,
           updatedAt: serverTimestamp(),
@@ -327,15 +354,54 @@ const AddVersionPage = () => {
             Add New Version
           </h1>
 
+          <div className="mb-6 flex flex-wrap gap-3">
+            {PRODUCT_TABS.map((product) => {
+              const config = APP_VERSION_PRODUCT_CONFIGS[product];
+              const isActive = product === activeProduct;
+
+              return (
+                <button
+                  key={product}
+                  type="button"
+                  onClick={() => {
+                    setActiveProduct(product);
+                    setSuccess('');
+                    setError('');
+                    setModalConfigMessage('');
+                    setLatestVersion(null);
+                    clearSelectedMedia();
+                    setVersion('');
+                    setBuildNumber('');
+                    setChangeNotes(['']);
+                    setIsCriticalUpdate(false);
+                  }}
+                  className={`rounded-xl border px-4 py-3 text-left transition ${
+                    isActive
+                      ? 'border-[#d7ff00] bg-[#d7ff00]/10 text-white'
+                      : 'border-zinc-700 bg-[#1a1e24] text-zinc-300 hover:border-zinc-500 hover:text-white'
+                  }`}
+                >
+                  <div className="text-sm font-semibold">{config.label}</div>
+                  <div className="text-xs text-zinc-400">
+                    {product === 'fitWithPulse' ? 'Legacy Fit With Pulse release feed' : 'PulseCheck release feed'}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="relative bg-[#1a1e24] rounded-xl p-6 mb-6 shadow-xl overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-orange-500 via-red-500 to-pink-500"></div>
             <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-orange-500 via-red-500 to-pink-500"></div>
 
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-white">Global Update Modal Switch</h2>
+                <h2 className="text-lg font-semibold text-white">
+                  {APP_VERSION_PRODUCT_CONFIGS[activeProduct].shortLabel} Update Modal Switch
+                </h2>
                 <p className="text-sm text-gray-400 mt-1">
-                  Use this failsafe to hide the update modal everywhere if a release note or media payload malfunctions.
+                  Use this failsafe to hide the {APP_VERSION_PRODUCT_CONFIGS[activeProduct].shortLabel} update modal
+                  everywhere if a release note or media payload malfunctions.
                 </p>
               </div>
 
@@ -376,7 +442,9 @@ const AddVersionPage = () => {
             <div className="absolute top-0 right-0 bottom-0 w-[2px] bg-gradient-to-b from-purple-500 via-blue-500 to-teal-500"></div>
 
             <div className="flex justify-between items-center mb-3">
-              <h2 className="text-lg font-semibold text-white">Current Version</h2>
+              <h2 className="text-lg font-semibold text-white">
+                {APP_VERSION_PRODUCT_CONFIGS[activeProduct].shortLabel} Current Release
+              </h2>
               {latestVersion?.isCriticalUpdate && (
                 <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">
                   Critical
@@ -396,6 +464,11 @@ const AddVersionPage = () => {
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <span className="text-xl font-bold text-[#d7ff00]">{latestVersion.version}</span>
+                  {latestVersion.buildNumber && (
+                    <span className="px-2 py-1 rounded-full bg-zinc-900/60 border border-zinc-700 text-zinc-200 text-xs">
+                      Build {latestVersion.buildNumber}
+                    </span>
+                  )}
                   {(latestVideoCount > 0 || latestImageCount > 0) && (
                     <div className="flex flex-wrap gap-2 text-xs">
                       {latestVideoCount > 0 && (
@@ -430,33 +503,62 @@ const AddVersionPage = () => {
             <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-blue-500 via-purple-500 to-[#d7ff00]"></div>
 
             <div className="text-sm text-gray-400 mb-4">
-              Enter version details, release notes, and optional media for the in-app carousel.
+              Enter release details for {APP_VERSION_PRODUCT_CONFIGS[activeProduct].label}, including the TestFlight
+              build number and optional in-app update media.
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label className="block text-gray-300 mb-2 text-sm font-medium">Version Number</label>
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    className="w-full bg-[#262a30] border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] transition text-white placeholder-gray-500"
-                    value={version}
-                    onChange={(event) => setVersion(event.target.value)}
-                    placeholder="e.g. 5.02"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={autoIncrementVersion}
-                    disabled={!latestVersion}
-                    className="px-4 py-2 bg-[#262a30] hover:bg-[#2a2f36] border border-gray-700 text-gray-300 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center group"
-                    title="Auto-increment version from latest"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#d7ff00]" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
-                    </svg>
-                    <span className="sr-only group-hover:not-sr-only ml-1 text-xs whitespace-nowrap">Auto-increment</span>
-                  </button>
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                <div>
+                  <label className="block text-gray-300 mb-2 text-sm font-medium">Version Number</label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      className="w-full bg-[#262a30] border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] transition text-white placeholder-gray-500"
+                      value={version}
+                      onChange={(event) => setVersion(event.target.value)}
+                      placeholder={activeProduct === 'fitWithPulse' ? 'e.g. 5.70' : 'e.g. 2.11'}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={autoIncrementVersion}
+                      disabled={!latestVersion}
+                      className="px-4 py-2 bg-[#262a30] hover:bg-[#2a2f36] border border-gray-700 text-gray-300 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center group"
+                      title="Auto-increment version from latest"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#d7ff00]" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                      </svg>
+                      <span className="sr-only group-hover:not-sr-only ml-1 text-xs whitespace-nowrap">Auto-increment</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2 text-sm font-medium">Build Number</label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      className="w-full bg-[#262a30] border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#d7ff00] transition text-white placeholder-gray-500"
+                      value={buildNumber}
+                      onChange={(event) => setBuildNumber(event.target.value)}
+                      placeholder="e.g. 2"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={autoIncrementBuild}
+                      className="px-4 py-2 bg-[#262a30] hover:bg-[#2a2f36] border border-gray-700 text-gray-300 rounded-lg transition flex items-center justify-center group"
+                      title="Auto-increment build number from latest"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-[#d7ff00]" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                      </svg>
+                      <span className="sr-only group-hover:not-sr-only ml-1 text-xs whitespace-nowrap">Next build</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 

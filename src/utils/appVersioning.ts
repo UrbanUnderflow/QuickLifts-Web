@@ -1,5 +1,35 @@
 export type AppVersionMediaType = 'video' | 'image';
 
+export type AppVersionProduct = 'fitWithPulse' | 'pulseCheck';
+
+export interface AppVersionProductConfig {
+  id: AppVersionProduct;
+  label: string;
+  shortLabel: string;
+  versionCollections: string[];
+  updateModalConfigPath: readonly [string, string];
+  storageRoot: string;
+}
+
+export const APP_VERSION_PRODUCT_CONFIGS: Record<AppVersionProduct, AppVersionProductConfig> = {
+  fitWithPulse: {
+    id: 'fitWithPulse',
+    label: 'Fit With Pulse',
+    shortLabel: 'Fit With Pulse',
+    versionCollections: ['version', 'versions'],
+    updateModalConfigPath: ['company-config', 'app-update-modal'],
+    storageRoot: 'press_assets/app_updates',
+  },
+  pulseCheck: {
+    id: 'pulseCheck',
+    label: 'PulseCheck',
+    shortLabel: 'PulseCheck',
+    versionCollections: ['pulsecheck-version', 'pulsecheck-versions'],
+    updateModalConfigPath: ['company-config', 'pulsecheck-app-update-modal'],
+    storageRoot: 'press_assets/pulsecheck_app_updates',
+  },
+};
+
 export interface AppVersionMediaItem {
   id: string;
   type: AppVersionMediaType;
@@ -11,6 +41,7 @@ export interface AppVersionMediaItem {
 
 export interface AppVersionDocument {
   version: string;
+  buildNumber?: string | null;
   changeNotes: string[];
   isCriticalUpdate: boolean;
   media: AppVersionMediaItem[];
@@ -41,6 +72,36 @@ export const compareSemanticVersions = (lhs: string, rhs: string): number => {
   }
 
   return lhs.localeCompare(rhs, undefined, { numeric: true, sensitivity: 'base' });
+};
+
+export const compareBuildNumbers = (lhs?: string | null, rhs?: string | null): number => {
+  const normalizedLeft = (lhs ?? '').trim();
+  const normalizedRight = (rhs ?? '').trim();
+  const leftValue = Number.parseInt(normalizedLeft, 10);
+  const rightValue = Number.parseInt(normalizedRight, 10);
+
+  if (!Number.isNaN(leftValue) && !Number.isNaN(rightValue) && leftValue !== rightValue) {
+    return leftValue - rightValue;
+  }
+
+  if (!Number.isNaN(leftValue) && Number.isNaN(rightValue)) {
+    return 1;
+  }
+
+  if (Number.isNaN(leftValue) && !Number.isNaN(rightValue)) {
+    return -1;
+  }
+
+  return normalizedLeft.localeCompare(normalizedRight, undefined, { numeric: true, sensitivity: 'base' });
+};
+
+export const incrementBuildNumber = (value?: string | null): string => {
+  const normalized = (value ?? '').trim();
+  const parsed = Number.parseInt(normalized, 10);
+  if (Number.isNaN(parsed)) {
+    return '1';
+  }
+  return String(parsed + 1);
 };
 
 const normalizeMediaEntry = (
@@ -130,6 +191,16 @@ export const normalizeAppVersionDocument = (
 
   return {
     version,
+    buildNumber:
+      typeof data.buildNumber === 'string'
+        ? data.buildNumber
+        : typeof data.buildNumber === 'number'
+          ? String(data.buildNumber)
+          : typeof data.build === 'string'
+            ? data.build
+            : typeof data.build === 'number'
+              ? String(data.build)
+              : null,
     changeNotes,
     isCriticalUpdate: Boolean(data.isCriticalUpdate ?? data.isCritical),
     media: normalizeAppVersionMedia(data),
@@ -141,7 +212,8 @@ export const normalizeAppVersionDocument = (
 export const buildAppVersionWritePayload = (
   changeNotes: string[],
   isCriticalUpdate: boolean,
-  media: AppVersionMediaItem[]
+  media: AppVersionMediaItem[],
+  buildNumber?: string
 ) => {
   const notesObject: { [key: string]: string } = {};
 
@@ -161,6 +233,8 @@ export const buildAppVersionWritePayload = (
 
   return {
     ...notesObject,
+    buildNumber: buildNumber?.trim() || null,
+    build: buildNumber?.trim() || null,
     changeNotes,
     isCriticalUpdate,
     media: normalizedMedia,

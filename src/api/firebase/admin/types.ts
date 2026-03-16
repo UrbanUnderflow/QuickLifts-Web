@@ -1,5 +1,5 @@
 import { Timestamp } from 'firebase/firestore';
-import { AppVersionMediaItem } from '../../../utils/appVersioning';
+import { AppVersionMediaItem, AppVersionProduct } from '../../../utils/appVersioning';
 
 export interface DailyPrompt {
   id?: string;
@@ -92,7 +92,9 @@ export interface BetaApplication {
 
 export interface AdminService {
   addVersion: (
+    product: AppVersionProduct,
     version: string,
+    buildNumber: string,
     changeNotes: string[],
     isCriticalUpdate: boolean,
     media?: AppVersionMediaItem[]
