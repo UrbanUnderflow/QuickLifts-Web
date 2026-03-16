@@ -18,6 +18,10 @@ import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
 
+const PULSECHECK_PURPLE = '#8B5CF6';
+const PULSECHECK_PURPLE_SOFT = '#A78BFA';
+const PULSECHECK_PURPLE_DEEP = '#7C3AED';
+
 // ─────────────────────────────────────────────────
 // FLOATING ORB — ambient background helper
 // ─────────────────────────────────────────────────
@@ -42,7 +46,7 @@ const GlassSurface: React.FC<{
   children: React.ReactNode;
   accentColor?: string;
   className?: string;
-}> = ({ children, accentColor = '#E0FE10', className = '' }) => (
+}> = ({ children, accentColor = PULSECHECK_PURPLE, className = '' }) => (
   <div className={`relative ${className}`}>
     <div
       className="absolute -inset-[1px] rounded-[32px] overflow-hidden pointer-events-none"
@@ -440,9 +444,9 @@ const PulseCheckLoginPage: NextPage = () => {
         {typeof window !== 'undefined' && window.location.hostname === 'localhost' && <DevModeToggle />}
 
         {/* ── AMBIENT ORBS ── */}
-        <FloatingOrb color="#8B5CF6" size={600} style={{ top: '-15%', left: '-10%' }} delay={0} />
+        <FloatingOrb color={PULSECHECK_PURPLE} size={600} style={{ top: '-15%', left: '-10%' }} delay={0} />
         <FloatingOrb color="#3B82F6" size={400} style={{ bottom: '-10%', right: '-8%' }} delay={3} />
-        <FloatingOrb color="#E0FE10" size={300} style={{ top: '50%', right: '20%' }} delay={6} />
+        <FloatingOrb color={PULSECHECK_PURPLE_SOFT} size={300} style={{ top: '50%', right: '20%' }} delay={6} />
 
         {/* Noise texture */}
         <div
@@ -624,10 +628,10 @@ const PulseCheckLoginPage: NextPage = () => {
                       <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full rounded-xl py-3.5 text-sm font-semibold text-black transition-all duration-200 hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
                         style={{
-                          background: 'linear-gradient(135deg, #E0FE10, #c5e00e)',
-                          boxShadow: '0 4px 20px rgba(224,254,16,0.2)',
+                          background: `linear-gradient(135deg, ${PULSECHECK_PURPLE}, ${PULSECHECK_PURPLE_DEEP})`,
+                          boxShadow: '0 4px 20px rgba(139,92,246,0.28)',
                         }}
                       >
                         {isLoading && !activeProvider ? (
@@ -816,10 +820,10 @@ const PulseCheckLoginPage: NextPage = () => {
                       <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full rounded-xl py-3.5 text-sm font-semibold text-black transition-all duration-200 hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-all duration-200 hover:brightness-110 disabled:opacity-50 flex items-center justify-center gap-2"
                         style={{
-                          background: 'linear-gradient(135deg, #E0FE10, #c5e00e)',
-                          boxShadow: '0 4px 20px rgba(224,254,16,0.2)',
+                          background: `linear-gradient(135deg, ${PULSECHECK_PURPLE}, ${PULSECHECK_PURPLE_DEEP})`,
+                          boxShadow: '0 4px 20px rgba(139,92,246,0.28)',
                         }}
                       >
                         {isLoading && !activeProvider ? (

@@ -351,7 +351,7 @@ const AddVersionPage = () => {
                 <path d="M16.5 8.25H18a.75.75 0 0 1 .75.75v9.75a.75.75 0 0 1-.75.75h-1.5a.75.75 0 0 1-.75-.75V9a.75.75 0 0 1 .75-.75Z" />
               </svg>
             </span>
-            Add New Version
+            Publish App Release
           </h1>
 
           <div className="mb-6 flex flex-wrap gap-3">
@@ -383,11 +383,38 @@ const AddVersionPage = () => {
                 >
                   <div className="text-sm font-semibold">{config.label}</div>
                   <div className="text-xs text-zinc-400">
-                    {product === 'fitWithPulse' ? 'Legacy Fit With Pulse release feed' : 'PulseCheck release feed'}
+                    {product === 'fitWithPulse'
+                      ? 'Legacy Fit With Pulse live release feed'
+                      : 'PulseCheck live release feed'}
                   </div>
                 </button>
               );
             })}
+          </div>
+
+          <div className="relative bg-[#1a1e24] rounded-xl p-6 mb-6 shadow-xl overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-amber-500 via-orange-500 to-red-500"></div>
+            <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-amber-500 via-orange-500 to-red-500"></div>
+
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 rounded-full bg-amber-500/15 p-2 text-amber-300">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.981-1.742 2.981H4.42c-1.53 0-2.492-1.647-1.743-2.98l5.58-9.921ZM11 13a1 1 0 10-2 0 1 1 0 002 0Zm-1-6a1 1 0 00-.993.883L9 8v3a1 1 0 001.993.117L11 11V8a1 1 0 00-1-1Z" clipRule="evenodd" />
+                </svg>
+              </div>
+
+              <div>
+                <h2 className="text-lg font-semibold text-white">Publish Timing Guardrail</h2>
+                <p className="text-sm text-gray-300 mt-1">
+                  This page controls the live in-app update feed and modal. It does not change the Xcode project build for
+                  you.
+                </p>
+                <p className="text-sm text-gray-400 mt-3">
+                  Only publish a release here after the matching App Store or TestFlight build is approved, processed, and
+                  actually available to install.
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="relative bg-[#1a1e24] rounded-xl p-6 mb-6 shadow-xl overflow-hidden">
@@ -397,7 +424,7 @@ const AddVersionPage = () => {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-white">
-                  {APP_VERSION_PRODUCT_CONFIGS[activeProduct].shortLabel} Update Modal Switch
+                  {APP_VERSION_PRODUCT_CONFIGS[activeProduct].shortLabel} Live Update Modal Switch
                 </h2>
                 <p className="text-sm text-gray-400 mt-1">
                   Use this failsafe to hide the {APP_VERSION_PRODUCT_CONFIGS[activeProduct].shortLabel} update modal
@@ -443,7 +470,7 @@ const AddVersionPage = () => {
 
             <div className="flex justify-between items-center mb-3">
               <h2 className="text-lg font-semibold text-white">
-                {APP_VERSION_PRODUCT_CONFIGS[activeProduct].shortLabel} Current Release
+                {APP_VERSION_PRODUCT_CONFIGS[activeProduct].shortLabel} Live Published Release
               </h2>
               {latestVersion?.isCriticalUpdate && (
                 <span className="px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">
@@ -503,8 +530,9 @@ const AddVersionPage = () => {
             <div className="absolute top-0 left-0 bottom-0 w-[2px] bg-gradient-to-b from-blue-500 via-purple-500 to-[#d7ff00]"></div>
 
             <div className="text-sm text-gray-400 mb-4">
-              Enter release details for {APP_VERSION_PRODUCT_CONFIGS[activeProduct].label}, including the TestFlight
-              build number and optional in-app update media.
+              Publish the live release details for {APP_VERSION_PRODUCT_CONFIGS[activeProduct].label}. This should match
+              the already-approved App Store or TestFlight build number and any optional in-app update media you want to
+              show.
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -560,6 +588,11 @@ const AddVersionPage = () => {
                     </button>
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm text-zinc-300">
+                <span className="font-semibold text-white">Release rule:</span> upload and wait for Apple first, then
+                publish the matching version/build here to turn on the in-app release messaging.
               </div>
 
               <div>
@@ -695,7 +728,9 @@ const AddVersionPage = () => {
                   <label htmlFor="critical-update" className="font-medium text-gray-300">
                     Is Critical Update?
                   </label>
-                  <p className="text-gray-500 text-xs mt-1">Mark this if users should be forced to update.</p>
+                  <p className="text-gray-500 text-xs mt-1">
+                    Mark this only when the new build is already live and you want the app to push people to install it.
+                  </p>
                 </div>
                 {isCriticalUpdate && (
                   <span className="ml-auto px-2 py-1 bg-red-900/30 text-red-400 rounded-full text-xs font-medium border border-red-900">
@@ -711,7 +746,7 @@ const AddVersionPage = () => {
               >
                 <div className="absolute inset-0 opacity-0 group-hover:opacity-10 bg-gradient-to-r from-[#40c9ff] to-[#e81cff] transition-opacity"></div>
 
-                <span className="relative z-10">{loading ? loadingMessage || 'Adding...' : 'Add Version'}</span>
+                <span className="relative z-10">{loading ? loadingMessage || 'Publishing...' : 'Publish Release'}</span>
                 <span className="absolute bottom-0 left-0 w-full h-1 bg-white/20 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></span>
               </button>
 
