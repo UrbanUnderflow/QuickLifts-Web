@@ -538,6 +538,7 @@ const MentalTrainingPage: React.FC = () => {
           <ExercisePlayer
             exercise={selectedExercise}
             assignmentId={selectedAssignmentId}
+            dailyAssignmentId={selectedDailyAssignmentId}
             profileSnapshotMilestone={selectedProfileSnapshotMilestone}
             onComplete={handleExerciseComplete}
             onClose={() => {

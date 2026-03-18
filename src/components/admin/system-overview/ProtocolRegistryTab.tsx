@@ -485,6 +485,7 @@ const ProtocolRegistryTab: React.FC = () => {
   const [sourceExerciseLoading, setSourceExerciseLoading] = useState(false);
   const [sourceExerciseError, setSourceExerciseError] = useState<string | null>(null);
   const [previewExercise, setPreviewExercise] = useState<MentalExercise | null>(null);
+  const [previewProtocolAudioContext, setPreviewProtocolAudioContext] = useState<{ protocolId: string; protocolLabel?: string | null } | null>(null);
 
   const loadWorkspace = async (preferred?: { familyId?: string | null; variantId?: string | null; runtimeId?: string | null }) => {
     setLoading(true);
@@ -850,12 +851,14 @@ const ProtocolRegistryTab: React.FC = () => {
 
   const openProtocolPreview = async () => {
     const exerciseId = runtimeDraft?.legacyExerciseId?.trim() || variantDraft?.legacyExerciseId?.trim() || '';
+    const protocolId = runtimeDraft?.id?.trim() || '';
     if (!exerciseId) {
       setWorkspaceMessage('Bind a legacy exercise id before previewing this protocol.');
       return;
     }
 
     if (sourceExercise?.id === exerciseId) {
+      setPreviewProtocolAudioContext(protocolId ? { protocolId, protocolLabel: runtimeDraft?.label || variantDraft?.label || null } : null);
       setPreviewExercise(sourceExercise);
       return;
     }
@@ -870,6 +873,7 @@ const ProtocolRegistryTab: React.FC = () => {
         return;
       }
       setSourceExercise(exercise);
+      setPreviewProtocolAudioContext(protocolId ? { protocolId, protocolLabel: runtimeDraft?.label || variantDraft?.label || null } : null);
       setPreviewExercise(exercise);
     } catch (error) {
       console.error('Failed to preview protocol source exercise:', error);
@@ -895,6 +899,7 @@ const ProtocolRegistryTab: React.FC = () => {
         return;
       }
       setSourceExercise(exercise);
+      setPreviewProtocolAudioContext({ protocolId: protocol.id, protocolLabel: protocol.label });
       setPreviewExercise(exercise);
     } catch (error) {
       console.error('Failed to preview published protocol source exercise:', error);
@@ -1426,8 +1431,15 @@ const ProtocolRegistryTab: React.FC = () => {
         <ExercisePlayer
           exercise={previewExercise}
           previewMode
-          onClose={() => setPreviewExercise(null)}
-          onComplete={() => setPreviewExercise(null)}
+          protocolAudioContext={previewProtocolAudioContext}
+          onClose={() => {
+            setPreviewExercise(null);
+            setPreviewProtocolAudioContext(null);
+          }}
+          onComplete={() => {
+            setPreviewExercise(null);
+            setPreviewProtocolAudioContext(null);
+          }}
         />
       ) : null}
     </div>

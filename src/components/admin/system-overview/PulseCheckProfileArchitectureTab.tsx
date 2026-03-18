@@ -11,7 +11,7 @@ const SURFACE_ROWS = [
 ];
 
 const IA_ROWS = [
-  ['1. Top Identity', 'Preferred name, role badge, team, pilot, cohort, season phase'],
+  ['1. Top Identity', 'Preferred name, team context, sport, season phase, primary goal, and primary challenge'],
   ['2. Mental Performance Profile', 'Subtle trend wrapper, pillars, skills, modifiers, and trends'],
   ['3. Program Pathway', 'Current emphasis, Nora explanation, next milestone, and Trial Milestones'],
   ['4. Profile History / Snapshots', 'Baseline, Midpoint, Endpoint, Retention, and current comparison views'],
@@ -55,7 +55,9 @@ const SNAPSHOT_DECISION_ROWS = [
 
 const PROFILE_GROUP_ROWS = [
   ['identity', 'Preferred name, display name, email, and photo'],
-  ['athleteContext', 'Sport, position, season phase, primary challenge, and pathway'],
+  ['athleteContext', 'Sport, position, season phase, and other stable setup context'],
+  ['athleteChallenge', 'Primary mental-performance challenge / bottleneck pattern'],
+  ['athleteGoal', 'Primary performance goal / desired outcome'],
   ['membership', 'Active org, team, pilot, cohorts, and role'],
   ['mentalPerformanceProfile', 'Pillar scores, skill scores, modifiers, trends, and narrative'],
   ['programPathway', 'Current emphasis, Nora explanation, next milestone, and Trial Milestones'],
@@ -156,6 +158,18 @@ const ProfileArchitectureOverviewDoc: React.FC = () => {
 
       <SectionBlock icon={Workflow} title="Recommended Information Architecture">
         <DataTable columns={['Card', 'Contents']} rows={IA_ROWS} />
+        <CardGrid columns="md:grid-cols-2">
+          <InfoCard
+            title="Challenge vs Goal"
+            accent="purple"
+            body="Primary challenge means the bottleneck or breakdown pattern Nora should train around. Primary goal means the outcome the athlete is trying to achieve. They should never be stored or explained as the same field."
+          />
+          <InfoCard
+            title="Planner Weighting"
+            accent="green"
+            body="Primary goal can shape explanation, tie-breaks, and context framing, but it should never outrank the athlete's actual readiness, recent performance data, or safety state."
+          />
+        </CardGrid>
       </SectionBlock>
 
       <SectionBlock icon={Brain} title="Mental Performance Profile And First-Scroll Questions">
@@ -170,6 +184,23 @@ const ProfileArchitectureOverviewDoc: React.FC = () => {
             title="Initial Scroll Focus"
             accent="green"
             body={<BulletList items={FIRST_SCROLL_QUESTIONS} />}
+          />
+        </CardGrid>
+        <CardGrid columns="md:grid-cols-3">
+          <InfoCard
+            title="Primary Mental Challenge"
+            accent="amber"
+            body="The bottleneck pattern Nora is trying to reduce. This is the thing that tends to break down when the athlete is under pressure, distracted, fatigued, or otherwise off balance."
+          />
+          <InfoCard
+            title="Primary Performance Goal"
+            accent="green"
+            body="The outcome the athlete wants to reach. This frames the destination Nora is helping toward, but it should not replace the current-state read."
+          />
+          <InfoCard
+            title="How Nora Uses Both"
+            accent="purple"
+            body="Challenge should steer training emphasis and intervention choice. Goal should shape framing, milestone language, and what success is meant to look like once the athlete is safe to train."
           />
         </CardGrid>
       </SectionBlock>
