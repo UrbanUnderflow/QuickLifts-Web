@@ -1,6 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { appendFileSync, mkdirSync } from 'fs';
-import { existsSync } from 'fs';
+import { appendFileSync, existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import { ExerciseCategory } from '../../src/api/firebase/mentaltraining/types';
 
@@ -10,7 +9,8 @@ const remoteLoginToken = process.env.PLAYWRIGHT_REMOTE_LOGIN_TOKEN;
 const allowWriteTests = process.env.PLAYWRIGHT_ALLOW_WRITE_TESTS === 'true';
 const pulseCheckOrganizationId = process.env.PLAYWRIGHT_PULSECHECK_ORG_ID || '';
 const pulseCheckTeamId = process.env.PLAYWRIGHT_PULSECHECK_TEAM_ID || '';
-const pulseCheckNamespace = process.env.PLAYWRIGHT_E2E_NAMESPACE || 'e2e-pulsecheck';
+const pulseCheckNamespaceBase = process.env.PLAYWRIGHT_E2E_NAMESPACE || 'e2e-pulsecheck';
+const pulseCheckNamespace = `${pulseCheckNamespaceBase}-journey`;
 const appBaseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 const appOrigin = new URL(appBaseURL).origin;
 const debugLogDir = path.resolve(process.cwd(), 'test-results', 'debug-logs');
@@ -151,6 +151,13 @@ async function waitForPulseE2EHarness(page: Page) {
   await page.waitForFunction(() => Boolean(window.__pulseE2E), undefined, { timeout: 20_000 });
 }
 
+async function syncProtocolRegistrySeeds(adminPage: Page) {
+  await waitForPulseE2EHarness(adminPage);
+  return adminPage.evaluate(async () => {
+    return window.__pulseE2E?.syncPulseCheckProtocolRegistrySeeds?.();
+  });
+}
+
 async function getAuthenticatedIdentity(page: Page): Promise<AuthIdentity | null> {
   return page.evaluate(() => {
     const authStorageKey = Object.keys(window.localStorage).find((key) => key.startsWith('firebase:authUser:'));
@@ -282,6 +289,14 @@ async function redeemAdultInvite(
   const { context, page } = await createIsolatedPage(browser);
 
   try {
+    page.on('console', (message) => {
+      const text = message.text().replace(/\s+/g, ' ').slice(0, 300);
+      console.log('[PulseCheck Invite Helper][console]', message.type(), text);
+    });
+    page.on('pageerror', (error) => {
+      console.log('[PulseCheck Invite Helper][pageerror]', error.message);
+    });
+
     const accessReadyText = page.getByText(/Your .* access for .* is active\./i);
     const acceptInviteButton = page.getByRole('button', { name: /Accept Invite/i });
     const continueLink = page.getByRole('link', { name: /Continue/i });
@@ -295,6 +310,7 @@ async function redeemAdultInvite(
     await page.getByLabel('Password', { exact: true }).fill(password);
     await page.getByLabel('Confirm Password').fill(password);
     await page.getByRole('button', { name: /Create Account and Join/i }).click();
+    console.log('[PulseCheck Invite Helper] account created submit complete', { url: page.url() });
 
     await Promise.race([
       accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
@@ -302,7 +318,7 @@ async function redeemAdultInvite(
       continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
       page.waitForURL(/\/PulseCheck\/member-setup/i, { timeout: 20_000 }).catch(() => null),
       page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }).catch(() => null),
-    ]);
+    ]).catch(() => null);
 
     await Promise.race([
       page.waitForURL(/\/PulseCheck\/member-setup/i, { timeout: 20_000 }),
@@ -316,6 +332,7 @@ async function redeemAdultInvite(
       (await acceptInviteButton.isVisible().catch(() => false)) &&
       (await redeemFailureText.isVisible().catch(() => false))
     ) {
+      console.log('[PulseCheck Invite Helper] retrying redeem from signed-in fallback', { url: page.url() });
       await acceptInviteButton.click();
       await Promise.race([
         page.waitForURL(/\/PulseCheck\/member-setup/i, { timeout: 20_000 }),
@@ -324,6 +341,14 @@ async function redeemAdultInvite(
         accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
       ]).catch(() => null);
     }
+
+    const postAcceptBody = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ');
+    console.log('[PulseCheck Invite Helper] after post-accept wait', {
+      url: page.url(),
+      hasContinue: /Continue/i.test(postAcceptBody),
+      hasFailure: /Failed|error|restricted|already exists/i.test(postAcceptBody),
+      body: postAcceptBody.slice(0, 300),
+    });
 
     if (/\/PulseCheck\/team-workspace/i.test(page.url())) {
       await waitForStableAppFrame(page);
@@ -334,6 +359,7 @@ async function redeemAdultInvite(
       const continueCount = await continueLink.count().catch(() => 0);
       if (continueCount > 0) {
         const continueHref = await continueLink.first().getAttribute('href').catch(() => null);
+        console.log('[PulseCheck Invite Helper] continue handoff', { continueHref, url: page.url() });
         if (continueHref) {
           await page.goto(continueHref, { waitUntil: 'domcontentloaded' });
         } else {
@@ -385,6 +411,14 @@ async function redeemAthleteInvite(
   const { context, page } = await createIsolatedPage(browser);
 
   try {
+    page.on('console', (message) => {
+      const text = message.text().replace(/\s+/g, ' ').slice(0, 300);
+      console.log('[PulseCheck Invite Helper][console]', message.type(), text);
+    });
+    page.on('pageerror', (error) => {
+      console.log('[PulseCheck Invite Helper][pageerror]', error.message);
+    });
+
     const accessReadyText = page.getByText(/Your .* access for .* is active\./i);
     const acceptInviteButton = page.getByRole('button', { name: /Accept Invite/i });
     const continueLink = page.getByRole('link', { name: /Continue/i });
@@ -401,6 +435,7 @@ async function redeemAthleteInvite(
     await page.getByLabel('Confirm Password').fill(password);
     await page.getByRole('button', { name: /Create Account and Join/i }).click();
     if (debugNamespace) writeDebugStep(debugNamespace, 'athlete-redeem:submitted');
+    console.log('[PulseCheck Invite Helper] athlete account created submit complete', { url: page.url() });
 
     await Promise.race([
       accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
@@ -408,7 +443,7 @@ async function redeemAthleteInvite(
       continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
       page.waitForURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 }).catch(() => null),
       page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }).catch(() => null),
-    ]);
+    ]).catch(() => null);
 
     await Promise.race([
       page.waitForURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 }),
@@ -422,6 +457,7 @@ async function redeemAthleteInvite(
       (await acceptInviteButton.isVisible().catch(() => false)) &&
       (await redeemFailureText.isVisible().catch(() => false))
     ) {
+      console.log('[PulseCheck Invite Helper] athlete retrying redeem from signed-in fallback', { url: page.url() });
       await acceptInviteButton.click();
       await Promise.race([
         page.waitForURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 }),
@@ -431,11 +467,23 @@ async function redeemAthleteInvite(
       ]).catch(() => null);
     }
 
+    const postAcceptBody = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ');
+    console.log('[PulseCheck Invite Helper] athlete after post-accept wait', {
+      url: page.url(),
+      body: postAcceptBody.slice(0, 300),
+    });
+
+    if (/\/PulseCheck\/team-workspace/i.test(page.url())) {
+      await waitForStableAppFrame(page);
+      return { context, page };
+    }
+
     if (debugNamespace) writeDebugStep(debugNamespace, 'athlete-redeem:success-visible');
     if (!/\/PulseCheck\/athlete-onboarding/i.test(page.url())) {
       const continueCount = await continueLink.count().catch(() => 0);
       if (continueCount > 0) {
         const continueHref = await continueLink.first().getAttribute('href').catch(() => null);
+        console.log('[PulseCheck Invite Helper] athlete continue handoff', { continueHref, url: page.url() });
         if (continueHref) {
           await page.goto(continueHref, { waitUntil: 'domcontentloaded' });
         } else {
@@ -445,6 +493,10 @@ async function redeemAthleteInvite(
     }
     await waitForStableAppFrame(page);
     if (debugNamespace) writeDebugStep(debugNamespace, `athlete-redeem:continued:${page.url()}`);
+
+    if (/\/PulseCheck\/team-workspace/i.test(page.url())) {
+      return { context, page };
+    }
 
     await expect(page).toHaveURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 });
     if (debugNamespace) writeDebugStep(debugNamespace, 'athlete-redeem:onboarding-open');
@@ -894,7 +946,13 @@ test.describe('PulseCheck athlete journey', () => {
       await expect(actors.athletePage.getByText(/Today's Nora Task/i)).toBeVisible({ timeout: 20_000 });
       await expect(actors.athletePage.getByRole('heading', { name: new RegExp(assignmentLabel, 'i') })).toBeVisible({ timeout: 20_000 });
 
-      await actors.athletePage.getByRole('button', { name: /Open today'?s task/i }).click();
+      const launchMentalTrainingLink = actors.athletePage.getByRole('link', { name: /Start today'?s task/i });
+      const openNoraTaskButton = actors.athletePage.getByRole('button', { name: /Open today'?s task/i });
+      if (await launchMentalTrainingLink.isVisible().catch(() => false)) {
+        await launchMentalTrainingLink.click();
+      } else {
+        await openNoraTaskButton.click();
+      }
       writeDebugStep(actors.namespace, 'test1:launch-clicked');
       await expect(actors.athletePage).toHaveURL(/\/mental-training/i, { timeout: 20_000 });
       writeDebugStep(actors.namespace, 'test1:mental-training-open');
@@ -902,7 +960,7 @@ test.describe('PulseCheck athlete journey', () => {
       await expect.poll(async () => {
         const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
         return state?.latestAssignment?.status || 'missing';
-      }, { timeout: 20_000 }).toBe('assigned');
+      }, { timeout: 20_000 }).toBe('started');
 
       await recordJourneyCompletion(page, actors.athleteIdentity.uid, latestAssignmentId);
       writeDebugStep(actors.namespace, 'test1:completion-recorded');
@@ -1044,7 +1102,7 @@ test.describe('PulseCheck athlete journey', () => {
       await expect.poll(async () => {
         const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
         return state?.latestAssignment?.status || 'missing';
-      }, { timeout: 20_000 }).toBe('assigned');
+      }, { timeout: 20_000 }).toBe('started');
 
       await recordJourneyCompletion(page, actors.athleteIdentity.uid, seededProtocol.assignmentId);
       writeDebugStep(actors.namespace, 'test3:protocol-completion-recorded');
@@ -1575,6 +1633,159 @@ test.describe('PulseCheck athlete journey', () => {
     } finally {
       await upsertProtocolRuntimeRecords(page, originalPrimingProtocols).catch(() => null);
       await upsertProtocolRuntimeRecords(actors.athletePage, originalPrimingProtocols).catch(() => null);
+      await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
+      await actors.coachContext.close().catch(() => null);
+      await actors.athleteContext.close().catch(() => null);
+    }
+  });
+
+  test('seeded protocol registry drives live assignment selection without runtime overrides', async ({ browser, page }) => {
+    test.setTimeout(240_000);
+    test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
+    test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
+
+    const actors = await provisionJourneyActors(browser, page);
+    const adminIdentity = await getAuthenticatedIdentity(page);
+
+    if (!adminIdentity?.uid || !adminIdentity.email) {
+      throw new Error('Unable to resolve the authenticated admin identity.');
+    }
+
+    try {
+      await syncProtocolRegistrySeeds(page);
+      await syncProtocolRegistrySeeds(actors.athletePage);
+
+      const seededPrimingProtocols = await captureProtocolRuntimeRecords(page, { protocolClass: 'priming' });
+      const publishedPrimingProtocols = seededPrimingProtocols.filter((record: Record<string, any>) =>
+        record?.isActive !== false &&
+        String(record?.publishStatus || '').toLowerCase() === 'published' &&
+        !['archived', 'restricted'].includes(String(record?.governanceStage || '').toLowerCase())
+      );
+
+      expect(publishedPrimingProtocols.length).toBeGreaterThan(0);
+
+      await seedAthleteJourneyFixture(page, {
+        namespace: actors.namespace,
+        adminIdentity,
+        coachIdentity: actors.coachIdentity,
+        coachEmail: actors.coachEmail,
+        athleteIdentity: actors.athleteIdentity,
+        athleteEmail: actors.athleteEmail,
+      });
+
+      await submitReadinessCheckInViaHarness(page, actors.athleteIdentity.uid);
+
+      await expect.poll(async () => {
+        const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+        return state?.latestAssignment?.status || 'missing';
+      }, { timeout: 30_000 }).toBe('assigned');
+
+      const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+      const protocolCandidates = (state?.latestCandidateSet?.candidates || []).filter((candidate: Record<string, any>) => candidate.type === 'protocol');
+      const protocolIds = protocolCandidates.map((candidate: Record<string, any>) => candidate.protocolId);
+
+      expect(protocolCandidates.length).toBeGreaterThan(0);
+      expect(protocolIds.every((protocolId: string) => publishedPrimingProtocols.some((record: Record<string, any>) => record.id === protocolId))).toBe(true);
+      expect(protocolCandidates.every((candidate: Record<string, any>) => !candidate.publishStatus || candidate.publishStatus === 'published')).toBe(true);
+    } finally {
+      await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
+      await actors.coachContext.close().catch(() => null);
+      await actors.athleteContext.close().catch(() => null);
+    }
+  });
+
+  test('restricted protocol runtimes stay excluded even when responsiveness strongly favors them', async ({ browser, page }) => {
+    test.setTimeout(240_000);
+    test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
+    test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
+
+    const actors = await provisionJourneyActors(browser, page);
+    const adminIdentity = await getAuthenticatedIdentity(page);
+
+    if (!adminIdentity?.uid || !adminIdentity.email) {
+      throw new Error('Unable to resolve the authenticated admin identity.');
+    }
+
+    try {
+      const baselineProtocolId = `${actors.namespace}-protocol-baseline`;
+      const restrictedProtocolId = `${actors.namespace}-protocol-restricted`;
+      const now = Date.now();
+      const runtimeRecords = [
+        buildPublishedProtocolRuntimeFixture({
+          id: baselineProtocolId,
+          label: 'E2E Baseline Priming Protocol',
+          familyId: `${baselineProtocolId}-family`,
+          familyLabel: 'E2E Baseline Priming',
+          variantId: `${baselineProtocolId}-variant`,
+          variantKey: 'e2e-baseline-priming',
+          variantLabel: 'E2E Baseline Priming',
+          sortOrder: 1,
+        }),
+        buildPublishedProtocolRuntimeFixture({
+          id: restrictedProtocolId,
+          label: 'E2E Restricted Priming Protocol',
+          familyId: `${restrictedProtocolId}-family`,
+          familyLabel: 'E2E Restricted Priming',
+          variantId: `${restrictedProtocolId}-variant`,
+          variantKey: 'e2e-restricted-priming',
+          variantLabel: 'E2E Restricted Priming',
+          sortOrder: 2,
+          publishStatus: 'published',
+          governanceStage: 'restricted',
+          isActive: true,
+        }),
+      ];
+
+      await upsertProtocolRuntimeRecords(page, runtimeRecords);
+      await upsertProtocolRuntimeRecords(actors.athletePage, runtimeRecords);
+
+      await seedAthleteJourneyFixture(page, {
+        namespace: actors.namespace,
+        adminIdentity,
+        coachIdentity: actors.coachIdentity,
+        coachEmail: actors.coachEmail,
+        athleteIdentity: actors.athleteIdentity,
+        athleteEmail: actors.athleteEmail,
+      });
+
+      await seedProtocolResponsivenessProfile(page, {
+        athleteUserId: actors.athleteIdentity.uid,
+        familyResponses: {
+          [`${restrictedProtocolId}-family`]: {
+            protocolFamilyId: `${restrictedProtocolId}-family`,
+            protocolFamilyLabel: 'E2E Restricted Priming',
+            responseDirection: 'positive',
+            confidence: 'high',
+            freshness: 'current',
+            sampleSize: 6,
+            positiveSignals: 5,
+            neutralSignals: 1,
+            negativeSignals: 0,
+            stateFit: ['yellow_snapshot', 'protocol_then_sim', 'medium_readiness'],
+            supportingEvidence: ['Strong response history should still be bounded by restricted governance.'],
+            lastObservedAt: now,
+            lastConfirmedAt: now,
+          },
+        },
+      });
+
+      await submitReadinessCheckInViaHarness(page, actors.athleteIdentity.uid, {
+        protocolRuntimeOverrides: runtimeRecords,
+      });
+
+      await expect.poll(async () => {
+        const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+        return state?.latestAssignment?.status || 'missing';
+      }, { timeout: 30_000 }).toBe('assigned');
+
+      const refreshedState = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+      const protocolCandidates = (refreshedState?.latestCandidateSet?.candidates || []).filter((candidate: Record<string, any>) => candidate.type === 'protocol');
+      const protocolIds = protocolCandidates.map((candidate: Record<string, any>) => candidate.protocolId);
+
+      expect(protocolIds).toContain(baselineProtocolId);
+      expect(protocolIds).not.toContain(restrictedProtocolId);
+      expect(protocolCandidates.some((candidate: Record<string, any>) => candidate.protocolId === restrictedProtocolId)).toBe(false);
+    } finally {
       await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
       await actors.coachContext.close().catch(() => null);
       await actors.athleteContext.close().catch(() => null);

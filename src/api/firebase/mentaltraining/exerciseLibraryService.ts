@@ -36,6 +36,22 @@ function hasNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+function shouldFallbackToSeededLibrary(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return (
+    message.includes('requires an index')
+    || message.includes('code=failed-precondition')
+    || message.includes('code=unavailable')
+    || message.includes('Could not reach Cloud Firestore backend')
+  );
+}
+
+function getSeededExercises() {
+  return SEEDED_EXERCISES
+    .filter((exercise) => exercise.isActive)
+    .sort((left, right) => left.sortOrder - right.sortOrder);
+}
+
 export function isLaunchablePublishedExercise(exercise: MentalExercise | null | undefined): exercise is MentalExercise {
   return Boolean(
     exercise
@@ -63,27 +79,45 @@ export const simModuleLibraryService = {
    * Get all active exercises
    */
   async getAll(): Promise<MentalExercise[]> {
-    const q = query(
-      collection(db, COLLECTION),
-      where('isActive', '==', true),
-      orderBy('sortOrder', 'asc')
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map(d => exerciseFromFirestore(d.id, d.data()));
+    try {
+      const q = query(
+        collection(db, COLLECTION),
+        where('isActive', '==', true),
+        orderBy('sortOrder', 'asc')
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(d => exerciseFromFirestore(d.id, d.data()));
+    } catch (error) {
+      if (!shouldFallbackToSeededLibrary(error)) {
+        throw error;
+      }
+
+      console.warn('[exerciseLibraryService] Falling back to seeded exercise library for getAll:', error);
+      return getSeededExercises();
+    }
   },
 
   /**
    * Get exercises by category
    */
   async getByCategory(category: ExerciseCategory): Promise<MentalExercise[]> {
-    const q = query(
-      collection(db, COLLECTION),
-      where('category', '==', category),
-      where('isActive', '==', true),
-      orderBy('sortOrder', 'asc')
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map(d => exerciseFromFirestore(d.id, d.data()));
+    try {
+      const q = query(
+        collection(db, COLLECTION),
+        where('category', '==', category),
+        where('isActive', '==', true),
+        orderBy('sortOrder', 'asc')
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(d => exerciseFromFirestore(d.id, d.data()));
+    } catch (error) {
+      if (!shouldFallbackToSeededLibrary(error)) {
+        throw error;
+      }
+
+      console.warn('[exerciseLibraryService] Falling back to seeded exercise library for getByCategory:', error);
+      return getSeededExercises().filter((exercise) => exercise.category === category);
+    }
   },
 
   /**
@@ -99,17 +133,26 @@ export const simModuleLibraryService = {
   },
 
   async getBySimSpecId(simSpecId: string): Promise<MentalExercise | null> {
-    const q = query(
-      collection(db, COLLECTION),
-      where('simSpecId', '==', simSpecId)
-    );
-    const snap = await getDocs(q);
-    const docSnap = snap.docs
-      .map((entry) => exerciseFromFirestore(entry.id, entry.data()))
-      .filter((exercise) => exercise.isActive)
-      .sort((left, right) => left.sortOrder - right.sortOrder)[0];
-    if (!docSnap) return null;
-    return docSnap;
+    try {
+      const q = query(
+        collection(db, COLLECTION),
+        where('simSpecId', '==', simSpecId)
+      );
+      const snap = await getDocs(q);
+      const docSnap = snap.docs
+        .map((entry) => exerciseFromFirestore(entry.id, entry.data()))
+        .filter((exercise) => exercise.isActive)
+        .sort((left, right) => left.sortOrder - right.sortOrder)[0];
+      if (!docSnap) return null;
+      return docSnap;
+    } catch (error) {
+      if (!shouldFallbackToSeededLibrary(error)) {
+        throw error;
+      }
+
+      console.warn('[exerciseLibraryService] Falling back to seeded exercise library for getBySimSpecId:', error);
+      return getSeededExercises().find((exercise) => exercise.simSpecId === simSpecId) || null;
+    }
   },
 
   async getPublishedById(id: string): Promise<MentalExercise | null> {
@@ -126,13 +169,22 @@ export const simModuleLibraryService = {
    * Get exercises best for a specific use case
    */
   async getBestFor(useCase: string): Promise<MentalExercise[]> {
-    const q = query(
-      collection(db, COLLECTION),
-      where('bestFor', 'array-contains', useCase),
-      where('isActive', '==', true)
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map(d => exerciseFromFirestore(d.id, d.data()));
+    try {
+      const q = query(
+        collection(db, COLLECTION),
+        where('bestFor', 'array-contains', useCase),
+        where('isActive', '==', true)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(d => exerciseFromFirestore(d.id, d.data()));
+    } catch (error) {
+      if (!shouldFallbackToSeededLibrary(error)) {
+        throw error;
+      }
+
+      console.warn('[exerciseLibraryService] Falling back to seeded exercise library for getBestFor:', error);
+      return getSeededExercises().filter((exercise) => exercise.bestFor.includes(useCase));
+    }
   },
 
   /**
@@ -199,14 +251,23 @@ export const simModuleLibraryService = {
    * Get exercises by difficulty
    */
   async getByDifficulty(difficulty: ExerciseDifficulty): Promise<MentalExercise[]> {
-    const q = query(
-      collection(db, COLLECTION),
-      where('difficulty', '==', difficulty),
-      where('isActive', '==', true),
-      orderBy('sortOrder', 'asc')
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map(d => exerciseFromFirestore(d.id, d.data()));
+    try {
+      const q = query(
+        collection(db, COLLECTION),
+        where('difficulty', '==', difficulty),
+        where('isActive', '==', true),
+        orderBy('sortOrder', 'asc')
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(d => exerciseFromFirestore(d.id, d.data()));
+    } catch (error) {
+      if (!shouldFallbackToSeededLibrary(error)) {
+        throw error;
+      }
+
+      console.warn('[exerciseLibraryService] Falling back to seeded exercise library for getByDifficulty:', error);
+      return getSeededExercises().filter((exercise) => exercise.difficulty === difficulty);
+    }
   },
 };
 

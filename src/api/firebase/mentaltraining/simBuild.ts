@@ -350,7 +350,7 @@ export function buildPublishedVariantRecord(record: SimVariantRecord, publishedA
   const nextRecord: SimVariantRecord = {
     ...builtRecord,
     publishedAt,
-    publishedModuleId: builtRecord.moduleDraft?.moduleId ?? builtRecord.publishedModuleId,
+    publishedModuleId: builtRecord.publishedModuleId ?? builtRecord.moduleDraft?.moduleId,
     specStatus: builtRecord.specStatus === 'not-required' ? 'not-required' : 'complete',
     publishedSnapshot,
     lastPublishedFingerprint: builtRecord.sourceFingerprint,

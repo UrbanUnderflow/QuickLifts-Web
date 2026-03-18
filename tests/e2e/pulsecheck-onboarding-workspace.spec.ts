@@ -8,7 +8,8 @@ const remoteLoginToken = process.env.PLAYWRIGHT_REMOTE_LOGIN_TOKEN;
 const allowWriteTests = process.env.PLAYWRIGHT_ALLOW_WRITE_TESTS === 'true';
 const pulseCheckOrganizationId = process.env.PLAYWRIGHT_PULSECHECK_ORG_ID || '';
 const pulseCheckTeamId = process.env.PLAYWRIGHT_PULSECHECK_TEAM_ID || '';
-const pulseCheckNamespace = process.env.PLAYWRIGHT_E2E_NAMESPACE || 'e2e-pulsecheck';
+const pulseCheckNamespaceBase = process.env.PLAYWRIGHT_E2E_NAMESPACE || 'e2e-pulsecheck';
+const pulseCheckNamespace = `${pulseCheckNamespaceBase}-workspace`;
 const appBaseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 const appOrigin = new URL(appBaseURL).origin;
 let pulseCheckWorkspaceContextPromise: Promise<PulseCheckWorkspaceContext> | null = null;
@@ -261,6 +262,23 @@ function getAthleteRosterCard(page: Page, email: string) {
     .filter({ hasText: email })
     .filter({ hasText: /team membership/i })
     .last();
+}
+
+async function waitForAthleteRosterCard(page: Page, email: string) {
+  const rosterCard = getAthleteRosterCard(page, email);
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    if (await rosterCard.isVisible().catch(() => false)) {
+      return rosterCard;
+    }
+
+    await page.waitForTimeout(1500);
+    await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => null);
+    await waitForStableAppFrame(page);
+  }
+
+  await expect(rosterCard).toBeVisible({ timeout: 20_000 });
+  return rosterCard;
 }
 
 async function openAdminOnboardingModal(page: Page) {
@@ -664,6 +682,14 @@ test.describe('PulseCheck onboarding and team workspace', () => {
       const memberCard = getAdultMemberCard(page, adultEmail);
       await expect(memberCard).toBeVisible({ timeout: 20_000 });
       await expect(memberCard.getByText(new RegExp(adultTitle, 'i'))).toBeVisible({ timeout: 20_000 });
+
+      const invitedAdultPage = context.pages()[0];
+      await invitedAdultPage.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(invitedAdultPage);
+      await expect(invitedAdultPage).toHaveURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 });
+      await invitedAdultPage.reload({ waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(invitedAdultPage);
+      await expect(invitedAdultPage).toHaveURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 });
     } finally {
       await context.close();
     }
@@ -702,9 +728,16 @@ test.describe('PulseCheck onboarding and team workspace', () => {
 
     try {
       await page.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
-      const athleteRosterCard = getAthleteRosterCard(page, athleteEmail);
-      await expect(athleteRosterCard).toBeVisible({ timeout: 20_000 });
+      const athleteRosterCard = await waitForAthleteRosterCard(page, athleteEmail);
       await expect(athleteRosterCard).toContainText(/Ready/i);
+
+      const invitedAthletePage = context.pages()[0];
+      await invitedAthletePage.goto(teamWorkspacePath(workspaceContext), { waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(invitedAthletePage);
+      await expect(invitedAthletePage).toHaveURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 });
+      await invitedAthletePage.reload({ waitUntil: 'domcontentloaded' });
+      await waitForStableAppFrame(invitedAthletePage);
+      await expect(invitedAthletePage).toHaveURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 });
     } finally {
       await context.close();
     }

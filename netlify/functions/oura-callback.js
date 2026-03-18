@@ -60,7 +60,7 @@ exports.handler = async (event) => {
       400,
       redirectHtml({
         title: 'Missing State',
-        message: 'PulseCheck could not verify this Oura connection request.',
+        message: 'Pulse could not verify this Oura connection request.',
         redirectTo: buildRedirectTarget(DEFAULT_RETURN_TO, { status: 'error', error: 'missing_state' }),
       })
     );
@@ -125,7 +125,7 @@ exports.handler = async (event) => {
       400,
       redirectHtml({
         title: 'Missing Authorization Code',
-        message: 'Oura returned to PulseCheck without an authorization code.',
+        message: 'Oura returned to Pulse without an authorization code.',
         redirectTo: target,
       })
     );
@@ -178,7 +178,7 @@ exports.handler = async (event) => {
       200,
       redirectHtml({
         title: 'Oura Connected',
-        message: 'PulseCheck linked your Oura account successfully.',
+        message: 'Pulse linked your Oura account successfully.',
         redirectTo: target,
       })
     );
@@ -216,7 +216,7 @@ exports.handler = async (event) => {
       error.statusCode || 500,
       redirectHtml({
         title: 'Connection Failed',
-        message: error?.message || 'PulseCheck could not finish the Oura connection.',
+        message: error?.message || 'Pulse could not finish the Oura connection.',
         redirectTo: target,
       })
     );

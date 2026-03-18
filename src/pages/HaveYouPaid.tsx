@@ -10,6 +10,17 @@ const debounce = (fn: (...args: any[]) => void, delay = 250) => {
   };
 };
 
+const getExpectedTotal = (personType?: string) => {
+  switch (personType) {
+    case 'AdultUS': return 200;
+    case 'AdultCA': return 250;
+    case 'ChildUS': return 75;
+    case 'ChildCA': return 110;
+    case 'ChildUNDER6': return 0;
+    default: return 200; // default to AdultUS
+  }
+};
+
 const HaveYouPaidPage: React.FC = () => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<ReunionPaymentRecord[]>([]);
@@ -31,6 +42,7 @@ const HaveYouPaidPage: React.FC = () => {
   const [editNameModal, setEditNameModal] = useState<{open: boolean; row: ReunionPaymentRecord | null}>({ open: false, row: null });
   const [editedName, setEditedName] = useState<string>('');
   const [depositCount, setDepositCount] = useState<number>(0);
+  const [paidInFullCount, setPaidInFullCount] = useState<number>(0);
 
   const runSearch = useMemo(
     () => debounce(async (text: string) => {
@@ -77,6 +89,13 @@ const HaveYouPaidPage: React.FC = () => {
       (r.dec1Amount && r.dec1Amount > 0)
     ).length;
     setDepositCount(peopleWithDeposits);
+
+    const peoplePaidInFull = all.filter(r => {
+      const total = (r.apr1Amount ?? 0) + (r.aug1Amount ?? 0) + (r.dec1Amount ?? 0);
+      const expected = getExpectedTotal(r.personType);
+      return total >= expected && expected > 0; // Require expected > 0 so free entries don't artificially pump the counter, or adjust as needed
+    }).length;
+    setPaidInFullCount(peoplePaidInFull);
   };
 
   const _handleSave = async () => {
@@ -167,6 +186,13 @@ const HaveYouPaidPage: React.FC = () => {
         ).length;
         setDepositCount(peopleWithDeposits);
         
+        const peoplePaidInFull = all.filter(r => {
+          const total = (r.apr1Amount ?? 0) + (r.aug1Amount ?? 0) + (r.dec1Amount ?? 0);
+          const expected = getExpectedTotal(r.personType);
+          return total >= expected && expected > 0;
+        }).length;
+        setPaidInFullCount(peoplePaidInFull);
+        
         setLoadingRows(false);
       } catch (_e) {
         // silent
@@ -184,19 +210,35 @@ const HaveYouPaidPage: React.FC = () => {
         <div className="max-w-2xl mx-auto px-4 py-12">
           <h1 className="text-2xl md:text-3xl font-semibold mb-4">Have you paid up your balance for the Anderson Family Reunion?</h1>
           
-          {/* Exciting Deposit Counter */}
-          {depositCount > 0 && (
-            <div className="mb-6 p-4 rounded-lg bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-700/50">
-              <div className="text-center">
-                <div className="text-3xl md:text-4xl font-bold text-green-400 mb-1">
-                  {depositCount} {depositCount === 1 ? 'person has' : 'people have'}
-                </div>
-                <div className="text-lg md:text-xl text-green-300">
-                  put down deposits! 🎉
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {/* Exciting Deposit Counter */}
+            {depositCount > 0 && (
+              <div className="p-4 rounded-lg bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-700/50">
+                <div className="text-center">
+                  <div className="text-3xl md:text-4xl font-bold text-green-400 mb-1">
+                    {depositCount} {depositCount === 1 ? 'person has' : 'people have'}
+                  </div>
+                  <div className="text-lg md:text-xl text-green-300">
+                    put down deposits! 🎉
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+            
+            {/* Paid In Full Counter */}
+            {paidInFullCount > 0 && (
+              <div className="p-4 rounded-lg bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border border-blue-700/50">
+                <div className="text-center">
+                  <div className="text-3xl md:text-4xl font-bold text-blue-400 mb-1">
+                    {paidInFullCount} {paidInFullCount === 1 ? 'person has' : 'people have'}
+                  </div>
+                  <div className="text-lg md:text-xl text-blue-300">
+                    paid in full! 🌟
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
           
           <p className="text-gray-300 mb-6">Enter your name below to check.</p>
 
@@ -230,9 +272,11 @@ const HaveYouPaidPage: React.FC = () => {
               <div className="text-sm text-gray-300">
                 {(() => {
                   const total = (selected.apr1Amount ?? 0) + (selected.aug1Amount ?? 0) + (selected.dec1Amount ?? 0);
-                  const owed = Math.max(200 - total, 0);
+                  const expected = getExpectedTotal(selected.personType);
+                  const owed = Math.max(expected - total, 0);
                   return (
                     <>
+                      <div>Type: {selected.personType || 'AdultUS'}</div>
                       <div>Total Paid: ${total}</div>
                       <div>Amount Owed: ${owed}</div>
                     </>
@@ -275,6 +319,7 @@ const HaveYouPaidPage: React.FC = () => {
               <thead>
                 <tr className="text-gray-400 border-b border-gray-800">
                   <th className="text-left p-3">Name</th>
+                  <th className="text-left p-3">Type</th>
                   <th className="text-left p-3">Total Paid</th>
                   <th className="text-left p-3">Total Owed</th>
                   <th className="text-left p-3">Actions</th>
@@ -298,8 +343,26 @@ const HaveYouPaidPage: React.FC = () => {
                         }}
                       >{r.name}</button>
                     </td>
+                    <td className="p-3 text-gray-300">
+                      <select
+                        value={r.personType || 'AdultUS'}
+                        onChange={async (e) => {
+                          const newType = e.target.value;
+                          if (!r.id) return;
+                          await reunionPaymentsService.upsert({ ...r, personType: newType });
+                          setRows(prev => prev.map(x => x.id === r.id ? { ...x, personType: newType } : x));
+                        }}
+                        className="bg-[#1a1f28] border border-gray-700 rounded px-2 py-1 text-sm focus:outline-none"
+                      >
+                        <option value="AdultUS">AdultUS ($200)</option>
+                        <option value="AdultCA">AdultCA ($250)</option>
+                        <option value="ChildUS">ChildUS ($75)</option>
+                        <option value="ChildCA">ChildCA ($110)</option>
+                        <option value="ChildUNDER6">ChildUNDER6 (Free)</option>
+                      </select>
+                    </td>
                     <td className="p-3 text-gray-300">${(r.apr1Amount ?? 0) + (r.aug1Amount ?? 0) + (r.dec1Amount ?? 0)}</td>
-                    <td className="p-3 text-gray-300">${Math.max(200 - ((r.apr1Amount ?? 0) + (r.aug1Amount ?? 0) + (r.dec1Amount ?? 0)), 0)}</td>
+                    <td className="p-3 text-gray-300">${Math.max(getExpectedTotal(r.personType) - ((r.apr1Amount ?? 0) + (r.aug1Amount ?? 0) + (r.dec1Amount ?? 0)), 0)}</td>
                      <td className="p-3 text-gray-300">
                        <div className="flex gap-2">
                          <button
@@ -359,7 +422,8 @@ const HaveYouPaidPage: React.FC = () => {
                     onClick={async ()=>{
                       if (!paymentModal.row?.id) return;
                       const currentTotal = (paymentModal.row.apr1Amount ?? 0) + (paymentModal.row.aug1Amount ?? 0) + (paymentModal.row.dec1Amount ?? 0);
-                      const owed = Math.max(200 - currentTotal, 0);
+                      const expected = getExpectedTotal(paymentModal.row.personType);
+                      const owed = Math.max(expected - currentTotal, 0);
                       if (owed > 0) {
                         await reunionPaymentsService.addPaymentById(paymentModal.row.id, owed);
                         await refreshTableAndCount();

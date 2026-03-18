@@ -15,6 +15,7 @@ export type ReunionPaymentRecord = {
   id?: string;
   name: string; // Full name to search
   notes?: string; // optional notes
+  personType?: 'Adult' | 'Child 7-16' | 'Child 6 and under' | string; // Optional person type to determine expected total and balance
   // simple milestone booleans or amounts for dates
   apr1Amount?: number; // amount paid by Apr 1st
   aug1Amount?: number; // amount paid by Aug 1st
@@ -54,6 +55,7 @@ export const reunionPaymentsService = {
       if (record.aug1Note !== undefined) updateData.aug1Note = record.aug1Note;
       if (record.dec1Note !== undefined) updateData.dec1Note = record.dec1Note;
       if (record.notes !== undefined) updateData.notes = record.notes;
+      if (record.personType !== undefined) updateData.personType = record.personType;
       
       await updateDoc(docRef, updateData);
       return record.id;
@@ -84,6 +86,7 @@ export const reunionPaymentsService = {
       if (record.aug1Note !== undefined) updateData.aug1Note = record.aug1Note;
       if (record.dec1Note !== undefined) updateData.dec1Note = record.dec1Note;
       if (record.notes !== undefined) updateData.notes = record.notes;
+      if (record.personType !== undefined) updateData.personType = record.personType;
       
       await updateDoc(existing.ref, updateData);
       return existing.id;
