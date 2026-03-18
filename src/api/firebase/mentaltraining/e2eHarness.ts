@@ -19,6 +19,7 @@ import {
   ATHLETE_MENTAL_PROGRESS_COLLECTION,
   PULSECHECK_ASSIGNMENT_CANDIDATE_SETS_COLLECTION,
   PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION,
+  PULSECHECK_PROTOCOLS_COLLECTION,
   PULSECHECK_PROTOCOL_RESPONSIVENESS_PROFILES_COLLECTION,
   PULSECHECK_STATE_SNAPSHOTS_COLLECTION,
   SIM_CHECKINS_ROOT,
@@ -30,6 +31,7 @@ import { athleteProgressService } from './athleteProgressService';
 import { assignmentOrchestratorService } from './assignmentOrchestratorService';
 import { completionService } from './completionService';
 import { simModuleLibraryService } from './exerciseLibraryService';
+import { protocolRegistryService } from './protocolRegistryService';
 import { BiggestChallenge, ExerciseCategory } from './types';
 
 const E2E_HISTORY_COLLECTION = 'history';
@@ -874,6 +876,9 @@ async function cleanupPulseCheckAthleteJourneyFixture(
     deleteQueryDocs(db, COACH_NOTIFICATIONS_COLLECTION, 'coachId', input.coachUserId),
   ]);
 
+  const protocolIds = await listPrefixedDocIds(db, PULSECHECK_PROTOCOLS_COLLECTION, buildPrefix(input.namespace));
+  await Promise.all(protocolIds.map((id) => deleteDoc(doc(db, PULSECHECK_PROTOCOLS_COLLECTION, id)).catch(() => undefined)));
+
   await Promise.all([
     deleteDoc(doc(db, PULSECHECK_PROTOCOL_RESPONSIVENESS_PROFILES_COLLECTION, input.athleteUserId)).catch(() => undefined),
     deleteDoc(doc(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, input.athleteUserId)).catch(() => undefined),
@@ -964,6 +969,60 @@ async function seedPulseCheckProtocolResponsivenessProfile(
   );
 
   return { id: input.athleteUserId, ...profile };
+}
+
+async function capturePulseCheckProtocolRuntimeRecords(
+  db: Firestore,
+  input: {
+    protocolIds?: string[];
+    protocolClass?: string;
+  }
+) {
+  const protocolIds = Array.isArray(input.protocolIds) ? new Set(input.protocolIds.filter(Boolean)) : null;
+  const snap = await getDocs(collection(db, PULSECHECK_PROTOCOLS_COLLECTION));
+
+  return snap.docs
+    .map((entry) => ({ id: entry.id, ...(entry.data() as Record<string, any>) } as Record<string, any> & { id: string }))
+    .filter((record) => {
+      if (protocolIds && !protocolIds.has(record.id)) {
+        return false;
+      }
+      if (input.protocolClass && record.protocolClass !== input.protocolClass) {
+        return false;
+      }
+      return true;
+    });
+}
+
+async function upsertPulseCheckProtocolRuntimeRecords(
+  db: Firestore,
+  input: {
+    records: Array<Record<string, any>>;
+  }
+) {
+  const records = Array.isArray(input.records) ? input.records.filter((record) => record && typeof record.id === 'string' && record.id.trim()) : [];
+  await Promise.all(
+    records.map((record) =>
+      setDoc(doc(db, PULSECHECK_PROTOCOLS_COLLECTION, record.id), record, { merge: true })
+    )
+  );
+
+  return { updatedIds: records.map((record) => record.id) };
+}
+
+async function deletePulseCheckProtocolRuntimeRecords(
+  db: Firestore,
+  input: {
+    protocolIds: string[];
+  }
+) {
+  const protocolIds = Array.isArray(input.protocolIds) ? input.protocolIds.filter(Boolean) : [];
+  await Promise.all(protocolIds.map((protocolId) => deleteDoc(doc(db, PULSECHECK_PROTOCOLS_COLLECTION, protocolId))));
+  return { deletedIds: protocolIds };
+}
+
+async function syncPulseCheckProtocolRegistrySeeds() {
+  return protocolRegistryService.syncSeedProtocols();
 }
 
 async function seedPulseCheckProtocolAssignmentFixture(
@@ -1333,6 +1392,17 @@ export interface PulseE2EHarness {
     protocolId?: string;
     sourceDate?: string;
   }) => Promise<Record<string, any>>;
+  capturePulseCheckProtocolRuntimeRecords: (input: {
+    protocolIds?: string[];
+    protocolClass?: string;
+  }) => Promise<Record<string, any>[]>;
+  upsertPulseCheckProtocolRuntimeRecords: (input: {
+    records: Array<Record<string, any>>;
+  }) => Promise<Record<string, any>>;
+  deletePulseCheckProtocolRuntimeRecords: (input: {
+    protocolIds: string[];
+  }) => Promise<Record<string, any>>;
+  syncPulseCheckProtocolRegistrySeeds: () => Promise<Record<string, any>>;
   inspectLegacyCoachRosterFixture: (namespace: string) => Promise<Record<string, any>>;
   inspectVariant: (variantId: string) => Promise<Record<string, any> | null>;
 }
@@ -1398,6 +1468,10 @@ export function installPulseE2EHarness(db: Firestore) {
     upsertPulseCheckCoachNotifications: (input) => upsertCoachNotificationDocs(db, input),
     seedPulseCheckProtocolResponsivenessProfile: (input) => seedPulseCheckProtocolResponsivenessProfile(db, input),
     seedPulseCheckProtocolAssignmentFixture: (input) => seedPulseCheckProtocolAssignmentFixture(db, input),
+    capturePulseCheckProtocolRuntimeRecords: (input) => capturePulseCheckProtocolRuntimeRecords(db, input),
+    upsertPulseCheckProtocolRuntimeRecords: (input) => upsertPulseCheckProtocolRuntimeRecords(db, input),
+    deletePulseCheckProtocolRuntimeRecords: (input) => deletePulseCheckProtocolRuntimeRecords(db, input),
+    syncPulseCheckProtocolRegistrySeeds: () => syncPulseCheckProtocolRegistrySeeds(),
     inspectLegacyCoachRosterFixture: (namespace: string) => inspectLegacyCoachRosterFixture(db, namespace),
     inspectVariant: async (variantId: string) => {
       const snap = await getDoc(doc(db, SIM_VARIANTS_COLLECTION, variantId));

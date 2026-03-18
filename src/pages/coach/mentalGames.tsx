@@ -63,6 +63,7 @@ import {
   PULSECHECK_ASSIGNMENT_REVISIONS_SUBCOLLECTION,
   PulseCheckProtocolResponsivenessProfile,
   PulseCheckProtocolResponsivenessSummary,
+  PulseCheckPlannerAuditCandidate,
   PulseCheckStateSnapshot,
   PULSECHECK_ASSIGNMENT_EVENTS_COLLECTION,
   PULSECHECK_CONVERSATION_SIGNAL_EVENTS_COLLECTION,
@@ -225,6 +226,58 @@ function getDailyAssignmentActionLabel(assignment: PulseCheckDailyAssignment): s
 function formatEventTimestamp(value?: number): string {
   if (!value) return 'Unknown time';
   return new Date(value).toLocaleString();
+}
+
+function formatProtocolAuditTrace(assignment: PulseCheckDailyAssignment): string[] {
+  const lines: string[] = [];
+
+  if (assignment.protocolFamilyId) {
+    lines.push(`Family: ${humanizeRuntimeLabel(assignment.protocolFamilyId)}`);
+  }
+
+  if (assignment.protocolVariantLabel || assignment.protocolVariantId || assignment.protocolVariantVersion) {
+    const variantLead = assignment.protocolVariantLabel || humanizeRuntimeLabel(assignment.protocolVariantId) || 'Unknown variant';
+    const variantVersion = assignment.protocolVariantVersion ? ` (${assignment.protocolVariantVersion})` : '';
+    lines.push(`Variant: ${variantLead}${variantVersion}`);
+  }
+
+  if (assignment.protocolPublishedAt) {
+    lines.push(`Published: ${formatEventTimestamp(assignment.protocolPublishedAt)}`);
+  }
+
+  if (assignment.protocolPublishedRevisionId) {
+    lines.push(`Published revision: ${assignment.protocolPublishedRevisionId}`);
+  }
+
+  if (assignment.protocolId) {
+    lines.push(`Runtime id: ${assignment.protocolId}`);
+  }
+
+  return lines;
+}
+
+function formatPlannerAuditCandidateTrace(candidate: PulseCheckPlannerAuditCandidate): string[] {
+  const lines: string[] = [];
+
+  if (candidate.protocolFamilyId) {
+    lines.push(`Family ${humanizeRuntimeLabel(candidate.protocolFamilyId)}`);
+  }
+
+  if (candidate.protocolVariantLabel || candidate.protocolVariantVersion) {
+    const variantLead = candidate.protocolVariantLabel || 'Published runtime variant';
+    const variantVersion = candidate.protocolVariantVersion ? ` ${candidate.protocolVariantVersion}` : '';
+    lines.push(`Variant ${variantLead}${variantVersion}`);
+  }
+
+  if (candidate.protocolPublishedAt) {
+    lines.push(`Published ${formatEventTimestamp(candidate.protocolPublishedAt)}`);
+  }
+
+  if (candidate.protocolPublishedRevisionId) {
+    lines.push(`Revision ${candidate.protocolPublishedRevisionId}`);
+  }
+
+  return lines;
 }
 
 function getAssignmentEventLabel(eventType: PulseCheckAssignmentEvent['eventType']): string {
@@ -1812,6 +1865,21 @@ const CoachMentalTraining: React.FC = () => {
                                 <div className="mt-2 text-xs text-zinc-500">
                                   Updated {formatEventTimestamp(assignment.updatedAt)}
                                 </div>
+                                {assignment.protocolId ? (
+                                  <div className="mt-3 space-y-2">
+                                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Assignment Audit Trace</div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {formatProtocolAuditTrace(assignment).map((item) => (
+                                        <span
+                                          key={`${assignment.id}-protocol-trace-${item}`}
+                                          className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] text-zinc-300"
+                                        >
+                                          {item}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : null}
                               </div>
                               {assignment.plannerAudit?.rankedCandidates?.length ? (
                                 <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-3 space-y-3">
@@ -1845,6 +1913,18 @@ const CoachMentalTraining: React.FC = () => {
                                         <div className="mt-2 text-sm text-zinc-300">
                                           {candidate.rationale}
                                         </div>
+                                        {candidate.protocolId ? (
+                                          <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-zinc-400">
+                                            {formatPlannerAuditCandidateTrace(candidate).map((item) => (
+                                              <span
+                                                key={`${assignment.id}-planner-audit-trace-${candidate.candidateId}-${item}`}
+                                                className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1"
+                                              >
+                                                {item}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : null}
                                         {(candidate.responsivenessConfidence || candidate.responsivenessFreshness) && (
                                           <div className="mt-2 flex flex-wrap gap-2 text-xs">
                                             {candidate.responsivenessConfidence && (
@@ -1880,6 +1960,18 @@ const CoachMentalTraining: React.FC = () => {
                                       <div className="mt-1 text-sm text-zinc-300">
                                         {getDailyAssignmentActionLabel(revision)}
                                       </div>
+                                      {revision.protocolId ? (
+                                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-zinc-400">
+                                          {formatProtocolAuditTrace(revision).map((item) => (
+                                            <span
+                                              key={`${assignment.id}-revision-trace-${revision.revision}-${item}`}
+                                              className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1"
+                                            >
+                                              {item}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      ) : null}
                                       <div className="mt-1 text-xs text-zinc-500 capitalize">
                                         {revision.status}
                                         {typeof revision.supersededByRevision === 'number' ? ` -> superseded by r${revision.supersededByRevision}` : ''}

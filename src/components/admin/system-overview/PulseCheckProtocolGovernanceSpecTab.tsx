@@ -1,6 +1,16 @@
 import React from 'react';
-import { AlertTriangle, BookCopy, Compass, GitBranch, ShieldCheck, TestTube2 } from 'lucide-react';
+import { AlertTriangle, BookCopy, Compass, GitBranch, ShieldCheck, TestTube2, FileText, Bot, Radar, ClipboardCheck, Shield, LineChart, History, Wrench } from 'lucide-react';
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock } from './PulseCheckRuntimeDocPrimitives';
+import ArtifactPageLibrary, { ArtifactPageEntry } from './ArtifactPageLibrary';
+import PulseCheckProtocolAuthoringWorkflowTab from './PulseCheckProtocolAuthoringWorkflowTab';
+import PulseCheckProtocolResponsivenessProfileSpecTab from './PulseCheckProtocolResponsivenessProfileSpecTab';
+import PulseCheckProtocolResponsivenessInspectorTab from './PulseCheckProtocolResponsivenessInspectorTab';
+import PulseCheckProtocolLaunchReadinessTab from './PulseCheckProtocolLaunchReadinessTab';
+import PulseCheckProtocolPlannerPolicyEnforcementTab from './PulseCheckProtocolPlannerPolicyEnforcementTab';
+import PulseCheckProtocolEvidenceDashboardTab from './PulseCheckProtocolEvidenceDashboardTab';
+import PulseCheckProtocolRevisionAuditTraceTab from './PulseCheckProtocolRevisionAuditTraceTab';
+import PulseCheckProtocolOpsRunbookTab from './PulseCheckProtocolOpsRunbookTab';
+import PulseCheckProtocolLaunchQaMatrixTab from './PulseCheckProtocolLaunchQaMatrixTab';
 
 const PRINCIPLE_ROWS = [
   ['Protocols are state interventions, not content cards', 'A protocol exists to change athlete state so a rep, trial, or recovery window becomes more useful.'],
@@ -62,7 +72,7 @@ const GAP_ROWS = [
   ['Sequencing model', 'Protocols are still mostly selected as single records, not as reviewed bundles or sequence patterns. This is explicitly deferred to v2.'],
 ];
 
-const PulseCheckProtocolGovernanceSpecTab: React.FC = () => {
+const ProtocolGovernanceOverviewDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
@@ -164,6 +174,100 @@ const PulseCheckProtocolGovernanceSpecTab: React.FC = () => {
         />
       </SectionBlock>
     </div>
+  );
+};
+
+const PROTOCOL_SYSTEM_PAGES: ArtifactPageEntry[] = [
+  {
+    id: 'governance-overview',
+    label: 'Governance Overview',
+    subtitle: 'Ontology, lifecycle, evidence model, and review rules for protocols.',
+    icon: FileText,
+    accent: '#c084fc',
+    render: () => <ProtocolGovernanceOverviewDoc />,
+  },
+  {
+    id: 'authoring-workflow',
+    label: 'Authoring Workflow',
+    subtitle: 'Workspace, publish controls, change classes, and revision model.',
+    icon: Bot,
+    accent: '#38bdf8',
+    render: () => <PulseCheckProtocolAuthoringWorkflowTab />,
+  },
+  {
+    id: 'responsiveness-profile',
+    label: 'Responsiveness Profile Spec',
+    subtitle: 'Athlete-level protocol response memory and planner weighting.',
+    icon: Radar,
+    accent: '#22c55e',
+    render: () => <PulseCheckProtocolResponsivenessProfileSpecTab />,
+  },
+  {
+    id: 'responsiveness-inspector',
+    label: 'Responsiveness Inspector',
+    subtitle: 'Read-only operator surface for browsing responsiveness memory.',
+    icon: Compass,
+    accent: '#f59e0b',
+    render: () => <PulseCheckProtocolResponsivenessInspectorTab />,
+  },
+  {
+    id: 'launch-readiness',
+    label: 'Launch Readiness',
+    subtitle: 'Go / no-go launch gates for registry, evidence, ops, and QA.',
+    icon: ClipboardCheck,
+    accent: '#14b8a6',
+    render: () => <PulseCheckProtocolLaunchReadinessTab />,
+  },
+  {
+    id: 'planner-policy',
+    label: 'Planner Policy Enforcement',
+    subtitle: 'Eligibility, filtering order, validator rules, and failure handling.',
+    icon: Shield,
+    accent: '#ef4444',
+    render: () => <PulseCheckProtocolPlannerPolicyEnforcementTab />,
+  },
+  {
+    id: 'evidence-dashboard',
+    label: 'Evidence Dashboard',
+    subtitle: 'Monitoring and review dashboard for protocol effectiveness and risk.',
+    icon: LineChart,
+    accent: '#06b6d4',
+    render: () => <PulseCheckProtocolEvidenceDashboardTab />,
+  },
+  {
+    id: 'revision-audit',
+    label: 'Revision & Audit Trace',
+    subtitle: 'Lineage, planner traceability, and assignment provenance.',
+    icon: History,
+    accent: '#f97316',
+    render: () => <PulseCheckProtocolRevisionAuditTraceTab />,
+  },
+  {
+    id: 'ops-runbook',
+    label: 'Ops Runbook',
+    subtitle: 'Operational containment, triage, ownership, and recovery playbook.',
+    icon: Wrench,
+    accent: '#fb7185',
+    render: () => <PulseCheckProtocolOpsRunbookTab />,
+  },
+  {
+    id: 'launch-qa-matrix',
+    label: 'Launch QA Matrix',
+    subtitle: 'Launch-blocking scenario matrix for readiness and audit visibility.',
+    icon: TestTube2,
+    accent: '#eab308',
+    render: () => <PulseCheckProtocolLaunchQaMatrixTab />,
+  },
+];
+
+const PulseCheckProtocolGovernanceSpecTab: React.FC = () => {
+  return (
+    <ArtifactPageLibrary
+      eyebrow="Pulse Check · Protocol System"
+      title="Protocol System Library"
+      summary="Governance parent artifact with internal pages for protocol authoring, responsiveness, launch controls, evidence, auditability, and live-ops discipline."
+      entries={PROTOCOL_SYSTEM_PAGES}
+    />
   );
 };
 

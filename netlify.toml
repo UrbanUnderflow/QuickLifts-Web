@@ -323,3 +323,8 @@
 [functions.award-round-badges]
   # Runs at 3 AM UTC (after challenge-status updater)
   schedule = "0 3 * * *"
+
+# Protocol Ops Monitoring: checks volume, defer/override, and negative-response alerts
+[functions.scheduled-pulsecheck-protocol-monitoring]
+  # Runs every 6 hours and sends a Brevo alert when protocol monitoring thresholds trip.
+  schedule = "0 */6 * * *"

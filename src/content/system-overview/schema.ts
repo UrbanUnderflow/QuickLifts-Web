@@ -143,6 +143,7 @@ export interface SystemOverviewSection {
   id: string;
   label: string;
   description: string;
+  parentSectionId?: string;
 }
 
 export interface SystemOverviewManifest {

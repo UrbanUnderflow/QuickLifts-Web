@@ -38,6 +38,12 @@ import PulseCheckProtocolGovernanceSpecTab from "../../components/admin/system-o
 import PulseCheckProtocolAuthoringWorkflowTab from "../../components/admin/system-overview/PulseCheckProtocolAuthoringWorkflowTab";
 import PulseCheckProtocolResponsivenessProfileSpecTab from "../../components/admin/system-overview/PulseCheckProtocolResponsivenessProfileSpecTab";
 import PulseCheckProtocolResponsivenessInspectorTab from "../../components/admin/system-overview/PulseCheckProtocolResponsivenessInspectorTab";
+import PulseCheckProtocolLaunchReadinessTab from "../../components/admin/system-overview/PulseCheckProtocolLaunchReadinessTab";
+import PulseCheckProtocolPlannerPolicyEnforcementTab from "../../components/admin/system-overview/PulseCheckProtocolPlannerPolicyEnforcementTab";
+import PulseCheckProtocolEvidenceDashboardTab from "../../components/admin/system-overview/PulseCheckProtocolEvidenceDashboardTab";
+import PulseCheckProtocolRevisionAuditTraceTab from "../../components/admin/system-overview/PulseCheckProtocolRevisionAuditTraceTab";
+import PulseCheckProtocolOpsRunbookTab from "../../components/admin/system-overview/PulseCheckProtocolOpsRunbookTab";
+import PulseCheckProtocolLaunchQaMatrixTab from "../../components/admin/system-overview/PulseCheckProtocolLaunchQaMatrixTab";
 import SimFamilySpecTab from "../../components/admin/system-overview/SimFamilySpecTab";
 import AthleteJourneyTab from "../../components/admin/system-overview/AthleteJourneyTab";
 import CoachJourneyTab from "../../components/admin/system-overview/CoachJourneyTab";
@@ -151,6 +157,12 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-protocol-authoring-workflow",
       "pulsecheck-protocol-responsiveness-profile-spec",
       "pulsecheck-protocol-responsiveness-inspector",
+      "pulsecheck-protocol-launch-readiness",
+      "pulsecheck-protocol-planner-policy-enforcement",
+      "pulsecheck-protocol-evidence-dashboard",
+      "pulsecheck-protocol-revision-audit-trace",
+      "pulsecheck-protocol-ops-runbook",
+      "pulsecheck-protocol-launch-qa-matrix",
       "sim-family-specs",
       "athlete-journey",
       "coach-journey",
@@ -244,6 +256,11 @@ function getSystemForSection(sectionId: string): string {
     if (tab.sectionIds.includes(sectionId)) return tab.id;
   }
   return SYSTEM_TABS[0].id;
+}
+
+function getArtifactRootSectionId(sectionId: string): string {
+  const section = systemOverviewManifest.sections.find((item) => item.id === sectionId);
+  return section?.parentSectionId ?? sectionId;
 }
 
 function EcosystemMap({
@@ -342,7 +359,7 @@ const SystemOverviewPage: React.FC = () => {
   const filteredSections = useMemo(
     () =>
       systemOverviewManifest.sections.filter((s) =>
-        activeSystemTab.sectionIds.includes(s.id),
+        activeSystemTab.sectionIds.includes(s.id) && !s.parentSectionId,
       ),
     [activeSystemTab],
   );
@@ -351,7 +368,12 @@ const SystemOverviewPage: React.FC = () => {
     trimmedHandbookSearchQuery.toLowerCase();
   const handbookSearchIndex = useMemo(
     () =>
-      systemOverviewManifest.sections.map((section) => {
+      systemOverviewManifest.sections
+      .filter((section) => !section.parentSectionId)
+      .map((section) => {
+        const childSections = systemOverviewManifest.sections.filter(
+          (candidate) => candidate.parentSectionId === section.id,
+        );
         const systemId = getSystemForSection(section.id);
         const systemTab =
           SYSTEM_TABS.find((tab) => tab.id === systemId) || SYSTEM_TABS[0];
@@ -360,6 +382,11 @@ const SystemOverviewPage: React.FC = () => {
           section.description,
           section.id.replace(/-/g, " "),
           systemTab.label,
+          ...childSections.flatMap((child) => [
+            child.label,
+            child.description,
+            child.id.replace(/-/g, " "),
+          ]),
         ];
 
         switch (section.id) {
@@ -485,9 +512,10 @@ const SystemOverviewPage: React.FC = () => {
         (s) => s.id === hash,
       );
       if (matchingSection) {
-        setActiveSectionId(hash);
+        const rootSectionId = getArtifactRootSectionId(hash);
+        setActiveSectionId(rootSectionId);
         // Also set the correct system tab
-        setActiveSystemId(getSystemForSection(hash));
+        setActiveSystemId(getSystemForSection(rootSectionId));
       }
     }
   }, []);
@@ -513,8 +541,9 @@ const SystemOverviewPage: React.FC = () => {
   };
 
   const handleHandbookSearchResultSelect = (sectionId: string) => {
-    setActiveSystemId(getSystemForSection(sectionId));
-    handleSectionChange(sectionId);
+    const rootSectionId = getArtifactRootSectionId(sectionId);
+    setActiveSystemId(getSystemForSection(rootSectionId));
+    handleSectionChange(rootSectionId);
   };
 
   const handleHandbookSearchSubmit = (
@@ -1185,6 +1214,24 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-protocol-responsiveness-inspector":
         return <PulseCheckProtocolResponsivenessInspectorTab />;
+
+      case "pulsecheck-protocol-launch-readiness":
+        return <PulseCheckProtocolLaunchReadinessTab />;
+
+      case "pulsecheck-protocol-planner-policy-enforcement":
+        return <PulseCheckProtocolPlannerPolicyEnforcementTab />;
+
+      case "pulsecheck-protocol-evidence-dashboard":
+        return <PulseCheckProtocolEvidenceDashboardTab />;
+
+      case "pulsecheck-protocol-revision-audit-trace":
+        return <PulseCheckProtocolRevisionAuditTraceTab />;
+
+      case "pulsecheck-protocol-ops-runbook":
+        return <PulseCheckProtocolOpsRunbookTab />;
+
+      case "pulsecheck-protocol-launch-qa-matrix":
+        return <PulseCheckProtocolLaunchQaMatrixTab />;
 
       case "sim-family-specs":
         return <SimFamilySpecTab />;

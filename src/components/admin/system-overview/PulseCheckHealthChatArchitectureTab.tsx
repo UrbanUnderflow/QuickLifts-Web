@@ -1,6 +1,17 @@
-import React from 'react';
-import { Activity, AlertTriangle, ArrowRightLeft, Brain, Database, MessageSquareQuote, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Activity, AlertTriangle, ArrowRightLeft, Brain, ChevronRight, Database, FileText, MessageSquareQuote, ShieldCheck, Wrench, Workflow } from 'lucide-react';
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
+import PulseCheckAthleteHealthContextSnapshotSpecTab from './PulseCheckAthleteHealthContextSnapshotSpecTab';
+import PulseCheckHealthContextSourceRecordSpecTab from './PulseCheckHealthContextSourceRecordSpecTab';
+import PulseCheckHealthContextSnapshotAssemblerSpecTab from './PulseCheckHealthContextSnapshotAssemblerSpecTab';
+import PulseCheckHealthContextPersistenceStorageSpecTab from './PulseCheckHealthContextPersistenceStorageSpecTab';
+import PulseCheckHealthContextOperationalOrchestrationSpecTab from './PulseCheckHealthContextOperationalOrchestrationSpecTab';
+import PulseCheckHealthContextImplementationRolloutPlanTab from './PulseCheckHealthContextImplementationRolloutPlanTab';
+import PulseCheckHealthContextOperatorRunbookTab from './PulseCheckHealthContextOperatorRunbookTab';
+import PulseCheckHealthContextDefinitionOfDoneTab from './PulseCheckHealthContextDefinitionOfDoneTab';
+import PulseCheckHealthContextEngineeringTaskBreakdownTab from './PulseCheckHealthContextEngineeringTaskBreakdownTab';
+import PulseCheckHealthContextFirestoreSchemaIndexSpecTab from './PulseCheckHealthContextFirestoreSchemaIndexSpecTab';
 
 const LIVE_NOW_ROWS = [
   ['Shared Firestore health summary', 'PulseCheck can read `daily-health-summaries` from the shared Firebase stack.', 'Live and already important.'],
@@ -124,12 +135,21 @@ const ROADMAP_ROWS = [
   ['Phase 5', 'Route Nora, proactive alerts, and coach views through the canonical snapshot plus audit events and role-aware privacy filters.', 'This makes the system robust, debuggable, and safe to scale.'],
 ];
 
-const PulseCheckHealthChatArchitectureTab: React.FC = () => {
+interface HealthContextDocEntry {
+  id: string;
+  label: string;
+  subtitle: string;
+  icon: React.ElementType;
+  accent: string;
+  render: () => React.ReactNode;
+}
+
+const HealthContextArchitectureOverviewDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
         eyebrow="PulseCheck Health Context"
-        title="Health Context & Ingestion Architecture"
+        title="Health Context Pipeline"
         version="Version 0.2 | March 17, 2026"
         summary="Source-of-truth artifact for how PulseCheck should build robust athlete health context across the shared FitWithPulse ecosystem and its own standalone capture stack. This document covers current reality, target ingestion lanes, canonical context design, and the rollout path for making Nora meaningfully aware of workouts, recovery, health, and daily athlete state."
         highlights={[
@@ -222,6 +242,182 @@ const PulseCheckHealthChatArchitectureTab: React.FC = () => {
       <SectionBlock icon={ShieldCheck} title="Implementation Roadmap">
         <DataTable columns={['Phase', 'Scope', 'Why It Comes Next']} rows={ROADMAP_ROWS} />
       </SectionBlock>
+    </div>
+  );
+};
+
+const HEALTH_CONTEXT_DOCS: HealthContextDocEntry[] = [
+  {
+    id: 'architecture',
+    label: 'Architecture Overview',
+    subtitle: 'Current reality, target lanes, canonical context design, and rollout path.',
+    icon: Brain,
+    accent: '#a78bfa',
+    render: () => <HealthContextArchitectureOverviewDoc />,
+  },
+  {
+    id: 'snapshot-spec',
+    label: 'Athlete Context Snapshot Spec',
+    subtitle: 'Canonical merged athlete-health snapshot contract.',
+    icon: Database,
+    accent: '#38bdf8',
+    render: () => <PulseCheckAthleteHealthContextSnapshotSpecTab />,
+  },
+  {
+    id: 'source-record-spec',
+    label: 'Source Record Spec',
+    subtitle: 'Normalized source-record contract for adapter output.',
+    icon: ArrowRightLeft,
+    accent: '#22c55e',
+    render: () => <PulseCheckHealthContextSourceRecordSpecTab />,
+  },
+  {
+    id: 'snapshot-assembler-spec',
+    label: 'Snapshot Assembler Spec',
+    subtitle: 'Merge-engine rules for daily and rolling context snapshots.',
+    icon: Workflow,
+    accent: '#f59e0b',
+    render: () => <PulseCheckHealthContextSnapshotAssemblerSpecTab />,
+  },
+  {
+    id: 'persistence-storage-spec',
+    label: 'Persistence & Storage Spec',
+    subtitle: 'Storage model for records, snapshots, traces, and status.',
+    icon: Database,
+    accent: '#f97316',
+    render: () => <PulseCheckHealthContextPersistenceStorageSpecTab />,
+  },
+  {
+    id: 'operational-orchestration-spec',
+    label: 'Operational Orchestration Spec',
+    subtitle: 'Connector lifecycle, sync scheduling, retries, and stale handling.',
+    icon: Activity,
+    accent: '#14b8a6',
+    render: () => <PulseCheckHealthContextOperationalOrchestrationSpecTab />,
+  },
+  {
+    id: 'implementation-rollout-plan',
+    label: 'Implementation Rollout Plan',
+    subtitle: 'Milestones for MVP, migration, ownership, and cutover.',
+    icon: Wrench,
+    accent: '#eab308',
+    render: () => <PulseCheckHealthContextImplementationRolloutPlanTab />,
+  },
+  {
+    id: 'operator-runbook',
+    label: 'Operator Runbook',
+    subtitle: 'Validation, parity checks, backfill, and rollout readiness steps.',
+    icon: ShieldCheck,
+    accent: '#fb7185',
+    render: () => <PulseCheckHealthContextOperatorRunbookTab />,
+  },
+  {
+    id: 'definition-of-done',
+    label: 'Definition Of Done',
+    subtitle: 'True completion criteria versus optional follow-on work.',
+    icon: FileText,
+    accent: '#94a3b8',
+    render: () => <PulseCheckHealthContextDefinitionOfDoneTab />,
+  },
+  {
+    id: 'engineering-task-breakdown',
+    label: 'Engineering Task Breakdown',
+    subtitle: 'Execution workstream breakdown across platform, product, ops, and QA.',
+    icon: Wrench,
+    accent: '#ef4444',
+    render: () => <PulseCheckHealthContextEngineeringTaskBreakdownTab />,
+  },
+  {
+    id: 'firestore-schema-index-spec',
+    label: 'Firestore Schema & Index Spec',
+    subtitle: 'Collection, query, and composite-index contract for the health-context system.',
+    icon: Database,
+    accent: '#06b6d4',
+    render: () => <PulseCheckHealthContextFirestoreSchemaIndexSpecTab />,
+  },
+];
+
+const PulseCheckHealthChatArchitectureTab: React.FC = () => {
+  const [activeDocId, setActiveDocId] = useState<string>(HEALTH_CONTEXT_DOCS[0].id);
+
+  const activeDoc = HEALTH_CONTEXT_DOCS.find((doc) => doc.id === activeDocId) || HEALTH_CONTEXT_DOCS[0];
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <FileText className="w-4 h-4 text-purple-400" />
+          <p className="text-xs uppercase tracking-wide text-purple-400 font-semibold">
+            Pulse Check · Health Context Pipeline
+          </p>
+        </div>
+        <h2 className="text-xl font-semibold text-white">Health Context Pipeline Library</h2>
+        <p className="text-sm text-zinc-400 mt-1">
+          Architecture parent artifact with internal pages for the related health-context contracts, rollout docs, and operating specs.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        {HEALTH_CONTEXT_DOCS.map((doc) => {
+          const Icon = doc.icon;
+          const isActive = doc.id === activeDocId;
+          return (
+            <button
+              key={doc.id}
+              onClick={() => setActiveDocId(doc.id)}
+              className="group relative text-left rounded-xl border px-4 py-3 transition-all duration-200"
+              style={{
+                background: isActive
+                  ? `linear-gradient(135deg, ${doc.accent}18, ${doc.accent}08)`
+                  : 'rgba(255,255,255,0.02)',
+                borderColor: isActive ? `${doc.accent}50` : 'rgba(63,63,70,0.6)',
+                boxShadow: isActive ? `0 0 24px ${doc.accent}12` : 'none',
+              }}
+            >
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                  style={{
+                    background: isActive ? `${doc.accent}25` : 'rgba(255,255,255,0.05)',
+                  }}
+                >
+                  <Icon
+                    className="w-4 h-4"
+                    style={{ color: isActive ? doc.accent : '#a1a1aa' }}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <p
+                    className="text-sm font-semibold truncate"
+                    style={{ color: isActive ? '#fff' : '#d4d4d8' }}
+                  >
+                    {doc.label}
+                  </p>
+                  <p className="text-[11px] text-zinc-500 line-clamp-2 mt-0.5">
+                    {doc.subtitle}
+                  </p>
+                </div>
+                <ChevronRight
+                  className="w-4 h-4 ml-auto shrink-0 transition-transform group-hover:translate-x-0.5"
+                  style={{ color: isActive ? doc.accent : '#52525b' }}
+                />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeDoc.id}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.25 }}
+        >
+          {activeDoc.render()}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 };

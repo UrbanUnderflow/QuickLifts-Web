@@ -16,6 +16,10 @@ const FUNCTION_LOADERS: Record<string, () => NetlifyFunctionModule> = {
   'record-pulsecheck-assignment-event': () => require('../../../../../netlify/functions/record-pulsecheck-assignment-event.js'),
   'pulsecheck-chat': () => require('../../../../../netlify/functions/pulsecheck-chat.js'),
   'pulsecheck-escalation': () => require('../../../../../netlify/functions/pulsecheck-escalation.js'),
+  'oura-auth-start': () => require('../../../../../netlify/functions/oura-auth-start.js'),
+  'oura-callback': () => require('../../../../../netlify/functions/oura-callback.js'),
+  'oura-status': () => require('../../../../../netlify/functions/oura-status.js'),
+  'oura-disconnect': () => require('../../../../../netlify/functions/oura-disconnect.js'),
 };
 
 function normalizeQueryValue(value: string | string[] | undefined) {

@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BrainCircuit, Database, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import {
+  assignmentOrchestratorService,
+  type PulseCheckDailyAssignment,
+  type PulseCheckPlannerAuditCandidate,
   protocolResponsivenessService,
   type PulseCheckProtocolResponsivenessProfile,
 } from '../../../api/firebase/mentaltraining';
@@ -20,8 +23,68 @@ function formatDate(timestamp?: number) {
   return new Date(timestamp).toLocaleString();
 }
 
+function humanizeRuntimeLabel(value?: string | null) {
+  return value ? value.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim() : 'Not set';
+}
+
 function formatFreshness(profile: PulseCheckProtocolResponsivenessProfile) {
   return profile.staleAt > Date.now() ? 'current' : 'refresh_required';
+}
+
+function formatProtocolAuditTrace(assignment: PulseCheckDailyAssignment) {
+  const lines: string[] = [];
+
+  if (assignment.protocolFamilyId) {
+    lines.push(`Family ${assignment.protocolFamilyId}`);
+  }
+
+  if (assignment.protocolVariantLabel || assignment.protocolVariantId || assignment.protocolVariantVersion) {
+    const variantLabel = assignment.protocolVariantLabel || assignment.protocolVariantId || 'Published variant';
+    const variantVersion = assignment.protocolVariantVersion ? ` ${assignment.protocolVariantVersion}` : '';
+    lines.push(`Variant ${variantLabel}${variantVersion}`);
+  }
+
+  if (assignment.protocolPublishedAt) {
+    lines.push(`Published ${formatDate(assignment.protocolPublishedAt)}`);
+  }
+
+  if (assignment.protocolPublishedRevisionId) {
+    lines.push(`Revision ${assignment.protocolPublishedRevisionId}`);
+  }
+
+  if (assignment.protocolId) {
+    lines.push(`Runtime ${assignment.protocolId}`);
+  }
+
+  return lines;
+}
+
+function formatPlannerAuditCandidateTrace(candidate: PulseCheckPlannerAuditCandidate) {
+  const lines: string[] = [];
+
+  if (candidate.protocolFamilyId) {
+    lines.push(`Family ${candidate.protocolFamilyId}`);
+  }
+
+  if (candidate.protocolVariantLabel || candidate.protocolVariantId || candidate.protocolVariantVersion) {
+    const variantLabel = candidate.protocolVariantLabel || candidate.protocolVariantId || 'Published variant';
+    const variantVersion = candidate.protocolVariantVersion ? ` ${candidate.protocolVariantVersion}` : '';
+    lines.push(`Variant ${variantLabel}${variantVersion}`);
+  }
+
+  if (candidate.protocolPublishedAt) {
+    lines.push(`Published ${formatDate(candidate.protocolPublishedAt)}`);
+  }
+
+  if (candidate.protocolPublishedRevisionId) {
+    lines.push(`Revision ${candidate.protocolPublishedRevisionId}`);
+  }
+
+  if (candidate.protocolId) {
+    lines.push(`Runtime ${candidate.protocolId}`);
+  }
+
+  return lines;
 }
 
 function getProfileFamilyRows(profile: PulseCheckProtocolResponsivenessProfile) {
@@ -52,11 +115,15 @@ function getProfileVariantRows(profile: PulseCheckProtocolResponsivenessProfile)
 
 const PulseCheckProtocolResponsivenessInspectorTab: React.FC = () => {
   const [profiles, setProfiles] = useState<PulseCheckProtocolResponsivenessProfile[]>([]);
+  const [latestAssignment, setLatestAssignment] = useState<PulseCheckDailyAssignment | null>(null);
+  const [assignmentRevisions, setAssignmentRevisions] = useState<PulseCheckDailyAssignment[]>([]);
   const [selectedAthleteId, setSelectedAthleteId] = useState<string>('');
   const [athleteQuery, setAthleteQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [loadingAssignmentTrace, setLoadingAssignmentTrace] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [assignmentTraceError, setAssignmentTraceError] = useState<string | null>(null);
 
   const loadRecentProfiles = async () => {
     setLoading(true);
@@ -76,6 +143,54 @@ const PulseCheckProtocolResponsivenessInspectorTab: React.FC = () => {
   useEffect(() => {
     void loadRecentProfiles();
   }, []);
+
+  useEffect(() => {
+    if (!selectedAthleteId) {
+      setLatestAssignment(null);
+      setAssignmentRevisions([]);
+      setAssignmentTraceError(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadAssignmentTrace = async () => {
+      setLoadingAssignmentTrace(true);
+      setAssignmentTraceError(null);
+      try {
+        const assignment = await assignmentOrchestratorService.getLatestForAthlete(selectedAthleteId);
+        if (cancelled) return;
+
+        setLatestAssignment(assignment);
+
+        if (!assignment) {
+          setAssignmentRevisions([]);
+          return;
+        }
+
+        const revisions = await assignmentOrchestratorService.listRevisions(assignment.id);
+        if (cancelled) return;
+        setAssignmentRevisions(revisions);
+      } catch (loadError) {
+        console.error('Failed to load assignment audit trace:', loadError);
+        if (!cancelled) {
+          setLatestAssignment(null);
+          setAssignmentRevisions([]);
+          setAssignmentTraceError('Could not load the latest assignment audit trace.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingAssignmentTrace(false);
+        }
+      }
+    };
+
+    void loadAssignmentTrace();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAthleteId]);
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.athleteId === selectedAthleteId) || null,
@@ -103,6 +218,35 @@ const PulseCheckProtocolResponsivenessInspectorTab: React.FC = () => {
       ['State fit sample', firstFamily ? firstFamily.stateFit.slice(0, 3).join(', ') : 'No state fit yet'],
     ];
   }, [selectedProfile]);
+
+  const assignmentSummaryRows = useMemo(() => {
+    if (!latestAssignment) return [];
+
+    return [
+      ['Assignment id', latestAssignment.id],
+      ['Source date', latestAssignment.sourceDate],
+      ['Status', humanizeRuntimeLabel(latestAssignment.status)],
+      ['Action type', humanizeRuntimeLabel(latestAssignment.actionType)],
+      ['Revision', String(latestAssignment.revision)],
+      ['Chosen candidate', latestAssignment.chosenCandidateId || 'Not stored'],
+      ['Updated', formatDate(latestAssignment.updatedAt)],
+      ['Planner generated', formatDate(latestAssignment.plannerAudit?.generatedAt)],
+    ];
+  }, [latestAssignment]);
+
+  const plannerAuditRows = useMemo(() => {
+    if (!latestAssignment?.plannerAudit?.rankedCandidates?.length) return [];
+
+    return latestAssignment.plannerAudit.rankedCandidates.slice(0, 4).map((candidate) => [
+      <div key={`${candidate.candidateId}-label`} className="space-y-1">
+        <div className="font-medium text-white">{candidate.label}</div>
+        <div className="text-xs text-zinc-500">{humanizeRuntimeLabel(candidate.type)}</div>
+      </div>,
+      candidate.selected ? 'Selected' : 'Candidate',
+      candidate.rationale,
+      candidate.protocolId ? formatPlannerAuditCandidateTrace(candidate).join(' • ') : 'No protocol lineage',
+    ]);
+  }, [latestAssignment]);
 
   const handleLoadAthlete = async () => {
     const athleteId = athleteQuery.trim();
@@ -151,6 +295,10 @@ const PulseCheckProtocolResponsivenessInspectorTab: React.FC = () => {
             title: 'Evidence First',
             body: 'The inspector surfaces sample size, freshness, supporting evidence, and state-fit tags so the profile is explainable at a glance.',
           },
+          {
+            title: 'Assignment Audit Trace',
+            body: 'Operators can inspect the latest Nora assignment lineage and planner audit for the selected athlete without leaving this internal surface.',
+          },
         ]}
       />
 
@@ -162,6 +310,7 @@ const PulseCheckProtocolResponsivenessInspectorTab: React.FC = () => {
           'Protocol Responsiveness Profile Spec',
           'Protocol Governance Spec',
           'Protocol Registry',
+          'Protocol Revision & Audit Trace',
           'Nora Assignment Rules',
         ]}
       />
@@ -311,6 +460,82 @@ const PulseCheckProtocolResponsivenessInspectorTab: React.FC = () => {
             title="No Profile Selected"
             accent="amber"
             body="Pick a recent athlete from the queue or search an athlete id to load a responsiveness profile."
+          />
+        )}
+      </SectionBlock>
+
+      <SectionBlock icon={Database} title="Latest Assignment Audit Trace">
+        {loadingAssignmentTrace ? (
+          <InfoCard
+            title="Loading Trace"
+            accent="blue"
+            body="Loading the latest Nora assignment and revision lineage for the selected athlete."
+          />
+        ) : latestAssignment ? (
+          <div className="space-y-4">
+            <DataTable columns={['Field', 'Value']} rows={assignmentSummaryRows} />
+            <CardGrid columns="md:grid-cols-3">
+              <InfoCard
+                title="Protocol Lineage"
+                accent={latestAssignment.protocolId ? 'green' : 'amber'}
+                body={
+                  latestAssignment.protocolId ? (
+                    <div className="flex flex-wrap gap-2">
+                      {formatProtocolAuditTrace(latestAssignment).map((item) => (
+                        <InlineTag key={`${latestAssignment.id}-${item}`} label={item} color="green" />
+                      ))}
+                    </div>
+                  ) : (
+                    'The latest assignment is not a protocol-backed runtime task.'
+                  )
+                }
+              />
+              <InfoCard
+                title="Planner Posture"
+                accent="purple"
+                body={
+                  <BulletList
+                    items={[
+                      `State confidence: ${humanizeRuntimeLabel(latestAssignment.plannerAudit?.stateConfidence)}`,
+                      latestAssignment.plannerAudit?.responsivenessApplied ? 'Responsiveness weighting was applied.' : 'Responsiveness weighting was not applied.',
+                      `Candidate set shown: ${latestAssignment.plannerAudit?.rankedCandidates?.length || 0}`,
+                    ]}
+                  />
+                }
+              />
+              <InfoCard
+                title="Revision Trail"
+                accent="blue"
+                body={
+                  <BulletList
+                    items={
+                      assignmentRevisions.length
+                        ? assignmentRevisions.slice(0, 4).map((revision) => {
+                            const revisionLead = `Revision ${revision.revision} • ${humanizeRuntimeLabel(revision.status)} • ${formatDate(revision.updatedAt)}`;
+                            const protocolTrace = revision.protocolId ? formatProtocolAuditTrace(revision).join(' • ') : 'No protocol lineage';
+                            return `${revisionLead} • ${protocolTrace}`;
+                          })
+                        : ['No stored revisions have been attached to this assignment yet.']
+                    }
+                  />
+                }
+              />
+            </CardGrid>
+            {plannerAuditRows.length ? (
+              <DataTable columns={['Candidate', 'Status', 'Rationale', 'Audit Trace']} rows={plannerAuditRows} />
+            ) : (
+              <InfoCard
+                title="Planner Audit"
+                accent="amber"
+                body="No ranked planner candidates were stored on the latest assignment."
+              />
+            )}
+          </div>
+        ) : (
+          <InfoCard
+            title="No Assignment Trace"
+            accent="amber"
+            body={assignmentTraceError || 'No Nora daily assignment was found yet for the selected athlete.'}
           />
         )}
       </SectionBlock>
