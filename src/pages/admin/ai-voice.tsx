@@ -13,7 +13,7 @@ import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage
 import { db, storage } from '../../api/firebase/config';
 import type { SimAudioAssetRef } from '../../api/firebase/mentaltraining/audioAssetService';
 import type { PulseCheckProtocolDefinition } from '../../api/firebase/mentaltraining';
-import { clearVoiceCache, speakStep, stopNarration } from '../../utils/tts';
+import { persistVoiceConfig, speakStep, stopNarration } from '../../utils/tts';
 import {
   AiVoiceConfig,
   ELEVENLABS_PRESETS,
@@ -1223,6 +1223,7 @@ const AdminAiVoice: React.FC = () => {
       const snap = await getDoc(ref);
       if (snap.exists()) {
         const data = normalizeAiVoiceConfig(snap.data() as Partial<AiVoiceConfig>);
+        persistVoiceConfig(data);
         setProvider(data.provider);
         setSelectedVoiceId(data.voiceId);
         setSelectedPresetId(data.presetId || getElevenLabsPreset().id);
@@ -1291,7 +1292,7 @@ const AdminAiVoice: React.FC = () => {
         updatedAt: Date.now(),
       };
       await setDoc(ref, payload, { merge: true });
-      clearVoiceCache();
+      persistVoiceConfig(payload);
     } catch (e: any) {
       setError(e?.message || 'Failed to save config');
     } finally {

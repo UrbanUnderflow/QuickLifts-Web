@@ -713,6 +713,7 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
       soundEnabled={soundEnabled}
       requiresWriting={requiresWriting}
       onStartInChat={onStartInChat}
+      previewMode={previewMode}
     />
   );
 };
@@ -1564,6 +1565,7 @@ const FocusExercise: React.FC<FocusExerciseProps> = ({
       <AutoNarrator
         enabled={!isPaused}
         text={currentInstruction}
+        debugLabel={`FocusExercise:${debugIdRef.current}:step-${step + 1}`}
         onDone={() => {
           if (instructions.length <= 1) {
             // Skip cue word for non-anchoring exercises
@@ -1989,6 +1991,7 @@ interface PromptExerciseProps {
   soundEnabled?: boolean;
   requiresWriting?: boolean;
   onStartInChat?: (exercise: SimModule) => void;
+  previewMode?: boolean;
 }
 
 const PromptExercise: React.FC<PromptExerciseProps> = ({
@@ -2002,10 +2005,12 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
   soundEnabled = true,
   requiresWriting = false,
   onStartInChat,
+  previewMode = false,
 }) => {
   const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
   const [hasFinishedAllPrompts, setHasFinishedAllPrompts] = useState(false);
   const narrationRunIdRef = useRef(0);
+  const debugIdRef = useRef(`prompt-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}`);
 
   const config = exercise.exerciseConfig.config as any;
   const prompts = Array.isArray(config?.prompts) ? config.prompts.filter(Boolean) : [];
@@ -2014,6 +2019,36 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
   const isLastPrompt = prompts.length === 0 ? true : currentPromptIndex >= prompts.length - 1;
   const targetDuration = typeof config?.duration === 'number' ? config.duration : undefined;
   const remaining = targetDuration != null ? Math.max(0, targetDuration - elapsedSeconds) : undefined;
+
+  useEffect(() => {
+    console.log('[PromptExercise] mount', {
+      debugId: debugIdRef.current,
+      exerciseId: exercise.id,
+      exerciseName: exercise.name,
+      previewMode,
+      promptCount: prompts.length,
+      currentPromptIndex,
+    });
+    return () => {
+      console.log('[PromptExercise] unmount', {
+        debugId: debugIdRef.current,
+        exerciseId: exercise.id,
+        finalPromptIndex: currentPromptIndex,
+      });
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    console.log('[PromptExercise] prompt index changed', {
+      debugId: debugIdRef.current,
+      exerciseId: exercise.id,
+      previewMode,
+      currentPromptIndex,
+      totalPrompts: prompts.length,
+      currentPrompt,
+    });
+  }, [currentPrompt, currentPromptIndex, exercise.id, previewMode, prompts.length]);
 
   const handleNext = () => {
     if (isLastPrompt) {
@@ -2086,6 +2121,8 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
       <AutoNarrator
         enabled={soundEnabled && !isPaused}
         text={currentPrompt || 'Stay with this for a moment. When you’re ready, tap Complete.'}
+        debugLabel={`PromptExercise:${debugIdRef.current}:prompt-${currentPromptIndex + 1}`}
+        advanceOnError={false}
         onDone={() => {
           if (hasFinishedAllPrompts) return;
           if (!isLastPrompt) {
@@ -2094,6 +2131,16 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
           }
           // last prompt finished reading → keep running until timer ends (if duration provided)
           setHasFinishedAllPrompts(true);
+        }}
+        onNarrationError={(error) => {
+          console.warn('[PromptExercise] narration error; staying on current prompt', {
+            debugId: debugIdRef.current,
+            exerciseId: exercise.id,
+            previewMode,
+            currentPromptIndex,
+            totalPrompts: prompts.length,
+            error,
+          });
         }}
         runIdRef={narrationRunIdRef}
         voiceChoice={null}
@@ -2152,29 +2199,59 @@ const AutoNarrator: React.FC<{
   onDone: () => void;
   runIdRef: React.MutableRefObject<number>;
   voiceChoice?: VoiceChoice | null;
-}> = ({ enabled, text, onDone, runIdRef, voiceChoice = null }) => {
+  advanceOnError?: boolean;
+  onNarrationError?: (error: unknown) => void;
+  debugLabel?: string;
+}> = ({
+  enabled,
+  text,
+  onDone,
+  runIdRef,
+  voiceChoice = null,
+  advanceOnError = false,
+  onNarrationError,
+  debugLabel,
+}) => {
   useEffect(() => {
     if (!enabled) return;
     const runId = (runIdRef.current += 1);
+    console.log('[AutoNarrator] start', {
+      debugLabel,
+      runId,
+      text,
+      advanceOnError,
+    });
     // cancel any previous narration before starting new
     stopNarration();
     speakStep(text, {
       onEnd: () => {
         // ignore stale runs
         if (runIdRef.current !== runId) return;
+        console.log('[AutoNarrator] end', { debugLabel, runId });
         onDone();
       },
-      onError: () => {
-        // If TTS fails, don't block the flow — still advance
+      onError: (error) => {
         if (runIdRef.current !== runId) return;
-        onDone();
+        console.warn('[AutoNarrator] error', {
+          debugLabel,
+          runId,
+          error,
+          advanceOnError,
+        });
+        onNarrationError?.(error);
+        if (advanceOnError) {
+          onDone();
+        }
       },
     }, voiceChoice ?? null);
     return () => {
       // if text changes/unmounts, stop current narration
-      if (runIdRef.current === runId) stopNarration();
+      if (runIdRef.current === runId) {
+        console.log('[AutoNarrator] cleanup', { debugLabel, runId });
+        stopNarration();
+      }
     };
-  }, [enabled, text, voiceChoice]);
+  }, [advanceOnError, debugLabel, enabled, onDone, onNarrationError, text, voiceChoice]);
   return null;
 };
 

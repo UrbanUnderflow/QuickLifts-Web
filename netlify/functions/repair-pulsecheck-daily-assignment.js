@@ -51,11 +51,25 @@ exports.handler = async (event) => {
     const assignmentId = `${userId}_${sourceDate}`;
     const db = admin.firestore();
 
+    console.info('[repair-pulsecheck-daily-assignment] Repair requested', {
+      userId,
+      sourceDate,
+      assignmentId,
+    });
+
     const existingAssignmentSnap = await db.collection(DAILY_ASSIGNMENTS_COLLECTION).doc(assignmentId).get();
     const existingAssignment = existingAssignmentSnap.exists
       ? { id: existingAssignmentSnap.id, ...existingAssignmentSnap.data() }
       : null;
     const existingSnapshot = await pulseCheckSubmissionRuntime.getSnapshotById(db, assignmentId);
+
+    console.info('[repair-pulsecheck-daily-assignment] Existing runtime state', {
+      userId,
+      sourceDate,
+      hasAssignment: Boolean(existingAssignment),
+      hasSnapshot: Boolean(existingSnapshot),
+      snapshotId: existingSnapshot?.id || null,
+    });
 
     if (existingAssignment) {
       return {
@@ -96,6 +110,15 @@ exports.handler = async (event) => {
       sourceStateSnapshotId: existingSnapshot.id,
       sourceDate,
       progress: syncedProgress,
+    });
+
+    console.info('[repair-pulsecheck-daily-assignment] Repair result', {
+      userId,
+      sourceDate,
+      repairApplied: Boolean(rematerialized?.dailyAssignment),
+      candidateCount: rematerialized?.candidateSet?.candidates?.length || 0,
+      dailyAssignmentId: rematerialized?.dailyAssignment?.id || null,
+      dailyAssignmentActionType: rematerialized?.dailyAssignment?.actionType || null,
     });
 
     return {

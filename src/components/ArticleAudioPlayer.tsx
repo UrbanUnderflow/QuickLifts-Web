@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, X } from 'lucide-react';
+import { buildSpeakRequest } from '../utils/tts';
 
 interface ArticleAudioPlayerProps {
   /** The full text of the article to narrate */
@@ -114,15 +115,12 @@ const ArticleAudioPlayer: React.FC<ArticleAudioPlayerProps> = ({
 
     const text = chunksRef.current[chunkIndex];
     if (!text) throw new Error('Invalid chunk index');
+    const request = await buildSpeakRequest(text, null);
 
     const res = await fetch('/.netlify/functions/tts-mental-step', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        voice: 'alloy',
-        format: 'mp3',
-      }),
+      body: JSON.stringify(request),
     });
 
     if (!res.ok) {

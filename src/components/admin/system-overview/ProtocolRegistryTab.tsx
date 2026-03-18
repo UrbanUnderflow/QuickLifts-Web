@@ -37,6 +37,7 @@ import {
 } from '../../../api/firebase/mentaltraining';
 import { getSeededProtocolFamilySpecById } from '../../../api/firebase/mentaltraining/pulsecheckProtocolFamilySpecs';
 import { ExercisePlayer } from '../../mentaltraining';
+import { primeNarrationPlayback } from '../../../utils/tts';
 import {
   BulletList,
   CardGrid,
@@ -486,6 +487,7 @@ const ProtocolRegistryTab: React.FC = () => {
   const [sourceExerciseError, setSourceExerciseError] = useState<string | null>(null);
   const [previewExercise, setPreviewExercise] = useState<MentalExercise | null>(null);
   const [previewProtocolAudioContext, setPreviewProtocolAudioContext] = useState<{ protocolId: string; protocolLabel?: string | null } | null>(null);
+  const [previewSessionKey, setPreviewSessionKey] = useState(0);
 
   const loadWorkspace = async (preferred?: { familyId?: string | null; variantId?: string | null; runtimeId?: string | null }) => {
     setLoading(true);
@@ -850,6 +852,7 @@ const ProtocolRegistryTab: React.FC = () => {
   };
 
   const openProtocolPreview = async () => {
+    void primeNarrationPlayback();
     const exerciseId = runtimeDraft?.legacyExerciseId?.trim() || variantDraft?.legacyExerciseId?.trim() || '';
     const protocolId = runtimeDraft?.id?.trim() || '';
     if (!exerciseId) {
@@ -858,6 +861,12 @@ const ProtocolRegistryTab: React.FC = () => {
     }
 
     if (sourceExercise?.id === exerciseId) {
+      console.log('[ProtocolRegistryTab] opening preview from cached source exercise', {
+        exerciseId,
+        protocolId,
+        previewSessionKey: previewSessionKey + 1,
+      });
+      setPreviewSessionKey((prev) => prev + 1);
       setPreviewProtocolAudioContext(protocolId ? { protocolId, protocolLabel: runtimeDraft?.label || variantDraft?.label || null } : null);
       setPreviewExercise(sourceExercise);
       return;
@@ -873,6 +882,11 @@ const ProtocolRegistryTab: React.FC = () => {
         return;
       }
       setSourceExercise(exercise);
+      console.log('[ProtocolRegistryTab] opening preview from loaded source exercise', {
+        exerciseId,
+        protocolId,
+      });
+      setPreviewSessionKey((prev) => prev + 1);
       setPreviewProtocolAudioContext(protocolId ? { protocolId, protocolLabel: runtimeDraft?.label || variantDraft?.label || null } : null);
       setPreviewExercise(exercise);
     } catch (error) {
@@ -884,6 +898,7 @@ const ProtocolRegistryTab: React.FC = () => {
   };
 
   const openProtocolPreviewForRecord = async (protocol: PulseCheckProtocolDefinition) => {
+    void primeNarrationPlayback();
     const exerciseId = protocol.legacyExerciseId?.trim();
     if (!exerciseId) {
       setWorkspaceMessage(`No source asset is bound to ${protocol.label} yet.`);
@@ -899,6 +914,11 @@ const ProtocolRegistryTab: React.FC = () => {
         return;
       }
       setSourceExercise(exercise);
+      console.log('[ProtocolRegistryTab] opening preview for inventory record', {
+        exerciseId,
+        protocolId: protocol.id,
+      });
+      setPreviewSessionKey((prev) => prev + 1);
       setPreviewProtocolAudioContext({ protocolId: protocol.id, protocolLabel: protocol.label });
       setPreviewExercise(exercise);
     } catch (error) {
@@ -1429,14 +1449,23 @@ const ProtocolRegistryTab: React.FC = () => {
 
       {previewExercise ? (
         <ExercisePlayer
+          key={`protocol-preview-${previewSessionKey}`}
           exercise={previewExercise}
           previewMode
           protocolAudioContext={previewProtocolAudioContext}
           onClose={() => {
+            console.log('[ProtocolRegistryTab] closing preview', {
+              exerciseId: previewExercise.id,
+              previewSessionKey,
+            });
             setPreviewExercise(null);
             setPreviewProtocolAudioContext(null);
           }}
           onComplete={() => {
+            console.log('[ProtocolRegistryTab] preview completed', {
+              exerciseId: previewExercise.id,
+              previewSessionKey,
+            });
             setPreviewExercise(null);
             setPreviewProtocolAudioContext(null);
           }}

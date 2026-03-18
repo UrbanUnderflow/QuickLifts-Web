@@ -63,8 +63,20 @@ function normalizeScopes(input) {
 function sanitizeReturnTo(value) {
   if (typeof value !== 'string') return DEFAULT_RETURN_TO;
   const trimmed = value.trim();
-  if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return DEFAULT_RETURN_TO;
-  return trimmed;
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'pulsecheck:') {
+      return parsed.toString();
+    }
+  } catch (error) {
+    return DEFAULT_RETURN_TO;
+  }
+
+  return DEFAULT_RETURN_TO;
 }
 
 function getBaseSiteUrl() {

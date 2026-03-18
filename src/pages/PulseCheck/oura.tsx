@@ -71,24 +71,6 @@ function scopesToHumanLabel(scopes?: string[]) {
   return Array.from(labels).join(', ') || 'Sleep, activity, and readiness';
 }
 
-const glowTransition = {
-  duration: 10,
-  repeat: Infinity,
-  ease: 'easeInOut' as const,
-};
-
-const orbitTransition = {
-  duration: 14,
-  repeat: Infinity,
-  ease: 'linear' as const,
-};
-
-const pulseTransition = {
-  duration: 3.6,
-  repeat: Infinity,
-  ease: 'easeInOut' as const,
-};
-
 const statusToneClasses: Record<BannerMessage['tone'], string> = {
   success: 'border-green-500/20 bg-green-500/[0.06] text-green-200',
   info: 'border-cyan-500/20 bg-cyan-500/[0.06] text-cyan-200',
@@ -100,125 +82,67 @@ const chipToneClasses = {
   idle: 'border-cyan-400/20 bg-cyan-400/[0.06] text-cyan-100',
 };
 
-function RingCircuitGraphic() {
+const GlassCard: React.FC<{
+  children: React.ReactNode;
+  accentColor?: string;
+  className?: string;
+  delay?: number;
+  hoverGlow?: boolean;
+}> = ({ children, accentColor = '#E0FE10', className = '', delay = 0, hoverGlow = false }) => {
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[34px]">
-      <motion.div
-        className="absolute left-[-8%] top-[-10%] h-56 w-56 rounded-full blur-3xl"
-        style={{ background: 'rgba(46, 226, 255, 0.14)' }}
-        animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.55, 0.3] }}
-        transition={glowTransition}
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.65, delay, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={hoverGlow ? { scale: 1.015, y: -4 } : undefined}
+      className={`relative group ${className}`}
+    >
+      <div
+        className="absolute -inset-1 rounded-[32px] blur-xl opacity-0 transition-all duration-700 group-hover:opacity-35"
+        style={{ background: `linear-gradient(135deg, ${accentColor}40, transparent 60%)` }}
       />
-      <motion.div
-        className="absolute bottom-[-6%] right-[-6%] h-52 w-52 rounded-full blur-3xl"
-        style={{ background: 'rgba(224, 254, 16, 0.12)' }}
-        animate={{ scale: [1.05, 0.92, 1.05], opacity: [0.22, 0.4, 0.22] }}
-        transition={{ ...glowTransition, duration: 9 }}
-      />
-
-      <div className="absolute inset-0">
-        <svg
-          viewBox="0 0 600 600"
-          className="absolute left-1/2 top-1/2 h-[580px] w-[580px] -translate-x-1/2 -translate-y-1/2 opacity-90"
-          aria-hidden="true"
-        >
-          <defs>
-            <linearGradient id="oura-ring-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="rgba(46,226,255,0.95)" />
-              <stop offset="52%" stopColor="rgba(255,255,255,0.72)" />
-              <stop offset="100%" stopColor="rgba(224,254,16,0.92)" />
-            </linearGradient>
-            <linearGradient id="oura-circuit-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="rgba(46,226,255,0.08)" />
-              <stop offset="50%" stopColor="rgba(46,226,255,0.9)" />
-              <stop offset="100%" stopColor="rgba(224,254,16,0.18)" />
-            </linearGradient>
-            <filter id="oura-ring-glow">
-              <feGaussianBlur stdDeviation="6" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-
-          <circle cx="300" cy="300" r="156" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1.2" />
-          <circle cx="300" cy="300" r="146" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="22" />
-          <circle
-            cx="300"
-            cy="300"
-            r="148"
-            fill="none"
-            stroke="url(#oura-ring-gradient)"
-            strokeWidth="16"
-            strokeLinecap="round"
-            strokeDasharray="540 110"
-            transform="rotate(-24 300 300)"
-            filter="url(#oura-ring-glow)"
-          />
-          <circle
-            cx="300"
-            cy="300"
-            r="148"
-            fill="none"
-            stroke="rgba(46,226,255,0.24)"
-            strokeWidth="3"
-            strokeDasharray="12 20"
-            transform="rotate(30 300 300)"
-          />
-
-          <path d="M94 238 H210" stroke="url(#oura-circuit-gradient)" strokeWidth="3" strokeLinecap="round" />
-          <path d="M392 192 H520 V136" stroke="url(#oura-circuit-gradient)" strokeWidth="3" strokeLinecap="round" />
-          <path d="M388 414 H510 V478" stroke="url(#oura-circuit-gradient)" strokeWidth="3" strokeLinecap="round" />
-          <path d="M88 366 H180 V462" stroke="url(#oura-circuit-gradient)" strokeWidth="3" strokeLinecap="round" />
-          <path d="M210 120 V170" stroke="rgba(224,254,16,0.42)" strokeWidth="2.5" strokeLinecap="round" />
-          <path d="M456 308 H548" stroke="rgba(224,254,16,0.3)" strokeWidth="2.5" strokeLinecap="round" />
-
-          {[
-            { cx: 94, cy: 238, color: '#2ee2ff' },
-            { cx: 210, cy: 120, color: '#e0fe10' },
-            { cx: 520, cy: 136, color: '#2ee2ff' },
-            { cx: 548, cy: 308, color: '#e0fe10' },
-            { cx: 510, cy: 478, color: '#2ee2ff' },
-            { cx: 180, cy: 462, color: '#e0fe10' },
-          ].map((node) => (
-            <g key={`${node.cx}-${node.cy}`}>
-              <circle cx={node.cx} cy={node.cy} r="7" fill={node.color} fillOpacity="0.12" />
-              <circle cx={node.cx} cy={node.cy} r="3.5" fill={node.color} />
-            </g>
-          ))}
-        </svg>
+      <div className="relative overflow-hidden rounded-[32px] border border-white/10 bg-zinc-900/40 backdrop-blur-xl">
+        <div
+          className="absolute left-0 right-0 top-0 h-[1px] opacity-60"
+          style={{ background: `linear-gradient(90deg, transparent, ${accentColor}80, transparent)` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-transparent pointer-events-none" />
+        {children}
       </div>
-
-      <motion.div
-        className="absolute left-1/2 top-1/2 h-[308px] w-[308px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10"
-        animate={{ rotate: 360 }}
-        transition={orbitTransition}
-      >
-        <motion.div
-          className="absolute left-1/2 top-0 h-3 w-3 -translate-x-1/2 rounded-full bg-cyan-300 shadow-[0_0_16px_rgba(46,226,255,0.8)]"
-          animate={{ scale: [0.9, 1.15, 0.9] }}
-          transition={pulseTransition}
-        />
-      </motion.div>
-      <motion.div
-        className="absolute left-1/2 top-1/2 h-[358px] w-[358px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#E0FE10]/10"
-        animate={{ rotate: -360 }}
-        transition={{ ...orbitTransition, duration: 18 }}
-      >
-        <motion.div
-          className="absolute bottom-0 left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-[#E0FE10] shadow-[0_0_18px_rgba(224,254,16,0.7)]"
-          animate={{ scale: [1, 1.22, 1] }}
-          transition={{ ...pulseTransition, duration: 3.2 }}
-        />
-      </motion.div>
-    </div>
+    </motion.div>
   );
 }
 
-function FeaturePill({ icon, label }: { icon: React.ReactNode; label: string }) {
+const FloatingOrb: React.FC<{
+  color: string;
+  size: string;
+  position: { top?: string; bottom?: string; left?: string; right?: string };
+  delay?: number;
+}> = ({ color, size, position, delay = 0 }) => {
   return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-xs uppercase tracking-[0.18em] text-zinc-300 backdrop-blur-sm">
+    <motion.div
+      className={`absolute ${size} rounded-full blur-3xl pointer-events-none`}
+      style={{ backgroundColor: color, ...position }}
+      animate={{ scale: [1, 1.18, 1], opacity: [0.22, 0.42, 0.22] }}
+      transition={{ duration: 8, repeat: Infinity, delay, ease: 'easeInOut' }}
+    />
+  );
+};
+
+function FeaturePill({
+  icon,
+  label,
+  accent = '#3B82F6',
+}: {
+  icon: React.ReactNode;
+  label: string;
+  accent?: string;
+}) {
+  return (
+    <div
+      className="inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs uppercase tracking-[0.18em] text-zinc-300 backdrop-blur-xl"
+      style={{ borderColor: `${accent}20`, background: `${accent}10` }}
+    >
       {icon}
       <span>{label}</span>
     </div>
@@ -235,11 +159,13 @@ function InfoStat({
   body: string;
 }) {
   return (
-    <div className="rounded-[24px] border border-white/8 bg-black/20 p-5 backdrop-blur-sm">
-      <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">{eyebrow}</div>
-      <div className="mt-3 text-lg font-semibold text-white">{title}</div>
-      <p className="mt-2 text-sm leading-7 text-zinc-400">{body}</p>
-    </div>
+    <GlassCard accentColor="#3B82F6" className="h-full">
+      <div className="p-5">
+        <div className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">{eyebrow}</div>
+        <div className="mt-3 text-lg font-semibold text-white">{title}</div>
+        <p className="mt-2 text-sm leading-7 text-zinc-400">{body}</p>
+      </div>
+    </GlassCard>
   );
 }
 
@@ -369,28 +295,44 @@ export default function PulseCheckOuraPage() {
   const sharedDataLabel = scopesToHumanLabel(connection?.grantedScopes?.length ? connection.grantedScopes : DEFAULT_SCOPES);
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#05070c] text-white">
+    <div className="relative min-h-screen overflow-hidden bg-[#0a0a0b] text-white">
       <Head>
         <title>Connect Oura | PulseCheck</title>
         <meta name="robots" content="noindex,nofollow" />
       </Head>
 
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(8,18,38,0.88),rgba(5,7,12,1)_58%)]" />
-        <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+        <FloatingOrb color="#E0FE10" size="h-[520px] w-[520px]" position={{ top: '-10%', left: '-12%' }} delay={0} />
+        <FloatingOrb color="#3B82F6" size="h-[420px] w-[420px]" position={{ top: '22%', right: '-6%' }} delay={2} />
+        <FloatingOrb color="#8B5CF6" size="h-[360px] w-[360px]" position={{ bottom: '8%', left: '18%' }} delay={4} />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(12,18,32,0.84),rgba(10,10,11,1)_60%)]" />
+        <div className="absolute inset-0 opacity-[0.015] bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIGJhc2VGcmVxdWVuY3k9Ii43NSIgc3RpdGNoVGlsZXM9InN0aXRjaCIgdHlwZT0iZnJhY3RhbE5vaXNlIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxwYXRoIGQ9Ik0wIDBoMzAwdjMwMEgweiIgZmlsdGVyPSJ1cmwoI2EpIiBvcGFjaXR5PSIuMDUiLz48L3N2Zz4=')]" />
       </div>
 
       <main className="relative z-10 mx-auto flex min-h-screen w-full max-w-6xl items-center px-4 py-10 md:px-6">
         <section className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)]">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-            className="relative overflow-hidden rounded-[34px] border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.12),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(224,254,16,0.08),_transparent_28%),#08101d] p-8 shadow-[0_30px_80px_rgba(0,0,0,0.35)]"
-          >
-            <RingCircuitGraphic />
+          <GlassCard accentColor="#3B82F6" className="overflow-hidden" hoverGlow>
+            <div className="relative min-h-[640px] p-8">
+              <motion.div
+                initial={{ opacity: 0, x: -80, rotate: -12 }}
+                animate={{ opacity: 0.55, x: 0, rotate: -12 }}
+                transition={{ duration: 0.9, delay: 0.18 }}
+                className="pointer-events-none absolute bottom-10 left-[-6%] h-44 w-72 rounded-[32px] border border-cyan-400/15 bg-gradient-to-br from-cyan-400/10 to-transparent backdrop-blur-xl"
+              />
+              <motion.div
+                initial={{ opacity: 0, x: 90, rotate: 14 }}
+                animate={{ opacity: 0.45, x: 0, rotate: 14 }}
+                transition={{ duration: 0.95, delay: 0.26 }}
+                className="pointer-events-none absolute right-[-8%] top-[16%] h-56 w-72 rounded-[32px] border border-[#E0FE10]/15 bg-gradient-to-br from-[#E0FE10]/8 to-transparent backdrop-blur-xl"
+              />
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 1.1, delay: 0.28 }}
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#3B82F6]/8 via-transparent to-transparent"
+              />
 
-            <div className="relative z-10 flex min-h-[640px] flex-col justify-between">
+              <div className="relative z-10 flex min-h-[576px] flex-col justify-between">
               <div className="max-w-lg space-y-6">
                 <div className="inline-flex rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-3">
                   <Link2 className="h-6 w-6 text-cyan-200" />
@@ -407,9 +349,9 @@ export default function PulseCheckOuraPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  <FeaturePill icon={<Waves className="h-3.5 w-3.5 text-cyan-200" />} label="Sleep + readiness insights" />
-                  <FeaturePill icon={<Sparkles className="h-3.5 w-3.5 text-[#E0FE10]" />} label="Personalized daily guidance" />
-                  <FeaturePill icon={<ShieldCheck className="h-3.5 w-3.5 text-cyan-200" />} label="Disconnect anytime" />
+                  <FeaturePill icon={<Waves className="h-3.5 w-3.5 text-cyan-200" />} label="Sleep + readiness insights" accent="#3B82F6" />
+                  <FeaturePill icon={<Sparkles className="h-3.5 w-3.5 text-[#E0FE10]" />} label="Personalized daily guidance" accent="#E0FE10" />
+                  <FeaturePill icon={<ShieldCheck className="h-3.5 w-3.5 text-cyan-200" />} label="Disconnect anytime" accent="#8B5CF6" />
                 </div>
               </div>
 
@@ -431,14 +373,11 @@ export default function PulseCheckOuraPage() {
                 />
               </div>
             </div>
-          </motion.div>
+            </div>
+          </GlassCard>
 
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.72, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
-            className="rounded-[34px] border border-zinc-800 bg-[linear-gradient(180deg,rgba(15,22,39,0.96),rgba(9,15,28,0.98))] p-8 shadow-[0_30px_80px_rgba(0,0,0,0.35)]"
-          >
+          <GlassCard accentColor="#E0FE10" className="h-full" delay={0.08}>
+            <div className="p-8">
             {message ? (
               <div className={`mb-5 rounded-2xl border px-4 py-3 text-sm ${statusToneClasses[message.tone]}`}>
                 {message.text}
@@ -542,12 +481,13 @@ export default function PulseCheckOuraPage() {
                   </button>
                 </div>
 
-                <div className="rounded-[24px] border border-cyan-500/12 bg-cyan-500/[0.04] p-5 text-sm leading-7 text-zinc-300">
+                <div className="rounded-[24px] border border-cyan-500/12 bg-cyan-500/[0.04] p-5 text-sm leading-7 text-zinc-300 backdrop-blur-sm">
                   Connecting Oura helps PulseCheck read the rhythm behind your day, so the app can meet you with more relevant support instead of making you start from scratch every time.
                 </div>
               </div>
             )}
-          </motion.div>
+            </div>
+          </GlassCard>
         </section>
       </main>
     </div>
