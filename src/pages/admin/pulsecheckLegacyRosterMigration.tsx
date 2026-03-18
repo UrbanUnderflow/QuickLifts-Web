@@ -275,7 +275,11 @@ const PulseCheckLegacyRosterMigrationPage: React.FC = () => {
                 const namingDraftInvalid = !candidate.existingTeamId && !isNamingDraftValid(namingDraft);
 
                 return (
-                  <div key={candidate.coachId} className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6 shadow-xl shadow-black/20">
+                  <div
+                    key={candidate.coachId}
+                    data-testid={`legacy-roster-card-${candidate.coachId}`}
+                    className="rounded-[28px] border border-white/10 bg-white/[0.03] p-6 shadow-xl shadow-black/20"
+                  >
                     <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                       <div className="max-w-3xl">
                         <div className="flex flex-wrap items-center gap-3">

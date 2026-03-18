@@ -50,6 +50,13 @@
   status = 200
   force = true
 
+# Unified AI Proxy Bridge 
+[[redirects]]
+  from = "/api/openai/*"
+  to = "/.netlify/functions/openai-bridge"
+  status = 200
+  force = true
+
 
 # NOTE: Do NOT add SPA-style catch-all redirects like "/* → / 200" here.
 # The @netlify/plugin-nextjs plugin handles ALL Next.js routing automatically.

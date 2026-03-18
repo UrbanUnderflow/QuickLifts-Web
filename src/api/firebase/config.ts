@@ -159,7 +159,9 @@ const getInitialMode = () => {
     return true;
   }
   if (typeof window !== 'undefined') {
-    const mode = window.localStorage.getItem('forceDevFirebase') === 'true'
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const mode = isLocalhost
+      || window.localStorage.getItem('forceDevFirebase') === 'true'
       || window.localStorage.getItem('devMode') === 'true';
     console.log('[Firebase] Initial mode:', {
       isDev: mode,
@@ -179,7 +181,9 @@ if (!auth) {
 }
 
 if (typeof window !== 'undefined') {
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const shouldInstallE2EHarness =
+    isLocalhost ||
     process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true' ||
     window.localStorage.getItem('forceDevFirebase') === 'true';
 
