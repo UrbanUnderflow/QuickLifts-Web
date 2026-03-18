@@ -14,6 +14,7 @@ type NetlifyFunctionModule = {
 const FUNCTION_LOADERS: Record<string, () => NetlifyFunctionModule> = {
   'submit-pulsecheck-checkin': () => require('../../../../../netlify/functions/submit-pulsecheck-checkin.js'),
   'record-pulsecheck-assignment-event': () => require('../../../../../netlify/functions/record-pulsecheck-assignment-event.js'),
+  'tts-mental-step': () => require('../../../../../netlify/functions/tts-mental-step.ts'),
   'pulsecheck-chat': () => require('../../../../../netlify/functions/pulsecheck-chat.js'),
   'pulsecheck-escalation': () => require('../../../../../netlify/functions/pulsecheck-escalation.js'),
   'oura-auth-start': () => require('../../../../../netlify/functions/oura-auth-start.js'),

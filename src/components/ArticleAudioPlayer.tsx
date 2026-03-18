@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, X } from 'lucide-react';
+import { resolvePulseCheckFunctionUrl } from '../api/firebase/mentaltraining/pulseCheckFunctionsUrl';
 import { buildSpeakRequest } from '../utils/tts';
 
 interface ArticleAudioPlayerProps {
@@ -117,7 +118,7 @@ const ArticleAudioPlayer: React.FC<ArticleAudioPlayerProps> = ({
     if (!text) throw new Error('Invalid chunk index');
     const request = await buildSpeakRequest(text, null);
 
-    const res = await fetch('/.netlify/functions/tts-mental-step', {
+    const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/tts-mental-step'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),

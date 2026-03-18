@@ -22,6 +22,7 @@ import {
   Target,
   Brain,
   Star,
+  Sparkles,
   ChevronRight,
   Volume2,
   VolumeX,
@@ -91,7 +92,7 @@ interface ExercisePlayerProps {
   } | null;
 }
 
-type PlayerState = 'intro' | 'pre-mood' | 'active' | 'post-mood' | 'complete';
+type PlayerState = 'intro' | 'pre-mood' | 'protocol-intro' | 'active' | 'post-mood' | 'complete';
 
 function isResetRuntime(exercise: SimModule): boolean {
   return exercise.buildArtifact?.engineKey === 'reset'
@@ -243,7 +244,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   }, [soundEnabled]);
 
   useEffect(() => {
-    if (state !== 'active') {
+    if (state !== 'protocol-intro') {
       protocolCuePlayedKeyRef.current = null;
       if (protocolCueAudioRef.current) {
         protocolCueAudioRef.current.pause();
@@ -255,6 +256,7 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
 
     const protocolId = resolvedProtocolAudioContext?.protocolId?.trim();
     if (!soundEnabled || !protocolId || !protocolCueUrl) {
+      setState('active');
       return;
     }
 
@@ -278,26 +280,39 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
       if (protocolCueAudioRef.current === audio) {
         protocolCueAudioRef.current = null;
       }
+      setState('active');
     });
     audio.onended = () => {
       if (protocolCueAudioRef.current === audio) {
         protocolCueAudioRef.current = null;
       }
+      setState('active');
     };
     audio.onerror = () => {
       if (protocolCueAudioRef.current === audio) {
         protocolCueAudioRef.current = null;
       }
+      setState('active');
     };
   }, [state, soundEnabled, protocolCueUrl, resolvedProtocolAudioContext?.protocolId]);
 
+  const shouldRunProtocolIntro = Boolean(
+    soundEnabled
+      && resolvedProtocolAudioContext?.protocolId?.trim()
+      && protocolCueUrl
+  );
+
+  const enterActiveFlow = () => {
+    setState(shouldRunProtocolIntro ? 'protocol-intro' : 'active');
+  };
+
   const handleStart = () => {
-    setState(resetOwnedFlow ? 'active' : 'pre-mood');
+    setState(resetOwnedFlow ? (shouldRunProtocolIntro ? 'protocol-intro' : 'active') : 'pre-mood');
   };
 
   const handlePreMoodSelect = (mood: number) => {
     setPreExerciseMood(mood);
-    setState('active');
+    enterActiveFlow();
   };
 
   const handleExerciseComplete = (data?: {
@@ -459,6 +474,14 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
             />
           )}
 
+          {state === 'protocol-intro' && (
+            <ProtocolIntroScreen
+              key="protocol-intro"
+              protocolLabel={resolvedProtocolAudioContext?.protocolLabel || exercise.name}
+              categoryColor={getCategoryColor()}
+            />
+          )}
+
           {state === 'post-mood' && (
             <MoodSelector
               key="post-mood"
@@ -554,6 +577,47 @@ const IntroScreen: React.FC<IntroScreenProps> = ({
     >
       Begin Exercise
     </motion.button>
+  </motion.div>
+);
+
+interface ProtocolIntroScreenProps {
+  protocolLabel: string;
+  categoryColor: string;
+}
+
+const ProtocolIntroScreen: React.FC<ProtocolIntroScreenProps> = ({
+  protocolLabel,
+  categoryColor,
+}) => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.96 }}
+    animate={{ opacity: 1, scale: 1 }}
+    exit={{ opacity: 0, scale: 1.02 }}
+    className="text-center"
+  >
+    <div className="relative mx-auto mb-10 h-44 w-44">
+      <motion.div
+        animate={{ scale: [1, 1.08, 1], opacity: [0.18, 0.3, 0.18] }}
+        transition={{ duration: 1.9, repeat: Infinity, ease: 'easeInOut' }}
+        className={`absolute inset-0 rounded-full bg-gradient-to-br ${categoryColor} blur-3xl`}
+      />
+      <motion.div
+        animate={{ scale: [0.92, 1.02, 0.92], rotate: [0, 6, 0, -6, 0] }}
+        transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+        className={`absolute inset-6 rounded-full bg-gradient-to-br ${categoryColor} opacity-30`}
+      />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="flex h-24 w-24 items-center justify-center rounded-full border border-white/10 bg-white/10 backdrop-blur-xl">
+          <Sparkles className="h-10 w-10 text-white" />
+        </div>
+      </div>
+    </div>
+
+    <div className="mb-3 text-xs uppercase tracking-[0.22em] text-white/50">Protocol Cue</div>
+    <h2 className="mx-auto max-w-xl text-3xl font-semibold text-white">{protocolLabel}</h2>
+    <p className="mx-auto mt-4 max-w-lg text-base leading-7 text-white/65">
+      Entering the protocol now. Nora will begin guidance as soon as the cue finishes.
+    </p>
   </motion.div>
 );
 
@@ -2212,6 +2276,17 @@ const AutoNarrator: React.FC<{
   onNarrationError,
   debugLabel,
 }) => {
+  const onDoneRef = useRef(onDone);
+  const onNarrationErrorRef = useRef(onNarrationError);
+
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  }, [onDone]);
+
+  useEffect(() => {
+    onNarrationErrorRef.current = onNarrationError;
+  }, [onNarrationError]);
+
   useEffect(() => {
     if (!enabled) return;
     const runId = (runIdRef.current += 1);
@@ -2228,7 +2303,7 @@ const AutoNarrator: React.FC<{
         // ignore stale runs
         if (runIdRef.current !== runId) return;
         console.log('[AutoNarrator] end', { debugLabel, runId });
-        onDone();
+        onDoneRef.current();
       },
       onError: (error) => {
         if (runIdRef.current !== runId) return;
@@ -2238,9 +2313,9 @@ const AutoNarrator: React.FC<{
           error,
           advanceOnError,
         });
-        onNarrationError?.(error);
+        onNarrationErrorRef.current?.(error);
         if (advanceOnError) {
-          onDone();
+          onDoneRef.current();
         }
       },
     }, voiceChoice ?? null);
@@ -2251,7 +2326,7 @@ const AutoNarrator: React.FC<{
         stopNarration();
       }
     };
-  }, [advanceOnError, debugLabel, enabled, onDone, onNarrationError, text, voiceChoice]);
+  }, [advanceOnError, debugLabel, enabled, text, voiceChoice]);
   return null;
 };
 
