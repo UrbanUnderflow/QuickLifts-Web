@@ -150,13 +150,55 @@ const { simVariantRegistryService } = loadVariantRegistryRuntime(firestore);
   const savedRecord = firestore.getDoc(\`sim-variants/\${initialRecord.id}\`);
   assert.equal(savedRecord.name, 'Sport-Context Reset');
   assert.equal(savedRecord.familyStatus, 'locked');
-  assert.equal(savedRecord.specStatus, 'needs-spec');
+  assert.equal(savedRecord.specStatus, 'in-progress');
   assert.equal(savedRecord.priority, 'high');
   assert.equal(savedRecord.syncStatus, 'in_sync');
   assert.equal(savedRecord.buildStatus, 'not_built');
 
   const historyEntries = firestore.getCollection(\`sim-variants/\${initialRecord.id}/history\`);
   assert.ok(historyEntries.some((entry) => entry.data.action === 'seed_synced'));
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+`);
+});
+
+test('syncSeeds does not purge modern Reset family variants just because they use the reset engine', () => {
+  runRegistryScenario(`
+const modernPublishedRecord = simBuild.buildPublishedVariantRecord(createVariantRecord({
+  engineKey: 'reset',
+  publishedModuleId: 'visual-disruption-reset-module',
+}), 200);
+
+const firestore = createFirestoreMock({
+  'sim-variants': [{ id: modernPublishedRecord.id, data: modernPublishedRecord }],
+  'sim-modules': [{ id: 'visual-disruption-reset-module', data: createModuleDraft({ id: 'visual-disruption-reset-module' }) }],
+});
+const { simVariantRegistryService } = loadVariantRegistryRuntime(firestore);
+
+(async () => {
+  const result = await simVariantRegistryService.syncSeeds([
+    {
+      name: 'Sport-Context Reset',
+      family: 'Reset',
+      familyStatus: 'locked',
+      mode: 'branch',
+      specStatus: 'needs-spec',
+      priority: 'high',
+    },
+  ]);
+
+  assert.equal(result.created, 0);
+  assert.equal(result.updated, 0);
+
+  const savedRecord = firestore.getDoc(\`sim-variants/\${modernPublishedRecord.id}\`);
+  assert.ok(savedRecord, 'Modern Reset variant should remain in sim-variants.');
+  assert.equal(savedRecord.specRaw, modernPublishedRecord.specRaw);
+  assert.equal(savedRecord.publishedModuleId, 'visual-disruption-reset-module');
+
+  const savedModule = firestore.getDoc('sim-modules/visual-disruption-reset-module');
+  assert.ok(savedModule, 'Published module should not be purged for modern Reset variants.');
 })().catch((error) => {
   console.error(error);
   process.exit(1);

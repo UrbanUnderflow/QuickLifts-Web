@@ -80,7 +80,7 @@ import { ExercisePlayer } from '../../mentaltraining';
 type SpecStatus = SimVariantSpecStatus;
 type FamilyStatus = SimVariantFamilyStatus;
 type VariantMode = SimVariantMode;
-type VariantEntry = SimVariantSeed & Partial<Pick<SimVariantRecord, 'lockedSpec' | 'archetypeOverride'>>;
+type VariantEntry = SimVariantSeed & Partial<Pick<SimVariantRecord, 'lockedSpec' | 'archetypeOverride' | 'publishedModuleId' | 'buildStatus'>>;
 
 interface ParsedSpec {
     coreIdentity: string;
@@ -1081,12 +1081,14 @@ function buildExpectedSectionLabels(variant: VariantEntry) {
         '3. Archetype Packaging Defaults',
         '4. Family Inheritance vs Variant Changes',
         '5. Athlete Experience Flow',
-        '6. Measurement and Scoring Notes',
-        '7. Mode Behavior',
-        '8. Build and Implementation Notes',
-        '9. Governing Documents',
-        '10. Boundary Safeguards',
-        '11. Variant Readiness Checklist',
+        '6. Variant Modifier Matrix',
+        '7. Measurement and Scoring Notes',
+        '8. Mode Behavior',
+        '9. Canonical Analytics Tag Vocabulary',
+        '10. Build and Implementation Notes',
+        '11. Governing Documents',
+        '12. Boundary Safeguards',
+        '13. Variant Readiness Checklist',
     ];
 }
 
@@ -1653,11 +1655,59 @@ function mapPriority(priority: VariantEntry['priority']) {
 }
 
 function mapVariantStatus(variant: VariantEntry) {
+    if (variant.publishedModuleId || variant.buildStatus === 'published') return 'Published Registry Spec';
     if (variant.specStatus === 'complete') return 'Build-Ready';
     if (variant.specStatus === 'in-progress') return 'In Progress';
     if (variant.mode === 'hybrid' || variant.specStatus === 'not-required') return 'Not Required';
     if (variant.familyStatus === 'candidate') return 'Exploratory Candidate Draft';
     return 'Draft Auto-Generated';
+}
+
+function formatGeneratedSpecDate() {
+    return new Intl.DateTimeFormat('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+    }).format(new Date());
+}
+
+function getGeneratedSpecReleaseMetadata(variant: VariantEntry) {
+    const isPublished = Boolean(variant.publishedModuleId) || variant.buildStatus === 'published' || Boolean((variant as Partial<SimVariantRecord>).publishedAt);
+    const isBuildReady = variant.specStatus === 'complete' || variant.buildStatus === 'built' || variant.buildStatus === 'out_of_sync' || Boolean((variant as Partial<SimVariantRecord>).buildArtifact);
+    const isReviewedDraft = variant.specStatus === 'in-progress' || Boolean((variant as Partial<SimVariantRecord>).specRaw?.trim());
+
+    if (isPublished) {
+        return {
+            status: 'Published Registry Spec',
+            version: 'v1.0',
+        };
+    }
+
+    if (isBuildReady) {
+        return {
+            status: 'Build-Ready Registry Spec',
+            version: 'v0.9',
+        };
+    }
+
+    if (isReviewedDraft) {
+        return {
+            status: 'Reviewed Registry Draft',
+            version: 'v0.7',
+        };
+    }
+
+    if (variant.familyStatus === 'candidate') {
+        return {
+            status: 'Exploratory Candidate Draft',
+            version: 'v0.3',
+        };
+    }
+
+    return {
+        status: 'Draft Auto-Generated',
+        version: 'v0.1',
+    };
 }
 
 const ARCHETYPE_LABELS: Record<SimVariantArchetype, string> = {
@@ -2676,6 +2726,7 @@ function getTrialBuildNotes(variant: VariantEntry) {
 }
 
 function buildGeneratedTrialVariantSpec(variant: VariantEntry, familyBase: FamilySpecBase | undefined, theme: VariantTheme, today: string) {
+    const release = getGeneratedSpecReleaseMetadata(variant);
     return displayCopy([
         '1. Core Identity',
         `Variant Name: ${variant.name}`,
@@ -2683,9 +2734,9 @@ function buildGeneratedTrialVariantSpec(variant: VariantEntry, familyBase: Famil
         'Variant Type: Trial variant',
         `Registry Mode: ${MODE_CONFIG[variant.mode].label}`,
         `Family Status: ${variant.familyStatus === 'locked' ? 'Locked Family' : 'Candidate Family'}`,
-        `Status: ${mapVariantStatus(variant)}`,
+        `Status: ${release.status}`,
         `Build Priority: ${mapPriority(variant.priority)}`,
-        'Version: v0.2',
+        `Version: ${release.version}`,
         `Generated On: ${today}`,
         '',
         '2. Variant Rationale',
@@ -2778,6 +2829,74 @@ function getDefaultDurationMinutes(variant: VariantEntry) {
         default:
             return variant.mode === 'hybrid' ? 4 : 5;
     }
+}
+
+function getAssignmentLanguagePattern(theme: VariantTheme) {
+    return theme.bestUse;
+}
+
+function getMeasurementLanguagePattern(variant: VariantEntry, theme: VariantTheme) {
+    return getNonTrialMeasurementNotes(variant, theme);
+}
+
+function getArtifactRiskPattern(variant: VariantEntry, theme: VariantTheme) {
+    if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            ...theme.artifactRisks,
+            'If a visual modifier makes the live cue ambiguous enough to create a new decision problem, classify it as a build defect rather than athlete failure.',
+        ];
+    }
+
+    return theme.artifactRisks;
+}
+
+function getVariantSpecificModifierMatrix(variant: VariantEntry) {
+    if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            '`flash` = a full-field luminance pulse, strobe burst, or abrupt overlay that competes with the live cue for <= 500 ms without changing the task rule or the correct target.',
+            '`target_disappearance` = the live cue is masked, hidden, or dropped for a bounded interval, then restored to the same task context so the athlete must reacquire the original target rather than solve a new problem.',
+            '`layout_scramble` = non-target anchors, peripheral elements, or surrounding layout positions shift while the live cue rule remains the same and the athlete must re-engage the original task.',
+            'Tier 1 allows one modifier at a time only: `flash` or `target_disappearance` or `layout_scramble`.',
+            'Tier 2 allows one modifier at a time or `flash + layout_scramble`; `target_disappearance` may pair only with low-salience flash and may not pair with simultaneous scramble.',
+            'Tier 3 allows `flash + target_disappearance` or `flash + layout_scramble`; `target_disappearance + layout_scramble` remains disallowed because it risks changing the mechanic from reset recovery into target-search or rule-discovery.',
+        ];
+    }
+
+    return [
+        'Define each approved modifier in runtime terms before publish so the pressure source is operationally clear rather than purely descriptive.',
+        'Lock which modifiers can co-occur by tier; if overlap rules are undefined, the build is not ready for publish.',
+    ];
+}
+
+function getVariantSpecificTrialProfile(variant: VariantEntry) {
+    if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            'If this variant is run in Trial Mode, lock a single Tier 3 profile: 5 minutes, adaptive difficulty off, coached feedback suppressed, fixed seed, fixed device logging, and one approved visual modifier schedule.',
+            'Recommended fixed schedule: Block 1 baseline clean read, Block 2 `flash` only, Block 3 `target_disappearance`, Block 4 `layout_scramble`, Block 5 `flash + layout_scramble` overlap.',
+            'Keep contrast profile, peripheral load tier, and visual density tier fixed for the whole trial protocol so the result reflects recovery quality rather than drifting presentation conditions.',
+        ];
+    }
+
+    return [
+        'If Trial Mode is used for this variant, lock one named modifier profile with fixed seed, fixed device class, fixed duration, and adaptive difficulty disabled rather than relying on prose-only standardization.',
+    ];
+}
+
+function getCanonicalAnalyticsTagVocabulary(variant: VariantEntry) {
+    if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            '`visual_disruption_subtype`: allowed values = `flash`, `target_disappearance`, `layout_scramble`.',
+            '`visual_disruption_overlap_mode`: allowed values = `single_modifier`, `flash_plus_target_disappearance`, `flash_plus_layout_scramble`.',
+            '`contrast_profile`: allowed values = `normal_contrast`, `reduced_contrast`, `glare_wash`.',
+            '`peripheral_load_tier`: allowed values = `low`, `medium`, `high`.',
+            '`visual_density_tier`: allowed values = `tier_1`, `tier_2`, `tier_3`.',
+            '`delivery_surface`: allowed values = `web_desktop`, `web_mobile`, `phone_native`, `tablet_native`.',
+        ];
+    }
+
+    return [
+        'Use canonical lower_snake_case tag families for modifier subtype, overlap mode, device class, and delivery surface; do not introduce near-duplicate labels at the session layer.',
+    ];
 }
 
 function getGenericArchetypeSpecNotes(variant: VariantEntry, familyBase: FamilySpecBase | undefined, theme: VariantTheme) {
@@ -2881,7 +3000,7 @@ function getNonTrialMeasurementNotes(variant: VariantEntry, theme: VariantTheme)
 function getNonTrialModeNotes(variant: VariantEntry, theme: VariantTheme) {
     const archetype = resolveVariantArchetype(variant);
     const trainingMode = [...theme.trainingMode];
-    const trialMode = [...theme.trialMode];
+    const trialMode = [...theme.trialMode, ...getVariantSpecificTrialProfile(variant)];
 
     if (variant.family === 'Reset' && archetype === 'sport_context') {
         return {
@@ -2942,9 +3061,9 @@ function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
     if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
         return [
             ...theme.buildNotes,
-            'Store visual disruption subtype tags such as flash, target disappearance, and layout scramble in the session record so recovery failures are attributable to the active disruption style.',
-            'Store display-state tags such as contrast profile, peripheral load, and visual density tier so visual difficulty is inspectable rather than anecdotal.',
+            'Store `visual_disruption_subtype`, `visual_disruption_overlap_mode`, `contrast_profile`, `peripheral_load_tier`, `visual_density_tier`, and `delivery_surface` using the canonical allowed values only.',
             'Preserve which visual disruption was active when a false start, motor artifact, or slow recovery occurred so coaches can separate reset speed from display-driven artifacts.',
+            'Keep the live cue visually legible under every modifier state; if the build changes the task identity instead of the disruption pressure, fail the variant for review.',
         ];
     }
 
@@ -3039,12 +3158,11 @@ function cleanupGeneratedBuildNotes(variant: VariantEntry, notes: string[]) {
     });
 
     if (variant.family === 'Reset' && resolveVariantArchetype(variant) === 'visual_channel') {
-        const disruptionIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store visual disruption subtype tags such as flash, target disappearance, and layout scramble'));
-        const displayStateIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store display-state tags such as contrast profile, peripheral load, and visual density tier'));
+        const disruptionIndex = cleaned.findIndex((note) => note.toLowerCase().includes('store `visual_disruption_subtype`, `visual_disruption_overlap_mode`, `contrast_profile`, `peripheral_load_tier`, `visual_density_tier`, and `delivery_surface`'));
         const preserveIndex = cleaned.findIndex((note) => note.toLowerCase().includes('preserve which visual disruption was active when a false start'));
-        if (disruptionIndex >= 0 && displayStateIndex >= 0 && preserveIndex >= 0) {
-            const next = cleaned.filter((_, index) => index !== displayStateIndex && index !== preserveIndex);
-            next[disruptionIndex] = 'Store visual disruption subtype tags such as flash, target disappearance, and layout scramble, plus display-state tags such as contrast profile, peripheral load, and visual density tier, and preserve which visual disruption was active when a false start, motor artifact, or slow recovery occurred so recovery failures are attributable to the active visual disruption style.';
+        if (disruptionIndex >= 0 && preserveIndex >= 0) {
+            const next = cleaned.filter((_, index) => index !== preserveIndex);
+            next[disruptionIndex] = 'Store `visual_disruption_subtype`, `visual_disruption_overlap_mode`, `contrast_profile`, `peripheral_load_tier`, `visual_density_tier`, and `delivery_surface` using the canonical allowed values only, and preserve which visual disruption was active when a false start, motor artifact, or slow recovery occurred so recovery failures are attributable to the active visual disruption style.';
             return next;
         }
     }
@@ -3270,7 +3388,13 @@ function buildGeneratedVariantSpec(variant: VariantEntry): string {
     const theme = inferVariantTheme(variant);
     const modeNotes = getNonTrialModeNotes(variant, theme);
     const buildNotes = cleanupGeneratedBuildNotes(variant, getNonTrialBuildNotes(variant, theme));
-    const today = 'March 9, 2026';
+    const today = formatGeneratedSpecDate();
+    const release = getGeneratedSpecReleaseMetadata(variant);
+    const assignmentPattern = getAssignmentLanguagePattern(theme);
+    const modifierMatrix = getVariantSpecificModifierMatrix(variant);
+    const measurementPattern = getMeasurementLanguagePattern(variant, theme);
+    const artifactRiskPattern = getArtifactRiskPattern(variant, theme);
+    const canonicalAnalyticsVocabulary = getCanonicalAnalyticsTagVocabulary(variant);
 
     if (isTrialVariant(variant)) {
         return buildGeneratedTrialVariantSpec(variant, familyBase, theme, today);
@@ -3283,16 +3407,16 @@ function buildGeneratedVariantSpec(variant: VariantEntry): string {
         `Variant Type: ${theme.variantType}`,
         `Registry Mode: ${MODE_CONFIG[variant.mode].label}`,
         `Family Status: ${variant.familyStatus === 'locked' ? 'Locked Family' : 'Candidate Family'}`,
-        `Status: ${mapVariantStatus(variant)}`,
+        `Status: ${release.status}`,
         `Build Priority: ${mapPriority(variant.priority)}`,
-        'Version: v0.1',
+        `Version: ${release.version}`,
         `Generated On: ${today}`,
         '',
         '2. Why This Variant Exists',
         `Purpose: ${theme.purpose}`,
         `Expected Benefit: ${theme.expectedBenefit}`,
         'When Nora Should Assign:',
-        ...theme.bestUse.map((item) => `- ${item}`),
+        ...assignmentPattern.map((item) => `- ${item}`),
         '',
         '3. Archetype Packaging Defaults',
         ...getGenericArchetypeSpecNotes(variant, familyBase, theme).map((item) => `- ${item}`),
@@ -3309,21 +3433,27 @@ function buildGeneratedVariantSpec(variant: VariantEntry): string {
         '5. Athlete Experience Flow',
         ...theme.athleteFlow.map((item) => `- ${item}`),
         '',
-        '6. Measurement and Scoring Notes',
-        ...getNonTrialMeasurementNotes(variant, theme).map((item) => `- ${item}`),
-        'Artifact / false-start risks:',
-        ...theme.artifactRisks.map((item) => `- ${item}`),
+        '6. Variant Modifier Matrix',
+        ...modifierMatrix.map((item) => `- ${item}`),
         '',
-        '7. Mode Behavior',
+        '7. Measurement and Scoring Notes',
+        ...measurementPattern.map((item) => `- ${item}`),
+        'Artifact / false-start risks:',
+        ...artifactRiskPattern.map((item) => `- ${item}`),
+        '',
+        '8. Mode Behavior',
         'Training Mode:',
         ...modeNotes.trainingMode.map((item) => `- ${item}`),
         'Trial Mode:',
         ...modeNotes.trialMode.map((item) => `- ${item}`),
         '',
-        '8. Build and Implementation Notes',
+        '9. Canonical Analytics Tag Vocabulary',
+        ...canonicalAnalyticsVocabulary.map((item) => `- ${item}`),
+        '',
+        '10. Build and Implementation Notes',
         ...buildNotes.map((item) => `- ${item}`),
         '',
-        '9. Governing Documents',
+        '11. Governing Documents',
         ...(familyBase?.governingDocs ?? [
             'Sim Specification Standards Addendum (v2)',
             `${variant.family} Family Spec`,
@@ -3331,15 +3461,17 @@ function buildGeneratedVariantSpec(variant: VariantEntry): string {
             'Sim Family Promotion Protocol v2.1',
         ]).map((item) => `- ${item}`),
         '',
-        '10. Boundary Safeguards',
+        '12. Boundary Safeguards',
         ...theme.boundarySafeguards.map((item) => `- ${item}`),
         '',
-        '11. Variant Readiness Checklist',
-        '- [ ] Core identity fields reviewed against the registry entry',
+        '13. Variant Readiness Checklist',
+        '- [ ] Core identity fields and status language reviewed against the registry entry and publish state',
         '- [ ] Archetype defaults match the intended packaging for this variant',
         '- [ ] Family inheritance and variant-specific changes confirmed',
+        '- [ ] Modifier matrix and co-occurrence rules locked before publish',
         '- [ ] Measurement notes checked against family metric rules',
-        '- [ ] Training Mode and Trial Mode behavior reviewed',
+        '- [ ] Training Mode and Trial Mode behavior reviewed, including any fixed trial profile',
+        '- [ ] Canonical analytics tag vocabulary locked to approved values',
         '- [ ] Artifact risks and boundary safeguards documented',
         '- [ ] Build and data notes translated into implementation tasks',
     ].join('\n'));
