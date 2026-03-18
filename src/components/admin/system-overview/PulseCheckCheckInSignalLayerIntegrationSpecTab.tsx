@@ -63,6 +63,98 @@ const FLOW_STEPS = [
   },
 ];
 
+const DECISION_FLOW_COLUMNS = [
+  {
+    title: 'Signal Intake',
+    accentClass: 'border-cyan-500/20 bg-cyan-500/[0.06]',
+    labelClass: 'text-cyan-200',
+    nodes: [
+      {
+        eyebrow: 'Athlete action',
+        title: 'Tap readiness + optional follow-up',
+        body: 'Submit one explicit check-in with source surface, time, readiness score, and structured reason when confidence needs it.',
+      },
+      {
+        eyebrow: 'Persisted object',
+        title: '`pulsecheck-check-ins` is written',
+        body: 'The tap becomes a durable runtime event instead of a local-only UI state or canned Nora reaction trigger.',
+      },
+    ],
+  },
+  {
+    title: 'State Interpretation',
+    accentClass: 'border-blue-500/20 bg-blue-500/[0.06]',
+    labelClass: 'text-blue-200',
+    nodes: [
+      {
+        eyebrow: 'Snapshot builder',
+        title: 'Raw snapshot pulls fresh context',
+        body: 'Combine the new self-report with recent performance, context, biometrics, and meaningful conversation-derived signals.',
+      },
+      {
+        eyebrow: 'AI enrichment',
+        title: 'Derive readiness, confidence, routing, protocol class',
+        body: 'The signal layer verifies contradictions, enriches the four state dimensions, then returns overallReadiness, confidence, recommendedRouting, and recommendedProtocolClass.',
+      },
+    ],
+  },
+  {
+    title: 'Bounded Planning',
+    accentClass: 'border-violet-500/20 bg-violet-500/[0.06]',
+    labelClass: 'text-violet-200',
+    nodes: [
+      {
+        eyebrow: 'Inventory assembly',
+        title: 'Build candidate set from active program + protocols',
+        body: 'The planner only sees valid sim and protocol options that match athlete state, program position, and current-day constraints.',
+      },
+      {
+        eyebrow: 'Planner decision',
+        title: 'Choose one bounded candidate',
+        body: 'AI can rank within the bounded pool, but it cannot invent work outside the registered inventory.',
+      },
+    ],
+  },
+  {
+    title: 'Execution Truth',
+    accentClass: 'border-emerald-500/20 bg-emerald-500/[0.06]',
+    labelClass: 'text-emerald-200',
+    nodes: [
+      {
+        eyebrow: 'Policy gate',
+        title: 'Validate freezes, safety, and mutability',
+        body: 'Coach overrides, started-task locks, safety rails, and eligibility checks determine whether the assignment can be refreshed or must stay frozen.',
+      },
+      {
+        eyebrow: 'Shared artifact',
+        title: 'Write one `pulsecheck-daily-assignments` record',
+        body: 'Today, Nora chat, and Training all render from the same assignment id, rationale, and status instead of parallel truths.',
+      },
+    ],
+  },
+];
+
+const DECISION_BRANCH_ROWS = [
+  {
+    trigger: 'Confidence is low or signals conflict',
+    systemBehavior: 'Reduce routing aggressiveness, optionally ask a lightweight follow-up, and keep the assignment reversible until evidence improves.',
+  },
+  {
+    trigger: 'The task is already started or coach-frozen',
+    systemBehavior: 'Store the new signal and refresh the snapshot, but do not silently rewrite execution truth for the same date.',
+  },
+  {
+    trigger: 'A meaningful chat correction lands before start',
+    systemBehavior: 'Refresh the snapshot, rerun the bounded planner, and rematerialize the mutable daily assignment with revision lineage.',
+  },
+];
+
+const DECISION_FEEDBACK_LOOP = [
+  'Viewed, started, completed, deferred, overridden, and corrected-in-chat events all feed back into snapshot refresh logic.',
+  'The next Nora message and the next surface render should read the refreshed assignment and snapshot ids, not old UI copy.',
+  'If Box Breathing appears after check-in, it should now be because the runtime assignment actually resolved to that exercise.',
+];
+
 const IOS_ROWS = [
   ['Tap readiness chip', 'Create `pulsecheck-check-ins` event and call orchestrator submit endpoint', 'Do not open chat automatically; return updated snapshot + assignment payload'],
   ['Low / Drained response', 'Optionally ask one lightweight structured follow-up when confidence or routing needs it', 'Examples: mentally tired, emotionally heavy, scattered, poor sleep, pressure'],
@@ -204,6 +296,56 @@ const PulseCheckCheckInSignalLayerIntegrationSpecTab: React.FC = () => {
 
       <SectionBlock icon={ArrowLeftRight} title="End-to-End Runtime Flow">
         <StepRail steps={FLOW_STEPS} />
+      </SectionBlock>
+
+      <SectionBlock icon={Route} title="Decision Flow Chart">
+        <div className="space-y-4 rounded-3xl border border-zinc-800 bg-[#090f1c] p-5">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-4">
+            {DECISION_FLOW_COLUMNS.map((column, columnIndex) => (
+              <div key={column.title} className="relative">
+                {columnIndex < DECISION_FLOW_COLUMNS.length - 1 ? (
+                  <div className="pointer-events-none absolute -right-3 top-10 hidden h-px w-6 bg-zinc-700 xl:block" />
+                ) : null}
+                <div className={`rounded-2xl border p-4 ${column.accentClass}`}>
+                  <p className={`text-[11px] font-semibold uppercase tracking-[0.18em] ${column.labelClass}`}>{column.title}</p>
+                  <div className="mt-4 space-y-3">
+                    {column.nodes.map((node, nodeIndex) => (
+                      <div key={node.title} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                        <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">{node.eyebrow}</p>
+                        <p className="mt-2 text-sm font-semibold text-white">{node.title}</p>
+                        <p className="mt-2 text-sm leading-relaxed text-zinc-300">{node.body}</p>
+                        {nodeIndex < column.nodes.length - 1 ? (
+                          <div className="mt-3 flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                            <span className="h-px flex-1 bg-zinc-700" />
+                            Continue
+                            <span className="h-px flex-1 bg-zinc-700" />
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <CardGrid columns="md:grid-cols-2">
+            {DECISION_BRANCH_ROWS.map((row) => (
+              <InfoCard
+                key={row.trigger}
+                title={row.trigger}
+                accent="amber"
+                body={row.systemBehavior}
+              />
+            ))}
+          </CardGrid>
+
+          <InfoCard
+            title="Feedback Loop"
+            accent="green"
+            body={<BulletList items={DECISION_FEEDBACK_LOOP} />}
+          />
+        </div>
       </SectionBlock>
 
       <SectionBlock icon={Smartphone} title="Athlete Surface Behavior">

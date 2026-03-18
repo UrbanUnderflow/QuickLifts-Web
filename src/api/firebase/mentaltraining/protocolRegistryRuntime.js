@@ -49,6 +49,11 @@ function defaultAvoidWindowTags(protocolClass) {
   }
 }
 
+function derivePublishedRevisionId(protocolId, publishedAt) {
+  if (!protocolId || typeof publishedAt !== 'number' || !Number.isFinite(publishedAt)) return undefined;
+  return `${protocolId}@${publishedAt}`;
+}
+
 function normalizeProtocolRecord(record, now = Date.now(), fallbackSortOrder = 999) {
   const label = record.label || record.id || 'Protocol';
   const protocolClass = record.protocolClass || 'regulation';
@@ -58,9 +63,15 @@ function normalizeProtocolRecord(record, now = Date.now(), fallbackSortOrder = 9
   const variantLabel = record.variantLabel || label;
   const variantKey = record.variantKey || slugify(variantLabel || label || 'protocol');
   const familyId = record.familyId || `${protocolClass}-${responseFamily}`;
+  const protocolId = record.id || '';
+  const publishedAt = typeof record.publishedAt === 'number'
+    ? record.publishedAt
+    : publishStatus === 'published'
+      ? now
+      : undefined;
 
   return {
-    id: record.id || '',
+    id: protocolId,
     label,
     familyId,
     familyLabel: record.familyLabel || toTitleCase(responseFamily),
@@ -69,6 +80,7 @@ function normalizeProtocolRecord(record, now = Date.now(), fallbackSortOrder = 9
     variantKey,
     variantLabel,
     variantVersion: record.variantVersion || 'v1',
+    publishedRevisionId: record.publishedRevisionId || derivePublishedRevisionId(protocolId, publishedAt),
     governanceStage:
       record.governanceStage ||
       (publishStatus === 'published' ? 'published' : publishStatus === 'archived' ? 'archived' : 'structured'),
@@ -91,7 +103,7 @@ function normalizeProtocolRecord(record, now = Date.now(), fallbackSortOrder = 9
     sortOrder: typeof record.sortOrder === 'number' ? record.sortOrder : fallbackSortOrder,
     publishStatus,
     isActive: record.isActive !== false,
-    publishedAt: typeof record.publishedAt === 'number' ? record.publishedAt : undefined,
+    publishedAt,
     archivedAt: typeof record.archivedAt === 'number' ? record.archivedAt : undefined,
     createdAt: typeof record.createdAt === 'number' ? record.createdAt : now,
     updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : now,

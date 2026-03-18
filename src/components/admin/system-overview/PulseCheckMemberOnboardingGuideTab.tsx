@@ -1,6 +1,8 @@
 import React from 'react';
-import { AlertTriangle, Bell, Brain, ClipboardCheck, Database, KeyRound, ShieldCheck, Smartphone, Users, UserCog, Waypoints } from 'lucide-react';
+import { AlertTriangle, Bell, Brain, ClipboardCheck, Database, KeyRound, ShieldCheck, Smartphone, Users, UserCog, Waypoints, FileText, Building2 } from 'lucide-react';
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
+import ArtifactPageLibrary, { ArtifactPageEntry } from './ArtifactPageLibrary';
+import PulseCheckTeamPilotCohortOnboardingArchitectureTab from './PulseCheckTeamPilotCohortOnboardingArchitectureTab';
 
 const READINESS_ROWS = [
   ['Organization readiness', 'Pulse Check has created the organization shell internally and attached implementation defaults.'],
@@ -184,7 +186,7 @@ const MODELING_ROWS = [
   ['Clinician setup', 'A launch-ready team should have a default clinician profile whenever day-one escalation support is expected.'],
 ];
 
-const PulseCheckMemberOnboardingGuideTab: React.FC = () => {
+const MemberOnboardingGuideOverviewDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
@@ -385,6 +387,36 @@ const PulseCheckMemberOnboardingGuideTab: React.FC = () => {
         <DataTable columns={['Issue', 'What To Check First']} rows={FAILURE_ROWS} />
       </SectionBlock>
     </div>
+  );
+};
+
+const ONBOARDING_ACCESS_PAGES: ArtifactPageEntry[] = [
+  {
+    id: 'member-onboarding-guide',
+    label: 'Member Onboarding Guide',
+    subtitle: 'End-to-end entry flow from setup through baseline unlock.',
+    icon: FileText,
+    accent: '#c084fc',
+    render: () => <MemberOnboardingGuideOverviewDoc />,
+  },
+  {
+    id: 'team-pilot-onboarding',
+    label: 'Team & Pilot Onboarding',
+    subtitle: 'How orgs, teams, pilots, cohorts, clinicians, and enrollments enter the system.',
+    icon: Building2,
+    accent: '#38bdf8',
+    render: () => <PulseCheckTeamPilotCohortOnboardingArchitectureTab />,
+  },
+];
+
+const PulseCheckMemberOnboardingGuideTab: React.FC = () => {
+  return (
+    <ArtifactPageLibrary
+      eyebrow="Pulse Check · Onboarding & Access"
+      title="Onboarding & Access Library"
+      summary="Operational parent artifact with internal pages for member entry flow, team and pilot onboarding architecture, and PulseCheck permissions posture."
+      entries={ONBOARDING_ACCESS_PAGES}
+    />
   );
 };
 

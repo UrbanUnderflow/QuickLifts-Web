@@ -1,6 +1,15 @@
 import React from 'react';
-import { Activity, AlertTriangle, ArrowRightLeft, Clock3, Cpu, GitBranch, ShieldAlert, Users } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowRightLeft, Clock3, Cpu, GitBranch, ShieldAlert, Users, FileText, Radar, ClipboardCheck, TimerReset, Flag, Bot, TestTube2, Waypoints, ShieldCheck } from 'lucide-react';
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
+import ArtifactPageLibrary, { ArtifactPageEntry } from './ArtifactPageLibrary';
+import PulseCheckStateSignalLayerTab from './PulseCheckStateSignalLayerTab';
+import PulseCheckCheckInSignalLayerIntegrationSpecTab from './PulseCheckCheckInSignalLayerIntegrationSpecTab';
+import PulseCheckStateSnapshotFreshnessPolicyTab from './PulseCheckStateSnapshotFreshnessPolicyTab';
+import PulseCheckPerformanceStateFlagDefinitionsTab from './PulseCheckPerformanceStateFlagDefinitionsTab';
+import PulseCheckNoraAssignmentRulesTab from './PulseCheckNoraAssignmentRulesTab';
+import PulseCheckNoraQaEdgeCaseScenarioMatrixTab from './PulseCheckNoraQaEdgeCaseScenarioMatrixTab';
+import PulseCheckStateEscalationOrchestrationTab from './PulseCheckStateEscalationOrchestrationTab';
+import PulseCheckEscalationIntegrationSpecTab from './PulseCheckEscalationIntegrationSpecTab';
 
 const SOURCE_OF_TRUTH = [
   ['Hard safety policy', 'Admin escalation conditions and explicit safety language govern clinical action.', 'Safety response always wins over a benign state or training goal.'],
@@ -117,7 +126,7 @@ const PILOT_DEFAULT_ROWS = [
   ['Pre-training unlock behavior', 'Standard coach or Nora sim assignment should stay locked until consent and the in-app baseline are complete. Optional Vision Pro sessions do not block unlock unless the rollout explicitly says otherwise. Shared completion truth can come from web baselineAssessment or native baselineProbe.'],
 ];
 
-const PulseCheckRuntimeArchitectureTab: React.FC = () => {
+const RuntimeArchitectureOverviewDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
@@ -251,6 +260,92 @@ const PulseCheckRuntimeArchitectureTab: React.FC = () => {
         />
       </SectionBlock>
     </div>
+  );
+};
+
+const RUNTIME_STACK_PAGES: ArtifactPageEntry[] = [
+  {
+    id: 'runtime-overview',
+    label: 'Runtime Overview',
+    subtitle: 'Top-level map for perception, routing, execution, and escalation.',
+    icon: FileText,
+    accent: '#c084fc',
+    render: () => <RuntimeArchitectureOverviewDoc />,
+  },
+  {
+    id: 'state-signal-layer',
+    label: 'State Signal Layer',
+    subtitle: 'Operational state inference, confidence, freshness, and outputs.',
+    icon: Radar,
+    accent: '#38bdf8',
+    render: () => <PulseCheckStateSignalLayerTab />,
+  },
+  {
+    id: 'checkin-integration',
+    label: 'Check-In Integration Spec',
+    subtitle: 'Contract between readiness check-in, snapshots, bounded candidates, and Nora.',
+    icon: ClipboardCheck,
+    accent: '#22c55e',
+    render: () => <PulseCheckCheckInSignalLayerIntegrationSpecTab />,
+  },
+  {
+    id: 'freshness-policy',
+    label: 'Snapshot Freshness Policy',
+    subtitle: 'Recency, validity, and decay rules for runtime snapshot use.',
+    icon: TimerReset,
+    accent: '#f59e0b',
+    render: () => <PulseCheckStateSnapshotFreshnessPolicyTab />,
+  },
+  {
+    id: 'performance-flags',
+    label: 'Performance-State Flags',
+    subtitle: 'Family-level definitions for translating acute sim behavior into state evidence.',
+    icon: Flag,
+    accent: '#14b8a6',
+    render: () => <PulseCheckPerformanceStateFlagDefinitionsTab />,
+  },
+  {
+    id: 'assignment-rules',
+    label: 'Nora Assignment Rules',
+    subtitle: 'Decision rules for Protocol, Sim, Trial, defer, and safety-aware assignment.',
+    icon: Bot,
+    accent: '#ef4444',
+    render: () => <PulseCheckNoraAssignmentRulesTab />,
+  },
+  {
+    id: 'qa-matrix',
+    label: 'Nora QA Matrix',
+    subtitle: 'Conflict, override, and edge-case testing for runtime behavior.',
+    icon: TestTube2,
+    accent: '#eab308',
+    render: () => <PulseCheckNoraQaEdgeCaseScenarioMatrixTab />,
+  },
+  {
+    id: 'state-escalation-orchestration',
+    label: 'State & Escalation Orchestration',
+    subtitle: 'Shared perception with separate performance, support, and safety lanes.',
+    icon: Waypoints,
+    accent: '#06b6d4',
+    render: () => <PulseCheckStateEscalationOrchestrationTab />,
+  },
+  {
+    id: 'escalation-integration',
+    label: 'Escalation Integration Spec',
+    subtitle: 'Execution-layer bridge between state snapshots and escalation workflow.',
+    icon: ShieldCheck,
+    accent: '#fb7185',
+    render: () => <PulseCheckEscalationIntegrationSpecTab />,
+  },
+];
+
+const PulseCheckRuntimeArchitectureTab: React.FC = () => {
+  return (
+    <ArtifactPageLibrary
+      eyebrow="Pulse Check · Runtime Stack"
+      title="Runtime Stack Library"
+      summary="Operating parent artifact with internal pages for state logic, check-in contracts, assignment policy, escalation routing, freshness posture, and QA coverage."
+      entries={RUNTIME_STACK_PAGES}
+    />
   );
 };
 

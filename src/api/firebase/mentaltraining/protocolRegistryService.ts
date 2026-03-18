@@ -23,6 +23,8 @@ import {
   type PulseCheckDailyAssignment,
   type PulseCheckProtocolDefinition,
   type PulseCheckProtocolEvidenceStatus,
+  type PulseCheckProtocolDownstreamImpactSummary,
+  type PulseCheckProtocolEvidenceFreshness,
   type PulseCheckProtocolEvidenceSummary,
   type PulseCheckProtocolFamily,
   type PulseCheckProtocolFamilyHistoryEntry,
@@ -43,6 +45,8 @@ import {
   pulseCheckProtocolVariantToFirestore,
 } from './types';
 import protocolSeed from './pulsecheckProtocolRegistry.json';
+import { getSeededProtocolFamilySpecById } from './pulsecheckProtocolFamilySpecs';
+import { getSeededProtocolVariantSpecById } from './pulsecheckProtocolVariantSpecs';
 
 export interface ProtocolRegistryWorkspaceBundle {
   families: PulseCheckProtocolFamily[];
@@ -76,6 +80,9 @@ function normalizeStringArray(values: string[] | undefined, fallback: string[] =
   return Array.from(new Set(source.map((value) => value.trim()).filter(Boolean)));
 }
 
+const EVIDENCE_CURRENT_WINDOW_DAYS = 21;
+const EVIDENCE_DEGRADED_WINDOW_DAYS = 45;
+
 function defaultExpectedStateShift(protocolClass: PulseCheckProtocolDefinition['protocolClass']) {
   switch (protocolClass) {
     case 'priming':
@@ -100,6 +107,106 @@ function defaultAvoidWindowTags(protocolClass: PulseCheckProtocolDefinition['pro
   }
 }
 
+function derivePublishedRevisionId(protocolId: string, publishedAt?: number) {
+  if (!protocolId || typeof publishedAt !== 'number' || !Number.isFinite(publishedAt)) return undefined;
+  return `${protocolId}@${publishedAt}`;
+}
+
+function deriveResponseDirection(
+  positiveSignals: number,
+  negativeSignals: number
+): PulseCheckProtocolEvidenceSummary['responseDirection'] {
+  if (negativeSignals > positiveSignals && negativeSignals > 0) return 'negative';
+  if (positiveSignals > negativeSignals && positiveSignals > 0) return 'positive';
+  if (positiveSignals > 0 && negativeSignals > 0) return 'mixed';
+  return 'neutral';
+}
+
+function deriveConfidence(sampleSize: number, positiveSignals: number, negativeSignals: number) {
+  const decisiveSignals = positiveSignals + negativeSignals;
+  const dominance = decisiveSignals > 0 ? Math.max(positiveSignals, negativeSignals) / decisiveSignals : 0;
+
+  if (sampleSize >= 6 && decisiveSignals >= 4 && dominance >= 0.66) return 'high' as const;
+  if (sampleSize >= 3 && decisiveSignals >= 2) return 'medium' as const;
+  return 'low' as const;
+}
+
+function deriveEvidenceFreshness(lastObservedAt?: number, lastConfirmedAt?: number): PulseCheckProtocolEvidenceFreshness | undefined {
+  const anchor = lastConfirmedAt || lastObservedAt;
+  if (!anchor) return undefined;
+
+  const ageDays = (Date.now() - anchor) / (24 * 60 * 60 * 1000);
+  const freshness =
+    ageDays <= EVIDENCE_CURRENT_WINDOW_DAYS
+      ? 'current'
+      : ageDays <= EVIDENCE_DEGRADED_WINDOW_DAYS
+        ? 'degraded'
+        : 'refresh_required';
+
+  return {
+    freshness,
+    lastObservedAt,
+    lastConfirmedAt,
+    ageDays: Number(ageDays.toFixed(1)),
+    staleAt: lastObservedAt ? lastObservedAt + EVIDENCE_DEGRADED_WINDOW_DAYS * 24 * 60 * 60 * 1000 : undefined,
+    explanation:
+      freshness === 'current'
+        ? 'Evidence is still within the current freshness window.'
+        : freshness === 'degraded'
+          ? 'Evidence is getting older and should be refreshed soon.'
+          : 'Evidence is stale enough that launch confidence should be downgraded until refreshed.',
+  };
+}
+
+function normalizeEvidenceFreshness(
+  freshness: Partial<PulseCheckProtocolEvidenceFreshness> | undefined,
+  lastObservedAt?: number,
+  lastConfirmedAt?: number
+): PulseCheckProtocolEvidenceFreshness | undefined {
+  if (!freshness) {
+    return deriveEvidenceFreshness(lastObservedAt, lastConfirmedAt);
+  }
+
+  const derived = deriveEvidenceFreshness(
+    typeof freshness.lastObservedAt === 'number' ? freshness.lastObservedAt : lastObservedAt,
+    typeof freshness.lastConfirmedAt === 'number' ? freshness.lastConfirmedAt : lastConfirmedAt
+  );
+
+  return {
+    freshness: freshness.freshness || derived?.freshness || 'degraded',
+    lastObservedAt: typeof freshness.lastObservedAt === 'number' ? freshness.lastObservedAt : derived?.lastObservedAt,
+    lastConfirmedAt: typeof freshness.lastConfirmedAt === 'number' ? freshness.lastConfirmedAt : derived?.lastConfirmedAt,
+    ageDays: typeof freshness.ageDays === 'number' ? freshness.ageDays : derived?.ageDays,
+    staleAt: typeof freshness.staleAt === 'number' ? freshness.staleAt : derived?.staleAt,
+    explanation: freshness.explanation?.trim() || derived?.explanation,
+  };
+}
+
+function normalizeDownstreamImpactSummary(
+  summary: Partial<PulseCheckProtocolDownstreamImpactSummary> | undefined
+): PulseCheckProtocolDownstreamImpactSummary | undefined {
+  if (!summary) return undefined;
+  const sampleSize = typeof summary.sampleSize === 'number' ? summary.sampleSize : 0;
+  const positiveSignals = typeof summary.positiveSignals === 'number' ? summary.positiveSignals : 0;
+  const neutralSignals = typeof summary.neutralSignals === 'number' ? summary.neutralSignals : 0;
+  const negativeSignals = typeof summary.negativeSignals === 'number' ? summary.negativeSignals : 0;
+  const totalSignals = positiveSignals + neutralSignals + negativeSignals;
+  const inferredSampleSize = Math.max(sampleSize, totalSignals);
+
+  return {
+    sampleSize: inferredSampleSize,
+    positiveSignals,
+    neutralSignals,
+    negativeSignals,
+    responseDirection:
+      summary.responseDirection || deriveResponseDirection(positiveSignals, negativeSignals),
+    confidence: summary.confidence || deriveConfidence(inferredSampleSize, positiveSignals, negativeSignals),
+    lastObservedAt: typeof summary.lastObservedAt === 'number' ? summary.lastObservedAt : undefined,
+    lastConfirmedAt: typeof summary.lastConfirmedAt === 'number' ? summary.lastConfirmedAt : undefined,
+    explanation: summary.explanation?.trim() || undefined,
+  };
+}
+
 function normalizeEvidencePanel(
   panel: Partial<PulseCheckProtocolEvidenceSummary> | undefined,
 ): PulseCheckProtocolEvidenceSummary | undefined {
@@ -110,25 +217,20 @@ function normalizeEvidencePanel(
   const negativeSignals = typeof panel.negativeSignals === 'number' ? panel.negativeSignals : 0;
   const totalSignals = positiveSignals + neutralSignals + negativeSignals;
   const inferredSampleSize = Math.max(sampleSize, totalSignals);
-  const responseDirection =
-    negativeSignals > positiveSignals && negativeSignals > 0
-      ? 'negative'
-      : positiveSignals > negativeSignals && positiveSignals > 0
-        ? 'positive'
-        : positiveSignals > 0 && negativeSignals > 0
-          ? 'mixed'
-          : 'neutral';
-  const confidence =
-    inferredSampleSize >= 6 ? 'high' : inferredSampleSize >= 3 ? 'medium' : 'low';
+  const lastObservedAt = typeof panel.lastObservedAt === 'number' ? panel.lastObservedAt : undefined;
+  const freshness = normalizeEvidenceFreshness(panel.freshness, lastObservedAt);
+  const downstreamImpact = normalizeDownstreamImpactSummary(panel.downstreamImpact);
 
   return {
     sampleSize: inferredSampleSize,
     positiveSignals,
     neutralSignals,
     negativeSignals,
-    responseDirection,
-    confidence,
-    lastObservedAt: typeof panel.lastObservedAt === 'number' ? panel.lastObservedAt : undefined,
+    responseDirection: panel.responseDirection || deriveResponseDirection(positiveSignals, negativeSignals),
+    confidence: panel.confidence || deriveConfidence(inferredSampleSize, positiveSignals, negativeSignals),
+    lastObservedAt,
+    freshness,
+    downstreamImpact,
     explanation: panel.explanation?.trim() || undefined,
   };
 }
@@ -137,9 +239,132 @@ function deriveEvidenceStatus(
   panel: PulseCheckProtocolEvidenceSummary | undefined
 ): PulseCheckProtocolEvidenceStatus {
   if (!panel || panel.sampleSize <= 0) return 'insufficient';
+  if (panel.freshness?.freshness === 'refresh_required') {
+    return panel.sampleSize >= 3 ? 'watch' : 'developing';
+  }
   if (panel.responseDirection === 'negative' || panel.negativeSignals >= panel.positiveSignals) return 'watch';
+  if (panel.downstreamImpact?.responseDirection === 'negative') return 'watch';
   if (panel.sampleSize >= 6 && panel.positiveSignals > panel.negativeSignals) return 'credible';
   return 'developing';
+}
+
+function classifyAssignmentDownstreamImpact(
+  assignment: PulseCheckDailyAssignment,
+  downstreamAssignments: PulseCheckDailyAssignment[]
+): {
+  responseDirection: PulseCheckProtocolDownstreamImpactSummary['responseDirection'];
+  positiveSignals: number;
+  neutralSignals: number;
+  negativeSignals: number;
+  lastObservedAt: number;
+  lastConfirmedAt?: number;
+  explanation: string;
+} {
+  const orderedDownstream = downstreamAssignments
+    .filter((candidate) => candidate.actionType === 'sim' || candidate.actionType === 'lighter_sim')
+    .slice()
+    .sort((left, right) => (right.updatedAt || right.createdAt || 0) - (left.updatedAt || left.createdAt || 0));
+
+  if (!orderedDownstream.length) {
+    return {
+      responseDirection: 'neutral',
+      positiveSignals: 0,
+      neutralSignals: 1,
+      negativeSignals: 0,
+      lastObservedAt: assignment.updatedAt || assignment.createdAt || 0,
+      explanation: 'No downstream sim or lighter-sim assignment was observed on the same day.',
+    };
+  }
+
+  const latest = orderedDownstream[0];
+  const latestEvent = latest.completedAt
+    ? { type: 'completed' as const, at: latest.completedAt }
+    : latest.status === 'completed'
+      ? { type: 'completed' as const, at: latest.updatedAt || latest.createdAt || 0 }
+      : latest.status === 'deferred' || latest.status === 'overridden'
+        ? { type: latest.status as 'deferred' | 'overridden', at: latest.updatedAt || latest.createdAt || 0 }
+        : undefined;
+
+  if (latestEvent?.type === 'completed') {
+    return {
+      responseDirection: 'positive',
+      positiveSignals: 1,
+      neutralSignals: 0,
+      negativeSignals: 0,
+      lastObservedAt: latest.updatedAt || latest.createdAt || assignment.updatedAt || assignment.createdAt || 0,
+      lastConfirmedAt: latestEvent.at,
+      explanation: `Downstream ${latest.actionType === 'lighter_sim' ? 'lighter sim' : 'sim'} completed after the protocol.`,
+    };
+  }
+
+  if (latestEvent?.type === 'deferred' || latestEvent?.type === 'overridden') {
+    return {
+      responseDirection: 'negative',
+      positiveSignals: 0,
+      neutralSignals: 0,
+      negativeSignals: 1,
+      lastObservedAt: latest.updatedAt || latest.createdAt || assignment.updatedAt || assignment.createdAt || 0,
+      lastConfirmedAt: latestEvent.at,
+      explanation: `Downstream ${latest.actionType === 'lighter_sim' ? 'lighter sim' : 'sim'} was deferred or overridden.`,
+    };
+  }
+
+  return {
+    responseDirection: 'neutral',
+    positiveSignals: 0,
+    neutralSignals: 1,
+    negativeSignals: 0,
+    lastObservedAt: latest.updatedAt || latest.createdAt || assignment.updatedAt || assignment.createdAt || 0,
+    explanation: `Downstream ${latest.actionType === 'lighter_sim' ? 'lighter sim' : 'sim'} is still in-flight or inconclusive.`,
+  };
+}
+
+function summarizeDownstreamSignals(
+  assignments: PulseCheckDailyAssignment[],
+  downstreamAssignmentsByKey: Map<string, PulseCheckDailyAssignment[]>
+): PulseCheckProtocolDownstreamImpactSummary | undefined {
+  if (!assignments.length) return undefined;
+
+  let positiveSignals = 0;
+  let neutralSignals = 0;
+  let negativeSignals = 0;
+  let lastObservedAt = 0;
+  let lastConfirmedAt = 0;
+  const evidence: string[] = [];
+
+  assignments.forEach((assignment) => {
+    const key = `${assignment.athleteId}::${assignment.sourceDate}`;
+    const downstreamSummary = classifyAssignmentDownstreamImpact(assignment, downstreamAssignmentsByKey.get(key) || []);
+
+    positiveSignals += downstreamSummary.responseDirection === 'positive' ? 1 : 0;
+    neutralSignals += downstreamSummary.responseDirection === 'neutral' ? 1 : 0;
+    negativeSignals += downstreamSummary.responseDirection === 'negative' ? 1 : 0;
+    lastObservedAt = Math.max(lastObservedAt, downstreamSummary.lastObservedAt || 0);
+    if (downstreamSummary.lastConfirmedAt) {
+      lastConfirmedAt = Math.max(lastConfirmedAt, downstreamSummary.lastConfirmedAt);
+    }
+    evidence.push(downstreamSummary.explanation);
+  });
+
+  const sampleSize = assignments.length;
+  return {
+    sampleSize,
+    positiveSignals,
+    neutralSignals,
+    negativeSignals,
+    responseDirection: deriveResponseDirection(positiveSignals, negativeSignals),
+    confidence: deriveConfidence(sampleSize, positiveSignals, negativeSignals),
+    lastObservedAt: lastObservedAt || undefined,
+    lastConfirmedAt: lastConfirmedAt || undefined,
+    explanation: evidence.slice(0, 3).join(' '),
+  };
+}
+
+function summarizeEvidenceFreshness(
+  sampleLastObservedAt?: number,
+  sampleLastConfirmedAt?: number
+): PulseCheckProtocolEvidenceFreshness | undefined {
+  return deriveEvidenceFreshness(sampleLastObservedAt, sampleLastConfirmedAt);
 }
 
 function summarizeReviewStatus(gates: PulseCheckProtocolReviewGate[]): PulseCheckProtocolReviewStatus {
@@ -183,6 +408,7 @@ function deriveVariantReviewChecklist(record: Partial<PulseCheckProtocolVariant>
     buildGate('script', 'Script or prompting summary is recorded', Boolean(record.scriptSummary?.trim())),
     buildGate('trigger', 'Trigger tags are defined', Boolean(record.triggerTags?.length)),
     buildGate('window', 'Context or use-window tags are defined', Boolean(record.preferredContextTags?.length || record.useWindowTags?.length)),
+    buildGate('evidence', 'Scientific basis is attached', Boolean(record.evidenceSummary?.trim() || record.sourceReferences?.length)),
     buildGate('misuse', 'Misuse risk reviewed', Boolean(record.contraindicationTags?.length || record.reviewNotes?.trim())),
   ];
 }
@@ -228,7 +454,8 @@ function pulseCheckAssignmentEventFromFirestore(
 function buildLiveEvidencePanel(
   assignments: PulseCheckDailyAssignment[],
   eventsByAssignmentId: Map<string, PulseCheckAssignmentEvent[]>,
-  label: string
+  label: string,
+  downstreamAssignmentsByKey: Map<string, PulseCheckDailyAssignment[]>
 ): PulseCheckProtocolEvidenceSummary | undefined {
   if (!assignments.length) {
     return undefined;
@@ -238,6 +465,8 @@ function buildLiveEvidencePanel(
   let neutralSignals = 0;
   let negativeSignals = 0;
   let lastObservedAt = 0;
+  let lastConfirmedAt = 0;
+  const evidenceNarrative: string[] = [];
 
   assignments.forEach((assignment) => {
     const events = (eventsByAssignmentId.get(assignment.id) || []).slice().sort((left, right) => right.eventAt - left.eventAt);
@@ -247,6 +476,8 @@ function buildLiveEvidencePanel(
 
     if (latestMeaningfulEvent?.eventType === 'completed' || assignment.status === 'completed') {
       positiveSignals += 1;
+      lastConfirmedAt = Math.max(lastConfirmedAt, latestMeaningfulEvent?.eventAt || assignment.completedAt || assignment.updatedAt || assignment.createdAt || 0);
+      evidenceNarrative.push('Observed a completed protocol assignment.');
       return;
     }
 
@@ -257,13 +488,27 @@ function buildLiveEvidencePanel(
       assignment.status === 'overridden'
     ) {
       negativeSignals += 1;
+      lastConfirmedAt = Math.max(lastConfirmedAt, latestMeaningfulEvent?.eventAt || assignment.updatedAt || assignment.createdAt || 0);
+      evidenceNarrative.push('Observed a deferred or overridden protocol assignment.');
       return;
     }
 
     neutralSignals += 1;
+    evidenceNarrative.push('Protocol assignment is still in-flight or inconclusive.');
   });
 
   const sampleSize = assignments.length;
+  const downstreamImpact = summarizeDownstreamSignals(assignments, downstreamAssignmentsByKey);
+  const derivedFreshness = summarizeEvidenceFreshness(lastObservedAt, lastConfirmedAt || downstreamImpact?.lastConfirmedAt);
+  const freshness = normalizeEvidenceFreshness(derivedFreshness, lastObservedAt, lastConfirmedAt || downstreamImpact?.lastConfirmedAt);
+  const signalMix = `${positiveSignals} completed, ${negativeSignals} deferred or overridden, ${neutralSignals} still in-flight or inconclusive.`;
+  const freshnessLine = freshness
+    ? `Freshness is ${freshness.freshness}${typeof freshness.ageDays === 'number' ? ` (${freshness.ageDays} days old)` : ''}.`
+    : 'Freshness could not be derived yet.';
+  const downstreamLine = downstreamImpact
+    ? `Downstream impact trends ${downstreamImpact.responseDirection} with ${downstreamImpact.positiveSignals} positive, ${downstreamImpact.negativeSignals} negative, and ${downstreamImpact.neutralSignals} neutral downstream outcomes.`
+    : 'No downstream impact signal has been captured yet.';
+
   const responseDirection =
     negativeSignals > positiveSignals && negativeSignals > 0
       ? 'negative'
@@ -282,7 +527,9 @@ function buildLiveEvidencePanel(
     responseDirection,
     confidence,
     lastObservedAt: lastObservedAt || undefined,
-    explanation: `Live runtime evidence for ${label}: ${positiveSignals} completed, ${negativeSignals} deferred or overridden, ${neutralSignals} still in-flight or inconclusive.`,
+    freshness,
+    downstreamImpact,
+    explanation: `Live runtime evidence for ${label}: ${signalMix} ${downstreamLine} ${freshnessLine} ${evidenceNarrative.slice(0, 4).join(' ')}`.trim(),
   };
 }
 
@@ -390,6 +637,7 @@ function normalizeVariantRecord(
     avoidWindowTags: normalizeStringArray(record.avoidWindowTags, family?.avoidWindowTags || []),
     contraindicationTags: normalizeStringArray(record.contraindicationTags, family?.contraindicationTags || []),
     evidenceSummary: record.evidenceSummary?.trim() || undefined,
+    sourceReferences: normalizeStringArray(record.sourceReferences),
     reviewNotes: record.reviewNotes?.trim() || undefined,
     approvalStatus,
     reviewChecklist,
@@ -426,8 +674,10 @@ function normalizeRuntimeRecord(
   const evidencePanel = normalizeEvidencePanel(record.evidencePanel);
   const evidenceStatus = record.evidenceStatus || deriveEvidenceStatus(evidencePanel);
   const reviewCadenceDays = typeof record.reviewCadenceDays === 'number' ? record.reviewCadenceDays : 30;
+  const publishedAt = typeof record.publishedAt === 'number' ? record.publishedAt : undefined;
+  const normalizedId = record.id?.trim() || `protocol-${variantKey || Date.now()}`;
   return {
-    id: record.id?.trim() || `protocol-${variantKey || Date.now()}`,
+    id: normalizedId,
     label,
     familyId,
     familyLabel: record.familyLabel?.trim() || family?.label || toTitleCase(responseFamily),
@@ -436,6 +686,7 @@ function normalizeRuntimeRecord(
     variantKey,
     variantLabel: record.variantLabel?.trim() || variant?.label || label,
     variantVersion: record.variantVersion?.trim() || variant?.variantVersion || 'v1',
+    publishedRevisionId: record.publishedRevisionId || derivePublishedRevisionId(normalizedId, publishedAt),
     governanceStage: deriveGovernanceStageFromPublishStatus(publishStatus, record.governanceStage || variant?.governanceStage || family?.governanceStage),
     legacyExerciseId: record.legacyExerciseId?.trim() || variant?.legacyExerciseId || '',
     protocolClass,
@@ -463,7 +714,7 @@ function normalizeRuntimeRecord(
     reviewCadenceDays,
     lastReviewedAt: typeof record.lastReviewedAt === 'number' ? record.lastReviewedAt : undefined,
     nextReviewAt: typeof record.nextReviewAt === 'number' ? record.nextReviewAt : undefined,
-    publishedAt: typeof record.publishedAt === 'number' ? record.publishedAt : undefined,
+    publishedAt,
     archivedAt: typeof record.archivedAt === 'number' ? record.archivedAt : undefined,
     createdAt: typeof record.createdAt === 'number' ? record.createdAt : now,
     updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : now,
@@ -505,6 +756,7 @@ function buildSeedWorkspace(now = Date.now()): ProtocolRegistryWorkspaceBundle {
   const families = Array.from(
     runtimeRecords.reduce<Map<string, PulseCheckProtocolFamily>>((acc, record) => {
       if (acc.has(record.familyId)) return acc;
+      const familySpec = getSeededProtocolFamilySpecById(record.familyId);
       acc.set(
         record.familyId,
         normalizeFamilyRecord(
@@ -522,7 +774,9 @@ function buildSeedWorkspace(now = Date.now()): ProtocolRegistryWorkspaceBundle {
             avoidWindowTags: record.avoidWindowTags,
             contraindicationTags: record.contraindicationTags,
             evidenceSummary: record.evidenceSummary,
+            sourceReferences: [],
             reviewNotes: record.reviewNotes,
+            ...familySpec,
             createdAt: now,
             updatedAt: now,
           },
@@ -537,34 +791,39 @@ function buildSeedWorkspace(now = Date.now()): ProtocolRegistryWorkspaceBundle {
 
   const variants = runtimeRecords
     .map((record) =>
-      normalizeVariantRecord(
-        {
-          id: record.variantId,
-          familyId: record.familyId,
-          label: record.variantLabel,
-          variantKey: record.variantKey,
-          variantVersion: record.variantVersion,
-          category: record.category,
-          deliveryMode: record.deliveryMode,
-          legacyExerciseId: record.legacyExerciseId,
-          rationale: record.rationale,
-          scriptSummary: record.mechanism,
-          durationSeconds: record.durationSeconds,
-          triggerTags: record.triggerTags,
-          preferredContextTags: record.preferredContextTags,
-          useWindowTags: record.useWindowTags,
-          avoidWindowTags: record.avoidWindowTags,
-          contraindicationTags: record.contraindicationTags,
-          evidenceSummary: record.evidenceSummary,
-          reviewNotes: record.reviewNotes,
-          governanceStage: record.governanceStage === 'published' ? 'pilot' : record.governanceStage,
-          isActive: true,
-          createdAt: now,
-          updatedAt: now,
-        },
-        familyById.get(record.familyId),
-        now
-      )
+      {
+        const variantSpec = getSeededProtocolVariantSpecById(record.variantId);
+        return normalizeVariantRecord(
+          {
+            id: record.variantId,
+            familyId: record.familyId,
+            label: record.variantLabel,
+            variantKey: record.variantKey,
+            variantVersion: record.variantVersion,
+            category: record.category,
+            deliveryMode: record.deliveryMode,
+            legacyExerciseId: record.legacyExerciseId,
+            rationale: record.rationale,
+            scriptSummary: record.mechanism,
+            durationSeconds: record.durationSeconds,
+            triggerTags: record.triggerTags,
+            preferredContextTags: record.preferredContextTags,
+            useWindowTags: record.useWindowTags,
+            avoidWindowTags: record.avoidWindowTags,
+            contraindicationTags: record.contraindicationTags,
+            evidenceSummary: record.evidenceSummary,
+            sourceReferences: [],
+            reviewNotes: record.reviewNotes,
+            governanceStage: record.governanceStage === 'published' ? 'pilot' : record.governanceStage,
+            isActive: true,
+            ...variantSpec,
+            createdAt: now,
+            updatedAt: now,
+          },
+          familyById.get(record.familyId),
+          now
+        );
+      }
     )
     .sort(sortByLabel);
 
@@ -700,6 +959,21 @@ async function listProtocolAssignments() {
     .filter((assignment) => Boolean(assignment.protocolId));
 }
 
+async function listAssignmentsForAthletes(athleteIds: string[]) {
+  const assignments: PulseCheckDailyAssignment[] = [];
+  const chunks = chunkArray(Array.from(new Set(athleteIds.filter(Boolean))), 10);
+
+  for (const chunk of chunks) {
+    if (!chunk.length) continue;
+    const snap = await getDocs(query(collection(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION), where('athleteId', 'in', chunk)));
+    snap.docs.forEach((entry) => {
+      assignments.push(pulseCheckDailyAssignmentFromFirestore(entry.id, entry.data() as Record<string, any>));
+    });
+  }
+
+  return assignments;
+}
+
 async function listAssignmentEventsForAssignments(assignmentIds: string[]) {
   const events: PulseCheckAssignmentEvent[] = [];
   const chunks = chunkArray(assignmentIds.filter(Boolean), 10);
@@ -730,11 +1004,20 @@ async function hydrateWorkspaceWithRuntimeEvidence(
   }
 
   const events = await listAssignmentEventsForAssignments(relevantAssignments.map((assignment) => assignment.id));
+  const downstreamAssignments = await listAssignmentsForAthletes(relevantAssignments.map((assignment) => assignment.athleteId));
   const eventsByAssignmentId = new Map<string, PulseCheckAssignmentEvent[]>();
   events.forEach((event) => {
     const existing = eventsByAssignmentId.get(event.assignmentId) || [];
     existing.push(event);
     eventsByAssignmentId.set(event.assignmentId, existing);
+  });
+
+  const downstreamAssignmentsByKey = new Map<string, PulseCheckDailyAssignment[]>();
+  downstreamAssignments.forEach((assignment) => {
+    const key = `${assignment.athleteId}::${assignment.sourceDate}`;
+    const existing = downstreamAssignmentsByKey.get(key) || [];
+    existing.push(assignment);
+    downstreamAssignmentsByKey.set(key, existing);
   });
 
   const assignmentsByRuntimeId = new Map<string, PulseCheckDailyAssignment[]>();
@@ -746,7 +1029,12 @@ async function hydrateWorkspaceWithRuntimeEvidence(
   });
 
   const runtimeRecords = workspace.runtimeRecords.map((runtime) => {
-    const liveEvidence = buildLiveEvidencePanel(assignmentsByRuntimeId.get(runtime.id) || [], eventsByAssignmentId, runtime.label);
+    const liveEvidence = buildLiveEvidencePanel(
+      assignmentsByRuntimeId.get(runtime.id) || [],
+      eventsByAssignmentId,
+      runtime.label,
+      downstreamAssignmentsByKey
+    );
     return liveEvidence
       ? normalizeRuntimeRecord(
           {
@@ -766,7 +1054,12 @@ async function hydrateWorkspaceWithRuntimeEvidence(
     const variantAssignments = runtimeRecords
       .filter((runtime) => runtime.variantId === variant.id)
       .flatMap((runtime) => assignmentsByRuntimeId.get(runtime.id) || []);
-    const liveEvidence = buildLiveEvidencePanel(variantAssignments, eventsByAssignmentId, variant.label);
+    const liveEvidence = buildLiveEvidencePanel(
+      variantAssignments,
+      eventsByAssignmentId,
+      variant.label,
+      downstreamAssignmentsByKey
+    );
     return liveEvidence
       ? normalizeVariantRecord(
           {
@@ -784,7 +1077,12 @@ async function hydrateWorkspaceWithRuntimeEvidence(
     const familyAssignments = runtimeRecords
       .filter((runtime) => runtime.familyId === family.id)
       .flatMap((runtime) => assignmentsByRuntimeId.get(runtime.id) || []);
-    const liveEvidence = buildLiveEvidencePanel(familyAssignments, eventsByAssignmentId, family.label);
+    const liveEvidence = buildLiveEvidencePanel(
+      familyAssignments,
+      eventsByAssignmentId,
+      family.label,
+      downstreamAssignmentsByKey
+    );
     return liveEvidence
       ? normalizeFamilyRecord(
           {
@@ -897,6 +1195,7 @@ export const protocolRegistryService = {
         governanceStage: overrides.governanceStage || family.governanceStage || 'structured',
         isActive: overrides.isActive ?? true,
         evidenceSummary: overrides.evidenceSummary,
+        sourceReferences: overrides.sourceReferences || [],
         reviewNotes: overrides.reviewNotes,
         createdAt: overrides.createdAt || now,
         updatedAt: now,
@@ -1082,8 +1381,25 @@ export const protocolRegistryService = {
     const family = await this.getFamilyById(record.familyId);
     const variant = await this.getVariantById(record.variantId);
     const now = Date.now();
+    const protectedPublishStatus = existing?.publishStatus || 'draft';
     const nextRecord = normalizeRuntimeRecord(
-      { ...(existing || {}), ...record, createdAt: existing?.createdAt || record.createdAt || now, updatedAt: now },
+      {
+        ...(existing || {}),
+        ...record,
+        publishStatus: protectedPublishStatus,
+        isActive: protectedPublishStatus === 'archived' ? false : (existing?.isActive ?? record.isActive),
+        governanceStage:
+          protectedPublishStatus === 'published'
+            ? 'published'
+            : protectedPublishStatus === 'archived'
+              ? 'archived'
+              : (record.governanceStage || existing?.governanceStage),
+        publishedRevisionId: existing?.publishedRevisionId,
+        publishedAt: existing?.publishedAt,
+        archivedAt: existing?.archivedAt,
+        createdAt: existing?.createdAt || record.createdAt || now,
+        updatedAt: now,
+      },
       family,
       variant,
       now,
@@ -1120,6 +1436,7 @@ export const protocolRegistryService = {
         familyStatus: 'locked',
         isActive: true,
         reviewStatus: 'approved',
+        publishedRevisionId: derivePublishedRevisionId(record.id, publishedAt),
         publishedAt,
         lastReviewedAt: record.lastReviewedAt || publishedAt,
         nextReviewAt: record.nextReviewAt || (publishedAt + (record.reviewCadenceDays || 30) * 24 * 60 * 60 * 1000),
@@ -1149,6 +1466,7 @@ export const protocolRegistryService = {
         publishStatus: 'archived',
         governanceStage: 'archived',
         isActive: false,
+        publishedRevisionId: record.publishedRevisionId,
         archivedAt,
         updatedAt: archivedAt,
       },
@@ -1178,7 +1496,23 @@ export const protocolRegistryService = {
 
     for (const family of seedWorkspace.families) {
       const existing = existingFamilies.get(family.id);
-      const nextRecord = normalizeFamilyRecord({ ...family, ...existing, createdAt: existing?.createdAt || family.createdAt, updatedAt: Date.now() }, Date.now());
+      const nextRecord = normalizeFamilyRecord(
+        {
+          ...existing,
+          ...family,
+          evidencePanel: existing?.evidencePanel || family.evidencePanel,
+          reviewNotes: existing?.reviewNotes || family.reviewNotes,
+          reviewStatus: existing?.reviewStatus || family.reviewStatus,
+          reviewChecklist: existing?.reviewChecklist?.length ? existing.reviewChecklist : family.reviewChecklist,
+          evidenceStatus: existing?.evidenceStatus || family.evidenceStatus,
+          lastReviewedAt: existing?.lastReviewedAt || family.lastReviewedAt,
+          nextReviewAt: existing?.nextReviewAt || family.nextReviewAt,
+          reviewCadenceDays: existing?.reviewCadenceDays || family.reviewCadenceDays,
+          createdAt: existing?.createdAt || family.createdAt,
+          updatedAt: Date.now(),
+        },
+        Date.now()
+      );
       const changed = !existing || JSON.stringify(pulseCheckProtocolFamilyToFirestore(existing)) !== JSON.stringify(pulseCheckProtocolFamilyToFirestore(nextRecord));
       if (changed) {
         const batch = writeBatch(db);
@@ -1192,7 +1526,24 @@ export const protocolRegistryService = {
     for (const variant of seedWorkspace.variants) {
       const existing = existingVariants.get(variant.id);
       const family = existingWorkspace.families.find((entry) => entry.id === variant.familyId) || seedWorkspace.families.find((entry) => entry.id === variant.familyId) || null;
-      const nextRecord = normalizeVariantRecord({ ...variant, ...existing, createdAt: existing?.createdAt || variant.createdAt, updatedAt: Date.now() }, family, Date.now());
+      const nextRecord = normalizeVariantRecord(
+        {
+          ...existing,
+          ...variant,
+          evidencePanel: existing?.evidencePanel || variant.evidencePanel,
+          reviewNotes: existing?.reviewNotes || variant.reviewNotes,
+          approvalStatus: existing?.approvalStatus || variant.approvalStatus,
+          reviewChecklist: existing?.reviewChecklist?.length ? existing.reviewChecklist : variant.reviewChecklist,
+          evidenceStatus: existing?.evidenceStatus || variant.evidenceStatus,
+          lastReviewedAt: existing?.lastReviewedAt || variant.lastReviewedAt,
+          nextReviewAt: existing?.nextReviewAt || variant.nextReviewAt,
+          reviewCadenceDays: existing?.reviewCadenceDays || variant.reviewCadenceDays,
+          createdAt: existing?.createdAt || variant.createdAt,
+          updatedAt: Date.now(),
+        },
+        family,
+        Date.now()
+      );
       const changed = !existing || JSON.stringify(pulseCheckProtocolVariantToFirestore(existing)) !== JSON.stringify(pulseCheckProtocolVariantToFirestore(nextRecord));
       if (changed) {
         const batch = writeBatch(db);

@@ -1,6 +1,9 @@
 import React from 'react';
-import { Activity, Database, Link2, ShieldCheck, Smartphone, Workflow } from 'lucide-react';
+import { Activity, Database, Link2, ShieldCheck, Smartphone, Workflow, FileText, Handshake, Moon } from 'lucide-react';
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
+import ArtifactPageLibrary, { ArtifactPageEntry } from './ArtifactPageLibrary';
+import PulseCheckDeviceIntegrationPartnershipMatrixTab from './PulseCheckDeviceIntegrationPartnershipMatrixTab';
+import PulseCheckOuraIntegrationStrategyTab from './PulseCheckOuraIntegrationStrategyTab';
 
 const CURRENT_BASELINE_ROWS = [
   ['Apple Watch / HealthKit', 'Platform bridge and permission layer for iOS-first athletes.', 'Current baseline lane for wearable health context.'],
@@ -118,7 +121,7 @@ const DEVICE_LANES = [
   },
 ];
 
-const PulseCheckDeviceIntegrationStrategyTab: React.FC = () => {
+const DeviceIntegrationStrategyOverviewDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
@@ -221,6 +224,44 @@ const PulseCheckDeviceIntegrationStrategyTab: React.FC = () => {
         </CardGrid>
       </SectionBlock>
     </div>
+  );
+};
+
+const DEVICE_INTEGRATION_PAGES: ArtifactPageEntry[] = [
+  {
+    id: 'device-integration-strategy',
+    label: 'Device Integration Strategy',
+    subtitle: 'Cross-device taxonomy, wishlist priorities, routing, and rollout guidance.',
+    icon: FileText,
+    accent: '#c084fc',
+    render: () => <DeviceIntegrationStrategyOverviewDoc />,
+  },
+  {
+    id: 'device-partnership-matrix',
+    label: 'Partnership Matrix',
+    subtitle: 'Which vendors fit data access, platform, enterprise, or brand-only partnership shapes.',
+    icon: Handshake,
+    accent: '#38bdf8',
+    render: () => <PulseCheckDeviceIntegrationPartnershipMatrixTab />,
+  },
+  {
+    id: 'oura-integration-strategy',
+    label: 'Oura Integration Strategy',
+    subtitle: 'Direct Oura lane, HealthKit fallback, merge rules, and rollout recommendation.',
+    icon: Moon,
+    accent: '#22c55e',
+    render: () => <PulseCheckOuraIntegrationStrategyTab />,
+  },
+];
+
+const PulseCheckDeviceIntegrationStrategyTab: React.FC = () => {
+  return (
+    <ArtifactPageLibrary
+      eyebrow="Pulse Check · Device & Wearable Integrations"
+      title="Device & Wearable Integrations Library"
+      summary="Integration parent artifact with internal pages for device strategy, partnership prioritization, and the dedicated Oura lane."
+      entries={DEVICE_INTEGRATION_PAGES}
+    />
   );
 };
 

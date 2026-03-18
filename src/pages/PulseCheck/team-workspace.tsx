@@ -753,29 +753,45 @@ export default function PulseCheckTeamWorkspacePage() {
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                   ) : !baselineComplete ? (
-                    <button
-                      type="button"
-                      onClick={handleLaunchBaseline}
-                      disabled={athleteTaskLoading}
-                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                      style={{ background: '#E0FE10' }}
-                      onMouseEnter={(e) => { if (!athleteTaskLoading) (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(224,254,16,0.35)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
-                    >
-                      {athleteTaskLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
-                      {baselineStarted ? 'Resume Baseline' : 'Start Baseline'}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleLaunchBaseline}
+                        disabled={athleteTaskLoading}
+                        className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                        style={{ background: '#E0FE10' }}
+                        onMouseEnter={(e) => { if (!athleteTaskLoading) (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(224,254,16,0.35)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+                      >
+                        {athleteTaskLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Brain className="h-4 w-4" />}
+                        {baselineStarted ? 'Resume Baseline' : 'Start Baseline'}
+                      </button>
+                      <Link
+                        href="/PulseCheck/oura"
+                        className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-300 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white backdrop-blur-sm"
+                      >
+                        Connect Oura
+                      </Link>
+                    </>
                   ) : (
-                    <Link
-                      href="/PulseCheck"
-                      className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90"
-                      style={{ background: '#E0FE10' }}
-                      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(224,254,16,0.35)'; }}
-                      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
-                    >
-                      Go to Today
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
+                    <>
+                      <Link
+                        href="/PulseCheck/oura"
+                        className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-zinc-300 transition-all hover:border-white/20 hover:bg-white/[0.07] hover:text-white backdrop-blur-sm"
+                      >
+                        Connect Oura
+                      </Link>
+                      <Link
+                        href="/PulseCheck"
+                        className="inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-black transition-all hover:opacity-90"
+                        style={{ background: '#E0FE10' }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(224,254,16,0.35)'; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
+                      >
+                        Go to Today
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </>
                   )
                 ) : (
                   <>

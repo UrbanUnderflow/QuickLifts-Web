@@ -3,7 +3,10 @@ import { auth, db } from '../config';
 import { pulseCheckProvisioningService } from '../pulsecheckProvisioning/service';
 import type { PulseCheckTeamMembership } from '../pulsecheckProvisioning/types';
 import { athleteProgressService } from './athleteProgressService';
-import { PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION } from './collections';
+import {
+  PULSECHECK_ASSIGNMENT_REVISIONS_SUBCOLLECTION,
+  PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION,
+} from './collections';
 import { simModuleLibraryService } from './exerciseLibraryService';
 import { resolvePulseCheckFunctionUrl } from './pulseCheckFunctionsUrl';
 import { stateSnapshotService } from './stateSnapshotService';
@@ -246,6 +249,21 @@ export const assignmentOrchestratorService = {
       .map((docSnap) => pulseCheckDailyAssignmentFromFirestore(docSnap.id, docSnap.data() as Record<string, any>))
       .sort(sortByFreshness)
       .slice(0, max);
+  },
+
+  async listRevisions(id: string): Promise<PulseCheckDailyAssignment[]> {
+    const snapshot = await getDocs(
+      collection(
+        db,
+        DAILY_ASSIGNMENTS_COLLECTION,
+        id,
+        PULSECHECK_ASSIGNMENT_REVISIONS_SUBCOLLECTION
+      )
+    );
+
+    return snapshot.docs
+      .map((docSnap) => pulseCheckDailyAssignmentFromFirestore(docSnap.id, docSnap.data() as Record<string, any>))
+      .sort((left, right) => right.revision - left.revision);
   },
 
   async orchestratePostCheckIn({

@@ -252,6 +252,15 @@ async function redeemAdultInvite(
     await page.getByLabel('Confirm Password').fill(password);
     await page.getByRole('button', { name: /Create Account and Join/i }).click();
 
+    const acceptInviteButton = page.getByRole('button', { name: /Accept Invite/i });
+    await Promise.race([
+      page.getByText(/Your team access is live/i).waitFor({ state: 'visible', timeout: 20_000 }),
+      acceptInviteButton.waitFor({ state: 'visible', timeout: 20_000 }),
+    ]);
+    if (await acceptInviteButton.isVisible().catch(() => false)) {
+      await acceptInviteButton.click();
+    }
+
     await expect(page.getByText(/Your team access is live/i)).toBeVisible({ timeout: 20_000 });
     await page.getByRole('link', { name: /Continue/i }).click();
     await waitForStableAppFrame(page);
@@ -301,6 +310,15 @@ async function redeemAthleteInvite(
     await page.getByLabel('Confirm Password').fill(password);
     await page.getByRole('button', { name: /Create Account and Join/i }).click();
     if (debugNamespace) writeDebugStep(debugNamespace, 'athlete-redeem:submitted');
+
+    const acceptInviteButton = page.getByRole('button', { name: /Accept Invite/i });
+    await Promise.race([
+      page.getByText(/Your team access is live/i).waitFor({ state: 'visible', timeout: 20_000 }),
+      acceptInviteButton.waitFor({ state: 'visible', timeout: 20_000 }),
+    ]);
+    if (await acceptInviteButton.isVisible().catch(() => false)) {
+      await acceptInviteButton.click();
+    }
 
     await expect(page.getByText(/Your team access is live/i)).toBeVisible({ timeout: 20_000 });
     if (debugNamespace) writeDebugStep(debugNamespace, 'athlete-redeem:success-visible');
@@ -419,6 +437,39 @@ async function seedProtocolAssignmentFixture(
   }, input);
 }
 
+async function captureProtocolRuntimeRecords(
+  adminPage: Page,
+  input: {
+    protocolIds?: string[];
+    protocolClass?: string;
+  }
+) {
+  await waitForPulseE2EHarness(adminPage);
+  return adminPage.evaluate(async (payload) => {
+    return window.__pulseE2E?.capturePulseCheckProtocolRuntimeRecords(payload);
+  }, input);
+}
+
+async function upsertProtocolRuntimeRecords(
+  adminPage: Page,
+  records: Array<Record<string, any>>
+) {
+  await waitForPulseE2EHarness(adminPage);
+  return adminPage.evaluate(async (payload) => {
+    return window.__pulseE2E?.upsertPulseCheckProtocolRuntimeRecords(payload);
+  }, { records });
+}
+
+async function deleteProtocolRuntimeRecords(
+  adminPage: Page,
+  protocolIds: string[]
+) {
+  await waitForPulseE2EHarness(adminPage);
+  return adminPage.evaluate(async (payload) => {
+    return window.__pulseE2E?.deletePulseCheckProtocolRuntimeRecords(payload);
+  }, { protocolIds });
+}
+
 async function cleanupAthleteJourneyFixture(adminPage: Page, namespace: string, athleteUserId: string, coachUserId: string) {
   await waitForPulseE2EHarness(adminPage);
   return adminPage.evaluate(async ({ namespace: fixtureNamespace, athleteUserId: athleteId, coachUserId: coachId }) => {
@@ -442,6 +493,81 @@ async function preparePulseCheckApp(page: Page, section: 'today' | 'nora') {
     window.localStorage.setItem('pulsecheck_has_seen_nora_onboarding', 'true');
     window.localStorage.setItem('pulse_has_seen_marketing', 'true');
   });
+}
+
+async function submitReadinessCheckIn(page: Page, readinessLabel: RegExp) {
+  await preparePulseCheckApp(page, 'today');
+  await expect(page.getByRole('heading', { name: /Where is your head at today\?/i })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: readinessLabel }).click();
+}
+
+function buildPublishedProtocolRuntimeFixture(input: {
+  id: string;
+  label: string;
+  familyId: string;
+  familyLabel: string;
+  variantId: string;
+  variantKey: string;
+  variantLabel: string;
+  variantVersion?: string;
+  protocolClass?: 'priming' | 'regulation' | 'recovery';
+  category?: 'focus' | 'confidence' | 'breathing' | 'visualization' | 'mindset';
+  responseFamily?: string;
+  deliveryMode?: string;
+  triggerTags?: string[];
+  preferredContextTags?: string[];
+  useWindowTags?: string[];
+  avoidWindowTags?: string[];
+  contraindicationTags?: string[];
+  sortOrder?: number;
+  publishStatus?: 'draft' | 'published' | 'archived';
+  governanceStage?: string;
+  isActive?: boolean;
+}) {
+  const now = Date.now();
+  const publishedAt = input.publishStatus === 'archived' ? now - 10_000 : now;
+  const protocolId = input.id;
+
+  return {
+    id: protocolId,
+    label: input.label,
+    familyId: input.familyId,
+    familyLabel: input.familyLabel,
+    familyStatus: 'locked',
+    variantId: input.variantId,
+    variantKey: input.variantKey,
+    variantLabel: input.variantLabel,
+    variantVersion: input.variantVersion || 'v1',
+    publishedRevisionId: `${protocolId}@${publishedAt}`,
+    governanceStage: input.governanceStage || (input.publishStatus === 'archived' ? 'archived' : 'published'),
+    legacyExerciseId: 'focus-cue-word',
+    protocolClass: input.protocolClass || 'priming',
+    category: input.category || 'focus',
+    responseFamily: input.responseFamily || 'focus_narrowing',
+    deliveryMode: input.deliveryMode || 'guided_focus',
+    triggerTags: input.triggerTags || ['pre_rep_prep'],
+    preferredContextTags: input.preferredContextTags || ['pre_training'],
+    useWindowTags: input.useWindowTags || ['pre_training'],
+    avoidWindowTags: input.avoidWindowTags || [],
+    contraindicationTags: input.contraindicationTags || [],
+    rationale: `[E2E] ${input.label} runtime fixture.`,
+    mechanism: `[E2E] ${input.label} mechanism.`,
+    expectedStateShift: '[E2E] Increase readiness before execution.',
+    durationSeconds: 180,
+    sortOrder: input.sortOrder ?? 1,
+    publishStatus: input.publishStatus || 'published',
+    isActive: input.isActive ?? input.publishStatus !== 'archived',
+    reviewStatus: 'approved',
+    reviewChecklist: [],
+    evidenceStatus: 'developing',
+    reviewCadenceDays: 30,
+    lastReviewedAt: now,
+    nextReviewAt: now + 30 * 24 * 60 * 60 * 1000,
+    publishedAt,
+    archivedAt: input.publishStatus === 'archived' ? now : null,
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 async function provisionJourneyActors(browser: Browser, adminPage: Page): Promise<JourneyActors> {
@@ -801,6 +927,318 @@ test.describe('PulseCheck athlete journey', () => {
 
       await expect(actors.coachPage.getByText(/paused until a coach or later cycle creates the next step/i)).toBeVisible({ timeout: 20_000 });
     } finally {
+      await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
+      await actors.coachContext.close().catch(() => null);
+      await actors.athleteContext.close().catch(() => null);
+    }
+  });
+
+  test('published inventory includes active runtimes and excludes archived runtimes', async ({ browser, page }) => {
+    test.setTimeout(240_000);
+    test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
+    test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
+
+    const actors = await provisionJourneyActors(browser, page);
+    const adminIdentity = await getAuthenticatedIdentity(page);
+
+    if (!adminIdentity?.uid || !adminIdentity.email) {
+      throw new Error('Unable to resolve the authenticated admin identity.');
+    }
+
+    const publishedProtocolId = `${actors.namespace}-protocol-live`;
+    const archivedProtocolId = `${actors.namespace}-protocol-archived`;
+
+    try {
+      await upsertProtocolRuntimeRecords(page, [
+        buildPublishedProtocolRuntimeFixture({
+          id: publishedProtocolId,
+          label: 'E2E Live Priming Protocol',
+          familyId: `${publishedProtocolId}-family`,
+          familyLabel: 'E2E Live Priming',
+          variantId: `${publishedProtocolId}-variant`,
+          variantKey: 'e2e-live-priming',
+          variantLabel: 'E2E Live Priming',
+          sortOrder: 1,
+        }),
+        buildPublishedProtocolRuntimeFixture({
+          id: archivedProtocolId,
+          label: 'E2E Archived Priming Protocol',
+          familyId: `${archivedProtocolId}-family`,
+          familyLabel: 'E2E Archived Priming',
+          variantId: `${archivedProtocolId}-variant`,
+          variantKey: 'e2e-archived-priming',
+          variantLabel: 'E2E Archived Priming',
+          sortOrder: 2,
+          publishStatus: 'archived',
+          governanceStage: 'archived',
+          isActive: false,
+        }),
+      ]);
+
+      await seedAthleteJourneyFixture(page, {
+        namespace: actors.namespace,
+        adminIdentity,
+        coachIdentity: actors.coachIdentity,
+        coachEmail: actors.coachEmail,
+        athleteIdentity: actors.athleteIdentity,
+        athleteEmail: actors.athleteEmail,
+      });
+
+      await submitReadinessCheckIn(actors.athletePage, /Okay/i);
+
+      await expect.poll(async () => {
+        const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+        return state?.latestAssignment?.status || 'missing';
+      }, { timeout: 30_000 }).toBe('assigned');
+
+      const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+      const protocolCandidates = (state?.latestCandidateSet?.candidates || []).filter((candidate: Record<string, any>) => candidate.type === 'protocol');
+      const protocolIds = protocolCandidates.map((candidate: Record<string, any>) => candidate.protocolId);
+
+      expect(protocolIds).toContain(publishedProtocolId);
+      expect(protocolIds).not.toContain(archivedProtocolId);
+    } finally {
+      await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
+      await actors.coachContext.close().catch(() => null);
+      await actors.athleteContext.close().catch(() => null);
+    }
+  });
+
+  test('trigger and use-window policy excludes mismatched published protocols', async ({ browser, page }) => {
+    test.setTimeout(240_000);
+    test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
+    test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
+
+    const actors = await provisionJourneyActors(browser, page);
+    const adminIdentity = await getAuthenticatedIdentity(page);
+
+    if (!adminIdentity?.uid || !adminIdentity.email) {
+      throw new Error('Unable to resolve the authenticated admin identity.');
+    }
+
+    const matchingProtocolId = `${actors.namespace}-protocol-match`;
+    const mismatchedProtocolId = `${actors.namespace}-protocol-mismatch`;
+
+    try {
+      await upsertProtocolRuntimeRecords(page, [
+        buildPublishedProtocolRuntimeFixture({
+          id: matchingProtocolId,
+          label: 'E2E Matching Priming Protocol',
+          familyId: `${matchingProtocolId}-family`,
+          familyLabel: 'E2E Matching Priming',
+          variantId: `${matchingProtocolId}-variant`,
+          variantKey: 'e2e-matching-priming',
+          variantLabel: 'E2E Matching Priming',
+          sortOrder: 1,
+          triggerTags: ['pre_rep_prep'],
+          useWindowTags: ['pre_training'],
+          preferredContextTags: ['pre_training'],
+        }),
+        buildPublishedProtocolRuntimeFixture({
+          id: mismatchedProtocolId,
+          label: 'E2E Mismatched Priming Protocol',
+          familyId: `${mismatchedProtocolId}-family`,
+          familyLabel: 'E2E Mismatched Priming',
+          variantId: `${mismatchedProtocolId}-variant`,
+          variantKey: 'e2e-mismatched-priming',
+          variantLabel: 'E2E Mismatched Priming',
+          sortOrder: 2,
+          triggerTags: ['post_competition'],
+          useWindowTags: ['recovery_day'],
+          preferredContextTags: ['recovery_day'],
+        }),
+      ]);
+
+      await seedAthleteJourneyFixture(page, {
+        namespace: actors.namespace,
+        adminIdentity,
+        coachIdentity: actors.coachIdentity,
+        coachEmail: actors.coachEmail,
+        athleteIdentity: actors.athleteIdentity,
+        athleteEmail: actors.athleteEmail,
+      });
+
+      await submitReadinessCheckIn(actors.athletePage, /Okay/i);
+
+      await expect.poll(async () => {
+        const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+        return state?.latestAssignment?.status || 'missing';
+      }, { timeout: 30_000 }).toBe('assigned');
+
+      const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+      const protocolCandidates = (state?.latestCandidateSet?.candidates || []).filter((candidate: Record<string, any>) => candidate.type === 'protocol');
+      const protocolIds = protocolCandidates.map((candidate: Record<string, any>) => candidate.protocolId);
+
+      expect(protocolIds).toContain(matchingProtocolId);
+      expect(protocolIds).not.toContain(mismatchedProtocolId);
+    } finally {
+      await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
+      await actors.coachContext.close().catch(() => null);
+      await actors.athleteContext.close().catch(() => null);
+    }
+  });
+
+  test('stale responsiveness does not overpower current protocol policy ordering', async ({ browser, page }) => {
+    test.setTimeout(240_000);
+    test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
+    test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
+
+    const actors = await provisionJourneyActors(browser, page);
+    const adminIdentity = await getAuthenticatedIdentity(page);
+
+    if (!adminIdentity?.uid || !adminIdentity.email) {
+      throw new Error('Unable to resolve the authenticated admin identity.');
+    }
+
+    const baselineProtocolId = `${actors.namespace}-protocol-baseline`;
+    const staleFavoredProtocolId = `${actors.namespace}-protocol-stale-favored`;
+    const now = Date.now();
+
+    try {
+      await upsertProtocolRuntimeRecords(page, [
+        buildPublishedProtocolRuntimeFixture({
+          id: baselineProtocolId,
+          label: 'E2E Baseline Priming Protocol',
+          familyId: `${baselineProtocolId}-family`,
+          familyLabel: 'E2E Baseline Priming',
+          variantId: `${baselineProtocolId}-variant`,
+          variantKey: 'e2e-baseline-priming',
+          variantLabel: 'E2E Baseline Priming',
+          sortOrder: 1,
+        }),
+        buildPublishedProtocolRuntimeFixture({
+          id: staleFavoredProtocolId,
+          label: 'E2E Stale Favored Priming Protocol',
+          familyId: `${staleFavoredProtocolId}-family`,
+          familyLabel: 'E2E Stale Favored Priming',
+          variantId: `${staleFavoredProtocolId}-variant`,
+          variantKey: 'e2e-stale-favored-priming',
+          variantLabel: 'E2E Stale Favored Priming',
+          sortOrder: 2,
+        }),
+      ]);
+
+      await seedAthleteJourneyFixture(page, {
+        namespace: actors.namespace,
+        adminIdentity,
+        coachIdentity: actors.coachIdentity,
+        coachEmail: actors.coachEmail,
+        athleteIdentity: actors.athleteIdentity,
+        athleteEmail: actors.athleteEmail,
+      });
+
+      await seedProtocolResponsivenessProfile(page, {
+        athleteUserId: actors.athleteIdentity.uid,
+        familyResponses: {
+          [`${baselineProtocolId}-family`]: {
+            protocolFamilyId: `${baselineProtocolId}-family`,
+            protocolFamilyLabel: 'E2E Baseline Priming',
+            responseDirection: 'negative',
+            confidence: 'high',
+            freshness: 'refresh_required',
+            sampleSize: 5,
+            positiveSignals: 0,
+            neutralSignals: 1,
+            negativeSignals: 4,
+            stateFit: ['yellow_snapshot', 'protocol_then_sim', 'medium_readiness'],
+            supportingEvidence: ['This stale profile should not suppress the current bounded ordering.'],
+            lastObservedAt: now - 60 * 24 * 60 * 60 * 1000,
+            lastConfirmedAt: now - 60 * 24 * 60 * 60 * 1000,
+          },
+          [`${staleFavoredProtocolId}-family`]: {
+            protocolFamilyId: `${staleFavoredProtocolId}-family`,
+            protocolFamilyLabel: 'E2E Stale Favored Priming',
+            responseDirection: 'positive',
+            confidence: 'high',
+            freshness: 'refresh_required',
+            sampleSize: 6,
+            positiveSignals: 5,
+            neutralSignals: 1,
+            negativeSignals: 0,
+            stateFit: ['yellow_snapshot', 'protocol_then_sim', 'medium_readiness'],
+            supportingEvidence: ['This stale profile should not overpower current-state policy.'],
+            lastObservedAt: now - 60 * 24 * 60 * 60 * 1000,
+            lastConfirmedAt: now - 60 * 24 * 60 * 60 * 1000,
+          },
+        },
+        staleAt: now - 1_000,
+      });
+
+      await submitReadinessCheckIn(actors.athletePage, /Okay/i);
+
+      await expect.poll(async () => {
+        const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+        return state?.latestAssignment?.status || 'missing';
+      }, { timeout: 30_000 }).toBe('assigned');
+
+      const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+      const protocolCandidates = (state?.latestCandidateSet?.candidates || []).filter((candidate: Record<string, any>) =>
+        candidate.type === 'protocol' &&
+        [baselineProtocolId, staleFavoredProtocolId].includes(candidate.protocolId)
+      );
+
+      expect(protocolCandidates).toHaveLength(2);
+      expect(protocolCandidates[0]?.protocolId).toBe(baselineProtocolId);
+      expect(protocolCandidates[0]?.responsivenessDirection).toBeFalsy();
+      expect(protocolCandidates[1]?.responsivenessDirection).toBeFalsy();
+    } finally {
+      await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
+      await actors.coachContext.close().catch(() => null);
+      await actors.athleteContext.close().catch(() => null);
+    }
+  });
+
+  test('inventory gaps are recorded when no live priming protocol remains eligible', async ({ browser, page }) => {
+    test.setTimeout(240_000);
+    test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
+    test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
+
+    const actors = await provisionJourneyActors(browser, page);
+    const adminIdentity = await getAuthenticatedIdentity(page);
+
+    if (!adminIdentity?.uid || !adminIdentity.email) {
+      throw new Error('Unable to resolve the authenticated admin identity.');
+    }
+
+    const originalPrimingProtocols = await captureProtocolRuntimeRecords(page, { protocolClass: 'priming' });
+
+    try {
+      await upsertProtocolRuntimeRecords(
+        page,
+        originalPrimingProtocols.map((record: Record<string, any>) => ({
+          ...record,
+          publishStatus: 'archived',
+          governanceStage: 'archived',
+          isActive: false,
+          archivedAt: Date.now(),
+          updatedAt: Date.now(),
+        }))
+      );
+
+      await seedAthleteJourneyFixture(page, {
+        namespace: actors.namespace,
+        adminIdentity,
+        coachIdentity: actors.coachIdentity,
+        coachEmail: actors.coachEmail,
+        athleteIdentity: actors.athleteIdentity,
+        athleteEmail: actors.athleteEmail,
+      });
+
+      await submitReadinessCheckIn(actors.athletePage, /Okay/i);
+
+      await expect.poll(async () => {
+        const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+        return state?.latestAssignment?.status || 'missing';
+      }, { timeout: 30_000 }).toBe('assigned');
+
+      const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+      const protocolCandidates = (state?.latestCandidateSet?.candidates || []).filter((candidate: Record<string, any>) => candidate.type === 'protocol');
+      const inventoryGaps = state?.latestCandidateSet?.inventoryGaps || [];
+
+      expect(protocolCandidates).toHaveLength(0);
+      expect(inventoryGaps.some((gap: string) => /No live priming protocol/i.test(gap))).toBe(true);
+    } finally {
+      await upsertProtocolRuntimeRecords(page, originalPrimingProtocols).catch(() => null);
       await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
       await actors.coachContext.close().catch(() => null);
       await actors.athleteContext.close().catch(() => null);

@@ -771,6 +771,29 @@ export interface PulseCheckProtocolEvidenceSummary {
   responseDirection: 'positive' | 'neutral' | 'negative' | 'mixed';
   confidence: PulseCheckStateConfidence;
   lastObservedAt?: number;
+  freshness?: PulseCheckProtocolEvidenceFreshness;
+  downstreamImpact?: PulseCheckProtocolDownstreamImpactSummary;
+  explanation?: string;
+}
+
+export interface PulseCheckProtocolEvidenceFreshness {
+  freshness: PulseCheckStateFreshness;
+  lastObservedAt?: number;
+  lastConfirmedAt?: number;
+  ageDays?: number;
+  staleAt?: number;
+  explanation?: string;
+}
+
+export interface PulseCheckProtocolDownstreamImpactSummary {
+  sampleSize: number;
+  positiveSignals: number;
+  neutralSignals: number;
+  negativeSignals: number;
+  responseDirection: 'positive' | 'neutral' | 'negative' | 'mixed';
+  confidence: PulseCheckStateConfidence;
+  lastObservedAt?: number;
+  lastConfirmedAt?: number;
   explanation?: string;
 }
 
@@ -851,6 +874,7 @@ export interface PulseCheckProtocolVariant {
   avoidWindowTags: string[];
   contraindicationTags: string[];
   evidenceSummary?: string;
+  sourceReferences: string[];
   reviewNotes?: string;
   approvalStatus: PulseCheckProtocolReviewStatus;
   reviewChecklist: PulseCheckProtocolReviewGate[];
@@ -875,6 +899,7 @@ export interface PulseCheckProtocolDefinition {
   variantKey: string;
   variantLabel: string;
   variantVersion: string;
+  publishedRevisionId?: string;
   governanceStage: PulseCheckProtocolGovernanceStage;
   legacyExerciseId: string;
   protocolClass: Exclude<PulseCheckProtocolClass, 'none'>;
@@ -987,6 +1012,12 @@ export interface PulseCheckAssignmentCandidate {
   simSpecId?: string;
   legacyExerciseId?: string;
   protocolId?: string;
+  protocolFamilyId?: string;
+  protocolVariantId?: string;
+  protocolVariantLabel?: string;
+  protocolVariantVersion?: string;
+  protocolPublishedAt?: number;
+  protocolPublishedRevisionId?: string;
   protocolLabel?: string;
   protocolClass?: PulseCheckProtocolClass;
   protocolCategory?: ExerciseCategory;
@@ -1034,6 +1065,13 @@ export interface PulseCheckPlannerAuditCandidate {
   actionType: PulseCheckDailyAssignmentActionType;
   rationale: string;
   selected?: boolean;
+  protocolId?: string;
+  protocolFamilyId?: string;
+  protocolVariantId?: string;
+  protocolVariantLabel?: string;
+  protocolVariantVersion?: string;
+  protocolPublishedAt?: number;
+  protocolPublishedRevisionId?: string;
   responsivenessDirection?: PulseCheckProtocolResponsivenessSummary['responseDirection'];
   responsivenessConfidence?: PulseCheckStateConfidence;
   responsivenessFreshness?: PulseCheckStateFreshness;
@@ -1098,6 +1136,12 @@ export interface PulseCheckDailyAssignment {
   simSpecId?: string;
   legacyExerciseId?: string;
   protocolId?: string;
+  protocolFamilyId?: string;
+  protocolVariantId?: string;
+  protocolVariantLabel?: string;
+  protocolVariantVersion?: string;
+  protocolPublishedAt?: number;
+  protocolPublishedRevisionId?: string;
   protocolLabel?: string;
   protocolClass?: PulseCheckProtocolClass;
   protocolCategory?: ExerciseCategory;
@@ -1683,6 +1727,12 @@ export function pulseCheckDailyAssignmentToFirestore(
   if (assignment.simSpecId) data.simSpecId = assignment.simSpecId;
   if (assignment.legacyExerciseId) data.legacyExerciseId = assignment.legacyExerciseId;
   if (assignment.protocolId) data.protocolId = assignment.protocolId;
+  if (assignment.protocolFamilyId) data.protocolFamilyId = assignment.protocolFamilyId;
+  if (assignment.protocolVariantId) data.protocolVariantId = assignment.protocolVariantId;
+  if (assignment.protocolVariantLabel) data.protocolVariantLabel = assignment.protocolVariantLabel;
+  if (assignment.protocolVariantVersion) data.protocolVariantVersion = assignment.protocolVariantVersion;
+  if (typeof assignment.protocolPublishedAt === 'number') data.protocolPublishedAt = assignment.protocolPublishedAt;
+  if (assignment.protocolPublishedRevisionId) data.protocolPublishedRevisionId = assignment.protocolPublishedRevisionId;
   if (assignment.protocolLabel) data.protocolLabel = assignment.protocolLabel;
   if (assignment.protocolClass) data.protocolClass = assignment.protocolClass;
   if (assignment.protocolCategory) data.protocolCategory = assignment.protocolCategory;
@@ -1739,6 +1789,12 @@ export function pulseCheckDailyAssignmentFromFirestore(
     simSpecId: data.simSpecId,
     legacyExerciseId: data.legacyExerciseId,
     protocolId: data.protocolId,
+    protocolFamilyId: data.protocolFamilyId,
+    protocolVariantId: data.protocolVariantId,
+    protocolVariantLabel: data.protocolVariantLabel,
+    protocolVariantVersion: data.protocolVariantVersion,
+    protocolPublishedAt: data.protocolPublishedAt,
+    protocolPublishedRevisionId: data.protocolPublishedRevisionId,
     protocolLabel: data.protocolLabel,
     protocolClass: data.protocolClass,
     protocolCategory: data.protocolCategory,
@@ -1769,10 +1825,26 @@ export function pulseCheckDailyAssignmentFromFirestore(
   };
 }
 
+function stripUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stripUndefinedDeep(entry)) as T;
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, entry]) => entry !== undefined)
+        .map(([key, entry]) => [key, stripUndefinedDeep(entry)])
+    ) as T;
+  }
+
+  return value;
+}
+
 export function pulseCheckProtocolDefinitionToFirestore(
   protocol: PulseCheckProtocolDefinition
 ): Record<string, any> {
-  return {
+  return stripUndefinedDeep({
     label: protocol.label,
     familyId: protocol.familyId,
     familyLabel: protocol.familyLabel,
@@ -1781,6 +1853,7 @@ export function pulseCheckProtocolDefinitionToFirestore(
     variantKey: protocol.variantKey,
     variantLabel: protocol.variantLabel,
     variantVersion: protocol.variantVersion,
+    publishedRevisionId: protocol.publishedRevisionId || null,
     governanceStage: protocol.governanceStage,
     legacyExerciseId: protocol.legacyExerciseId,
     protocolClass: protocol.protocolClass,
@@ -1812,7 +1885,7 @@ export function pulseCheckProtocolDefinitionToFirestore(
     archivedAt: protocol.archivedAt || null,
     createdAt: protocol.createdAt,
     updatedAt: protocol.updatedAt,
-  };
+  });
 }
 
 export function pulseCheckProtocolDefinitionFromFirestore(
@@ -1829,6 +1902,7 @@ export function pulseCheckProtocolDefinitionFromFirestore(
     variantKey: data.variantKey || id,
     variantLabel: data.variantLabel || data.label || id,
     variantVersion: data.variantVersion || 'v1',
+    publishedRevisionId: data.publishedRevisionId || undefined,
     governanceStage: data.governanceStage || (data.publishStatus === 'published' ? 'published' : data.publishStatus === 'archived' ? 'archived' : 'structured'),
     legacyExerciseId: data.legacyExerciseId || '',
     protocolClass: data.protocolClass || 'regulation',
@@ -1866,7 +1940,7 @@ export function pulseCheckProtocolDefinitionFromFirestore(
 export function pulseCheckProtocolFamilyToFirestore(
   family: PulseCheckProtocolFamily
 ): Record<string, any> {
-  return {
+  return stripUndefinedDeep({
     label: family.label,
     protocolClass: family.protocolClass,
     responseFamily: family.responseFamily,
@@ -1890,7 +1964,7 @@ export function pulseCheckProtocolFamilyToFirestore(
     nextReviewAt: family.nextReviewAt || null,
     createdAt: family.createdAt,
     updatedAt: family.updatedAt,
-  };
+  });
 }
 
 export function pulseCheckProtocolFamilyFromFirestore(
@@ -1928,7 +2002,7 @@ export function pulseCheckProtocolFamilyFromFirestore(
 export function pulseCheckProtocolVariantToFirestore(
   variant: PulseCheckProtocolVariant
 ): Record<string, any> {
-  return {
+  return stripUndefinedDeep({
     familyId: variant.familyId,
     label: variant.label,
     variantKey: variant.variantKey,
@@ -1945,6 +2019,7 @@ export function pulseCheckProtocolVariantToFirestore(
     avoidWindowTags: variant.avoidWindowTags,
     contraindicationTags: variant.contraindicationTags,
     evidenceSummary: variant.evidenceSummary || null,
+    sourceReferences: variant.sourceReferences,
     reviewNotes: variant.reviewNotes || null,
     approvalStatus: variant.approvalStatus,
     reviewChecklist: variant.reviewChecklist,
@@ -1957,7 +2032,7 @@ export function pulseCheckProtocolVariantToFirestore(
     isActive: variant.isActive,
     createdAt: variant.createdAt,
     updatedAt: variant.updatedAt,
-  };
+  });
 }
 
 export function pulseCheckProtocolVariantFromFirestore(
@@ -1982,6 +2057,7 @@ export function pulseCheckProtocolVariantFromFirestore(
     avoidWindowTags: Array.isArray(data.avoidWindowTags) ? data.avoidWindowTags : [],
     contraindicationTags: Array.isArray(data.contraindicationTags) ? data.contraindicationTags : [],
     evidenceSummary: data.evidenceSummary || undefined,
+    sourceReferences: Array.isArray(data.sourceReferences) ? data.sourceReferences : [],
     reviewNotes: data.reviewNotes || undefined,
     approvalStatus: data.approvalStatus || 'not_started',
     reviewChecklist: Array.isArray(data.reviewChecklist) ? data.reviewChecklist : [],

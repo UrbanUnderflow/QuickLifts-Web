@@ -1,6 +1,8 @@
 import React from 'react';
-import { Brain, Compass, Database, History, Shield, Users, Waypoints, Workflow } from 'lucide-react';
+import { Brain, Compass, Database, History, Shield, Users, Waypoints, Workflow, FileText, Download } from 'lucide-react';
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock } from './PulseCheckRuntimeDocPrimitives';
+import ArtifactPageLibrary, { ArtifactPageEntry } from './ArtifactPageLibrary';
+import PulseCheckProfileSnapshotExportSpecTab from './PulseCheckProfileSnapshotExportSpecTab';
 
 const SURFACE_ROWS = [
   ['Today', 'Action surface', 'What should I do today?'],
@@ -103,7 +105,7 @@ const OPERATIONAL_LOCK_ITEMS = [
   'The first profile scroll must stay focused on the six core profile questions before lower-priority settings, membership, or account controls.',
 ];
 
-const PulseCheckProfileArchitectureTab: React.FC = () => {
+const ProfileArchitectureOverviewDoc: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
@@ -217,6 +219,36 @@ const PulseCheckProfileArchitectureTab: React.FC = () => {
         />
       </SectionBlock>
     </div>
+  );
+};
+
+const PROFILE_SYSTEM_PAGES: ArtifactPageEntry[] = [
+  {
+    id: 'profile-architecture',
+    label: 'Profile Architecture',
+    subtitle: 'Profile IA, field schema, milestone snapshots, and explanation rules.',
+    icon: FileText,
+    accent: '#c084fc',
+    render: () => <ProfileArchitectureOverviewDoc />,
+  },
+  {
+    id: 'profile-snapshot-export',
+    label: 'Snapshot & Export Spec',
+    subtitle: 'Canonical snapshot storage, revision handling, and research export contract.',
+    icon: Download,
+    accent: '#38bdf8',
+    render: () => <PulseCheckProfileSnapshotExportSpecTab />,
+  },
+];
+
+const PulseCheckProfileArchitectureTab: React.FC = () => {
+  return (
+    <ArtifactPageLibrary
+      eyebrow="Pulse Check · Profile System"
+      title="Profile System Library"
+      summary="Profile parent artifact with internal pages for information architecture, milestone snapshot rules, and the canonical export contract."
+      entries={PROFILE_SYSTEM_PAGES}
+    />
   );
 };
 

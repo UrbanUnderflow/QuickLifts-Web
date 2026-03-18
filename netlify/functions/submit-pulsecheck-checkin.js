@@ -53,8 +53,109 @@ function humanizeRuntimeLabel(value) {
   return value ? String(value).replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
 }
 
+function normalizeTag(value) {
+  return typeof value === 'string'
+    ? value.trim().toLowerCase().replace(/[\s-]+/g, '_')
+    : '';
+}
+
+function derivePublishedRevisionId(protocolId, publishedAt) {
+  if (!protocolId || typeof publishedAt !== 'number' || !Number.isFinite(publishedAt)) return undefined;
+  return `${protocolId}@${publishedAt}`;
+}
+
 function uniqueStrings(values) {
   return Array.from(new Set((Array.isArray(values) ? values : []).filter((value) => typeof value === 'string' && value.trim()).map((value) => value.trim())));
+}
+
+function deriveProtocolPolicySnapshotTags(snapshot) {
+  const tags = new Set(uniqueStrings([
+    ...(snapshot?.contextTags || []),
+    snapshot?.recommendedRouting || '',
+    snapshot?.recommendedProtocolClass || '',
+    snapshot?.overallReadiness ? `${snapshot.overallReadiness}_snapshot` : '',
+    typeof snapshot?.readinessScore === 'number'
+      ? (snapshot.readinessScore < 45 ? 'low_readiness' : snapshot.readinessScore < 65 ? 'medium_readiness' : 'high_readiness')
+      : '',
+    snapshot?.supportFlag ? 'support_flag' : '',
+    snapshot?.rawSignalSummary?.activeProgramContext?.sessionType || '',
+    snapshot?.rawSignalSummary?.activeProgramContext?.durationMode || '',
+    ...(snapshot?.rawSignalSummary?.contradictionFlags || []),
+  ]).map((tag) => normalizeTag(tag)));
+
+  const explicit = snapshot?.rawSignalSummary?.explicitSelfReport || {};
+  const dimensions = snapshot?.stateDimensions || {};
+  const sessionType = normalizeTag(snapshot?.rawSignalSummary?.activeProgramContext?.sessionType);
+  const durationMode = normalizeTag(snapshot?.rawSignalSummary?.activeProgramContext?.durationMode);
+  const moodWord = normalizeTag(explicit.moodWord);
+
+  if (moodWord) tags.add(moodWord);
+
+  if (sessionType === 'training_rep') {
+    tags.add('pre_training');
+    tags.add('pre_technical_work');
+    tags.add('pre_rep_prep');
+  }
+
+  if (sessionType === 'pressure_exposure' || durationMode === 'extended_stress_test') {
+    tags.add('competition_window');
+    tags.add('high_stakes_week');
+    tags.add('pre_competition');
+  }
+
+  if (sessionType === 'recovery_rep') {
+    tags.add('recovery_day');
+    tags.add('post_load');
+    tags.add('post_competition');
+  }
+
+  if (sessionType === 'reassessment') {
+    tags.add('post_trial');
+  }
+
+  if (snapshot?.recommendedProtocolClass === 'priming') {
+    tags.add('pre_training');
+    tags.add('pre_rep_prep');
+  }
+
+  if (snapshot?.recommendedProtocolClass === 'recovery') {
+    tags.add('recovery_day');
+    tags.add('post_load');
+  }
+
+  if (typeof explicit.energyLevel === 'number' && explicit.energyLevel <= 2) {
+    ['low_energy', 'flatness', 'underactivation', 'slow_start'].forEach((tag) => tags.add(tag));
+  }
+
+  if (typeof explicit.stressLevel === 'number' && explicit.stressLevel >= 4) {
+    ['acute_stress', 'anxiety', 'pressure_spike', 'mental_noise'].forEach((tag) => tags.add(tag));
+  }
+
+  if (typeof explicit.sleepQuality === 'number' && explicit.sleepQuality <= 2) {
+    ['sleep_sensitive', 'heavy_fatigue', 'cognitive_depletion'].forEach((tag) => tags.add(tag));
+  }
+
+  if (dimensions.activation >= 80) {
+    ['activation_spike', 'overactivation', 'panic_spike', 'racing_heart', 'racing_thoughts', 'somatic_noise', 'hidden_tension'].forEach((tag) => tags.add(tag));
+  } else if (dimensions.activation >= 65) {
+    ['activation_spike', 'overactivation', 'hidden_tension', 'somatic_noise'].forEach((tag) => tags.add(tag));
+  } else if (dimensions.activation <= 35) {
+    ['underactivation', 'low_presence'].forEach((tag) => tags.add(tag));
+  }
+
+  if (dimensions.focusReadiness <= 45) {
+    ['scattered_focus', 'mental_noise', 'technical_rust'].forEach((tag) => tags.add(tag));
+  }
+
+  if (dimensions.emotionalLoad >= 70) {
+    ['anxiety', 'mental_noise', 'hidden_tension'].forEach((tag) => tags.add(tag));
+  }
+
+  if (dimensions.cognitiveFatigue >= 70) {
+    ['heavy_fatigue', 'cognitive_depletion', 'sleep_sensitive'].forEach((tag) => tags.add(tag));
+  }
+
+  return tags;
 }
 
 function stripUndefinedDeep(value) {
@@ -94,12 +195,28 @@ async function listLiveProtocolRegistry(db) {
       batch.set(collectionRef.doc(record.id), record, { merge: true });
     });
     await batch.commit();
-    return seededRecords.filter((record) => record.isActive && record.publishStatus === 'published');
+    return seededRecords.filter((record) => (
+      record.isActive
+      && record.publishStatus === 'published'
+      && record.governanceStage !== 'restricted'
+      && record.familyId
+      && record.variantId
+      && record.label
+      && record.legacyExerciseId
+    ));
   }
 
   return snap.docs
     .map((entry) => normalizeProtocolRegistryRecord({ id: entry.id, ...entry.data() }))
-    .filter((record) => record.isActive && record.publishStatus === 'published')
+    .filter((record) => (
+      record.isActive
+      && record.publishStatus === 'published'
+      && record.governanceStage !== 'restricted'
+      && record.familyId
+      && record.variantId
+      && record.label
+      && record.legacyExerciseId
+    ))
     .sort((left, right) => {
       if ((left.sortOrder || 999) !== (right.sortOrder || 999)) {
         return (left.sortOrder || 999) - (right.sortOrder || 999);
@@ -789,20 +906,74 @@ function buildProtocolCandidates({ snapshot, liveProtocolRegistry, responsivenes
     return { candidates: [], inventoryGap: null };
   }
 
+  const snapshotTags = deriveProtocolPolicySnapshotTags(snapshot);
+
+  const inventoryGapReasons = new Set();
   const protocols = (Array.isArray(liveProtocolRegistry) ? liveProtocolRegistry : [])
     .filter((entry) => entry.protocolClass === protocolClass)
-    .map((protocol) => ({
-      protocol,
-      responsivenessSummary: buildResponsivenessPlannerSummary(protocol, responsivenessProfile),
-      responsivenessScore: buildProtocolResponsivenessScore({
+    .map((protocol) => {
+      const triggerTags = uniqueStrings(protocol.triggerTags).map((tag) => normalizeTag(tag));
+      const useWindowTags = uniqueStrings(protocol.useWindowTags).map((tag) => normalizeTag(tag));
+      const preferredContextTags = uniqueStrings(protocol.preferredContextTags).map((tag) => normalizeTag(tag));
+      const avoidWindowTags = uniqueStrings(protocol.avoidWindowTags).map((tag) => normalizeTag(tag));
+      const contraindicationTags = uniqueStrings(protocol.contraindicationTags).map((tag) => normalizeTag(tag));
+
+      const matchedTriggerTags = triggerTags.filter((tag) => snapshotTags.has(tag));
+      const matchedUseWindowTags = useWindowTags.filter((tag) => snapshotTags.has(tag));
+      const matchedPreferredContextTags = preferredContextTags.filter((tag) => snapshotTags.has(tag));
+      const matchedAvoidWindowTags = avoidWindowTags.filter((tag) => snapshotTags.has(tag));
+      const matchedContraindicationTags = contraindicationTags.filter((tag) => snapshotTags.has(tag));
+
+      if (!protocol.familyId || !protocol.variantId || !protocol.legacyExerciseId) {
+        inventoryGapReasons.add('One or more published protocols are missing required runtime linkage or asset metadata.');
+        return null;
+      }
+
+      if (matchedAvoidWindowTags.length) {
+        return null;
+      }
+
+      if (matchedContraindicationTags.length) {
+        return null;
+      }
+
+      if (triggerTags.length && !matchedTriggerTags.length) {
+        inventoryGapReasons.add('Protocol trigger policy excluded candidates because no live runtime trigger matched the current athlete snapshot.');
+        return null;
+      }
+
+      if (useWindowTags.length && !matchedUseWindowTags.length) {
+        inventoryGapReasons.add('Protocol use-window policy excluded candidates because no live runtime use window matched the current athlete snapshot.');
+        return null;
+      }
+
+      const responsivenessSummary = buildResponsivenessPlannerSummary(protocol, responsivenessProfile);
+      const responsivenessScore = buildProtocolResponsivenessScore({
         snapshot,
         runtime: protocol,
         responsivenessProfile,
-      }),
-    }))
+      });
+      const contextFitScore = matchedTriggerTags.length * 6 + matchedUseWindowTags.length * 8 + matchedPreferredContextTags.length * 5;
+      const contextFitSummary = [
+        matchedTriggerTags.length ? `Trigger fit: ${matchedTriggerTags.map((tag) => humanizeRuntimeLabel(tag)).join(', ')}.` : '',
+        matchedUseWindowTags.length ? `Window fit: ${matchedUseWindowTags.map((tag) => humanizeRuntimeLabel(tag)).join(', ')}.` : '',
+        matchedPreferredContextTags.length ? `Context fit: ${matchedPreferredContextTags.map((tag) => humanizeRuntimeLabel(tag)).join(', ')}.` : '',
+      ].filter(Boolean).join(' ');
+
+      return {
+        protocol,
+        responsivenessSummary,
+        responsivenessScore,
+        contextFitScore,
+        contextFitSummary,
+      };
+    })
+    .filter(Boolean)
     .sort((left, right) => {
-      if (right.responsivenessScore !== left.responsivenessScore) {
-        return right.responsivenessScore - left.responsivenessScore;
+      const rightScore = right.responsivenessScore + right.contextFitScore;
+      const leftScore = left.responsivenessScore + left.contextFitScore;
+      if (rightScore !== leftScore) {
+        return rightScore - leftScore;
       }
       return (left.protocol.sortOrder || 999) - (right.protocol.sortOrder || 999);
     });
@@ -810,40 +981,61 @@ function buildProtocolCandidates({ snapshot, liveProtocolRegistry, responsivenes
   if (!protocols.length) {
     return {
       candidates: [],
-      inventoryGap: `No live ${protocolClass} protocol is registered yet for the bounded planner inventory.`,
+      inventoryGap: inventoryGapReasons.size
+        ? Array.from(inventoryGapReasons).join(' ')
+        : `No live ${protocolClass} protocol is currently eligible for the bounded planner inventory.`,
     };
   }
 
-  return {
-    candidates: protocols.map(({ protocol, responsivenessSummary }) => {
-      const summary =
-        responsivenessProfile?.variantResponses?.[protocol.variantId]
-        || responsivenessProfile?.familyResponses?.[protocol.familyId];
+  const candidates = protocols.map(({ protocol, responsivenessSummary, contextFitSummary }) => {
+    const summary =
+      responsivenessProfile?.variantResponses?.[protocol.variantId]
+      || responsivenessProfile?.familyResponses?.[protocol.familyId];
 
-      return {
-        id: `${snapshot.athleteId}_${snapshot.sourceDate}_${protocol.id}`,
-        type: 'protocol',
-        label: protocol.label,
-        actionType: 'protocol',
-        rationale: [protocol.rationale || `Bounded protocol candidate for ${protocolClass} work from the live protocol registry.`, responsivenessSummary]
-          .filter(Boolean)
-          .join(' '),
-        legacyExerciseId: protocol.legacyExerciseId,
-        protocolId: protocol.id,
-        protocolLabel: protocol.label,
-        protocolClass,
-        protocolCategory: protocol.category,
-        protocolResponseFamily: protocol.responseFamily,
-        protocolDeliveryMode: protocol.deliveryMode,
-        responsivenessDirection: summary?.responseDirection,
-        responsivenessConfidence: summary?.confidence,
-        responsivenessFreshness: summary?.freshness,
+    return {
+      id: `${snapshot.athleteId}_${snapshot.sourceDate}_${protocol.id}`,
+      type: 'protocol',
+      label: protocol.label,
+      actionType: 'protocol',
+      rationale: [
+        protocol.rationale || `Bounded protocol candidate for ${protocolClass} work from the live protocol registry.`,
+        contextFitSummary,
         responsivenessSummary,
-        responsivenessStateFit: summary?.stateFit,
-        durationSeconds: protocol.durationSeconds,
-      };
-    }),
-    inventoryGap: null,
+      ]
+        .filter(Boolean)
+        .join(' '),
+      legacyExerciseId: protocol.legacyExerciseId,
+      protocolId: protocol.id,
+      protocolFamilyId: protocol.familyId,
+      protocolVariantId: protocol.variantId,
+      protocolVariantLabel: protocol.variantLabel,
+      protocolVariantVersion: protocol.variantVersion,
+      protocolPublishedAt: protocol.publishedAt,
+      protocolPublishedRevisionId: protocol.publishedRevisionId || derivePublishedRevisionId(protocol.id, protocol.publishedAt),
+      protocolLabel: protocol.label,
+      protocolClass,
+      protocolCategory: protocol.category,
+      protocolResponseFamily: protocol.responseFamily,
+      protocolDeliveryMode: protocol.deliveryMode,
+      responsivenessDirection: summary?.responseDirection,
+      responsivenessConfidence: summary?.confidence,
+      responsivenessFreshness: summary?.freshness,
+      responsivenessSummary,
+      responsivenessStateFit: summary?.stateFit,
+      durationSeconds: protocol.durationSeconds,
+    };
+  });
+
+  const excludedProtocolIds = new Set(candidates.map((candidate) => candidate.protocolId));
+  const filteredCount = (Array.isArray(liveProtocolRegistry) ? liveProtocolRegistry : [])
+    .filter((entry) => entry.protocolClass === protocolClass && !excludedProtocolIds.has(entry.id))
+    .length;
+
+  return {
+    candidates,
+    inventoryGap: filteredCount > 0
+      ? `${filteredCount} ${protocolClass} protocol candidate${filteredCount === 1 ? ' was' : 's were'} excluded by launch policy filters for the current state posture.`
+      : null,
   };
 }
 
@@ -1055,6 +1247,13 @@ function buildPlannerAudit({ snapshot, candidateSet, plannerOutput, selectedCand
     actionType: candidate.actionType,
     rationale: candidate.rationale,
     selected: candidate.id === selectedCandidate?.id,
+    protocolId: candidate.protocolId,
+    protocolFamilyId: candidate.protocolFamilyId,
+    protocolVariantId: candidate.protocolVariantId,
+    protocolVariantLabel: candidate.protocolVariantLabel,
+    protocolVariantVersion: candidate.protocolVariantVersion,
+    protocolPublishedAt: candidate.protocolPublishedAt,
+    protocolPublishedRevisionId: candidate.protocolPublishedRevisionId,
     responsivenessDirection: candidate.responsivenessDirection,
     responsivenessConfidence: candidate.responsivenessConfidence,
     responsivenessFreshness: candidate.responsivenessFreshness,
@@ -1311,6 +1510,7 @@ function assignmentLineageChanged(existing, nextAssignment) {
     'simSpecId',
     'legacyExerciseId',
     'protocolId',
+    'protocolPublishedRevisionId',
     'protocolLabel',
     'protocolClass',
     'protocolCategory',
@@ -1383,10 +1583,6 @@ async function orchestratePostCheckIn({
     await getSnapshotById(db, `${athleteId}_${sourceDate}`);
 
   const athleteMembership = await resolveActiveAthleteMembership(db, athleteId);
-  if (!athleteMembership) {
-    return null;
-  }
-
   const coachId = await resolveCoachId(db, athleteId, athleteMembership, progress.coachId);
   if (coachId) {
     await db.collection(PROGRESS_COLLECTION).doc(athleteId).set({
@@ -1434,8 +1630,8 @@ async function orchestratePostCheckIn({
     lineageId: existing?.lineageId || assignmentId,
     revision: baselineRevision,
     athleteId,
-    teamId: athleteMembership.teamId,
-    teamMembershipId: athleteMembership.id,
+    teamId: athleteMembership?.teamId,
+    teamMembershipId: athleteMembership?.id,
     coachId,
     sourceCheckInId,
     sourceStateSnapshotId,
@@ -1449,6 +1645,12 @@ async function orchestratePostCheckIn({
     simSpecId: selectedCandidate?.simSpecId || activeProgram.recommendedSimId,
     legacyExerciseId: selectedCandidate?.legacyExerciseId || activeProgram.recommendedLegacyExerciseId,
     protocolId: selectedCandidate?.protocolId,
+    protocolFamilyId: selectedCandidate?.protocolFamilyId,
+    protocolVariantId: selectedCandidate?.protocolVariantId,
+    protocolVariantLabel: selectedCandidate?.protocolVariantLabel,
+    protocolVariantVersion: selectedCandidate?.protocolVariantVersion,
+    protocolPublishedAt: selectedCandidate?.protocolPublishedAt,
+    protocolPublishedRevisionId: selectedCandidate?.protocolPublishedRevisionId,
     protocolLabel: selectedCandidate?.protocolLabel,
     protocolClass: selectedCandidate?.protocolClass,
     protocolCategory: selectedCandidate?.protocolCategory,
