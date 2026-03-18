@@ -303,12 +303,19 @@ const HaveYouPaidPage: React.FC = () => {
                      <td className="p-3 text-gray-300">
                        <div className="flex gap-2">
                          <button
-                           className="px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500"
+                           className="px-3 py-1 rounded-md bg-blue-600 hover:bg-blue-500 whitespace-nowrap"
                            onClick={() => {
                              setEditNameModal({ open: true, row: r });
                              setEditedName(r.name);
                            }}
-                         >Edit</button>
+                         >Edit Name</button>
+                         <button
+                           className="px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 whitespace-nowrap"
+                           onClick={() => {
+                             setPaymentModal({ open: true, row: r });
+                             setModalAmount('');
+                           }}
+                         >Update Balance</button>
                          <button
                            className="px-3 py-1 rounded-md bg-red-600 hover:bg-red-500"
                            onClick={async () => {
@@ -346,18 +353,33 @@ const HaveYouPaidPage: React.FC = () => {
                     className="w-full bg-[#1a1f28] border border-gray-700 rounded-lg px-3 py-2 focus:outline-none"
                   />
                 </div>
-                <div className="p-4 border-t border-gray-800 flex justify-end gap-2">
-                  <button className="px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 hover:bg-zinc-700" onClick={()=>setPaymentModal({ open: false, row: null })}>Cancel</button>
+                <div className="p-4 border-t border-gray-800 flex justify-between gap-2">
                   <button
-                    className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500"
+                    className="px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-500 font-medium whitespace-nowrap"
                     onClick={async ()=>{
-                      const amt = Number(modalAmount);
-                      if (!paymentModal.row?.id || !amt || amt <= 0) return;
-                      await reunionPaymentsService.addPaymentById(paymentModal.row.id, amt);
-                      await refreshTableAndCount();
+                      if (!paymentModal.row?.id) return;
+                      const currentTotal = (paymentModal.row.apr1Amount ?? 0) + (paymentModal.row.aug1Amount ?? 0) + (paymentModal.row.dec1Amount ?? 0);
+                      const owed = Math.max(200 - currentTotal, 0);
+                      if (owed > 0) {
+                        await reunionPaymentsService.addPaymentById(paymentModal.row.id, owed);
+                        await refreshTableAndCount();
+                      }
                       setPaymentModal({ open: false, row: null });
                     }}
-                  >Add Amount</button>
+                  >Paid In Full</button>
+                  <div className="flex gap-2">
+                    <button className="px-4 py-2 rounded-md bg-zinc-800 border border-zinc-700 hover:bg-zinc-700" onClick={()=>setPaymentModal({ open: false, row: null })}>Cancel</button>
+                    <button
+                      className="px-4 py-2 rounded-md bg-blue-600 hover:bg-blue-500"
+                      onClick={async ()=>{
+                        const amt = Number(modalAmount);
+                        if (!paymentModal.row?.id || !amt || amt <= 0) return;
+                        await reunionPaymentsService.addPaymentById(paymentModal.row.id, amt);
+                        await refreshTableAndCount();
+                        setPaymentModal({ open: false, row: null });
+                      }}
+                    >Add Amount</button>
+                  </div>
                 </div>
               </div>
             </div>

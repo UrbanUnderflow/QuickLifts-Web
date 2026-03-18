@@ -38,6 +38,17 @@ async function ensureAdminSession(page: Page, nextPath: string) {
   await waitForStableAppFrame(page);
   await page.waitForTimeout(1500);
 
+  const adminIdentity = await getAuthenticatedAdminIdentity(page).catch(() => null);
+  if (adminIdentity?.email) {
+    await waitForPulseE2EHarness(page).catch(() => null);
+    await page.evaluate(async ({ email }) => {
+      await window.__pulseE2E?.ensureAdminRecord?.(email);
+    }, { email: adminIdentity.email }).catch(() => null);
+    await page.goto(nextPath, { waitUntil: 'domcontentloaded' });
+    await waitForStableAppFrame(page);
+    await page.waitForTimeout(1500);
+  }
+
   const useWebAppButton = page.getByRole('button', { name: /Use Web App/i });
   if (await useWebAppButton.isVisible().catch(() => false)) {
     await useWebAppButton.click().catch(() => {});
@@ -1120,11 +1131,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
       const customOrganizationName = `[E2E] ${namespace} Organization`;
       const customTeamName = `[E2E] ${namespace} Team`;
 
-      const candidateCard = page
-        .locator('div')
-        .filter({ has: page.getByText(fixture?.coachDisplayName || '', { exact: true }) })
-        .filter({ has: page.getByRole('button', { name: /Migrate Roster/i }) })
-        .first();
+      const candidateCard = page.getByTestId(`legacy-roster-card-${fixture.coachId}`);
 
       await expect(candidateCard).toBeVisible({ timeout: 20_000 });
       await expect(candidateCard.getByText(/New organization \+ team will be created/i)).toBeVisible({ timeout: 15_000 });
@@ -1171,11 +1178,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
       const fixture = await seedLegacyRosterFixture(page, namespace, 'existing-team');
       await page.goto(legacyRosterMigrationPath(), { waitUntil: 'domcontentloaded' });
 
-      const candidateCard = page
-        .locator('div')
-        .filter({ has: page.getByText(fixture?.coachDisplayName || '', { exact: true }) })
-        .filter({ has: page.getByRole('button', { name: /Migrate Roster/i }) })
-        .first();
+      const candidateCard = page.getByTestId(`legacy-roster-card-${fixture.coachId}`);
 
       await expect(candidateCard).toBeVisible({ timeout: 20_000 });
       await expect(candidateCard.getByText(fixture.existingOrganizationName, { exact: true })).toBeVisible({ timeout: 15_000 });

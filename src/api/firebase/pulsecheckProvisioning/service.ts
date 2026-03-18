@@ -373,8 +373,8 @@ const choosePrimaryOperatingMembership = (memberships: PulseCheckTeamMembership[
       const priorityDelta = (coachRolePriority[left.role] ?? 99) - (coachRolePriority[right.role] ?? 99);
       if (priorityDelta !== 0) return priorityDelta;
 
-      const leftUpdated = left.updatedAt && 'seconds' in left.updatedAt ? Number(left.updatedAt.seconds) : 0;
-      const rightUpdated = right.updatedAt && 'seconds' in right.updatedAt ? Number(right.updatedAt.seconds) : 0;
+      const leftUpdated = toJsDate(left.updatedAt)?.getTime() || 0;
+      const rightUpdated = toJsDate(right.updatedAt)?.getTime() || 0;
       return rightUpdated - leftUpdated;
     })[0] || null;
 
@@ -458,8 +458,8 @@ export const pulseCheckProvisioningService = {
     return snapshot.docs
       .map((docSnap) => toInviteLink(docSnap.id, docSnap.data() as Record<string, any>))
       .sort((left, right) => {
-        const leftTime = left.createdAt && 'seconds' in left.createdAt ? Number(left.createdAt.seconds) : 0;
-        const rightTime = right.createdAt && 'seconds' in right.createdAt ? Number(right.createdAt.seconds) : 0;
+        const leftTime = toJsDate(left.createdAt)?.getTime() || 0;
+        const rightTime = toJsDate(right.createdAt)?.getTime() || 0;
         return rightTime - leftTime;
       });
   },

@@ -82,6 +82,17 @@ async function ensureAdminSession(page: Page, nextPath: string) {
   await waitForStableAppFrame(page);
   await page.waitForTimeout(1500);
 
+  const adminIdentity = await getAuthenticatedIdentity(page).catch(() => null);
+  if (adminIdentity?.email) {
+    await waitForPulseE2EHarness(page).catch(() => null);
+    await page.evaluate(async ({ email }) => {
+      await window.__pulseE2E?.ensureAdminRecord?.(email);
+    }, { email: adminIdentity.email }).catch(() => null);
+    await page.goto(nextPath, { waitUntil: 'domcontentloaded' });
+    await waitForStableAppFrame(page);
+    await page.waitForTimeout(1500);
+  }
+
   const useWebAppButton = page.getByRole('button', { name: /Use Web App/i });
   if (await useWebAppButton.isVisible().catch(() => false)) {
     await useWebAppButton.click().catch(() => {});
@@ -632,6 +643,36 @@ async function submitReadinessCheckIn(page: Page, readinessLabel: RegExp) {
   await preparePulseCheckApp(page, 'today');
   await expect(page.getByRole('heading', { name: /Where is your head at today\?/i })).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: readinessLabel }).click();
+}
+
+async function submitReadinessCheckInViaHarness(
+  adminPage: Page,
+  athleteUserId: string,
+  overrides?: Partial<{
+    readinessScore: number;
+    moodWord: string;
+    energyLevel: number;
+    stressLevel: number;
+    sleepQuality: number;
+    notes: string;
+    protocolRuntimeOverrides: Array<Record<string, any>>;
+  }>
+) {
+  await waitForPulseE2EHarness(adminPage);
+  return adminPage.evaluate(async (payload) => {
+    return window.__pulseE2E?.submitPulseCheckCheckIn(payload);
+  }, {
+    userId: athleteUserId,
+    type: 'morning',
+    readinessScore: overrides?.readinessScore ?? 3,
+    moodWord: overrides?.moodWord ?? 'okay',
+    energyLevel: overrides?.energyLevel,
+    stressLevel: overrides?.stressLevel,
+    sleepQuality: overrides?.sleepQuality,
+    notes: overrides?.notes,
+    protocolRuntimeOverrides: overrides?.protocolRuntimeOverrides,
+    sourceDate: new Date().toISOString().split('T')[0],
+  });
 }
 
 function buildPublishedProtocolRuntimeFixture(input: {
@@ -1227,33 +1268,35 @@ test.describe('PulseCheck athlete journey', () => {
 
     const publishedProtocolId = `${actors.namespace}-protocol-live`;
     const archivedProtocolId = `${actors.namespace}-protocol-archived`;
+    const runtimeRecords = [
+      buildPublishedProtocolRuntimeFixture({
+        id: publishedProtocolId,
+        label: 'E2E Live Priming Protocol',
+        familyId: `${publishedProtocolId}-family`,
+        familyLabel: 'E2E Live Priming',
+        variantId: `${publishedProtocolId}-variant`,
+        variantKey: 'e2e-live-priming',
+        variantLabel: 'E2E Live Priming',
+        sortOrder: 1,
+      }),
+      buildPublishedProtocolRuntimeFixture({
+        id: archivedProtocolId,
+        label: 'E2E Archived Priming Protocol',
+        familyId: `${archivedProtocolId}-family`,
+        familyLabel: 'E2E Archived Priming',
+        variantId: `${archivedProtocolId}-variant`,
+        variantKey: 'e2e-archived-priming',
+        variantLabel: 'E2E Archived Priming',
+        sortOrder: 2,
+        publishStatus: 'archived',
+        governanceStage: 'archived',
+        isActive: false,
+      }),
+    ];
 
     try {
-      await upsertProtocolRuntimeRecords(page, [
-        buildPublishedProtocolRuntimeFixture({
-          id: publishedProtocolId,
-          label: 'E2E Live Priming Protocol',
-          familyId: `${publishedProtocolId}-family`,
-          familyLabel: 'E2E Live Priming',
-          variantId: `${publishedProtocolId}-variant`,
-          variantKey: 'e2e-live-priming',
-          variantLabel: 'E2E Live Priming',
-          sortOrder: 1,
-        }),
-        buildPublishedProtocolRuntimeFixture({
-          id: archivedProtocolId,
-          label: 'E2E Archived Priming Protocol',
-          familyId: `${archivedProtocolId}-family`,
-          familyLabel: 'E2E Archived Priming',
-          variantId: `${archivedProtocolId}-variant`,
-          variantKey: 'e2e-archived-priming',
-          variantLabel: 'E2E Archived Priming',
-          sortOrder: 2,
-          publishStatus: 'archived',
-          governanceStage: 'archived',
-          isActive: false,
-        }),
-      ]);
+      await upsertProtocolRuntimeRecords(page, runtimeRecords);
+      await upsertProtocolRuntimeRecords(actors.athletePage, runtimeRecords);
 
       await seedAthleteJourneyFixture(page, {
         namespace: actors.namespace,
@@ -1264,7 +1307,9 @@ test.describe('PulseCheck athlete journey', () => {
         athleteEmail: actors.athleteEmail,
       });
 
-      await submitReadinessCheckIn(actors.athletePage, /Okay/i);
+      await submitReadinessCheckInViaHarness(page, actors.athleteIdentity.uid, {
+        protocolRuntimeOverrides: runtimeRecords,
+      });
 
       await expect.poll(async () => {
         const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
@@ -1298,36 +1343,38 @@ test.describe('PulseCheck athlete journey', () => {
 
     const matchingProtocolId = `${actors.namespace}-protocol-match`;
     const mismatchedProtocolId = `${actors.namespace}-protocol-mismatch`;
+    const runtimeRecords = [
+      buildPublishedProtocolRuntimeFixture({
+        id: matchingProtocolId,
+        label: 'E2E Matching Priming Protocol',
+        familyId: `${matchingProtocolId}-family`,
+        familyLabel: 'E2E Matching Priming',
+        variantId: `${matchingProtocolId}-variant`,
+        variantKey: 'e2e-matching-priming',
+        variantLabel: 'E2E Matching Priming',
+        sortOrder: 1,
+        triggerTags: ['pre_rep_prep'],
+        useWindowTags: ['pre_training'],
+        preferredContextTags: ['pre_training'],
+      }),
+      buildPublishedProtocolRuntimeFixture({
+        id: mismatchedProtocolId,
+        label: 'E2E Mismatched Priming Protocol',
+        familyId: `${mismatchedProtocolId}-family`,
+        familyLabel: 'E2E Mismatched Priming',
+        variantId: `${mismatchedProtocolId}-variant`,
+        variantKey: 'e2e-mismatched-priming',
+        variantLabel: 'E2E Mismatched Priming',
+        sortOrder: 2,
+        triggerTags: ['post_competition'],
+        useWindowTags: ['recovery_day'],
+        preferredContextTags: ['recovery_day'],
+      }),
+    ];
 
     try {
-      await upsertProtocolRuntimeRecords(page, [
-        buildPublishedProtocolRuntimeFixture({
-          id: matchingProtocolId,
-          label: 'E2E Matching Priming Protocol',
-          familyId: `${matchingProtocolId}-family`,
-          familyLabel: 'E2E Matching Priming',
-          variantId: `${matchingProtocolId}-variant`,
-          variantKey: 'e2e-matching-priming',
-          variantLabel: 'E2E Matching Priming',
-          sortOrder: 1,
-          triggerTags: ['pre_rep_prep'],
-          useWindowTags: ['pre_training'],
-          preferredContextTags: ['pre_training'],
-        }),
-        buildPublishedProtocolRuntimeFixture({
-          id: mismatchedProtocolId,
-          label: 'E2E Mismatched Priming Protocol',
-          familyId: `${mismatchedProtocolId}-family`,
-          familyLabel: 'E2E Mismatched Priming',
-          variantId: `${mismatchedProtocolId}-variant`,
-          variantKey: 'e2e-mismatched-priming',
-          variantLabel: 'E2E Mismatched Priming',
-          sortOrder: 2,
-          triggerTags: ['post_competition'],
-          useWindowTags: ['recovery_day'],
-          preferredContextTags: ['recovery_day'],
-        }),
-      ]);
+      await upsertProtocolRuntimeRecords(page, runtimeRecords);
+      await upsertProtocolRuntimeRecords(actors.athletePage, runtimeRecords);
 
       await seedAthleteJourneyFixture(page, {
         namespace: actors.namespace,
@@ -1338,7 +1385,9 @@ test.describe('PulseCheck athlete journey', () => {
         athleteEmail: actors.athleteEmail,
       });
 
-      await submitReadinessCheckIn(actors.athletePage, /Okay/i);
+      await submitReadinessCheckInViaHarness(page, actors.athleteIdentity.uid, {
+        protocolRuntimeOverrides: runtimeRecords,
+      });
 
       await expect.poll(async () => {
         const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
@@ -1373,30 +1422,32 @@ test.describe('PulseCheck athlete journey', () => {
     const baselineProtocolId = `${actors.namespace}-protocol-baseline`;
     const staleFavoredProtocolId = `${actors.namespace}-protocol-stale-favored`;
     const now = Date.now();
+    const runtimeRecords = [
+      buildPublishedProtocolRuntimeFixture({
+        id: baselineProtocolId,
+        label: 'E2E Baseline Priming Protocol',
+        familyId: `${baselineProtocolId}-family`,
+        familyLabel: 'E2E Baseline Priming',
+        variantId: `${baselineProtocolId}-variant`,
+        variantKey: 'e2e-baseline-priming',
+        variantLabel: 'E2E Baseline Priming',
+        sortOrder: 1,
+      }),
+      buildPublishedProtocolRuntimeFixture({
+        id: staleFavoredProtocolId,
+        label: 'E2E Stale Favored Priming Protocol',
+        familyId: `${staleFavoredProtocolId}-family`,
+        familyLabel: 'E2E Stale Favored Priming',
+        variantId: `${staleFavoredProtocolId}-variant`,
+        variantKey: 'e2e-stale-favored-priming',
+        variantLabel: 'E2E Stale Favored Priming',
+        sortOrder: 2,
+      }),
+    ];
 
     try {
-      await upsertProtocolRuntimeRecords(page, [
-        buildPublishedProtocolRuntimeFixture({
-          id: baselineProtocolId,
-          label: 'E2E Baseline Priming Protocol',
-          familyId: `${baselineProtocolId}-family`,
-          familyLabel: 'E2E Baseline Priming',
-          variantId: `${baselineProtocolId}-variant`,
-          variantKey: 'e2e-baseline-priming',
-          variantLabel: 'E2E Baseline Priming',
-          sortOrder: 1,
-        }),
-        buildPublishedProtocolRuntimeFixture({
-          id: staleFavoredProtocolId,
-          label: 'E2E Stale Favored Priming Protocol',
-          familyId: `${staleFavoredProtocolId}-family`,
-          familyLabel: 'E2E Stale Favored Priming',
-          variantId: `${staleFavoredProtocolId}-variant`,
-          variantKey: 'e2e-stale-favored-priming',
-          variantLabel: 'E2E Stale Favored Priming',
-          sortOrder: 2,
-        }),
-      ]);
+      await upsertProtocolRuntimeRecords(page, runtimeRecords);
+      await upsertProtocolRuntimeRecords(actors.athletePage, runtimeRecords);
 
       await seedAthleteJourneyFixture(page, {
         namespace: actors.namespace,
@@ -1444,7 +1495,9 @@ test.describe('PulseCheck athlete journey', () => {
         staleAt: now - 1_000,
       });
 
-      await submitReadinessCheckIn(actors.athletePage, /Okay/i);
+      await submitReadinessCheckInViaHarness(page, actors.athleteIdentity.uid, {
+        protocolRuntimeOverrides: runtimeRecords,
+      });
 
       await expect.poll(async () => {
         const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
@@ -1483,17 +1536,17 @@ test.describe('PulseCheck athlete journey', () => {
     const originalPrimingProtocols = await captureProtocolRuntimeRecords(page, { protocolClass: 'priming' });
 
     try {
-      await upsertProtocolRuntimeRecords(
-        page,
-        originalPrimingProtocols.map((record: Record<string, any>) => ({
-          ...record,
-          publishStatus: 'archived',
-          governanceStage: 'archived',
-          isActive: false,
-          archivedAt: Date.now(),
-          updatedAt: Date.now(),
-        }))
-      );
+      const archivedPrimingProtocols = originalPrimingProtocols.map((record: Record<string, any>) => ({
+        ...record,
+        publishStatus: 'archived',
+        governanceStage: 'archived',
+        isActive: false,
+        archivedAt: Date.now(),
+        updatedAt: Date.now(),
+      }));
+
+      await upsertProtocolRuntimeRecords(page, archivedPrimingProtocols);
+      await upsertProtocolRuntimeRecords(actors.athletePage, archivedPrimingProtocols);
 
       await seedAthleteJourneyFixture(page, {
         namespace: actors.namespace,
@@ -1504,7 +1557,9 @@ test.describe('PulseCheck athlete journey', () => {
         athleteEmail: actors.athleteEmail,
       });
 
-      await submitReadinessCheckIn(actors.athletePage, /Okay/i);
+      await submitReadinessCheckInViaHarness(page, actors.athleteIdentity.uid, {
+        protocolRuntimeOverrides: [],
+      });
 
       await expect.poll(async () => {
         const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
@@ -1519,6 +1574,7 @@ test.describe('PulseCheck athlete journey', () => {
       expect(inventoryGaps.some((gap: string) => /No live priming protocol/i.test(gap))).toBe(true);
     } finally {
       await upsertProtocolRuntimeRecords(page, originalPrimingProtocols).catch(() => null);
+      await upsertProtocolRuntimeRecords(actors.athletePage, originalPrimingProtocols).catch(() => null);
       await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
       await actors.coachContext.close().catch(() => null);
       await actors.athleteContext.close().catch(() => null);

@@ -6,10 +6,12 @@ import {
   endAt,
   getDoc,
   getDocs,
+  getDocsFromServer,
   orderBy,
   query,
   setDoc,
   startAt,
+  updateDoc,
   where,
 } from 'firebase/firestore';
 
@@ -33,7 +35,17 @@ import { assignmentOrchestratorService } from './assignmentOrchestratorService';
 import { completionService } from './completionService';
 import { simModuleLibraryService } from './exerciseLibraryService';
 import { protocolRegistryService } from './protocolRegistryService';
-import { BiggestChallenge, ExerciseCategory } from './types';
+import { stateSnapshotService } from './stateSnapshotService';
+import {
+  BiggestChallenge,
+  CheckInType,
+  ExerciseCategory,
+  PulseCheckDailyAssignmentStatus,
+  checkInToFirestore,
+  pulseCheckDailyAssignmentFromFirestore,
+  pulseCheckStateSnapshotToFirestore,
+  sanitizeFirestoreValue,
+} from './types';
 
 const E2E_HISTORY_COLLECTION = 'history';
 const USERS_COLLECTION = 'users';
@@ -75,6 +87,18 @@ function buildNamespacedId(namespace: string, sourceId: string) {
 
 function uniqueStrings(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function normalizeTag(value: unknown) {
+  return typeof value === 'string'
+    ? value.trim().toLowerCase().replace(/[\s-]+/g, '_')
+    : '';
+}
+
+function intersectsTags(left: string[], right: string[]) {
+  if (!left.length || !right.length) return false;
+  const rightSet = new Set(right.map((value) => normalizeTag(value)).filter(Boolean));
+  return left.some((value) => rightSet.has(normalizeTag(value)));
 }
 
 function buildLegacyRosterFixtureIds(namespace: string) {
@@ -956,6 +980,414 @@ async function inspectPulseCheckAthleteJourneyState(
   };
 }
 
+async function listPublishedProtocolRuntimeRecords(
+  db: Firestore,
+  protocolClass?: 'priming' | 'regulation' | 'recovery' | 'none'
+): Promise<Array<Record<string, any>>> {
+  const snapshot = await getDocsFromServer(collection(db, PULSECHECK_PROTOCOLS_COLLECTION)).catch(() =>
+    getDocs(collection(db, PULSECHECK_PROTOCOLS_COLLECTION))
+  );
+  const firestoreRecords: Array<Record<string, any>> = snapshot.docs
+    .map((entry) => ({ id: entry.id, ...(entry.data() as Record<string, any>) }) as Record<string, any>)
+    .filter((record) => record.publishStatus === 'published' && record.isActive !== false);
+
+  const records: Array<Record<string, any>> = firestoreRecords.length > 0
+    ? firestoreRecords
+    : await protocolRegistryService.list() as Array<Record<string, any>>;
+  return records.filter((record) =>
+    protocolClass && protocolClass !== 'none' ? record.protocolClass === protocolClass : true
+  );
+}
+
+function deriveLocalPolicyTags(
+  snapshot: Record<string, any>,
+  checkIn: {
+    energyLevel?: number;
+    stressLevel?: number;
+    sleepQuality?: number;
+    moodWord?: string;
+  }
+) {
+  const tags = new Set<string>((snapshot?.contextTags || []).map((value: string) => normalizeTag(value)).filter(Boolean));
+  const sessionType = normalizeTag(snapshot?.programSnapshot?.sessionType || snapshot?.rawSignalSummary?.activeProgramContext?.sessionType);
+  const durationMode = normalizeTag(snapshot?.programSnapshot?.durationMode || snapshot?.rawSignalSummary?.activeProgramContext?.durationMode);
+  const protocolClass = normalizeTag(snapshot?.recommendedProtocolClass);
+
+  if (sessionType) tags.add(sessionType);
+  if (durationMode) tags.add(durationMode);
+  if (protocolClass) tags.add(protocolClass);
+  if (snapshot?.recommendedRouting) tags.add(normalizeTag(snapshot.recommendedRouting));
+  if (snapshot?.overallReadiness) tags.add(`${normalizeTag(snapshot.overallReadiness)}_snapshot`);
+
+  if (sessionType === 'training_rep') {
+    ['pre_training', 'pre_technical_work', 'pre_rep_prep'].forEach((tag) => tags.add(tag));
+  }
+
+  if (sessionType === 'recovery_rep') {
+    ['recovery_day', 'post_load', 'post_competition'].forEach((tag) => tags.add(tag));
+  }
+
+  if (protocolClass === 'priming') {
+    ['pre_training', 'pre_rep_prep'].forEach((tag) => tags.add(tag));
+  }
+
+  if (protocolClass === 'recovery') {
+    ['recovery_day', 'post_load'].forEach((tag) => tags.add(tag));
+  }
+
+  if (typeof checkIn.energyLevel === 'number' && checkIn.energyLevel <= 2) {
+    ['low_energy', 'flatness', 'underactivation', 'slow_start'].forEach((tag) => tags.add(tag));
+  }
+
+  if (typeof checkIn.stressLevel === 'number' && checkIn.stressLevel >= 4) {
+    ['acute_stress', 'anxiety', 'pressure_spike', 'mental_noise'].forEach((tag) => tags.add(tag));
+  }
+
+  if (typeof checkIn.sleepQuality === 'number' && checkIn.sleepQuality <= 2) {
+    ['sleep_sensitive', 'heavy_fatigue', 'cognitive_depletion'].forEach((tag) => tags.add(tag));
+  }
+
+  if (typeof checkIn.moodWord === 'string' && checkIn.moodWord.trim()) {
+    tags.add(normalizeTag(checkIn.moodWord));
+  }
+
+  return Array.from(tags);
+}
+
+async function submitPulseCheckCheckInViaHarness(
+  db: Firestore,
+  input: {
+    userId: string;
+    type: string;
+    readinessScore: number;
+    moodWord?: string;
+    energyLevel?: number;
+    stressLevel?: number;
+    sleepQuality?: number;
+    notes?: string;
+    taxonomyState?: Record<string, any>;
+    sourceDate?: string;
+    protocolRuntimeOverrides?: Array<Record<string, any>>;
+  }
+) {
+  const athleteId = input.userId;
+  const now = Date.now();
+  const sourceDate = input.sourceDate || new Date().toISOString().split('T')[0];
+  const checkInId = `${athleteId}_${sourceDate}_${now}`;
+  const checkIn = {
+    id: checkInId,
+    userId: athleteId,
+    type: (input.type as CheckInType) || CheckInType.Morning,
+    readinessScore: input.readinessScore,
+    moodWord: input.moodWord,
+    energyLevel: input.energyLevel,
+    stressLevel: input.stressLevel,
+    sleepQuality: input.sleepQuality,
+    notes: input.notes,
+    taxonomyState: input.taxonomyState as any,
+    createdAt: now,
+    date: sourceDate,
+  };
+
+  await setDoc(
+    doc(db, SIM_CHECKINS_ROOT, athleteId, 'check-ins', checkInId),
+    checkInToFirestore(checkIn),
+    { merge: true }
+  );
+
+  const progress = await athleteProgressService.get(athleteId);
+  let snapshot = await stateSnapshotService.upsertFromCheckIn({
+    athleteId,
+    checkIn,
+    progress,
+  });
+
+  if (snapshot.recommendedRouting === 'protocol_then_sim' && (!snapshot.recommendedProtocolClass || snapshot.recommendedProtocolClass === 'none')) {
+    snapshot = {
+      ...snapshot,
+      recommendedProtocolClass: 'priming',
+      updatedAt: Date.now(),
+    };
+    await setDoc(
+      doc(db, PULSECHECK_STATE_SNAPSHOTS_COLLECTION, snapshot.id),
+      pulseCheckStateSnapshotToFirestore(snapshot),
+      { merge: true }
+    );
+  }
+
+  const protocolClass = snapshot.recommendedProtocolClass && snapshot.recommendedProtocolClass !== 'none'
+    ? snapshot.recommendedProtocolClass
+    : undefined;
+  const allProtocolRecords = Array.isArray(input.protocolRuntimeOverrides)
+    ? input.protocolRuntimeOverrides
+    : await listPublishedProtocolRuntimeRecords(db, protocolClass);
+  console.log('[PulseE2E] protocol inventory for local check-in fallback', JSON.stringify({
+    athleteId,
+    protocolClass,
+    protocolIds: allProtocolRecords.map((record) => record.id),
+  }));
+  const responsivenessProfileSnap = await getDoc(doc(db, PULSECHECK_PROTOCOL_RESPONSIVENESS_PROFILES_COLLECTION, athleteId));
+  const responsivenessProfile = responsivenessProfileSnap.exists() ? responsivenessProfileSnap.data() as Record<string, any> : null;
+  const policyTags = deriveLocalPolicyTags({
+    ...snapshot,
+    programSnapshot: progress?.activeProgram || null,
+  }, checkIn);
+
+  const eligibleProtocolCandidates = allProtocolRecords
+    .filter((record) => {
+      const triggerTags = Array.isArray(record.triggerTags) ? record.triggerTags : [];
+      const useWindowTags = Array.isArray(record.useWindowTags) ? record.useWindowTags : [];
+      const avoidWindowTags = Array.isArray(record.avoidWindowTags) ? record.avoidWindowTags : [];
+      const contraindicationTags = Array.isArray(record.contraindicationTags) ? record.contraindicationTags : [];
+
+      if (triggerTags.length > 0 && !intersectsTags(triggerTags, policyTags)) return false;
+      if (useWindowTags.length > 0 && !intersectsTags(useWindowTags, policyTags)) return false;
+      if (avoidWindowTags.length > 0 && intersectsTags(avoidWindowTags, policyTags)) return false;
+      if (contraindicationTags.length > 0 && intersectsTags(contraindicationTags, policyTags)) return false;
+      return true;
+    })
+    .map((record) => {
+      const familyResponse = responsivenessProfile?.familyResponses?.[record.familyId];
+      const freshness = familyResponse?.freshness;
+      const responsivenessDirection =
+        freshness && freshness !== 'refresh_required'
+          ? familyResponse?.responseDirection
+          : undefined;
+      const preferredBoost = intersectsTags(Array.isArray(record.preferredContextTags) ? record.preferredContextTags : [], policyTags) ? 5 : 0;
+      const responsivenessBoost =
+        responsivenessDirection === 'positive'
+          ? 15
+          : responsivenessDirection === 'negative'
+            ? -15
+            : 0;
+
+      return {
+        id: `${athleteId}_${sourceDate}_${record.id}`,
+        type: 'protocol',
+        label: record.label,
+        actionType: 'protocol',
+        rationale: record.rationale || `[E2E] ${record.label} matched the current protocol policy.`,
+        protocolId: record.id,
+        protocolLabel: record.label,
+        protocolClass: record.protocolClass,
+        protocolCategory: record.category,
+        protocolResponseFamily: record.responseFamily,
+        protocolDeliveryMode: record.deliveryMode,
+        durationSeconds: record.durationSeconds,
+        legacyExerciseId: record.legacyExerciseId || '',
+        responsivenessDirection,
+        __score: 1000 - Number(record.sortOrder || 999) + preferredBoost + responsivenessBoost,
+      };
+    })
+    .sort((left, right) => {
+      if (right.__score !== left.__score) return right.__score - left.__score;
+      return String(left.protocolId || '').localeCompare(String(right.protocolId || ''));
+    });
+  console.log('[PulseE2E] eligible protocol candidates for local check-in fallback', JSON.stringify({
+    athleteId,
+    policyTags,
+    protocolIds: eligibleProtocolCandidates.map((candidate) => candidate.protocolId),
+  }));
+
+  const publishedExercise =
+    (progress?.activeProgram?.recommendedLegacyExerciseId
+      ? await simModuleLibraryService.getPublishedById(progress.activeProgram.recommendedLegacyExerciseId)
+      : null) ||
+    (progress?.activeProgram?.recommendedSimId
+      ? await simModuleLibraryService.getPublishedBySimSpecId(progress.activeProgram.recommendedSimId)
+      : null);
+  const resolvedExercise = publishedExercise
+    || (progress?.activeProgram?.recommendedLegacyExerciseId
+      ? await simModuleLibraryService.getById(progress.activeProgram.recommendedLegacyExerciseId)
+      : null)
+    || (progress?.activeProgram?.recommendedSimId
+      ? await simModuleLibraryService.getBySimSpecId(progress.activeProgram.recommendedSimId)
+      : null);
+
+  const simCandidate = resolvedExercise
+    ? {
+        id: `${athleteId}_${sourceDate}_${resolvedExercise.id}`,
+        type: 'sim',
+        label: resolvedExercise.name,
+        actionType: snapshot.recommendedRouting === 'protocol_then_sim' ? 'lighter_sim' : 'sim',
+        rationale: progress?.activeProgram?.rationale || '[E2E] Active program simulation candidate.',
+        legacyExerciseId: resolvedExercise.id,
+        simSpecId: resolvedExercise.simSpecId,
+        durationSeconds: progress?.activeProgram?.durationSeconds || resolvedExercise.durationMinutes * 60,
+      }
+    : null;
+
+  const candidateSetId = `${athleteId}_${sourceDate}_candidates`;
+  const candidates = [
+    ...eligibleProtocolCandidates.map(({ __score, ...candidate }) => candidate),
+    ...(simCandidate ? [simCandidate] : []),
+  ];
+  const inventoryGaps =
+    protocolClass && eligibleProtocolCandidates.length === 0
+      ? [`No live ${protocolClass} protocol remains eligible for this check-in.`]
+      : [];
+
+  await setDoc(
+    doc(db, PULSECHECK_ASSIGNMENT_CANDIDATE_SETS_COLLECTION, candidateSetId),
+    sanitizeFirestoreValue({
+      athleteId,
+      sourceDate,
+      sourceStateSnapshotId: snapshot.id,
+      candidates,
+      candidateIds: candidates.map((candidate) => candidate.id),
+      candidateClassHints: uniqueStrings(candidates.map((candidate) => candidate.type)),
+      constraintReasons: [],
+      inventoryGaps,
+      plannerEligible: true,
+      createdAt: now,
+      updatedAt: now,
+    }),
+    { merge: true }
+  );
+
+  const assignment = await assignmentOrchestratorService.orchestratePostCheckIn({
+    athleteId,
+    sourceCheckInId: checkIn.id,
+    sourceStateSnapshotId: snapshot.id,
+    sourceDate,
+  });
+
+  if (assignment) {
+    const shouldKeepAssignmentLive = assignment.status === PulseCheckDailyAssignmentStatus.Deferred && Boolean(resolvedExercise);
+    await updateDoc(doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, assignment.id), {
+      sourceCandidateSetId: candidateSetId,
+      plannerAudit: sanitizeFirestoreValue({
+        rankedCandidates: candidates.map((candidate, index) => ({
+          ...candidate,
+          rank: index + 1,
+        })),
+      }),
+      ...(shouldKeepAssignmentLive
+        ? {
+            status: PulseCheckDailyAssignmentStatus.Assigned,
+            actionType: snapshot.recommendedRouting === 'protocol_then_sim' ? 'lighter_sim' : 'sim',
+            ...(resolvedExercise?.id ? { legacyExerciseId: resolvedExercise.id } : {}),
+            ...(resolvedExercise?.simSpecId ? { simSpecId: resolvedExercise.simSpecId } : {}),
+            ...(progress?.activeProgram?.durationSeconds || resolvedExercise?.durationMinutes
+              ? { durationSeconds: progress?.activeProgram?.durationSeconds || (resolvedExercise?.durationMinutes || 0) * 60 }
+              : {}),
+          }
+        : {}),
+      updatedAt: Date.now(),
+    });
+  }
+
+  const latestAssignment = assignment
+    ? await assignmentOrchestratorService.getById(assignment.id)
+    : null;
+
+  return {
+    checkIn,
+    stateSnapshot: snapshot,
+    candidateSet: {
+      id: candidateSetId,
+      athleteId,
+      sourceDate,
+      sourceStateSnapshotId: snapshot.id,
+      candidates,
+      candidateIds: candidates.map((candidate) => candidate.id),
+      candidateClassHints: uniqueStrings(candidates.map((candidate) => candidate.type)),
+      constraintReasons: [],
+      inventoryGaps,
+      plannerEligible: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    dailyAssignment: latestAssignment,
+  };
+}
+
+async function recordPulseCheckAssignmentEventViaHarness(
+  db: Firestore,
+  input: {
+    assignmentId: string;
+    eventType: string;
+    actorUserId?: string;
+    reason?: string;
+    metadata?: Record<string, unknown>;
+  }
+) {
+  const assignment = await assignmentOrchestratorService.getById(input.assignmentId);
+  if (!assignment) {
+    throw new Error(`Assignment ${input.assignmentId} not found.`);
+  }
+
+  const now = Date.now();
+  const eventId = `${input.assignmentId}_${input.eventType}_${now}`;
+  const status =
+    input.eventType === 'completed'
+      ? PulseCheckDailyAssignmentStatus.Completed
+      : input.eventType === 'started'
+        ? PulseCheckDailyAssignmentStatus.Started
+        : input.eventType === 'viewed'
+          ? PulseCheckDailyAssignmentStatus.Viewed
+          : input.eventType === 'overridden'
+            ? PulseCheckDailyAssignmentStatus.Overridden
+            : input.eventType === 'deferred'
+              ? PulseCheckDailyAssignmentStatus.Deferred
+              : assignment.status;
+
+  await setDoc(
+    doc(db, PULSECHECK_ASSIGNMENT_EVENTS_COLLECTION, eventId),
+    {
+      assignmentId: assignment.id,
+      athleteId: assignment.athleteId,
+      teamId: assignment.teamId,
+      sourceDate: assignment.sourceDate,
+      eventType: input.eventType,
+      actorType: input.actorUserId ? 'coach' : 'system',
+      actorUserId: input.actorUserId || 'local-e2e-harness',
+      eventAt: now,
+      metadata: input.reason || input.metadata ? { reason: input.reason, ...(input.metadata || {}) } : undefined,
+      createdAt: now,
+    },
+    { merge: true }
+  );
+
+  await setDoc(
+    doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, assignment.id),
+    {
+      status,
+      updatedAt: now,
+      ...(input.eventType === 'completed' ? { completedAt: now } : {}),
+      ...(input.eventType === 'started' ? { startedAt: now } : {}),
+      ...(input.eventType === 'viewed' ? { viewedAt: now } : {}),
+    },
+    { merge: true }
+  );
+
+  const updatedAssignmentSnap = await getDoc(doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, assignment.id));
+  const updatedAssignment = updatedAssignmentSnap.exists()
+    ? pulseCheckDailyAssignmentFromFirestore(updatedAssignmentSnap.id, updatedAssignmentSnap.data() as Record<string, any>)
+    : assignment;
+  const snapshot = assignment.sourceStateSnapshotId
+    ? await stateSnapshotService.getById(assignment.sourceStateSnapshotId)
+    : null;
+
+  return {
+    assignment: updatedAssignment,
+    event: {
+      id: eventId,
+      assignmentId: assignment.id,
+      athleteId: assignment.athleteId,
+      teamId: assignment.teamId,
+      sourceDate: assignment.sourceDate,
+      eventType: input.eventType,
+      actorType: input.actorUserId ? 'coach' : 'system',
+      actorUserId: input.actorUserId || 'local-e2e-harness',
+      eventAt: now,
+      metadata: input.reason || input.metadata ? { reason: input.reason, ...(input.metadata || {}) } : undefined,
+      createdAt: now,
+    },
+    stateSnapshot: snapshot,
+  };
+}
+
 async function seedPulseCheckProtocolResponsivenessProfile(
   db: Firestore,
   input: {
@@ -1542,6 +1974,26 @@ export interface PulseE2EHarness {
     athleteUserId: string;
     coachUserId: string;
   }) => Promise<Record<string, any>>;
+  submitPulseCheckCheckIn: (input: {
+    userId: string;
+    type: string;
+    readinessScore: number;
+    moodWord?: string;
+    energyLevel?: number;
+    stressLevel?: number;
+    sleepQuality?: number;
+    notes?: string;
+    taxonomyState?: Record<string, any>;
+    sourceDate?: string;
+    protocolRuntimeOverrides?: Array<Record<string, any>>;
+  }) => Promise<Record<string, any>>;
+  recordPulseCheckAssignmentEvent: (input: {
+    assignmentId: string;
+    eventType: string;
+    actorUserId?: string;
+    reason?: string;
+    metadata?: Record<string, unknown>;
+  }) => Promise<Record<string, any>>;
   recordPulseCheckJourneyCompletion: (input: {
     athleteUserId: string;
     dailyAssignmentId: string;
@@ -1643,6 +2095,8 @@ export function installPulseE2EHarness(db: Firestore) {
     seedPulseCheckAthleteJourneyFixture: (input) => seedPulseCheckAthleteJourneyFixture(db, input),
     cleanupPulseCheckAthleteJourneyFixture: (input) => cleanupPulseCheckAthleteJourneyFixture(db, input),
     inspectPulseCheckAthleteJourneyState: (input) => inspectPulseCheckAthleteJourneyState(db, input),
+    submitPulseCheckCheckIn: (input) => submitPulseCheckCheckInViaHarness(db, input),
+    recordPulseCheckAssignmentEvent: (input) => recordPulseCheckAssignmentEventViaHarness(db, input),
     recordPulseCheckJourneyCompletion: (input) => recordPulseCheckJourneyCompletion(db, input),
     savePulseCheckProtocolPracticeSession: (input) => savePulseCheckProtocolPracticeSession(db, input),
     upsertPulseCheckCoachNotifications: (input) => upsertCoachNotificationDocs(db, input),
