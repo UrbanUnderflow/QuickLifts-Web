@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { existsSync } from 'fs';
 import path from 'path';
 
@@ -35,34 +35,78 @@ function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-async function expectPreviewRuntime(page: Page, familyName: string) {
-  await expect(page.getByRole('button', { name: /Close module preview/i })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole('button', { name: /Begin Exercise/i })).not.toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole('button', { name: /Begin Training/i })).not.toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText('Before we begin...')).not.toBeVisible({ timeout: 15_000 });
+function previewRoot(page: Page): Locator {
+  return page
+    .locator('button[aria-label="Close module preview"]')
+    .locator('xpath=ancestor::div[contains(@class,"fixed") and contains(@class,"inset-0") and contains(@class,"z-50")][1]')
+    .first();
+}
 
-  if (familyName === 'Reset') {
-    await expect(page.getByText(/Target:|rounds?|Recover|Lock In/i).first()).toBeVisible({ timeout: 15_000 });
+async function closePreviewRuntime(page: Page) {
+  const closeButton = previewRoot(page).getByRole('button', { name: /Close module preview/i });
+  await closeButton.evaluate((element: HTMLElement) => element.click());
+  await expect(closeButton).not.toBeVisible({ timeout: 10_000 });
+}
+
+async function expectPreviewRuntime(page: Page, familyName: string) {
+  const root = previewRoot(page);
+  await expect(root.getByRole('button', { name: /Close module preview/i })).toBeVisible({ timeout: 15_000 });
+  await expect(root.getByRole('button', { name: /Begin Exercise/i })).not.toBeVisible({ timeout: 15_000 });
+  await expect(root.getByRole('button', { name: /Begin Training/i })).not.toBeVisible({ timeout: 15_000 });
+  await expect(root.getByRole('button', { name: /Start Built Module|Start Noise Gate|Start Brake Point|Start Signal Window|Start Sequence Shift|Begin Endurance Run/i })).not.toBeVisible({ timeout: 15_000 });
+  await expect(root.getByText('Before we begin...')).not.toBeVisible({ timeout: 15_000 });
+
+  const activeAssertions: Record<string, RegExp> = {
+    Reset: /Target:|rounds?|Recover|Lock In/i,
+    'Noise Gate': /Live Cue|Decision Field|Noise accuracy/i,
+    'Brake Point': /Brake Cue|Action Field|Clean rate/i,
+    'Signal Window': /Read Window|Decision Field|window collapsing/i,
+    'Sequence Shift': /Active Rule|Stimulus|Clean rate/i,
+    'Endurance Lock': /Maintain Form|Cadence|Finish-Phase Control|Clean Execution Under Load/i,
+  };
+
+  const marker = activeAssertions[familyName];
+  if (marker) {
+    await expect(root.getByText(marker).first()).toBeVisible({ timeout: 15_000 });
   }
 }
 
 async function startPreviewRuntime(page: Page) {
-  const beginExerciseButton = page.getByRole('button', { name: /Begin Exercise/i }).first();
-  if (await beginExerciseButton.isVisible().catch(() => false)) {
-    await beginExerciseButton.click();
-    await page.waitForTimeout(500);
-  }
+  const root = previewRoot(page);
+  const entryButtonNames = [
+    /Begin Exercise/i,
+    /Begin Training/i,
+    /Start Built Module/i,
+    /Start Noise Gate/i,
+    /Start Brake Point/i,
+    /Start Signal Window/i,
+    /Start Sequence Shift/i,
+    /Begin Endurance Run/i,
+  ];
 
-  const beginTrainingButton = page.getByRole('button', { name: /Begin Training/i }).first();
-  if (await beginTrainingButton.isVisible().catch(() => false)) {
-    await beginTrainingButton.click();
-    await page.waitForTimeout(500);
-  }
+  for (let step = 0; step < 6; step += 1) {
+    const preMoodHeading = root.getByText('Before we begin...').first();
+    if (await preMoodHeading.isVisible().catch(() => false)) {
+      await root.getByRole('button', { name: /Neutral|Good|Great/i }).first().click();
+      await expect(preMoodHeading).not.toBeVisible({ timeout: 15_000 });
+      await page.waitForTimeout(250);
+      continue;
+    }
 
-  const preMoodHeading = page.getByText('Before we begin...').first();
-  if (await preMoodHeading.isVisible().catch(() => false)) {
-    await page.getByRole('button', { name: /Neutral|Good|Great/i }).first().click();
-    await expect(preMoodHeading).not.toBeVisible({ timeout: 15_000 });
+    let clickedEntryButton = false;
+    for (const buttonName of entryButtonNames) {
+      const button = root.getByRole('button', { name: buttonName }).first();
+      if (await button.isVisible().catch(() => false)) {
+        await button.click({ force: true });
+        await page.waitForTimeout(500);
+        clickedEntryButton = true;
+        break;
+      }
+    }
+
+    if (!clickedEntryButton) {
+      break;
+    }
   }
 }
 
@@ -185,12 +229,11 @@ test.describe('Variant registry harness', () => {
         const previewButton = page.getByRole('button', { name: /Build \+ Preview|Preview Built Module/i }).first();
         await previewButton.click();
         await expect(
-          page.getByRole('button', { name: /Begin Exercise|Begin Training/i }).first(),
+          previewRoot(page).getByRole('button', { name: /Begin Exercise|Begin Training/i }).first(),
         ).toBeVisible({ timeout: 15_000 });
         await startPreviewRuntime(page);
         await expectPreviewRuntime(page, variantCase.family);
-        await page.getByRole('button', { name: /Close module preview/i }).click({ force: true });
-        await expect(page.getByRole('button', { name: /Close module preview/i })).not.toBeVisible({ timeout: 10_000 });
+        await closePreviewRuntime(page);
 
         const moduleIdInput = page.locator("//label[contains(., 'Module Id')]/following-sibling::input").first();
         if (await moduleIdInput.isVisible().catch(() => false)) {
