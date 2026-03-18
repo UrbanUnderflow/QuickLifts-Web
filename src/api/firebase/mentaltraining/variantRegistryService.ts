@@ -646,7 +646,6 @@ function isLegacyResetVariant(record: SimVariantRecord) {
   return (
     includesResetSwitchToken(record.id)
     || record.family === 'The Reset Switch'
-    || (record.engineKey as string | undefined) === 'reset'
     || includesResetSwitchToken(record.name)
     || includesResetSwitchToken(record.publishedModuleId)
     || includesResetSwitchToken(record.moduleDraft?.moduleId)
@@ -662,7 +661,6 @@ function isLegacyResetModule(id: string, data: Record<string, any>) {
     || includesResetSwitchToken(data?.name)
     || includesResetSwitchToken(data?.description)
     || includesResetSwitchToken(data?.exerciseConfig?.config?.type)
-    || includesResetSwitchToken(data?.engineKey)
     || includesResetSwitchToken(data?.buildArtifact?.engineKey)
     || includesResetSwitchToken(data?.buildArtifact?.family)
     || includesResetSwitchToken(data?.buildArtifact?.moduleId)
@@ -767,7 +765,6 @@ export const simVariantRegistryService = {
           || existingRecord.family !== seed.family
           || existingRecord.familyStatus !== seed.familyStatus
           || existingRecord.mode !== seed.mode
-          || existingRecord.specStatus !== seed.specStatus
           || existingRecord.priority !== seed.priority;
 
         if (!canonicalChanged) {
@@ -776,7 +773,11 @@ export const simVariantRegistryService = {
 
         const reconciledRecord = applyDraftSyncState({
           ...existingRecord,
-          ...seed,
+          name: seed.name,
+          family: seed.family,
+          familyStatus: seed.familyStatus,
+          mode: seed.mode,
+          priority: seed.priority,
           updatedAt: now,
         });
 
