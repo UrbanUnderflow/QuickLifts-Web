@@ -6,6 +6,7 @@ import {
   normalizeElevenLabsSettings,
   shouldUseElevenLabsVoiceDefaults,
 } from '../lib/aiVoice';
+import { resolvePulseCheckFunctionUrl } from '../api/firebase/mentaltraining/pulseCheckFunctionsUrl';
 
 type SpeakOptions = {
   /** Called when narration finishes successfully */
@@ -205,7 +206,9 @@ async function speakViaNetlifyTTS(req: SpeakRequest, opts: SpeakOptions) {
     previewText: req.text.slice(0, 80),
   });
   // Hit our Netlify function which uses OPEN_AI_SECRET_KEY server-side.
-  const res = await fetch('/.netlify/functions/tts-mental-step', {
+  const ttsUrl = resolvePulseCheckFunctionUrl('/.netlify/functions/tts-mental-step');
+  console.log('[TTS] speakViaNetlifyTTS url', { ttsUrl });
+  const res = await fetch(ttsUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
