@@ -122,6 +122,108 @@ const DEVICE_LANES = [
   },
 ];
 
+const RUN_SOURCE_HIERARCHY_ROWS = [
+  ['1', 'Apple Watch live workout lane', 'Primary live source for heart rate, calories, pace, distance, and workout-state truth when a watch workout is active or mirrored into the run session.', 'This is the preferred wearable runtime whenever the athlete has an Apple Watch available.'],
+  ['2', 'Oura ring wearable lane', 'Secondary source for biometrics, workout-window validation, calorie and exertion reconciliation, and post-run enrichment when Apple Watch is not active.', 'Oura can strengthen heart-rate and workout-context confidence, but it should not own GPS pace or route distance.'],
+  ['3', 'Phone-led RunTrackingService lane', 'Fallback source for session timer, GPS route, outdoor pace, outdoor distance, treadmill estimation, and algorithm calories when no stronger wearable signal is active.', 'This is the honest fallback when the athlete does not have a live wearable source in play.'],
+];
+
+const RUN_METRIC_OWNERSHIP_ROWS = [
+  ['Workout state', 'App session plus Apple Watch when active', 'The app still owns the user-facing run state, but Apple Watch becomes the strongest proof that the workout is truly live.'],
+  ['Outdoor route / GPS distance', 'Apple Watch first, phone GPS fallback', 'Oura does not replace GPS ownership for route or live pace.'],
+  ['Treadmill distance', 'Apple Watch first, phone motion fallback, then manual confirmation', 'If the phone is not on-body, the runtime should not fabricate precise treadmill distance from weak motion.'],
+  ['Calories burned', 'Apple Watch first, Oura-assisted reconciliation second, algorithm fallback third', 'Use Oura to refine confidence and fill biometrics gaps when watch data is unavailable, but keep manual estimation as the floor.'],
+  ['Heart rate / exertion', 'Apple Watch first, Oura second, none if unavailable', 'Oura is valuable for exertion and workout-window enrichment when the athlete is ring-only.'],
+  ['Recovery context after the run', 'Oura / HealthKit / PulseCheck health-context pipeline', 'This should continue flowing into the broader readiness and recovery system after session closeout.'],
+];
+
+const RUN_GUARDRAIL_ROWS = [
+  ['Phone-led run shows no meaningful movement', 'After 45 seconds of low movement, send a loud reminder that the phone needs to be on the athlete’s body for accurate phone-led tracking.', 'Keeps treadmill and pocket-free runs from silently degrading into bad distance and pace data.'],
+  ['Run appears to still be active after the athlete stops moving', 'After 150 seconds of low movement, send a second reminder and show an in-app modal asking whether to end the run.', 'Prevents forgotten active runs from inflating duration and calories.'],
+  ['Custom reminder voice assets', 'Generate long-form spoken reminders in the admin voice console, then export the chosen files into the iOS app bundle.', 'Current runtime still uses the bundled alert sound until the custom files are swapped in.'],
+];
+
+const RUN_SYSTEM_COMPONENT_ROWS = [
+  ['Run session controller', 'Owns start, pause, resume, end, and the user-visible state of the run.', 'The app experience should always have one authoritative session state even if multiple sensors contribute data.'],
+  ['Source arbitration layer', 'Chooses which live or post-run source has authority for each metric domain.', 'This layer applies the Apple Watch > Oura enrichment > phone fallback hierarchy.'],
+  ['Live metric collectors', 'Read GPS, motion, workout, and biometric signals from the currently active source set.', 'These collectors should remain source-aware so the runtime can explain provenance.'],
+  ['Reconciliation and enrichment layer', 'Merges Oura and other late-arriving signals into the finished run window.', 'This is where calorie confidence, exertion confidence, and workout-window validation should improve after the run.'],
+  ['Guardrail and attention layer', 'Detects low-confidence tracking conditions and prompts the athlete when the session needs intervention.', 'Examples include phone-not-on-body detection and stale active-run reminders.'],
+  ['Canonical run record writer', 'Persists the final run with metric provenance, confidence, and source annotations.', 'Downstream analytics and coaching layers should consume one normalized run record, not raw device payloads.'],
+];
+
+const RUN_DECISION_INPUT_ROWS = [
+  ['Is an Apple Watch workout available for this session?', 'If yes, Apple Watch becomes the strongest live metrics source.'],
+  ['Is the athlete wearing an Oura ring with available sync data?', 'If yes and Apple Watch is absent, Oura can enrich biometrics and validate the run window.'],
+  ['Is the phone producing trustworthy on-body GPS or motion?', 'If yes, the phone runtime can own the fallback lane for pace, distance, and timer continuity.'],
+  ['Is the run indoor or outdoor?', 'This determines whether GPS, motion, or manual confirmation should dominate the distance model.'],
+  ['Has movement confidence degraded during the session?', 'If yes, the app should warn the athlete and lower confidence instead of silently overclaiming precision.'],
+];
+
+const RUN_CANONICAL_OUTPUT_ROWS = [
+  ['Session lifecycle', 'Start time, pause segments, resume segments, end time, total elapsed duration', 'App session controller'],
+  ['Distance and pace', 'Outdoor route distance, live pace, splits, treadmill confidence or manual confirmation', 'Apple Watch first, phone fallback'],
+  ['Energy and biometrics', 'Calories, heart rate, exertion confidence, workout-window validation', 'Apple Watch first, Oura second, algorithm fallback'],
+  ['Source provenance', 'Primary source, secondary enrichment source, fallback reason, freshness markers', 'Source arbitration layer'],
+  ['Confidence flags', 'Low-motion warning, phone-off-body suspicion, stale-run intervention, mirrored-data state', 'Guardrail layer'],
+  ['Health-context handoff', 'Recovery and readiness inputs that flow into PulseCheck after session closeout', 'Oura / HealthKit / canonical health-context pipeline'],
+];
+
+const RUN_E2E_CHECKLIST_ROWS = [
+  ['Foundation', 'Define a formal run-source enum and provenance model for Apple Watch, Oura, and phone fallback.', 'Every saved run can declare primary source, secondary source, fallback reason, and confidence state.'],
+  ['Foundation', 'Create the source arbitration layer that decides who owns each metric domain.', 'The runtime can choose Apple Watch, Oura enrichment, or phone fallback without scattering precedence logic.'],
+  ['Session Runtime', 'Refactor the run start flow so one canonical session controller opens every run.', 'App-started runs no longer bypass wearable arbitration or create source-specific session paths.'],
+  ['Session Runtime', 'Promote Apple Watch to the live metrics source when a watch workout path is available.', 'App-started runs can use watch heart rate, calories, pace, and distance without requiring a separate watch-first user action.'],
+  ['Session Runtime', 'Keep RunTrackingService as the explicit fallback lane for no-watch scenarios.', 'Phone-led runs still work reliably when no wearable source is available.'],
+  ['Oura Layer', 'Implement Oura run-window reconciliation for ring-only sessions.', 'Completed runs can pull Oura biometrics, workout-window evidence, and calorie or exertion refinement without pretending Oura owns GPS.'],
+  ['Oura Layer', 'Define Oura freshness and delay handling rules.', 'The runtime knows when Oura enrichment is ready, stale, partial, or unavailable.'],
+  ['Indoor / Treadmill', 'Add low-confidence treadmill handling when the phone is off-body.', 'The app warns the athlete, lowers confidence, and requests confirmation instead of inventing precise treadmill distance.'],
+  ['Guardrails', 'Ship phone-off-body detection and still-active-run intervention as productized runtime rules.', 'Users are warned during bad tracking states and can close mistaken active sessions cleanly.'],
+  ['Voice + Notifications', 'Bundle branded spoken reminder sounds generated from the admin voice console into the iOS app.', 'Run alerts use the customer-facing voice assets instead of the temporary generic alert sound.'],
+  ['Persistence', 'Expand the canonical run record with provenance, confidence, reconciliation, and intervention fields.', 'Downstream analytics, coaching, and recap surfaces can explain where each metric came from.'],
+  ['Health Context', 'Write post-run recovery and readiness handoff logic into the health-context pipeline.', 'Run completion can influence PulseCheck context with honest source labeling.'],
+  ['UX', 'Update active run, summary, and device settings surfaces to explain source ownership and confidence clearly.', 'Athletes can tell whether a run used Apple Watch, Oura enrichment, or phone fallback.'],
+  ['Ops', 'Add operator visibility for source health, stale wearable links, reconciliation failures, and low-confidence sessions.', 'The team can support failures without digging through raw logs.'],
+  ['QA', 'Create end-to-end test scenarios for outdoor, treadmill, Apple Watch, Oura-only, dual-device, and no-device runs.', 'The full hierarchy is validated under realistic session conditions before release.'],
+  ['Launch', 'Define release gating, rollout sequence, analytics success criteria, and post-launch monitoring.', 'The system ships with measurable quality thresholds instead of a blind rollout.'],
+];
+
+const RUN_RELEASE_GATES = [
+  'Apple Watch app-started runs correctly promote the watch to the strongest live source whenever the watch path is available.',
+  'Oura-only runs preserve phone-led route and pace while successfully enriching calories, exertion, or workout-window confidence after closeout.',
+  'Phone-off-body and stale-run reminders trigger at the intended thresholds and never silently trap the user in a bad session.',
+  'Saved runs expose enough provenance for summary UI, support workflows, and downstream analytics to explain the source of truth.',
+  'Indoor, outdoor, low-connectivity, and delayed-sync scenarios all fail honest instead of producing silent false precision.',
+];
+
+const RUN_SESSION_LIFECYCLE = [
+  {
+    title: 'Session Start',
+    body: 'When the athlete taps start, the runtime opens one canonical run session, inspects available wearable and device sources, and chooses the initial live-source posture for the run.',
+    owner: 'Run session controller',
+  },
+  {
+    title: 'Live Tracking',
+    body: 'During the run, Apple Watch should own live workout metrics when present. If the watch is not active, the phone runtime owns pace and distance while Oura remains a secondary biometric and validation lane.',
+    owner: 'Source arbitration layer',
+  },
+  {
+    title: 'Guardrail Evaluation',
+    body: 'The runtime continuously checks movement confidence and active-run plausibility. If the phone appears to be off-body or the run looks unintentionally left on, the athlete is prompted to correct the session.',
+    owner: 'Guardrail layer',
+  },
+  {
+    title: 'Session Closeout',
+    body: 'When the athlete ends the run, the system finalizes live metrics, records the primary source, and preserves any guardrail or confidence flags that occurred during the session.',
+    owner: 'Canonical run writer',
+  },
+  {
+    title: 'Post-Run Reconciliation',
+    body: 'After closeout, Oura and other delayed signals can enrich the completed run window to improve calorie confidence, exertion understanding, and recovery-context handoff without rewriting source provenance dishonestly.',
+    owner: 'Reconciliation layer',
+  },
+];
+
 const DeviceIntegrationStrategyOverviewDoc: React.FC = () => {
   return (
     <div className="space-y-10">
@@ -228,6 +330,122 @@ const DeviceIntegrationStrategyOverviewDoc: React.FC = () => {
   );
 };
 
+const RunWearableSourceOfTruthDoc: React.FC = () => {
+  return (
+    <div className="space-y-10">
+      <DocHeader
+        eyebrow="PulseCheck Run Runtime"
+        title="Run Wearable System Outline"
+        version="Version 0.1 | March 18, 2026"
+        summary="System outline for how PulseCheck should run active workout tracking across Apple Watch, Oura, and phone-led fallback logic. This document defines the run-session architecture, source hierarchy, metric ownership rules, safeguard behaviors, and the canonical output shape the runtime should produce."
+        highlights={[
+          {
+            title: 'Apple Watch Wins Live',
+            body: 'If an Apple Watch is available for the active workout, it should outrank every other runtime source for live biometrics and workout truth.',
+          },
+          {
+            title: 'Oura Enriches And Validates',
+            body: 'Oura should strengthen calorie, exertion, and workout-window confidence when watch data is absent, but it should not pretend to own GPS pace or route distance.',
+          },
+          {
+            title: 'Manual Tracking Is The Floor',
+            body: 'RunTrackingService remains the explicit fallback when no stronger wearable signal is active, and the app should fail honest when confidence drops.',
+          },
+        ]}
+      />
+
+      <RuntimeAlignmentPanel
+        role="System design artifact for active run sessions inside QuickLifts and PulseCheck. It explains which runtime components exist, how source arbitration should work, which metrics belong to which device lane, and how guardrails preserve session quality."
+        sourceOfTruth="This page is the outline document for the run wearable system. Use it whenever we implement or revise run-session logic involving Apple Watch, Oura, phone-led tracking, confidence rules, or the final canonical run record."
+        masterReference="Use this page when building the run session controller, source arbitration layer, reconciliation layer, guardrail behaviors, and the canonical run persistence flow."
+        relatedDocs={[
+          'Device Integration Strategy',
+          'Oura Integration Strategy',
+          'Health Context Architecture',
+          'Health Context Operational Orchestration Spec',
+          'AI Voice Console',
+        ]}
+      />
+
+      <SectionBlock icon={Database} title="System Components">
+        <DataTable columns={['Component', 'Responsibility', 'System Rule']} rows={RUN_SYSTEM_COMPONENT_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={Workflow} title="Run Session Lifecycle">
+        <StepRail steps={RUN_SESSION_LIFECYCLE} />
+      </SectionBlock>
+
+      <SectionBlock icon={Link2} title="Source Arbitration Inputs">
+        <DataTable columns={['Decision Input', 'Why It Matters']} rows={RUN_DECISION_INPUT_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={Activity} title="Run Source Hierarchy">
+        <DataTable columns={['Priority', 'Runtime Source', 'What It Owns', 'Rule']} rows={RUN_SOURCE_HIERARCHY_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={Workflow} title="Metric Ownership Boundaries">
+        <DataTable columns={['Metric', 'Preferred Owner', 'Boundary Rule']} rows={RUN_METRIC_OWNERSHIP_ROWS} />
+        <CardGrid columns="md:grid-cols-2">
+          <InfoCard
+            title="Architecture Rule"
+            accent="blue"
+            body="Do not treat Oura as a live GPS replacement. If the athlete only has the ring, PulseCheck should still use the phone-led run runtime for route and pace while Oura strengthens the biometrics and session-confidence layer."
+          />
+          <InfoCard
+            title="Honest Degradation"
+            accent="amber"
+            body="If the phone is sitting on a treadmill or otherwise not on-body, the app should warn the athlete and lower confidence rather than inventing precise distance from weak motion."
+          />
+        </CardGrid>
+      </SectionBlock>
+
+      <SectionBlock icon={Smartphone} title="Run Guardrails And Reminders">
+        <DataTable columns={['Condition', 'Runtime Behavior', 'Why It Exists']} rows={RUN_GUARDRAIL_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={Database} title="Canonical Run Outputs">
+        <DataTable columns={['Output Domain', 'What Must Be Persisted', 'Primary Owner']} rows={RUN_CANONICAL_OUTPUT_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={Workflow} title="End-To-End Completion Checklist">
+        <DataTable columns={['Workstream', 'What Must Be Completed', 'Definition Of Complete']} rows={RUN_E2E_CHECKLIST_ROWS} />
+        <CardGrid columns="md:grid-cols-2">
+          <InfoCard
+            title="Build Order"
+            accent="blue"
+            body="Start with the source model and arbitration layer, then wire session runtime promotion, then add Oura reconciliation, then harden the UX and ops layers. That keeps the implementation sequence aligned with the system architecture instead of stacking ad hoc patches."
+          />
+          <InfoCard
+            title="Release Gates"
+            accent="green"
+            body={<BulletList items={RUN_RELEASE_GATES} />}
+          />
+        </CardGrid>
+      </SectionBlock>
+
+      <SectionBlock icon={ShieldCheck} title="Decision Rules">
+        <CardGrid columns="md:grid-cols-3">
+          <InfoCard
+            title="If Apple Watch Is Active"
+            accent="green"
+            body={<BulletList items={['Use Apple Watch as the strongest live workout source.', 'Let the phone remain the control surface and UI host.', 'Treat Oura as additional context only if it later helps with recovery or validation.']} />}
+          />
+          <InfoCard
+            title="If Only Oura Is Active"
+            accent="blue"
+            body={<BulletList items={['Use RunTrackingService for timer, pace, and distance.', 'Use Oura for workout-window validation, biometrics enrichment, and calorie or exertion reconciliation.', 'Do not overclaim live distance precision from the ring alone.']} />}
+          />
+          <InfoCard
+            title="If No Wearable Is Active"
+            accent="amber"
+            body={<BulletList items={['Fall back to the manual phone-led runtime.', 'Warn the athlete if the phone does not appear to be on-body.', 'Prefer low-confidence UX over silently bad data.']} />}
+          />
+        </CardGrid>
+      </SectionBlock>
+    </div>
+  );
+};
+
 const DEVICE_INTEGRATION_PAGES: ArtifactPageEntry[] = [
   {
     id: 'device-integration-strategy',
@@ -254,6 +472,14 @@ const DEVICE_INTEGRATION_PAGES: ArtifactPageEntry[] = [
     render: () => <PulseCheckOuraIntegrationStrategyTab />,
   },
   {
+    id: 'run-wearable-source-of-truth',
+    label: 'Run Source Of Truth',
+    subtitle: 'Apple Watch precedence, Oura enrichment, phone fallback, and run safeguard rules.',
+    icon: Activity,
+    accent: '#14b8a6',
+    render: () => <RunWearableSourceOfTruthDoc />,
+  },
+  {
     id: 'school-wearable-bundle-plan',
     label: 'School Bundle Plan',
     subtitle: 'Bundled school offer, OEM shortlist, and current FDA, Bluetooth, and FCC posture.',
@@ -268,7 +494,7 @@ const PulseCheckDeviceIntegrationStrategyTab: React.FC = () => {
     <ArtifactPageLibrary
       eyebrow="Pulse Check · Device & Wearable Integrations"
       title="Device & Wearable Integrations Library"
-      summary="Integration parent artifact with internal pages for device strategy, partnership prioritization, and the dedicated Oura lane."
+      summary="Integration parent artifact with internal pages for device strategy, run source-of-truth rules, partnership prioritization, and the dedicated Oura lane."
       entries={DEVICE_INTEGRATION_PAGES}
     />
   );

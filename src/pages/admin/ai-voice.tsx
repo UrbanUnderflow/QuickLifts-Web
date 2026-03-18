@@ -386,7 +386,7 @@ const VP_STAGE_PALETTE: Record<VPCueDef['stageTag'], { label: string; color: str
   countdown:  { label: 'Countdown',   color: '#FFD60A', dimColor: 'rgba(255,214,10,0.15)' },
 };
 
-type AdminAudioTab = 'voice' | 'appLibrary' | 'visionPro' | 'protocols';
+type AdminAudioTab = 'voice' | 'appLibrary' | 'visionPro' | 'protocols' | 'runAlerts';
 
 type ProtocolCueDef = {
   cueKey: string;
@@ -462,6 +462,44 @@ const PROTOCOL_SOUND_CUES: ProtocolCueDef[] = (protocolSeed as Array<{
   prompt: buildProtocolCuePrompt(record),
   durationSeconds: record.protocolClass === 'recovery' ? 6 : record.protocolClass === 'priming' ? 3 : 4,
 }));
+
+type RunAlertCueDef = {
+  cueKey: string;
+  label: string;
+  intent: 'phonePlacement' | 'stillActive';
+  description: string;
+  prompt: string;
+  durationSeconds: number;
+  bundleTarget: string;
+};
+
+const RUN_ALERT_ENGINE_KEY = 'community-run-alerts';
+
+const RUN_ALERT_PALETTE: Record<RunAlertCueDef['intent'], { label: string; color: string; dimColor: string }> = {
+  phonePlacement: { label: 'Phone Placement', color: '#F97316', dimColor: 'rgba(249,115,22,0.14)' },
+  stillActive: { label: 'Still Active', color: '#E0FE10', dimColor: 'rgba(224,254,16,0.12)' },
+};
+
+const RUN_ALERT_CUES: RunAlertCueDef[] = [
+  {
+    cueKey: 'phone-on-body-reminder',
+    label: 'Phone On Body Reminder',
+    intent: 'phonePlacement',
+    description: 'Long, assertive spoken alert for runs where the phone is no longer moving with the athlete.',
+    prompt: 'Pulse alert. Keep your phone on your body so distance and pace stay accurate. Pick it up and keep it with you now.',
+    durationSeconds: 7,
+    bundleTarget: 'run-phone-on-body-alert.mp3',
+  },
+  {
+    cueKey: 'still-active-run-reminder',
+    label: 'Still Active Run Reminder',
+    intent: 'stillActive',
+    description: 'Long spoken reminder for sessions that appear finished but are still running in the app.',
+    prompt: 'Pulse alert. Your run is still active. If you finished, open the app and end your run now so your summary stays accurate.',
+    durationSeconds: 8,
+    bundleTarget: 'run-still-active-alert.mp3',
+  },
+];
 
 function vpSlugify(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -853,6 +891,128 @@ const ProtocolSoundCard: React.FC<{
   );
 };
 
+const RunAlertSoundCard: React.FC<{
+  cue: RunAlertCueDef;
+  asset: SimAudioAssetRef | null;
+  generating: boolean;
+  isPlaying: boolean;
+  onGenerate: () => void;
+  onPlay: () => void;
+  onStop: () => void;
+}> = ({ cue, asset, generating, isPlaying, onGenerate, onPlay, onStop }) => {
+  const palette = RUN_ALERT_PALETTE[cue.intent];
+  const isReady = Boolean(asset?.downloadURL);
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`rounded-xl border p-4 transition-all duration-200 ${
+        isPlaying
+          ? 'border-white/20 bg-white/[0.05]'
+          : 'border-white/[0.07] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg"
+          style={{ background: palette.dimColor, border: `1px solid ${palette.color}30` }}
+        >
+          <Bell className="h-4 w-4" style={{ color: palette.color }} />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-white">{cue.label}</span>
+            <span
+              className="rounded-md border px-1.5 py-0.5 text-[10px] font-semibold"
+              style={{ color: palette.color, background: palette.dimColor, borderColor: `${palette.color}30` }}
+            >
+              {palette.label}
+            </span>
+            <span className="rounded-md border border-white/[0.08] bg-white/[0.03] px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+              iOS alert voice
+            </span>
+            {generating ? (
+              <span className="flex items-center gap-1 rounded-md border border-amber-700/30 bg-amber-900/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                <Loader2 className="h-2.5 w-2.5 animate-spin" />Generating…
+              </span>
+            ) : isReady ? (
+              <span className="rounded-md border border-emerald-700/30 bg-emerald-900/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                Ready
+              </span>
+            ) : (
+              <span className="rounded-md border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">
+                Not Generated
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-500">{cue.description}</p>
+          <code className="mt-1 block text-[10px] font-mono text-zinc-600">
+            {cue.durationSeconds}s · ElevenLabs speech · {cue.bundleTarget}
+          </code>
+        </div>
+
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          {isReady && !generating && (
+            <button
+              onClick={isPlaying ? onStop : onPlay}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                isPlaying
+                  ? 'border border-white/20 bg-white/10 text-white hover:bg-white/15'
+                  : 'border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'
+              }`}
+            >
+              {isPlaying ? <><Square className="h-3 w-3" />Stop</> : <><Play className="h-3 w-3" />Preview</>}
+            </button>
+          )}
+          <button
+            onClick={onGenerate}
+            disabled={generating}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+              generating
+                ? 'cursor-not-allowed border border-zinc-700 bg-zinc-800 text-zinc-500'
+                : isReady
+                  ? 'border border-zinc-700 bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                  : 'border bg-white/5 text-white hover:bg-white/10'
+            }`}
+            style={!generating && !isReady ? { borderColor: `${palette.color}40`, color: palette.color, background: palette.dimColor } : undefined}
+          >
+            {generating ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : isReady ? (
+              <><RotateCcw className="h-3 w-3" />Regen</>
+            ) : (
+              <><Wand2 className="h-3 w-3" />Generate</>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {isPlaying && (
+        <div className="mt-3 flex h-4 items-center gap-0.5">
+          {Array.from({ length: 20 }).map((_, i) => (
+            <motion.div
+              key={i}
+              className="w-1 rounded-full"
+              style={{ background: palette.color }}
+              animate={{ height: ['4px', `${Math.random() * 14 + 4}px`, '4px'] }}
+              transition={{ duration: 0.5 + Math.random() * 0.4, repeat: Infinity, delay: i * 0.07, ease: 'easeInOut' }}
+            />
+          ))}
+        </div>
+      )}
+
+      {isReady && asset && (
+        <div className="mt-2 rounded-lg border border-white/[0.04] bg-zinc-950/60 px-2 py-1.5">
+          <code className="break-all text-[10px] font-mono text-zinc-600">{asset.storagePath}</code>
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
 // ──────────────────────────────────────────────────────────
 // MAIN PAGE
 // ──────────────────────────────────────────────────────────
@@ -895,6 +1055,13 @@ const AdminAiVoice: React.FC = () => {
   const [protocolGenErrors, setProtocolGenErrors] = useState<Record<string, string>>({});
   const [protocolPlayingId, setProtocolPlayingId] = useState<string | null>(null);
   const protocolAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [runAlertAssets, setRunAlertAssets] = useState<Record<string, SimAudioAssetRef | null>>({});
+  const [runAlertGenerating, setRunAlertGenerating] = useState<Record<string, boolean>>({});
+  const [runAlertLoading, setRunAlertLoading] = useState(false);
+  const [runAlertLoadError, setRunAlertLoadError] = useState<string | null>(null);
+  const [runAlertGenErrors, setRunAlertGenErrors] = useState<Record<string, string>>({});
+  const [runAlertPlayingId, setRunAlertPlayingId] = useState<string | null>(null);
+  const runAlertAudioRef = useRef<HTMLAudioElement | null>(null);
   const [protocolSectionsOpen, setProtocolSectionsOpen] = useState<Record<ProtocolCueDef['protocolClass'], boolean>>({
     regulation: true,
     priming: true,
@@ -999,7 +1166,7 @@ const AdminAiVoice: React.FC = () => {
     };
   };
 
-  const generateVPSpeech = async (cue: VPCueDef) => {
+  const generateSpeechBlob = async (prompt: string) => {
     const elevenLabsVoiceId =
       provider === 'elevenlabs' && ELEVENLABS_VOICES.some((voice) => voice.id === selectedVoiceId)
         ? selectedVoiceId
@@ -1014,7 +1181,7 @@ const AdminAiVoice: React.FC = () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        text: cue.prompt,
+        text: prompt,
         provider: 'elevenlabs',
         voice: elevenLabsVoiceId,
         format: 'mp3',
@@ -1051,7 +1218,7 @@ const AdminAiVoice: React.FC = () => {
       let contentType = 'audio/mpeg';
 
       if (cue.generationMode === 'speech') {
-        const speech = await generateVPSpeech(cue);
+        const speech = await generateSpeechBlob(cue.prompt);
         blob = speech.blob;
         providerId = speech.providerId;
         contentType = speech.contentType;
@@ -1215,6 +1382,94 @@ const AdminAiVoice: React.FC = () => {
     audio.onerror = () => setProtocolPlayingId(null);
   };
 
+  const loadRunAlertAssets = async () => {
+    setRunAlertLoading(true);
+    setRunAlertLoadError(null);
+    try {
+      const results: Record<string, SimAudioAssetRef | null> = {};
+      await Promise.all(
+        RUN_ALERT_CUES.map(async (cue) => {
+          const docId = buildGeneratedDocId(RUN_ALERT_ENGINE_KEY, cue.cueKey, cue.prompt);
+          const snap = await getDoc(doc(db, 'sim-audio-assets', docId));
+          results[cue.cueKey] = snap.exists() ? (snap.data() as SimAudioAssetRef) : null;
+        })
+      );
+      setRunAlertAssets(results);
+    } catch (e: any) {
+      setRunAlertLoadError(e?.message || 'Failed to load run alert voice cues');
+    } finally {
+      setRunAlertLoading(false);
+    }
+  };
+
+  const generateRunAlertSound = async (cue: RunAlertCueDef) => {
+    setRunAlertGenerating((prev) => ({ ...prev, [cue.cueKey]: true }));
+    setRunAlertGenErrors((prev) => {
+      const next = { ...prev };
+      delete next[cue.cueKey];
+      return next;
+    });
+    try {
+      const speech = await generateSpeechBlob(cue.prompt);
+      const assetId = buildGeneratedDocId(RUN_ALERT_ENGINE_KEY, cue.cueKey, cue.prompt);
+      const path = `sim-audio-assets/${vpSlugify(RUN_ALERT_ENGINE_KEY)}/${cue.cueKey}/${assetId}.mp3`;
+      const sRef = storageRef(storage, path);
+      const snapshot = await uploadBytes(sRef, speech.blob, { contentType: speech.contentType });
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      const gsUrl = `gs://${snapshot.ref.bucket}/${snapshot.ref.fullPath}`;
+      const now = Date.now();
+      const assetRecord: SimAudioAssetRef = {
+        id: assetId,
+        cueKey: cue.cueKey,
+        label: cue.label,
+        prompt: cue.prompt,
+        provider: speech.providerId,
+        format: 'mp3',
+        contentType: speech.contentType,
+        storagePath: path,
+        gsUrl,
+        downloadURL,
+        createdAt: runAlertAssets[cue.cueKey]?.createdAt ?? now,
+        updatedAt: now,
+      };
+      await setDoc(doc(db, 'sim-audio-assets', assetId), {
+        ...assetRecord,
+        family: RUN_ALERT_ENGINE_KEY,
+        engineKey: RUN_ALERT_ENGINE_KEY,
+        archetype: 'voice_channel',
+        intent: cue.intent,
+        bundleTarget: cue.bundleTarget,
+      });
+      setRunAlertAssets((prev) => ({ ...prev, [cue.cueKey]: assetRecord }));
+    } catch (e: any) {
+      const msg = e?.message || 'Generation failed';
+      setRunAlertGenErrors((prev) => ({ ...prev, [cue.cueKey]: msg }));
+      console.error(`[Run Alerts] ${cue.cueKey}:`, msg);
+    } finally {
+      setRunAlertGenerating((prev) => ({ ...prev, [cue.cueKey]: false }));
+    }
+  };
+
+  const stopRunAlertSound = () => {
+    if (runAlertAudioRef.current) {
+      runAlertAudioRef.current.pause();
+      runAlertAudioRef.current.currentTime = 0;
+      runAlertAudioRef.current = null;
+    }
+    setRunAlertPlayingId(null);
+  };
+
+  const playRunAlertSound = (cueKey: string, url: string) => {
+    stopRunAlertSound();
+    setRunAlertPlayingId(cueKey);
+    const audio = new Audio(url);
+    runAlertAudioRef.current = audio;
+    audio.volume = 0.9;
+    audio.play().catch(() => setRunAlertPlayingId(null));
+    audio.onended = () => setRunAlertPlayingId(null);
+    audio.onerror = () => setRunAlertPlayingId(null);
+  };
+
   const loadConfig = async () => {
     setLoading(true);
     setError(null);
@@ -1241,11 +1496,13 @@ const AdminAiVoice: React.FC = () => {
     loadConfig();
     loadVPAssets();
     loadProtocolAssets();
+    loadRunAlertAssets();
     return () => {
       stopNarration();
       stopSoundEffect();
       stopVPSound();
       stopProtocolSound();
+      stopRunAlertSound();
     };
   }, []);
 
@@ -1419,6 +1676,13 @@ const AdminAiVoice: React.FC = () => {
               label="Protocols"
               description="Generated signature sound effects for every PulseCheck protocol in the registry."
               onClick={() => setActiveTab('protocols')}
+            />
+            <AudioTabButton
+              active={activeTab === 'runAlerts'}
+              icon={<Bell className="h-4 w-4" />}
+              label="Run Alerts"
+              description="Generated spoken alerts for off-body phone detection and runs left active too long."
+              onClick={() => setActiveTab('runAlerts')}
             />
           </div>
 
@@ -1935,6 +2199,101 @@ const AdminAiVoice: React.FC = () => {
               )}
               <div className="ml-auto text-zinc-600">
                 Firestore: <code className="font-mono">sim-audio-assets</code> · Storage: <code className="font-mono">sim-audio-assets/pulsecheck-protocols/</code>
+              </div>
+            </div>
+          </div>
+          )}
+
+          {activeTab === 'runAlerts' && (
+          <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-900/40 p-5 backdrop-blur-xl">
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-orange-500/25 bg-orange-500/12">
+                  <Bell className="h-4 w-4 text-orange-300" />
+                </div>
+                <div>
+                  <div className="font-semibold text-white">Run Warning Voice Cues</div>
+                  <div className="mt-0.5 text-xs text-zinc-500">
+                    ElevenLabs-spoken run alerts for phone placement loss and runs that appear finished but remain active.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={loadRunAlertAssets}
+                disabled={runAlertLoading}
+                className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-white transition-colors hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {runAlertLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Refresh
+              </button>
+            </div>
+
+            <AnimatePresence>
+              {runAlertLoadError && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-3 rounded-xl border border-red-700/40 bg-red-900/20 p-3 text-xs text-red-200"
+                >
+                  {runAlertLoadError}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="mt-4 flex items-start gap-3 rounded-xl border border-white/[0.05] bg-zinc-950/60 p-3 text-xs text-zinc-400">
+              <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-zinc-500" />
+              <div>
+                These cues are stored in <code className="font-mono text-zinc-300">sim-audio-assets/community-run-alerts/</code>.
+                Generate and preview them here with the current Nora ElevenLabs voice, then export the chosen MP3 into the iOS bundle under <code className="font-mono text-zinc-300">QuickLifts/Resources/sounds/</code> using the target filename shown on each card.
+                Until those bundle assets are added, the app falls back to <code className="font-mono text-zinc-300">Bell.wav</code> for local notification sound.
+              </div>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-3">
+              {RUN_ALERT_CUES.map((cue) => (
+                <div key={cue.cueKey}>
+                  <RunAlertSoundCard
+                    cue={cue}
+                    asset={runAlertAssets[cue.cueKey] ?? null}
+                    generating={runAlertGenerating[cue.cueKey] ?? false}
+                    isPlaying={runAlertPlayingId === cue.cueKey}
+                    onGenerate={() => generateRunAlertSound(cue)}
+                    onPlay={() => {
+                      const url = runAlertAssets[cue.cueKey]?.downloadURL;
+                      if (url) playRunAlertSound(cue.cueKey, url);
+                    }}
+                    onStop={stopRunAlertSound}
+                  />
+                  <AnimatePresence>
+                    {runAlertGenErrors[cue.cueKey] && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mt-1 rounded-lg border border-red-700/30 bg-red-900/20 px-3 py-2 text-[11px] text-red-300"
+                      >
+                        {runAlertGenErrors[cue.cueKey]}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-white/[0.05] pt-4 text-xs text-zinc-500">
+              <div>
+                <span className="font-semibold text-zinc-300">{Object.values(runAlertAssets).filter(Boolean).length}</span>
+                {' / '}{RUN_ALERT_CUES.length} cues generated
+              </div>
+              {Object.values(runAlertGenerating).some(Boolean) && (
+                <div className="flex items-center gap-1.5 text-amber-400">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {Object.values(runAlertGenerating).filter(Boolean).length} generating…
+                </div>
+              )}
+              <div className="ml-auto text-zinc-600">
+                Firestore: <code className="font-mono">sim-audio-assets</code> · Storage: <code className="font-mono">sim-audio-assets/community-run-alerts/</code>
               </div>
             </div>
           </div>

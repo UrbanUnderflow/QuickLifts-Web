@@ -2902,6 +2902,9 @@ const ProtocolPracticeConversation: React.FC<{
         <div className="space-y-8">
           <div className="text-xs uppercase tracking-[0.22em] text-white/50">Protocol Evaluation</div>
           <h3 className="mx-auto max-w-2xl text-2xl font-semibold text-white">{scorecard.evaluationSummary}</h3>
+          <p className="mx-auto max-w-2xl text-sm leading-6 text-white/65">
+            Nora is looking for whether this sounded usable under pressure, not just whether it matched the script on paper.
+          </p>
           <AutoNarrator
             enabled={soundEnabled && !isPaused}
             text={scorecard.evaluationSummary}
@@ -2921,7 +2924,7 @@ const ProtocolPracticeConversation: React.FC<{
           </div>
           <div className="mx-auto grid max-w-3xl grid-cols-1 gap-3 md:grid-cols-2">
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-left">
-              <p className="text-sm font-semibold text-white">Strengths</p>
+              <p className="text-sm font-semibold text-white">What landed</p>
               <ul className="mt-2 space-y-2 text-sm text-zinc-200">
                 {scorecard.strengths.map((item) => <li key={item}>{item}</li>)}
               </ul>
@@ -2936,7 +2939,7 @@ const ProtocolPracticeConversation: React.FC<{
           </div>
           {scorecard.voiceSignalsSummary ? (
             <div className="mx-auto max-w-3xl rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-left">
-              <p className="text-sm font-semibold text-white">Optional voice-quality note</p>
+              <p className="text-sm font-semibold text-white">Optional voice delivery note</p>
               <p className="mt-2 text-sm text-zinc-200">{scorecard.voiceSignalsSummary}</p>
             </div>
           ) : null}

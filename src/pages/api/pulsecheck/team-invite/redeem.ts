@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../../lib/firebase-admin';
+import { getFirebaseAdminApp } from '../../../../lib/firebase-admin';
 import type {
   PulseCheckPilotEnrollmentStatus,
   PulseCheckPilotStudyMode,
@@ -93,19 +94,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const idToken = authHeader.slice('Bearer '.length);
   const token = normalizeString(req.body?.token);
+  const forceDevFirebase = req.body?.forceDevFirebase === true;
   if (!token) {
     return res.status(400).json({ error: 'Invite token is required.' });
   }
 
   try {
-    const decoded = await admin.auth().verifyIdToken(idToken);
+    const adminApp = getFirebaseAdminApp(forceDevFirebase);
+    const decoded = await admin.auth(adminApp).verifyIdToken(idToken);
     const userId = decoded.uid;
     const userEmail = normalizeEmail(decoded.email);
     if (!userEmail) {
       return res.status(400).json({ error: 'Authenticated user must have an email address.' });
     }
 
-    const firestore = admin.firestore();
+    const firestore = admin.firestore(adminApp);
     const now = admin.firestore.FieldValue.serverTimestamp();
     const inviteRef = firestore.collection(INVITE_LINKS_COLLECTION).doc(token);
 

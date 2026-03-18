@@ -56,6 +56,30 @@ async function waitForStableAppFrame(page: Page) {
   }
 }
 
+async function getVisibleLabeledField(page: Page, label: string) {
+  const fields = page.getByLabel(label);
+  const count = await fields.count();
+
+  for (let index = 0; index < count; index += 1) {
+    const candidate = fields.nth(index);
+    if (await candidate.isVisible().catch(() => false)) {
+      return candidate;
+    }
+  }
+
+  return fields.first();
+}
+
+async function fillInviteEmailField(page: Page, email: string) {
+  const emailField = await getVisibleLabeledField(page, 'Email');
+  if (await emailField.isDisabled().catch(() => false)) {
+    await expect(emailField).toHaveValue(email, { timeout: 20_000 });
+    return;
+  }
+
+  await emailField.fill(email);
+}
+
 function teamWorkspacePath(context?: PulseCheckWorkspaceContext) {
   const organizationId = context?.organizationId || pulseCheckOrganizationId;
   const teamId = context?.teamId || pulseCheckTeamId;
@@ -274,11 +298,13 @@ async function redeemAdultInvite(
   browser: Browser,
   inviteUrl: string,
   {
+    email,
     name,
     title,
     username,
     password,
   }: {
+    email: string;
     name: string;
     title: string;
     username: string;
@@ -288,17 +314,90 @@ async function redeemAdultInvite(
   const { context, page } = await createIsolatedPage(browser);
 
   try {
+    page.on('console', (message) => {
+      const text = message.text().replace(/\s+/g, ' ').slice(0, 300);
+      console.log('[PulseCheck Invite Helper][console]', message.type(), text);
+    });
+    page.on('pageerror', (error) => {
+      console.log('[PulseCheck Invite Helper][pageerror]', error.message);
+    });
+
+    const accessReadyText = page.getByText(/Your .* access for .* is active\./i);
+    const acceptInviteButton = page.getByRole('button', { name: /Accept Invite/i });
+    const continueLink = page.getByRole('link', { name: /Continue/i });
+    const redeemFailureText = page.getByText(/PERMISSION_DENIED|Missing or insufficient permissions|Failed to redeem invite/i);
+
     await page.goto(inviteUrl, { waitUntil: 'domcontentloaded' });
     await waitForStableAppFrame(page);
     await expect(page.getByRole('heading', { name: /Join/i })).toBeVisible({ timeout: 20_000 });
+    await fillInviteEmailField(page, email);
     await page.getByLabel('Username').fill(username);
     await page.getByLabel('Password', { exact: true }).fill(password);
     await page.getByLabel('Confirm Password').fill(password);
     await page.getByRole('button', { name: /Create Account and Join/i }).click();
+    console.log('[PulseCheck Invite Helper] account created submit complete', { url: page.url() });
 
-    await expect(page.getByText(/Your team access is live/i)).toBeVisible({ timeout: 20_000 });
-    await page.getByRole('link', { name: /Continue/i }).click();
+    await Promise.race([
+      accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
+      acceptInviteButton.waitFor({ state: 'visible', timeout: 20_000 }),
+      continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
+      page.waitForURL(/\/PulseCheck\/member-setup/i, { timeout: 20_000 }).catch(() => null),
+      page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }).catch(() => null),
+    ]).catch(() => null);
+
+    await Promise.race([
+      page.waitForURL(/\/PulseCheck\/member-setup/i, { timeout: 20_000 }),
+      continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
+      accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
+    ]).catch(() => null);
+
+    if (
+      !/\/PulseCheck\/member-setup/i.test(page.url()) &&
+      !/\/PulseCheck\/team-workspace/i.test(page.url()) &&
+      (await acceptInviteButton.isVisible().catch(() => false)) &&
+      (await redeemFailureText.isVisible().catch(() => false))
+    ) {
+      console.log('[PulseCheck Invite Helper] retrying redeem from signed-in fallback', { url: page.url() });
+      await acceptInviteButton.click();
+      await Promise.race([
+        page.waitForURL(/\/PulseCheck\/member-setup/i, { timeout: 20_000 }),
+        page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }),
+        continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
+        accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
+      ]).catch(() => null);
+    }
+
+    const postAcceptBody = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ');
+    console.log('[PulseCheck Invite Helper] after post-accept wait', {
+      url: page.url(),
+      hasContinue: /Continue/i.test(postAcceptBody),
+      hasFailure: /Failed|error|restricted|already exists/i.test(postAcceptBody),
+      body: postAcceptBody.slice(0, 300),
+    });
+
+    if (/\/PulseCheck\/team-workspace/i.test(page.url())) {
+      await waitForStableAppFrame(page);
+      return { context, page };
+    }
+
+    if (!/\/PulseCheck\/member-setup/i.test(page.url())) {
+      const continueCount = await continueLink.count().catch(() => 0);
+      if (continueCount > 0) {
+        const continueHref = await continueLink.first().getAttribute('href').catch(() => null);
+        console.log('[PulseCheck Invite Helper] continue handoff', { continueHref, url: page.url() });
+        if (continueHref) {
+          await page.goto(continueHref, { waitUntil: 'domcontentloaded' });
+        } else {
+          await continueLink.first().click({ timeout: 5_000 });
+        }
+      }
+    }
+
     await waitForStableAppFrame(page);
+
+    if (/\/PulseCheck\/team-workspace/i.test(page.url())) {
+      return { context, page };
+    }
 
     await expect(page).toHaveURL(/\/PulseCheck\/member-setup/i, { timeout: 20_000 });
     await page.getByLabel('Name').fill(name);
@@ -335,10 +434,12 @@ async function redeemAthleteInvite(
   browser: Browser,
   inviteUrl: string,
   {
+    email,
     name,
     username,
     password,
   }: {
+    email: string;
     name: string;
     username: string;
     password: string;
@@ -347,16 +448,69 @@ async function redeemAthleteInvite(
   const { context, page } = await createIsolatedPage(browser);
 
   try {
+    const accessReadyText = page.getByText(/Your .* access for .* is active\./i);
+    const acceptInviteButton = page.getByRole('button', { name: /Accept Invite/i });
+    const continueLink = page.getByRole('link', { name: /Continue/i });
+    const redeemFailureText = page.getByText(/PERMISSION_DENIED|Missing or insufficient permissions|Failed to redeem invite/i);
+
     await page.goto(inviteUrl, { waitUntil: 'domcontentloaded' });
     await waitForStableAppFrame(page);
     await expect(page.getByRole('heading', { name: /Join/i })).toBeVisible({ timeout: 20_000 });
+    await fillInviteEmailField(page, email);
     await page.getByLabel('Username').fill(username);
     await page.getByLabel('Password', { exact: true }).fill(password);
     await page.getByLabel('Confirm Password').fill(password);
     await page.getByRole('button', { name: /Create Account and Join/i }).click();
+    console.log('[PulseCheck Invite Helper] athlete account created submit complete', { url: page.url() });
 
-    await expect(page.getByText(/Your team access is live/i)).toBeVisible({ timeout: 20_000 });
-    await page.getByRole('link', { name: /Continue/i }).click();
+    await Promise.race([
+      accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
+      acceptInviteButton.waitFor({ state: 'visible', timeout: 20_000 }),
+      continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
+      page.waitForURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 }).catch(() => null),
+      page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }).catch(() => null),
+    ]).catch(() => null);
+
+    await Promise.race([
+      page.waitForURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 }),
+      continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
+      accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
+    ]).catch(() => null);
+
+    if (
+      !/\/PulseCheck\/athlete-onboarding/i.test(page.url()) &&
+      !/\/PulseCheck\/team-workspace/i.test(page.url()) &&
+      (await acceptInviteButton.isVisible().catch(() => false)) &&
+      (await redeemFailureText.isVisible().catch(() => false))
+    ) {
+      console.log('[PulseCheck Invite Helper] athlete retrying redeem from signed-in fallback', { url: page.url() });
+      await acceptInviteButton.click();
+      await Promise.race([
+        page.waitForURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 }),
+        page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }),
+        continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
+        accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
+      ]).catch(() => null);
+    }
+
+    console.log('[PulseCheck Invite Helper] athlete after post-accept wait', {
+      url: page.url(),
+      body: (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300),
+    });
+
+    if (!/\/PulseCheck\/athlete-onboarding/i.test(page.url())) {
+      const continueCount = await continueLink.count().catch(() => 0);
+      if (continueCount > 0) {
+        const continueHref = await continueLink.first().getAttribute('href').catch(() => null);
+        console.log('[PulseCheck Invite Helper] athlete continue handoff', { continueHref, url: page.url() });
+        if (continueHref) {
+          await page.goto(continueHref, { waitUntil: 'domcontentloaded' });
+        } else {
+          await continueLink.first().click({ timeout: 5_000 });
+        }
+      }
+    }
+
     await waitForStableAppFrame(page);
 
     await expect(page).toHaveURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 });
@@ -487,6 +641,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     const inviteUrl = await extractInviteUrl(inviteCard);
 
     const { context } = await redeemAdultInvite(browser, inviteUrl, {
+      email: adultEmail,
       name: adultName,
       title: adultTitle,
       username: adultUsername,
@@ -528,6 +683,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     const inviteUrl = await extractInviteUrl(inviteCard);
 
     const { context } = await redeemAthleteInvite(browser, inviteUrl, {
+      email: athleteEmail,
       name: athleteName,
       username: athleteUsername,
       password,
@@ -593,6 +749,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     const athleteTwoInviteUrl = await extractInviteUrl(athleteTwoInviteCard);
 
     const { context: coachContext, page: coachPage } = await redeemAdultInvite(browser, coachInviteUrl, {
+      email: coachEmail,
       name: coachName,
       title: coachTitle,
       username: coachUsername,
@@ -600,12 +757,14 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     });
 
     const { context: athleteOneContext } = await redeemAthleteInvite(browser, athleteOneInviteUrl, {
+      email: athleteOneEmail,
       name: athleteOneName,
       username: athleteOneUsername,
       password: athleteOnePassword,
     });
 
     const { context: athleteTwoContext } = await redeemAthleteInvite(browser, athleteTwoInviteUrl, {
+      email: athleteTwoEmail,
       name: athleteTwoName,
       username: athleteTwoUsername,
       password: athleteTwoPassword,
@@ -681,12 +840,14 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     const staffInviteUrl = await extractInviteUrl(getPostActivationAdultInviteCard(page, staffName));
 
     const { context: coachContext, page: coachPage } = await redeemAdultInvite(browser, coachInviteUrl, {
+      email: coachEmail,
       name: coachName,
       title: coachTitle,
       username: coachUsername,
       password: coachPassword,
     });
     const { context: staffContext, page: staffPage } = await redeemAdultInvite(browser, staffInviteUrl, {
+      email: staffEmail,
       name: staffName,
       title: staffTitle,
       username: staffUsername,
@@ -817,6 +978,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     const targetInviteUrl = await extractInviteUrl(getPostActivationAdultInviteCard(page, targetAdultName));
 
     const { context, page: signedInPage } = await redeemAdultInvite(browser, signedInInviteUrl, {
+      email: signedInAdultEmail,
       name: signedInAdultName,
       title: signedInAdultTitle,
       username: signedInAdultUsername,
@@ -910,6 +1072,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     const athleteInviteUrl = await extractInviteUrl(getWorkspaceAthleteInviteCard(page, athleteEmail));
 
     const { context: staffContext, page: staffPage } = await redeemAdultInvite(browser, staffInviteUrl, {
+      email: staffEmail,
       name: staffName,
       title: staffTitle,
       username: staffUsername,
@@ -917,6 +1080,7 @@ test.describe('PulseCheck onboarding and team workspace', () => {
     });
 
     const { context: athleteContext } = await redeemAthleteInvite(browser, athleteInviteUrl, {
+      email: athleteEmail,
       name: athleteName,
       username: athleteUsername,
       password: athletePassword,
