@@ -15,10 +15,12 @@ import {
   PulseCheckDailyAssignmentActionType,
   PulseCheckAssignmentEventRecordResult,
   PulseCheckDailyAssignmentStatus,
+  type PulseCheckProtocolPracticeSession,
   RecordPulseCheckAssignmentEventInput,
   PulseCheckStateSnapshot,
   pulseCheckDailyAssignmentFromFirestore,
   pulseCheckDailyAssignmentToFirestore,
+  sanitizeFirestoreValue,
 } from './types';
 
 const DAILY_ASSIGNMENTS_COLLECTION = PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION;
@@ -387,6 +389,13 @@ export const assignmentOrchestratorService = {
 
   async markCompleted(id: string): Promise<void> {
     await recordAssignmentEvent({ assignmentId: id, eventType: 'completed' });
+  },
+
+  async saveProtocolPracticeSession(id: string, session: PulseCheckProtocolPracticeSession): Promise<void> {
+    await updateDoc(doc(db, DAILY_ASSIGNMENTS_COLLECTION, id), {
+      protocolPracticeSession: sanitizeFirestoreValue(session),
+      updatedAt: Date.now(),
+    });
   },
 
   async resolveExercise(id: string) {

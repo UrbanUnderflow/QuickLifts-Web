@@ -365,6 +365,105 @@ function readStringFromRecord(record: Record<string, unknown> | null, key: strin
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+type PracticeScorecardEntry = {
+  label: string;
+  value: string;
+  tone: 'green' | 'blue' | 'amber' | 'red' | 'zinc';
+};
+
+function buildPracticeConversationScorecard({
+  assignment,
+  latestConversationSignal,
+  latestCoachTruthEvent,
+}: {
+  assignment: PulseCheckDailyAssignment;
+  latestConversationSignal?: PulseCheckConversationDerivedSignalEvent;
+  latestCoachTruthEvent?: PulseCheckAssignmentEvent | null;
+}): PracticeScorecardEntry[] {
+  const persistedSession = assignment.protocolPracticeSession;
+  if (persistedSession?.scorecard) {
+    const scorecard = persistedSession.scorecard;
+    return [
+      {
+        label: 'Transcript summary',
+        value: persistedSession.turns[0]?.responseText || 'Transcript summary saved in turn history.',
+        tone: persistedSession.turns.length ? 'green' : 'amber',
+      },
+      {
+        label: 'Evaluation summary',
+        value: scorecard.evaluationSummary,
+        tone: 'green',
+      },
+      {
+        label: 'Signal awareness',
+        value: `${scorecard.dimensionScores.signalAwareness.toFixed(1)} / 5`,
+        tone: scorecard.dimensionScores.signalAwareness >= 4 ? 'green' : scorecard.dimensionScores.signalAwareness >= 3 ? 'amber' : 'red',
+      },
+      {
+        label: 'Shift quality',
+        value: `${scorecard.dimensionScores.shiftQuality.toFixed(1)} / 5`,
+        tone: scorecard.dimensionScores.shiftQuality >= 4 ? 'green' : scorecard.dimensionScores.shiftQuality >= 3 ? 'amber' : 'red',
+      },
+      {
+        label: 'Technique fidelity',
+        value: `${scorecard.dimensionScores.techniqueFidelity.toFixed(1)} / 5`,
+        tone: scorecard.dimensionScores.techniqueFidelity >= 4 ? 'green' : scorecard.dimensionScores.techniqueFidelity >= 3 ? 'amber' : 'red',
+      },
+      {
+        label: 'Coachability',
+        value: `${scorecard.dimensionScores.coachability.toFixed(1)} / 5`,
+        tone: scorecard.dimensionScores.coachability >= 4 ? 'green' : scorecard.dimensionScores.coachability >= 3 ? 'amber' : 'red',
+      },
+    ];
+  }
+
+  const transcriptSummary = latestConversationSignal?.inferredDelta?.summary?.trim() || 'No transcript summary recorded yet.';
+  const evaluationSummary =
+    latestConversationSignal?.inferredDelta?.contradictionSummary?.trim() ||
+    transcriptSummary ||
+    'No evaluation summary recorded yet.';
+  const signalCount = latestConversationSignal?.inferredDelta?.supportingEvidence?.length || 0;
+  const shiftLabel = latestConversationSignal?.inferredDelta?.overallReadiness
+    ? `${humanizeRuntimeLabel(latestConversationSignal.inferredDelta.overallReadiness)} posture`
+    : 'Not yet measured';
+  const techniqueLabel = latestConversationSignal?.inferredDelta?.recommendedProtocolClass
+    ? humanizeRuntimeLabel(latestConversationSignal.inferredDelta.recommendedProtocolClass)
+    : 'Not yet measured';
+
+  return [
+    {
+      label: 'Transcript summary',
+      value: transcriptSummary,
+      tone: latestConversationSignal?.inferredDelta?.summary ? 'green' : 'amber',
+    },
+    {
+      label: 'Evaluation summary',
+      value: evaluationSummary,
+      tone: latestConversationSignal?.inferredDelta?.contradictionSummary ? 'amber' : latestConversationSignal?.inferredDelta?.summary ? 'green' : 'amber',
+    },
+    {
+      label: 'Signal awareness',
+      value: signalCount ? `${signalCount} evidence cue${signalCount === 1 ? '' : 's'} captured` : 'Awaiting evidence cues',
+      tone: signalCount ? 'green' : 'amber',
+    },
+    {
+      label: 'Shift quality',
+      value: shiftLabel,
+      tone: latestConversationSignal?.inferredDelta?.overallReadiness ? 'green' : 'blue',
+    },
+    {
+      label: 'Technique fidelity',
+      value: techniqueLabel,
+      tone: latestConversationSignal?.inferredDelta?.recommendedProtocolClass ? 'green' : 'blue',
+    },
+    {
+      label: 'Coachability',
+      value: latestCoachTruthEvent ? 'Coach correction captured' : 'No coach correction yet',
+      tone: latestCoachTruthEvent ? 'green' : 'blue',
+    },
+  ];
+}
+
 const CoachMentalTraining: React.FC = () => {
   const router = useRouter();
   const currentUser = useUser();
@@ -1576,6 +1675,27 @@ const CoachMentalTraining: React.FC = () => {
                       formatSignalDeltaLabel('Emotional load', latestConversationSignal?.inferredDelta?.emotionalLoadDelta),
                       formatSignalDeltaLabel('Fatigue', latestConversationSignal?.inferredDelta?.cognitiveFatigueDelta),
                     ].filter(Boolean);
+                    const practiceScorecardRows = buildPracticeConversationScorecard({
+                      assignment,
+                      latestConversationSignal,
+                      latestCoachTruthEvent,
+                    });
+                    const practiceTranscriptSummary =
+                      assignment.protocolPracticeSession?.turns?.map((turn) => turn.responseText).filter(Boolean).slice(0, 2).join(' ') ||
+                      latestConversationSignal?.inferredDelta?.summary ||
+                      'No transcript summary recorded yet.';
+                    const practiceEvaluationSummary =
+                      assignment.protocolPracticeSession?.scorecard?.evaluationSummary ||
+                      latestConversationSignal?.inferredDelta?.contradictionSummary ||
+                      latestConversationSignal?.inferredDelta?.summary ||
+                      'No evaluation summary recorded yet.';
+                    const practiceReadyLabel = assignment.protocolId
+                      ? assignment.protocolPracticeSession?.scorecard
+                        ? 'Persisted scorecard'
+                        : latestConversationSignal
+                        ? 'Transcript-backed'
+                        : 'Awaiting transcript'
+                      : 'No protocol lineage';
 
                     return (
                       <div
@@ -2065,6 +2185,72 @@ const CoachMentalTraining: React.FC = () => {
                             </div>
                           </div>
                         )}
+
+                        {assignment.protocolId ? (
+                          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-4 space-y-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="text-xs uppercase tracking-[0.22em] text-cyan-200">Protocol Practice Conversation</div>
+                              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${latestConversationSignal ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200' : 'border-amber-500/20 bg-amber-500/10 text-amber-100'}`}>
+                                {practiceReadyLabel}
+                              </span>
+                              <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] font-semibold text-zinc-200">
+                                Text first
+                              </span>
+                              <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[11px] font-semibold text-zinc-200">
+                                Voice next
+                              </span>
+                            </div>
+                            <div className="grid gap-3 lg:grid-cols-2">
+                              <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-3 space-y-3">
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Transcript Summary</div>
+                                <div className="text-sm leading-6 text-zinc-300">{practiceTranscriptSummary}</div>
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Evaluation Summary</div>
+                                <div className="text-sm leading-6 text-zinc-300">{practiceEvaluationSummary}</div>
+                                {assignment.protocolPracticeSession?.turns?.length ? (
+                                  <div className="space-y-2">
+                                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Turn Trace</div>
+                                    {assignment.protocolPracticeSession.turns.slice(0, 3).map((turn) => (
+                                      <div key={`${assignment.id}-practice-turn-${turn.id}`} className="rounded-xl border border-white/8 bg-white/5 px-3 py-2 text-sm text-zinc-300">
+                                        <span className="font-medium text-white">{turn.promptLabel || 'Nora prompt'}:</span> {turn.responseText}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : latestConversationSignal?.inferredDelta?.supportingEvidence?.length ? (
+                                  <div className="space-y-2">
+                                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Evidence Cues</div>
+                                    {latestConversationSignal.inferredDelta.supportingEvidence.slice(0, 3).map((evidence, index) => (
+                                      <div key={`${assignment.id}-practice-evidence-${index}`} className="rounded-xl border border-white/8 bg-white/5 px-3 py-2 text-sm text-zinc-300">
+                                        {evidence}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+
+                              <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-3 space-y-3">
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Practice Scorecard</div>
+                                <div className="grid gap-2 md:grid-cols-2">
+                                  {practiceScorecardRows.map((entry) => (
+                                    <div key={`${assignment.id}-practice-scorecard-${entry.label}`} className="rounded-xl border border-white/8 bg-white/5 px-3 py-3">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <div className="text-sm font-medium text-white">{entry.label}</div>
+                                        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${entry.tone === 'green' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200' : entry.tone === 'amber' ? 'border-amber-500/20 bg-amber-500/10 text-amber-100' : entry.tone === 'red' ? 'border-rose-500/20 bg-rose-500/10 text-rose-200' : entry.tone === 'blue' ? 'border-cyan-500/20 bg-cyan-500/10 text-cyan-200' : 'border-zinc-700 bg-zinc-800/80 text-zinc-300'}`}>
+                                          {entry.tone === 'green' ? 'Captured' : entry.tone === 'amber' ? 'Needs review' : entry.tone === 'red' ? 'Missing' : 'Draft'}
+                                        </span>
+                                      </div>
+                                      <div className="mt-2 text-sm text-zinc-300">{entry.value}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="text-xs text-zinc-500">
+                                  {assignment.protocolPracticeSession?.scorecard
+                                    ? 'This scorecard is coming from the persisted protocol practice session attached to the assignment audit trace.'
+                                    : 'This is a review-surface scorecard derived from the latest conversation signal until persisted practice-session records are available.'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
 
                         {isActionable ? (
                           <div className="flex flex-wrap gap-3">

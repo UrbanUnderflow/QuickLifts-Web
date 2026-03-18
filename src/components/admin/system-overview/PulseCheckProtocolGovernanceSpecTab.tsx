@@ -7,6 +7,7 @@ import PulseCheckProtocolResponsivenessProfileSpecTab from './PulseCheckProtocol
 import PulseCheckProtocolResponsivenessInspectorTab from './PulseCheckProtocolResponsivenessInspectorTab';
 import PulseCheckProtocolLaunchReadinessTab from './PulseCheckProtocolLaunchReadinessTab';
 import PulseCheckProtocolPlannerPolicyEnforcementTab from './PulseCheckProtocolPlannerPolicyEnforcementTab';
+import PulseCheckProtocolPracticeConversationSpecTab from './PulseCheckProtocolPracticeConversationSpecTab';
 import PulseCheckProtocolEvidenceDashboardTab from './PulseCheckProtocolEvidenceDashboardTab';
 import PulseCheckProtocolRevisionAuditTraceTab from './PulseCheckProtocolRevisionAuditTraceTab';
 import PulseCheckProtocolOpsRunbookTab from './PulseCheckProtocolOpsRunbookTab';
@@ -225,6 +226,14 @@ const PROTOCOL_SYSTEM_PAGES: ArtifactPageEntry[] = [
     icon: Shield,
     accent: '#ef4444',
     render: () => <PulseCheckProtocolPlannerPolicyEnforcementTab />,
+  },
+  {
+    id: 'practice-conversation',
+    label: 'Practice Conversation Spec',
+    subtitle: 'Teach, practice, evaluate runtime contract for Nora-guided protocol application.',
+    icon: Bot,
+    accent: '#14b8a6',
+    render: () => <PulseCheckProtocolPracticeConversationSpecTab />,
   },
   {
     id: 'evidence-dashboard',
