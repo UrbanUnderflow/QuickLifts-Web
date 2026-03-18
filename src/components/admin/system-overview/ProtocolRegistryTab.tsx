@@ -7,6 +7,7 @@ import {
   GitBranch,
   History,
   Layers3,
+  MessageCircleMore,
   PlusCircle,
   RefreshCw,
   Save,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 import {
   ExerciseCategory,
+  protocolPracticeConversationService,
   protocolRegistryService,
   simModuleLibraryService,
   type MentalExercise,
@@ -444,6 +446,22 @@ function describeExerciseConfig(exercise: MentalExercise | null) {
   return humanizeTag(exercise.exerciseConfig.type);
 }
 
+const PRACTICE_SCORECARD_DIMENSIONS = [
+  'Signal awareness',
+  'Technique fidelity',
+  'Language quality',
+  'Shift quality',
+  'Coachability',
+];
+
+const PRACTICE_INPUT_MODES = ['Text first', 'Voice next', 'Transcript review'];
+
+const PRACTICE_CLOSEOUT_BEHAVIOR = [
+  'Nora returns a short evaluation summary before completion.',
+  'The scorecard should record what was strong, what was missing, and what to do on the next rep.',
+  'The practice flow should not silently skip straight to completion after the instructional phase.',
+];
+
 const listButtonClass = (selected: boolean) =>
   `w-full rounded-2xl border px-4 py-3 text-left transition ${
     selected
@@ -486,7 +504,13 @@ const ProtocolRegistryTab: React.FC = () => {
   const [sourceExerciseLoading, setSourceExerciseLoading] = useState(false);
   const [sourceExerciseError, setSourceExerciseError] = useState<string | null>(null);
   const [previewExercise, setPreviewExercise] = useState<MentalExercise | null>(null);
-  const [previewProtocolAudioContext, setPreviewProtocolAudioContext] = useState<{ protocolId: string; protocolLabel?: string | null } | null>(null);
+  const [previewProtocolAudioContext, setPreviewProtocolAudioContext] = useState<{
+    protocolId: string;
+    protocolLabel?: string | null;
+    protocolFamilyId?: string | null;
+    protocolVariantId?: string | null;
+    protocolPublishedRevisionId?: string | null;
+  } | null>(null);
   const [previewSessionKey, setPreviewSessionKey] = useState(0);
 
   const loadWorkspace = async (preferred?: { familyId?: string | null; variantId?: string | null; runtimeId?: string | null }) => {
@@ -867,7 +891,13 @@ const ProtocolRegistryTab: React.FC = () => {
         previewSessionKey: previewSessionKey + 1,
       });
       setPreviewSessionKey((prev) => prev + 1);
-      setPreviewProtocolAudioContext(protocolId ? { protocolId, protocolLabel: runtimeDraft?.label || variantDraft?.label || null } : null);
+      setPreviewProtocolAudioContext(protocolId ? {
+        protocolId,
+        protocolLabel: runtimeDraft?.label || variantDraft?.label || null,
+        protocolFamilyId: familyDraft?.id || null,
+        protocolVariantId: variantDraft?.id || null,
+        protocolPublishedRevisionId: runtimeDraft?.publishedRevisionId || null,
+      } : null);
       setPreviewExercise(sourceExercise);
       return;
     }
@@ -887,7 +917,13 @@ const ProtocolRegistryTab: React.FC = () => {
         protocolId,
       });
       setPreviewSessionKey((prev) => prev + 1);
-      setPreviewProtocolAudioContext(protocolId ? { protocolId, protocolLabel: runtimeDraft?.label || variantDraft?.label || null } : null);
+      setPreviewProtocolAudioContext(protocolId ? {
+        protocolId,
+        protocolLabel: runtimeDraft?.label || variantDraft?.label || null,
+        protocolFamilyId: familyDraft?.id || null,
+        protocolVariantId: variantDraft?.id || null,
+        protocolPublishedRevisionId: runtimeDraft?.publishedRevisionId || null,
+      } : null);
       setPreviewExercise(exercise);
     } catch (error) {
       console.error('Failed to preview protocol source exercise:', error);
@@ -919,7 +955,13 @@ const ProtocolRegistryTab: React.FC = () => {
         protocolId: protocol.id,
       });
       setPreviewSessionKey((prev) => prev + 1);
-      setPreviewProtocolAudioContext({ protocolId: protocol.id, protocolLabel: protocol.label });
+      setPreviewProtocolAudioContext({
+        protocolId: protocol.id,
+        protocolLabel: protocol.label,
+        protocolFamilyId: protocol.familyId,
+        protocolVariantId: protocol.variantId,
+        protocolPublishedRevisionId: protocol.publishedRevisionId || null,
+      });
       setPreviewExercise(exercise);
     } catch (error) {
       console.error('Failed to preview published protocol source exercise:', error);
@@ -939,6 +981,9 @@ const ProtocolRegistryTab: React.FC = () => {
   const familyDirty = compareDraft(familyDraft) !== compareDraft(selectedFamily);
   const variantDirty = compareDraft(variantDraft) !== compareDraft(selectedVariant);
   const runtimeDirty = compareDraft(runtimeDraft) !== compareDraft(selectedRuntime);
+  const practiceSpec =
+    protocolPracticeConversationService.getByVariantId(runtimeDraft?.variantId || variantDraft?.id) ||
+    protocolPracticeConversationService.getByLegacyExerciseId(runtimeDraft?.legacyExerciseId || variantDraft?.legacyExerciseId || sourceExercise?.id);
   const publishBlocked =
     !familyDraft ||
     !variantDraft ||
@@ -1329,6 +1374,51 @@ const ProtocolRegistryTab: React.FC = () => {
                     <div><span className="font-medium text-white">Source exercise description:</span> {sourceExercise?.description || 'No bound source description available yet.'}</div>
                     <div><span className="font-medium text-white">Source exercise neuroscience:</span> {sourceExercise?.neuroscience || 'No neuroscience note available for the current bound source.'}</div>
                     <div><span className="font-medium text-white">Benefits:</span> {sourceExercise?.benefits?.length ? sourceExercise.benefits.slice(0, 4).join(', ') : 'No benefits attached yet.'}</div>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/[0.06] p-4">
+                  <div className="flex items-center gap-2">
+                    <MessageCircleMore className="h-4 w-4 text-cyan-300" />
+                    <div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-cyan-200">Practice Conversation</div>
+                      <div className="text-sm text-cyan-100">Teach -&gt; practice -&gt; evaluate review contract</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-3 xl:grid-cols-2">
+                    <div className="rounded-2xl border border-cyan-500/15 bg-black/20 p-3 text-sm text-zinc-300">
+                      <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Readiness</div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <InlineTag label={runtimeDraft.publishStatus === 'published' ? 'Published runtime' : 'Not yet published'} color={runtimeDraft.publishStatus === 'published' ? 'green' : 'amber'} />
+                        <InlineTag label={sourceExercise ? 'Source asset bound' : 'Source asset missing'} color={sourceExercise ? 'blue' : 'red'} />
+                        <InlineTag label={practiceSpec ? 'Practice spec locked' : 'Practice spec missing'} color={practiceSpec ? 'green' : 'red'} />
+                        {PRACTICE_INPUT_MODES.map((mode) => (
+                          <InlineTag key={mode} label={mode} color={mode === 'Text first' ? 'blue' : mode === 'Voice next' ? 'amber' : 'purple'} />
+                        ))}
+                      </div>
+                      <div className="mt-3 text-sm leading-6 text-zinc-300">
+                        Nora should teach the protocol, guide a bounded practice exchange, and then close with an evaluation summary instead of jumping straight to completion.
+                      </div>
+                      {practiceSpec ? (
+                        <div className="mt-3 rounded-xl border border-cyan-500/10 bg-cyan-500/[0.04] px-3 py-2 text-sm text-zinc-300">
+                          Locked practice spec: {practiceSpec.title} with {practiceSpec.turns.length} guided turn{practiceSpec.turns.length === 1 ? '' : 's'} and {practiceSpec.inputModes.join(' / ')} input.
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="rounded-2xl border border-cyan-500/15 bg-black/20 p-3 text-sm text-zinc-300">
+                      <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Scorecard Contract</div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {PRACTICE_SCORECARD_DIMENSIONS.map((dimension) => (
+                          <InlineTag key={dimension} label={dimension} color="purple" />
+                        ))}
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {PRACTICE_CLOSEOUT_BEHAVIOR.map((line) => (
+                          <div key={line} className="rounded-xl border border-cyan-500/10 bg-cyan-500/[0.04] px-3 py-2 text-sm text-zinc-300">
+                            {line}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">

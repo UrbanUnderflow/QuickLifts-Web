@@ -24,6 +24,7 @@ import {
   Star,
   Sparkles,
   ChevronRight,
+  Mic,
   Volume2,
   VolumeX,
 } from 'lucide-react';
@@ -31,9 +32,18 @@ import { speakStep, stopNarration, VoiceChoice } from '../../utils/tts';
 import {
   SimModule,
   ExerciseCategory,
+  type PulseCheckProtocolPracticeSession,
+  type PulseCheckProtocolPracticeTurn,
+  type PulseCheckProtocolPracticeVoiceSignals,
 } from '../../api/firebase/mentaltraining/types';
 import { assignmentOrchestratorService } from '../../api/firebase/mentaltraining/assignmentOrchestratorService';
 import { protocolAudioAssetService } from '../../api/firebase/mentaltraining/protocolAudioAssetService';
+import {
+  protocolPracticeConversationService,
+  type ProtocolPracticeAdaptiveFollowUp,
+  type ProtocolPracticeSpec,
+  type ProtocolPracticeTurnSpec,
+} from '../../api/firebase/mentaltraining/protocolPracticeConversationService';
 import type { ProfileSnapshotMilestone } from '../../api/firebase/mentaltraining/taxonomy';
 import { ResetGame } from './ResetGame';
 import { SimRuntimePlayer } from './SimRuntimePlayer';
@@ -89,6 +99,9 @@ interface ExercisePlayerProps {
   protocolAudioContext?: {
     protocolId: string;
     protocolLabel?: string | null;
+    protocolFamilyId?: string | null;
+    protocolVariantId?: string | null;
+    protocolPublishedRevisionId?: string | null;
   } | null;
 }
 
@@ -126,6 +139,9 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   const [resolvedProtocolAudioContext, setResolvedProtocolAudioContext] = useState<{
     protocolId: string;
     protocolLabel?: string | null;
+    protocolFamilyId?: string | null;
+    protocolVariantId?: string | null;
+    protocolPublishedRevisionId?: string | null;
   } | null>(protocolAudioContext);
   const [protocolCueUrl, setProtocolCueUrl] = useState<string | null>(null);
 
@@ -159,6 +175,9 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
       setResolvedProtocolAudioContext({
         protocolId: protocolAudioContext.protocolId.trim(),
         protocolLabel: protocolAudioContext.protocolLabel ?? null,
+        protocolFamilyId: protocolAudioContext.protocolFamilyId ?? null,
+        protocolVariantId: protocolAudioContext.protocolVariantId ?? null,
+        protocolPublishedRevisionId: protocolAudioContext.protocolPublishedRevisionId ?? null,
       });
       return () => {
         cancelled = true;
@@ -179,6 +198,9 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
           setResolvedProtocolAudioContext({
             protocolId: assignment.protocolId.trim(),
             protocolLabel: assignment.protocolLabel ?? null,
+            protocolFamilyId: assignment.protocolFamilyId ?? null,
+            protocolVariantId: assignment.protocolVariantId ?? null,
+            protocolPublishedRevisionId: assignment.protocolPublishedRevisionId ?? null,
           });
           return;
         }
@@ -471,6 +493,8 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
               onStartInChat={onStartInChat}
               profileSnapshotMilestone={profileSnapshotMilestone}
               previewMode={previewMode}
+              dailyAssignmentId={dailyAssignmentId}
+              protocolExecutionContext={resolvedProtocolAudioContext}
             />
           )}
 
@@ -693,6 +717,14 @@ interface ActiveExerciseProps {
   onStartInChat?: (exercise: SimModule) => void;
   profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
   previewMode?: boolean;
+  dailyAssignmentId?: string;
+  protocolExecutionContext?: {
+    protocolId: string;
+    protocolLabel?: string | null;
+    protocolFamilyId?: string | null;
+    protocolVariantId?: string | null;
+    protocolPublishedRevisionId?: string | null;
+  } | null;
 }
 
 const ActiveExercise: React.FC<ActiveExerciseProps> = ({
@@ -709,6 +741,8 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
   onStartInChat,
   profileSnapshotMilestone,
   previewMode,
+  dailyAssignmentId,
+  protocolExecutionContext,
 }) => {
   if (exercise.buildArtifact?.engineKey) {
     return (
@@ -778,6 +812,8 @@ const ActiveExercise: React.FC<ActiveExerciseProps> = ({
       requiresWriting={requiresWriting}
       onStartInChat={onStartInChat}
       previewMode={previewMode}
+      dailyAssignmentId={dailyAssignmentId}
+      protocolExecutionContext={protocolExecutionContext}
     />
   );
 };
@@ -2056,6 +2092,14 @@ interface PromptExerciseProps {
   requiresWriting?: boolean;
   onStartInChat?: (exercise: SimModule) => void;
   previewMode?: boolean;
+  dailyAssignmentId?: string;
+  protocolExecutionContext?: {
+    protocolId: string;
+    protocolLabel?: string | null;
+    protocolFamilyId?: string | null;
+    protocolVariantId?: string | null;
+    protocolPublishedRevisionId?: string | null;
+  } | null;
 }
 
 const PromptExercise: React.FC<PromptExerciseProps> = ({
@@ -2070,14 +2114,21 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
   requiresWriting = false,
   onStartInChat,
   previewMode = false,
+  dailyAssignmentId,
+  protocolExecutionContext = null,
 }) => {
   const [currentPromptIndex, setCurrentPromptIndex] = useState(0);
   const [hasFinishedAllPrompts, setHasFinishedAllPrompts] = useState(false);
+  const [practiceStarted, setPracticeStarted] = useState(false);
+  const [teachCompletedAt, setTeachCompletedAt] = useState<number | undefined>();
   const narrationRunIdRef = useRef(0);
   const debugIdRef = useRef(`prompt-${Date.now().toString(16)}-${Math.random().toString(16).slice(2, 8)}`);
 
   const config = exercise.exerciseConfig.config as any;
   const prompts = Array.isArray(config?.prompts) ? config.prompts.filter(Boolean) : [];
+  const practiceSpec =
+    protocolPracticeConversationService.getByVariantId(protocolExecutionContext?.protocolVariantId) ||
+    protocolPracticeConversationService.getByLegacyExerciseId(exercise.id);
   const safeTotalPrompts = Math.max(1, prompts.length);
   const currentPrompt = prompts[currentPromptIndex];
   const isLastPrompt = prompts.length === 0 ? true : currentPromptIndex >= prompts.length - 1;
@@ -2116,6 +2167,11 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
 
   const handleNext = () => {
     if (isLastPrompt) {
+      if (practiceSpec) {
+        setTeachCompletedAt(Date.now());
+        setPracticeStarted(true);
+        return;
+      }
       // For writing exercises, redirect to chat instead of completing
       if (requiresWriting && onStartInChat) {
         onStartInChat(exercise);
@@ -2130,6 +2186,7 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
   // Determine button text based on exercise type
   const getButtonText = () => {
     if (!isLastPrompt) return 'Next';
+    if (practiceSpec) return 'Begin Practice';
     if (requiresWriting) return 'Start Exercise';
     return 'Complete';
   };
@@ -2139,6 +2196,25 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  if (practiceStarted && practiceSpec) {
+    return (
+      <ProtocolPracticeConversation
+        exercise={exercise}
+        spec={practiceSpec}
+        categoryColor={categoryColor}
+        isPaused={isPaused}
+        soundEnabled={soundEnabled}
+        onPause={onPause}
+        onResume={onResume}
+        onComplete={onComplete}
+        previewMode={previewMode}
+        dailyAssignmentId={dailyAssignmentId}
+        protocolExecutionContext={protocolExecutionContext}
+        teachCompletedAt={teachCompletedAt}
+      />
+    );
+  }
 
   return (
     <motion.div
@@ -2211,7 +2287,7 @@ const PromptExercise: React.FC<PromptExerciseProps> = ({
       />
 
       {/* After all prompts are read, silently continue until timer ends (if duration exists) */}
-      {hasFinishedAllPrompts && targetDuration != null && remaining === 0 && (
+      {!practiceSpec && hasFinishedAllPrompts && targetDuration != null && remaining === 0 && (
         <AutoCompleteOnce onComplete={onComplete} />
       )}
 
@@ -2329,6 +2405,562 @@ const AutoNarrator: React.FC<{
   }, [advanceOnError, debugLabel, enabled, text, voiceChoice]);
   return null;
 };
+
+const ProtocolPracticeConversation: React.FC<{
+  exercise: SimModule;
+  spec: ProtocolPracticeSpec;
+  categoryColor: string;
+  isPaused: boolean;
+  soundEnabled: boolean;
+  onPause: () => void;
+  onResume: () => void;
+  onComplete: (data?: {
+    durationSeconds?: number;
+    preExerciseMood?: number;
+    postExerciseMood?: number;
+    difficultyRating?: number;
+    helpfulnessRating?: number;
+    notes?: string;
+  }) => void;
+  previewMode?: boolean;
+  dailyAssignmentId?: string;
+  protocolExecutionContext?: {
+    protocolId: string;
+    protocolLabel?: string | null;
+    protocolFamilyId?: string | null;
+    protocolVariantId?: string | null;
+    protocolPublishedRevisionId?: string | null;
+  } | null;
+  teachCompletedAt?: number;
+}> = ({
+  exercise,
+  spec,
+  categoryColor,
+  isPaused,
+  soundEnabled,
+  onPause,
+  onResume,
+  onComplete,
+  previewMode = false,
+  dailyAssignmentId,
+  protocolExecutionContext = null,
+  teachCompletedAt,
+}) => {
+  type PracticePhase = 'practice-intro' | 'practice-turn' | 'practice-feedback' | 'evaluation';
+
+  const [phase, setPhase] = useState<PracticePhase>('practice-intro');
+  const [turnIndex, setTurnIndex] = useState(0);
+  const [responseDraft, setResponseDraft] = useState('');
+  const [liveTranscript, setLiveTranscript] = useState('');
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [transcriptConfidence, setTranscriptConfidence] = useState<number | undefined>();
+  const [pendingFeedback, setPendingFeedback] = useState<PulseCheckProtocolPracticeTurn | null>(null);
+  const [pendingFollowUp, setPendingFollowUp] = useState<ProtocolPracticeAdaptiveFollowUp | null>(null);
+  const [turns, setTurns] = useState<PulseCheckProtocolPracticeTurn[]>([]);
+  const [scorecard, setScorecard] = useState<PulseCheckProtocolPracticeSession['scorecard']>();
+  const [persisting, setPersisting] = useState(false);
+  const [activeFollowUp, setActiveFollowUp] = useState<ProtocolPracticeAdaptiveFollowUp | null>(null);
+
+  const recognitionRef = useRef<any>(null);
+  const recordingStartedAtRef = useRef<number | null>(null);
+  const narrationRunIdRef = useRef(0);
+  const sessionPersistedRef = useRef(false);
+
+  const currentTurnSpec = spec.turns[Math.min(turnIndex, spec.turns.length - 1)];
+  const currentPromptText = activeFollowUp?.promptText || currentTurnSpec?.promptText || '';
+  const currentPromptId = activeFollowUp?.id || currentTurnSpec?.id || '';
+  const currentPromptLabel = activeFollowUp ? `${currentTurnSpec?.label || 'Follow-up'} Follow-Up` : currentTurnSpec?.label;
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // no-op
+      }
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+    recordingStartedAtRef.current = null;
+  };
+
+  useEffect(() => () => {
+    stopListening();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (isPaused && isListening) {
+      stopListening();
+    }
+  }, [isListening, isPaused]);
+
+  const currentInputModeUsed = (submittedTurns: PulseCheckProtocolPracticeTurn[]) => {
+    const modes = Array.from(new Set(submittedTurns.map((turn) => turn.modality)));
+    if (modes.length > 1) return 'mixed' as const;
+    return modes[0] || 'text';
+  };
+
+  const buildVoiceSignals = (): PulseCheckProtocolPracticeVoiceSignals | undefined => {
+    const responseDurationMs = recordingStartedAtRef.current ? Date.now() - recordingStartedAtRef.current : undefined;
+    const words = normalizeResponseDraft(responseDraft).split(' ').filter(Boolean).length;
+    const minutes = responseDurationMs ? responseDurationMs / 60000 : 0;
+    const wordsPerMinute = responseDurationMs && minutes > 0 ? Number((words / minutes).toFixed(1)) : undefined;
+    const confidenceQualified = typeof transcriptConfidence === 'number' && transcriptConfidence >= 0.55;
+
+    if (
+      responseDurationMs == null &&
+      typeof transcriptConfidence !== 'number' &&
+      wordsPerMinute == null
+    ) {
+      return undefined;
+    }
+
+    return {
+      responseDurationMs,
+      transcriptConfidence,
+      confidenceQualified,
+      wordsPerMinute,
+      confidenceExplanation: confidenceQualified
+        ? 'Transcript confidence was high enough to keep optional voice-quality notes.'
+        : 'Transcript confidence was too weak to influence optional voice-quality notes.',
+    };
+  };
+
+  const startListening = () => {
+    setSpeechError(null);
+    const SpeechRecognitionCtor =
+      (window as any).SpeechRecognition ||
+      (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      setSpeechError('Voice input is not supported in this browser. You can still type your answer.');
+      return;
+    }
+
+    stopNarration();
+    stopListening();
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+      const confidences: number[] = [];
+
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const alternative = result[0];
+        if (typeof alternative?.confidence === 'number') {
+          confidences.push(alternative.confidence);
+        }
+        if (result.isFinal) {
+          finalTranscript += alternative?.transcript || '';
+        } else {
+          interimTranscript += alternative?.transcript || '';
+        }
+      }
+
+      if (finalTranscript.trim()) {
+        setResponseDraft((previous) => {
+          const previousText = previous.trim();
+          return previousText ? `${previousText} ${finalTranscript.trim()}`.trim() : finalTranscript.trim();
+        });
+      }
+      setLiveTranscript(interimTranscript);
+      if (confidences.length) {
+        const average = confidences.reduce((sum, value) => sum + value, 0) / confidences.length;
+        setTranscriptConfidence(Number(average.toFixed(2)));
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      setSpeechError(event?.error ? `Voice capture error: ${event.error}.` : 'Voice capture failed. You can still type your answer.');
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = recognition;
+    recordingStartedAtRef.current = Date.now();
+    setTranscriptConfidence(undefined);
+    setLiveTranscript('');
+    setIsListening(true);
+
+    try {
+      recognition.start();
+    } catch {
+      setSpeechError('Voice capture could not start. You can still type your answer.');
+      setIsListening(false);
+      recognitionRef.current = null;
+      recordingStartedAtRef.current = null;
+    }
+  };
+
+  const currentSession = (): PulseCheckProtocolPracticeSession => {
+    const session = protocolPracticeConversationService.createSessionDraft(spec, {
+      protocolId: protocolExecutionContext?.protocolId,
+      protocolFamilyId: protocolExecutionContext?.protocolFamilyId || spec.protocolFamilyId,
+      protocolVariantId: protocolExecutionContext?.protocolVariantId || spec.protocolVariantId,
+    });
+
+    return {
+      ...session,
+      teachCompletedAt,
+      practiceStartedAt: turns.length ? turns[0].submittedAt : Date.now(),
+      completedAt: scorecard ? Date.now() : undefined,
+      inputModeUsed: currentInputModeUsed(turns),
+      transcriptReviewUsed: turns.some((turn) => Boolean(turn.transcriptReviewed)),
+      adaptiveFollowUpsUsed: turns.filter((turn) => turn.usedAdaptiveFollowUp).length,
+      turns,
+      scorecard,
+    };
+  };
+
+  const persistSessionIfNeeded = async (finalScorecard: NonNullable<PulseCheckProtocolPracticeSession['scorecard']>) => {
+    if (previewMode || !dailyAssignmentId || sessionPersistedRef.current) return;
+
+    const session = {
+      ...currentSession(),
+      completedAt: Date.now(),
+      scorecard: finalScorecard,
+    };
+
+    setPersisting(true);
+    try {
+      await assignmentOrchestratorService.saveProtocolPracticeSession(dailyAssignmentId, session);
+      sessionPersistedRef.current = true;
+    } catch (error) {
+      console.error('[ProtocolPracticeConversation] Failed to persist practice session', error);
+    } finally {
+      setPersisting(false);
+    }
+  };
+
+  const submitTurn = async () => {
+    const trimmedResponse = responseDraft.trim();
+    if (!trimmedResponse || !currentTurnSpec) return;
+
+    stopListening();
+    stopNarration();
+
+    const evaluation = protocolPracticeConversationService.evaluateTurn(
+      spec,
+      currentTurnSpec,
+      {
+        responseText: trimmedResponse,
+        modality: transcriptConfidence != null ? 'voice' : 'text',
+        usedAdaptiveFollowUp: Boolean(activeFollowUp),
+        followUpPromptId: activeFollowUp?.id,
+        followUpPromptText: activeFollowUp?.promptText,
+        transcriptReviewed: transcriptConfidence != null ? true : false,
+        voiceSignals: transcriptConfidence != null ? buildVoiceSignals() : undefined,
+      },
+      turns
+    );
+
+    setTurns((previous) => [...previous, evaluation.turn]);
+    setPendingFeedback(evaluation.turn);
+    setPendingFollowUp(evaluation.shouldUseAdaptiveFollowUp ? evaluation.followUpPrompt || null : null);
+    setPhase('practice-feedback');
+    setResponseDraft('');
+    setLiveTranscript('');
+    setTranscriptConfidence(undefined);
+    recordingStartedAtRef.current = null;
+  };
+
+  const advanceAfterFeedback = async () => {
+    if (pendingFollowUp) {
+      setActiveFollowUp(pendingFollowUp);
+      setPendingFollowUp(null);
+      setPendingFeedback(null);
+      setPhase('practice-turn');
+      return;
+    }
+
+    const nextBaseTurnIndex = turnIndex + 1;
+    setPendingFeedback(null);
+    setActiveFollowUp(null);
+
+    if (nextBaseTurnIndex < spec.turns.length) {
+      setTurnIndex(nextBaseTurnIndex);
+      setPhase('practice-turn');
+      return;
+    }
+
+    const finalScorecard = protocolPracticeConversationService.evaluateSession(spec, turns);
+    setScorecard(finalScorecard);
+    await persistSessionIfNeeded(finalScorecard);
+    setPhase('evaluation');
+  };
+
+  const completePracticeConversation = () => {
+    onComplete({
+      notes: scorecard?.evaluationSummary,
+    });
+  };
+
+  const normalizeDraftPlaceholder = activeFollowUp
+    ? 'Answer Nora’s follow-up...'
+    : currentTurnSpec?.placeholder || 'Type your answer...';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -16 }}
+      className="text-center"
+    >
+      {phase === 'practice-intro' && (
+        <div className="space-y-8">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-white/10">
+            <Mic className="h-8 w-8 text-white" />
+          </div>
+          <div className="space-y-3">
+            <div className="text-xs uppercase tracking-[0.22em] text-white/50">Protocol Practice</div>
+            <h2 className="text-3xl font-semibold text-white">{spec.title}</h2>
+            <p className="mx-auto max-w-2xl text-base leading-7 text-white/70">{spec.practiceIntro}</p>
+          </div>
+          <AutoNarrator
+            enabled={soundEnabled && !isPaused}
+            text={spec.practiceIntro}
+            debugLabel={`ProtocolPractice:${spec.id}:intro`}
+            advanceOnError={false}
+            onDone={() => undefined}
+            runIdRef={narrationRunIdRef}
+            voiceChoice={null}
+          />
+          <div className="flex justify-center gap-4">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={isPaused ? onResume : onPause}
+              className="p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              {isPaused ? <Play className="w-6 h-6 text-white" /> : <Pause className="w-6 h-6 text-white" />}
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setPhase('practice-turn')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${categoryColor} text-white font-semibold`}
+            >
+              Start Conversation
+              <ChevronRight className="w-5 h-5" />
+            </motion.button>
+          </div>
+        </div>
+      )}
+
+      {phase === 'practice-turn' && currentTurnSpec && (
+        <div className="space-y-8">
+          <div className="flex items-center justify-between">
+            <span className="text-white/60 text-sm">
+              Practice Turn {Math.min(turnIndex + 1, spec.turns.length)} of {spec.turns.length}
+            </span>
+            <span className="text-white/50 text-xs uppercase tracking-[0.18em]">
+              {currentPromptLabel}
+            </span>
+          </div>
+
+          <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${((turnIndex + (activeFollowUp ? 0.5 : 1)) / spec.turns.length) * 100}%` }}
+              className={`h-full bg-gradient-to-r ${categoryColor}`}
+            />
+          </div>
+
+          <div className="min-h-[160px] flex items-center justify-center">
+            <p className="text-xl text-white leading-relaxed max-w-2xl">{currentPromptText}</p>
+          </div>
+
+          <AutoNarrator
+            enabled={soundEnabled && !isPaused}
+            text={currentPromptText}
+            debugLabel={`ProtocolPractice:${spec.id}:${currentPromptId}`}
+            advanceOnError={false}
+            onDone={() => undefined}
+            runIdRef={narrationRunIdRef}
+            voiceChoice={null}
+          />
+
+          <div className="mx-auto max-w-2xl rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
+            <textarea
+              value={responseDraft}
+              onChange={(event) => setResponseDraft(event.target.value)}
+              placeholder={normalizeDraftPlaceholder}
+              className="min-h-[140px] w-full resize-none rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-base text-white outline-none placeholder:text-white/35"
+            />
+            {liveTranscript ? (
+              <p className="mt-3 text-sm text-cyan-300">Listening: {liveTranscript}</p>
+            ) : null}
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-white/55">
+              <span>Allowed input: {spec.inputModes.join(', ')}</span>
+              {typeof transcriptConfidence === 'number' ? (
+                <span>Transcript confidence: {(transcriptConfidence * 100).toFixed(0)}%</span>
+              ) : null}
+              {spec.transcriptReviewEnabled ? <span>Transcript is editable before submit.</span> : null}
+            </div>
+            {speechError ? <p className="mt-3 text-sm text-amber-300">{speechError}</p> : null}
+          </div>
+
+          <div className="flex justify-center gap-4">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={isPaused ? onResume : onPause}
+              className="p-4 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+            >
+              {isPaused ? <Play className="w-6 h-6 text-white" /> : <Pause className="w-6 h-6 text-white" />}
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={isListening ? stopListening : startListening}
+              aria-label={isListening ? 'Stop voice capture' : 'Start voice capture'}
+              aria-pressed={isListening}
+              className={`p-4 rounded-full border transition-colors ${
+                isListening
+                  ? 'border-emerald-300/60 bg-emerald-500/20'
+                  : 'border-white/10 bg-white/10 hover:bg-white/20'
+              }`}
+            >
+              <Mic className="w-6 h-6 text-white" />
+            </motion.button>
+
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={submitTurn}
+              disabled={!responseDraft.trim()}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold ${
+                responseDraft.trim()
+                  ? `bg-gradient-to-r ${categoryColor}`
+                  : 'bg-white/10 text-white/40'
+              }`}
+            >
+              Submit Answer
+              <ChevronRight className="w-5 h-5" />
+            </motion.button>
+          </div>
+        </div>
+      )}
+
+      {phase === 'practice-feedback' && pendingFeedback && (
+        <div className="space-y-8">
+          <div className="text-xs uppercase tracking-[0.22em] text-white/50">Nora Feedback</div>
+          <h3 className="mx-auto max-w-2xl text-2xl font-semibold text-white">{pendingFeedback.noraFeedback}</h3>
+          <AutoNarrator
+            enabled={soundEnabled && !isPaused}
+            text={pendingFeedback.noraFeedback}
+            debugLabel={`ProtocolPractice:${spec.id}:feedback:${pendingFeedback.promptId}`}
+            advanceOnError={false}
+            onDone={() => undefined}
+            runIdRef={narrationRunIdRef}
+            voiceChoice={null}
+          />
+          <div className="mx-auto grid max-w-2xl grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-left">
+              <p className="text-sm font-semibold text-white">What landed</p>
+              <ul className="mt-2 space-y-2 text-sm text-zinc-200">
+                {pendingFeedback.strengths.length ? pendingFeedback.strengths.map((item) => (
+                  <li key={item}>{item}</li>
+                )) : <li>You stayed in the rep and answered directly.</li>}
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-left">
+              <p className="text-sm font-semibold text-white">What to sharpen</p>
+              <ul className="mt-2 space-y-2 text-sm text-zinc-200">
+                {pendingFeedback.misses.length ? pendingFeedback.misses.map((item) => (
+                  <li key={item}>{item}</li>
+                )) : <li>Keep the next answer just as concrete.</li>}
+              </ul>
+            </div>
+          </div>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => { void advanceAfterFeedback(); }}
+            className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${categoryColor} text-white font-semibold`}
+          >
+            {pendingFollowUp ? 'Try Nora’s Follow-Up' : 'Continue'}
+            <ChevronRight className="w-5 h-5" />
+          </motion.button>
+        </div>
+      )}
+
+      {phase === 'evaluation' && scorecard && (
+        <div className="space-y-8">
+          <div className="text-xs uppercase tracking-[0.22em] text-white/50">Protocol Evaluation</div>
+          <h3 className="mx-auto max-w-2xl text-2xl font-semibold text-white">{scorecard.evaluationSummary}</h3>
+          <AutoNarrator
+            enabled={soundEnabled && !isPaused}
+            text={scorecard.evaluationSummary}
+            debugLabel={`ProtocolPractice:${spec.id}:evaluation`}
+            advanceOnError={false}
+            onDone={() => undefined}
+            runIdRef={narrationRunIdRef}
+            voiceChoice={null}
+          />
+          <div className="mx-auto grid max-w-3xl grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {Object.entries(scorecard.dimensionScores).map(([dimension, value]) => (
+              <div key={dimension} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
+                <p className="text-xs uppercase tracking-[0.18em] text-white/45">{spec.rubricLabels[dimension as keyof typeof scorecard.dimensionScores]}</p>
+                <p className="mt-2 text-2xl font-semibold text-white">{value.toFixed(1)} / 5</p>
+              </div>
+            ))}
+          </div>
+          <div className="mx-auto grid max-w-3xl grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-left">
+              <p className="text-sm font-semibold text-white">Strengths</p>
+              <ul className="mt-2 space-y-2 text-sm text-zinc-200">
+                {scorecard.strengths.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </div>
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-left">
+              <p className="text-sm font-semibold text-white">Next rep focus</p>
+              <ul className="mt-2 space-y-2 text-sm text-zinc-200">
+                {scorecard.improvementAreas.map((item) => <li key={item}>{item}</li>)}
+                <li>{scorecard.nextRepFocus}</li>
+              </ul>
+            </div>
+          </div>
+          {scorecard.voiceSignalsSummary ? (
+            <div className="mx-auto max-w-3xl rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-left">
+              <p className="text-sm font-semibold text-white">Optional voice-quality note</p>
+              <p className="mt-2 text-sm text-zinc-200">{scorecard.voiceSignalsSummary}</p>
+            </div>
+          ) : null}
+          <div className="flex justify-center">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={completePracticeConversation}
+              disabled={persisting}
+              className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${categoryColor} text-white font-semibold ${persisting ? 'opacity-60' : ''}`}
+            >
+              {persisting ? 'Saving Practice…' : 'Continue To Closeout'}
+              <ChevronRight className="w-5 h-5" />
+            </motion.button>
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
+function normalizeResponseDraft(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+}
 
 // ============================================================================
 // COMPLETION SCREEN

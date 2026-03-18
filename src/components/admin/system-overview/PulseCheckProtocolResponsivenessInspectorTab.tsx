@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BrainCircuit, Database, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { BrainCircuit, Database, MessageCircleMore, RefreshCw, Search, ShieldCheck } from 'lucide-react';
 import {
   assignmentOrchestratorService,
   type PulseCheckDailyAssignment,
@@ -536,6 +536,68 @@ const PulseCheckProtocolResponsivenessInspectorTab: React.FC = () => {
             title="No Assignment Trace"
             accent="amber"
             body={assignmentTraceError || 'No Nora daily assignment was found yet for the selected athlete.'}
+          />
+        )}
+      </SectionBlock>
+
+      <SectionBlock icon={MessageCircleMore} title="Practice Conversation Review">
+        {latestAssignment ? (
+          <CardGrid columns="md:grid-cols-3">
+            <InfoCard
+              title="Review Boundary"
+              accent="blue"
+              body={
+                <BulletList
+                  items={[
+                    'This inspector reads the assignment-linked practice session when one is persisted; it does not invent transcript content.',
+                    'When transcript data is unavailable, the inspector should say so plainly instead of inventing a summary.',
+                    'Coach review remains the richer surface for turn-by-turn narrative context.',
+                  ]}
+                />
+              }
+            />
+            <InfoCard
+              title="Practice Transcript"
+              accent={latestAssignment.protocolPracticeSession?.turns?.length ? 'green' : 'amber'}
+              body={
+                latestAssignment.protocolPracticeSession?.turns?.length
+                  ? latestAssignment.protocolPracticeSession.turns.slice(0, 2).map((turn) => `${turn.promptLabel || 'Prompt'}: ${turn.responseText}`).join(' ')
+                  : 'No persisted practice transcript summary is attached to this assignment yet. Use coach review or the evidence dashboard for the transcript-level surface once records land.'
+              }
+            />
+            <InfoCard
+              title="Scorecard Contract"
+              accent={latestAssignment.protocolPracticeSession?.scorecard ? 'green' : 'amber'}
+              body={
+                latestAssignment.protocolPracticeSession?.scorecard ? (
+                  <BulletList
+                    items={[
+                      `Signal awareness: ${latestAssignment.protocolPracticeSession.scorecard.dimensionScores.signalAwareness.toFixed(1)} / 5`,
+                      `Technique fidelity: ${latestAssignment.protocolPracticeSession.scorecard.dimensionScores.techniqueFidelity.toFixed(1)} / 5`,
+                      `Language quality: ${latestAssignment.protocolPracticeSession.scorecard.dimensionScores.languageQuality.toFixed(1)} / 5`,
+                      `Shift quality: ${latestAssignment.protocolPracticeSession.scorecard.dimensionScores.shiftQuality.toFixed(1)} / 5`,
+                      `Coachability: ${latestAssignment.protocolPracticeSession.scorecard.dimensionScores.coachability.toFixed(1)} / 5`,
+                    ]}
+                  />
+                ) : (
+                  <BulletList
+                    items={[
+                      'Signal awareness',
+                      'Technique fidelity',
+                      'Language quality',
+                      'Shift quality',
+                      'Coachability',
+                    ]}
+                  />
+                )
+              }
+            />
+          </CardGrid>
+        ) : (
+          <InfoCard
+            title="No Practice Context"
+            accent="amber"
+            body="Select a recent athlete assignment first so the inspector can at least anchor the practice-conversation review to real lineage."
           />
         )}
       </SectionBlock>

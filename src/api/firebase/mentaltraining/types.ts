@@ -1086,6 +1086,72 @@ export interface PulseCheckPlannerAudit {
   rankedCandidates: PulseCheckPlannerAuditCandidate[];
 }
 
+export type PulseCheckProtocolPracticeInputMode = 'text' | 'voice' | 'mixed';
+
+export interface PulseCheckProtocolPracticeVoiceSignals {
+  responseDurationMs?: number;
+  transcriptConfidence?: number;
+  confidenceQualified?: boolean;
+  wordsPerMinute?: number;
+  confidenceExplanation?: string;
+}
+
+export interface PulseCheckProtocolPracticeDimensionScores {
+  signalAwareness: number;
+  techniqueFidelity: number;
+  languageQuality: number;
+  shiftQuality: number;
+  coachability: number;
+}
+
+export interface PulseCheckProtocolPracticeTurn {
+  id: string;
+  promptId: string;
+  promptLabel?: string;
+  promptText: string;
+  responseText: string;
+  modality: 'text' | 'voice';
+  followUpPromptId?: string;
+  followUpPromptText?: string;
+  usedAdaptiveFollowUp?: boolean;
+  transcriptReviewed?: boolean;
+  voiceSignals?: PulseCheckProtocolPracticeVoiceSignals;
+  scores: PulseCheckProtocolPracticeDimensionScores;
+  strengths: string[];
+  misses: string[];
+  noraFeedback: string;
+  submittedAt: number;
+}
+
+export interface PulseCheckProtocolPracticeScorecard {
+  overallScore: number;
+  dimensionScores: PulseCheckProtocolPracticeDimensionScores;
+  strengths: string[];
+  improvementAreas: string[];
+  evaluationSummary: string;
+  nextRepFocus: string;
+  coachabilityTrend: 'improving' | 'steady' | 'needs_support';
+  voiceSignalsSummary?: string;
+}
+
+export interface PulseCheckProtocolPracticeSession {
+  specId: string;
+  specVersion: string;
+  protocolId?: string;
+  protocolFamilyId?: string;
+  protocolVariantId?: string;
+  inputModesAllowed: PulseCheckProtocolPracticeInputMode[];
+  inputModeUsed?: PulseCheckProtocolPracticeInputMode;
+  teachCompletedAt?: number;
+  practiceStartedAt?: number;
+  completedAt?: number;
+  transcriptReviewEnabled: boolean;
+  transcriptReviewUsed: boolean;
+  adaptiveFollowUpsUsed: number;
+  turns: PulseCheckProtocolPracticeTurn[];
+  scorecard?: PulseCheckProtocolPracticeScorecard;
+}
+
 export interface PulseCheckStateSnapshot {
   id: string;
   athleteId: string;
@@ -1160,6 +1226,7 @@ export interface PulseCheckDailyAssignment {
   escalationTier?: number;
   supportFlag?: boolean;
   programSnapshot?: ProgramPrescription;
+  protocolPracticeSession?: PulseCheckProtocolPracticeSession;
   coachNotifiedAt?: number;
   startedAt?: number;
   completedAt?: number;
@@ -1753,6 +1820,7 @@ export function pulseCheckDailyAssignmentToFirestore(
   if (typeof assignment.escalationTier === 'number') data.escalationTier = assignment.escalationTier;
   if (typeof assignment.supportFlag === 'boolean') data.supportFlag = assignment.supportFlag;
   if (assignment.programSnapshot) data.programSnapshot = sanitizeFirestoreValue(assignment.programSnapshot);
+  if (assignment.protocolPracticeSession) data.protocolPracticeSession = sanitizeFirestoreValue(assignment.protocolPracticeSession);
   if (typeof assignment.coachNotifiedAt === 'number') data.coachNotifiedAt = assignment.coachNotifiedAt;
   if (typeof assignment.startedAt === 'number') data.startedAt = assignment.startedAt;
   if (typeof assignment.completedAt === 'number') data.completedAt = assignment.completedAt;
@@ -1813,6 +1881,7 @@ export function pulseCheckDailyAssignmentFromFirestore(
     escalationTier: data.escalationTier,
     supportFlag: data.supportFlag,
     programSnapshot: data.programSnapshot,
+    protocolPracticeSession: data.protocolPracticeSession,
     coachNotifiedAt: data.coachNotifiedAt,
     startedAt: data.startedAt,
     completedAt: data.completedAt,

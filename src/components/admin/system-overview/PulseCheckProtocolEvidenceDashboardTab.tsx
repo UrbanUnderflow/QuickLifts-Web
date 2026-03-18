@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, BarChart3, BrainCircuit, Database, ShieldCheck, TimerReset } from 'lucide-react';
+import { Activity, BarChart3, BrainCircuit, Database, MessageCircleMore, ShieldCheck, TimerReset } from 'lucide-react';
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock } from './PulseCheckRuntimeDocPrimitives';
 
 const PANEL_ROWS = [
@@ -10,6 +10,9 @@ const PANEL_ROWS = [
   ['Downstream effect', 'Whether the next sim / trial / rep became more useful after the protocol and whether follow-through stayed clean.'],
   ['Negative response watchlist', 'Protocols with unusually high negative or mixed-response posture, especially when downstream follow-through is also poor.'],
   ['Athlete responsiveness rollups', 'Family- and variant-level responsiveness posture by freshness, confidence, state-fit, and negative-response concentration.'],
+  ['Practice conversation readiness', 'Whether the protocol can support teach -> practice -> evaluate flow with transcript and scorecard capture.'],
+  ['Practice transcript summary', 'Short review line for what Nora and the athlete actually practiced during the session.'],
+  ['Practice scorecard', 'Signal awareness, technique fidelity, language quality, shift quality, and coachability.'],
   ['Governance review queue', 'Protocols due for review, protocols with evidence drift, and protocols operating under stale freshness or restrictions.'],
 ];
 
@@ -22,6 +25,8 @@ const KPI_ROWS = [
   ['Median readiness delta', 'Whether post-protocol readiness tends to improve, hold, or worsen.'],
   ['Downstream execution success rate', 'Whether the next sim or rep is more likely to complete cleanly after the protocol.'],
   ['Negative-response concentration', 'Whether the same runtime keeps producing deferred or overridden outcomes.'],
+  ['Practice transcript coverage', 'Whether the system captured a meaningful transcript summary for the practice conversation.'],
+  ['Scorecard persistence rate', 'Whether evaluation results survive into assignment audit and evidence surfaces.'],
 ];
 
 const SLICE_ROWS = [
@@ -37,6 +42,8 @@ const ALERT_ROWS = [
   ['Override / defer anomaly', 'Flag protocol for ops inspection and coach follow-up.'],
   ['Evidence freshness degradation', 'Reduce confidence in governance review and ranking usage until refreshed.'],
   ['Downstream failure pattern', 'Investigate whether the protocol is harming the next sim or preventing execution from carrying forward cleanly.'],
+  ['Practice transcript missing', 'Treat the practice conversation as incomplete until a transcript summary or equivalent turn trace exists.'],
+  ['Scorecard unavailable', 'Show the protocol as ready for conversation review but not yet review-complete.'],
   ['Large policy mismatch', 'Investigate whether the planner is selecting a poor-fit protocol too often in a given context.'],
   ['Review cadence overdue', 'Push protocol into governance queue before leaving it live indefinitely.'],
 ];
@@ -91,6 +98,38 @@ const PulseCheckProtocolEvidenceDashboardTab: React.FC = () => {
 
       <SectionBlock icon={TimerReset} title="Alerting And Review Triggers">
         <DataTable columns={['Alert', 'Required Action']} rows={ALERT_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={MessageCircleMore} title="Practice Conversation Evidence">
+        <CardGrid columns="md:grid-cols-2">
+          <InfoCard
+            title="What The Dashboard Should Surface"
+            accent="blue"
+            body={
+              <BulletList
+                items={[
+                  'Whether a protocol can support the teach -> practice -> evaluate flow without leaving review surfaces guessing.',
+                  'Whether transcript summary and turn-level evidence exist for the latest practice conversation.',
+                  'Whether a scorecard was captured for signal awareness, technique fidelity, language quality, shift quality, and coachability.',
+                  'Whether practice evidence is fresh enough to trust for launch or needs review.',
+                ]}
+              />
+            }
+          />
+          <InfoCard
+            title="How To Read Gaps"
+            accent="amber"
+            body={
+              <BulletList
+                items={[
+                  'No transcript summary means the practice session should still be treated as incomplete for review.',
+                  'No scorecard means the system has not yet proven it can evaluate applied practice, only instruction.',
+                  'Practice readiness should never override registry launch gating or evidence freshness.',
+                ]}
+              />
+            }
+          />
+        </CardGrid>
       </SectionBlock>
 
       <SectionBlock icon={BrainCircuit} title="Dashboard Interpretation Rules">
