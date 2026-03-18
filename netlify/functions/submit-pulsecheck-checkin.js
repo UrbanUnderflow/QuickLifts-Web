@@ -11,6 +11,7 @@ const RESPONSE_HEADERS = {
 const CHECKINS_ROOT = 'mental-check-ins';
 const PROGRESS_COLLECTION = 'athlete-mental-progress';
 const DAILY_ASSIGNMENTS_COLLECTION = 'pulsecheck-daily-assignments';
+const ASSIGNMENT_EVENTS_COLLECTION = 'pulsecheck-assignment-events';
 const ASSIGNMENT_REVISIONS_SUBCOLLECTION = 'revisions';
 const SNAPSHOTS_COLLECTION = 'state-snapshots';
 const ASSIGNMENT_CANDIDATE_SETS_COLLECTION = 'pulsecheck-assignment-candidate-sets';

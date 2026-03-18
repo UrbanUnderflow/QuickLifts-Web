@@ -40,6 +40,7 @@ import PulseCheckProtocolResponsivenessProfileSpecTab from "../../components/adm
 import PulseCheckProtocolResponsivenessInspectorTab from "../../components/admin/system-overview/PulseCheckProtocolResponsivenessInspectorTab";
 import PulseCheckProtocolLaunchReadinessTab from "../../components/admin/system-overview/PulseCheckProtocolLaunchReadinessTab";
 import PulseCheckProtocolPlannerPolicyEnforcementTab from "../../components/admin/system-overview/PulseCheckProtocolPlannerPolicyEnforcementTab";
+import PulseCheckProtocolPracticeConversationSpecTab from "../../components/admin/system-overview/PulseCheckProtocolPracticeConversationSpecTab";
 import PulseCheckProtocolEvidenceDashboardTab from "../../components/admin/system-overview/PulseCheckProtocolEvidenceDashboardTab";
 import PulseCheckProtocolRevisionAuditTraceTab from "../../components/admin/system-overview/PulseCheckProtocolRevisionAuditTraceTab";
 import PulseCheckProtocolOpsRunbookTab from "../../components/admin/system-overview/PulseCheckProtocolOpsRunbookTab";
@@ -67,6 +68,7 @@ import PulseCheckHealthContextFirestoreSchemaIndexSpecTab from "../../components
 import PulseCheckOuraIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckOuraIntegrationStrategyTab";
 import PulseCheckDeviceIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckDeviceIntegrationStrategyTab";
 import PulseCheckDeviceIntegrationPartnershipMatrixTab from "../../components/admin/system-overview/PulseCheckDeviceIntegrationPartnershipMatrixTab";
+import PulseCheckSchoolWearableBundlePlanTab from "../../components/admin/system-overview/PulseCheckSchoolWearableBundlePlanTab";
 import PulseCheckPatentEligibilityAuditTab from "../../components/admin/system-overview/PulseCheckPatentEligibilityAuditTab";
 import FirestoreIndexRegistryTab from "../../components/admin/system-overview/FirestoreIndexRegistryTab";
 import PulseCheckStateSnapshotFreshnessPolicyTab from "../../components/admin/system-overview/PulseCheckStateSnapshotFreshnessPolicyTab";
@@ -159,6 +161,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-protocol-responsiveness-inspector",
       "pulsecheck-protocol-launch-readiness",
       "pulsecheck-protocol-planner-policy-enforcement",
+      "pulsecheck-protocol-practice-conversation-spec",
       "pulsecheck-protocol-evidence-dashboard",
       "pulsecheck-protocol-revision-audit-trace",
       "pulsecheck-protocol-ops-runbook",
@@ -183,6 +186,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-oura-integration-strategy",
       "pulsecheck-device-integration-strategy",
       "pulsecheck-device-integration-partnership-matrix",
+      "pulsecheck-school-wearable-bundle-plan",
       "pulsecheck-patent-eligibility-audit",
       "pulsecheck-state-snapshot-freshness-policy",
       "pulsecheck-performance-state-flag-definitions",
@@ -1221,6 +1225,9 @@ const SystemOverviewPage: React.FC = () => {
       case "pulsecheck-protocol-planner-policy-enforcement":
         return <PulseCheckProtocolPlannerPolicyEnforcementTab />;
 
+      case "pulsecheck-protocol-practice-conversation-spec":
+        return <PulseCheckProtocolPracticeConversationSpecTab />;
+
       case "pulsecheck-protocol-evidence-dashboard":
         return <PulseCheckProtocolEvidenceDashboardTab />;
 
@@ -1292,6 +1299,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-device-integration-partnership-matrix":
         return <PulseCheckDeviceIntegrationPartnershipMatrixTab />;
+
+      case "pulsecheck-school-wearable-bundle-plan":
+        return <PulseCheckSchoolWearableBundlePlanTab />;
 
       case "pulsecheck-patent-eligibility-audit":
         return <PulseCheckPatentEligibilityAuditTab />;

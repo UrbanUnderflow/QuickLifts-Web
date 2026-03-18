@@ -142,6 +142,52 @@ function createFirestoreDb({ snapshot }) {
   };
 }
 
+function createResponsivenessDb() {
+  const writes = {
+    profiles: [],
+  };
+
+  const emptyQueryResult = { docs: [] };
+
+  return {
+    writes,
+    collection(name) {
+      if (name === 'pulsecheck-protocol-responsiveness-profiles') {
+        return {
+          doc(id) {
+            return {
+              async get() {
+                return { exists: false, id, data: () => undefined };
+              },
+              async set(data) {
+                writes.profiles.push({ id, data });
+              },
+            };
+          },
+        };
+      }
+
+      if (
+        name === 'pulsecheck-daily-assignments'
+        || name === 'pulsecheck-assignment-events'
+        || name === 'state-snapshots'
+      ) {
+        return {
+          where() {
+            return {
+              async get() {
+                return emptyQueryResult;
+              },
+            };
+          },
+        };
+      }
+
+      throw new Error(`Unexpected collection: ${name}`);
+    },
+  };
+}
+
 test('orchestratePostCheckIn materializes a protocol assignment when activeProgram is missing', async () => {
   const runtimeHelpers = loadRuntimeHelpers();
   const snapshot = {
@@ -219,6 +265,23 @@ test('orchestratePostCheckIn materializes a protocol assignment when activeProgr
   assert.equal(db.writes.assignments.length, 1);
   assert.equal(db.writes.snapshots.length, 1);
   assert.equal(db.writes.snapshots[0].data.executionLink, assignment.id);
+});
+
+test('getOrRefreshProtocolResponsivenessProfile reads assignment events without throwing', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+  const db = createResponsivenessDb();
+
+  const profile = await runtimeHelpers.getOrRefreshProtocolResponsivenessProfile({
+    db,
+    athleteId: 'athlete-1',
+    protocolRegistry: [],
+  });
+
+  assert.equal(profile.athleteId, 'athlete-1');
+  assert.deepEqual(profile.familyResponses, {});
+  assert.deepEqual(profile.variantResponses, {});
+  assert.equal(db.writes.profiles.length, 1);
+  assert.equal(db.writes.profiles[0].id, 'athlete-1');
 });
 
 test('stripUndefinedDeep removes undefined optional check-in fields before persistence', async () => {

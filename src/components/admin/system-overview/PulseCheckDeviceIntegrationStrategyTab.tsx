@@ -1,9 +1,10 @@
 import React from 'react';
-import { Activity, Database, Link2, ShieldCheck, Smartphone, Workflow, FileText, Handshake, Moon } from 'lucide-react';
+import { Activity, Building2, Database, Link2, ShieldCheck, Smartphone, Workflow, FileText, Handshake, Moon } from 'lucide-react';
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 import ArtifactPageLibrary, { ArtifactPageEntry } from './ArtifactPageLibrary';
 import PulseCheckDeviceIntegrationPartnershipMatrixTab from './PulseCheckDeviceIntegrationPartnershipMatrixTab';
 import PulseCheckOuraIntegrationStrategyTab from './PulseCheckOuraIntegrationStrategyTab';
+import PulseCheckSchoolWearableBundlePlanTab from './PulseCheckSchoolWearableBundlePlanTab';
 
 const CURRENT_BASELINE_ROWS = [
   ['Apple Watch / HealthKit', 'Platform bridge and permission layer for iOS-first athletes.', 'Current baseline lane for wearable health context.'],
@@ -251,6 +252,14 @@ const DEVICE_INTEGRATION_PAGES: ArtifactPageEntry[] = [
     icon: Moon,
     accent: '#22c55e',
     render: () => <PulseCheckOuraIntegrationStrategyTab />,
+  },
+  {
+    id: 'school-wearable-bundle-plan',
+    label: 'School Bundle Plan',
+    subtitle: 'Bundled school offer, OEM shortlist, and current FDA, Bluetooth, and FCC posture.',
+    icon: Building2,
+    accent: '#f97316',
+    render: () => <PulseCheckSchoolWearableBundlePlanTab />,
   },
 ];
 
