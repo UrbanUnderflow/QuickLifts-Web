@@ -82,7 +82,7 @@ const DevModeToggle: React.FC = () => {
   return (
     <button
       onClick={handleToggle}
-      className="absolute top-4 left-4 px-2 py-1 rounded text-xs font-medium transition-colors flex items-center gap-2"
+      className="absolute top-4 left-4 z-20 px-2 py-1 rounded text-xs font-medium transition-colors flex items-center gap-2 shadow-lg"
       style={{
         background: isDevelopment ? '#E0FE10' : '#3f3f46',
         color: isDevelopment ? 'black' : 'white'
@@ -2532,8 +2532,8 @@ const SignInModal: React.FC<SignInModalProps> = ({
 
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black z-50 sm:p-6">
-      <div className="bg-zinc-900 w-full h-full sm:h-auto sm:w-[480px] sm:rounded-xl p-6 sm:p-8 border-none sm:border sm:border-zinc-700 shadow-xl overflow-y-auto">
-        {window.location.hostname === 'localhost' && <DevModeToggle />}
+      <div className="relative bg-zinc-900 w-full h-full sm:h-auto sm:w-[480px] sm:rounded-xl p-6 sm:p-8 border-none sm:border sm:border-zinc-700 shadow-xl overflow-y-auto">
+        {typeof window !== 'undefined' && window.location.hostname === 'localhost' && <DevModeToggle />}
         {/* iPhone App Download Banner */}
         {iphoneBanner}
         

@@ -1135,11 +1135,17 @@ async function submitPulseCheckCheckInViaHarness(
 
   const eligibleProtocolCandidates = allProtocolRecords
     .filter((record) => {
+      const publishStatus = String(record.publishStatus || '').toLowerCase();
+      const governanceStage = String(record.governanceStage || '').toLowerCase();
       const triggerTags = Array.isArray(record.triggerTags) ? record.triggerTags : [];
       const useWindowTags = Array.isArray(record.useWindowTags) ? record.useWindowTags : [];
       const avoidWindowTags = Array.isArray(record.avoidWindowTags) ? record.avoidWindowTags : [];
       const contraindicationTags = Array.isArray(record.contraindicationTags) ? record.contraindicationTags : [];
 
+      if (record.isActive === false) return false;
+      if (publishStatus && publishStatus !== 'published') return false;
+      if (governanceStage === 'archived' || governanceStage === 'restricted') return false;
+      if (protocolClass && record.protocolClass && record.protocolClass !== protocolClass) return false;
       if (triggerTags.length > 0 && !intersectsTags(triggerTags, policyTags)) return false;
       if (useWindowTags.length > 0 && !intersectsTags(useWindowTags, policyTags)) return false;
       if (avoidWindowTags.length > 0 && intersectsTags(avoidWindowTags, policyTags)) return false;
@@ -1252,6 +1258,26 @@ async function submitPulseCheckCheckInViaHarness(
     sourceDate,
   });
 
+  if (Array.isArray(input.protocolRuntimeOverrides) && input.protocolRuntimeOverrides.length > 0) {
+    await setDoc(
+      doc(db, PULSECHECK_ASSIGNMENT_CANDIDATE_SETS_COLLECTION, candidateSetId),
+      sanitizeFirestoreValue({
+        athleteId,
+        sourceDate,
+        sourceStateSnapshotId: snapshot.id,
+        candidates,
+        candidateIds: candidates.map((candidate) => candidate.id),
+        candidateClassHints: uniqueStrings(candidates.map((candidate) => candidate.type)),
+        constraintReasons: [],
+        inventoryGaps,
+        plannerEligible: true,
+        createdAt: now,
+        updatedAt: now,
+      }),
+      { merge: true }
+    );
+  }
+
   if (assignment) {
     const shouldKeepAssignmentLive = assignment.status === PulseCheckDailyAssignmentStatus.Deferred && Boolean(resolvedExercise);
     await updateDoc(doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, assignment.id), {
@@ -1275,6 +1301,26 @@ async function submitPulseCheckCheckInViaHarness(
         : {}),
       updatedAt: Date.now(),
     });
+
+    if (Array.isArray(input.protocolRuntimeOverrides)) {
+      await setDoc(
+        doc(db, PULSECHECK_ASSIGNMENT_CANDIDATE_SETS_COLLECTION, candidateSetId),
+        sanitizeFirestoreValue({
+          athleteId,
+          sourceDate,
+          sourceStateSnapshotId: snapshot.id,
+          candidates,
+          candidateIds: candidates.map((candidate) => candidate.id),
+          candidateClassHints: uniqueStrings(candidates.map((candidate) => candidate.type)),
+          constraintReasons: [],
+          inventoryGaps,
+          plannerEligible: true,
+          createdAt: now,
+          updatedAt: Date.now(),
+        }),
+        { merge: true }
+      );
+    }
   }
 
   const latestAssignment = assignment
@@ -1319,6 +1365,9 @@ async function recordPulseCheckAssignmentEventViaHarness(
 
   const now = Date.now();
   const eventId = `${input.assignmentId}_${input.eventType}_${now}`;
+  const eventMetadata = sanitizeFirestoreValue(
+    input.reason || input.metadata ? { reason: input.reason, ...(input.metadata || {}) } : undefined
+  );
   const status =
     input.eventType === 'completed'
       ? PulseCheckDailyAssignmentStatus.Completed
@@ -1334,7 +1383,7 @@ async function recordPulseCheckAssignmentEventViaHarness(
 
   await setDoc(
     doc(db, PULSECHECK_ASSIGNMENT_EVENTS_COLLECTION, eventId),
-    {
+    sanitizeFirestoreValue({
       assignmentId: assignment.id,
       athleteId: assignment.athleteId,
       teamId: assignment.teamId,
@@ -1343,9 +1392,9 @@ async function recordPulseCheckAssignmentEventViaHarness(
       actorType: input.actorUserId ? 'coach' : 'system',
       actorUserId: input.actorUserId || 'local-e2e-harness',
       eventAt: now,
-      metadata: input.reason || input.metadata ? { reason: input.reason, ...(input.metadata || {}) } : undefined,
+      metadata: eventMetadata,
       createdAt: now,
-    },
+    }),
     { merge: true }
   );
 
@@ -1381,7 +1430,7 @@ async function recordPulseCheckAssignmentEventViaHarness(
       actorType: input.actorUserId ? 'coach' : 'system',
       actorUserId: input.actorUserId || 'local-e2e-harness',
       eventAt: now,
-      metadata: input.reason || input.metadata ? { reason: input.reason, ...(input.metadata || {}) } : undefined,
+      metadata: eventMetadata,
       createdAt: now,
     },
     stateSnapshot: snapshot,

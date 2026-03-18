@@ -22,7 +22,7 @@ import {
   SIM_VARIANTS_COLLECTION,
 } from './collections';
 import type { SimVariantBuildMeta, SimVariantPublishedSnapshot } from './simBuild';
-import { buildPublishedVariantRecord, buildPublishedModuleFromVariant } from './simBuild';
+import { applyDraftSyncState, buildPublishedVariantRecord, buildPublishedModuleFromVariant } from './simBuild';
 
 const VISION_RUNTIME_PACKAGES_COLLECTION = 'vision-runtime-packages';
 
@@ -224,7 +224,7 @@ export interface SimVariantRecord extends SimVariantSeed {
   updatedAt: number;
 }
 
-export type SimVariantHistoryAction = 'created' | 'saved' | 'published' | 'seeded' | 'vision_promoted';
+export type SimVariantHistoryAction = 'created' | 'saved' | 'published' | 'seeded' | 'seed_synced' | 'vision_promoted';
 
 export interface SimVariantHistoryEntry {
   id: string;
@@ -595,6 +595,8 @@ function buildHistorySummary(action: SimVariantHistoryAction, record: SimVariant
       return `Published ${record.name} to sim-modules${moduleId ? ` as ${moduleId}` : ''}.`;
     case 'seeded':
       return `Seeded ${record.name} from the static registry baseline.`;
+    case 'seed_synced':
+      return `Reconciled ${record.name} with the static registry baseline.`;
     case 'vision_promoted':
       return `Promoted ${record.name} in the Vision package pipeline${record.visionPackageStatus ? ` to ${record.visionPackageStatus}` : ''}.`;
     default:
@@ -748,16 +750,40 @@ export const simVariantRegistryService = {
       .sort((left, right) => left.packageName.localeCompare(right.packageName));
   },
 
-  async syncSeeds(seeds: SimVariantSeed[]): Promise<{ records: SimVariantRecord[]; created: number }> {
+  async syncSeeds(seeds: SimVariantSeed[]): Promise<{ records: SimVariantRecord[]; created: number; updated: number }> {
     const existing = await purgeLegacyResetArtifacts(await this.list());
     const existingById = new Map(existing.map((record) => [record.id, record]));
     const now = Date.now();
     const batch = writeBatch(db);
     let created = 0;
+    let updated = 0;
 
     seeds.forEach((seed) => {
       const id = buildSimVariantId(seed);
-      if (existingById.has(id)) {
+      const existingRecord = existingById.get(id);
+      if (existingRecord) {
+        const canonicalChanged =
+          existingRecord.name !== seed.name
+          || existingRecord.family !== seed.family
+          || existingRecord.familyStatus !== seed.familyStatus
+          || existingRecord.mode !== seed.mode
+          || existingRecord.specStatus !== seed.specStatus
+          || existingRecord.priority !== seed.priority;
+
+        if (!canonicalChanged) {
+          return;
+        }
+
+        const reconciledRecord = applyDraftSyncState({
+          ...existingRecord,
+          ...seed,
+          updatedAt: now,
+        });
+
+        batch.set(doc(db, SIM_VARIANTS_COLLECTION, id), variantToFirestore(reconciledRecord), { merge: true });
+        writeVariantHistory(batch, reconciledRecord, 'seed_synced');
+        existingById.set(id, reconciledRecord);
+        updated += 1;
         return;
       }
 
@@ -767,19 +793,21 @@ export const simVariantRegistryService = {
         createdAt: now,
         updatedAt: now,
       };
+      const nextRecord = applyDraftSyncState(record);
 
-      batch.set(doc(db, SIM_VARIANTS_COLLECTION, id), variantToFirestore(record));
-      writeVariantHistory(batch, record, 'seeded');
-      existingById.set(id, record);
+      batch.set(doc(db, SIM_VARIANTS_COLLECTION, id), variantToFirestore(nextRecord));
+      writeVariantHistory(batch, nextRecord, 'seeded');
+      existingById.set(id, nextRecord);
       created += 1;
     });
 
-    if (created > 0) {
+    if (created > 0 || updated > 0) {
       await batch.commit();
     }
 
     return {
       created,
+      updated,
       records: Array.from(existingById.values()),
     };
   },
@@ -788,11 +816,11 @@ export const simVariantRegistryService = {
     const variantRef = doc(db, SIM_VARIANTS_COLLECTION, record.id);
     const existing = await getDoc(variantRef);
     const now = Date.now();
-    const nextRecord: SimVariantRecord = {
+    const nextRecord = applyDraftSyncState({
       ...record,
-      createdAt: existing.exists() ? record.createdAt : now,
+      createdAt: existing.exists() ? (existing.data()?.createdAt || record.createdAt) : now,
       updatedAt: now,
-    };
+    });
     const batch = writeBatch(db);
     batch.set(variantRef, variantToFirestore(nextRecord), { merge: true });
     writeVariantHistory(batch, nextRecord, existing.exists() ? 'saved' : 'created');
@@ -801,11 +829,18 @@ export const simVariantRegistryService = {
 
   async publish(record: SimVariantRecord, module: MentalExercise): Promise<string> {
     const publishedAt = Date.now();
+    const recordForPublish: SimVariantRecord = {
+      ...record,
+      publishedModuleId: module.id,
+      moduleDraft: record.moduleDraft
+        ? {
+          ...record.moduleDraft,
+          moduleId: module.id,
+        }
+        : record.moduleDraft,
+    };
     const nextRecord = buildPublishedVariantRecord(
-      {
-        ...record,
-        publishedModuleId: module.id,
-      },
+      recordForPublish,
       publishedAt
     );
     const publishedModule = buildPublishedModuleFromVariant(nextRecord, {

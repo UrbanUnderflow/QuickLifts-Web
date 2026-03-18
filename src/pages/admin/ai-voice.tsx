@@ -2245,8 +2245,8 @@ const AdminAiVoice: React.FC = () => {
               <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-zinc-500" />
               <div>
                 These cues are stored in <code className="font-mono text-zinc-300">sim-audio-assets/community-run-alerts/</code>.
-                Generate and preview them here with the current Nora ElevenLabs voice, then export the chosen MP3 into the iOS bundle under <code className="font-mono text-zinc-300">QuickLifts/Resources/sounds/</code> using the target filename shown on each card.
-                Until those bundle assets are added, the app falls back to <code className="font-mono text-zinc-300">Bell.wav</code> for local notification sound.
+                Generate and preview them here with the current Nora ElevenLabs voice. QuickLifts now syncs the latest files from <code className="font-mono text-zinc-300">/api/audio/run-alerts</code> into iOS <code className="font-mono text-zinc-300">Library/Sounds</code> using the target filename shown on each card, matching the same remote-audio delivery pattern used by Vision Pro.
+                Until the app completes its first sync, it falls back to <code className="font-mono text-zinc-300">Bell.wav</code> for local notification sound.
               </div>
             </div>
 

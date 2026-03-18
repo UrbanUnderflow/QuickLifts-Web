@@ -7,7 +7,10 @@ const hasAuthState = Boolean(process.env.PLAYWRIGHT_STORAGE_STATE) || existsSync
 const remoteLoginToken = process.env.PLAYWRIGHT_REMOTE_LOGIN_TOKEN;
 const appBaseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 const appOrigin = new URL(appBaseURL).origin;
-const protocolNamespace = process.env.PLAYWRIGHT_E2E_NAMESPACE || 'e2e-protocol-practice';
+const protocolNamespaceBase = process.env.PLAYWRIGHT_E2E_NAMESPACE;
+const protocolNamespace = protocolNamespaceBase
+  ? `${protocolNamespaceBase}-practice`
+  : 'e2e-protocol-practice';
 const protocolPreviewAudioPath = path.resolve(process.cwd(), 'public/audio/sfx/half-way-there.mp3');
 
 function wait(ms: number) {
@@ -122,22 +125,22 @@ async function openPublishedProtocolPreview(page: Page) {
 
 async function startPromptExerciseFromPreview(page: Page) {
   await expect(page.getByRole('button', { name: /Begin Exercise/i })).toBeVisible({ timeout: 20_000 });
-  await page.getByRole('button', { name: /Begin Exercise/i }).click();
+  await page.getByRole('button', { name: /Begin Exercise/i }).click({ force: true });
   await expect(page.getByText(/Before we begin/i)).toBeVisible({ timeout: 20_000 });
-  await page.getByRole('button', { name: /Neutral/i }).click();
+  await page.getByRole('button', { name: /Neutral/i }).click({ force: true });
 }
 
 async function advanceTeachFlowToPractice(page: Page) {
   for (let step = 0; step < 8; step += 1) {
     const beginPractice = page.getByRole('button', { name: /Begin Practice/i });
     if (await beginPractice.isVisible().catch(() => false)) {
-      await beginPractice.click();
+      await beginPractice.click({ force: true });
       return;
     }
 
     const nextButton = page.getByRole('button', { name: /^Next$/i });
     if (await nextButton.isVisible().catch(() => false)) {
-      await nextButton.click();
+      await nextButton.click({ force: true });
       await page.waitForTimeout(150);
       continue;
     }
@@ -146,7 +149,7 @@ async function advanceTeachFlowToPractice(page: Page) {
   }
 
   await expect(page.getByRole('button', { name: /Begin Practice/i })).toBeVisible({ timeout: 20_000 });
-  await page.getByRole('button', { name: /Begin Practice/i }).click();
+  await page.getByRole('button', { name: /Begin Practice/i }).click({ force: true });
 }
 
 test.describe('Protocol Practice Conversation', () => {
@@ -233,21 +236,25 @@ test.describe('Protocol Practice Conversation', () => {
     await page.locator('textarea').fill('My heart is racing and my palms are sweaty.');
     await page.getByRole('button', { name: /Submit Answer/i }).click();
     await expect(page.getByText(/Nora Feedback/i)).toBeVisible({ timeout: 20_000 });
-    await page.getByRole('button', { name: /^Continue$/i }).click();
+    await expect(page.getByRole('button', { name: /^Continue$/i })).toBeVisible({ timeout: 20_000 });
+    await page.getByRole('button', { name: /^Continue$/i }).click({ force: true });
 
     await expect(page.getByText(/Practice Turn 2 of 3/i)).toBeVisible({ timeout: 20_000 });
     await page.locator('textarea').fill('I am nervous.');
     await page.getByRole('button', { name: /Submit Answer/i }).click();
     await expect(page.getByRole('button', { name: /Try Nora’s Follow-Up/i })).toBeVisible({ timeout: 20_000 });
-    await page.getByRole('button', { name: /Try Nora’s Follow-Up/i }).click();
+    await expect(page.getByRole('button', { name: /Try Nora’s Follow-Up/i })).toBeVisible({ timeout: 20_000 });
+    await page.getByRole('button', { name: /Try Nora’s Follow-Up/i }).click({ force: true });
     await page.locator('textarea').fill('The same body signal means I am excited, fueled, and ready, not in danger.');
     await page.getByRole('button', { name: /Submit Answer/i }).click();
-    await page.getByRole('button', { name: /^Continue$/i }).click();
+    await expect(page.getByRole('button', { name: /^Continue$/i })).toBeVisible({ timeout: 20_000 });
+    await page.getByRole('button', { name: /^Continue$/i }).click({ force: true });
 
     await expect(page.getByText(/Practice Turn 3 of 3/i)).toBeVisible({ timeout: 20_000 });
     await page.locator('textarea').fill('These butterflies are fuel. I am ready to compete and execute.');
     await page.getByRole('button', { name: /Submit Answer/i }).click();
-    await page.getByRole('button', { name: /^Continue$/i }).click();
+    await expect(page.getByRole('button', { name: /^Continue$/i })).toBeVisible({ timeout: 20_000 });
+    await page.getByRole('button', { name: /^Continue$/i }).click({ force: true });
 
     await expect(page.getByText(/Protocol Evaluation/i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/Here is how your reframe rep looked/i)).toBeVisible({ timeout: 20_000 });

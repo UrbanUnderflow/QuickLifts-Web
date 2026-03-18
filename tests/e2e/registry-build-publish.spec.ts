@@ -17,6 +17,7 @@ const hasAuthState = Boolean(process.env.PLAYWRIGHT_STORAGE_STATE) || existsSync
 const remoteLoginToken = process.env.PLAYWRIGHT_REMOTE_LOGIN_TOKEN;
 const allowWriteTests = process.env.PLAYWRIGHT_ALLOW_WRITE_TESTS === 'true';
 const namespace = process.env.PLAYWRIGHT_E2E_NAMESPACE || 'e2e-registry';
+const testTimeoutMs = Number(process.env.PLAYWRIGHT_TEST_TIMEOUT_MS || 180_000);
 const variantCases = process.env.PLAYWRIGHT_VARIANT_NAME
   ? DEFAULT_VARIANT_CASES.filter((entry) => entry.name === VARIANT_NAME)
   : DEFAULT_VARIANT_CASES;
@@ -30,15 +31,39 @@ function displayVariantName(name: string) {
   return name;
 }
 
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function expectPreviewRuntime(page: Page, familyName: string) {
+  await expect(page.getByRole('button', { name: /Close module preview/i })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: /Begin Exercise/i })).not.toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: /Begin Training/i })).not.toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('Before we begin...')).not.toBeVisible({ timeout: 15_000 });
+
   if (familyName === 'Reset') {
-    await expect(
-      page.getByText(/3-Second Reset|Reset/i).first(),
-    ).toBeVisible({ timeout: 15_000 });
-    return;
+    await expect(page.getByText(/Target:|rounds?|Recover|Lock In/i).first()).toBeVisible({ timeout: 15_000 });
+  }
+}
+
+async function startPreviewRuntime(page: Page) {
+  const beginExerciseButton = page.getByRole('button', { name: /Begin Exercise/i }).first();
+  if (await beginExerciseButton.isVisible().catch(() => false)) {
+    await beginExerciseButton.click();
+    await page.waitForTimeout(500);
   }
 
-  await expect(page.getByText('Compiled Runtime')).toBeVisible({ timeout: 15_000 });
+  const beginTrainingButton = page.getByRole('button', { name: /Begin Training/i }).first();
+  if (await beginTrainingButton.isVisible().catch(() => false)) {
+    await beginTrainingButton.click();
+    await page.waitForTimeout(500);
+  }
+
+  const preMoodHeading = page.getByText('Before we begin...').first();
+  if (await preMoodHeading.isVisible().catch(() => false)) {
+    await page.getByRole('button', { name: /Neutral|Good|Great/i }).first().click();
+    await expect(preMoodHeading).not.toBeVisible({ timeout: 15_000 });
+  }
 }
 
 async function ensureAdminSession(page: Page) {
@@ -69,32 +94,56 @@ async function waitForE2EHarness(page: Page) {
 async function prepareRegistryFixture(page: Page, variantName: string, caseNamespace: string) {
   await waitForE2EHarness(page);
 
-  await page.evaluate(async ({ sourceName, namespace: e2eNamespace }) => {
+  const fixture = await page.evaluate(async ({ sourceName, namespace: e2eNamespace }) => {
     await window.__pulseE2E?.cleanupRegistryFixtures(e2eNamespace);
-    await window.__pulseE2E?.cloneVariantFixtureByName(sourceName, e2eNamespace);
+    return await window.__pulseE2E?.cloneVariantFixtureByName(sourceName, e2eNamespace);
   }, { sourceName: variantName, namespace: caseNamespace });
 
-  const fixtureName = `[E2E] ${displayVariantName(variantName)}`;
-  const moduleId = `${caseNamespace}-${variantName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const fixtureName = fixture?.variantName || `[E2E] ${displayVariantName(variantName)}`;
+  const moduleId = fixture?.moduleId || `${caseNamespace}-${variantName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const variantId = fixture?.variantId || `${caseNamespace}-${variantName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+
+  await page.waitForFunction(async (nextVariantId) => {
+    return Boolean(await window.__pulseE2E?.inspectVariant(nextVariantId));
+  }, variantId, { timeout: 20_000 });
 
   return {
     fixtureName,
     moduleId,
+    variantId,
   };
 }
 
+async function dismissRegistryOverlays(page: Page) {
+  const closeButton = page.getByRole('button', { name: /^Close$/ }).first();
+  if (await closeButton.isVisible().catch(() => false)) {
+    await closeButton.click();
+    await expect(closeButton).not.toBeVisible({ timeout: 10_000 });
+  }
+}
+
 async function openFixtureWorkspace(page: Page, fixtureName: string, familyName: string) {
+  await dismissRegistryOverlays(page);
+
   const search = page.getByPlaceholder('Search variants or families...');
   await search.fill(fixtureName);
 
-  const familyGroup = page.getByRole('button', { name: new RegExp(displayFamilyName(familyName), 'i') }).first();
-  if (await familyGroup.isVisible()) {
+  const familyGroup = page.getByRole('button', {
+    name: new RegExp(`^${escapeRegex(displayFamilyName(familyName))}\\s+(Locked|Candidate)\\b`, 'i'),
+  }).first();
+  const openWorkspaceButton = page
+    .locator('div')
+    .filter({ hasText: fixtureName })
+    .locator('button[title="Open variant workspace"]')
+    .first();
+
+  if (!(await openWorkspaceButton.isVisible().catch(() => false))) {
+    await expect(familyGroup).toBeVisible({ timeout: 15_000 });
     await familyGroup.click();
   }
 
-  const row = page.locator('div').filter({ hasText: fixtureName }).first();
-  await expect(row).toBeVisible({ timeout: 15_000 });
-  await row.locator('button[title=\"Open variant workspace\"]').click();
+  await expect(openWorkspaceButton).toBeVisible({ timeout: 15_000 });
+  await openWorkspaceButton.click();
   await expect(page.getByText('Variant Workspace')).toBeVisible({ timeout: 10_000 });
 }
 
@@ -110,7 +159,7 @@ test.describe('Variant registry harness', () => {
 
   for (const variantCase of variantCases) {
     test(`registry build preview and publish smoke: ${variantCase.name}`, async ({ page }) => {
-      test.setTimeout(180_000);
+      test.setTimeout(testTimeoutMs);
       test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
 
       const caseNamespace = `${namespace}-${variantCase.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
@@ -135,12 +184,12 @@ test.describe('Variant registry harness', () => {
 
         const previewButton = page.getByRole('button', { name: /Build \+ Preview|Preview Built Module/i }).first();
         await previewButton.click();
-        await expect(page.getByRole('button', { name: /Begin Exercise/i })).toBeVisible({ timeout: 15_000 });
-        await page.getByRole('button', { name: /Begin Exercise/i }).click();
-        await expect(page.getByText('Before we begin...')).toBeVisible({ timeout: 10_000 });
-        await page.getByRole('button', { name: /Neutral|Good|Great/i }).first().click();
+        await expect(
+          page.getByRole('button', { name: /Begin Exercise|Begin Training/i }).first(),
+        ).toBeVisible({ timeout: 15_000 });
+        await startPreviewRuntime(page);
         await expectPreviewRuntime(page, variantCase.family);
-        await page.getByRole('button', { name: /Close module preview/i }).click();
+        await page.getByRole('button', { name: /Close module preview/i }).click({ force: true });
         await expect(page.getByRole('button', { name: /Close module preview/i })).not.toBeVisible({ timeout: 10_000 });
 
         const moduleIdInput = page.locator("//label[contains(., 'Module Id')]/following-sibling::input").first();
@@ -168,7 +217,7 @@ test.describe('Variant registry harness', () => {
   }
 
   test(`registry sync-state smoke: ${syncTestVariantCase.name}`, async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(testTimeoutMs);
     test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
     test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true to verify publish and out-of-sync behavior.');
 

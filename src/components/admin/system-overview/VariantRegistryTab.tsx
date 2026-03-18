@@ -6265,7 +6265,7 @@ const VariantRegistryTab: React.FC = () => {
     const loadRegistry = async (showSeedToast: boolean = false) => {
         setLoading(true);
         try {
-            const { records, created } = await simVariantRegistryService.syncSeeds(VARIANT_REGISTRY);
+            const { records, created, updated } = await simVariantRegistryService.syncSeeds(VARIANT_REGISTRY);
             const existingById = new Map(records.map((record) => [record.id, record]));
             const seededIds = new Set(VARIANT_REGISTRY.map((seed) => buildSimVariantId(seed)));
             const merged = VARIANT_REGISTRY.map((seed, index) =>
@@ -6280,10 +6280,10 @@ const VariantRegistryTab: React.FC = () => {
             const packages = await simVariantRegistryService.listVisionPackages();
             setVisionPackages(packages);
 
-            if (created > 0 && showSeedToast) {
+            if ((created > 0 || updated > 0) && showSeedToast) {
                 setToast({
                     type: 'success',
-                    message: `Synced ${created} registry variants into Firestore.`,
+                    message: `Registry sync applied ${created} new and ${updated} reconciled variants.`,
                 });
             }
         } catch (error) {

@@ -21,6 +21,7 @@ const FUNCTION_LOADERS: Record<string, () => NetlifyFunctionModule> = {
   'oura-callback': () => require('../../../../../netlify/functions/oura-callback.js'),
   'oura-status': () => require('../../../../../netlify/functions/oura-status.js'),
   'oura-disconnect': () => require('../../../../../netlify/functions/oura-disconnect.js'),
+  'oura-sync': () => require('../../../../../netlify/functions/oura-sync.js'),
 };
 
 function normalizeQueryValue(value: string | string[] | undefined) {

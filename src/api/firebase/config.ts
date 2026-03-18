@@ -160,11 +160,16 @@ const getInitialMode = () => {
   }
   if (typeof window !== 'undefined') {
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const mode = isLocalhost
-      || window.localStorage.getItem('forceDevFirebase') === 'true'
-      || window.localStorage.getItem('devMode') === 'true';
+    const forceDevFirebase = window.localStorage.getItem('forceDevFirebase') === 'true';
+    const savedDevMode = window.localStorage.getItem('devMode');
+    const hasExplicitDevMode = savedDevMode !== null;
+    const mode = forceDevFirebase
+      || (hasExplicitDevMode ? savedDevMode === 'true' : isLocalhost);
     console.log('[Firebase] Initial mode:', {
       isDev: mode,
+      source: forceDevFirebase
+        ? 'forceDevFirebase'
+        : (hasExplicitDevMode ? 'devMode localStorage' : (isLocalhost ? 'localhost default' : 'production default')),
       timestamp: new Date().toISOString()
     });
     return mode;
