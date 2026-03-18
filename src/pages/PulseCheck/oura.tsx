@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { CheckCircle2, ExternalLink, Link2, Loader2, RefreshCcw, ShieldCheck, Unplug } from 'lucide-react';
+import { auth } from '../../api/firebase/config';
 import { ouraIntegrationService, type OuraConnectionStatus } from '../../api/firebase/mentaltraining/ouraIntegrationService';
-import { useUser, useUserLoading } from '../../hooks/useUser';
 
 type BannerMessage = {
   tone: 'success' | 'error' | 'info';
@@ -23,8 +24,8 @@ function formatTimestamp(value?: number | null) {
 
 export default function PulseCheckOuraPage() {
   const router = useRouter();
-  const currentUser = useUser();
-  const currentUserLoading = useUserLoading();
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(auth.currentUser);
+  const [authResolved, setAuthResolved] = useState(Boolean(auth.currentUser));
   const [connection, setConnection] = useState<OuraConnectionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<'connect' | 'disconnect' | 'refresh' | null>(null);
@@ -85,14 +86,23 @@ export default function PulseCheckOuraPage() {
   }, [callbackBanner, router]);
 
   useEffect(() => {
-    if (currentUserLoading) return;
-    if (!currentUser) {
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      setFirebaseUser(nextUser);
+      setAuthResolved(true);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!authResolved) return;
+    if (!firebaseUser) {
       setLoading(false);
       return;
     }
 
     loadStatus().catch(() => undefined);
-  }, [currentUser, currentUserLoading, loadStatus]);
+  }, [authResolved, firebaseUser, loadStatus]);
 
   const handleConnect = async () => {
     setActionLoading('connect');
@@ -175,11 +185,11 @@ export default function PulseCheckOuraPage() {
               </div>
             ) : null}
 
-            {currentUserLoading || loading ? (
+            {!authResolved || loading ? (
               <div className="flex min-h-[320px] items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-cyan-300" />
               </div>
-            ) : !currentUser ? (
+            ) : !firebaseUser ? (
               <div className="space-y-5">
                 <div className="rounded-2xl border border-zinc-800 bg-black/20 p-5 text-sm leading-7 text-zinc-300">
                   Sign in to PulseCheck first, then come back here to connect Oura.

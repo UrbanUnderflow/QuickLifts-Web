@@ -1032,7 +1032,19 @@ const ProtocolRegistryTab: React.FC = () => {
             </div>
             <div className="space-y-2">
               {families.map((family) => (
-                <button key={family.id} type="button" onClick={() => setSelectedFamilyId(family.id)} className={listButtonClass(family.id === selectedFamilyId)}>
+                <button
+                  key={family.id}
+                  type="button"
+                  onClick={() => {
+                    const nextVariants = variants.filter((entry) => entry.familyId === family.id);
+                    const nextVariantId = nextVariants[0]?.id || null;
+                    const nextRuntimeId = runtimeRecords.find((entry) => entry.variantId === nextVariantId)?.id || null;
+                    setSelectedFamilyId(family.id);
+                    setSelectedVariantId(nextVariantId);
+                    setSelectedRuntimeId(nextRuntimeId);
+                  }}
+                  className={listButtonClass(family.id === selectedFamilyId)}
+                >
                   <div className="font-medium text-white">{family.label}</div>
                   <div className="mt-1 text-xs text-zinc-500">{family.id}</div>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -1052,7 +1064,16 @@ const ProtocolRegistryTab: React.FC = () => {
             </div>
             <div className="space-y-2">
               {familyVariants.length ? familyVariants.map((variant) => (
-                <button key={variant.id} type="button" onClick={() => setSelectedVariantId(variant.id)} className={listButtonClass(variant.id === selectedVariantId)}>
+                <button
+                  key={variant.id}
+                  type="button"
+                  onClick={() => {
+                    const nextRuntimeId = runtimeRecords.find((entry) => entry.variantId === variant.id)?.id || null;
+                    setSelectedVariantId(variant.id);
+                    setSelectedRuntimeId(nextRuntimeId);
+                  }}
+                  className={listButtonClass(variant.id === selectedVariantId)}
+                >
                   <div className="font-medium text-white">{variant.label}</div>
                   <div className="mt-1 text-xs text-zinc-500">{variant.variantVersion} · {variant.variantKey}</div>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -1223,45 +1244,55 @@ const ProtocolRegistryTab: React.FC = () => {
                   <InlineTag label={`${runtimeDraft.reviewCadenceDays}d cadence`} color="blue" />
                 </div>
                 <div className="rounded-2xl border border-zinc-800 bg-black/20 p-4">
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Planner Contract</div>
-                      <div className="mt-2 text-sm text-zinc-300">Runtime identity, lineage, delivery contract, and planner-safe policy envelope.</div>
+                      <div className="mt-2 max-w-xl text-sm leading-6 text-zinc-300">
+                        Runtime identity, lineage, delivery contract, and planner-safe policy envelope.
+                      </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => void openProtocolPreview()}
                       disabled={sourceExerciseLoading || !(runtimeDraft.legacyExerciseId?.trim() || variantDraft?.legacyExerciseId?.trim())}
-                      className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-200 transition hover:bg-cyan-500/15 disabled:opacity-60"
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-4 py-3 text-sm font-medium text-cyan-200 transition hover:bg-cyan-500/15 disabled:opacity-60 lg:w-auto"
                     >
                       {sourceExerciseLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <BrainCircuit className="h-4 w-4" />}
                       {sourceExerciseLoading ? 'Loading...' : 'Preview Protocol'}
                     </button>
                   </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4 text-sm text-zinc-300">
-                    <div className="rounded-2xl border border-zinc-800 bg-[#060b16] p-3">
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 text-sm text-zinc-300">
+                    <div className="rounded-2xl border border-zinc-800 bg-[#060b16] p-4">
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Lineage</div>
-                      <div className="mt-2 font-medium text-white">{runtimeDraft.label}</div>
-                      <div className="text-xs text-zinc-500">{runtimeDraft.id}</div>
-                      <div className="mt-1 text-xs text-zinc-500">{runtimeDraft.familyLabel} / {runtimeDraft.variantLabel} / {runtimeDraft.variantVersion}</div>
-                      <div className="mt-1 text-xs text-zinc-500">{runtimeDraft.publishedRevisionId || 'Not published yet'}</div>
+                      <div className="mt-3 space-y-2">
+                        <div className="font-medium leading-7 text-white">{runtimeDraft.label}</div>
+                        <div className="break-all text-xs leading-5 text-zinc-500">{runtimeDraft.id}</div>
+                        <div className="text-sm leading-6 text-zinc-300">{runtimeDraft.familyLabel} / {runtimeDraft.variantLabel} / {runtimeDraft.variantVersion}</div>
+                        <div className="break-all text-xs leading-5 text-zinc-500">{runtimeDraft.publishedRevisionId || 'Not published yet'}</div>
+                      </div>
                     </div>
-                    <div className="rounded-2xl border border-zinc-800 bg-[#060b16] p-3">
+                    <div className="rounded-2xl border border-zinc-800 bg-[#060b16] p-4">
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Delivery</div>
-                      <div className="mt-2">{humanizeTag(runtimeDraft.deliveryMode)}</div>
-                      <div className="mt-1 text-xs text-zinc-500">{humanizeTag(runtimeDraft.category)} · {formatDurationSeconds(runtimeDraft.durationSeconds)}</div>
-                      <div className="mt-1 text-xs text-zinc-500">Source asset: {runtimeDraft.legacyExerciseId || 'Not bound'}</div>
+                      <div className="mt-3 space-y-2">
+                        <div className="font-medium leading-7 text-white">{humanizeTag(runtimeDraft.deliveryMode)}</div>
+                        <div className="text-sm leading-6 text-zinc-300">{humanizeTag(runtimeDraft.category)} · {formatDurationSeconds(runtimeDraft.durationSeconds)}</div>
+                        <div className="break-all text-xs leading-5 text-zinc-500">Source asset: {runtimeDraft.legacyExerciseId || 'Not bound'}</div>
+                      </div>
                     </div>
-                    <div className="rounded-2xl border border-zinc-800 bg-[#060b16] p-3">
+                    <div className="rounded-2xl border border-zinc-800 bg-[#060b16] p-4">
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Triggers</div>
-                      <div className="mt-2 text-xs text-zinc-300">{formatTagList(runtimeDraft.triggerTags, 'No trigger tags')}</div>
-                      <div className="mt-1 text-xs text-zinc-500">Preferred context: {formatTagList(runtimeDraft.preferredContextTags, 'Any supported context')}</div>
+                      <div className="mt-3 space-y-2">
+                        <div className="text-sm leading-6 text-zinc-300">{formatTagList(runtimeDraft.triggerTags, 'No trigger tags')}</div>
+                        <div className="text-sm leading-6 text-zinc-500">Preferred context: {formatTagList(runtimeDraft.preferredContextTags, 'Any supported context')}</div>
+                      </div>
                     </div>
-                    <div className="rounded-2xl border border-zinc-800 bg-[#060b16] p-3">
+                    <div className="rounded-2xl border border-zinc-800 bg-[#060b16] p-4">
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Safety Policy</div>
-                      <div className="mt-2 text-xs text-zinc-300">Use windows: {formatTagList(runtimeDraft.useWindowTags, 'General use')}</div>
-                      <div className="mt-1 text-xs text-zinc-500">Avoid: {formatTagList(runtimeDraft.avoidWindowTags, 'None configured')}</div>
-                      <div className="mt-1 text-xs text-zinc-500">Contraindications: {formatTagList(runtimeDraft.contraindicationTags, 'None configured')}</div>
+                      <div className="mt-3 space-y-2">
+                        <div className="text-sm leading-6 text-zinc-300">Use windows: {formatTagList(runtimeDraft.useWindowTags, 'General use')}</div>
+                        <div className="text-sm leading-6 text-zinc-500">Avoid: {formatTagList(runtimeDraft.avoidWindowTags, 'None configured')}</div>
+                        <div className="text-sm leading-6 text-zinc-500">Contraindications: {formatTagList(runtimeDraft.contraindicationTags, 'None configured')}</div>
+                      </div>
                     </div>
                   </div>
                 </div>

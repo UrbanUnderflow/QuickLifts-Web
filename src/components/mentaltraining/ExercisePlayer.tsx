@@ -1743,19 +1743,33 @@ const BreathingExercise: React.FC<BreathingExerciseProps> = ({
       </div>
 
       {/* Breathing circle */}
-      <div className="relative w-72 h-72 mx-auto mb-8">
+      <div className="relative w-72 h-72 mx-auto mb-8 overflow-visible">
+        {/* Ambient halo */}
+        <motion.div
+          animate={{ scale: breathScale * 1.02, opacity: [0.2, 0.28, 0.2] }}
+          transition={{ duration: currentPhase?.duration || 4, ease: 'easeInOut' }}
+          className={`pointer-events-none absolute -inset-20 rounded-full bg-gradient-to-br ${categoryColor} blur-[96px]`}
+        />
+
         {/* Outer glow */}
         <motion.div
           animate={{ scale: breathScale }}
           transition={{ duration: currentPhase?.duration || 4, ease: 'easeInOut' }}
-          className={`absolute inset-0 rounded-full bg-gradient-to-br ${categoryColor} opacity-20 blur-xl`}
+          className={`pointer-events-none absolute -inset-6 rounded-full bg-gradient-to-br ${categoryColor} opacity-[0.18] blur-[56px]`}
+        />
+
+        {/* Mid glow ring */}
+        <motion.div
+          animate={{ scale: breathScale }}
+          transition={{ duration: currentPhase?.duration || 4, ease: 'easeInOut' }}
+          className={`pointer-events-none absolute inset-0 rounded-full bg-gradient-to-br ${categoryColor} opacity-[0.24] blur-2xl`}
         />
 
         {/* Main circle */}
         <motion.div
           animate={{ scale: breathScale }}
           transition={{ duration: currentPhase?.duration || 4, ease: 'easeInOut' }}
-          className={`absolute inset-4 rounded-full bg-gradient-to-br ${categoryColor} opacity-40`}
+          className={`absolute inset-4 rounded-full bg-gradient-to-br ${categoryColor} opacity-35 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]`}
         />
 
         {/* Inner circle with countdown */}

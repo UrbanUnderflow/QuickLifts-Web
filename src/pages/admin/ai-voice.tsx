@@ -12,6 +12,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../../api/firebase/config';
 import type { SimAudioAssetRef } from '../../api/firebase/mentaltraining/audioAssetService';
+import type { PulseCheckProtocolDefinition } from '../../api/firebase/mentaltraining';
 import { clearVoiceCache, speakStep, stopNarration } from '../../utils/tts';
 import {
   AiVoiceConfig,
@@ -25,6 +26,7 @@ import {
   normalizeElevenLabsSettings,
   shouldUseElevenLabsVoiceDefaults,
 } from '../../lib/aiVoice';
+import protocolSeed from '../../api/firebase/mentaltraining/pulsecheckProtocolRegistry.json';
 
 // ──────────────────────────────────────────────────────────
 // CONSTANTS
@@ -384,6 +386,83 @@ const VP_STAGE_PALETTE: Record<VPCueDef['stageTag'], { label: string; color: str
   countdown:  { label: 'Countdown',   color: '#FFD60A', dimColor: 'rgba(255,214,10,0.15)' },
 };
 
+type AdminAudioTab = 'voice' | 'appLibrary' | 'visionPro' | 'protocols';
+
+type ProtocolCueDef = {
+  cueKey: string;
+  protocolId: string;
+  label: string;
+  protocolClass: 'regulation' | 'priming' | 'recovery';
+  responseFamily: string;
+  description: string;
+  prompt: string;
+  durationSeconds: number;
+};
+
+const PROTOCOL_ENGINE_KEY = 'pulsecheck-protocols';
+
+const PROTOCOL_CLASS_PALETTE: Record<ProtocolCueDef['protocolClass'], { label: string; color: string; dimColor: string }> = {
+  regulation: { label: 'Regulation', color: '#38BDF8', dimColor: 'rgba(56,189,248,0.14)' },
+  priming: { label: 'Priming', color: '#F59E0B', dimColor: 'rgba(245,158,11,0.14)' },
+  recovery: { label: 'Recovery', color: '#34D399', dimColor: 'rgba(52,211,153,0.14)' },
+};
+
+function buildProtocolCuePrompt(record: Pick<ProtocolCueDef, 'label' | 'protocolClass' | 'responseFamily'>) {
+  switch (record.responseFamily) {
+    case 'acute_downshift':
+      return 'A soft but immediate physiological reset cue, airy inhale shimmer followed by a long exhale release, calming, precise, no music, no speech.';
+    case 'steady_regulation':
+      return 'A balanced paced-breath cue, even pulse, composed and grounded, subtle performance breathing signal, no music, no speech.';
+    case 'focus_narrowing':
+      return record.protocolClass === 'priming'
+        ? 'A sharp attentional lock cue, focused click-chime hybrid, clean and precise, cueing the next action, no music, no speech.'
+        : 'A body-awareness narrowing cue, soft inward bell with grounded resonance, calming and precise, no music, no speech.';
+    case 'cognitive_reframe':
+      return 'An uplifted reframing cue, bright but controlled rise, pressure becoming opportunity, short and motivating, no speech.';
+    case 'activation_upshift':
+      return 'A compact energizing activation hit, inhale-led surge with athletic readiness, crisp and controlled, no music, no speech.';
+    case 'imagery_priming':
+      return 'A cinematic execution-prime cue, clean anticipatory shimmer with focused forward motion, vivid but restrained, no speech.';
+    case 'confidence_priming':
+      return 'A poised embodied confidence cue, upright and expansive tonal lift, subtle authority without hype, no speech.';
+    case 'recovery_downregulation':
+      return 'A deep recovery cue, slow resolving breath-like tone, soft parasympathetic downshift, restorative and spacious, no speech.';
+    case 'recovery_reflection':
+      return 'A reflective post-session cue, grounded piano-like tone bed with quiet resolution, thoughtful and steady, no speech.';
+    default:
+      return `${record.label} protocol signature cue, athletic mental training sound effect, polished, short, no speech.`;
+  }
+}
+
+function buildProtocolCueDescription(record: Pick<ProtocolCueDef, 'label' | 'protocolClass' | 'responseFamily'>) {
+  switch (record.protocolClass) {
+    case 'regulation':
+      return `Signature start cue for ${record.label}, tuned for calming, composure, and state control.`;
+    case 'priming':
+      return `Signature start cue for ${record.label}, tuned for readiness, precision, and competitive entry.`;
+    case 'recovery':
+      return `Signature start cue for ${record.label}, tuned for downshift, processing, and recovery posture.`;
+    default:
+      return `Signature cue for ${record.label}.`;
+  }
+}
+
+const PROTOCOL_SOUND_CUES: ProtocolCueDef[] = (protocolSeed as Array<{
+  id: string;
+  label: string;
+  protocolClass: 'regulation' | 'priming' | 'recovery';
+  responseFamily: string;
+}>).map((record) => ({
+  cueKey: `${record.id}-signature`,
+  protocolId: record.id,
+  label: `${record.label} Signature`,
+  protocolClass: record.protocolClass,
+  responseFamily: record.responseFamily,
+  description: buildProtocolCueDescription(record),
+  prompt: buildProtocolCuePrompt(record),
+  durationSeconds: record.protocolClass === 'recovery' ? 6 : record.protocolClass === 'priming' ? 3 : 4,
+}));
+
 function vpSlugify(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
@@ -399,6 +478,36 @@ function vpHashString(input: string) {
 function buildVPDocId(cue: VPCueDef) {
   return `sfx-${VP_ENGINE_KEY}-${cue.cueKey}-${vpHashString(cue.prompt)}`;
 }
+
+function buildGeneratedDocId(engineKey: string, cueKey: string, prompt: string) {
+  return `sfx-${vpSlugify(engineKey)}-${cueKey}-${vpHashString(prompt)}`;
+}
+
+const AudioTabButton: React.FC<{
+  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+  description: string;
+  onClick: () => void;
+}> = ({ active, icon, label, description, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`flex min-w-[170px] flex-1 items-start gap-3 rounded-2xl border px-4 py-3 text-left transition-all ${
+      active
+        ? 'border-[#E0FE10]/30 bg-[#E0FE10]/10 text-white shadow-[0_10px_40px_rgba(224,254,16,0.08)]'
+        : 'border-white/[0.08] bg-white/[0.02] text-zinc-300 hover:border-white/[0.14] hover:bg-white/[0.04]'
+    }`}
+  >
+    <div className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl ${active ? 'bg-[#E0FE10]/15 text-[#E0FE10]' : 'bg-white/5 text-zinc-500'}`}>
+      {icon}
+    </div>
+    <div className="min-w-0">
+      <div className="text-sm font-semibold">{label}</div>
+      <div className="mt-1 text-xs leading-relaxed text-zinc-500">{description}</div>
+    </div>
+  </button>
+);
 
 // ──────────────────────────────────────────────────────────
 // SOUND CARD
@@ -622,10 +731,134 @@ const VPSoundCard: React.FC<{
   );
 };
 
+const ProtocolSoundCard: React.FC<{
+  cue: ProtocolCueDef;
+  asset: SimAudioAssetRef | null;
+  generating: boolean;
+  isPlaying: boolean;
+  onGenerate: () => void;
+  onPlay: () => void;
+  onStop: () => void;
+}> = ({ cue, asset, generating, isPlaying, onGenerate, onPlay, onStop }) => {
+  const palette = PROTOCOL_CLASS_PALETTE[cue.protocolClass];
+  const isReady = Boolean(asset?.downloadURL);
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`rounded-xl border p-4 transition-all duration-200 ${
+        isPlaying
+          ? 'border-white/20 bg-white/[0.05]'
+          : 'border-white/[0.07] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg"
+          style={{ background: palette.dimColor, border: `1px solid ${palette.color}30` }}
+        >
+          <Music className="h-4 w-4" style={{ color: palette.color }} />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-white">{cue.label}</span>
+            <span
+              className="rounded-md border px-1.5 py-0.5 text-[10px] font-semibold"
+              style={{ color: palette.color, background: palette.dimColor, borderColor: `${palette.color}30` }}
+            >
+              {palette.label}
+            </span>
+            <span className="rounded-md border border-white/[0.08] bg-white/[0.03] px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+              {cue.responseFamily.replace(/_/g, ' ')}
+            </span>
+            {generating ? (
+              <span className="flex items-center gap-1 rounded-md border border-amber-700/30 bg-amber-900/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+                <Loader2 className="h-2.5 w-2.5 animate-spin" />Generating…
+              </span>
+            ) : isReady ? (
+              <span className="rounded-md border border-emerald-700/30 bg-emerald-900/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                Ready
+              </span>
+            ) : (
+              <span className="rounded-md border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500">
+                Not Generated
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-zinc-500">{cue.description}</p>
+          <code className="mt-1 block text-[10px] font-mono text-zinc-600">
+            {cue.durationSeconds}s · ElevenLabs SFX · {cue.protocolId}
+          </code>
+        </div>
+
+        <div className="flex flex-shrink-0 items-center gap-1.5">
+          {isReady && !generating && (
+            <button
+              onClick={isPlaying ? onStop : onPlay}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                isPlaying
+                  ? 'border border-white/20 bg-white/10 text-white hover:bg-white/15'
+                  : 'border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'
+              }`}
+            >
+              {isPlaying ? <><Square className="h-3 w-3" />Stop</> : <><Play className="h-3 w-3" />Preview</>}
+            </button>
+          )}
+          <button
+            onClick={onGenerate}
+            disabled={generating}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+              generating
+                ? 'cursor-not-allowed border border-zinc-700 bg-zinc-800 text-zinc-500'
+                : isReady
+                  ? 'border border-zinc-700 bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-white'
+                  : 'border bg-white/5 text-white hover:bg-white/10'
+            }`}
+            style={!generating && !isReady ? { borderColor: `${palette.color}40`, color: palette.color, background: palette.dimColor } : undefined}
+          >
+            {generating ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : isReady ? (
+              <><RotateCcw className="h-3 w-3" />Regen</>
+            ) : (
+              <><Wand2 className="h-3 w-3" />Generate</>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {isPlaying && (
+        <div className="mt-3 flex h-4 items-center gap-0.5">
+          {Array.from({ length: 20 }).map((_, i) => (
+            <motion.div
+              key={i}
+              className="w-1 rounded-full"
+              style={{ background: palette.color }}
+              animate={{ height: ['4px', `${Math.random() * 14 + 4}px`, '4px'] }}
+              transition={{ duration: 0.5 + Math.random() * 0.4, repeat: Infinity, delay: i * 0.07, ease: 'easeInOut' }}
+            />
+          ))}
+        </div>
+      )}
+
+      {isReady && asset && (
+        <div className="mt-2 rounded-lg border border-white/[0.04] bg-zinc-950/60 px-2 py-1.5">
+          <code className="break-all text-[10px] font-mono text-zinc-600">{asset.storagePath}</code>
+        </div>
+      )}
+    </motion.div>
+  );
+};
+
 // ──────────────────────────────────────────────────────────
 // MAIN PAGE
 // ──────────────────────────────────────────────────────────
 const AdminAiVoice: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<AdminAudioTab>('voice');
+
   // Voice config state
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -653,6 +886,23 @@ const AdminAiVoice: React.FC = () => {
   const [vpGenErrors, setVPGenErrors] = useState<Record<string, string>>({});
   const [vpPlayingId, setVPPlayingId] = useState<string | null>(null);
   const vpAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [vpSectionsOpen, setVPSectionsOpen] = useState<Record<string, boolean>>({ resetTrial: true });
+
+  const [protocolAssets, setProtocolAssets] = useState<Record<string, SimAudioAssetRef | null>>({});
+  const [protocolGenerating, setProtocolGenerating] = useState<Record<string, boolean>>({});
+  const [protocolLoading, setProtocolLoading] = useState(false);
+  const [protocolLoadError, setProtocolLoadError] = useState<string | null>(null);
+  const [protocolGenErrors, setProtocolGenErrors] = useState<Record<string, string>>({});
+  const [protocolPlayingId, setProtocolPlayingId] = useState<string | null>(null);
+  const protocolAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [protocolSectionsOpen, setProtocolSectionsOpen] = useState<Record<ProtocolCueDef['protocolClass'], boolean>>({
+    regulation: true,
+    priming: true,
+    recovery: true,
+  });
+  const [librarySectionsOpen, setLibrarySectionsOpen] = useState<Record<string, boolean>>(
+    Object.fromEntries(CATEGORY_ORDER.map((category, index) => [category, index < 2])) as Record<string, boolean>
+  );
 
   const voiceLabel = useMemo(() => {
     const source = provider === 'elevenlabs' ? ELEVENLABS_VOICES : OPENAI_VOICES;
@@ -673,6 +923,32 @@ const AdminAiVoice: React.FC = () => {
     return groups;
   }, []);
 
+  const groupedProtocolCues = useMemo(() => {
+    return PROTOCOL_SOUND_CUES.reduce<Record<ProtocolCueDef['protocolClass'], ProtocolCueDef[]>>(
+      (acc, cue) => {
+        acc[cue.protocolClass].push(cue);
+        return acc;
+      },
+      {
+        regulation: [],
+        priming: [],
+        recovery: [],
+      }
+    );
+  }, []);
+
+  const toggleLibrarySection = (sectionKey: string) => {
+    setLibrarySectionsOpen((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
+  };
+
+  const toggleProtocolSection = (sectionKey: ProtocolCueDef['protocolClass']) => {
+    setProtocolSectionsOpen((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
+  };
+
+  const toggleVPSection = (sectionKey: string) => {
+    setVPSectionsOpen((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
+  };
+
   // ── VP load: read Firestore for all Reset cue docs
   const loadVPAssets = async () => {
     setVPLoading(true);
@@ -681,7 +957,7 @@ const AdminAiVoice: React.FC = () => {
       const results: Record<string, SimAudioAssetRef | null> = {};
       await Promise.all(
         VP_RESET_CUES.map(async (cue) => {
-          const docId = buildVPDocId(cue);
+          const docId = buildGeneratedDocId(VP_ENGINE_KEY, cue.cueKey, cue.prompt);
           const snap = await getDoc(doc(db, 'sim-audio-assets', docId));
           results[cue.cueKey] = snap.exists() ? (snap.data() as SimAudioAssetRef) : null;
         })
@@ -699,6 +975,28 @@ const AdminAiVoice: React.FC = () => {
     const isLocalhost =
       window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     return isLocalhost ? 'http://localhost:8888/.netlify/functions' : '/.netlify/functions';
+  };
+
+  const generateSfxBlob = async (prompt: string, durationSeconds: number) => {
+    const res = await fetch('/api/mentaltraining/generate-sfx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, durationSeconds }),
+    });
+    const payload = await res.json();
+    if (!res.ok || !payload?.audio) {
+      throw new Error(payload?.error || 'Sound generation failed');
+    }
+
+    const binary = window.atob(payload.audio as string);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+
+    return {
+      blob: new Blob([bytes], { type: 'audio/mpeg' }),
+      providerId: 'elevenlabs' as const,
+      contentType: (payload.contentType ?? 'audio/mpeg') as string,
+    };
   };
 
   const generateVPSpeech = async (cue: VPCueDef) => {
@@ -758,24 +1056,14 @@ const AdminAiVoice: React.FC = () => {
         providerId = speech.providerId;
         contentType = speech.contentType;
       } else {
-        const res = await fetch('/api/mentaltraining/generate-sfx', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: cue.prompt, durationSeconds: cue.durationSeconds }),
-        });
-        const payload = await res.json();
-        if (!res.ok || !payload?.audio) {
-          throw new Error(payload?.error || 'Sound generation failed');
-        }
-
-        const binary = window.atob(payload.audio as string);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-        blob = new Blob([bytes], { type: 'audio/mpeg' });
+        const sfx = await generateSfxBlob(cue.prompt, cue.durationSeconds);
+        blob = sfx.blob;
+        providerId = sfx.providerId;
+        contentType = sfx.contentType;
       }
 
       // 3. Upload to Firebase Storage
-      const assetId = buildVPDocId(cue);
+      const assetId = buildGeneratedDocId(VP_ENGINE_KEY, cue.cueKey, cue.prompt);
       const path = `sim-audio-assets/${vpSlugify(VP_ENGINE_KEY)}/${cue.cueKey}/${assetId}.mp3`;
       const sRef = storageRef(storage, path);
       const snapshot = await uploadBytes(sRef, blob, { contentType });
@@ -838,6 +1126,95 @@ const AdminAiVoice: React.FC = () => {
     audio.onerror = () => setVPPlayingId(null);
   };
 
+  const loadProtocolAssets = async () => {
+    setProtocolLoading(true);
+    setProtocolLoadError(null);
+    try {
+      const results: Record<string, SimAudioAssetRef | null> = {};
+      await Promise.all(
+        PROTOCOL_SOUND_CUES.map(async (cue) => {
+          const docId = buildGeneratedDocId(PROTOCOL_ENGINE_KEY, cue.cueKey, cue.prompt);
+          const snap = await getDoc(doc(db, 'sim-audio-assets', docId));
+          results[cue.cueKey] = snap.exists() ? (snap.data() as SimAudioAssetRef) : null;
+        })
+      );
+      setProtocolAssets(results);
+    } catch (e: any) {
+      setProtocolLoadError(e?.message || 'Failed to load protocol sound cues');
+    } finally {
+      setProtocolLoading(false);
+    }
+  };
+
+  const generateProtocolSound = async (cue: ProtocolCueDef) => {
+    setProtocolGenerating((prev) => ({ ...prev, [cue.cueKey]: true }));
+    setProtocolGenErrors((prev) => {
+      const next = { ...prev };
+      delete next[cue.cueKey];
+      return next;
+    });
+    try {
+      const sfx = await generateSfxBlob(cue.prompt, cue.durationSeconds);
+      const assetId = buildGeneratedDocId(PROTOCOL_ENGINE_KEY, cue.cueKey, cue.prompt);
+      const path = `sim-audio-assets/${vpSlugify(PROTOCOL_ENGINE_KEY)}/${cue.cueKey}/${assetId}.mp3`;
+      const sRef = storageRef(storage, path);
+      const snapshot = await uploadBytes(sRef, sfx.blob, { contentType: sfx.contentType });
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      const gsUrl = `gs://${snapshot.ref.bucket}/${snapshot.ref.fullPath}`;
+      const now = Date.now();
+      const assetRecord: SimAudioAssetRef = {
+        id: assetId,
+        cueKey: cue.cueKey,
+        label: cue.label,
+        prompt: cue.prompt,
+        provider: sfx.providerId,
+        format: 'mp3',
+        contentType: sfx.contentType,
+        storagePath: path,
+        gsUrl,
+        downloadURL,
+        createdAt: protocolAssets[cue.cueKey]?.createdAt ?? now,
+        updatedAt: now,
+      };
+      await setDoc(doc(db, 'sim-audio-assets', assetId), {
+        ...assetRecord,
+        family: PROTOCOL_ENGINE_KEY,
+        engineKey: PROTOCOL_ENGINE_KEY,
+        archetype: 'audio_channel',
+        protocolId: cue.protocolId,
+        protocolClass: cue.protocolClass,
+        responseFamily: cue.responseFamily,
+      });
+      setProtocolAssets((prev) => ({ ...prev, [cue.cueKey]: assetRecord }));
+    } catch (e: any) {
+      const msg = e?.message || 'Generation failed';
+      setProtocolGenErrors((prev) => ({ ...prev, [cue.cueKey]: msg }));
+      console.error(`[Protocol SFX] ${cue.cueKey}:`, msg);
+    } finally {
+      setProtocolGenerating((prev) => ({ ...prev, [cue.cueKey]: false }));
+    }
+  };
+
+  const stopProtocolSound = () => {
+    if (protocolAudioRef.current) {
+      protocolAudioRef.current.pause();
+      protocolAudioRef.current.currentTime = 0;
+      protocolAudioRef.current = null;
+    }
+    setProtocolPlayingId(null);
+  };
+
+  const playProtocolSound = (cueKey: string, url: string) => {
+    stopProtocolSound();
+    setProtocolPlayingId(cueKey);
+    const audio = new Audio(url);
+    protocolAudioRef.current = audio;
+    audio.volume = 0.75;
+    audio.play().catch(() => setProtocolPlayingId(null));
+    audio.onended = () => setProtocolPlayingId(null);
+    audio.onerror = () => setProtocolPlayingId(null);
+  };
+
   const loadConfig = async () => {
     setLoading(true);
     setError(null);
@@ -862,10 +1239,12 @@ const AdminAiVoice: React.FC = () => {
   useEffect(() => {
     loadConfig();
     loadVPAssets();
+    loadProtocolAssets();
     return () => {
       stopNarration();
       stopSoundEffect();
       stopVPSound();
+      stopProtocolSound();
     };
   }, []);
 
@@ -984,7 +1363,7 @@ const AdminAiVoice: React.FC = () => {
                 AI Voice & Sound Effects
               </h1>
               <p className="text-zinc-400 mt-2 text-sm">
-                Configure Nora's voice and preview all sound effects across Community and PulseCheck apps.
+                Configure Nora's voice, app sound libraries, immersive Vision Pro cue sets, and generated PulseCheck protocol signature audio.
               </p>
             </div>
             <button
@@ -1011,9 +1390,41 @@ const AdminAiVoice: React.FC = () => {
             )}
           </AnimatePresence>
 
+          <div className="mb-6 flex flex-wrap gap-3">
+            <AudioTabButton
+              active={activeTab === 'voice'}
+              icon={<Mic2 className="h-4 w-4" />}
+              label="Nora Voice"
+              description="Global narration voice, provider selection, presets, and preview."
+              onClick={() => setActiveTab('voice')}
+            />
+            <AudioTabButton
+              active={activeTab === 'appLibrary'}
+              icon={<Music className="h-4 w-4" />}
+              label="App Library"
+              description="Pulse Community and PulseCheck app sound libraries with category-based preview."
+              onClick={() => setActiveTab('appLibrary')}
+            />
+            <AudioTabButton
+              active={activeTab === 'visionPro'}
+              icon={<Eye className="h-4 w-4" />}
+              label="Vision Pro"
+              description="Immersive chamber cues, spoken countdowns, and trial-specific audio packages."
+              onClick={() => setActiveTab('visionPro')}
+            />
+            <AudioTabButton
+              active={activeTab === 'protocols'}
+              icon={<Wand2 className="h-4 w-4" />}
+              label="Protocols"
+              description="Generated signature sound effects for every PulseCheck protocol in the registry."
+              onClick={() => setActiveTab('protocols')}
+            />
+          </div>
+
           {/* ════════════════════════
               SECTION 1: AI VOICE
           ════════════════════════ */}
+          {activeTab === 'voice' && (
           <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl mb-6">
             {/* Collapsible header */}
             <button
@@ -1177,10 +1588,12 @@ const AdminAiVoice: React.FC = () => {
               )}
             </AnimatePresence>
           </div>
+          )}
 
           {/* ════════════════════════
               SECTION 2: SOUND EFFECTS
           ════════════════════════ */}
+          {activeTab === 'appLibrary' && (
           <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl p-5">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-8 h-8 rounded-lg bg-[#8B5CF6]/15 border border-[#8B5CF6]/25 flex items-center justify-center">
@@ -1203,24 +1616,42 @@ const AdminAiVoice: React.FC = () => {
               {CATEGORY_ORDER.map((cat) => {
                 const sounds = groupedSounds[cat];
                 if (!sounds?.length) return null;
+                const isOpen = librarySectionsOpen[cat] ?? true;
                 return (
-                  <div key={cat}>
-                    <div className="flex items-center gap-2 mb-3">
+                  <div key={cat} className="rounded-2xl border border-white/[0.06] bg-black/10">
+                    <button
+                      type="button"
+                      onClick={() => toggleLibrarySection(cat)}
+                      className="flex w-full items-center gap-2 px-4 py-4 text-left"
+                    >
                       <span className="text-xs font-semibold uppercase tracking-[0.15em] text-zinc-500">{CATEGORY_LABELS[cat]}</span>
-                      <div className="flex-1 h-px bg-white/[0.05]" />
+                      <div className="h-px flex-1 bg-white/[0.05]" />
                       <span className="text-xs text-zinc-600">{sounds.length} sounds</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {sounds.map((sound) => (
-                        <SoundCard
-                          key={sound.id}
-                          sound={sound}
-                          isPlaying={playingSound === sound.id}
-                          onPlay={() => playSoundEffect(sound)}
-                          onStop={stopSoundEffect}
-                        />
-                      ))}
-                    </div>
+                      {isOpen ? <ChevronUp className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />}
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {isOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="grid grid-cols-1 gap-3 px-4 pb-4 sm:grid-cols-2">
+                            {sounds.map((sound) => (
+                              <SoundCard
+                                key={sound.id}
+                                sound={sound}
+                                isPlaying={playingSound === sound.id}
+                                onPlay={() => playSoundEffect(sound)}
+                                onStop={stopSoundEffect}
+                              />
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 );
               })}
@@ -1241,10 +1672,12 @@ const AdminAiVoice: React.FC = () => {
               </div>
             </div>
           </div>
+          )}
 
           {/* ════════════════════════
               SECTION 3: VISION PRO IMMERSIVE SOUNDS
           ════════════════════════ */}
+          {activeTab === 'visionPro' && (
           <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl p-5 mt-6">
             <div className="flex items-center justify-between gap-3 mb-1">
               <div className="flex items-center gap-3">
@@ -1273,82 +1706,238 @@ const AdminAiVoice: React.FC = () => {
               </button>
             </div>
 
-            {/* Load error */}
+            <div className="mt-4 rounded-2xl border border-white/[0.06] bg-black/10">
+              <button
+                type="button"
+                onClick={() => toggleVPSection('resetTrial')}
+                className="flex w-full items-center gap-3 px-4 py-4 text-left"
+              >
+                <span className="text-sm font-semibold text-white">Vision Pro — Reset Trial Sound Cues</span>
+                <div className="h-px flex-1 bg-white/[0.05]" />
+                <span className="text-xs text-zinc-600">{Object.values(vpAssets).filter(Boolean).length} / {VP_RESET_CUES.length} generated</span>
+                {vpSectionsOpen.resetTrial ? <ChevronUp className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />}
+              </button>
+
+              <AnimatePresence initial={false}>
+                {vpSectionsOpen.resetTrial && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-4 pb-4">
+                      <AnimatePresence>
+                        {vpLoadError && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="mt-3 rounded-xl border border-red-700/40 bg-red-900/20 p-3 text-xs text-red-200"
+                          >
+                            {vpLoadError}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <div className="mt-4 flex items-start gap-3 rounded-xl border border-white/[0.05] bg-zinc-950/60 p-3 text-xs text-zinc-400">
+                        <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-zinc-500" />
+                        <div>
+                          Generated audio is stored at <code className="font-mono text-zinc-300">sim-audio-assets/vision-pro-reset/</code> in Firebase Storage.
+                          The visionOS app reads <code className="font-mono text-zinc-300">downloadURL</code> at session start to preload chamber SFX and Nora&apos;s spoken pre-brief.
+                          Spoken cues are generated with <strong className="text-zinc-200">ElevenLabs</strong> right here beside the chamber sound cues, using the Nora voice controls from the section above when available.
+                        </div>
+                      </div>
+
+                      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {VP_RESET_CUES.map((cue) => (
+                          <div key={cue.cueKey}>
+                            <VPSoundCard
+                              cue={cue}
+                              asset={vpAssets[cue.cueKey] ?? null}
+                              generating={vpGenerating[cue.cueKey] ?? false}
+                              isPlaying={vpPlayingId === cue.cueKey}
+                              onGenerate={() => generateVPSound(cue)}
+                              onPlay={() => {
+                                const url = vpAssets[cue.cueKey]?.downloadURL;
+                                if (url) playVPSound(cue.cueKey, url);
+                              }}
+                              onStop={stopVPSound}
+                            />
+                            <AnimatePresence>
+                              {vpGenErrors[cue.cueKey] && (
+                                <motion.div
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  className="mt-1 rounded-lg border border-red-700/30 bg-red-900/20 px-3 py-2 text-[11px] text-red-300"
+                                >
+                                  {vpGenErrors[cue.cueKey]}
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-white/[0.05] pt-4 text-xs text-zinc-500">
+                        <div>
+                          <span className="font-semibold text-zinc-300">{Object.values(vpAssets).filter(Boolean).length}</span>
+                          {' / '}{VP_RESET_CUES.length} cues generated
+                        </div>
+                        {Object.values(vpGenerating).some(Boolean) && (
+                          <div className="flex items-center gap-1.5 text-amber-400">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            {Object.values(vpGenerating).filter(Boolean).length} generating…
+                          </div>
+                        )}
+                        <div className="ml-auto text-zinc-600">
+                          Firestore: <code className="font-mono">sim-audio-assets</code> · Storage: <code className="font-mono">sim-audio-assets/vision-pro-reset/</code>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+          )}
+
+          {activeTab === 'protocols' && (
+          <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-900/40 p-5 backdrop-blur-xl">
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/25 bg-cyan-500/12">
+                  <Music className="h-4 w-4 text-cyan-300" />
+                </div>
+                <div>
+                  <div className="font-semibold text-white">PulseCheck Protocol Sound Cues</div>
+                  <div className="mt-0.5 text-xs text-zinc-500">
+                    Signature entry cues for each live protocol. Stored in Firebase and grouped by regulation, priming, and recovery.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={loadProtocolAssets}
+                disabled={protocolLoading}
+                className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-white transition-colors hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {protocolLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Refresh
+              </button>
+            </div>
+
             <AnimatePresence>
-              {vpLoadError && (
+              {protocolLoadError && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="mt-3 p-3 rounded-xl bg-red-900/20 border border-red-700/40 text-red-200 text-xs"
+                  className="mt-3 rounded-xl border border-red-700/40 bg-red-900/20 p-3 text-xs text-red-200"
                 >
-                  {vpLoadError}
+                  {protocolLoadError}
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* How it works callout */}
-            <div className="mt-4 flex items-start gap-3 p-3 rounded-xl bg-zinc-950/60 border border-white/[0.05] text-xs text-zinc-400">
-              <Info className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
+            <div className="mt-4 flex items-start gap-3 rounded-xl border border-white/[0.05] bg-zinc-950/60 p-3 text-xs text-zinc-400">
+              <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-zinc-500" />
               <div>
-                Generated audio is stored at <code className="font-mono text-zinc-300">sim-audio-assets/vision-pro-reset/</code> in Firebase Storage.
-                The visionOS app reads <code className="font-mono text-zinc-300">downloadURL</code> at session start to preload chamber SFX and Nora's spoken pre-brief.
-                Spoken cues are generated with <strong className="text-zinc-200">ElevenLabs</strong> right here beside the chamber sound cues, using the Nora voice controls from the section above when available. Click <strong className="text-zinc-200">Generate</strong> to create a cue for the first time, or <strong className="text-zinc-200">Regen</strong> to replace an existing one.
+                Each protocol gets one generated signature cue designed to match its state-shift intent. These assets are stored under <code className="font-mono text-zinc-300">sim-audio-assets/pulsecheck-protocols/</code> and can be expanded later into multi-cue packages.
               </div>
             </div>
 
-            {/* Cue cards */}
-            <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {VP_RESET_CUES.map((cue) => (
-                <div key={cue.cueKey}>
-                  <VPSoundCard
-                    cue={cue}
-                    asset={vpAssets[cue.cueKey] ?? null}
-                    generating={vpGenerating[cue.cueKey] ?? false}
-                    isPlaying={vpPlayingId === cue.cueKey}
-                    onGenerate={() => generateVPSound(cue)}
-                    onPlay={() => {
-                      const url = vpAssets[cue.cueKey]?.downloadURL;
-                      if (url) playVPSound(cue.cueKey, url);
-                    }}
-                    onStop={stopVPSound}
-                  />
-                  {/* Per-cue generation error */}
-                  <AnimatePresence>
-                    {vpGenErrors[cue.cueKey] && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="mt-1 px-3 py-2 rounded-lg bg-red-900/20 border border-red-700/30 text-red-300 text-[11px]"
+            <div className="mt-5 space-y-4">
+              {(['regulation', 'priming', 'recovery'] as const).map((protocolClass) => {
+                const cues = groupedProtocolCues[protocolClass];
+                const palette = PROTOCOL_CLASS_PALETTE[protocolClass];
+                const open = protocolSectionsOpen[protocolClass];
+                return (
+                  <div key={protocolClass} className="rounded-2xl border border-white/[0.06] bg-black/10">
+                    <button
+                      type="button"
+                      onClick={() => toggleProtocolSection(protocolClass)}
+                      className="flex w-full items-center gap-3 px-4 py-4 text-left"
+                    >
+                      <span
+                        className="rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]"
+                        style={{ color: palette.color, background: palette.dimColor, borderColor: `${palette.color}30` }}
                       >
-                        {vpGenErrors[cue.cueKey]}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ))}
+                        {palette.label}
+                      </span>
+                      <span className="text-sm font-semibold text-white">{palette.label} Protocol Cues</span>
+                      <div className="h-px flex-1 bg-white/[0.05]" />
+                      <span className="text-xs text-zinc-600">
+                        {cues.filter((cue) => protocolAssets[cue.cueKey]).length} / {cues.length} generated
+                      </span>
+                      {open ? <ChevronUp className="h-4 w-4 text-zinc-500" /> : <ChevronDown className="h-4 w-4 text-zinc-500" />}
+                    </button>
+
+                    <AnimatePresence initial={false}>
+                      {open && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="grid grid-cols-1 gap-3 px-4 pb-4">
+                            {cues.map((cue) => (
+                              <div key={cue.cueKey}>
+                                <ProtocolSoundCard
+                                  cue={cue}
+                                  asset={protocolAssets[cue.cueKey] ?? null}
+                                  generating={protocolGenerating[cue.cueKey] ?? false}
+                                  isPlaying={protocolPlayingId === cue.cueKey}
+                                  onGenerate={() => generateProtocolSound(cue)}
+                                  onPlay={() => {
+                                    const url = protocolAssets[cue.cueKey]?.downloadURL;
+                                    if (url) playProtocolSound(cue.cueKey, url);
+                                  }}
+                                  onStop={stopProtocolSound}
+                                />
+                                <AnimatePresence>
+                                  {protocolGenErrors[cue.cueKey] && (
+                                    <motion.div
+                                      initial={{ opacity: 0, height: 0 }}
+                                      animate={{ opacity: 1, height: 'auto' }}
+                                      exit={{ opacity: 0, height: 0 }}
+                                      className="mt-1 rounded-lg border border-red-700/30 bg-red-900/20 px-3 py-2 text-[11px] text-red-300"
+                                    >
+                                      {protocolGenErrors[cue.cueKey]}
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* Status summary footer */}
-            <div className="mt-5 flex flex-wrap items-center gap-4 text-xs text-zinc-500 border-t border-white/[0.05] pt-4">
+            <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-white/[0.05] pt-4 text-xs text-zinc-500">
               <div>
-                <span className="text-zinc-300 font-semibold">
-                  {Object.values(vpAssets).filter(Boolean).length}
-                </span>
-                {' / '}{VP_RESET_CUES.length} cues generated
+                <span className="font-semibold text-zinc-300">{Object.values(protocolAssets).filter(Boolean).length}</span>
+                {' / '}{PROTOCOL_SOUND_CUES.length} cues generated
               </div>
-              {Object.values(vpGenerating).some(Boolean) && (
+              {Object.values(protocolGenerating).some(Boolean) && (
                 <div className="flex items-center gap-1.5 text-amber-400">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  {Object.values(vpGenerating).filter(Boolean).length} generating…
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  {Object.values(protocolGenerating).filter(Boolean).length} generating…
                 </div>
               )}
               <div className="ml-auto text-zinc-600">
-                Firestore: <code className="font-mono">sim-audio-assets</code> · Storage: <code className="font-mono">sim-audio-assets/vision-pro-reset/</code>
+                Firestore: <code className="font-mono">sim-audio-assets</code> · Storage: <code className="font-mono">sim-audio-assets/pulsecheck-protocols/</code>
               </div>
             </div>
           </div>
+          )}
 
         </motion.div>
       </div>

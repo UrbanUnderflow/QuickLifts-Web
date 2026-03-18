@@ -70,7 +70,9 @@ export const simModuleLibraryService = {
   async getById(id: string): Promise<MentalExercise | null> {
     const docRef = doc(db, COLLECTION, id);
     const snap = await getDoc(docRef);
-    if (!snap.exists()) return null;
+    if (!snap.exists()) {
+      return SEEDED_EXERCISES.find((exercise) => exercise.id === id) || null;
+    }
     return exerciseFromFirestore(snap.id, snap.data());
   },
 
