@@ -1,13 +1,19 @@
 import { collection, doc, getDoc, getDocs, query, setDoc, updateDoc, where } from 'firebase/firestore';
-import { db } from '../config';
+import { auth, db } from '../config';
 import { pulseCheckProvisioningService } from '../pulsecheckProvisioning/service';
 import type { PulseCheckTeamMembership } from '../pulsecheckProvisioning/types';
 import { athleteProgressService } from './athleteProgressService';
 import { PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION } from './collections';
 import { simModuleLibraryService } from './exerciseLibraryService';
+import { resolvePulseCheckFunctionUrl } from './pulseCheckFunctionsUrl';
+import { stateSnapshotService } from './stateSnapshotService';
 import {
   PulseCheckDailyAssignment,
+  PulseCheckDailyAssignmentActionType,
+  PulseCheckAssignmentEventRecordResult,
   PulseCheckDailyAssignmentStatus,
+  RecordPulseCheckAssignmentEventInput,
+  PulseCheckStateSnapshot,
   pulseCheckDailyAssignmentFromFirestore,
   pulseCheckDailyAssignmentToFirestore,
 } from './types';
@@ -56,6 +62,107 @@ const toReadinessBand = (readinessScore?: number): PulseCheckDailyAssignment['re
   if (readinessScore < 65) return 'medium';
   return 'high';
 };
+
+const humanizeRuntimeLabel = (value?: string | null) =>
+  value ? value.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('You must be signed in to update Nora daily assignments.');
+  }
+
+  const idToken = await user.getIdToken();
+  return {
+    Authorization: `Bearer ${idToken}`,
+    'Content-Type': 'application/json',
+  };
+}
+
+async function recordAssignmentEvent(
+  input: RecordPulseCheckAssignmentEventInput
+): Promise<PulseCheckAssignmentEventRecordResult> {
+  const headers = await getAuthHeaders();
+  const response = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/record-pulsecheck-assignment-event'), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(input),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || `Request failed with status ${response.status}`);
+  }
+
+  return data as PulseCheckAssignmentEventRecordResult;
+}
+
+function resolveSnapshotDrivenActionType({
+  snapshot,
+  hasResolvedExercise,
+  fallbackActionType,
+}: {
+  snapshot?: PulseCheckStateSnapshot | null;
+  hasResolvedExercise: boolean;
+  fallbackActionType: PulseCheckDailyAssignmentActionType;
+}): PulseCheckDailyAssignmentActionType {
+  if (!snapshot) {
+    return fallbackActionType;
+  }
+
+  switch (snapshot.recommendedRouting) {
+    case 'defer_alternate_path':
+      return 'defer';
+    case 'protocol_only':
+    case 'protocol_then_sim':
+      return hasResolvedExercise ? 'lighter_sim' : 'defer';
+    case 'sim_only':
+    case 'sim_then_protocol':
+    case 'trial_only':
+    default:
+      return hasResolvedExercise ? 'sim' : 'defer';
+  }
+}
+
+function buildSnapshotDrivenRationale({
+  snapshot,
+  actionType,
+  fallbackRationale,
+}: {
+  snapshot?: PulseCheckStateSnapshot | null;
+  actionType: PulseCheckDailyAssignmentActionType;
+  fallbackRationale?: string;
+}): string {
+  if (!snapshot) {
+    return fallbackRationale || '';
+  }
+
+  const confidenceLabel = humanizeRuntimeLabel(snapshot.confidence) || 'current';
+  const routingLabel = humanizeRuntimeLabel(snapshot.recommendedRouting) || 'sim only';
+  const readinessLabel = snapshot.overallReadiness ? `${snapshot.overallReadiness} readiness` : 'current readiness';
+  const protocolLabel =
+    snapshot.recommendedProtocolClass && snapshot.recommendedProtocolClass !== 'none'
+      ? `${humanizeRuntimeLabel(snapshot.recommendedProtocolClass)} protocol`
+      : '';
+
+  let runtimeLead = '';
+  switch (actionType) {
+    case 'defer':
+      runtimeLead = `Nora paused the main task because today's state snapshot reads ${readinessLabel} with ${confidenceLabel} confidence.`;
+      break;
+    case 'lighter_sim':
+      runtimeLead = protocolLabel
+        ? `Nora is front-loading ${protocolLabel} work because today's state snapshot reads ${readinessLabel} and routes ${routingLabel}.`
+        : `Nora softened today's entry because the state snapshot reads ${readinessLabel} and routes ${routingLabel}.`;
+      break;
+    case 'sim':
+    default:
+      runtimeLead = `Nora kept today's task live because the state snapshot reads ${readinessLabel} and routes ${routingLabel}.`;
+      break;
+  }
+
+  return fallbackRationale ? `${runtimeLead} ${fallbackRationale}` : runtimeLead;
+}
 
 const sortByFreshness = (left: PulseCheckDailyAssignment, right: PulseCheckDailyAssignment) =>
   (right.updatedAt || right.createdAt) - (left.updatedAt || left.createdAt);
@@ -144,16 +251,22 @@ export const assignmentOrchestratorService = {
   async orchestratePostCheckIn({
     athleteId,
     sourceCheckInId,
+    sourceStateSnapshotId,
     sourceDate,
   }: {
     athleteId: string;
     sourceCheckInId: string;
+    sourceStateSnapshotId?: string;
     sourceDate: string;
   }): Promise<PulseCheckDailyAssignment | null> {
     const progress = await athleteProgressService.get(athleteId);
     if (!progress?.activeProgram) {
       return null;
     }
+
+    const snapshot =
+      (sourceStateSnapshotId ? await stateSnapshotService.getById(sourceStateSnapshotId) : null) ||
+      (await stateSnapshotService.getForAthleteOnDate(athleteId, sourceDate));
 
     const athleteMembership = await resolveActiveAthleteMembership(athleteId);
     if (!athleteMembership) {
@@ -163,9 +276,13 @@ export const assignmentOrchestratorService = {
     const coachId = await resolveCoachId(athleteId, athleteMembership, progress.coachId);
     await persistResolvedCoachId(athleteId, coachId);
 
-    const readinessScore = progress.activeProgram.generatedAt
-      ? progress.taxonomyProfile?.modifierScores?.readiness
-      : undefined;
+    const readinessScore =
+      snapshot?.readinessScore ??
+      (
+        progress.activeProgram.generatedAt
+          ? progress.taxonomyProfile?.modifierScores?.readiness
+          : undefined
+      );
     const assignmentId = buildDailyAssignmentId(athleteId, sourceDate);
     const existing = await this.getById(assignmentId);
 
@@ -175,20 +292,29 @@ export const assignmentOrchestratorService = {
 
     const isLowerReadiness =
       progress.activeProgram.sessionType === 'recovery_rep' || progress.activeProgram.sessionType === 'probe';
-    const actionType = progress.activeProgram.recommendedSimId
+    const fallbackActionType = progress.activeProgram.recommendedSimId
       ? isLowerReadiness
         ? 'lighter_sim'
         : 'sim'
       : 'defer';
+    const actionType = resolveSnapshotDrivenActionType({
+      snapshot,
+      hasResolvedExercise: Boolean(progress.activeProgram.recommendedSimId || progress.activeProgram.recommendedLegacyExerciseId),
+      fallbackActionType,
+    });
 
     const now = Date.now();
     const nextAssignment: PulseCheckDailyAssignment = {
       id: assignmentId,
+      lineageId: existing?.lineageId || assignmentId,
+      revision: existing?.revision || 1,
+      previousRevision: existing?.previousRevision,
       athleteId,
       teamId: athleteMembership.teamId,
       teamMembershipId: athleteMembership.id,
       coachId,
       sourceCheckInId,
+      sourceStateSnapshotId,
       sourceDate,
       assignedBy: 'nora',
       status: actionType === 'defer' ? PulseCheckDailyAssignmentStatus.Deferred : PulseCheckDailyAssignmentStatus.Assigned,
@@ -198,7 +324,11 @@ export const assignmentOrchestratorService = {
       sessionType: progress.activeProgram.sessionType,
       durationMode: progress.activeProgram.durationMode,
       durationSeconds: progress.activeProgram.durationSeconds,
-      rationale: progress.activeProgram.rationale,
+      rationale: buildSnapshotDrivenRationale({
+        snapshot,
+        actionType,
+        fallbackRationale: progress.activeProgram.rationale,
+      }),
       readinessScore,
       readinessBand: toReadinessBand(readinessScore),
       escalationTier: 0,
@@ -215,6 +345,10 @@ export const assignmentOrchestratorService = {
       { merge: true }
     );
 
+    if (sourceStateSnapshotId) {
+      await stateSnapshotService.attachExecutionLink(sourceStateSnapshotId, assignmentId);
+    }
+
     return nextAssignment;
   },
 
@@ -226,46 +360,15 @@ export const assignmentOrchestratorService = {
   },
 
   async markViewed(id: string): Promise<void> {
-    const existing = await this.getById(id);
-    if (!existing || existing.status !== PulseCheckDailyAssignmentStatus.Assigned) {
-      return;
-    }
-
-    await updateDoc(doc(db, DAILY_ASSIGNMENTS_COLLECTION, id), {
-      status: PulseCheckDailyAssignmentStatus.Viewed,
-      updatedAt: Date.now(),
-    });
+    await recordAssignmentEvent({ assignmentId: id, eventType: 'viewed' });
   },
 
   async markStarted(id: string): Promise<void> {
-    const existing = await this.getById(id);
-    if (!existing) return;
-    if (
-      existing.status === PulseCheckDailyAssignmentStatus.Completed ||
-      existing.status === PulseCheckDailyAssignmentStatus.Overridden ||
-      existing.status === PulseCheckDailyAssignmentStatus.Deferred ||
-      existing.status === PulseCheckDailyAssignmentStatus.Superseded
-    ) {
-      return;
-    }
-
-    await updateDoc(doc(db, DAILY_ASSIGNMENTS_COLLECTION, id), {
-      status: PulseCheckDailyAssignmentStatus.Started,
-      startedAt: existing.startedAt || Date.now(),
-      updatedAt: Date.now(),
-    });
+    await recordAssignmentEvent({ assignmentId: id, eventType: 'started' });
   },
 
   async markCompleted(id: string): Promise<void> {
-    const existing = await this.getById(id);
-    if (!existing) return;
-
-    await updateDoc(doc(db, DAILY_ASSIGNMENTS_COLLECTION, id), {
-      status: PulseCheckDailyAssignmentStatus.Completed,
-      startedAt: existing.startedAt || Date.now(),
-      completedAt: Date.now(),
-      updatedAt: Date.now(),
-    });
+    await recordAssignmentEvent({ assignmentId: id, eventType: 'completed' });
   },
 
   async resolveExercise(id: string) {
@@ -292,11 +395,11 @@ export const assignmentOrchestratorService = {
     overriddenBy: string;
     reason: string;
   }): Promise<void> {
-    await updateDoc(doc(db, DAILY_ASSIGNMENTS_COLLECTION, id), {
-      status: PulseCheckDailyAssignmentStatus.Overridden,
-      overriddenBy,
-      overrideReason: reason,
-      updatedAt: Date.now(),
+    await recordAssignmentEvent({
+      assignmentId: id,
+      eventType: 'overridden',
+      actorUserId: overriddenBy,
+      reason,
     });
   },
 
@@ -309,11 +412,11 @@ export const assignmentOrchestratorService = {
     overriddenBy: string;
     reason: string;
   }): Promise<void> {
-    await updateDoc(doc(db, DAILY_ASSIGNMENTS_COLLECTION, id), {
-      status: PulseCheckDailyAssignmentStatus.Deferred,
-      overriddenBy,
-      overrideReason: reason,
-      updatedAt: Date.now(),
+    await recordAssignmentEvent({
+      assignmentId: id,
+      eventType: 'deferred',
+      actorUserId: overriddenBy,
+      reason,
     });
   },
 };

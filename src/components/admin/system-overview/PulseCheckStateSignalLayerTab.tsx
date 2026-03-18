@@ -3,11 +3,13 @@ import { Activity, BarChart3, Brain, Gauge, Layers3, Radar, Route, ShieldCheck }
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 
 const SIGNAL_ROWS = [
-  ['Self-report', 'Direct athlete description of current state.', 'Anxious, scattered, flat, frustrated, mentally tired, locked in', 'Phase 1'],
-  ['Conversation sentiment', 'Emotional tone inferred from athlete language.', 'Rising frustration, nervous tone, low-confidence language', 'Phase 2'],
-  ['Biometrics', 'Physiological context when available.', 'Heart rate, HRV, sleep, breathing rate', 'Phase 2'],
-  ['Performance', 'Behavioral evidence that state may be degrading the rep.', 'False starts, volatility, acute dip, widening variance', 'Phase 1'],
-  ['Context', 'Situational information that changes what good routing looks like.', 'Pre-game, post-trial, travel, high-stakes week', 'Phase 1'],
+  ['Self-report', 'Direct athlete description of current state.', 'Anxious, scattered, flat, frustrated, mentally tired, locked in', 'Live'],
+  ['Conversation sentiment', 'Emotional tone inferred from athlete language.', 'Rising frustration, nervous tone, low-confidence language', 'Live / expanding'],
+  ['Biometrics', 'Physiological context when available.', 'Heart rate, HRV, sleep, breathing rate', 'Live / expanding'],
+  ['Performance', 'Behavioral evidence that state may be degrading the rep.', 'False starts, volatility, acute dip, widening variance', 'Live'],
+  ['Context', 'Situational information that changes what good routing looks like.', 'Pre-game, post-trial, travel, high-stakes week', 'Live'],
+  ['Execution events', 'Signals from what the athlete actually did after assignment.', 'Viewed, started, completed, deferred, coach-adjusted', 'Live input + snapshot refresh'],
+  ['Coach constraints', 'Hard narrowing rules that the planner must respect.', 'Locked family, defer, manual override, return-to-play restriction', 'When present'],
 ];
 
 const DIMENSIONS = [
@@ -39,24 +41,24 @@ const PIPELINE = [
     body: 'Use self-report, conversation sentiment, biometrics, performance, and context whenever they are available.',
   },
   {
-    title: 'Normalize into Comparable Signals',
-    body: 'Convert each source into a common state-signal format that can be weighted and compared consistently.',
+    title: 'Normalize into Canonical Source Records',
+    body: 'Convert each source into a common signal format so raw evidence can be compared, audited, replayed, and enriched consistently.',
   },
   {
-    title: 'Weight by Recency and Confidence',
-    body: 'Strong, recent signals count more; sparse, stale, or contradictory signals reduce confidence.',
+    title: 'AI Verifies Contradictions and Gaps',
+    body: 'An AI interpretation step should inspect the raw evidence, identify conflicts, call out missing context, and decide which signals are likely trustworthy versus noisy.',
   },
   {
-    title: 'Estimate the Four Dimensions',
-    body: 'Infer current Activation, Focus Readiness, Emotional Load, and Cognitive Fatigue without drifting into diagnosis.',
+    title: 'AI Enriches The State',
+    body: 'The model should infer Activation, Focus Readiness, Emotional Load, Cognitive Fatigue, supporting hypotheses, and confidence posture without drifting into diagnosis.',
   },
   {
-    title: 'Derive Readiness and Routing Hints',
-    body: 'Create the Green / Yellow / Red readiness output, confidence band, protocol class hint, and routing recommendation.',
+    title: 'Persist Raw + Enriched Snapshot',
+    body: 'Store one authoritative snapshot that preserves both raw signal provenance and the AI-enriched interpretation so downstream systems can explain why the system thinks what it thinks.',
   },
   {
-    title: 'Persist a Shared State Snapshot',
-    body: 'Store one authoritative state snapshot so Nora, coach tools, and escalation all consume the same runtime context, then let the execution layer materialize the daily task from it.',
+    title: 'Hand The Snapshot To The Assignment Planner',
+    body: 'The enriched snapshot becomes the primary decision input for the bounded Nora assignment planner, while deterministic policy gates still enforce safety, eligibility, and coach constraints.',
   },
 ];
 
@@ -69,15 +71,19 @@ const PATTERN_ROWS = [
 ];
 
 const SNAPSHOT_ROWS = [
+  ['rawSignalSummary', 'Structured summary of the source records considered for this snapshot'],
   ['stateDimensions', 'Activation, Focus Readiness, Emotional Load, Cognitive Fatigue'],
   ['overallReadiness', 'Derived Green / Yellow / Red output used for routing'],
   ['confidence', 'High / Medium / Low confidence in the current estimate'],
+  ['enrichedInterpretation', 'AI-authored interpretation of what is most likely driving the current state'],
   ['sourcesUsed', 'Signals that informed the snapshot'],
+  ['sourceEventIds', 'Traceable ids for the raw evidence behind the snapshot'],
   ['contextTags', 'Pre-game, post-trial, travel, injury phase, high-stakes week'],
   ['performanceFlags', 'False-start spike, acute instability, early degradation onset'],
   ['persistentRed', 'Repeated red-state pattern requiring staff-support visibility'],
   ['recommendedProtocolClass', 'Regulation, Priming, Recovery, or none'],
   ['recommendedRouting', 'Protocol only, Sim only, Trial only, Protocol -> Sim, Sim -> Protocol, Defer / alternate path'],
+  ['candidateClassHints', 'What kind of bounded assignment pool the planner should consider'],
   ['executionLink', 'Reference to the daily assignment artifact the coach and athlete now act from'],
 ];
 
@@ -93,6 +99,7 @@ const THRESHOLD_GOVERNANCE = [
   ['Operating standard, not truth', 'Family-level state-flag thresholds are pilot defaults and may be recalibrated after sufficient valid athlete-session volume.'],
   ['Baseline-aware before cohort-aware', 'Default interpretation uses the athlete rolling baseline first before considering cohort drift.'],
   ['Human review for threshold changes', 'Threshold updates should be versioned, evidence-backed, and approved rather than silently altered in production.'],
+  ['AI inside policy rails', 'The model should enrich and interpret the state, but deterministic policy still owns hard constraints, coach locks, and safety boundaries.'],
 ];
 
 const PulseCheckStateSignalLayerTab: React.FC = () => {
@@ -101,20 +108,24 @@ const PulseCheckStateSignalLayerTab: React.FC = () => {
       <DocHeader
         eyebrow="Pulse Check Runtime"
         title="State Signal Layer"
-        version="Version 1.3 | March 16, 2026"
-        summary="Foundation-layer artifact for the shared perception model. This page defines the canonical state dimensions, signal categories, confidence logic, freshness defaults, and the persisted snapshot that all downstream runtime systems should consume before daily assignment materialization."
+        version="Version 1.4 | March 17, 2026"
+        summary="Foundation-layer artifact for the shared perception model. This page now defines the raw-signal intake, AI-enriched state interpretation, confidence logic, freshness defaults, and the persisted snapshot that downstream runtime systems should consume before Nora assignment planning."
         highlights={[
           {
             title: 'One Canonical State Model',
             body: 'Activation, Focus Readiness, Emotional Load, and Cognitive Fatigue are fixed. Overall Readiness is derived, not a fifth peer dimension.',
           },
           {
-            title: 'Confidence-Governed Routing',
+            title: 'AI Enrichment, Not Just Scoring',
+            body: 'The signal layer should preserve raw evidence, then let AI verify contradictions, infer likely drivers, and enrich the state before assignment planning.',
+          },
+          {
+            title: 'Confidence-Governed Planning',
             body: 'Low-confidence or conflicting signals should trigger a lighter, more reversible decision rather than brittle assignment behavior.',
           },
           {
             title: 'One Snapshot, Shared Execution Context',
-            body: 'The same state snapshot now feeds Nora routing, coach review, and the daily assignment artifact rather than separate copy-only hints.',
+            body: 'The same enriched snapshot should feed Nora planning, coach review, and the daily assignment artifact rather than separate copy-only hints.',
           },
           {
             title: 'Performance-Relevant, Not Diagnostic',
@@ -145,10 +156,10 @@ const PulseCheckStateSignalLayerTab: React.FC = () => {
               <BulletList
                 items={[
                   'State Signal informs routing; it does not itself diagnose or escalate.',
-                  'Use multiple signals whenever possible and avoid assigning from one weak cue.',
-                  'Prefer structured inputs first and free-form interpretation second.',
-                  'Keep decisions explainable to staff and athletes.',
-                  'Keep Protocols thin; the layer triggers them but does not create a second simulation taxonomy.',
+                  'Preserve raw source records separately from the AI-enriched interpretation.',
+                  'Use AI to verify contradictions and flesh out the state, not to bypass policy or invent unsafe outcomes.',
+                  'Keep decisions explainable to staff and athletes with evidence and provenance.',
+                  'Keep Protocols thin; the layer triggers them, and the planner chooses only from the bounded protocol/simulation inventory.',
                 ]}
               />
             }
@@ -156,7 +167,7 @@ const PulseCheckStateSignalLayerTab: React.FC = () => {
           <InfoCard
             title="Routing Boundary"
             accent="blue"
-            body="This layer exists to estimate whether the athlete should regulate, prime, recover, train, assess, or defer. It should not become a hidden severity score or a covert safety classifier."
+            body="This layer exists to estimate whether the athlete should regulate, prime, recover, train, assess, or defer. It should not become a hidden severity score, a covert safety classifier, or a freeform exercise generator."
           />
         </CardGrid>
       </SectionBlock>
@@ -248,6 +259,7 @@ const PulseCheckStateSignalLayerTab: React.FC = () => {
                   'Do not infer mental-health conditions from sentiment or biometrics.',
                   'Do not route the athlete away from all training on a single weak signal.',
                   'Do not expose raw private conversation content to coaches when summaries are enough.',
+                  'Do not let AI invent new assignment classes or exercises outside the canonical candidate inventory.',
                   'Keep clinical escalation rules separate from this state-routing layer.',
                 ]}
               />

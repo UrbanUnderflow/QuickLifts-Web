@@ -1680,7 +1680,7 @@ const UsersManagement: React.FC = () => {
         const fetchedLogs = logsSnapshot.docs.map(doc => (
           // Convert to plain object matching ExerciseLog structure expected by state/UI
           // Ensure this aligns with how ExerciseLog is structured/used elsewhere
-          { id: doc.id, ...doc.data() } as ExerciseLog 
+          { ...doc.data(), id: doc.id } as ExerciseLog 
         ));
         
         // Optional: Sort logs if needed (e.g., by order field)

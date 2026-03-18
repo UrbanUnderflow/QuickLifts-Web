@@ -930,7 +930,7 @@ async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
     const qArray = query(collectionsRef, where("ownerId", "array-contains", userId));
     const snapshotArray = await getDocs(qArray);
     const collectionsFromArray: SweatlistCollection[] = snapshotArray.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => {
-      const data = { id: doc.id, ...doc.data() };
+      const data = { ...doc.data(), id: doc.id };
       return new SweatlistCollection(data);
     });
 
@@ -940,7 +940,7 @@ async fetchCollections(userId: string): Promise<SweatlistCollection[]> {
     const qString = query(collectionsRef, where("ownerId", "==", userId));
     const snapshotString = await getDocs(qString);
     const collectionsFromString: SweatlistCollection[] = snapshotString.docs.map((doc: QueryDocumentSnapshot<DocumentData>) => {
-      const data = { id: doc.id, ...doc.data() };
+      const data = { ...doc.data(), id: doc.id };
       return new SweatlistCollection(data);
     });
 

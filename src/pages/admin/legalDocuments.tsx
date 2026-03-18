@@ -298,8 +298,8 @@ const LegalDocumentsAdmin: React.FC = () => {
       );
       const snapshot = await getDocs(q);
       const docs = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        id: doc.id
       })) as LegalDocument[];
       setDocuments(docs);
 
@@ -335,8 +335,8 @@ const LegalDocumentsAdmin: React.FC = () => {
       );
       const snapshot = await getDocs(q);
       const requests = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        id: doc.id
       })) as SigningRequest[];
       setSigningRequests(requests);
     } catch (error) {
@@ -349,7 +349,7 @@ const LegalDocumentsAdmin: React.FC = () => {
         );
         const fallbackSnapshot = await getDocs(fallbackQ);
         const requests = fallbackSnapshot.docs
-          .map(doc => ({ id: doc.id, ...doc.data() } as SigningRequest))
+          .map(doc => ({ ...doc.data(), id: doc.id } as SigningRequest))
           .filter(r => r.legalDocumentId);
         setSigningRequests(requests);
       } catch (fallbackError) {

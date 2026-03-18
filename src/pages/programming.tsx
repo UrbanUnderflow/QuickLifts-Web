@@ -2311,7 +2311,7 @@ const DesktopChallengeSetupView: React.FC<DesktopChallengeSetupProps> = ({
         let allExerciseVideos: ExerciseVideo[] = [];
         try {
           const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
-          allExerciseVideos = videoSnapshot.docs.map(doc => new ExerciseVideo({ id: doc.id, ...doc.data() }));
+          allExerciseVideos = videoSnapshot.docs.map(doc => new ExerciseVideo({ ...doc.data(), id: doc.id }));
         } catch (videoError) {
           console.error('[Programming] Error fetching exercise videos:', videoError);
           // Continue without videos rather than failing completely

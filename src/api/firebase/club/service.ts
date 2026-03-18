@@ -85,7 +85,7 @@ class ClubService {
       return null;
     }
 
-    return new Club({ id: snapshot.id, ...snapshot.data() });
+    return new Club({ ...snapshot.data(), id: snapshot.id });
   }
 
   /**
@@ -105,7 +105,7 @@ class ClubService {
     }
 
     const doc = snapshot.docs[0];
-    return new Club({ id: doc.id, ...doc.data() });
+    return new Club({ ...doc.data(), id: doc.id });
   }
 
   /**
@@ -123,7 +123,7 @@ class ClubService {
       return [];
     }
 
-    return snapshot.docs.map(doc => new Club({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => new Club({ ...doc.data(), id: doc.id }));
   }
 
   /**
@@ -183,7 +183,7 @@ class ClubService {
       } else {
         console.log(`[ClubService] User ${userId} is already a member of club ${clubId}`);
       }
-      return new ClubMember({ id: memberId, ...existingData, isActive: true });
+      return new ClubMember({ ...existingData, id: memberId, isActive: true });
     }
 
     // Create new member
@@ -251,7 +251,7 @@ class ClubService {
     );
 
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => new ClubMember({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => new ClubMember({ ...doc.data(), id: doc.id }));
   }
 
   async getClubMember(clubId: string, userId: string): Promise<ClubMember | null> {
@@ -262,7 +262,7 @@ class ClubService {
       return null;
     }
 
-    return new ClubMember({ id: snapshot.id, ...snapshot.data() });
+    return new ClubMember({ ...snapshot.data(), id: snapshot.id });
   }
 
   async getClubMemberProfile(clubId: string, userId: string): Promise<ClubMemberProfile | null> {
@@ -624,7 +624,7 @@ class ClubService {
     const snapshot = await getDocs(collection(db, 'clubEventCheckins', clubId, 'events'));
 
     return snapshot.docs
-      .map(doc => new ClubEvent({ id: doc.id, ...doc.data() }))
+      .map(doc => new ClubEvent({ ...doc.data(), id: doc.id }))
       .sort((left, right) => {
         if (left.isUpcoming !== right.isUpcoming) {
           return left.isUpcoming ? -1 : 1;
@@ -641,7 +641,7 @@ class ClubService {
     const snapshot = await getDocs(
       collection(db, 'clubEventCheckins', clubId, 'events', eventId, 'checkins')
     );
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
   }
 
   /**

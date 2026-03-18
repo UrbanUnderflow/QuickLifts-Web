@@ -183,7 +183,7 @@ const OutreachCampaignsPage: React.FC = () => {
         try {
             const q = query(collection(db, 'outreach_campaigns'), orderBy('createdAt', 'desc'));
             const snapshot = await getDocs(q);
-            const fetched = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OutreachCampaign));
+            const fetched = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as OutreachCampaign));
             setCampaigns(fetched);
         } catch (err: any) {
             console.error(err);

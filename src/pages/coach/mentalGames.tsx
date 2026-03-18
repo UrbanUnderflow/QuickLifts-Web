@@ -43,6 +43,9 @@ import {
   curriculumAssignmentService,
   athleteProgressService,
   recommendationService,
+  protocolRegistryService,
+  protocolResponsivenessService,
+  stateSnapshotService,
   SimModule,
   SimAssignment,
   ExerciseCategory,
@@ -52,8 +55,18 @@ import {
   CurriculumAssignment,
   AthleteMentalProgress,
   ExerciseCompletion,
+  PulseCheckAssignmentEvent,
+  PulseCheckConversationDerivedSignalEvent,
   PulseCheckDailyAssignment,
   PulseCheckDailyAssignmentStatus,
+  PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION,
+  PULSECHECK_ASSIGNMENT_REVISIONS_SUBCOLLECTION,
+  PulseCheckProtocolResponsivenessProfile,
+  PulseCheckProtocolResponsivenessSummary,
+  PulseCheckStateSnapshot,
+  PULSECHECK_ASSIGNMENT_EVENTS_COLLECTION,
+  PULSECHECK_CONVERSATION_SIGNAL_EVENTS_COLLECTION,
+  pulseCheckDailyAssignmentFromFirestore,
   visionProTrialService,
   VISION_PRO_CURRICULUM_ASSIGNMENTS_COLLECTION,
   VISION_PRO_LEGACY_ASSIGNMENTS_COLLECTION,
@@ -82,6 +95,16 @@ interface AthleteWithProgress {
   mentalProgress?: AthleteMentalProgress;
   curriculumAssignment?: CurriculumAssignment;
   latestSessionCompletion?: ExerciseCompletion;
+}
+
+interface DailyAssignmentReviewContext {
+  snapshot: PulseCheckStateSnapshot | null;
+  conversationSignals: PulseCheckConversationDerivedSignalEvent[];
+  assignmentEvents: PulseCheckAssignmentEvent[];
+  revisions: PulseCheckDailyAssignment[];
+  responsivenessProfile: PulseCheckProtocolResponsivenessProfile | null;
+  familyResponse: PulseCheckProtocolResponsivenessSummary | null;
+  variantResponse: PulseCheckProtocolResponsivenessSummary | null;
 }
 
 type TabType = 'recommendations' | 'athletes' | 'exercises' | 'assignments';
@@ -176,6 +199,10 @@ function getDailyAssignmentActionLabel(assignment: PulseCheckDailyAssignment): s
     return humanizeRuntimeLabel(assignment.simSpecId);
   }
 
+  if (assignment.protocolLabel) {
+    return assignment.protocolLabel;
+  }
+
   if (assignment.legacyExerciseId) {
     return humanizeRuntimeLabel(assignment.legacyExerciseId);
   }
@@ -184,7 +211,105 @@ function getDailyAssignmentActionLabel(assignment: PulseCheckDailyAssignment): s
     return humanizeRuntimeLabel(assignment.sessionType);
   }
 
-  return assignment.actionType === 'lighter_sim' ? 'Lighter sim' : 'Sim';
+  if (assignment.actionType === 'lighter_sim') {
+    return 'Lighter sim';
+  }
+
+  if (assignment.actionType === 'protocol') {
+    return 'Protocol';
+  }
+
+  return 'Sim';
+}
+
+function formatEventTimestamp(value?: number): string {
+  if (!value) return 'Unknown time';
+  return new Date(value).toLocaleString();
+}
+
+function getAssignmentEventLabel(eventType: PulseCheckAssignmentEvent['eventType']): string {
+  switch (eventType) {
+    case 'viewed':
+      return 'Viewed';
+    case 'started':
+      return 'Started';
+    case 'completed':
+      return 'Completed';
+    case 'deferred':
+      return 'Deferred';
+    case 'overridden':
+      return 'Coach override';
+    default:
+      return eventType;
+  }
+}
+
+function getAssignmentEventTone(eventType: PulseCheckAssignmentEvent['eventType']): string {
+  switch (eventType) {
+    case 'completed':
+      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+    case 'started':
+      return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300';
+    case 'viewed':
+      return 'border-blue-500/30 bg-blue-500/10 text-blue-300';
+    case 'deferred':
+      return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
+    case 'overridden':
+      return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+    default:
+      return 'border-zinc-700 bg-zinc-800/80 text-zinc-300';
+  }
+}
+
+function getResponsivenessTone(
+  responseDirection?: PulseCheckProtocolResponsivenessSummary['responseDirection']
+): string {
+  switch (responseDirection) {
+    case 'positive':
+      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+    case 'negative':
+      return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
+    case 'mixed':
+      return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+    default:
+      return 'border-zinc-700 bg-zinc-800/80 text-zinc-300';
+  }
+}
+
+function getFreshnessTone(freshness?: PulseCheckProtocolResponsivenessSummary['freshness']): string {
+  switch (freshness) {
+    case 'current':
+      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+    case 'degraded':
+      return 'border-amber-500/30 bg-amber-500/10 text-amber-200';
+    case 'refresh_required':
+      return 'border-rose-500/30 bg-rose-500/10 text-rose-200';
+    default:
+      return 'border-zinc-700 bg-zinc-800/80 text-zinc-300';
+  }
+}
+
+function formatSignalDeltaLabel(label: string, delta?: number): string | null {
+  if (typeof delta !== 'number' || delta === 0) return null;
+  return `${label} ${delta > 0 ? '+' : ''}${delta}`;
+}
+
+function readEventMetadataRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function readAssignmentSummaryFromEvent(
+  event: PulseCheckAssignmentEvent,
+  key: 'previousAssignmentSummary' | 'nextAssignmentSummary'
+): Record<string, unknown> | null {
+  const metadata = readEventMetadataRecord(event.metadata);
+  const summary = metadata?.[key];
+  return summary && typeof summary === 'object' ? (summary as Record<string, unknown>) : null;
+}
+
+function readStringFromRecord(record: Record<string, unknown> | null, key: string): string | null {
+  const value = record?.[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 const CoachMentalTraining: React.FC = () => {
@@ -201,9 +326,12 @@ const CoachMentalTraining: React.FC = () => {
   const [recommendations, setRecommendations] = useState<MentalRecommendation[]>([]);
   const [curriculumAssignments, setCurriculumAssignments] = useState<CurriculumAssignment[]>([]);
   const [noraDailyAssignments, setNoraDailyAssignments] = useState<PulseCheckDailyAssignment[]>([]);
+  const [dailyAssignmentReviewContext, setDailyAssignmentReviewContext] = useState<Record<string, DailyAssignmentReviewContext>>({});
+  const [expandedDailyAssignments, setExpandedDailyAssignments] = useState<Record<string, boolean>>({});
   const [generatingRecommendations, setGeneratingRecommendations] = useState(false);
   const [actioningRecommendation, setActioningRecommendation] = useState<string | null>(null);
   const [actioningDailyAssignment, setActioningDailyAssignment] = useState<string | null>(null);
+  const [loadingDailyReviewContext, setLoadingDailyReviewContext] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -239,6 +367,112 @@ const CoachMentalTraining: React.FC = () => {
   const refreshNoraDailyAssignments = useCallback(async (coachId: string) => {
     const assignments = await assignmentOrchestratorService.listRecentForCoach(coachId, 24);
     setNoraDailyAssignments(assignments);
+  }, []);
+
+  const loadDailyAssignmentReviewContext = useCallback(async (assignments: PulseCheckDailyAssignment[]) => {
+    if (!assignments.length) {
+      setDailyAssignmentReviewContext({});
+      return;
+    }
+
+    setLoadingDailyReviewContext(true);
+    try {
+      const [protocolRuntimeRecords, responsivenessProfiles] = await Promise.all([
+        protocolRegistryService.list(),
+        Promise.all(
+          Array.from(new Set(assignments.map((assignment) => assignment.athleteId))).map(async (athleteId) =>
+            [athleteId, await protocolResponsivenessService.refreshForAthlete(athleteId)] as const
+          )
+        ),
+      ]);
+      const runtimeById = new Map(protocolRuntimeRecords.map((runtime) => [runtime.id, runtime]));
+      const responsivenessByAthlete = new Map(responsivenessProfiles);
+
+      const entries = await Promise.all(assignments.map(async (assignment) => {
+        const [snapshot, assignmentEventsSnap, conversationSignalsByAssignmentSnap, conversationSignalsByDateSnap, revisionsSnap] = await Promise.all([
+          assignment.sourceStateSnapshotId
+            ? stateSnapshotService.getById(assignment.sourceStateSnapshotId)
+            : stateSnapshotService.getForAthleteOnDate(assignment.athleteId, assignment.sourceDate),
+          getDocs(
+            query(
+              collection(db, PULSECHECK_ASSIGNMENT_EVENTS_COLLECTION),
+              where('assignmentId', '==', assignment.id)
+            )
+          ),
+          getDocs(
+            query(
+              collection(db, PULSECHECK_CONVERSATION_SIGNAL_EVENTS_COLLECTION),
+              where('sourceAssignmentId', '==', assignment.id)
+            )
+          ),
+          getDocs(
+            query(
+              collection(db, PULSECHECK_CONVERSATION_SIGNAL_EVENTS_COLLECTION),
+              where('athleteId', '==', assignment.athleteId),
+              where('sourceDate', '==', assignment.sourceDate)
+            )
+          ),
+          getDocs(
+            collection(
+              db,
+              PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION,
+              assignment.id,
+              PULSECHECK_ASSIGNMENT_REVISIONS_SUBCOLLECTION
+            )
+          ),
+        ]);
+
+        const assignmentEvents = assignmentEventsSnap.docs
+          .map((docSnap: { id: string; data: () => Record<string, any> }) => ({ id: docSnap.id, ...(docSnap.data() as Record<string, any>) } as PulseCheckAssignmentEvent))
+          .sort((left: PulseCheckAssignmentEvent, right: PulseCheckAssignmentEvent) => (right.eventAt || 0) - (left.eventAt || 0));
+
+        const conversationSignalMap = new Map<string, PulseCheckConversationDerivedSignalEvent>();
+        [...conversationSignalsByAssignmentSnap.docs, ...conversationSignalsByDateSnap.docs].forEach((docSnap) => {
+          conversationSignalMap.set(
+            docSnap.id,
+            { id: docSnap.id, ...(docSnap.data() as Record<string, any>) } as PulseCheckConversationDerivedSignalEvent
+          );
+        });
+
+        const conversationSignals = Array.from(conversationSignalMap.values())
+          .sort((left, right) => (right.eventAt || 0) - (left.eventAt || 0))
+          .slice(0, 6);
+
+        const revisions = revisionsSnap.docs
+          .map((docSnap: { id: string; data: () => Record<string, any> }) =>
+            pulseCheckDailyAssignmentFromFirestore(assignment.id, {
+              lineageId: assignment.lineageId,
+              ...docSnap.data(),
+            })
+          )
+          .sort((left, right) => (right.revision || 0) - (left.revision || 0));
+
+        const responsivenessProfile = responsivenessByAthlete.get(assignment.athleteId) || null;
+        const runtime = assignment.protocolId ? (runtimeById.get(assignment.protocolId) || null) : null;
+        const familyResponse = runtime && responsivenessProfile
+          ? (responsivenessProfile.familyResponses?.[runtime.familyId] || null)
+          : null;
+        const variantResponse = runtime && responsivenessProfile
+          ? (responsivenessProfile.variantResponses?.[runtime.variantId] || null)
+          : null;
+
+        return [assignment.id, {
+          snapshot,
+          assignmentEvents,
+          conversationSignals,
+          revisions,
+          responsivenessProfile,
+          familyResponse,
+          variantResponse,
+        }] as const;
+      }));
+
+      setDailyAssignmentReviewContext(Object.fromEntries(entries));
+    } catch (error) {
+      console.error('Failed to load Nora assignment review context:', error);
+    } finally {
+      setLoadingDailyReviewContext(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -572,6 +806,16 @@ const CoachMentalTraining: React.FC = () => {
       })
       .catch((err) => console.error('Failed to refresh coach assignments:', err));
   }, [activeTab, coachProfile?.id]);
+
+  useEffect(() => {
+    if (activeTab !== 'assignments') return;
+    if (!noraDailyAssignments.length) {
+      setDailyAssignmentReviewContext({});
+      return;
+    }
+
+    loadDailyAssignmentReviewContext(noraDailyAssignments);
+  }, [activeTab, noraDailyAssignments, loadDailyAssignmentReviewContext]);
 
   // Handle modifying a recommendation
   const handleModifyRecommendation = useCallback(async (recommendationId: string) => {
@@ -1246,13 +1490,39 @@ const CoachMentalTraining: React.FC = () => {
                   Nora has not auto-assigned any daily tasks for this coach yet.
                 </div>
               ) : (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  {loadingDailyReviewContext && (
+                    <div className="rounded-xl border border-zinc-700/50 bg-zinc-900/50 px-4 py-3 text-sm text-zinc-400">
+                      Loading signal context and runtime review details...
+                    </div>
+                  )}
                   {noraDailyAssignments.map((assignment) => {
                     const athlete = athletes.find((entry) => entry.id === assignment.athleteId);
                     const isActionable =
                       assignment.status === PulseCheckDailyAssignmentStatus.Assigned ||
                       assignment.status === PulseCheckDailyAssignmentStatus.Viewed;
                     const isBusy = actioningDailyAssignment === assignment.id;
+                    const reviewContext = dailyAssignmentReviewContext[assignment.id];
+                    const isExpanded = Boolean(expandedDailyAssignments[assignment.id]);
+                    const latestConversationSignal = reviewContext?.conversationSignals?.[0];
+                    const latestCoachTruthEvent = reviewContext?.assignmentEvents?.find((event) =>
+                      event.eventType === 'overridden' || event.eventType === 'deferred'
+                    );
+                    const previousAssignmentSummary = latestCoachTruthEvent
+                      ? readAssignmentSummaryFromEvent(latestCoachTruthEvent, 'previousAssignmentSummary')
+                      : null;
+                    const nextAssignmentSummary = latestCoachTruthEvent
+                      ? readAssignmentSummaryFromEvent(latestCoachTruthEvent, 'nextAssignmentSummary')
+                      : null;
+                    const nextExecutionTruthOwner = latestCoachTruthEvent
+                      ? readStringFromRecord(readEventMetadataRecord(latestCoachTruthEvent.metadata), 'nextExecutionTruthOwner')
+                      : null;
+                    const signalDeltaLabels = [
+                      formatSignalDeltaLabel('Activation', latestConversationSignal?.inferredDelta?.activationDelta),
+                      formatSignalDeltaLabel('Focus', latestConversationSignal?.inferredDelta?.focusReadinessDelta),
+                      formatSignalDeltaLabel('Emotional load', latestConversationSignal?.inferredDelta?.emotionalLoadDelta),
+                      formatSignalDeltaLabel('Fatigue', latestConversationSignal?.inferredDelta?.cognitiveFatigueDelta),
+                    ].filter(Boolean);
 
                     return (
                       <div
@@ -1278,6 +1548,17 @@ const CoachMentalTraining: React.FC = () => {
                           {assignment.rationale || 'Nora generated this task from the latest check-in and profile state.'}
                         </div>
 
+                        {(assignment.status === PulseCheckDailyAssignmentStatus.Overridden || assignment.status === PulseCheckDailyAssignmentStatus.Deferred) && (
+                          <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
+                            <div className="text-xs uppercase tracking-[0.22em] text-amber-200">Execution Truth</div>
+                            <div className="mt-1 text-sm text-amber-100">
+                              {nextExecutionTruthOwner === 'staff'
+                                ? 'Staff action is now the execution truth for this date.'
+                                : 'Coach action is now the execution truth for this date.'}
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex flex-wrap gap-2 text-xs">
                           <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-zinc-300">
                             {assignment.sourceDate}
@@ -1297,7 +1578,401 @@ const CoachMentalTraining: React.FC = () => {
                               Coach push sent
                             </span>
                           )}
+                          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-zinc-300">
+                            Revision {assignment.revision}
+                          </span>
+                          {latestConversationSignal && (
+                            <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-cyan-300">
+                              Chat correction recorded
+                            </span>
+                          )}
                         </div>
+
+                        <div className="flex flex-wrap items-center gap-3">
+                          <button
+                            onClick={() => setExpandedDailyAssignments((prev) => ({ ...prev, [assignment.id]: !prev[assignment.id] }))}
+                            className="px-4 py-2 rounded-xl border border-zinc-700 bg-black/20 text-sm font-medium text-zinc-200 hover:border-zinc-500 transition-colors"
+                          >
+                            {isExpanded ? 'Hide Review Context' : 'Review Signal Context'}
+                          </button>
+                          {assignment.plannerConfidence && (
+                            <span className="text-xs text-zinc-500">
+                              Planner confidence: <span className="capitalize text-zinc-300">{assignment.plannerConfidence}</span>
+                            </span>
+                          )}
+                          {assignment.decisionSource && (
+                            <span className="text-xs text-zinc-500">
+                              Decision source: <span className="uppercase tracking-[0.18em] text-zinc-300">{assignment.decisionSource}</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {isExpanded && (
+                          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 rounded-2xl border border-white/8 bg-black/20 p-4">
+                            <div className="space-y-3 xl:col-span-1">
+                              <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Current Snapshot</div>
+                              {reviewContext?.snapshot ? (
+                                <>
+                                  <div className="flex flex-wrap gap-2 text-xs">
+                                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-zinc-200 capitalize">
+                                      {reviewContext.snapshot.overallReadiness} readiness
+                                    </span>
+                                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-zinc-200 capitalize">
+                                      {reviewContext.snapshot.confidence} confidence
+                                    </span>
+                                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-zinc-200">
+                                      {humanizeRuntimeLabel(reviewContext.snapshot.recommendedRouting)}
+                                    </span>
+                                    {reviewContext.snapshot.recommendedProtocolClass && reviewContext.snapshot.recommendedProtocolClass !== 'none' && (
+                                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-zinc-200">
+                                        {humanizeRuntimeLabel(reviewContext.snapshot.recommendedProtocolClass)}
+                                      </span>
+                                    )}
+                                    {reviewContext.snapshot.supportFlag && (
+                                      <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-rose-200">
+                                        Support flag
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm leading-6 text-zinc-300">
+                                    {reviewContext.snapshot.enrichedInterpretation?.summary || 'No enriched snapshot summary saved.'}
+                                  </p>
+                                  {reviewContext.snapshot.enrichedInterpretation?.plannerNotes?.length ? (
+                                    <div className="space-y-2">
+                                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Planner Notes</div>
+                                      {reviewContext.snapshot.enrichedInterpretation.plannerNotes.slice(-3).map((note, index) => (
+                                        <div key={`${assignment.id}-planner-note-${index}`} className="rounded-xl border border-white/8 bg-white/5 px-3 py-2 text-sm text-zinc-300">
+                                          {note}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <div className="text-sm text-zinc-500">
+                                  Snapshot context is not available yet for this task.
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="space-y-3 xl:col-span-1">
+                              <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Latest Chat Correction</div>
+                              {latestConversationSignal ? (
+                                <>
+                                  <div className="flex flex-wrap gap-2 text-xs">
+                                    <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-cyan-300 capitalize">
+                                      {latestConversationSignal.confidence} confidence
+                                    </span>
+                                    {latestConversationSignal.inferredDelta?.overallReadiness && (
+                                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-zinc-200 capitalize">
+                                        {latestConversationSignal.inferredDelta.overallReadiness} posture
+                                      </span>
+                                    )}
+                                    {latestConversationSignal.inferredDelta?.recommendedRouting && (
+                                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-zinc-200">
+                                        {humanizeRuntimeLabel(latestConversationSignal.inferredDelta.recommendedRouting)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm leading-6 text-zinc-300">
+                                    {latestConversationSignal.inferredDelta?.summary || 'Structured chat correction recorded.'}
+                                  </p>
+                                  {latestConversationSignal.inferredDelta?.contradictionSummary ? (
+                                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                                      {latestConversationSignal.inferredDelta.contradictionSummary}
+                                    </div>
+                                  ) : null}
+                                  {signalDeltaLabels.length ? (
+                                    <div className="flex flex-wrap gap-2 text-xs">
+                                      {signalDeltaLabels.map((label) => (
+                                        <span key={`${assignment.id}-${label}`} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-zinc-200">
+                                          {label}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                  {latestConversationSignal.inferredDelta?.supportingEvidence?.length ? (
+                                    <div className="space-y-2">
+                                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Supporting Evidence</div>
+                                      {latestConversationSignal.inferredDelta.supportingEvidence.slice(0, 3).map((evidence, index) => (
+                                        <div key={`${assignment.id}-signal-evidence-${index}`} className="rounded-xl border border-white/8 bg-white/5 px-3 py-2 text-sm text-zinc-300">
+                                          {evidence}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                  <div className="text-xs text-zinc-500">
+                                    Recorded {formatEventTimestamp(latestConversationSignal.eventAt)}
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-sm text-zinc-500">
+                                  No chat-derived correction was recorded for this assignment yet.
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="space-y-3 xl:col-span-1">
+                              {assignment.protocolId ? (
+                                <div className="space-y-3">
+                                  <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Protocol Responsiveness</div>
+                                  {reviewContext?.responsivenessProfile ? (
+                                    <>
+                                      {reviewContext.familyResponse ? (
+                                        <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-3 space-y-3">
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <div className="text-sm font-medium text-white">
+                                              {reviewContext.familyResponse.protocolFamilyLabel || 'Protocol family'}
+                                            </div>
+                                            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize ${getResponsivenessTone(reviewContext.familyResponse.responseDirection)}`}>
+                                              {reviewContext.familyResponse.responseDirection}
+                                            </span>
+                                          </div>
+                                          <div className="flex flex-wrap gap-2 text-xs">
+                                            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-zinc-300 capitalize">
+                                              {reviewContext.familyResponse.confidence} confidence
+                                            </span>
+                                            <span className={`rounded-full border px-2.5 py-1 capitalize ${getFreshnessTone(reviewContext.familyResponse.freshness)}`}>
+                                              {reviewContext.familyResponse.freshness.replace('_', ' ')}
+                                            </span>
+                                            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-zinc-300">
+                                              {reviewContext.familyResponse.sampleSize} evidence windows
+                                            </span>
+                                          </div>
+                                          <div className="text-xs text-zinc-500">
+                                            State confidence {reviewContext.snapshot?.confidence || 'unknown'} vs responsiveness confidence {reviewContext.familyResponse.confidence}.
+                                          </div>
+                                          {reviewContext.familyResponse.supportingEvidence.length ? (
+                                            <div className="space-y-2">
+                                              {reviewContext.familyResponse.supportingEvidence.slice(0, 3).map((evidence, index) => (
+                                                <div key={`${assignment.id}-family-response-evidence-${index}`} className="rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-sm text-zinc-300">
+                                                  {evidence}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          ) : null}
+                                          {reviewContext.familyResponse.stateFit.length ? (
+                                            <div className="flex flex-wrap gap-2 text-xs">
+                                              {reviewContext.familyResponse.stateFit.slice(0, 5).map((fitTag) => (
+                                                <span key={`${assignment.id}-family-fit-${fitTag}`} className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-zinc-300">
+                                                  {humanizeRuntimeLabel(fitTag)}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      ) : (
+                                        <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-3 text-sm text-zinc-500">
+                                          The athlete does not have enough family-level protocol evidence yet.
+                                        </div>
+                                      )}
+
+                                      {reviewContext.variantResponse ? (
+                                        <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-3 space-y-2">
+                                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Runtime Variant</div>
+                                          <div className="text-sm font-medium text-white">
+                                            {reviewContext.variantResponse.variantLabel || assignment.protocolLabel || 'Published runtime'}
+                                          </div>
+                                          <div className="flex flex-wrap gap-2 text-xs">
+                                            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize ${getResponsivenessTone(reviewContext.variantResponse.responseDirection)}`}>
+                                              {reviewContext.variantResponse.responseDirection}
+                                            </span>
+                                            <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-zinc-300 capitalize">
+                                              {reviewContext.variantResponse.confidence} confidence
+                                            </span>
+                                            <span className={`rounded-full border px-2.5 py-1 capitalize ${getFreshnessTone(reviewContext.variantResponse.freshness)}`}>
+                                              {reviewContext.variantResponse.freshness.replace('_', ' ')}
+                                            </span>
+                                          </div>
+                                          {reviewContext.variantResponse.supportingEvidence[0] && (
+                                            <div className="text-sm text-zinc-400">
+                                              {reviewContext.variantResponse.supportingEvidence[0]}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ) : null}
+
+                                      <div className="text-xs text-zinc-500">
+                                        Profile refreshed {formatEventTimestamp(reviewContext.responsivenessProfile.updatedAt)}.
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="text-sm text-zinc-500">
+                                      No athlete-level protocol responsiveness profile has been built yet.
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+
+                              <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Assignment Lifecycle</div>
+                              <div className="rounded-xl border border-white/8 bg-white/5 px-3 py-3">
+                                <div className="text-sm font-medium text-white">
+                                  {assignment.plannerSummary || assignment.rationale || 'Planner rationale unavailable.'}
+                                </div>
+                                <div className="mt-2 text-xs text-zinc-500">
+                                  Updated {formatEventTimestamp(assignment.updatedAt)}
+                                </div>
+                              </div>
+                              {assignment.plannerAudit?.rankedCandidates?.length ? (
+                                <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-3 space-y-3">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Planner Audit</div>
+                                    {assignment.plannerAudit.responsivenessApplied && (
+                                      <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-300">
+                                        Responsiveness applied
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-zinc-500">
+                                    Generated {formatEventTimestamp(assignment.plannerAudit.generatedAt)} with {assignment.plannerAudit.stateConfidence} state confidence.
+                                  </div>
+                                  <div className="space-y-2">
+                                    {assignment.plannerAudit.rankedCandidates.slice(0, 4).map((candidate) => (
+                                      <div key={`${assignment.id}-planner-audit-${candidate.candidateId}`} className="rounded-xl border border-white/8 bg-white/5 px-3 py-3">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <div className="text-sm font-medium text-white">{candidate.label}</div>
+                                          {candidate.selected && (
+                                            <span className="rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-2.5 py-1 text-[11px] font-semibold text-[#E0FE10]">
+                                              Selected
+                                            </span>
+                                          )}
+                                          {candidate.responsivenessDirection && (
+                                            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold capitalize ${getResponsivenessTone(candidate.responsivenessDirection)}`}>
+                                              {candidate.responsivenessDirection}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="mt-2 text-sm text-zinc-300">
+                                          {candidate.rationale}
+                                        </div>
+                                        {(candidate.responsivenessConfidence || candidate.responsivenessFreshness) && (
+                                          <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                                            {candidate.responsivenessConfidence && (
+                                              <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-zinc-300 capitalize">
+                                                {candidate.responsivenessConfidence} confidence
+                                              </span>
+                                            )}
+                                            {candidate.responsivenessFreshness && (
+                                              <span className={`rounded-full border px-2.5 py-1 capitalize ${getFreshnessTone(candidate.responsivenessFreshness)}`}>
+                                                {candidate.responsivenessFreshness.replace('_', ' ')}
+                                              </span>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                              {reviewContext?.revisions?.length ? (
+                                <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-3 space-y-3">
+                                  <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Revision History</div>
+                                  {reviewContext.revisions.slice(0, 4).map((revision) => (
+                                    <div key={`${assignment.id}-revision-${revision.revision}`} className="rounded-xl border border-white/8 bg-white/5 px-3 py-3">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <div className="text-sm font-medium text-white">
+                                          Revision {revision.revision}
+                                        </div>
+                                        <div className="text-xs text-zinc-500">
+                                          {formatEventTimestamp(revision.supersededAt || revision.updatedAt)}
+                                        </div>
+                                      </div>
+                                      <div className="mt-1 text-sm text-zinc-300">
+                                        {getDailyAssignmentActionLabel(revision)}
+                                      </div>
+                                      <div className="mt-1 text-xs text-zinc-500 capitalize">
+                                        {revision.status}
+                                        {typeof revision.supersededByRevision === 'number' ? ` -> superseded by r${revision.supersededByRevision}` : ''}
+                                      </div>
+                                      {revision.rationale && (
+                                        <div className="mt-2 text-sm text-zinc-400">
+                                          {revision.rationale}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {latestCoachTruthEvent && (
+                                <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 space-y-3">
+                                  <div className="text-xs uppercase tracking-[0.18em] text-amber-200">Coach Truth Diff</div>
+                                  <div className="grid grid-cols-1 gap-3">
+                                    <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-3">
+                                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Before</div>
+                                      <div className="mt-2 text-sm font-medium text-white">
+                                        {readStringFromRecord(previousAssignmentSummary, 'actionLabel') || 'Nora task'}
+                                      </div>
+                                      <div className="mt-1 text-sm text-zinc-400 capitalize">
+                                        {readStringFromRecord(previousAssignmentSummary, 'status') || 'unknown status'}
+                                      </div>
+                                      {readStringFromRecord(previousAssignmentSummary, 'rationale') && (
+                                        <div className="mt-2 text-sm text-zinc-400">
+                                          {readStringFromRecord(previousAssignmentSummary, 'rationale')}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3">
+                                      <div className="text-xs uppercase tracking-[0.18em] text-amber-200">After</div>
+                                      <div className="mt-2 text-sm font-medium text-white">
+                                        {readStringFromRecord(nextAssignmentSummary, 'actionLabel') || 'Nora task'}
+                                      </div>
+                                      <div className="mt-1 text-sm text-amber-100 capitalize">
+                                        {readStringFromRecord(nextAssignmentSummary, 'status') || 'unknown status'}
+                                      </div>
+                                      <div className="mt-2 text-sm text-amber-100">
+                                        {nextExecutionTruthOwner === 'staff'
+                                          ? 'Staff action now owns execution truth for this date.'
+                                          : 'Coach action now owns execution truth for this date.'}
+                                      </div>
+                                      {readStringFromRecord(nextAssignmentSummary, 'rationale') && (
+                                        <div className="mt-2 text-sm text-amber-50/90">
+                                          {readStringFromRecord(nextAssignmentSummary, 'rationale')}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="text-xs text-amber-100/80">
+                                    {getAssignmentEventLabel(latestCoachTruthEvent.eventType)} at {formatEventTimestamp(latestCoachTruthEvent.eventAt)}
+                                  </div>
+                                </div>
+                              )}
+                              {reviewContext?.assignmentEvents?.length ? (
+                                <div className="space-y-2">
+                                  {reviewContext.assignmentEvents.slice(0, 5).map((event) => {
+                                    const reason =
+                                      typeof event.metadata?.reason === 'string' && event.metadata.reason.trim()
+                                        ? event.metadata.reason.trim()
+                                        : null;
+                                    return (
+                                      <div key={event.id} className="rounded-xl border border-white/8 bg-black/20 px-3 py-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getAssignmentEventTone(event.eventType)}`}>
+                                            {getAssignmentEventLabel(event.eventType)}
+                                          </span>
+                                          <span className="text-xs text-zinc-500">
+                                            {formatEventTimestamp(event.eventAt)}
+                                          </span>
+                                        </div>
+                                        <div className="mt-2 text-sm text-zinc-300 capitalize">
+                                          Actor: {humanizeRuntimeLabel(event.actorType || 'system')}
+                                        </div>
+                                        {reason && (
+                                          <div className="mt-2 text-sm text-zinc-400">
+                                            {reason}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div className="text-sm text-zinc-500">
+                                  No lifecycle events have been recorded yet.
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                         {isActionable ? (
                           <div className="flex flex-wrap gap-3">

@@ -24,7 +24,6 @@ import {
   ExerciseCompletion,
   MentalTrainingStreak,
   MentalCheckIn,
-  CheckInType,
   ExerciseCategory,
   Achievement,
   SessionProgramUpdateSummary,
@@ -33,7 +32,6 @@ import {
   streakFromFirestore,
   streakToFirestore,
   checkInFromFirestore,
-  checkInToFirestore,
   sanitizeFirestoreValue,
 } from './types';
 import {
@@ -44,7 +42,6 @@ import {
 import { assignmentService } from './assignmentService';
 import { athleteProgressService } from './athleteProgressService';
 import { assignmentOrchestratorService } from './assignmentOrchestratorService';
-import { buildTaxonomyCheckInState } from './taxonomyProfileService';
 import type { ProgramPrescription } from './taxonomy';
 
 const COMPLETIONS_ROOT = SIM_COMPLETIONS_ROOT;
@@ -525,68 +522,6 @@ export const completionService = {
   // =========================================================================
   // CHECK-INS
   // =========================================================================
-
-  /**
-   * Record a mental check-in
-   */
-  async recordCheckIn({
-    userId,
-    type,
-    readinessScore,
-    moodWord,
-    energyLevel,
-    stressLevel,
-    sleepQuality,
-    notes,
-    taxonomyState,
-  }: {
-    userId: string;
-    type: CheckInType;
-    readinessScore: number;
-    moodWord?: string;
-    energyLevel?: number;
-    stressLevel?: number;
-    sleepQuality?: number;
-    notes?: string;
-    taxonomyState?: MentalCheckIn['taxonomyState'];
-  }): Promise<string> {
-    const now = Date.now();
-    const today = new Date().toISOString().split('T')[0];
-    const priorProfile = await athleteProgressService.get(userId);
-
-    const checkIn: Omit<MentalCheckIn, 'id'> = {
-      userId,
-      type,
-      readinessScore,
-      moodWord,
-      energyLevel,
-      stressLevel,
-      sleepQuality,
-      notes,
-      taxonomyState: taxonomyState ?? buildTaxonomyCheckInState({
-        readinessScore,
-        energyLevel,
-        stressLevel,
-        sleepQuality,
-        moodWord,
-        priorProfile: priorProfile?.taxonomyProfile,
-      }),
-      createdAt: now,
-      date: today,
-    };
-
-    const checkInsRef = collection(db, CHECKINS_ROOT, userId, 'check-ins');
-    const docRef = await addDoc(checkInsRef, checkInToFirestore(checkIn as MentalCheckIn));
-
-    await athleteProgressService.syncTaxonomyProfile(userId);
-    await assignmentOrchestratorService.orchestratePostCheckIn({
-      athleteId: userId,
-      sourceCheckInId: docRef.id,
-      sourceDate: checkIn.date,
-    });
-
-    return docRef.id;
-  },
 
   /**
    * Get check-ins for a user

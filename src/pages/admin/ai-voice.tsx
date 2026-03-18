@@ -266,7 +266,8 @@ interface VPCueDef {
   cueKey: string;
   label: string;
   description: string;
-  stageTag: 'lockIn' | 'disruption' | 'recovery' | 'tap' | 'transition';
+  stageTag: 'lockIn' | 'disruption' | 'recovery' | 'tap' | 'transition' | 'briefing' | 'countdown';
+  generationMode: 'sfx' | 'speech';
   prompt: string;
   durationSeconds: number;
 }
@@ -277,6 +278,7 @@ const VP_RESET_CUES: VPCueDef[] = [
     label: 'Lock-In Drone',
     description: 'Ambient void hum during the pre-tap orb focus phase.',
     stageTag: 'lockIn',
+    generationMode: 'sfx',
     prompt: 'Deep low-frequency meditation drone, subtle electronic void atmosphere, immersive spatial ambient hum, no music, no speech',
     durationSeconds: 5,
   },
@@ -285,6 +287,7 @@ const VP_RESET_CUES: VPCueDef[] = [
     label: 'Disruption Slam',
     description: 'Visceral pressure slam on disruption stage entry.',
     stageTag: 'disruption',
+    generationMode: 'sfx',
     prompt: 'Sudden intense stadium crowd surge, sharp disruptive slam, competitive sports pressure sound, short and visceral, no music, no speech',
     durationSeconds: 3,
   },
@@ -293,6 +296,7 @@ const VP_RESET_CUES: VPCueDef[] = [
     label: 'Recovery Ping',
     description: 'Urgent alert ping when the recovery window opens.',
     stageTag: 'recovery',
+    generationMode: 'sfx',
     prompt: 'Clear urgent recovery signal ping, bright electronic alert tone, sports performance cue, crisp and attention-grabbing',
     durationSeconds: 2,
   },
@@ -301,6 +305,7 @@ const VP_RESET_CUES: VPCueDef[] = [
     label: 'Tap Confirm',
     description: 'Soft satisfying chime confirming the orb tap.',
     stageTag: 'tap',
+    generationMode: 'sfx',
     prompt: 'Soft satisfying confirmation chime, brief tonal response, clean completion sound effect',
     durationSeconds: 1,
   },
@@ -309,8 +314,63 @@ const VP_RESET_CUES: VPCueDef[] = [
     label: 'Block Settle',
     description: 'Quiet grounding tone between reps.',
     stageTag: 'transition',
+    generationMode: 'sfx',
     prompt: 'Quiet settling tone, brief calm resolution, between-rep pause, subtle and grounding',
     durationSeconds: 2,
+  },
+  {
+    cueKey: 'noraResetPreBriefIntro',
+    label: 'Nora Intro Brief',
+    description: 'Spoken explanation of the Reset chamber before measurement begins.',
+    stageTag: 'briefing',
+    generationMode: 'speech',
+    prompt: "We're about to run Reset. First, hold your focus on the orb. When pressure appears, stay calm. Only pinch when the orb turns green. Early pinches count as false starts. Keep your eyes steady, recover quickly, and let the chamber measure how well you reset for the next play.",
+    durationSeconds: 18,
+  },
+  {
+    cueKey: 'noraResetReadyPrompt',
+    label: 'Nora Ready Prompt',
+    description: 'Spoken readiness prompt before the spoken countdown.',
+    stageTag: 'briefing',
+    generationMode: 'speech',
+    prompt: 'Are you ready to begin? Say yes when you are ready.',
+    durationSeconds: 4,
+  },
+  {
+    cueKey: 'noraResetCountdown3',
+    label: 'Countdown 3',
+    description: 'Spoken countdown cue: 3.',
+    stageTag: 'countdown',
+    generationMode: 'speech',
+    prompt: 'Three.',
+    durationSeconds: 1,
+  },
+  {
+    cueKey: 'noraResetCountdown2',
+    label: 'Countdown 2',
+    description: 'Spoken countdown cue: 2.',
+    stageTag: 'countdown',
+    generationMode: 'speech',
+    prompt: 'Two.',
+    durationSeconds: 1,
+  },
+  {
+    cueKey: 'noraResetCountdown1',
+    label: 'Countdown 1',
+    description: 'Spoken countdown cue: 1.',
+    stageTag: 'countdown',
+    generationMode: 'speech',
+    prompt: 'One.',
+    durationSeconds: 1,
+  },
+  {
+    cueKey: 'noraResetCountdownBegin',
+    label: 'Countdown Begin',
+    description: 'Spoken start cue that hands off into measurement.',
+    stageTag: 'countdown',
+    generationMode: 'speech',
+    prompt: 'Begin.',
+    durationSeconds: 1,
   },
 ];
 
@@ -320,6 +380,8 @@ const VP_STAGE_PALETTE: Record<VPCueDef['stageTag'], { label: string; color: str
   recovery:   { label: 'Recovery',    color: '#30D158', dimColor: 'rgba(48,209,88,0.15)'  },
   tap:        { label: 'Tap',         color: '#00D4AA', dimColor: 'rgba(0,212,170,0.12)'  },
   transition: { label: 'Transition',  color: '#8E8E93', dimColor: 'rgba(142,142,147,0.12)'},
+  briefing:   { label: 'Pre-Brief',   color: '#8B5CF6', dimColor: 'rgba(139,92,246,0.15)' },
+  countdown:  { label: 'Countdown',   color: '#FFD60A', dimColor: 'rgba(255,214,10,0.15)' },
 };
 
 function vpSlugify(value: string) {
@@ -489,7 +551,9 @@ const VPSoundCard: React.FC<{
             )}
           </div>
           <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">{cue.description}</p>
-          <code className="text-[10px] text-zinc-600 font-mono mt-1 block">{cue.durationSeconds}s · ElevenLabs SFX · {cue.cueKey}</code>
+          <code className="text-[10px] text-zinc-600 font-mono mt-1 block">
+            {cue.durationSeconds}s · {cue.generationMode === 'speech' ? 'ElevenLabs / Nora voice cue' : 'ElevenLabs SFX'} · {cue.cueKey}
+          </code>
         </div>
 
         {/* Actions */}
@@ -609,7 +673,7 @@ const AdminAiVoice: React.FC = () => {
     return groups;
   }, []);
 
-  // ── VP load: read Firestore for all 5 cue docs
+  // ── VP load: read Firestore for all Reset cue docs
   const loadVPAssets = async () => {
     setVPLoading(true);
     setVPLoadError(null);
@@ -630,33 +694,91 @@ const AdminAiVoice: React.FC = () => {
     }
   };
 
-  // ── VP generate: call ElevenLabs SFX API → Firebase Storage → Firestore
+  const getNetlifyFunctionsBase = () => {
+    if (typeof window === 'undefined') return '/.netlify/functions';
+    const isLocalhost =
+      window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    return isLocalhost ? 'http://localhost:8888/.netlify/functions' : '/.netlify/functions';
+  };
+
+  const generateVPSpeech = async (cue: VPCueDef) => {
+    const elevenLabsVoiceId =
+      provider === 'elevenlabs' && ELEVENLABS_VOICES.some((voice) => voice.id === selectedVoiceId)
+        ? selectedVoiceId
+        : ELEVENLABS_VOICES[0]?.id;
+
+    if (!elevenLabsVoiceId) {
+      throw new Error('No ElevenLabs Nora voice is configured for spoken Reset cues.');
+    }
+
+    const settings = shouldUseElevenLabsVoiceDefaults(selectedPresetId) ? null : elevenLabsSettings;
+    const response = await fetch(`${getNetlifyFunctionsBase()}/tts-mental-step`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: cue.prompt,
+        provider: 'elevenlabs',
+        voice: elevenLabsVoiceId,
+        format: 'mp3',
+        presetId: selectedPresetId || null,
+        settings,
+        punctuationPauses,
+      }),
+    });
+
+    if (!response.ok) {
+      let message = `Voice generation failed: ${response.status}`;
+      try {
+        const payload = await response.json();
+        message = payload?.error || message;
+      } catch {}
+      throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    return {
+      blob,
+      providerId: 'elevenlabs' as const,
+      contentType: blob.type || 'audio/mpeg',
+    };
+  };
+
+  // ── VP generate: call SFX or Nora TTS → Firebase Storage → Firestore
   const generateVPSound = async (cue: VPCueDef) => {
     setVPGenerating((prev) => ({ ...prev, [cue.cueKey]: true }));
     setVPGenErrors((prev) => { const n = { ...prev }; delete n[cue.cueKey]; return n; });
     try {
-      // 1. Generate via ElevenLabs
-      const res = await fetch('/api/mentaltraining/generate-sfx', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: cue.prompt, durationSeconds: cue.durationSeconds }),
-      });
-      const payload = await res.json();
-      if (!res.ok || !payload?.audio) {
-        throw new Error(payload?.error || 'Sound generation failed');
-      }
+      let blob: Blob;
+      let providerId: SimAudioAssetRef['provider'] = 'elevenlabs';
+      let contentType = 'audio/mpeg';
 
-      // 2. base64 → Blob
-      const binary = window.atob(payload.audio as string);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-      const blob = new Blob([bytes], { type: 'audio/mpeg' });
+      if (cue.generationMode === 'speech') {
+        const speech = await generateVPSpeech(cue);
+        blob = speech.blob;
+        providerId = speech.providerId;
+        contentType = speech.contentType;
+      } else {
+        const res = await fetch('/api/mentaltraining/generate-sfx', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: cue.prompt, durationSeconds: cue.durationSeconds }),
+        });
+        const payload = await res.json();
+        if (!res.ok || !payload?.audio) {
+          throw new Error(payload?.error || 'Sound generation failed');
+        }
+
+        const binary = window.atob(payload.audio as string);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        blob = new Blob([bytes], { type: 'audio/mpeg' });
+      }
 
       // 3. Upload to Firebase Storage
       const assetId = buildVPDocId(cue);
       const path = `sim-audio-assets/${vpSlugify(VP_ENGINE_KEY)}/${cue.cueKey}/${assetId}.mp3`;
       const sRef = storageRef(storage, path);
-      const snapshot = await uploadBytes(sRef, blob, { contentType: 'audio/mpeg' });
+      const snapshot = await uploadBytes(sRef, blob, { contentType });
       const downloadURL = await getDownloadURL(snapshot.ref);
       const gsUrl = `gs://${snapshot.ref.bucket}/${snapshot.ref.fullPath}`;
 
@@ -667,9 +789,9 @@ const AdminAiVoice: React.FC = () => {
         cueKey: cue.cueKey,
         label: cue.label,
         prompt: cue.prompt,
-        provider: 'elevenlabs',
+        provider: providerId,
         format: 'mp3',
-        contentType: 'audio/mpeg',
+        contentType,
         storagePath: path,
         gsUrl,
         downloadURL,
@@ -680,7 +802,9 @@ const AdminAiVoice: React.FC = () => {
         ...assetRecord,
         family: 'vision-pro-reset',
         engineKey: VP_ENGINE_KEY,
-        archetype: 'audio_channel',
+        archetype: cue.generationMode === 'speech' ? 'voice_channel' : 'audio_channel',
+        stageTag: cue.stageTag,
+        generationMode: cue.generationMode,
       });
 
       setVPAssets((prev) => ({ ...prev, [cue.cueKey]: assetRecord }));
@@ -1135,7 +1259,7 @@ const AdminAiVoice: React.FC = () => {
                     </span>
                   </div>
                   <div className="text-xs text-zinc-500 mt-0.5">
-                    Spatial sound effects for the immersive Reset / Next Play trial. Generated via ElevenLabs and stored in Firebase — not bundled as static files.
+                    Immersive Reset audio library for both spatial chamber SFX and Nora's spoken pre-brief cues. Stored in Firebase and streamed by the headset at runtime.
                   </div>
                 </div>
               </div>
@@ -1168,8 +1292,8 @@ const AdminAiVoice: React.FC = () => {
               <Info className="w-4 h-4 text-zinc-500 mt-0.5 flex-shrink-0" />
               <div>
                 Generated audio is stored at <code className="font-mono text-zinc-300">sim-audio-assets/vision-pro-reset/</code> in Firebase Storage.
-                The visionOS app reads <code className="font-mono text-zinc-300">downloadURL</code> at session start to preload spatial audio.
-                Click <strong className="text-zinc-200">Generate</strong> to create a cue for the first time, or <strong className="text-zinc-200">Regen</strong> to replace an existing one.
+                The visionOS app reads <code className="font-mono text-zinc-300">downloadURL</code> at session start to preload chamber SFX and Nora's spoken pre-brief.
+                Spoken cues are generated with <strong className="text-zinc-200">ElevenLabs</strong> right here beside the chamber sound cues, using the Nora voice controls from the section above when available. Click <strong className="text-zinc-200">Generate</strong> to create a cue for the first time, or <strong className="text-zinc-200">Regen</strong> to replace an existing one.
               </div>
             </div>
 

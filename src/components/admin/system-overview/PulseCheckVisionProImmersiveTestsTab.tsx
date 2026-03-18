@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { ClipboardList, Gauge, Layers3, MapPinned, ScanSearch, ShieldCheck, TestTube2, Trophy, Waypoints, Wrench } from 'lucide-react';
-import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
+import { ClipboardList, FlaskConical, Gauge, Layers3, MapPinned, ScanSearch, ShieldCheck, TestTube2, Trophy, Waypoints, Wrench } from 'lucide-react';
+import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail, TemporaryPlanningPanel } from './PulseCheckRuntimeDocPrimitives';
 
 type VisionProDocId =
   | 'immersive-trial-spec'
@@ -8,6 +8,8 @@ type VisionProDocId =
   | 'event-script-metric-mapping'
   | 'pilot-protocol'
   | 'pilot-ops-runbook'
+  | 'operator-companion-spec'
+  | 'operator-companion-implementation-plan'
   | 'vision-ui-design-language'
   | 'visionos-test-lane'
   | 'realitykit-implementation-guide'
@@ -23,6 +25,7 @@ interface VisionProArtifactDoc {
   keyLocks: string[];
   outOfScope: string[];
   buildImplications: string[];
+  temporaryPlanning?: boolean;
 }
 
 const VISION_PRO_DOCS: VisionProArtifactDoc[] = [
@@ -152,6 +155,59 @@ const VISION_PRO_DOCS: VisionProArtifactDoc[] = [
       'The session model needs explicit support for calibration, pause, abort, and data-verification outcomes.',
       'Coach and research routing should be traceable back to one reconciled session record.',
     ],
+  },
+  {
+    id: 'operator-companion-spec',
+    label: 'Operator Companion Spec',
+    sourceFile: 'Vision Pro Football Operator Companion Spec V1.pdf',
+    authority: 'Staff-led demo and live session orchestration for Vision Pro: phone/web operator surfaces, allowed remote controls, novice-athlete handoff flow, and the rule that the companion supports the trial without replacing the immersive task surface.',
+    roleSummary:
+      'Defines how a staff member should run Vision Pro with first-time headset users. This artifact turns the current queue + QR/pairing + kiosk claim flow into a coherent operator model: queue on web, handoff on phone, claim on headset, monitor from phone, and use only a small set of remote interventions that protect comfort, clarity, and measurement trust.',
+    keyLocks: [
+      'Vision Pro demos should be staff-led for first-time users; the operator companion exists to reduce athlete confusion, not to create a second gameplay surface.',
+      'The athlete should only need to do three things: get queued, put on the headset, and follow the in-headset task.',
+      'The operator companion may control session orchestration actions like start, pause, abort, redo, and submit status, but it must not become a shadow gameplay UI.',
+      'The phone companion should reflect the same canonical session state as the kiosk/runtime, not invent parallel local state.',
+      'Every remote control must improve comfort, task clarity, or session integrity. If a control does not help the room run better, it should not exist.',
+    ],
+    outOfScope: [
+      'Letting athletes self-direct the whole headset flow from the phone',
+      'Mirroring the measured task surface onto the phone as a second game UI',
+      'Creating a complex coach dashboard before the operator basics exist',
+      'Adding remote controls that bypass validity gates or comfort checks',
+    ],
+    buildImplications: [
+      'The current queue, mint-launch-token, claim, start, abandon, and complete service hooks should be treated as the companion foundation rather than replaced.',
+      'The first companion should be narrow: session status, ready/start, pause/abort, redo, and submit/reconciliation visibility.',
+      'The operator experience should be documented in the same handbook layer as kiosk, pilot ops, and immersive runtime behavior so demo flow stays spec-driven.',
+    ],
+  },
+  {
+    id: 'operator-companion-implementation-plan',
+    label: 'Operator Companion Implementation Plan',
+    sourceFile: 'Vision Pro - Immersive Tests chapter',
+    authority: 'Temporary execution-layer plan for converting the operator companion spec into a buildable V1 without prematurely pretending the plan is a stable architecture artifact.',
+    roleSummary:
+      'Turns the Operator Companion Spec into a temporary implementation-planning artifact. This plan exists to coordinate build order, dependencies, state contracts, and verification while the operator surface is still being shaped. It should be cleaned up, deleted, or promoted into a formal design artifact once the V1 control loop is stable.',
+    keyLocks: [
+      'This plan is temporary and execution-facing. It is not the canonical long-term product architecture.',
+      'The companion must still stay narrow: session status, start, pause, abort, redo, and submit/reconciliation visibility.',
+      'The operator surface must mirror canonical session state instead of inventing a parallel client state machine.',
+      'The plan should sequence work so control semantics and backend truth are correct before UI polish or nice-to-have room aids.',
+      'Promotion into a formal design doc should only happen once the control contract survives real-device testing and room execution.',
+    ],
+    outOfScope: [
+      'Turning planning notes into permanent system doctrine before implementation proves them out',
+      'Expanding the companion into a full coach dashboard',
+      'Moving gameplay or measured interaction to the phone',
+      'Speculating about advanced operator workflows before the V1 state/control loop is stable',
+    ],
+    buildImplications: [
+      'The admin overview should explicitly allow temporary implementation-planning artifacts when a build sequence needs to be locked before a formal architecture artifact exists.',
+      'The operator companion needs a concrete workstream/task list anchored to the live Vision Pro lifecycle hooks and canonical states.',
+      'The promotion rule should stay visible so the team knows when to delete or formalize this plan.',
+    ],
+    temporaryPlanning: true,
   },
   {
     id: 'vision-ui-design-language',
@@ -294,10 +350,28 @@ const STACK_ROWS = [
   ['3', 'Event Script + Metric Mapping', 'How runtime events, condition tags, validity flags, and family-metric mapping should work.'],
   ['4', 'Pilot Protocol', 'How the first football pilot should run operationally, including baseline rules and session validity.'],
   ['5', 'Pilot Ops Runbook', 'What staff actually do in the room before, during, and after a live session.'],
-  ['6', 'Vision UI Design Language', 'How chromatic-glass UI, authority levels, and HUD restraint should work around the immersive trial package.'],
-  ['7', 'RealityKit Implementation Guide', 'How to close the gap between the specs and the current runtime by building the actual immersive football content in RealityKit.'],
-  ['8', 'Noise Gate Design Brief', 'The design-first north star for Crowd Tunnel: visual direction, task clarity, and the environmental rules that make it feel stunning.'],
-  ['9', 'Noise Gate Milestone 1 Plan', 'The executable build contract for one complete, beautiful, playable Crowd Tunnel loop with score and closeout.'],
+  ['6', 'Operator Companion Spec', 'How a staff member should orchestrate queueing, headset handoff, live control, and post-session closeout for first-time Vision Pro users.'],
+  ['6a', 'Operator Companion Implementation Plan (Temporary)', 'Short-lived execution plan for building the operator companion V1 before the control contract is mature enough for a permanent design artifact.'],
+  ['7', 'Vision UI Design Language', 'How chromatic-glass UI, authority levels, and HUD restraint should work around the immersive trial package.'],
+  ['8', 'RealityKit Implementation Guide', 'How to close the gap between the specs and the current runtime by building the actual immersive football content in RealityKit.'],
+  ['9', 'Noise Gate Design Brief', 'The design-first north star for Crowd Tunnel: visual direction, task clarity, and the environmental rules that make it feel stunning.'],
+  ['10', 'Noise Gate Milestone 1 Plan', 'The executable build contract for one complete, beautiful, playable Crowd Tunnel loop with score and closeout.'],
+];
+
+const TEMPORARY_IMPLEMENTATION_PATTERN_ROWS = [
+  ['When to use', 'Use a temporary planning artifact when the team needs a visible execution contract before the stable architecture is fully known.'],
+  ['What it may contain', 'Workstreams, task order, dependencies, open questions, and promotion/delete criteria.'],
+  ['What it must not become', 'A second permanent source of truth that drifts from the real spec or outlives the implementation uncertainty it was created to manage.'],
+  ['Exit rule', 'Delete it after the work is absorbed into stable docs, or promote it into a formal design/system artifact once the contract is proven.'],
+];
+
+const ACTIVE_TEMPORARY_PLANNING_ROWS = [
+  [
+    'Operator Companion Implementation Plan',
+    'Vision Pro - Immersive Tests',
+    'V1 execution plan for the operator phone surface: canonical session states, state-gated controls, control semantics, reconciliation visibility, and real-device validation sequence.',
+    'Temporary until the control contract is proven on real devices and either promoted into a formal design doc or deleted after absorption into stable specs.',
+  ],
 ];
 
 const CURRENT_ALIGNMENT_ROWS = [
@@ -363,6 +437,98 @@ const VISIONOS_MANUAL_ROWS = [
   ['Runtime progression', 'Walk through Reset / Next Play, controlled break, Signal Window, and closeout in order without improvising around missing state.'],
   ['Pause / abort', 'Trigger a pause and an abort path and confirm the runtime, session outcome, and operator copy all stay coherent.'],
   ['Post-session data check', 'Verify the session record includes version trail, baseline references, transfer-gap summary, immersive baseline mode, and event-log linkage.'],
+];
+
+const OPERATOR_COMPANION_FLOW_ROWS = [
+  ['1', 'Coach / staff queue the session', 'Web or staff tooling queues the Vision Pro session before the athlete puts on the headset.'],
+  ['2', 'Athlete receives handoff token', 'The phone app shows the QR code and 6-digit pairing code, but the athlete is not asked to manage the headset flow alone.'],
+  ['3', 'Operator claims on kiosk', 'Staff scans or enters the code on the Vision Pro kiosk and confirms the correct athlete/session before headset handoff.'],
+  ['4', 'Operator starts and monitors', 'Phone companion shows ready / claimed / running state and exposes only the room-safe actions needed during the session.'],
+  ['5', 'Operator closes out', 'After the run, the companion confirms submit status, redo path, and any reconciliation or follow-up notes.'],
+];
+
+const OPERATOR_COMPANION_SURFACE_ROWS = [
+  ['Coach web', 'Queue session', 'Choose athlete + family + variant and create the canonical Vision Pro session record.'],
+  ['Athlete phone', 'Handoff token', 'Display QR + code and simple “what happens next” guidance.'],
+  ['Operator phone companion', 'Live orchestration', 'Reflect live session state and expose start, pause, abort, redo, and submit status.'],
+  ['Vision Pro kiosk', 'Claim + fail-safe', 'Pair, claim, recover from dismissal, and provide panel fallback if immersion fails.'],
+  ['Immersive runtime', 'Measured trial surface', 'Own the task itself; never move gameplay interaction to the phone.'],
+  ['Admin / reporting', 'Reconciliation + review', 'Store notes, closeout status, and post-session review artifacts after the demo.'],
+];
+
+const OPERATOR_COMPANION_CONTROL_ROWS = [
+  ['Allow', 'Start session', 'Useful when the athlete is wearing the headset and the operator wants to control room timing cleanly.'],
+  ['Allow', 'Pause / abort', 'Needed for comfort, confusion, or room interruption without relying on the athlete to navigate controls.'],
+  ['Allow', 'Redo test', 'Supports demo resets and validity-safe reruns after a failed or confusing first attempt.'],
+  ['Allow', 'Submit / sync status', 'Lets staff verify that results actually wrote and know whether follow-up is needed.'],
+  ['Do not allow', 'Remote gameplay input', 'The operator companion must not act as a second controller for the measured task.'],
+  ['Do not allow', 'Bypass calibration / validity gates', 'Operator convenience cannot override session integrity.'],
+];
+
+const OPERATOR_COMPANION_STATE_ROWS = [
+  ['Queued', 'Session exists but no token has been claimed yet', 'Operator can verify athlete, device readiness, and handoff.'],
+  ['Ready to claim', 'QR / pairing code minted', 'Operator is waiting to claim on kiosk.'],
+  ['Claimed', 'Headset has the session', 'Operator can verify the right athlete/session before starting.'],
+  ['Running', 'Immersive trial active', 'Companion shows elapsed state and supports pause / abort only.'],
+  ['Completed', 'Run ended and summary is available', 'Operator can review redo vs. submit and confirm sync result.'],
+  ['Needs reconciliation', 'Submission or metadata issue', 'Operator is directed into follow-up rather than silently losing the session.'],
+];
+
+const OPERATOR_COMPANION_V1_ROWS = [
+  ['V1 must have', 'Session status, start, pause, abort, redo, submit status', 'These are the smallest controls that materially improve demos with first-time users.'],
+  ['V1 nice-to-have', 'Headset battery / comfort checklist / quick notes', 'Helpful, but only after the core control loop is stable.'],
+  ['V1 must not become', 'A mirrored gameplay console', 'The companion should orchestrate the room, not replace immersion.'],
+];
+
+const OPERATOR_COMPANION_PLAN_WORKSTREAM_ROWS = [
+  ['Canonical session contract', 'Lock `queued -> ready_to_claim -> claimed -> running -> completed -> needs_reconciliation` and the allowed transitions.', 'The operator surface cannot be correct if the state model is fuzzy.'],
+  ['Operator iPhone surface', 'Build a narrow operator screen with athlete/session identity, live state, and state-driven controls.', 'This is the actual room tool the spec is asking for.'],
+  ['Control semantics', 'Wire `start`, `pause`, `abort`, and `redo` to the real session lifecycle instead of local-only UI state.', 'Remote actions need backend/runtime truth, not button theater.'],
+  ['Submit + reconciliation visibility', 'Show whether completion synced, failed, or needs follow-up and route the operator accordingly.', 'Silent session loss is worse than no companion.'],
+  ['Copy + room posture', 'Write operator-facing state copy that matches the staff-led demo rule and avoids turning the phone into a second gameplay UI.', 'The companion is an orchestration surface, not an interpretation surface.'],
+  ['Verification', 'Run happy path, pause, abort, redo, and sync-failure checks against kiosk/runtime/phone together.', 'The contract is cross-surface, so verification has to be cross-surface too.'],
+];
+
+const OPERATOR_COMPANION_PLAN_SEQUENCE = [
+  {
+    title: 'Lock the canonical session state contract',
+    body: 'Treat the state machine as the first deliverable. Name the states, name the transitions, and decide which actions are legal in each state before building more UI.',
+    owner: 'Product + Engineering',
+  },
+  {
+    title: 'Build the narrow operator surface shell',
+    body: 'Add the iPhone operator screen with identity, state banner, and disabled placeholders for the real controls. This proves the information architecture without inventing behavior.',
+    owner: 'iOS',
+  },
+  {
+    title: 'Wire start / pause / abort / redo to real lifecycle hooks',
+    body: 'Move each control from UI placeholder to real backend/runtime action one by one, keeping the control set narrow and state-gated.',
+    owner: 'iOS + visionOS + services',
+  },
+  {
+    title: 'Add submit status and reconciliation handling',
+    body: 'Completed sessions need visible sync state and a clear operator next step when something is missing or failed.',
+    owner: 'iOS + reporting',
+  },
+  {
+    title: 'Verify the room loop on device',
+    body: 'Run first-time-user demo flows with the actual headset and operator phone before promoting anything into a permanent system artifact.',
+    owner: 'Product + Ops + Engineering',
+  },
+];
+
+const OPERATOR_COMPANION_PLAN_DEPENDENCY_ROWS = [
+  ['Existing foundation', 'Queue -> mint launch token -> claim -> start / abandon / complete hooks', 'The plan should build on the existing lifecycle rather than replacing it.'],
+  ['Runtime dependency', 'Kiosk and immersive runtime must publish canonical state changes', 'The operator phone cannot mirror what the headset does not expose cleanly.'],
+  ['Reporting dependency', 'Completion/sync outcome visibility', 'Needed for the `completed` vs. `needs_reconciliation` split.'],
+  ['Device dependency', 'Real Vision Pro room testing', 'Promotion to a permanent doc should not happen on simulator confidence alone.'],
+];
+
+const OPERATOR_COMPANION_PLAN_OPEN_QUESTION_ROWS = [
+  ['Pause semantics', 'Is pause a true persisted session state or only a runtime-local condition today?', 'Needed before the operator copy and recovery rules are final.'],
+  ['Redo behavior', 'Does redo create a new session record or reset the current one?', 'This changes both reporting and operator expectations.'],
+  ['Calibration visibility', 'Should the operator phone reflect calibration state in V1 or stay focused on post-claim orchestration?', 'This affects scope and control density.'],
+  ['Realtime layer', 'Do we already have a live session observer path, or does the companion need one built?', 'This determines whether the companion is mostly UI wiring or service work.'],
 ];
 
 const VISION_UI_AUTHORITY_ROWS = [
@@ -433,6 +599,39 @@ const REALITYKIT_DELIVERABLE_ROWS = [
   ['Milestone 3', 'Signal Window becomes full Spatial Read in the arena', 'Cue discrimination is authored in space and validated against the locked event script.'],
   ['Milestone 4', 'Overlay layer becomes minimal and operator-safe', 'Pause, abort, and summary remain available without taking over the game surface.'],
   ['Milestone 5', 'Spec-faithful pilot rehearsal', 'The build is ready for an operator walkthrough that matches the handbook protocol and runbook rather than a prototype test harness.'],
+];
+
+const RESET_CHAMBER_SCIENCE_ROWS = [
+  ['Keep', 'Phase onset cues', 'Lighting-profile shifts, orb state changes, and crowd-state changes are allowed because they mark the condition change clearly without panel UI.'],
+  ['Keep', 'Evaluative pressure', 'Crowd presence, restrained flash behavior, and scoreboard consequence cues support the feeling of being watched and judged under pressure.'],
+  ['Keep', 'Urgency / outcome', 'Recovery should signal act-now urgency, and transition should communicate recovered vs. missed cleanly.'],
+  ['Reduce', 'Abstract disruption geometry', 'Large side slabs, shutters, and ornamental ripples should stay static or disabled unless they directly improve manipulation strength or task clarity.'],
+  ['Reduce', 'Ambient spectacle', 'Animation that exists only to make the chamber feel alive is not enough. It must map to pressure, consequence, urgency, or recovery.'],
+  ['Validation rule', 'One-question gate', 'Every animated element should answer: what experimental purpose does this serve? If the answer is vague, cut or tone it down.'],
+];
+
+const RESET_CHAMBER_POLISH_SPRINT_THREE_ROWS = [
+  ['Manipulation strength', 'Does the athlete feel watched, pressured, and judged before the rep breaks?', 'Keep atmosphere that increases evaluative pressure. Cut motion that only adds busyness.'],
+  ['Task readability', 'Can a first-time athlete explain exactly what to do during lock-in, disruption, and recovery?', 'Elevate surfaces that clarify the task. Trim anything that competes with the task target.'],
+  ['Outcome trust', 'Does success vs. miss feel experimentally legible, not cosmetically dramatic?', 'Consequence cues should reinforce what happened, not entertain.'],
+  ['Measurement support', 'Does the environment make timing, urgency, and rep validity easier to interpret?', 'Polish is allowed when it improves confidence in the measurement.'],
+  ['Device realism', 'Does the chamber still feel coherent on physical Vision Pro, not just in Simulator?', 'Tune final intensity, brightness, and scale on-headset before adding more layers.'],
+  ['Polish rule', 'Would removing this element make the test worse, or just less flashy?', 'If it only hurts flash, remove or soften it.'],
+];
+
+const RESET_CHAMBER_KEEP_TRIM_CUT_ROWS = [
+  ['Keep', 'IBL phase family', 'The lock-in / disruption / recovery lighting family gives the chamber real condition identity without relying on HUD.'],
+  ['Keep', 'Ground plane and lane', 'The floor and athlete lane anchor the station spatially and help the athlete feel placed inside a measurable trial.'],
+  ['Keep', 'Layered crowd presence', 'Multiple crowd rows and restrained sway support evaluative pressure and the feeling of being watched.'],
+  ['Keep', 'Haze and edge shaping', 'Atmospheric depth and darker periphery improve focus and make the pressure field feel spatial rather than screen-like.'],
+  ['Keep', 'Scoreboard consequence pulse', 'A readable forward consequence cue helps communicate that something happened to the rep, not just to the room.'],
+  ['Trim', 'Orb disruption jitter', 'The destabilization helps mark the break, but it should stay tight enough that it feels like pressure, not chaos.'],
+  ['Trim', 'Crowd flash behavior', 'Flashes are useful as evaluative pressure only if they stay sparse and never become concert-light spectacle.'],
+  ['Trim', 'Recovery halo intensity', 'The act-now recovery cue is important, but it should not become the only readable object in the room.'],
+  ['Trim', 'Summary card world scale', 'The summary should feel authoritative and readable on-device, but not dominate the chamber like a floating laptop.'],
+  ['Cut', 'Decorative slab / shutter theatrics', 'Large side-shape motion and shutter-like sweeps do not improve the manipulation enough to justify the visual noise.'],
+  ['Cut', 'Ambient movement without a rep meaning', 'If an element does not strengthen onset, pressure, urgency, or outcome readability, it should not stay animated.'],
+  ['Cut', 'Any cue that competes with the task target', 'The orb/task lane must remain the primary locus of attention; side activity should never steal that role.'],
 ];
 
 const NOISE_GATE_NORTH_STAR_ROWS = [
@@ -623,6 +822,27 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
         <DataTable columns={['Capability', 'Status', 'What This Means']} rows={CURRENT_ALIGNMENT_ROWS} />
       </SectionBlock>
 
+      <SectionBlock icon={Wrench} title="Active Implementation-Planning Artifacts">
+        <TemporaryPlanningPanel
+          title="Temporary Implementation Planning Layer"
+          intent="This section is for active execution contracts that are intentionally temporary. Use it when the team needs a visible build sequence and dependency map before the stable system-design artifact is ready."
+          promotionRule="Every artifact in this section must either be deleted after the work is absorbed into stable docs or promoted into a formal system design artifact once the implementation contract is proven."
+        />
+
+        <div className="mt-4 rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+          <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+            <ClipboardList className="h-4 w-4 text-cyan-400" />
+            Current Temporary Planning Artifacts
+          </h4>
+          <div className="mt-4">
+            <DataTable
+              columns={['Artifact', 'Lives In', 'Current Role', 'Exit / Promotion Rule']}
+              rows={ACTIVE_TEMPORARY_PLANNING_ROWS}
+            />
+          </div>
+        </div>
+      </SectionBlock>
+
       <SectionBlock icon={MapPinned} title="Document Artifacts">
         <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-4">
           <div className="flex flex-wrap gap-2">
@@ -639,7 +859,12 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
                       : 'border-zinc-700 bg-black/20 text-zinc-300 hover:border-zinc-500 hover:text-white'
                   }`}
                 >
-                  {doc.label}
+                  <span>{doc.label}</span>
+                  {doc.temporaryPlanning ? (
+                    <span className="ml-2 rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-200">
+                      Temporary
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
@@ -757,6 +982,165 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
                   </h4>
                   <div className="mt-4">
                     <DataTable columns={['Check', 'What To Confirm']} rows={VISIONOS_MANUAL_ROWS} />
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {activeDoc.id === 'operator-companion-spec' ? (
+              <div className="space-y-6">
+                <CardGrid columns="xl:grid-cols-2">
+                  <InfoCard
+                    title="North Star"
+                    accent="green"
+                    body="For first-time Vision Pro users, the right posture is staff-led. The phone companion should make the room run smoothly without turning the phone into a second gameplay surface."
+                  />
+                  <InfoCard
+                    title="Why This Exists"
+                    accent="blue"
+                    body="The current queue, QR/pairing, kiosk claim, and runtime lifecycle already exist. The missing piece is a coherent operator surface that lets staff run the demo confidently, especially with people who have never worn Vision Pro before."
+                  />
+                </CardGrid>
+
+                <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <ClipboardList className="h-4 w-4 text-cyan-400" />
+                    Staff-Led Demo Flow
+                  </h4>
+                  <div className="mt-4">
+                    <DataTable columns={['Step', 'Moment', 'Meaning']} rows={OPERATOR_COMPANION_FLOW_ROWS} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                  <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                      <Layers3 className="h-4 w-4 text-green-400" />
+                      Companion Surface Map
+                    </h4>
+                    <div className="mt-4">
+                      <DataTable columns={['Surface', 'Primary Job', 'What It Should Own']} rows={OPERATOR_COMPANION_SURFACE_ROWS} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                      <ShieldCheck className="h-4 w-4 text-amber-400" />
+                      Remote Control Guardrails
+                    </h4>
+                    <div className="mt-4">
+                      <DataTable columns={['Rule', 'Control', 'Why']} rows={OPERATOR_COMPANION_CONTROL_ROWS} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-5">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <Waypoints className="h-4 w-4 text-cyan-400" />
+                    Canonical Session States
+                  </h4>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+                    The phone companion should mirror the real Vision Pro session lifecycle instead of inventing a second local state model. If the operator sees the wrong state, the room will drift.
+                  </p>
+                  <div className="mt-4">
+                    <DataTable columns={['State', 'Meaning', 'Operator Need']} rows={OPERATOR_COMPANION_STATE_ROWS} />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-purple-500/20 bg-purple-500/5 p-5">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <Trophy className="h-4 w-4 text-purple-400" />
+                    V1 Scope Contract
+                  </h4>
+                  <div className="mt-4">
+                    <DataTable columns={['Scope', 'Definition', 'Why']} rows={OPERATOR_COMPANION_V1_ROWS} />
+                  </div>
+                </div>
+
+                <CardGrid columns="xl:grid-cols-2">
+                  <InfoCard
+                    title="Current Foundation"
+                    accent="amber"
+                    body="The companion should build on the existing queue -> launch token -> kiosk claim -> start / abandon / complete lifecycle instead of replacing it. That means the spec is compatible with the current phone app, kiosk, and service layer."
+                  />
+                  <InfoCard
+                    title="Measurement Rule"
+                    accent="green"
+                    body="Operator control is justified when it improves comfort, task clarity, or session integrity. It is not justified when it adds a parallel gameplay surface or lets staff bypass validity rules."
+                  />
+                </CardGrid>
+              </div>
+            ) : null}
+
+            {activeDoc.id === 'operator-companion-implementation-plan' ? (
+              <div className="space-y-6">
+                <TemporaryPlanningPanel
+                  intent="This artifact is intentionally execution-facing and temporary. It exists so operator companion work can be planned in the admin overview before the design contract is mature enough to deserve permanent architecture status."
+                  promotionRule="Delete this plan once the work is absorbed into stable docs, or promote it into a formal design/system artifact only after the V1 operator control loop is validated on real devices and no longer depends on unresolved state/control questions."
+                />
+
+                <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <Wrench className="h-4 w-4 text-amber-400" />
+                    Temporary Planning Pattern
+                  </h4>
+                  <div className="mt-4">
+                    <DataTable columns={['Rule', 'Definition']} rows={TEMPORARY_IMPLEMENTATION_PATTERN_ROWS} />
+                  </div>
+                </div>
+
+                <CardGrid columns="xl:grid-cols-2">
+                  <InfoCard
+                    title="Planning Goal"
+                    accent="blue"
+                    body="Turn the existing operator companion spec into a build order that can be executed without inflating scope or letting the phone become a second task surface."
+                  />
+                  <InfoCard
+                    title="Planning Rule"
+                    accent="amber"
+                    body="Prioritize state truth and control semantics before UI polish. If the companion does not mirror canonical session state, the room will drift."
+                  />
+                </CardGrid>
+
+                <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <ClipboardList className="h-4 w-4 text-cyan-400" />
+                    V1 Workstreams
+                  </h4>
+                  <div className="mt-4">
+                    <DataTable columns={['Workstream', 'What To Build', 'Why It Exists']} rows={OPERATOR_COMPANION_PLAN_WORKSTREAM_ROWS} />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-5">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <Waypoints className="h-4 w-4 text-cyan-400" />
+                    Recommended Build Sequence
+                  </h4>
+                  <div className="mt-4">
+                    <StepRail steps={OPERATOR_COMPANION_PLAN_SEQUENCE} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                  <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                      <Gauge className="h-4 w-4 text-green-400" />
+                      Dependencies
+                    </h4>
+                    <div className="mt-4">
+                      <DataTable columns={['Dependency', 'Need', 'Why']} rows={OPERATOR_COMPANION_PLAN_DEPENDENCY_ROWS} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-5">
+                    <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                      <ScanSearch className="h-4 w-4 text-amber-400" />
+                      Open Questions
+                    </h4>
+                    <div className="mt-4">
+                      <DataTable columns={['Question', 'Why It Matters', 'Impact']} rows={OPERATOR_COMPANION_PLAN_OPEN_QUESTION_ROWS} />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -934,6 +1318,45 @@ const PulseCheckVisionProImmersiveTestsTab: React.FC = () => {
                   </h4>
                   <div className="mt-4">
                     <DataTable columns={['Milestone', 'Outcome', 'Acceptance']} rows={REALITYKIT_DELIVERABLE_ROWS} />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <ShieldCheck className="h-4 w-4 text-amber-400" />
+                    Reset Chamber Scientific Pruning Contract
+                  </h4>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+                    The live Reset Chamber should stay disciplined. Atmospheric changes are allowed when they strengthen the manipulation or clarify the task; decorative motion that does not improve pressure, urgency, or outcome readability should be reduced.
+                  </p>
+                  <div className="mt-4">
+                    <DataTable columns={['Rule', 'Surface', 'Meaning']} rows={RESET_CHAMBER_SCIENCE_ROWS} />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-5">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <FlaskConical className="h-4 w-4 text-cyan-400" />
+                    Reset Chamber Polish Sprint 3 Audit
+                  </h4>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+                    Sprint 3 should treat polish and science as the same review surface. Any atmospheric or visual improvement should either strengthen the manipulation, clarify the rep, or improve confidence in how recovery is measured.
+                  </p>
+                  <div className="mt-4">
+                    <DataTable columns={['Lens', 'Question', 'Rule']} rows={RESET_CHAMBER_POLISH_SPRINT_THREE_ROWS} />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-green-500/20 bg-green-500/5 p-5">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold text-white">
+                    <Trophy className="h-4 w-4 text-green-400" />
+                    Reset Chamber Keep / Trim / Cut Audit
+                  </h4>
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-300">
+                    This is the current Sprint 3 call on the live Reset chamber. It should be updated as physical-device runs reveal whether the chamber is strengthening the manipulation or simply adding motion.
+                  </p>
+                  <div className="mt-4">
+                    <DataTable columns={['Call', 'Surface', 'Reason']} rows={RESET_CHAMBER_KEEP_TRIM_CUT_ROWS} />
                   </div>
                 </div>
               </div>

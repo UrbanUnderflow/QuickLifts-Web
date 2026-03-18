@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useUser } from '../hooks/useUser';
 import { db } from '../api/firebase/config';
+import { resolvePulseCheckFunctionUrl } from '../api/firebase/mentaltraining/pulseCheckFunctionsUrl';
 import {
   collection,
   addDoc,
@@ -145,7 +146,7 @@ const PulseCheckChat: React.FC = () => {
     setSending(true);
 
     try {
-      const res = await fetch('/.netlify/functions/pulsecheck-chat', {
+      const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.id, message: text, conversationId })
@@ -312,5 +313,4 @@ const PulseCheckChat: React.FC = () => {
 };
 
 export default PulseCheckChat;
-
 

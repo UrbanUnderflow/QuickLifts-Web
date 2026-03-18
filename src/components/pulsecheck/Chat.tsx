@@ -11,9 +11,11 @@ import {
   ExerciseCompletion,
   PulseCheckDailyAssignment,
   PulseCheckDailyAssignmentStatus,
+  PulseCheckStateSnapshot,
   SimModule,
 } from '../../api/firebase/mentaltraining/types';
-import { assignmentOrchestratorService, completionService } from '../../api/firebase/mentaltraining';
+import { assignmentOrchestratorService, completionService, stateSnapshotService } from '../../api/firebase/mentaltraining';
+import { resolvePulseCheckFunctionUrl } from '../../api/firebase/mentaltraining/pulseCheckFunctionsUrl';
 import { ExerciseInstructionCard } from '../mentaltraining';
 
 const STORAGE_KEY_NORA_INTRO = 'pulsecheck_has_seen_nora_intro_card';
@@ -49,9 +51,24 @@ const assignmentStatusLabel = (status: PulseCheckDailyAssignmentStatus) => {
 const assignmentActionLabel = (assignment: PulseCheckDailyAssignment) => {
   if (assignment.actionType === 'defer') return 'Pause for today';
   if (assignment.simSpecId) return humanizeAssignmentLabel(assignment.simSpecId);
+  if (assignment.protocolLabel) return assignment.protocolLabel;
   if (assignment.legacyExerciseId) return humanizeAssignmentLabel(assignment.legacyExerciseId);
   if (assignment.sessionType) return humanizeAssignmentLabel(assignment.sessionType);
-  return assignment.actionType === 'lighter_sim' ? 'Lighter sim' : 'Sim';
+  if (assignment.actionType === 'lighter_sim') return 'Lighter sim';
+  if (assignment.actionType === 'protocol') return 'Protocol';
+  return 'Sim';
+};
+
+const readinessPromptLabel = (snapshot: PulseCheckStateSnapshot | null) => {
+  if (!snapshot) return null;
+  switch (snapshot.overallReadiness) {
+    case 'green':
+      return 'green-readiness';
+    case 'red':
+      return 'red-readiness';
+    default:
+      return 'yellow-readiness';
+  }
 };
 
 const isLaunchableAssignment = (assignment: PulseCheckDailyAssignment | null) =>
@@ -213,6 +230,8 @@ const Chat: React.FC = () => {
     return localStorage.getItem(STORAGE_KEY_NORA_INTRO) !== 'true';
   });
   const [todaysDailyAssignment, setTodaysDailyAssignment] = useState<PulseCheckDailyAssignment | null>(null);
+  const [todaysStateSnapshot, setTodaysStateSnapshot] = useState<PulseCheckStateSnapshot | null>(null);
+  const [dailyContextLoading, setDailyContextLoading] = useState(true);
   const [latestCompletion, setLatestCompletion] = useState<ExerciseCompletion | null>(null);
   
   // Active exercise state (for writing exercises that redirect here)
@@ -293,22 +312,34 @@ const Chat: React.FC = () => {
   useEffect(() => {
     if (!currentUser?.id) {
       setTodaysDailyAssignment(null);
+      setTodaysStateSnapshot(null);
+      setDailyContextLoading(false);
       return;
     }
 
     let active = true;
+    setDailyContextLoading(true);
 
-    assignmentOrchestratorService
-      .getForAthleteOnDate(currentUser.id, todayDateKey())
-      .then((assignment) => {
+    Promise.all([
+      assignmentOrchestratorService.getForAthleteOnDate(currentUser.id, todayDateKey()),
+      stateSnapshotService.getForAthleteOnDate(currentUser.id, todayDateKey()),
+    ])
+      .then(([assignment, snapshot]) => {
         if (active) {
           setTodaysDailyAssignment(assignment);
+          setTodaysStateSnapshot(snapshot);
         }
       })
       .catch((error) => {
-        console.error('[PulseCheck] Failed to load today assignment for chat', error);
+        console.error('[PulseCheck] Failed to load daily runtime context for chat', error);
         if (active) {
           setTodaysDailyAssignment(null);
+          setTodaysStateSnapshot(null);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setDailyContextLoading(false);
         }
       });
 
@@ -348,14 +379,19 @@ const Chat: React.FC = () => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
-  // Initial AI greeting like iOS
+  // Initial AI greeting grounded in today's runtime context when available
   useEffect(() => {
     if (!currentUser) return;
     if (messages.length > 0) return;
+    if (dailyContextLoading) return;
     const name = (currentUser as any).preferredName || currentUser.displayName || currentUser.username || 'athlete';
-    const greeting = `Hey ${name} — I'm Nora, your AI mental performance coach. What's one focus for today?`;
+    const assignmentLabel = todaysDailyAssignment ? assignmentActionLabel(todaysDailyAssignment) : null;
+    const readinessLabel = readinessPromptLabel(todaysStateSnapshot);
+    const greeting = todaysDailyAssignment
+      ? `Hey ${name} — I read today's signal as ${readinessLabel || 'current readiness'} and lined up ${assignmentLabel}. ${todaysDailyAssignment.rationale || "I've got today's task ready."} What do you want to tighten before you start?`
+      : `Hey ${name} — I'm Nora, your AI mental performance coach. What's one focus for today?`;
     setMessages([{ id: Math.random().toString(36).slice(2), content: greeting, isFromUser: false, timestamp: Math.floor(Date.now() / 1000), messageType: 'greeting' }]);
-  }, [currentUser]);
+  }, [currentUser, dailyContextLoading, messages.length, todaysDailyAssignment, todaysStateSnapshot]);
 
   // Load mental notes
   useEffect(() => {
@@ -432,7 +468,7 @@ const Chat: React.FC = () => {
       // Send the request to AI to discuss this mental note
       const prompt = `I'd like to discuss my mental note: "${note.title}". ${note.content}`;
       
-      const res = await fetch('/.netlify/functions/pulsecheck-chat', {
+      const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -481,7 +517,7 @@ const Chat: React.FC = () => {
     
     setEscalationProcessing(true);
     try {
-      const res = await fetch('/.netlify/functions/pulsecheck-escalation', {
+      const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-escalation'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -517,7 +553,7 @@ const Chat: React.FC = () => {
     
     setEscalationProcessing(true);
     try {
-      const res = await fetch('/.netlify/functions/pulsecheck-escalation', {
+      const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-escalation'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -562,7 +598,7 @@ const Chat: React.FC = () => {
     if (escalation.tier === EscalationTier.ElevatedRisk) {
       // Create escalation record first
       try {
-        const res = await fetch('/.netlify/functions/pulsecheck-escalation', {
+        const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-escalation'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -630,7 +666,7 @@ const Chat: React.FC = () => {
     console.log('─'.repeat(60));
 
     try {
-      const res = await fetch('/.netlify/functions/pulsecheck-chat', {
+      const res = await fetch(resolvePulseCheckFunctionUrl('/.netlify/functions/pulsecheck-chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: currentUser.id, message: text, conversationId })
