@@ -1574,13 +1574,18 @@ async function orchestratePostCheckIn({
   plannerDecision,
   liveProtocolRegistry,
 }) {
-  if (!progress?.activeProgram) {
-    return null;
-  }
-
   const snapshot =
     (sourceStateSnapshotId ? await getSnapshotById(db, sourceStateSnapshotId) : null) ||
     await getSnapshotById(db, `${athleteId}_${sourceDate}`);
+
+  if (!snapshot) {
+    console.warn('[submit-pulsecheck-checkin] orchestratePostCheckIn skipped because no snapshot was found', {
+      athleteId,
+      sourceDate,
+      sourceStateSnapshotId,
+    });
+    return null;
+  }
 
   const athleteMembership = await resolveActiveAthleteMembership(db, athleteId);
   const coachId = await resolveCoachId(db, athleteId, athleteMembership, progress.coachId);
@@ -1589,6 +1594,16 @@ async function orchestratePostCheckIn({
       coachId,
       updatedAt: Date.now(),
     }, { merge: true });
+  }
+
+  const activeProgram = progress?.activeProgram || null;
+  if (!activeProgram) {
+    console.warn('[submit-pulsecheck-checkin] No activeProgram was available during assignment orchestration; continuing with bounded candidates and fallback rules only.', {
+      athleteId,
+      sourceDate,
+      recommendedRouting: snapshot.recommendedRouting,
+      candidateCount: candidateSet?.candidates?.length || 0,
+    });
   }
 
   const readinessScore = snapshot?.readinessScore ?? progress?.taxonomyProfile?.modifierScores?.readiness;
@@ -1602,10 +1617,10 @@ async function orchestratePostCheckIn({
     return existing;
   }
 
-  const activeProgram = progress.activeProgram;
-  const fallbackActionType = activeProgram.recommendedSimId
-    ? (activeProgram.sessionType === 'recovery_rep' || activeProgram.sessionType === 'probe' ? 'lighter_sim' : 'sim')
-    : 'defer';
+  const fallbackActionType =
+    activeProgram?.recommendedSimId
+      ? (activeProgram.sessionType === 'recovery_rep' || activeProgram.sessionType === 'probe' ? 'lighter_sim' : 'sim')
+      : undefined;
   const validatedPlannerDecision = validatePlannerDecision({
     decision: plannerDecision || buildFallbackPlannerDecision({ snapshot, candidateSet: candidateSet || buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress, liveProtocolRegistry, responsivenessProfile: null }) }),
     candidateSet: candidateSet || buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress, liveProtocolRegistry, responsivenessProfile: null }),
@@ -1619,9 +1634,25 @@ async function orchestratePostCheckIn({
       ? selectedCandidate.actionType
       : resolveSnapshotDrivenActionType({
           snapshot,
-          hasResolvedExercise: Boolean(activeProgram.recommendedSimId || activeProgram.recommendedLegacyExerciseId),
+          hasResolvedExercise: Boolean(
+            selectedCandidate?.simSpecId
+            || selectedCandidate?.legacyExerciseId
+            || activeProgram?.recommendedSimId
+            || activeProgram?.recommendedLegacyExerciseId
+          ),
           fallbackActionType,
         }));
+
+  console.info('[submit-pulsecheck-checkin] Assignment decision resolved', {
+    athleteId,
+    sourceDate,
+    hasActiveProgram: Boolean(activeProgram),
+    candidateCount: candidateSet?.candidates?.length || 0,
+    selectedCandidateId: selectedCandidate?.id || null,
+    selectedCandidateType: selectedCandidate?.type || null,
+    actionType,
+    plannerDecisionSource: plannerOutput.decisionSource || snapshot?.decisionSource || 'fallback_rules',
+  });
 
   const now = Date.now();
   const baselineRevision = typeof existing?.revision === 'number' ? existing.revision : 1;
@@ -1642,8 +1673,8 @@ async function orchestratePostCheckIn({
     actionType,
     chosenCandidateId: selectedCandidate?.id,
     chosenCandidateType: selectedCandidate?.type,
-    simSpecId: selectedCandidate?.simSpecId || activeProgram.recommendedSimId,
-    legacyExerciseId: selectedCandidate?.legacyExerciseId || activeProgram.recommendedLegacyExerciseId,
+    simSpecId: selectedCandidate?.simSpecId || activeProgram?.recommendedSimId,
+    legacyExerciseId: selectedCandidate?.legacyExerciseId || activeProgram?.recommendedLegacyExerciseId,
     protocolId: selectedCandidate?.protocolId,
     protocolFamilyId: selectedCandidate?.protocolFamilyId,
     protocolVariantId: selectedCandidate?.protocolVariantId,
@@ -1656,13 +1687,13 @@ async function orchestratePostCheckIn({
     protocolCategory: selectedCandidate?.protocolCategory,
     protocolResponseFamily: selectedCandidate?.protocolResponseFamily,
     protocolDeliveryMode: selectedCandidate?.protocolDeliveryMode,
-    sessionType: selectedCandidate?.sessionType || activeProgram.sessionType,
-    durationMode: selectedCandidate?.durationMode || activeProgram.durationMode,
-    durationSeconds: selectedCandidate?.durationSeconds || activeProgram.durationSeconds,
+    sessionType: selectedCandidate?.sessionType || activeProgram?.sessionType,
+    durationMode: selectedCandidate?.durationMode || activeProgram?.durationMode,
+    durationSeconds: selectedCandidate?.durationSeconds || activeProgram?.durationSeconds,
     rationale: plannerOutput.rationaleSummary || buildSnapshotDrivenRationale({
       snapshot,
       actionType,
-      fallbackRationale: activeProgram.rationale,
+      fallbackRationale: activeProgram?.rationale,
     }),
     plannerSummary: plannerOutput.rationaleSummary,
     plannerAudit: buildPlannerAudit({
@@ -1677,7 +1708,7 @@ async function orchestratePostCheckIn({
     readinessBand: toReadinessBand(readinessScore),
     escalationTier: existing?.escalationTier ?? 0,
     supportFlag: plannerOutput.supportFlag ?? existing?.supportFlag ?? snapshot?.supportFlag ?? false,
-    programSnapshot: activeProgram,
+    programSnapshot: activeProgram || undefined,
     coachNotifiedAt: existing?.coachNotifiedAt,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
@@ -1711,6 +1742,16 @@ async function orchestratePostCheckIn({
 
   await assignmentRef.set(stripUndefinedDeep(assignment), { merge: true });
   await attachExecutionLink(db, sourceStateSnapshotId, assignmentId);
+  console.info('[submit-pulsecheck-checkin] Daily assignment persisted', {
+    assignmentId,
+    athleteId,
+    sourceDate,
+    status: assignment.status,
+    actionType: assignment.actionType,
+    simSpecId: assignment.simSpecId || null,
+    protocolId: assignment.protocolId || null,
+    hasActiveProgram: Boolean(activeProgram),
+  });
   return assignment;
 }
 
@@ -1820,6 +1861,13 @@ exports.handler = async (event) => {
       ? body.sourceDate
       : new Date().toISOString().split('T')[0];
 
+    console.info('[submit-pulsecheck-checkin] Received check-in submission', {
+      userId,
+      sourceDate,
+      readinessScore,
+      type: body.type || 'morning',
+    });
+
     const now = Date.now();
     const priorProgress = await loadOrInitializeProgress(db, userId);
     const taxonomyState = body.taxonomyState || profileSnapshotRuntime.buildTaxonomyCheckInState({
@@ -1845,10 +1893,19 @@ exports.handler = async (event) => {
       date: sourceDate,
     };
 
-    const checkInRef = await db.collection(CHECKINS_ROOT).doc(userId).collection('check-ins').add(nextCheckIn);
-    const persistedCheckIn = { id: checkInRef.id, ...nextCheckIn };
+    const sanitizedCheckIn = stripUndefinedDeep(nextCheckIn);
+    const checkInRef = await db.collection(CHECKINS_ROOT).doc(userId).collection('check-ins').add(sanitizedCheckIn);
+    const persistedCheckIn = { id: checkInRef.id, ...sanitizedCheckIn };
 
     const syncedProgress = await syncTaxonomyProfile(db, userId, priorProgress);
+    console.info('[submit-pulsecheck-checkin] Synced progress for submission', {
+      userId,
+      sourceDate,
+      hasActiveProgram: Boolean(syncedProgress?.activeProgram),
+      recommendedSimId: syncedProgress?.activeProgram?.recommendedSimId || null,
+      recommendedLegacyExerciseId: syncedProgress?.activeProgram?.recommendedLegacyExerciseId || null,
+      sessionType: syncedProgress?.activeProgram?.sessionType || null,
+    });
     const rawStateSnapshot = await upsertStateSnapshot({
       db,
       athleteId: userId,
@@ -1872,6 +1929,16 @@ exports.handler = async (event) => {
       sourceStateSnapshotId: stateSnapshot.id,
       sourceDate,
       progress: syncedProgress,
+    });
+
+    console.info('[submit-pulsecheck-checkin] Submission materialization complete', {
+      userId,
+      sourceDate,
+      candidateCount: candidateSet?.candidates?.length || 0,
+      plannerEligible: Boolean(candidateSet?.plannerEligible),
+      dailyAssignmentId: dailyAssignment?.id || null,
+      dailyAssignmentActionType: dailyAssignment?.actionType || null,
+      dailyAssignmentStatus: dailyAssignment?.status || null,
     });
 
     await db.collection(PROGRESS_COLLECTION).doc(userId).collection('check-ins').add({
@@ -1907,6 +1974,7 @@ exports.handler = async (event) => {
 };
 
 exports.runtimeHelpers = {
+  stripUndefinedDeep,
   loadOrInitializeProgress,
   syncTaxonomyProfile,
   getSnapshotById,
