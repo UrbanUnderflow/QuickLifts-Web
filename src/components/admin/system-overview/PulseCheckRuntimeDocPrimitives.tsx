@@ -238,3 +238,33 @@ export function RuntimeAlignmentPanel({
     </div>
   );
 }
+
+export function TemporaryPlanningPanel({
+  title = 'Temporary Implementation Planning Artifact',
+  status = 'Temporary',
+  intent,
+  promotionRule,
+}: {
+  title?: string;
+  status?: string;
+  intent: string;
+  promotionRule: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-5">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-amber-300">{title}</p>
+          <p className="mt-2 text-sm leading-relaxed text-zinc-200">{intent}</p>
+        </div>
+        <span className="inline-flex rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-200">
+          {status}
+        </span>
+      </div>
+      <div className="mt-4 rounded-xl border border-zinc-800 bg-black/20 p-4">
+        <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Promotion Rule</p>
+        <p className="mt-2 text-sm leading-relaxed text-zinc-300">{promotionRule}</p>
+      </div>
+    </div>
+  );
+}

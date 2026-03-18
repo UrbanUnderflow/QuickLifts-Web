@@ -388,6 +388,37 @@ async function upsertCoachNotifications(adminPage: Page, athleteUserId: string, 
   }, { athleteUserId, coachUserId });
 }
 
+async function seedProtocolResponsivenessProfile(
+  adminPage: Page,
+  input: {
+    athleteUserId: string;
+    familyResponses?: Record<string, any>;
+    variantResponses?: Record<string, any>;
+    staleAt?: number;
+  }
+) {
+  await waitForPulseE2EHarness(adminPage);
+  return adminPage.evaluate(async (payload) => {
+    return window.__pulseE2E?.seedPulseCheckProtocolResponsivenessProfile(payload);
+  }, input);
+}
+
+async function seedProtocolAssignmentFixture(
+  adminPage: Page,
+  input: {
+    namespace: string;
+    athleteUserId: string;
+    coachUserId: string;
+    protocolId?: string;
+    sourceDate?: string;
+  }
+) {
+  await waitForPulseE2EHarness(adminPage);
+  return adminPage.evaluate(async (payload) => {
+    return window.__pulseE2E?.seedPulseCheckProtocolAssignmentFixture(payload);
+  }, input);
+}
+
 async function cleanupAthleteJourneyFixture(adminPage: Page, namespace: string, athleteUserId: string, coachUserId: string) {
   await waitForPulseE2EHarness(adminPage);
   return adminPage.evaluate(async ({ namespace: fixtureNamespace, athleteUserId: athleteId, coachUserId: coachId }) => {
@@ -543,6 +574,7 @@ test.describe('PulseCheck athlete journey', () => {
       if (!latestAssignmentId) {
         throw new Error('Expected a Nora daily assignment id after the athlete check-in.');
       }
+      expect(assignmentState?.latestAssignment?.plannerAudit?.rankedCandidates?.length || 0).toBeGreaterThan(0);
       const assignmentLabel = humanizeAssignmentLabel(
         assignmentState?.latestAssignment?.simSpecId ||
           assignmentState?.latestAssignment?.legacyExerciseId ||
@@ -577,6 +609,120 @@ test.describe('PulseCheck athlete journey', () => {
       await preparePulseCheckApp(actors.athletePage, 'today');
       writeDebugStep(actors.namespace, 'test1:today-reopened');
       await expect(actors.athletePage.getByText(new RegExp(completedState.latestCompletion.sessionSummary.athleteHeadline, 'i'))).toBeVisible({ timeout: 20_000 });
+    } finally {
+      await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
+      await actors.coachContext.close().catch(() => null);
+      await actors.athleteContext.close().catch(() => null);
+    }
+  });
+
+  test('protocol responsiveness changes bounded candidate ranking and protocol completion refreshes the athlete profile', async ({ browser, page }) => {
+    test.setTimeout(240_000);
+    test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
+    test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
+
+    const actors = await provisionJourneyActors(browser, page);
+    const adminIdentity = await getAuthenticatedIdentity(page);
+
+    if (!adminIdentity?.uid || !adminIdentity.email) {
+      throw new Error('Unable to resolve the authenticated admin identity.');
+    }
+
+    try {
+      await seedAthleteJourneyFixture(page, {
+        namespace: actors.namespace,
+        adminIdentity,
+        coachIdentity: actors.coachIdentity,
+        coachEmail: actors.coachEmail,
+        athleteIdentity: actors.athleteIdentity,
+        athleteEmail: actors.athleteEmail,
+      });
+      writeDebugStep(actors.namespace, 'test3:fixture-seeded');
+
+      const now = Date.now();
+      await seedProtocolResponsivenessProfile(page, {
+        athleteUserId: actors.athleteIdentity.uid,
+        familyResponses: {
+          'priming-confidence_priming': {
+            protocolFamilyId: 'priming-confidence_priming',
+            protocolFamilyLabel: 'Confidence Priming',
+            responseDirection: 'positive',
+            confidence: 'high',
+            freshness: 'current',
+            sampleSize: 6,
+            positiveSignals: 5,
+            neutralSignals: 1,
+            negativeSignals: 0,
+            stateFit: ['yellow_snapshot', 'protocol_then_sim', 'medium_readiness'],
+            supportingEvidence: ['This athlete responds well to confidence-priming protocols in yellow readiness windows.'],
+            lastObservedAt: now,
+            lastConfirmedAt: now,
+          },
+          'priming-focus_narrowing': {
+            protocolFamilyId: 'priming-focus_narrowing',
+            protocolFamilyLabel: 'Focus Narrowing',
+            responseDirection: 'negative',
+            confidence: 'high',
+            freshness: 'current',
+            sampleSize: 5,
+            positiveSignals: 0,
+            neutralSignals: 1,
+            negativeSignals: 4,
+            stateFit: ['yellow_snapshot', 'protocol_then_sim', 'medium_readiness'],
+            supportingEvidence: ['Focus-narrowing protocols have backfired in similar yellow readiness windows.'],
+            lastObservedAt: now,
+            lastConfirmedAt: now,
+          },
+        },
+      });
+      writeDebugStep(actors.namespace, 'test3:responsiveness-seeded');
+
+      await preparePulseCheckApp(actors.athletePage, 'today');
+      await expect(actors.athletePage.getByRole('heading', { name: /Where is your head at today\?/i })).toBeVisible({ timeout: 20_000 });
+      await actors.athletePage.getByRole('button', { name: /Okay/i }).click();
+      writeDebugStep(actors.namespace, 'test3:readiness-clicked');
+
+      await expect.poll(async () => {
+        const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+        return state?.latestAssignment?.status || 'missing';
+      }, { timeout: 30_000 }).toBe('assigned');
+
+      const rankingState = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+      const protocolCandidates = (rankingState?.latestCandidateSet?.candidates || []).filter((candidate: Record<string, any>) => candidate.type === 'protocol');
+      expect(protocolCandidates.length).toBeGreaterThan(0);
+      expect(protocolCandidates[0]?.protocolId).toBe('protocol-power-pose');
+      expect(protocolCandidates[0]?.responsivenessDirection).toBe('positive');
+      expect(rankingState?.latestAssignment?.plannerAudit?.rankedCandidates?.length || 0).toBeGreaterThan(0);
+
+      const seededProtocol = await seedProtocolAssignmentFixture(page, {
+        namespace: actors.namespace,
+        athleteUserId: actors.athleteIdentity.uid,
+        coachUserId: actors.coachIdentity.uid,
+        protocolId: 'protocol-cue-word-anchoring',
+      });
+      writeDebugStep(actors.namespace, 'test3:protocol-assignment-seeded');
+
+      await preparePulseCheckApp(actors.athletePage, 'nora');
+      await expect(actors.athletePage.getByText(/Today's Nora Task/i)).toBeVisible({ timeout: 20_000 });
+      await actors.athletePage.getByRole('button', { name: /Open today'?s task/i }).click();
+      await expect(actors.athletePage).toHaveURL(/\/mental-training/i, { timeout: 20_000 });
+
+      await expect.poll(async () => {
+        const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+        return state?.latestAssignment?.status || 'missing';
+      }, { timeout: 20_000 }).toBe('started');
+
+      await recordJourneyCompletion(page, actors.athleteIdentity.uid, seededProtocol.assignmentId);
+      writeDebugStep(actors.namespace, 'test3:protocol-completion-recorded');
+
+      await expect.poll(async () => {
+        const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+        return state?.latestAssignment?.status || 'missing';
+      }, { timeout: 20_000 }).toBe('completed');
+
+      const refreshedState = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
+      expect(refreshedState?.responsivenessProfile?.familyResponses?.['priming-focus_narrowing']?.sampleSize || 0).toBeGreaterThan(0);
+      expect(refreshedState?.responsivenessProfile?.sourceEventIds?.length || 0).toBeGreaterThan(0);
     } finally {
       await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
       await actors.coachContext.close().catch(() => null);

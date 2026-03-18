@@ -147,7 +147,7 @@ const SignDocument: React.FC = () => {
       if (request.signingGroupId) {
         const groupQuery = query(collection(db, 'signingRequests'), where('signingGroupId', '==', request.signingGroupId));
         const groupSnap = await getDocs(groupQuery);
-        allSigners = groupSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        allSigners = groupSnap.docs.map(d => ({ ...d.data(), id: d.id }));
         // Ensure the current request is treated as signed
         isFullyExecuted = allSigners.every(r => r.id === request.id ? true : r.status === 'signed');
       } else {
@@ -732,7 +732,6 @@ const SignDocument: React.FC = () => {
 };
 
 export default SignDocument;
-
 
 
 

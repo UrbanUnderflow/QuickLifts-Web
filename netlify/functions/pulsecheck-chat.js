@@ -7,6 +7,22 @@
 // - Saves/updates conversation document in Firestore (conversations)
 
 const { initializeFirebaseAdmin, admin, headers } = require('./config/firebase');
+const { runtimeHelpers: pulseCheckSubmissionRuntime } = require('./submit-pulsecheck-checkin');
+
+const SNAPSHOTS_COLLECTION = 'state-snapshots';
+const CONVERSATION_SIGNAL_EVENTS_COLLECTION = 'conversation-derived-signal-events';
+const VALID_ROUTING = new Set([
+  'protocol_only',
+  'sim_only',
+  'trial_only',
+  'protocol_then_sim',
+  'sim_then_protocol',
+  'defer_alternate_path',
+]);
+const VALID_PROTOCOL_CLASSES = new Set(['regulation', 'priming', 'recovery', 'none']);
+const VALID_CONFIDENCE = new Set(['high', 'medium', 'low']);
+const VALID_READINESS = new Set(['green', 'yellow', 'red']);
+const MUTABLE_ASSIGNMENT_STATUSES = new Set(['assigned', 'viewed']);
 
 // Escalation Tier enum values
 const EscalationTier = {
@@ -64,6 +80,405 @@ function shouldUseSmartNoon(text) {
   return /\b(you decide|you choose|whatever you think|best time|surprise me|up to you|pick for me)\b/.test(t);
 }
 
+function clamp(value, min = 0, max = 100) {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function uniqueStrings(values) {
+  return Array.from(new Set((Array.isArray(values) ? values : [])
+    .filter((value) => typeof value === 'string' && value.trim())
+    .map((value) => value.trim())));
+}
+
+function appendUnique(values, additions) {
+  return Array.from(new Set([...(Array.isArray(values) ? values : []), ...(Array.isArray(additions) ? additions : [])].filter(Boolean)));
+}
+
+function stripUndefinedDeep(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => stripUndefinedDeep(entry)).filter((entry) => entry !== undefined);
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.entries(value).reduce((accumulator, [key, entry]) => {
+      const cleaned = stripUndefinedDeep(entry);
+      if (cleaned !== undefined) {
+        accumulator[key] = cleaned;
+      }
+      return accumulator;
+    }, {});
+  }
+
+  return value === undefined ? undefined : value;
+}
+
+function extractJsonObject(text) {
+  if (!text || typeof text !== 'string') return null;
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    const firstBrace = text.indexOf('{');
+    const lastBrace = text.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      try {
+        return JSON.parse(text.slice(firstBrace, lastBrace + 1));
+      } catch (nestedError) {
+        return null;
+      }
+    }
+  }
+
+  return null;
+}
+
+async function callOpenAiJson({ systemPrompt, userPayload }) {
+  const apiKey = process.env.OPEN_AI_SECRET_KEY;
+  if (!apiKey) return null;
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      temperature: 0.2,
+      max_tokens: 450,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: JSON.stringify(userPayload) },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(`OpenAI request failed (${response.status}): ${errorText.slice(0, 240)}`);
+  }
+
+  const completion = await response.json();
+  return extractJsonObject(completion?.choices?.[0]?.message?.content);
+}
+
+function deriveOverallReadiness({ readinessScore, dimensions }) {
+  if (readinessScore >= 70 && dimensions.focusReadiness >= 65 && dimensions.cognitiveFatigue <= 45) return 'green';
+  if (readinessScore < 45 || dimensions.cognitiveFatigue >= 70 || dimensions.emotionalLoad >= 70) return 'red';
+  return 'yellow';
+}
+
+function deriveProtocolClass(dimensions) {
+  if ((dimensions.cognitiveFatigue ?? 0) >= 70) return 'recovery';
+  if ((dimensions.activation ?? 0) >= 65 || (dimensions.emotionalLoad ?? 0) >= 65) return 'regulation';
+  if ((dimensions.focusReadiness ?? 0) <= 45) return 'priming';
+  return 'none';
+}
+
+function buildCandidateHints({ routing, assignment }) {
+  if (routing === 'trial_only') return ['trial'];
+  if (routing === 'protocol_only') return ['protocol'];
+  if (routing === 'protocol_then_sim' || routing === 'sim_then_protocol') return ['protocol', 'sim'];
+  if (routing === 'defer_alternate_path') return [];
+  if (assignment?.actionType === 'protocol') return ['protocol'];
+  if (assignment?.actionType === 'defer') return [];
+  return ['sim'];
+}
+
+function buildReadinessScore(dimensions) {
+  const focus = dimensions.focusReadiness ?? 50;
+  const fatigue = dimensions.cognitiveFatigue ?? 50;
+  const emotional = dimensions.emotionalLoad ?? 50;
+  const activation = dimensions.activation ?? 50;
+  return clamp(
+    50
+      + ((focus - 50) * 0.5)
+      - ((fatigue - 50) * 0.35)
+      - ((emotional - 50) * 0.2)
+      + ((activation - 50) * 0.1)
+  );
+}
+
+function messageMayContainStateSignal(message) {
+  const t = normalizeText(message);
+  if (!t || t.length < 6) return false;
+
+  return /\b(sleep|slept|tired|drained|exhausted|fried|scattered|overwhelmed|anxious|anxiety|nervous|rattled|heavy|pressure|stressed|stress|panic|calm|calmer|better|good now|good now|ready|locked in|focused|settled|not up for it|not ready|burned out|burnt out|gassed|flat)\b/.test(t);
+}
+
+function validateDeltaNumber(value) {
+  return Number.isFinite(value) ? Math.max(-20, Math.min(20, Math.round(value))) : 0;
+}
+
+function buildFallbackConversationSignalAnalysis({ message, snapshot }) {
+  const text = normalizeText(message);
+  if (!messageMayContainStateSignal(text)) {
+    return null;
+  }
+
+  const sleepSignal = /\b(sleep|slept|awake|insomnia)\b/.test(text);
+  const lowSignal = /\b(drained|exhausted|fried|scattered|overwhelmed|anxious|nervous|rattled|heavy|not up for it|not ready|burned out|burnt out|gassed|flat|stressed|panic|pressure)\b/.test(text);
+  const recoverySignal = /\b(calm|calmer|better|good now|ready|locked in|focused|settled)\b/.test(text);
+
+  if (!lowSignal && !recoverySignal) {
+    return null;
+  }
+
+  if (lowSignal) {
+    const protocolClass = sleepSignal ? 'recovery' : 'regulation';
+    const supportFlag = snapshot?.overallReadiness === 'red' || /\b(not up for it|panic|burned out|burnt out)\b/.test(text);
+    return {
+      shouldCreateEvent: true,
+      confidence: sleepSignal ? 'high' : 'medium',
+      summary: sleepSignal
+        ? 'The athlete described a more depleted state than the current assignment posture, especially around sleep or recovery.'
+        : 'The athlete described a more constrained state than the current assignment posture.',
+      supportingEvidence: uniqueStrings([
+        sleepSignal ? 'User described poor sleep or recovery drag.' : '',
+        /\b(scattered|focused)\b/.test(text) ? 'User gave a direct focus-quality cue.' : '',
+        /\b(anxious|nervous|rattled|pressure|panic)\b/.test(text) ? 'User described pressure or emotional load.' : '',
+      ]),
+      contradictionSummary: 'Latest chat message signals lower readiness than the current runtime posture.',
+      contextTags: uniqueStrings([
+        'chat_signal_refresh',
+        'chat_correction',
+        sleepSignal ? 'sleep_drag' : '',
+        /\b(anxious|nervous|rattled|pressure|panic)\b/.test(text) ? 'pressure_load' : '',
+      ]),
+      dimensionDeltas: {
+        activation: sleepSignal ? -8 : -4,
+        focusReadiness: -10,
+        emotionalLoad: /\b(anxious|nervous|rattled|pressure|panic)\b/.test(text) ? 14 : 8,
+        cognitiveFatigue: sleepSignal ? 14 : 8,
+      },
+      overallReadiness: supportFlag ? 'red' : 'yellow',
+      recommendedRouting: supportFlag ? 'defer_alternate_path' : 'protocol_only',
+      recommendedProtocolClass: protocolClass,
+      supportFlag,
+      decisionSource: 'fallback_rules',
+    };
+  }
+
+  return {
+    shouldCreateEvent: true,
+    confidence: 'medium',
+    summary: 'The athlete described a more ready and settled state than the prior snapshot captured.',
+    supportingEvidence: uniqueStrings([
+      /\b(calm|calmer|settled)\b/.test(text) ? 'User reported calmer physiology.' : '',
+      /\b(ready|locked in|focused|better|good now)\b/.test(text) ? 'User reported improved readiness.' : '',
+    ]),
+    contradictionSummary: 'Latest chat message signals stronger readiness than the prior constrained posture.',
+    contextTags: ['chat_signal_refresh', 'chat_correction', 'readiness_rebound'],
+    dimensionDeltas: {
+      activation: 6,
+      focusReadiness: 10,
+      emotionalLoad: -10,
+      cognitiveFatigue: -8,
+    },
+    overallReadiness: snapshot?.overallReadiness === 'red' ? 'yellow' : 'green',
+    recommendedRouting: 'sim_only',
+    recommendedProtocolClass: 'none',
+    supportFlag: false,
+    decisionSource: 'fallback_rules',
+  };
+}
+
+async function getCurrentStateSnapshot(db, userId, todaysNoraAssignment) {
+  const todayId = `${userId}_${new Date().toISOString().split('T')[0]}`;
+  const directSnapshotId = todaysNoraAssignment?.sourceStateSnapshotId || todayId;
+  const directSnap = await db.collection(SNAPSHOTS_COLLECTION).doc(directSnapshotId).get();
+  if (directSnap.exists) {
+    return { id: directSnap.id, ...(directSnap.data() || {}) };
+  }
+
+  const fallbackQuery = await db
+    .collection(SNAPSHOTS_COLLECTION)
+    .where('athleteId', '==', userId)
+    .where('sourceDate', '==', todayId.split('_').slice(1).join('_'))
+    .orderBy('updatedAt', 'desc')
+    .limit(1)
+    .get();
+  if (fallbackQuery.empty) {
+    return null;
+  }
+
+  const doc = fallbackQuery.docs[0];
+  return { id: doc.id, ...(doc.data() || {}) };
+}
+
+async function deriveConversationSignalAnalysis({ message, recentMessages, snapshot, assignment }) {
+  if (!snapshot || !messageMayContainStateSignal(message)) {
+    return null;
+  }
+
+  const fallback = buildFallbackConversationSignalAnalysis({ message, snapshot });
+
+  try {
+    const raw = await callOpenAiJson({
+      systemPrompt: [
+        'You detect whether an athlete chat message creates a meaningful PulseCheck state correction for Nora.',
+        'Return only valid JSON.',
+        'Use only the provided evidence.',
+        'Do not invent medical claims.',
+        'Only create an event when the message materially updates readiness, fatigue, emotional load, focus, or assignment suitability.',
+        'Allowed confidence: high, medium, low.',
+        'Allowed readiness: green, yellow, red.',
+        'Allowed routing: protocol_only, sim_only, trial_only, protocol_then_sim, sim_then_protocol, defer_alternate_path.',
+        'Allowed protocolClass: regulation, priming, recovery, none.',
+        'Dimension deltas must be integers from -20 to 20.',
+        'JSON shape: {"shouldCreateEvent":false,"confidence":"medium","summary":"","supportingEvidence":[],"contradictionSummary":"","contextTags":[],"dimensionDeltas":{"activation":0,"focusReadiness":0,"emotionalLoad":0,"cognitiveFatigue":0},"overallReadiness":"yellow","recommendedRouting":"sim_only","recommendedProtocolClass":"none","supportFlag":false}',
+      ].join(' '),
+      userPayload: {
+        latestUserMessage: message,
+        recentMessages: Array.isArray(recentMessages) ? recentMessages.slice(-6) : [],
+        currentStateSnapshot: snapshot,
+        todaysAssignment: assignment || null,
+      },
+    });
+
+    if (!raw || typeof raw !== 'object') {
+      return fallback;
+    }
+
+    if (raw.shouldCreateEvent !== true) {
+      return fallback;
+    }
+
+    const confidence = VALID_CONFIDENCE.has(raw.confidence) ? raw.confidence : (fallback?.confidence || 'medium');
+    const overallReadiness = VALID_READINESS.has(raw.overallReadiness) ? raw.overallReadiness : (fallback?.overallReadiness || snapshot.overallReadiness || 'yellow');
+    const recommendedRouting = VALID_ROUTING.has(raw.recommendedRouting)
+      ? raw.recommendedRouting
+      : (fallback?.recommendedRouting || snapshot.recommendedRouting || 'sim_only');
+    const recommendedProtocolClass = VALID_PROTOCOL_CLASSES.has(raw.recommendedProtocolClass)
+      ? raw.recommendedProtocolClass
+      : (fallback?.recommendedProtocolClass || snapshot.recommendedProtocolClass || 'none');
+
+    return {
+      shouldCreateEvent: true,
+      confidence,
+      summary: typeof raw.summary === 'string' && raw.summary.trim()
+        ? raw.summary.trim()
+        : (fallback?.summary || 'Latest athlete chat message materially updated the current-day state posture.'),
+      supportingEvidence: uniqueStrings(raw.supportingEvidence).length
+        ? uniqueStrings(raw.supportingEvidence)
+        : (fallback?.supportingEvidence || []),
+      contradictionSummary: typeof raw.contradictionSummary === 'string' && raw.contradictionSummary.trim()
+        ? raw.contradictionSummary.trim()
+        : (fallback?.contradictionSummary || 'Latest athlete chat message changes the prior state interpretation.'),
+      contextTags: uniqueStrings(raw.contextTags).length
+        ? uniqueStrings(raw.contextTags)
+        : (fallback?.contextTags || ['chat_signal_refresh']),
+      dimensionDeltas: {
+        activation: validateDeltaNumber(raw.dimensionDeltas?.activation),
+        focusReadiness: validateDeltaNumber(raw.dimensionDeltas?.focusReadiness),
+        emotionalLoad: validateDeltaNumber(raw.dimensionDeltas?.emotionalLoad),
+        cognitiveFatigue: validateDeltaNumber(raw.dimensionDeltas?.cognitiveFatigue),
+      },
+      overallReadiness,
+      recommendedRouting,
+      recommendedProtocolClass,
+      supportFlag: typeof raw.supportFlag === 'boolean' ? raw.supportFlag : (fallback?.supportFlag || false),
+      decisionSource: 'ai',
+    };
+  } catch (error) {
+    console.warn('[pulsecheck-chat] Conversation signal extraction fell back to runtime heuristics:', error?.message || error);
+    return fallback;
+  }
+}
+
+function refreshSnapshotFromConversationSignal({ snapshot, assignment, signalAnalysis, eventId, eventAt }) {
+  if (!snapshot || !signalAnalysis?.shouldCreateEvent) {
+    return null;
+  }
+
+  const currentDimensions = snapshot.stateDimensions || {
+    activation: 50,
+    focusReadiness: 50,
+    emotionalLoad: 50,
+    cognitiveFatigue: 50,
+  };
+  const deltas = signalAnalysis.dimensionDeltas || {};
+  const nextDimensions = {
+    activation: clamp((currentDimensions.activation || 50) + (deltas.activation || 0)),
+    focusReadiness: clamp((currentDimensions.focusReadiness || 50) + (deltas.focusReadiness || 0)),
+    emotionalLoad: clamp((currentDimensions.emotionalLoad || 50) + (deltas.emotionalLoad || 0)),
+    cognitiveFatigue: clamp((currentDimensions.cognitiveFatigue || 50) + (deltas.cognitiveFatigue || 0)),
+  };
+
+  let nextReadinessScore = typeof snapshot.readinessScore === 'number'
+    ? clamp(snapshot.readinessScore + ((deltas.focusReadiness || 0) * 0.45) - ((deltas.cognitiveFatigue || 0) * 0.3) - ((deltas.emotionalLoad || 0) * 0.2) + ((deltas.activation || 0) * 0.1))
+    : buildReadinessScore(nextDimensions);
+
+  if (signalAnalysis.overallReadiness === 'red') {
+    nextReadinessScore = Math.min(nextReadinessScore, 42);
+  } else if (signalAnalysis.overallReadiness === 'green') {
+    nextReadinessScore = Math.max(nextReadinessScore, 72);
+  } else {
+    nextReadinessScore = clamp(nextReadinessScore, 45, 69);
+  }
+
+  const overallReadiness = signalAnalysis.overallReadiness || deriveOverallReadiness({
+    readinessScore: nextReadinessScore,
+    dimensions: nextDimensions,
+  });
+  const recommendedRouting = VALID_ROUTING.has(signalAnalysis.recommendedRouting)
+    ? signalAnalysis.recommendedRouting
+    : (snapshot.recommendedRouting || 'sim_only');
+  const recommendedProtocolClass = VALID_PROTOCOL_CLASSES.has(signalAnalysis.recommendedProtocolClass)
+    ? signalAnalysis.recommendedProtocolClass
+    : (snapshot.recommendedProtocolClass || deriveProtocolClass(nextDimensions));
+  const supportFlag = typeof signalAnalysis.supportFlag === 'boolean'
+    ? signalAnalysis.supportFlag
+    : Boolean(snapshot.supportFlag);
+  const previousInterpretation = snapshot.enrichedInterpretation || {};
+  const plannerNote = `Chat-derived correction: ${signalAnalysis.summary}`;
+
+  return {
+    ...snapshot,
+    stateDimensions: nextDimensions,
+    overallReadiness,
+    confidence: signalAnalysis.confidence || snapshot.confidence || 'medium',
+    freshness: 'current',
+    sourcesUsed: appendUnique(snapshot.sourcesUsed, ['conversation_signal_runtime']),
+    sourceEventIds: appendUnique(snapshot.sourceEventIds, [eventId]),
+    contextTags: appendUnique(snapshot.contextTags, ['chat_signal_refresh', ...(signalAnalysis.contextTags || [])]),
+    recommendedRouting,
+    recommendedProtocolClass,
+    candidateClassHints: buildCandidateHints({ routing: recommendedRouting, assignment }),
+    readinessScore: nextReadinessScore,
+    supportFlag,
+    decisionSource: signalAnalysis.decisionSource || snapshot.decisionSource || 'fallback_rules',
+    enrichedInterpretation: {
+      summary: signalAnalysis.summary || previousInterpretation.summary || 'Latest athlete chat message updated the state snapshot.',
+      likelyPrimaryFactor: previousInterpretation.likelyPrimaryFactor || 'mixed',
+      supportingSignals: appendUnique(previousInterpretation.supportingSignals, signalAnalysis.supportingEvidence || []),
+      contradictions: appendUnique(previousInterpretation.contradictions, signalAnalysis.contradictionSummary ? [signalAnalysis.contradictionSummary] : []),
+      plannerNotes: appendUnique(previousInterpretation.plannerNotes, [plannerNote]),
+      confidenceRationale:
+        previousInterpretation.confidenceRationale
+        || 'Nora incorporated a structured chat-derived signal into the current-day snapshot.',
+      supportFlag,
+      modelSource: signalAnalysis.decisionSource || previousInterpretation.modelSource || 'fallback_rules',
+    },
+    updatedAt: eventAt,
+  };
+}
+
+function buildSnapshotContextSection(snapshot, conversationSignalEvent) {
+  if (!snapshot) {
+    return '';
+  }
+
+  const summary = snapshot.enrichedInterpretation?.summary || 'No enriched summary saved.';
+  const plannerNotes = uniqueStrings(snapshot.enrichedInterpretation?.plannerNotes).slice(-2);
+  const noteLines = plannerNotes.length ? `\n- Planner Notes: ${plannerNotes.join(' | ')}` : '';
+  const correctionLine = conversationSignalEvent
+    ? `\n- Latest Chat Correction: ${conversationSignalEvent.inferredDelta?.summary || 'A meaningful chat-derived state update was recorded just now.'}`
+    : '';
+
+  return `\n\n## Current State Snapshot:\n- Overall Readiness: ${snapshot.overallReadiness || 'unknown'}\n- Confidence: ${snapshot.confidence || 'medium'}\n- Routing Posture: ${snapshot.recommendedRouting || 'sim_only'}\n- Protocol Class Hint: ${snapshot.recommendedProtocolClass || 'none'}\n- Support Flag: ${snapshot.supportFlag ? 'true' : 'false'}\n- Snapshot Summary: ${summary}${noteLines}${correctionLine}\nRules:\n- Treat this as the latest runtime state estimate.\n- If a just-recorded chat correction makes the athlete meaningfully more constrained than the earlier assignment posture, do not push them into the heavier version of the task as if nothing changed.\n- Keep recommendations bounded and explain when the state seems to have shifted.`;
+}
+
 async function getActiveMentalAssignments(db, userId) {
   const snap = await db
     .collection('sim-assignments')
@@ -96,6 +511,7 @@ function getDailyAssignmentActionLabel(assignment) {
 
   return (
     humanizeAssignmentField(assignment.simSpecId) ||
+    humanizeAssignmentField(assignment.protocolLabel) ||
     humanizeAssignmentField(assignment.legacyExerciseId) ||
     humanizeAssignmentField(assignment.sessionType) ||
     (assignment.actionType === 'lighter_sim' ? 'lighter sim' : 'sim')
@@ -233,6 +649,10 @@ exports.handler = async (event, context) => {
       }
     }
 
+    if (!convoRef) {
+      convoRef = db.collection('conversations').doc();
+    }
+
     // Build recent message history
     // Prefer client-provided messages (iOS sends these), fall back to Firestore conversation
     let recentMessages;
@@ -247,13 +667,117 @@ exports.handler = async (event, context) => {
 
     let todaysNoraAssignment = null;
     let athleteMentalProgress = null;
+    let currentStateSnapshot = null;
+    let conversationSignalEvent = null;
+    let assignmentRefreshApplied = false;
     try {
       [todaysNoraAssignment, athleteMentalProgress] = await Promise.all([
         getTodaysNoraAssignment(db, userId),
         getAthleteMentalProgress(db, userId),
       ]);
+      currentStateSnapshot = await getCurrentStateSnapshot(db, userId, todaysNoraAssignment);
     } catch (contextError) {
       console.warn('[pulsecheck-chat] Failed to load Nora assignment context (non-blocking):', contextError?.message || contextError);
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const userMsg = {
+      id: cryptoRandomId(),
+      content: message,
+      isFromUser: true,
+      timestamp: nowSec,
+      messageType: 'text'
+    };
+    let newConvoId = conversationId || convo?.id || convoRef.id;
+
+    try {
+      const signalAnalysis = await deriveConversationSignalAnalysis({
+        message,
+        recentMessages,
+        snapshot: currentStateSnapshot,
+        assignment: todaysNoraAssignment,
+      });
+
+      if (signalAnalysis?.shouldCreateEvent && currentStateSnapshot) {
+        const eventRef = db.collection(CONVERSATION_SIGNAL_EVENTS_COLLECTION).doc();
+        const eventAt = Date.now();
+        const refreshedSnapshot = refreshSnapshotFromConversationSignal({
+          snapshot: currentStateSnapshot,
+          assignment: todaysNoraAssignment,
+          signalAnalysis,
+          eventId: eventRef.id,
+          eventAt,
+        });
+
+        if (refreshedSnapshot) {
+          conversationSignalEvent = {
+            id: eventRef.id,
+            athleteId: userId,
+            conversationId: newConvoId,
+            messageId: userMsg.id,
+            sourceDate: currentStateSnapshot.sourceDate || new Date().toISOString().split('T')[0],
+            sourceAssignmentId: todaysNoraAssignment?.id,
+            sourceStateSnapshotId: currentStateSnapshot.id,
+            supersedesSnapshotId: currentStateSnapshot.id,
+            confidence: signalAnalysis.confidence || currentStateSnapshot.confidence || 'medium',
+            inferredDelta: {
+              activationDelta: signalAnalysis.dimensionDeltas?.activation || 0,
+              focusReadinessDelta: signalAnalysis.dimensionDeltas?.focusReadiness || 0,
+              emotionalLoadDelta: signalAnalysis.dimensionDeltas?.emotionalLoad || 0,
+              cognitiveFatigueDelta: signalAnalysis.dimensionDeltas?.cognitiveFatigue || 0,
+              overallReadiness: signalAnalysis.overallReadiness,
+              recommendedRouting: signalAnalysis.recommendedRouting,
+              recommendedProtocolClass: signalAnalysis.recommendedProtocolClass,
+              supportFlag: signalAnalysis.supportFlag,
+              summary: signalAnalysis.summary,
+              contradictionSummary: signalAnalysis.contradictionSummary,
+              supportingEvidence: signalAnalysis.supportingEvidence || [],
+              contextTags: signalAnalysis.contextTags || [],
+            },
+            eventAt,
+            createdAt: eventAt,
+            decisionSource: signalAnalysis.decisionSource || 'fallback_rules',
+          };
+
+          await Promise.all([
+            eventRef.set(stripUndefinedDeep(conversationSignalEvent)),
+            db.collection(SNAPSHOTS_COLLECTION).doc(currentStateSnapshot.id).set(stripUndefinedDeep(refreshedSnapshot), { merge: true }),
+          ]);
+          currentStateSnapshot = refreshedSnapshot;
+
+          if ((!todaysNoraAssignment || MUTABLE_ASSIGNMENT_STATUSES.has(String(todaysNoraAssignment.status || '')))
+            && athleteMentalProgress?.activeProgram) {
+            const priorAssignment = todaysNoraAssignment;
+            const rematerialized = await pulseCheckSubmissionRuntime.rematerializeAssignmentFromSnapshot({
+              db,
+              athleteId: userId,
+              sourceCheckInId:
+                priorAssignment?.sourceCheckInId
+                || currentStateSnapshot.sourceCheckInId
+                || currentStateSnapshot.rawSignalSummary?.explicitSelfReport?.id
+                || '',
+              sourceStateSnapshotId: currentStateSnapshot.id,
+              sourceDate: currentStateSnapshot.sourceDate || new Date().toISOString().split('T')[0],
+              progress: athleteMentalProgress,
+            });
+
+            if (rematerialized?.dailyAssignment) {
+              todaysNoraAssignment = rematerialized.dailyAssignment;
+              currentStateSnapshot = rematerialized.stateSnapshot || currentStateSnapshot;
+              assignmentRefreshApplied =
+                !priorAssignment
+                || priorAssignment.actionType !== rematerialized.dailyAssignment.actionType
+                || priorAssignment.chosenCandidateId !== rematerialized.dailyAssignment.chosenCandidateId
+                || priorAssignment.rationale !== rematerialized.dailyAssignment.rationale
+                || priorAssignment.status !== rematerialized.dailyAssignment.status
+                || priorAssignment.sourceStateSnapshotId !== rematerialized.dailyAssignment.sourceStateSnapshotId
+                || priorAssignment.updatedAt !== rematerialized.dailyAssignment.updatedAt;
+            }
+          }
+        }
+      }
+    } catch (signalError) {
+      console.warn('[pulsecheck-chat] Chat-derived signal refresh failed (non-blocking):', signalError?.message || signalError);
     }
 
     // =========================================================================
@@ -386,6 +910,11 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
       }
 
       assignmentContextSection += `\nRules:\n- Treat this assignment as the source of truth for today's performance task.\n- If the status is deferred, superseded, or coach-adjusted, do not speak as if the original task is still active.\n- If the athlete asks what they should do today, anchor your answer to this assignment before offering broader coaching context.\n- Do not invent a different assignment unless you clearly frame it as separate brainstorming and not the active task.`;
+      if (conversationSignalEvent && !['started', 'completed', 'deferred', 'overridden', 'superseded'].includes(todaysNoraAssignment.status || '')) {
+        assignmentContextSection += assignmentRefreshApplied
+          ? `\n- A newer chat-derived signal refreshed both the state snapshot and the current mutable assignment. Speak to the updated task, not the stale one.`
+          : `\n- A newer chat-derived signal just refreshed the state snapshot. If that newer evidence makes the athlete more constrained than the original assignment posture, acknowledge the shift and keep the immediate next step bounded instead of pushing the heavier version of the task.`;
+      }
     } else if (athleteMentalProgress?.activeProgram) {
       const activeProgram = athleteMentalProgress.activeProgram;
       const recommendedAction =
@@ -396,6 +925,7 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
 
       assignmentContextSection = `\n\n## Current Program Recommendation (No Daily Task Materialized Yet):\n- Recommended Focus: ${recommendedAction}\n- Rationale: ${activeProgram.rationale || 'No rationale saved.'}\nRules:\n- This is recommendation context, not a confirmed assigned task.\n- If the athlete asks what is assigned today, be honest that no daily Nora task is materialized yet.`;
     }
+    const snapshotContextSection = buildSnapshotContextSection(currentStateSnapshot, conversationSignalEvent);
     
     // Add context-specific instructions
     let contextInstructions = '';
@@ -418,7 +948,7 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
     }
     
     // Build final system prompt
-    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${assignmentContextSection}${contextInstructions}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nInstead, acknowledge their answer and advance the topic.`;
+    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${assignmentContextSection}${snapshotContextSection}${contextInstructions}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nInstead, acknowledge their answer and advance the topic.`;
     
     // Legacy support: If iOS still sends systemPromptContext (old version), use it but log a warning
     if (systemPromptContext && !healthContext) {
@@ -652,14 +1182,6 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
     }
 
     // Update conversation: append messages and save
-    const nowSec = Math.floor(Date.now() / 1000);
-    const userMsg = {
-      id: cryptoRandomId(),
-      content: message,
-      isFromUser: true,
-      timestamp: nowSec,
-      messageType: 'text'
-    };
     const aiMsg = {
       id: cryptoRandomId(),
       content: assistantMessage,
@@ -668,10 +1190,10 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
       messageType: 'text'
     };
 
-    let newConvoId = conversationId || convo?.id;
     try {
-      if (!convoRef) {
+      if (!convo?.messages?.length) {
         const data = {
+          id: convoRef.id,
           userId,
           title: 'Nora',
           messages: [userMsg, aiMsg],
@@ -681,9 +1203,8 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
           createdAt: nowSec,
           updatedAt: nowSec
         };
-        const docRef = await db.collection('conversations').add(data);
-        newConvoId = docRef.id;
-        await docRef.set({ id: newConvoId }, { merge: true });
+        await convoRef.set(data, { merge: true });
+        newConvoId = convoRef.id;
       } else {
         const updated = Array.isArray(convo?.messages) ? [...convo.messages, userMsg, aiMsg] : [userMsg, aiMsg];
         await convoRef.set({
@@ -845,7 +1366,11 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
       body: JSON.stringify({
         conversationId: newConvoId,
         assistantMessage,
-        escalation: escalationResponse
+        escalation: escalationResponse,
+        stateSnapshot: currentStateSnapshot || null,
+        conversationSignalEvent: conversationSignalEvent || null,
+        dailyAssignment: todaysNoraAssignment || null,
+        assignmentRefreshApplied,
       })
     };
   } catch (error) {

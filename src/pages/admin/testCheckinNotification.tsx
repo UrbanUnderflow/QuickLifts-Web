@@ -118,7 +118,7 @@ const TestCheckinNotificationPage: React.FC = () => {
       const usersRef = collection(db, 'users');
       const querySnapshot = await getDocs(usersRef);
       // Convert raw data to plain objects for caching, then instantiate User class
-      const usersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const usersData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
       
       localStorage.setItem(USER_CACHE_KEY, JSON.stringify(usersData));
       console.log(`[User Cache] ${usersData.length} users fetched from Firestore and cached in localStorage.`);

@@ -95,7 +95,7 @@ class UserService {
       const q = query(usersRef, where(documentId(), 'in', chunk));
       const querySnapshot = await getDocs(q);
       querySnapshot.docs.forEach(doc => {
-        users.push(new User(doc.id, { id: doc.id, ...doc.data() }));
+        users.push(new User(doc.id, { ...doc.data(), id: doc.id }));
       });
     }
     return users;
@@ -803,7 +803,7 @@ class UserService {
       const querySnapshot = await getDocs(usersRef);
       
       return querySnapshot.docs
-        .map(doc => new User(doc.id, { id: doc.id, ...doc.data() }))
+        .map(doc => new User(doc.id, { ...doc.data(), id: doc.id }))
         .filter(user => user.profileImage?.profileImageURL); // Only return users with profile images
         
     } catch (error) {
@@ -874,7 +874,7 @@ class UserService {
       const querySnapshot = await getDocs(q);
       
       return querySnapshot.docs
-        .map(doc => new User(doc.id, { id: doc.id, ...doc.data() }))
+        .map(doc => new User(doc.id, { ...doc.data(), id: doc.id }))
         .filter(user => user.profileImage?.profileImageURL); // Only return users with profile images
         
     } catch (error) {
@@ -1056,7 +1056,7 @@ class UserService {
       
       const dataCards: any[] = [];
       querySnapshot.forEach((doc) => {
-        const data = { id: doc.id, ...doc.data() };
+        const data = { ...doc.data(), id: doc.id };
         dataCards.push(data);
       });
 

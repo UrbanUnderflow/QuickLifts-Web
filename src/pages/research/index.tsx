@@ -33,6 +33,12 @@ interface Article {
   publishedAt?: Timestamp;
 }
 
+const normalizeArticle = (id: string, data: Omit<Article, 'slug'>): Article => ({
+  ...data,
+  // The Firestore document ID is the canonical route segment for /research/[slug].
+  slug: id,
+});
+
 // ─── Format date from Timestamp ────────────────────────────────────
 const formatDate = (timestamp: Timestamp | undefined): string => {
   if (!timestamp) return '';
@@ -181,7 +187,7 @@ const ResearchPage: NextPage = () => {
       try {
         const snapshot = await getDocs(collection(db, 'researchArticles'));
         const publishedArticles = snapshot.docs
-          .map(doc => ({ slug: doc.id, ...doc.data() }) as Article)
+          .map(doc => normalizeArticle(doc.id, doc.data() as Omit<Article, 'slug'>))
           .filter(article => article.status === 'published')
           .sort((a, b) => {
             const aTime = a.publishedAt?.toMillis?.() || a.createdAt?.toMillis?.() || 0;

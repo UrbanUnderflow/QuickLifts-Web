@@ -2387,8 +2387,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       (snapshot) => {
         equityDocs = snapshot.docs
           .map(d => ({
-            id: d.id,
             ...d.data(),
+            id: d.id,
             source: 'equity',
             type: 'equity'
           }))
@@ -2415,8 +2415,8 @@ const InvestorDataroom: React.FC<InvestorDataroomPageProps> = ({ metaData }) => 
       (snapshot) => {
         legalDocs = snapshot.docs
           .map(d => ({
-            id: d.id,
             ...d.data(),
+            id: d.id,
             source: 'legal',
             type: 'legal'
           }))

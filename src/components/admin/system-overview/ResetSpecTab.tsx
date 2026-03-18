@@ -518,6 +518,11 @@ const ResetSpecTab: React.FC = () => {
                             Current immersive build status: Reset Chamber is the live Reset surface inside the Vision Pro football package. Other family-level immersive variants elsewhere in the handbook are still roadmap items unless they are explicitly marked otherwise.
                         </p>
                     </div>
+                    <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2">
+                        <p className="text-[10px] text-cyan-200">
+                            Living implementation contract: update the active Reset Chamber behavior in <span className="font-semibold text-white">Vision Pro - Immersive Tests → RealityKit Implementation Guide</span>. This Reset family page remains the taxonomy and measurement context layer, while the Vision Pro chapter owns the live immersive chamber rules.
+                        </p>
+                    </div>
                     <div className="rounded-lg border border-zinc-700 bg-black/30 px-3 py-2">
                         <p className="text-[10px] text-zinc-500">New variants can be added without taxonomy changes. If any variant produces divergent performance patterns (per the Promotion Protocol), it will be flagged for evaluation.</p>
                     </div>
@@ -541,10 +546,61 @@ const ResetSpecTab: React.FC = () => {
                         </div>
                     </div>
                     <div className="rounded-xl border border-zinc-700 bg-black/30 px-4 py-3">
+                        <p className="text-xs font-semibold text-white mb-1">Operator Companion Posture</p>
+                        <p className="text-[10px] text-zinc-400 leading-relaxed">
+                            First-time Vision Pro demos should be staff-led. The phone companion should orchestrate queueing, start, pause, abort, redo, and submit visibility while the measured task stays fully in-headset. Keep the live control contract in <span className="font-semibold text-white">Vision Pro - Immersive Tests → Operator Companion Spec</span>, and keep the temporary execution plan in <span className="font-semibold text-white">Vision Pro - Immersive Tests → Active Implementation-Planning Artifacts</span> until the control loop is stable enough for promotion.
+                        </p>
+                    </div>
+                    <div className="rounded-xl border border-zinc-700 bg-black/30 px-4 py-3">
                         <p className="text-xs font-semibold text-white mb-1">Transfer Gap</p>
                         <p className="text-[10px] text-zinc-400 leading-relaxed">
                             The difference between Recovery Time in daily training (adaptive, phone/web) and Recovery Time in the Trial variant (standardized, higher fidelity). <span className="text-green-400">Small gap</span> = internalized skill. <span className="text-red-400">Large gap</span> = improvement in drill, not yet stabilized under realistic conditions.
                         </p>
+                    </div>
+                    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+                        <p className="text-xs font-semibold text-white mb-1">Reset Chamber Scientific Contract</p>
+                        <div className="space-y-1">
+                            {[
+                                'Keep only the cues that strengthen condition onset, evaluative pressure, urgency, or outcome readability.',
+                                'Trim decorative movement that makes the room busier without changing the athlete decision or the meaning of the rep.',
+                                'Use atmosphere to support the manipulation; do not let spectacle become the manipulation.'
+                            ].map((item) => (
+                                <div key={item} className="flex items-start gap-1.5">
+                                    <CheckCircle2 className="w-3 h-3 text-amber-400 flex-shrink-0 mt-0.5" />
+                                    <p className="text-[10px] text-zinc-300">{item}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3">
+                        <p className="text-xs font-semibold text-white mb-1">Polish Sprint 3 Evaluation Lens</p>
+                        <div className="space-y-1">
+                            {[
+                                'Polish only counts if it increases manipulation strength, task readability, or measurement trust.',
+                                'Use physical Vision Pro runs to tune brightness, scale, and intensity before adding more environment layers.',
+                                'If removing an animated element would not harm the experimental condition, it should probably be softened or cut.'
+                            ].map((item) => (
+                                <div key={item} className="flex items-start gap-1.5">
+                                    <CheckCircle2 className="w-3 h-3 text-cyan-400 flex-shrink-0 mt-0.5" />
+                                    <p className="text-[10px] text-zinc-300">{item}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="rounded-xl border border-green-500/20 bg-green-500/5 px-4 py-3">
+                        <p className="text-xs font-semibold text-white mb-1">Current Keep / Trim / Cut Call</p>
+                        <div className="space-y-1">
+                            {[
+                                'Keep the phase IBL family, ground/lane, layered crowd presence, haze shaping, and scoreboard consequence cues.',
+                                'Trim orb disruption jitter, crowd flash intensity, recovery halo dominance, and world-space summary scale.',
+                                'Cut decorative motion that does not strengthen onset, pressure, urgency, or outcome readability.'
+                            ].map((item) => (
+                                <div key={item} className="flex items-start gap-1.5">
+                                    <CheckCircle2 className="w-3 h-3 text-green-400 flex-shrink-0 mt-0.5" />
+                                    <p className="text-[10px] text-zinc-300">{item}</p>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </section>

@@ -383,7 +383,7 @@ export default function MissionControlPage() {
             limit(20)
         );
         const unsub = onSnapshot(q, (snap) => {
-            const items = snap.docs.map(d => ({ id: d.id, ...d.data() } as ProposedObjective));
+            const items = snap.docs.map(d => ({ ...d.data(), id: d.id } as ProposedObjective));
             // Sort client-side to avoid composite index requirement
             items.sort((a, b) => {
                 const aTime = (a as any).proposedAt?.toMillis?.() ?? 0;

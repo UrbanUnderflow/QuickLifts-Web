@@ -68,6 +68,16 @@ interface ResearchArticle {
     publishedAt?: Timestamp;
 }
 
+const normalizeResearchArticle = (
+    id: string,
+    data: Omit<ResearchArticle, 'id' | 'slug'>
+): ResearchArticle => ({
+    ...data,
+    id,
+    // The document ID is the route slug used by /research/[slug].
+    slug: id,
+});
+
 const CATEGORIES = [
     'Metabolic Health',
     'Performance Science',
@@ -281,10 +291,9 @@ const ResearchArticlesAdmin: React.FC = () => {
                 orderBy('createdAt', 'desc')
             );
             const snapshot = await getDocs(articlesQuery);
-            const articlesData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })) as ResearchArticle[];
+            const articlesData = snapshot.docs.map(doc =>
+                normalizeResearchArticle(doc.id, doc.data() as Omit<ResearchArticle, 'id' | 'slug'>)
+            );
             setArticles(articlesData);
         } catch (error) {
             console.error('Error loading articles:', error);
@@ -420,6 +429,7 @@ const ResearchArticlesAdmin: React.FC = () => {
             } else if (selectedArticle) {
                 // Update existing article
                 const updates: Partial<ResearchArticle> = {
+                    slug: selectedArticle.id,
                     title: formData.title,
                     subtitle: formData.subtitle,
                     author: formData.author,

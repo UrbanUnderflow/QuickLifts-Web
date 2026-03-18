@@ -161,7 +161,7 @@ const FitnessSeekerLeadsPage: React.FC = () => {
                 // Campaigns
                 const q = query(collection(db, 'outreach_campaigns'), orderBy('createdAt', 'desc'), limit(10));
                 const campsSnap = await getDocs(q);
-                const camps = campsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as OutreachCampaign));
+                const camps = campsSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as OutreachCampaign));
                 setCampaigns(camps);
             } catch (err) {
                 console.error("Failed to fetch initial data", err);

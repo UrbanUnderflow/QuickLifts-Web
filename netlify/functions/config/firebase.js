@@ -184,7 +184,13 @@ if (admin.apps.length === 0) {
   }
 }
 
-const db = admin.firestore();
+const db = new Proxy({}, {
+  get(_target, property) {
+    const firestore = admin.firestore();
+    const value = firestore[property];
+    return typeof value === 'function' ? value.bind(firestore) : value;
+  }
+});
 
 // Helper function to convert timestamps
 const convertTimestamp = (timestamp) => {

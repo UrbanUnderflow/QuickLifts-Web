@@ -8,9 +8,11 @@ import {
   assignmentOrchestratorService,
   CheckInType,
   completionService,
+  pulseCheckCheckInSubmissionService,
   PulseCheckDailyAssignmentStatus,
+  stateSnapshotService,
 } from '../../api/firebase/mentaltraining';
-import type { ExerciseCompletion, PulseCheckDailyAssignment } from '../../api/firebase/mentaltraining/types';
+import type { ExerciseCompletion, PulseCheckDailyAssignment, PulseCheckStateSnapshot } from '../../api/firebase/mentaltraining/types';
 import { useUser, useUserLoading } from '../../hooks/useUser';
 import PulseCheckAccessHub, { teamDestinationForMembership } from './PulseCheckAccessHub';
 
@@ -145,9 +147,12 @@ const assignmentActionLabel = (assignment: PulseCheckDailyAssignment | null) => 
   if (!assignment) return 'No Nora task yet';
   if (assignment.actionType === 'defer') return 'Pause for today';
   if (assignment.simSpecId) return humanizeAssignmentLabel(assignment.simSpecId);
+  if (assignment.protocolLabel) return assignment.protocolLabel;
   if (assignment.legacyExerciseId) return humanizeAssignmentLabel(assignment.legacyExerciseId);
   if (assignment.sessionType) return humanizeAssignmentLabel(assignment.sessionType);
-  return assignment.actionType === 'lighter_sim' ? 'Lighter sim' : 'Sim';
+  if (assignment.actionType === 'lighter_sim') return 'Lighter sim';
+  if (assignment.actionType === 'protocol') return 'Protocol';
+  return 'Sim';
 };
 
 const isLaunchableAssignment = (assignment: PulseCheckDailyAssignment | null) =>
@@ -309,6 +314,7 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
   const [checkInSaving, setCheckInSaving] = useState(false);
   const [todaysCheckInAt, setTodaysCheckInAt] = useState<number | null>(null);
   const [currentDailyAssignment, setCurrentDailyAssignment] = useState<PulseCheckDailyAssignment | null>(null);
+  const [currentStateSnapshot, setCurrentStateSnapshot] = useState<PulseCheckStateSnapshot | null>(null);
   const [assignmentLoading, setAssignmentLoading] = useState(true);
   const [latestCompletion, setLatestCompletion] = useState<ExerciseCompletion | null>(null);
   const [recentSessionHistory, setRecentSessionHistory] = useState<ExerciseCompletion[]>([]);
@@ -317,6 +323,12 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
     const assignment = await assignmentOrchestratorService.getForAthleteOnDate(userId, todayDateKey());
     setCurrentDailyAssignment(assignment);
     return assignment;
+  };
+
+  const refreshTodaySnapshot = async (userId: string) => {
+    const snapshot = await stateSnapshotService.getForAthleteOnDate(userId, todayDateKey());
+    setCurrentStateSnapshot(snapshot);
+    return snapshot;
   };
 
   useEffect(() => {
@@ -358,6 +370,7 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
     if (currentUserLoading) return;
     if (!currentUser?.id) {
       setCurrentDailyAssignment(null);
+      setCurrentStateSnapshot(null);
       setAssignmentLoading(false);
       return;
     }
@@ -365,17 +378,21 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
     let active = true;
     setAssignmentLoading(true);
 
-    assignmentOrchestratorService
-      .getForAthleteOnDate(currentUser.id, todayDateKey())
-      .then((assignment) => {
+    Promise.all([
+      assignmentOrchestratorService.getForAthleteOnDate(currentUser.id, todayDateKey()),
+      stateSnapshotService.getForAthleteOnDate(currentUser.id, todayDateKey()),
+    ])
+      .then(([assignment, snapshot]) => {
         if (active) {
           setCurrentDailyAssignment(assignment);
+          setCurrentStateSnapshot(snapshot);
         }
       })
       .catch((error) => {
-        console.error('[PulseCheck today] Failed to load today assignment:', error);
+        console.error('[PulseCheck today] Failed to load daily runtime context:', error);
         if (active) {
           setCurrentDailyAssignment(null);
+          setCurrentStateSnapshot(null);
         }
       })
       .finally(() => {
@@ -513,23 +530,25 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
     setSelectedReadiness(option.id);
     setCheckInSaving(true);
 
-    completionService
-      .recordCheckIn({
+    pulseCheckCheckInSubmissionService
+      .submit({
         userId: currentUser.id,
         type: CheckInType.Morning,
         readinessScore: option.score,
         moodWord: option.label,
         notes: 'PulseCheck web Today daily check-in',
       })
-      .then(() => {
-        setTodaysCheckInAt(Date.now());
-        return refreshTodayAssignment(currentUser.id);
+      .then((result) => {
+        setTodaysCheckInAt(result.checkIn.createdAt || Date.now());
+        setCurrentStateSnapshot(result.stateSnapshot);
+        setCurrentDailyAssignment(result.dailyAssignment);
       })
       .catch((error) => {
         console.error('[PulseCheck today] Failed to save daily check-in:', error);
         setSelectedReadiness(null);
         setTodaysCheckInAt(null);
         setCurrentDailyAssignment(null);
+        setCurrentStateSnapshot(null);
       })
       .finally(() => {
         setCheckInSaving(false);
@@ -540,8 +559,16 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
     try {
       if (currentDailyAssignment?.id) {
         await assignmentOrchestratorService.markViewed(currentDailyAssignment.id);
-        const refreshed = await assignmentOrchestratorService.getById(currentDailyAssignment.id);
-        setCurrentDailyAssignment(refreshed);
+        const [refreshedAssignment, refreshedSnapshot] = await Promise.all([
+          assignmentOrchestratorService.getById(currentDailyAssignment.id),
+          currentStateSnapshot?.id
+            ? stateSnapshotService.getById(currentStateSnapshot.id)
+            : refreshTodaySnapshot(currentUser?.id || ''),
+        ]);
+        setCurrentDailyAssignment(refreshedAssignment);
+        if (refreshedSnapshot) {
+          setCurrentStateSnapshot(refreshedSnapshot);
+        }
       }
     } catch (error) {
       console.error('[PulseCheck today] Failed to mark daily assignment viewed:', error);
@@ -557,10 +584,16 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
 
   const orgCount = new Set(memberships.map((m) => m.organizationId)).size;
   const canLaunchTodayTask = isLaunchableAssignment(currentDailyAssignment);
+  const snapshotReadinessLabel = currentStateSnapshot?.overallReadiness
+    ? `${currentStateSnapshot.overallReadiness} readiness`
+    : null;
+  const snapshotConfidenceLabel = currentStateSnapshot?.confidence
+    ? `${currentStateSnapshot.confidence} confidence`
+    : null;
   const readinessStatusCopy = checkInLoading
     ? 'Checking whether today already has a saved check-in.'
     : selectedReadiness
-      ? `Saved${todaysCheckInAt ? ` · ${new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(todaysCheckInAt))}` : ''}${assignmentLoading ? ' · building today\'s task' : currentDailyAssignment ? ` · ${assignmentStatusLabel(currentDailyAssignment.status)}` : ''}`
+      ? `Saved${todaysCheckInAt ? ` · ${new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(todaysCheckInAt))}` : ''}${assignmentLoading ? ' · building today\'s task' : currentDailyAssignment ? ` · ${assignmentStatusLabel(currentDailyAssignment.status)}` : ''}${snapshotReadinessLabel ? ` · ${snapshotReadinessLabel}` : ''}`
       : 'Not completed yet';
 
   return (
@@ -918,6 +951,16 @@ export default function PulseCheckTodayView({ onOpenNora }: PulseCheckTodayViewP
                       <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-300">
                         {assignmentStatusLabel(currentDailyAssignment.status)}
                       </div>
+                      {snapshotReadinessLabel ? (
+                        <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-300">
+                          {snapshotReadinessLabel}
+                        </div>
+                      ) : null}
+                      {snapshotConfidenceLabel ? (
+                        <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-300">
+                          {snapshotConfidenceLabel}
+                        </div>
+                      ) : null}
                       {currentDailyAssignment.readinessBand ? (
                         <div className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-300">
                           {currentDailyAssignment.readinessBand} readiness

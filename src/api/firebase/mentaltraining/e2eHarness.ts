@@ -17,7 +17,10 @@ import type { Firestore } from 'firebase/firestore';
 
 import {
   ATHLETE_MENTAL_PROGRESS_COLLECTION,
+  PULSECHECK_ASSIGNMENT_CANDIDATE_SETS_COLLECTION,
   PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION,
+  PULSECHECK_PROTOCOL_RESPONSIVENESS_PROFILES_COLLECTION,
+  PULSECHECK_STATE_SNAPSHOTS_COLLECTION,
   SIM_CHECKINS_ROOT,
   SIM_COMPLETIONS_ROOT,
   SIM_MODULES_COLLECTION,
@@ -115,6 +118,34 @@ function buildAthleteJourneyFixtureIds(namespace: string) {
     teamId: workspace.teamId,
     coachAthleteLinkId: `${prefix}coach-athlete-link`,
   };
+}
+
+function resolveProtocolFixture(protocolId?: string) {
+  switch (protocolId) {
+    case 'protocol-power-pose':
+      return {
+        id: 'protocol-power-pose',
+        label: 'Power Posing',
+        legacyExerciseId: 'confidence-power-pose',
+        protocolClass: 'priming',
+        protocolCategory: ExerciseCategory.Confidence,
+        protocolResponseFamily: 'confidence_priming',
+        protocolDeliveryMode: 'embodied_reset',
+        durationSeconds: 120,
+      };
+    case 'protocol-cue-word-anchoring':
+    default:
+      return {
+        id: 'protocol-cue-word-anchoring',
+        label: 'Cue Word Anchoring',
+        legacyExerciseId: 'focus-cue-word',
+        protocolClass: 'priming',
+        protocolCategory: ExerciseCategory.Focus,
+        protocolResponseFamily: 'focus_narrowing',
+        protocolDeliveryMode: 'guided_focus',
+        durationSeconds: 300,
+      };
+  }
 }
 
 async function listPrefixedDocIds(db: Firestore, collectionName: string, prefix: string) {
@@ -838,10 +869,13 @@ async function cleanupPulseCheckAthleteJourneyFixture(
     deleteNestedDocsByParent(db, SIM_CHECKINS_ROOT, input.athleteUserId, 'check-ins'),
     deleteNestedDocsByParent(db, SIM_COMPLETIONS_ROOT, input.athleteUserId, 'completions'),
     deleteQueryDocs(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, 'athleteId', input.athleteUserId),
+    deleteQueryDocs(db, PULSECHECK_ASSIGNMENT_CANDIDATE_SETS_COLLECTION, 'athleteId', input.athleteUserId),
+    deleteQueryDocs(db, PULSECHECK_STATE_SNAPSHOTS_COLLECTION, 'athleteId', input.athleteUserId),
     deleteQueryDocs(db, COACH_NOTIFICATIONS_COLLECTION, 'coachId', input.coachUserId),
   ]);
 
   await Promise.all([
+    deleteDoc(doc(db, PULSECHECK_PROTOCOL_RESPONSIVENESS_PROFILES_COLLECTION, input.athleteUserId)).catch(() => undefined),
     deleteDoc(doc(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, input.athleteUserId)).catch(() => undefined),
     deleteDoc(doc(db, COACH_ATHLETES_COLLECTION, fixture.coachAthleteLinkId)).catch(() => undefined),
     deleteDoc(doc(db, COACH_REFERRALS_COLLECTION, `${input.coachUserId}_${input.athleteUserId}`)).catch(() => undefined),
@@ -876,6 +910,16 @@ async function inspectPulseCheckAthleteJourneyState(
     getDocs(query(collection(db, COACH_NOTIFICATIONS_COLLECTION), where('coachId', '==', input.coachUserId))),
   ]);
 
+  const [stateSnapshotSnap, candidateSetSnap, responsivenessProfileSnap] = await Promise.all([
+    latestAssignment?.sourceStateSnapshotId
+      ? getDoc(doc(db, PULSECHECK_STATE_SNAPSHOTS_COLLECTION, latestAssignment.sourceStateSnapshotId))
+      : getDoc(doc(db, PULSECHECK_STATE_SNAPSHOTS_COLLECTION, `${input.athleteUserId}_${latestAssignment?.sourceDate || ''}`)),
+    latestAssignment?.sourceCandidateSetId
+      ? getDoc(doc(db, PULSECHECK_ASSIGNMENT_CANDIDATE_SETS_COLLECTION, latestAssignment.sourceCandidateSetId))
+      : getDoc(doc(db, PULSECHECK_ASSIGNMENT_CANDIDATE_SETS_COLLECTION, `${input.athleteUserId}_${latestAssignment?.sourceDate || ''}_candidates`)),
+    getDoc(doc(db, PULSECHECK_PROTOCOL_RESPONSIVENESS_PROFILES_COLLECTION, input.athleteUserId)),
+  ]);
+
   const coachNotifications = coachNotificationsSnap.docs
     .map((entry) => ({ id: entry.id, ...(entry.data() as Record<string, any>) }) as Record<string, any> & { id: string })
     .sort((left, right) => (Number(right.createdAt) || 0) - (Number(left.createdAt) || 0));
@@ -883,9 +927,174 @@ async function inspectPulseCheckAthleteJourneyState(
   return {
     athleteProgress: progressSnap.exists() ? { id: progressSnap.id, ...progressSnap.data() } : null,
     latestAssignment,
+    latestStateSnapshot: stateSnapshotSnap.exists() ? { id: stateSnapshotSnap.id, ...stateSnapshotSnap.data() } : null,
+    latestCandidateSet: candidateSetSnap.exists() ? { id: candidateSetSnap.id, ...candidateSetSnap.data() } : null,
+    responsivenessProfile: responsivenessProfileSnap.exists() ? { id: responsivenessProfileSnap.id, ...responsivenessProfileSnap.data() } : null,
     latestCompletion,
     recentCheckIns: latestCheckIns,
     coachNotifications,
+  };
+}
+
+async function seedPulseCheckProtocolResponsivenessProfile(
+  db: Firestore,
+  input: {
+    athleteUserId: string;
+    familyResponses?: Record<string, any>;
+    variantResponses?: Record<string, any>;
+    staleAt?: number;
+  }
+) {
+  const now = Date.now();
+  const profile = {
+    athleteId: input.athleteUserId,
+    familyResponses: input.familyResponses || {},
+    variantResponses: input.variantResponses || {},
+    sourceEventIds: [],
+    staleAt: input.staleAt || now + 14 * 24 * 60 * 60 * 1000,
+    lastUpdatedAt: now,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await setDoc(
+    doc(db, PULSECHECK_PROTOCOL_RESPONSIVENESS_PROFILES_COLLECTION, input.athleteUserId),
+    profile,
+    { merge: true }
+  );
+
+  return { id: input.athleteUserId, ...profile };
+}
+
+async function seedPulseCheckProtocolAssignmentFixture(
+  db: Firestore,
+  input: {
+    namespace: string;
+    athleteUserId: string;
+    coachUserId: string;
+    protocolId?: string;
+    sourceDate?: string;
+  }
+) {
+  const fixture = buildAthleteJourneyFixtureIds(input.namespace);
+  const protocol = resolveProtocolFixture(input.protocolId);
+  const now = Date.now();
+  const sourceDate = input.sourceDate || new Date().toISOString().split('T')[0];
+  const snapshotId = `${input.athleteUserId}_${sourceDate}`;
+  const candidateSetId = `${input.athleteUserId}_${sourceDate}_candidates`;
+  const assignmentId = `${input.athleteUserId}_${sourceDate}`;
+  const candidateId = `${input.athleteUserId}_${sourceDate}_${protocol.id}`;
+
+  await setDoc(
+    doc(db, PULSECHECK_STATE_SNAPSHOTS_COLLECTION, snapshotId),
+    {
+      athleteId: input.athleteUserId,
+      sourceDate,
+      sourceCheckInId: 'e2e-protocol-seed-checkin',
+      stateDimensions: {
+        activation: 54,
+        focusReadiness: 48,
+        emotionalLoad: 44,
+        cognitiveFatigue: 41,
+      },
+      overallReadiness: 'yellow',
+      confidence: 'medium',
+      freshness: 'current',
+      sourcesUsed: ['e2e_fixture'],
+      sourceEventIds: [],
+      contextTags: ['competition_window', 'between_reps'],
+      recommendedRouting: 'protocol_then_sim',
+      recommendedProtocolClass: protocol.protocolClass,
+      candidateClassHints: ['protocol', 'sim'],
+      readinessScore: 52,
+      supportFlag: false,
+      decisionSource: 'fallback_rules',
+      executionLink: assignmentId,
+      createdAt: now,
+      updatedAt: now,
+    },
+    { merge: true }
+  );
+
+  await setDoc(
+    doc(db, PULSECHECK_ASSIGNMENT_CANDIDATE_SETS_COLLECTION, candidateSetId),
+    {
+      athleteId: input.athleteUserId,
+      sourceDate,
+      sourceStateSnapshotId: snapshotId,
+      candidates: [
+        {
+          id: candidateId,
+          type: 'protocol',
+          label: protocol.label,
+          actionType: 'protocol',
+          rationale: `[E2E] Seeded protocol candidate ${protocol.label}.`,
+          legacyExerciseId: protocol.legacyExerciseId,
+          protocolId: protocol.id,
+          protocolLabel: protocol.label,
+          protocolClass: protocol.protocolClass,
+          protocolCategory: protocol.protocolCategory,
+          protocolResponseFamily: protocol.protocolResponseFamily,
+          protocolDeliveryMode: protocol.protocolDeliveryMode,
+          durationSeconds: protocol.durationSeconds,
+        },
+      ],
+      candidateIds: [candidateId],
+      candidateClassHints: ['protocol'],
+      constraintReasons: [],
+      inventoryGaps: [],
+      plannerEligible: true,
+      createdAt: now,
+      updatedAt: now,
+    },
+    { merge: true }
+  );
+
+  await setDoc(
+    doc(db, PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION, assignmentId),
+    {
+      lineageId: assignmentId,
+      revision: 1,
+      athleteId: input.athleteUserId,
+      teamId: fixture.teamId,
+      teamMembershipId: `${fixture.teamId}_${input.athleteUserId}`,
+      coachId: input.coachUserId,
+      sourceCheckInId: 'e2e-protocol-seed-checkin',
+      sourceStateSnapshotId: snapshotId,
+      sourceCandidateSetId: candidateSetId,
+      sourceDate,
+      assignedBy: 'nora',
+      status: 'assigned',
+      actionType: 'protocol',
+      chosenCandidateId: candidateId,
+      chosenCandidateType: 'protocol',
+      legacyExerciseId: protocol.legacyExerciseId,
+      protocolId: protocol.id,
+      protocolLabel: protocol.label,
+      protocolClass: protocol.protocolClass,
+      protocolCategory: protocol.protocolCategory,
+      protocolResponseFamily: protocol.protocolResponseFamily,
+      protocolDeliveryMode: protocol.protocolDeliveryMode,
+      durationSeconds: protocol.durationSeconds,
+      rationale: `[E2E] Seeded protocol assignment for ${protocol.label}.`,
+      plannerSummary: `[E2E] Seeded protocol assignment for ${protocol.label}.`,
+      plannerConfidence: 'medium',
+      decisionSource: 'fallback_rules',
+      readinessScore: 52,
+      readinessBand: 'medium',
+      supportFlag: false,
+      createdAt: now,
+      updatedAt: now,
+    },
+    { merge: true }
+  );
+
+  return {
+    assignmentId,
+    candidateSetId,
+    snapshotId,
+    sourceDate,
+    protocolId: protocol.id,
   };
 }
 
@@ -1111,6 +1320,19 @@ export interface PulseE2EHarness {
     coachUserId: string;
     athleteUserId: string;
   }) => Promise<Record<string, any>>;
+  seedPulseCheckProtocolResponsivenessProfile: (input: {
+    athleteUserId: string;
+    familyResponses?: Record<string, any>;
+    variantResponses?: Record<string, any>;
+    staleAt?: number;
+  }) => Promise<Record<string, any>>;
+  seedPulseCheckProtocolAssignmentFixture: (input: {
+    namespace: string;
+    athleteUserId: string;
+    coachUserId: string;
+    protocolId?: string;
+    sourceDate?: string;
+  }) => Promise<Record<string, any>>;
   inspectLegacyCoachRosterFixture: (namespace: string) => Promise<Record<string, any>>;
   inspectVariant: (variantId: string) => Promise<Record<string, any> | null>;
 }
@@ -1174,6 +1396,8 @@ export function installPulseE2EHarness(db: Firestore) {
     inspectPulseCheckAthleteJourneyState: (input) => inspectPulseCheckAthleteJourneyState(db, input),
     recordPulseCheckJourneyCompletion: (input) => recordPulseCheckJourneyCompletion(input),
     upsertPulseCheckCoachNotifications: (input) => upsertCoachNotificationDocs(db, input),
+    seedPulseCheckProtocolResponsivenessProfile: (input) => seedPulseCheckProtocolResponsivenessProfile(db, input),
+    seedPulseCheckProtocolAssignmentFixture: (input) => seedPulseCheckProtocolAssignmentFixture(db, input),
     inspectLegacyCoachRosterFixture: (namespace: string) => inspectLegacyCoachRosterFixture(db, namespace),
     inspectVariant: async (variantId: string) => {
       const snap = await getDoc(doc(db, SIM_VARIANTS_COLLECTION, variantId));

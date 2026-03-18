@@ -422,13 +422,13 @@ class ExerciseService {
           const videoSnapshot = await getDocs(collection(db, 'exerciseVideos'));
           const exerciseVideos: ExerciseVideo[] = videoSnapshot.docs.map((doc) =>
             new ExerciseVideo({
-              id: doc.id,
               ...doc.data(),
+              id: doc.id,
             })
           );
           
           const exercises: Exercise[] = exerciseSnapshot.docs.map((doc) =>
-            new Exercise({ id: doc.id, ...doc.data() })
+            new Exercise({ ...doc.data(), id: doc.id })
           );
           
           // Map videos to exercises and ensure correct instantiation

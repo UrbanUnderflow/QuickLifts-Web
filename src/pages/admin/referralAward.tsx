@@ -232,7 +232,7 @@ const ReferralAwardPage: React.FC = () => {
     try {
       const usersRef = collection(db, 'users');
       const querySnapshot = await getDocs(usersRef);
-      const usersData = querySnapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
+      const usersData = querySnapshot.docs.map((doc: any) => ({ ...doc.data(), id: doc.id }));
       
       localStorage.setItem(USER_CACHE_KEY, JSON.stringify(usersData));
       console.log(`[User Cache] ${usersData.length} users fetched from Firestore and cached in localStorage.`);

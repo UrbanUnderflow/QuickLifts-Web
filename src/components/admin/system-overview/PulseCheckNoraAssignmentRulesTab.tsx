@@ -4,23 +4,26 @@ import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentP
 
 const INPUT_ROWS = [
   ['Latest valid state snapshot', 'Current state across four dimensions, overall readiness, and confidence.', 'Yes'],
+  ['AI-enriched interpretation', 'The system’s best explanation of what is most likely driving the athlete’s current state and what evidence supports it.', 'Yes'],
   ['Current escalation status', 'Tier 0 to Tier 3, safety mode, or support visibility state.', 'Yes'],
   ['Program intent', 'Whether today is a probe, training rep, pressure exposure, reassessment, or competition-day support moment.', 'Yes'],
   ['Athlete profile', 'Longer-term strengths, weaknesses, modifier sensitivities, fatigability, and protocol responsiveness.', 'Yes'],
   ['Current active program and daily assignment state', 'Whether today already has an unstarted, started, completed, or coach-overridden Nora task.', 'Yes'],
   ['Recent session history', 'Recent exposures and whether family, duration, or difficulty should vary.', 'Yes'],
   ['Schedule / context window', 'Pre-game, post-trial, travel, return-to-play, high-stakes week.', 'Yes'],
+  ['Eligible assignment candidate set', 'The bounded list of sims, protocols, or trials that are actually valid for this athlete, date, and program state.', 'Yes'],
   ['Coach assignment / manual constraints', 'Cases where a coach has locked or requested a specific family, duration, or trial window.', 'When present'],
 ];
 
 const PRECEDENCE = [
   ['1. Safety overrides', 'Tier 2 and Tier 3 suppress normal training flow. Tier 1 introduces coach-aware caution.'],
-  ['2. Support visibility', 'Persistent-red patterns can reduce aggressiveness even without clinical escalation.'],
-  ['3. State-fit', 'Green / Yellow / Red decides whether the athlete should regulate, prime, recover, train, assess, or defer.'],
-  ['4. Program intent', 'Determines whether the day is a probe, skill rep, pressure exposure, reassessment, or support moment.'],
-  ['5. Skill targeting', 'Choose the best-fit Sim family when skill is the bottleneck.'],
-  ['6. Progression and dose', 'Set variant, difficulty, modifier intensity, and duration.'],
-  ['7. Preference and presentation', 'Shape athlete-facing framing without changing the core decision.'],
+  ['2. Candidate-set and coach constraints', 'Before Nora plans anything, the system narrows choices to the valid protocol / sim / trial candidates for this athlete and date.'],
+  ['3. Support visibility', 'Persistent-red patterns can reduce aggressiveness even without clinical escalation.'],
+  ['4. State-fit', 'Green / Yellow / Red plus the enriched dimension pattern decides whether the athlete should regulate, prime, recover, train, assess, or defer.'],
+  ['5. Program intent', 'Determines whether the day is a probe, skill rep, pressure exposure, reassessment, or support moment.'],
+  ['6. AI planner choice within bounds', 'The model recommends the best-fit option from the bounded candidate set rather than following a hard-coded family matrix.'],
+  ['7. Progression and dose', 'Set variant, difficulty, modifier intensity, and duration.'],
+  ['8. Preference and presentation', 'Shape athlete-facing framing without changing the core decision.'],
 ];
 
 const OUTCOME_CARDS = [
@@ -52,21 +55,33 @@ const SUPPORT_AND_STALE_ROWS = [
   ['Coach lock plus safety conflict', 'Safety wins. The coach lock becomes advisory until the safety override clears.'],
 ];
 
+const PLANNER_SCOPE_ROWS = [
+  ['Bounded candidate-set rule', 'Nora may only choose from the canonical eligible inventory of sims, protocols, and trials assembled upstream for that athlete and date.'],
+  ['No freeform generation', 'Nora does not invent new exercises, new protocol types, or undocumented families at runtime.'],
+  ['Sibling protocol registry rule', 'Protocols should live in their own registry-backed inventory, not as inline planner code and not as sim variants shoehorned into the wrong model.'],
+  ['Current protocol inventory posture', 'The planner now reads published protocols from a sibling registry across breathing, focus, mindset, confidence, and visualization, but the authoring surface and long-tail inventory are still growing.'],
+  ['Planner output contract', 'The AI planner should return structured decision JSON with candidate id, rationale, confidence, and support flags so deterministic validators can materialize the task safely.'],
+];
+
 const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
         eyebrow="Pulse Check Runtime"
         title="Nora Assignment Rules"
-        version="Version 1.2 | March 16, 2026"
-        summary="Execution-layer artifact for how Nora selects the next athlete action. This page formalizes the precedence ladder Nora uses after safety overrides are resolved and translates state, profile, program intent, recent history, and coach intervention state into the next best performance move."
+        version="Version 1.3 | March 17, 2026"
+        summary="Execution-layer artifact for how Nora selects the next athlete action. This page now formalizes an AI-led planner that reads the enriched state snapshot, then chooses from a bounded candidate set of valid sims, protocols, and trials after safety and policy constraints are applied."
         highlights={[
           {
             title: 'State Is a Routing Input',
             body: 'Protocols are assigned when current state is the bottleneck. Sims and Trials are assigned when skill or assessment timing is the bottleneck.',
           },
           {
-            title: 'Signal Layer v1 Materializes The Task',
+            title: 'AI Chooses Within Bounds',
+            body: 'Nora should use AI to interpret the enriched snapshot and recommend the best option, but only from the valid candidate set assembled upstream for that athlete and date.',
+          },
+          {
+            title: 'Signal Layer Materializes The Task',
             body: 'After Nora resolves the routing decision, the Assignment Orchestrator writes one athlete-facing daily task rather than leaving the decision as copy only, and Nora chat should read from that same artifact.',
           },
           {
@@ -127,6 +142,10 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
             <InfoCard key={title} title={title} body={body} accent="blue" />
           ))}
         </CardGrid>
+      </SectionBlock>
+
+      <SectionBlock icon={BrainCircuit} title="Planner Scope and Inventory Boundary">
+        <DataTable columns={['Rule', 'Meaning']} rows={PLANNER_SCOPE_ROWS} />
       </SectionBlock>
 
       <SectionBlock icon={Shield} title="Default Routing Matrix">
@@ -196,9 +215,9 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
 
       <SectionBlock icon={Route} title="Signal Layer v1 Execution Scope">
         <InfoCard
-          title="What V1 Actually Materializes"
+          title="Current Runtime Truth"
           accent="blue"
-          body="In the current implementation slice, the Assignment Orchestrator should materialize one Nora daily task after check-in using the resolved routing decision. V1 should stay honest: it can express sim, lighter-sim, or defer outcomes now, while full protocol and trial orchestration remain future execution lanes."
+          body="In the current implementation slice, the Assignment Orchestrator can materialize one Nora daily task after check-in and the planner now reads published protocols from a sibling registry rather than an inline list. The protocol lane is real and broader than breathing-only, but its authoring workflow and inventory depth still need to mature."
         />
       </SectionBlock>
 
@@ -232,6 +251,7 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
                 'Tier 2 and Tier 3 never become disguised performance sessions.',
                 'Protocols are a performance-state response, not a clinical substitute.',
                 'Coach locks and manual constraints can narrow choices but cannot bypass safety.',
+                'Nora may only choose from eligible sims, protocols, and trials already present in the canonical registry.',
                 'Nora should never speak in diagnostic language when explaining assignments.',
               ]}
             />

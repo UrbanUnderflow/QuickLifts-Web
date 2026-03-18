@@ -31,6 +31,10 @@ export { curriculumAssignmentService } from './curriculumAssignmentService';
 export { athleteProgressService } from './athleteProgressService';
 export { recommendationService } from './recommendationService';
 export { assignmentOrchestratorService } from './assignmentOrchestratorService';
+export { stateSnapshotService } from './stateSnapshotService';
+export { pulseCheckCheckInSubmissionService } from './pulseCheckCheckInSubmissionService';
+export { protocolRegistryService } from './protocolRegistryService';
+export { protocolResponsivenessService } from './protocolResponsivenessService';
 export { profileSnapshotService } from './profileSnapshotService';
 export type {
   CanonicalProfileSnapshot,

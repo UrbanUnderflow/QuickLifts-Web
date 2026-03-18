@@ -993,8 +993,8 @@ const EquityAdminPage: React.FC = () => {
         );
         const docsSnapshot = await getDocs(docsQuery);
         const docsData = docsSnapshot.docs.map(d => ({
-          id: d.id,
-          ...d.data()
+          ...d.data(),
+          id: d.id
         })) as EquityDocument[];
         setEquityDocuments(docsData);
       } catch {
@@ -1010,7 +1010,7 @@ const EquityAdminPage: React.FC = () => {
           orderBy('createdAt', 'desc')
         );
         const snapshot = await getDocs(q);
-        const reqs = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as SigningRequest[];
+        const reqs = snapshot.docs.map(d => ({ ...d.data(), id: d.id })) as SigningRequest[];
         setSigningRequests(reqs);
       } catch (error) {
         // Fallback when compound index isn't available
@@ -1018,7 +1018,7 @@ const EquityAdminPage: React.FC = () => {
           const fallbackQ = query(collection(db, 'signingRequests'), orderBy('createdAt', 'desc'));
           const fallbackSnapshot = await getDocs(fallbackQ);
           const reqs = fallbackSnapshot.docs
-            .map(d => ({ id: d.id, ...d.data() } as SigningRequest))
+            .map(d => ({ ...d.data(), id: d.id } as SigningRequest))
             .filter(r => Boolean((r as any).equityDocumentId));
           setSigningRequests(reqs);
         } catch {

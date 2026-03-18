@@ -117,6 +117,34 @@
       ]
     },
     {
+      "collectionGroup": "coachReferrals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "referrerCoachId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "coaches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "onboardInvite.code",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "coaches",
       "queryScope": "COLLECTION",
       "fields": [
@@ -131,15 +159,15 @@
       ]
     },
     {
-      "collectionGroup": "coachReferrals",
+      "collectionGroup": "conversations",
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "referrerCoachId",
+          "fieldPath": "userId",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "createdAt",
+          "fieldPath": "timestamp",
           "order": "DESCENDING"
         }
       ]
@@ -203,7 +231,12 @@
     {
       "collectionGroup": "daily-reflections",
       "queryScope": "COLLECTION",
-      "fields": []
+      "fields": [
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
+        }
+      ]
     },
     {
       "collectionGroup": "dailySentimentAnalysis",
@@ -292,170 +325,6 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "fitnessSeeker_leads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "goal",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "fitnessSeeker_leads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "level",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "fitnessSeeker_leads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "goal",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "gender",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "fitnessSeeker_leads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "goal",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "gender",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "level",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "fitnessSeeker_leads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "goal",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "score",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "fitnessSeeker_leads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "gender",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "score",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "fitnessSeeker_leads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "level",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "score",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "fitnessSeeker_leads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "goal",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "gender",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "score",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "fitnessSeeker_leads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "goal",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "gender",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "level",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "score",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "fitnessSeeker_leads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "gender",
-          "order": "ASCENDING"
-        },
-        {
           "fieldPath": "calorieReq",
           "order": "DESCENDING"
         }
@@ -465,6 +334,24 @@
       "collectionGroup": "fitnessSeeker_leads",
       "queryScope": "COLLECTION",
       "fields": [
+        {
+          "fieldPath": "gender",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "fitnessSeeker_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "gender",
+          "order": "ASCENDING"
+        },
         {
           "fieldPath": "level",
           "order": "ASCENDING"
@@ -484,11 +371,175 @@
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "fitnessSeeker_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "goal",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "fitnessSeeker_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "goal",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "gender",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "fitnessSeeker_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "goal",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "gender",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "level",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "fitnessSeeker_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "goal",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "gender",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "level",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "fitnessSeeker_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "goal",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "gender",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "fitnessSeeker_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "goal",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "fitnessSeeker_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "level",
           "order": "ASCENDING"
         },
         {
           "fieldPath": "calorieReq",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "fitnessSeeker_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "level",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "fitnessSeeker_leads",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "level",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "score",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "health-context-snapshots",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "athleteUserId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "snapshotType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "snapshotDateKey",
           "order": "DESCENDING"
         }
       ]
@@ -618,7 +669,7 @@
       ]
     },
     {
-      "collectionGroup": "sim-assignments",
+      "collectionGroup": "mental-exercise-assignments",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -632,7 +683,7 @@
       ]
     },
     {
-      "collectionGroup": "sim-modules",
+      "collectionGroup": "mental-exercises",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -673,6 +724,34 @@
         },
         {
           "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "conversationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "notes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "category",
           "order": "ASCENDING"
         },
         {
@@ -798,6 +877,34 @@
       ]
     },
     {
+      "collectionGroup": "promoCodeUsage",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "promoCodeId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "promoCodeUsage",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "usedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "promoCodes",
       "queryScope": "COLLECTION",
       "fields": [
@@ -830,34 +937,6 @@
       ]
     },
     {
-      "collectionGroup": "promoCodeUsage",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "promoCodeId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "usedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "promoCodeUsage",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "userId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "usedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "reviewWeeklyContext",
       "queryScope": "COLLECTION",
       "fields": [
@@ -885,6 +964,24 @@
         },
         {
           "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "subscriptions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "platform",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
           "order": "DESCENDING"
         }
       ]
@@ -936,6 +1033,20 @@
       ]
     },
     {
+      "collectionGroup": "user-mental-notes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "users",
       "queryScope": "COLLECTION",
       "fields": [
@@ -946,6 +1057,34 @@
         {
           "fieldPath": "location.longitude",
           "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "onboardInvite.code",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "subscriptionType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastActive",
+          "order": "DESCENDING"
         }
       ]
     },
@@ -989,20 +1128,43 @@
       "ttl": false,
       "indexes": [
         {
-          "order": "ASCENDING",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "arrayConfig": "CONTAINS"
         },
         {
-          "order": "DESCENDING",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "order": "ASCENDING"
         },
         {
-          "arrayConfig": "CONTAINS",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "order": "DESCENDING"
         },
         {
-          "order": "ASCENDING",
-          "queryScope": "COLLECTION_GROUP"
+          "queryScope": "COLLECTION_GROUP",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "checkins",
+      "fieldPath": "workoutSummary.id",
+      "ttl": false,
+      "indexes": [
+        {
+          "queryScope": "COLLECTION",
+          "arrayConfig": "CONTAINS"
+        },
+        {
+          "queryScope": "COLLECTION",
+          "order": "ASCENDING"
+        },
+        {
+          "queryScope": "COLLECTION",
+          "order": "DESCENDING"
+        },
+        {
+          "queryScope": "COLLECTION_GROUP",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -1012,16 +1174,20 @@
       "ttl": false,
       "indexes": [
         {
-          "order": "ASCENDING",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "arrayConfig": "CONTAINS"
         },
         {
-          "order": "DESCENDING",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "order": "ASCENDING"
         },
         {
-          "arrayConfig": "CONTAINS",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "order": "DESCENDING"
+        },
+        {
+          "queryScope": "COLLECTION_GROUP",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -1031,16 +1197,20 @@
       "ttl": false,
       "indexes": [
         {
-          "order": "ASCENDING",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "arrayConfig": "CONTAINS"
         },
         {
-          "order": "DESCENDING",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "order": "ASCENDING"
         },
         {
-          "arrayConfig": "CONTAINS",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "order": "DESCENDING"
+        },
+        {
+          "queryScope": "COLLECTION_GROUP",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -1050,16 +1220,20 @@
       "ttl": false,
       "indexes": [
         {
-          "order": "ASCENDING",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "arrayConfig": "CONTAINS"
         },
         {
-          "order": "DESCENDING",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "order": "ASCENDING"
         },
         {
-          "arrayConfig": "CONTAINS",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "order": "DESCENDING"
+        },
+        {
+          "queryScope": "COLLECTION_GROUP",
+          "order": "ASCENDING"
         }
       ]
     },
@@ -1069,16 +1243,20 @@
       "ttl": false,
       "indexes": [
         {
-          "order": "ASCENDING",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "arrayConfig": "CONTAINS"
         },
         {
-          "order": "DESCENDING",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "order": "ASCENDING"
         },
         {
-          "arrayConfig": "CONTAINS",
-          "queryScope": "COLLECTION"
+          "queryScope": "COLLECTION",
+          "order": "DESCENDING"
+        },
+        {
+          "queryScope": "COLLECTION_GROUP",
+          "order": "ASCENDING"
         }
       ]
     }

@@ -83,8 +83,8 @@ const DocumentSigningAdmin: React.FC = () => {
       const snapshot = await getDocs(q);
       
       const requests: SigningRequest[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        id: doc.id
       } as SigningRequest));
       
       setSigningRequests(requests);
@@ -580,6 +580,5 @@ const DocumentSigningAdmin: React.FC = () => {
 };
 
 export default DocumentSigningAdmin;
-
 
 

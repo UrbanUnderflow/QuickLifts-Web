@@ -1,58 +1,106 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import Head from 'next/head';
-import { Activity, AlertTriangle, Brain, Check, Copy, Cpu, Database, ExternalLink, Gamepad2, Layers, Link2, Loader2, MessageSquareQuote, Server, Share2, Smartphone, TestTube2, Trash2, Users } from 'lucide-react';
-import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
-import SectionNav from '../../components/admin/system-overview/SectionNav';
-import ProductHandbook from '../../components/admin/system-overview/ProductHandbook';
-import HeartbeatProtocolTab from '../../components/admin/HeartbeatProtocolTab';
-import HunterWorldTab from '../../components/admin/HunterWorldTab';
-import SimulationTaxonomyTab from '../../components/admin/system-overview/SimulationTaxonomyTab';
-import SimFamilyTreeTab from '../../components/admin/system-overview/SimFamilyTreeTab';
-import PromotionProtocolTab from '../../components/admin/system-overview/PromotionProtocolTab';
-import SimSpecStandardsTab from '../../components/admin/system-overview/SimSpecStandardsTab';
-import VariantRegistryTab from '../../components/admin/system-overview/VariantRegistryTab';
-import SimFamilySpecTab from '../../components/admin/system-overview/SimFamilySpecTab';
-import AthleteJourneyTab from '../../components/admin/system-overview/AthleteJourneyTab';
-import CoachJourneyTab from '../../components/admin/system-overview/CoachJourneyTab';
-import PulseClubActivationArchitectureTab from '../../components/admin/system-overview/PulseClubActivationArchitectureTab';
-import SmartRoutesV1ArchitectureTab from '../../components/admin/system-overview/SmartRoutesV1ArchitectureTab';
-import SharedLinkPreviewStrategyTab from '../../components/admin/system-overview/SharedLinkPreviewStrategyTab';
-import PulseCheckRuntimeArchitectureTab from '../../components/admin/system-overview/PulseCheckRuntimeArchitectureTab';
-import PulseCheckStateSignalLayerTab from '../../components/admin/system-overview/PulseCheckStateSignalLayerTab';
-import PulseCheckStateSnapshotFreshnessPolicyTab from '../../components/admin/system-overview/PulseCheckStateSnapshotFreshnessPolicyTab';
-import PulseCheckPerformanceStateFlagDefinitionsTab from '../../components/admin/system-overview/PulseCheckPerformanceStateFlagDefinitionsTab';
-import PulseCheckNoraAssignmentRulesTab from '../../components/admin/system-overview/PulseCheckNoraAssignmentRulesTab';
-import PulseCheckNoraQaEdgeCaseScenarioMatrixTab from '../../components/admin/system-overview/PulseCheckNoraQaEdgeCaseScenarioMatrixTab';
-import PulseCheckStateEscalationOrchestrationTab from '../../components/admin/system-overview/PulseCheckStateEscalationOrchestrationTab';
-import PulseCheckEscalationIntegrationSpecTab from '../../components/admin/system-overview/PulseCheckEscalationIntegrationSpecTab';
-import PulseCheckMemberOnboardingGuideTab from '../../components/admin/system-overview/PulseCheckMemberOnboardingGuideTab';
-import PulseCheckTeamPilotCohortOnboardingArchitectureTab from '../../components/admin/system-overview/PulseCheckTeamPilotCohortOnboardingArchitectureTab';
-import PulseCheckPermissionsVisibilityModelTab from '../../components/admin/system-overview/PulseCheckPermissionsVisibilityModelTab';
-import PulseCheckCoachDashboardInformationArchitectureTab from '../../components/admin/system-overview/PulseCheckCoachDashboardInformationArchitectureTab';
-import PulseCheckProfileArchitectureTab from '../../components/admin/system-overview/PulseCheckProfileArchitectureTab';
-import PulseCheckProfileSnapshotExportSpecTab from '../../components/admin/system-overview/PulseCheckProfileSnapshotExportSpecTab';
-import PulseCheckVisionProImmersiveTestsTab from '../../components/admin/system-overview/PulseCheckVisionProImmersiveTestsTab';
-import PulseSystemDesignLanguageTab from '../../components/admin/system-overview/PulseSystemDesignLanguageTab';
-import AuntEdnaIntegrationStrategyTab from '../../components/admin/system-overview/AuntEdnaIntegrationStrategyTab';
-import PlaywrightTestingStrategyTab from '../../components/admin/system-overview/PlaywrightTestingStrategyTab';
-import AndroidTestingStrategyTab from '../../components/admin/system-overview/AndroidTestingStrategyTab';
-import XCUITestingStrategyTab from '../../components/admin/system-overview/XCUITestingStrategyTab';
-import { systemOverviewShareService } from '../../api/systemOverviewShare/service';
-import type { SystemOverviewShareLink } from '../../api/systemOverviewShare/types';
-import { systemOverviewManifest } from '../../content/system-overview/manifest';
-import type { ConnectionType, EcosystemConnection, EcosystemNode } from '../../content/system-overview/schema';
+import React, { useEffect, useMemo, useState } from "react";
+import Head from "next/head";
+import {
+  Activity,
+  AlertTriangle,
+  Brain,
+  Check,
+  Copy,
+  Cpu,
+  Database,
+  ExternalLink,
+  Gamepad2,
+  Layers,
+  Link2,
+  Loader2,
+  MessageSquareQuote,
+  Search,
+  Server,
+  Share2,
+  Smartphone,
+  TestTube2,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
+import AdminRouteGuard from "../../components/auth/AdminRouteGuard";
+import SectionNav from "../../components/admin/system-overview/SectionNav";
+import ProductHandbook from "../../components/admin/system-overview/ProductHandbook";
+import HeartbeatProtocolTab from "../../components/admin/HeartbeatProtocolTab";
+import HunterWorldTab from "../../components/admin/HunterWorldTab";
+import SimulationTaxonomyTab from "../../components/admin/system-overview/SimulationTaxonomyTab";
+import SimFamilyTreeTab from "../../components/admin/system-overview/SimFamilyTreeTab";
+import PromotionProtocolTab from "../../components/admin/system-overview/PromotionProtocolTab";
+import SimSpecStandardsTab from "../../components/admin/system-overview/SimSpecStandardsTab";
+import VariantRegistryTab from "../../components/admin/system-overview/VariantRegistryTab";
+import ProtocolRegistryTab from "../../components/admin/system-overview/ProtocolRegistryTab";
+import PulseCheckProtocolGovernanceSpecTab from "../../components/admin/system-overview/PulseCheckProtocolGovernanceSpecTab";
+import PulseCheckProtocolAuthoringWorkflowTab from "../../components/admin/system-overview/PulseCheckProtocolAuthoringWorkflowTab";
+import PulseCheckProtocolResponsivenessProfileSpecTab from "../../components/admin/system-overview/PulseCheckProtocolResponsivenessProfileSpecTab";
+import PulseCheckProtocolResponsivenessInspectorTab from "../../components/admin/system-overview/PulseCheckProtocolResponsivenessInspectorTab";
+import SimFamilySpecTab from "../../components/admin/system-overview/SimFamilySpecTab";
+import AthleteJourneyTab from "../../components/admin/system-overview/AthleteJourneyTab";
+import CoachJourneyTab from "../../components/admin/system-overview/CoachJourneyTab";
+import PulseClubActivationArchitectureTab from "../../components/admin/system-overview/PulseClubActivationArchitectureTab";
+import SmartRoutesV1ArchitectureTab from "../../components/admin/system-overview/SmartRoutesV1ArchitectureTab";
+import SharedLinkPreviewStrategyTab from "../../components/admin/system-overview/SharedLinkPreviewStrategyTab";
+import PulseCheckRuntimeArchitectureTab from "../../components/admin/system-overview/PulseCheckRuntimeArchitectureTab";
+import PulseCheckStateSignalLayerTab from "../../components/admin/system-overview/PulseCheckStateSignalLayerTab";
+import PulseCheckCheckInSignalLayerIntegrationSpecTab from "../../components/admin/system-overview/PulseCheckCheckInSignalLayerIntegrationSpecTab";
+import PulseCheckHealthChatArchitectureTab from "../../components/admin/system-overview/PulseCheckHealthChatArchitectureTab";
+import PulseCheckAthleteHealthContextSnapshotSpecTab from "../../components/admin/system-overview/PulseCheckAthleteHealthContextSnapshotSpecTab";
+import PulseCheckHealthContextSourceRecordSpecTab from "../../components/admin/system-overview/PulseCheckHealthContextSourceRecordSpecTab";
+import PulseCheckHealthContextSnapshotAssemblerSpecTab from "../../components/admin/system-overview/PulseCheckHealthContextSnapshotAssemblerSpecTab";
+import PulseCheckHealthContextPersistenceStorageSpecTab from "../../components/admin/system-overview/PulseCheckHealthContextPersistenceStorageSpecTab";
+import PulseCheckHealthContextOperationalOrchestrationSpecTab from "../../components/admin/system-overview/PulseCheckHealthContextOperationalOrchestrationSpecTab";
+import PulseCheckHealthContextImplementationRolloutPlanTab from "../../components/admin/system-overview/PulseCheckHealthContextImplementationRolloutPlanTab";
+import PulseCheckHealthContextOperatorRunbookTab from "../../components/admin/system-overview/PulseCheckHealthContextOperatorRunbookTab";
+import PulseCheckHealthContextDefinitionOfDoneTab from "../../components/admin/system-overview/PulseCheckHealthContextDefinitionOfDoneTab";
+import PulseCheckHealthContextEngineeringTaskBreakdownTab from "../../components/admin/system-overview/PulseCheckHealthContextEngineeringTaskBreakdownTab";
+import PulseCheckHealthContextFirestoreSchemaIndexSpecTab from "../../components/admin/system-overview/PulseCheckHealthContextFirestoreSchemaIndexSpecTab";
+import PulseCheckOuraIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckOuraIntegrationStrategyTab";
+import PulseCheckDeviceIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckDeviceIntegrationStrategyTab";
+import PulseCheckDeviceIntegrationPartnershipMatrixTab from "../../components/admin/system-overview/PulseCheckDeviceIntegrationPartnershipMatrixTab";
+import PulseCheckPatentEligibilityAuditTab from "../../components/admin/system-overview/PulseCheckPatentEligibilityAuditTab";
+import FirestoreIndexRegistryTab from "../../components/admin/system-overview/FirestoreIndexRegistryTab";
+import PulseCheckStateSnapshotFreshnessPolicyTab from "../../components/admin/system-overview/PulseCheckStateSnapshotFreshnessPolicyTab";
+import PulseCheckPerformanceStateFlagDefinitionsTab from "../../components/admin/system-overview/PulseCheckPerformanceStateFlagDefinitionsTab";
+import PulseCheckNoraAssignmentRulesTab from "../../components/admin/system-overview/PulseCheckNoraAssignmentRulesTab";
+import PulseCheckNoraQaEdgeCaseScenarioMatrixTab from "../../components/admin/system-overview/PulseCheckNoraQaEdgeCaseScenarioMatrixTab";
+import PulseCheckStateEscalationOrchestrationTab from "../../components/admin/system-overview/PulseCheckStateEscalationOrchestrationTab";
+import PulseCheckEscalationIntegrationSpecTab from "../../components/admin/system-overview/PulseCheckEscalationIntegrationSpecTab";
+import PulseCheckMemberOnboardingGuideTab from "../../components/admin/system-overview/PulseCheckMemberOnboardingGuideTab";
+import PulseCheckTeamPilotCohortOnboardingArchitectureTab from "../../components/admin/system-overview/PulseCheckTeamPilotCohortOnboardingArchitectureTab";
+import PulseCheckPermissionsVisibilityModelTab from "../../components/admin/system-overview/PulseCheckPermissionsVisibilityModelTab";
+import PulseCheckCoachDashboardInformationArchitectureTab from "../../components/admin/system-overview/PulseCheckCoachDashboardInformationArchitectureTab";
+import PulseCheckProfileArchitectureTab from "../../components/admin/system-overview/PulseCheckProfileArchitectureTab";
+import PulseCheckProfileSnapshotExportSpecTab from "../../components/admin/system-overview/PulseCheckProfileSnapshotExportSpecTab";
+import PulseCheckVisionProImmersiveTestsTab from "../../components/admin/system-overview/PulseCheckVisionProImmersiveTestsTab";
+import PulseSystemDesignLanguageTab from "../../components/admin/system-overview/PulseSystemDesignLanguageTab";
+import AuntEdnaIntegrationStrategyTab from "../../components/admin/system-overview/AuntEdnaIntegrationStrategyTab";
+import PlaywrightTestingStrategyTab from "../../components/admin/system-overview/PlaywrightTestingStrategyTab";
+import AndroidTestingStrategyTab from "../../components/admin/system-overview/AndroidTestingStrategyTab";
+import XCUITestingStrategyTab from "../../components/admin/system-overview/XCUITestingStrategyTab";
+import { systemOverviewShareService } from "../../api/systemOverviewShare/service";
+import type { SystemOverviewShareLink } from "../../api/systemOverviewShare/types";
+import { systemOverviewManifest } from "../../content/system-overview/manifest";
+import type {
+  ConnectionType,
+  EcosystemConnection,
+  EcosystemNode,
+} from "../../content/system-overview/schema";
 
 const CONNECTION_COLORS: Record<ConnectionType, string> = {
-  data: '#38bdf8',
-  auth: '#a78bfa',
-  events: '#facc15',
+  data: "#38bdf8",
+  auth: "#a78bfa",
+  events: "#facc15",
 };
 
-const LAYER_STYLES: Record<EcosystemNode['layer'], string> = {
-  surface: 'bg-blue-500/10 border-blue-400/40',
-  backend: 'bg-purple-500/10 border-purple-400/40',
-  integration: 'bg-amber-500/10 border-amber-400/40',
-  agent: 'bg-green-500/10 border-green-400/40',
+const LAYER_STYLES: Record<EcosystemNode["layer"], string> = {
+  surface: "bg-blue-500/10 border-blue-400/40",
+  backend: "bg-purple-500/10 border-purple-400/40",
+  integration: "bg-amber-500/10 border-amber-400/40",
+  agent: "bg-green-500/10 border-green-400/40",
 };
 
 /* ---- SYSTEM-LEVEL TAB DEFINITIONS ---- */
@@ -66,91 +114,127 @@ interface SystemTab {
 
 const SYSTEM_TABS: SystemTab[] = [
   {
-    id: 'pulse-community',
-    label: 'Pulse Community',
+    id: "pulse-community",
+    label: "Pulse Community",
     icon: Users,
-    accent: '#60a5fa',
-    sectionIds: ['executive-summary', 'ecosystem-map', 'product-handbooks', 'pulse-club-activation-architecture', 'smart-routes-v1-architecture', 'shared-link-preview-strategy', 'workout-share-cards', 'backend-data', 'integrations', 'end-to-end-flows', 'ownership-release-matrix', 'risks-gaps', 'glossary'],
-  },
-  {
-    id: 'pulsecheck',
-    label: 'PulseCheck',
-    icon: Brain,
-    accent: '#c084fc',
+    accent: "#60a5fa",
     sectionIds: [
-      'simulation-taxonomy',
-      'sim-family-tree',
-      'promotion-protocol',
-      'sim-spec-standards',
-      'variant-registry',
-      'sim-family-specs',
-      'athlete-journey',
-      'coach-journey',
-      'pulsecheck-runtime-architecture',
-      'pulsecheck-state-signal-layer',
-      'pulsecheck-state-snapshot-freshness-policy',
-      'pulsecheck-performance-state-flag-definitions',
-      'pulsecheck-nora-assignment-rules',
-      'pulsecheck-nora-qa-edge-case-matrix',
-      'pulsecheck-state-escalation-orchestration',
-      'pulsecheck-escalation-integration-spec',
-      'pulsecheck-member-onboarding-guide',
-      'pulsecheck-team-pilot-cohort-onboarding-architecture',
-      'pulsecheck-permissions-visibility-model',
-      'pulsecheck-coach-dashboard-information-architecture',
-      'pulsecheck-profile-architecture',
-      'pulsecheck-profile-snapshot-export-spec',
-      'pulsecheck-vision-pro-immersive-tests',
+      "executive-summary",
+      "ecosystem-map",
+      "product-handbooks",
+      "pulse-club-activation-architecture",
+      "smart-routes-v1-architecture",
+      "shared-link-preview-strategy",
+      "workout-share-cards",
+      "backend-data",
+      "firestore-index-registry",
+      "integrations",
+      "end-to-end-flows",
+      "ownership-release-matrix",
+      "risks-gaps",
+      "glossary",
     ],
   },
   {
-    id: 'design-language',
-    label: 'Design Language',
+    id: "pulsecheck",
+    label: "PulseCheck",
+    icon: Brain,
+    accent: "#c084fc",
+    sectionIds: [
+      "simulation-taxonomy",
+      "sim-family-tree",
+      "promotion-protocol",
+      "sim-spec-standards",
+      "variant-registry",
+      "protocol-registry",
+      "pulsecheck-protocol-governance-spec",
+      "pulsecheck-protocol-authoring-workflow",
+      "pulsecheck-protocol-responsiveness-profile-spec",
+      "pulsecheck-protocol-responsiveness-inspector",
+      "sim-family-specs",
+      "athlete-journey",
+      "coach-journey",
+      "pulsecheck-runtime-architecture",
+      "pulsecheck-state-signal-layer",
+      "pulsecheck-checkin-signal-layer-integration-spec",
+      "pulsecheck-health-chat-architecture",
+      "pulsecheck-athlete-health-context-snapshot-spec",
+      "pulsecheck-health-context-source-record-spec",
+      "pulsecheck-health-context-snapshot-assembler-spec",
+      "pulsecheck-health-context-persistence-storage-spec",
+      "pulsecheck-health-context-operational-orchestration-spec",
+      "pulsecheck-health-context-implementation-rollout-plan",
+      "pulsecheck-health-context-operator-runbook",
+      "pulsecheck-health-context-definition-of-done",
+      "pulsecheck-health-context-engineering-task-breakdown",
+      "pulsecheck-health-context-firestore-schema-index-spec",
+      "pulsecheck-oura-integration-strategy",
+      "pulsecheck-device-integration-strategy",
+      "pulsecheck-device-integration-partnership-matrix",
+      "pulsecheck-patent-eligibility-audit",
+      "pulsecheck-state-snapshot-freshness-policy",
+      "pulsecheck-performance-state-flag-definitions",
+      "pulsecheck-nora-assignment-rules",
+      "pulsecheck-nora-qa-edge-case-matrix",
+      "pulsecheck-state-escalation-orchestration",
+      "pulsecheck-escalation-integration-spec",
+      "pulsecheck-member-onboarding-guide",
+      "pulsecheck-team-pilot-cohort-onboarding-architecture",
+      "pulsecheck-permissions-visibility-model",
+      "pulsecheck-coach-dashboard-information-architecture",
+      "pulsecheck-profile-architecture",
+      "pulsecheck-profile-snapshot-export-spec",
+      "pulsecheck-vision-pro-immersive-tests",
+    ],
+  },
+  {
+    id: "design-language",
+    label: "Design Language",
     icon: MessageSquareQuote,
-    accent: '#f97316',
-    sectionIds: ['system-design-language'],
+    accent: "#f97316",
+    sectionIds: ["system-design-language"],
   },
   {
-    id: 'agent-swarm',
-    label: 'Agent Swarm',
+    id: "agent-swarm",
+    label: "Agent Swarm",
     icon: Cpu,
-    accent: '#22c55e',
-    sectionIds: ['agent-infrastructure-handbook'],
+    accent: "#22c55e",
+    sectionIds: ["agent-infrastructure-handbook"],
   },
   {
-    id: 'auntedna',
-    label: 'AuntEdna',
+    id: "auntedna",
+    label: "AuntEdna",
     icon: Link2,
-    accent: '#f59e0b',
-    sectionIds: ['auntedna-integration-strategy'],
+    accent: "#f59e0b",
+    sectionIds: ["auntedna-integration-strategy"],
   },
   {
-    id: 'hunter-world',
-    label: 'Hunter World',
+    id: "hunter-world",
+    label: "Hunter World",
     icon: Gamepad2,
-    accent: '#facc15',
-    sectionIds: ['hunter-world-handbook'],
+    accent: "#facc15",
+    sectionIds: ["hunter-world-handbook"],
   },
   {
-    id: 'playwright',
-    label: 'Playwright',
+    id: "playwright",
+    label: "Playwright",
     icon: TestTube2,
-    accent: '#34d399',
-    sectionIds: ['playwright-testing-strategy'],
+    accent: "#34d399",
+    sectionIds: ["playwright-testing-strategy"],
   },
   {
-    id: 'android-test',
-    label: 'Android',
+    id: "android-test",
+    label: "Android",
     icon: Activity,
-    accent: '#84cc16',
-    sectionIds: ['android-testing-strategy'],
+    accent: "#84cc16",
+    sectionIds: ["android-testing-strategy"],
   },
   {
-    id: 'xcuitest',
-    label: 'XCUITest',
+    id: "xcuitest",
+    label: "XCUITest",
     icon: Smartphone,
-    accent: '#f472b6',
-    sectionIds: ['xcuitest-testing-strategy'],
+    accent: "#f472b6",
+    sectionIds: ["xcuitest-testing-strategy"],
   },
 ];
 
@@ -162,8 +246,17 @@ function getSystemForSection(sectionId: string): string {
   return SYSTEM_TABS[0].id;
 }
 
-function EcosystemMap({ nodes, connections }: { nodes: EcosystemNode[]; connections: EcosystemConnection[] }) {
-  const nodeMap = useMemo(() => Object.fromEntries(nodes.map((node) => [node.id, node])), [nodes]);
+function EcosystemMap({
+  nodes,
+  connections,
+}: {
+  nodes: EcosystemNode[];
+  connections: EcosystemConnection[];
+}) {
+  const nodeMap = useMemo(
+    () => Object.fromEntries(nodes.map((node) => [node.id, node])),
+    [nodes],
+  );
 
   return (
     <div className="relative bg-[#050a14] border border-zinc-800 rounded-2xl h-[460px] overflow-hidden">
@@ -186,7 +279,15 @@ function EcosystemMap({ nodes, connections }: { nodes: EcosystemNode[]; connecti
           );
         })}
         <defs>
-          <marker id="map-arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" fill="#f8fafc">
+          <marker
+            id="map-arrowhead"
+            markerWidth="6"
+            markerHeight="6"
+            refX="5"
+            refY="3"
+            orient="auto"
+            fill="#f8fafc"
+          >
             <path d="M0,0 L0,6 L6,3 z" />
           </marker>
         </defs>
@@ -195,7 +296,11 @@ function EcosystemMap({ nodes, connections }: { nodes: EcosystemNode[]; connecti
         <div
           key={node.id}
           className={`absolute px-3 py-2 rounded-xl text-left text-xs border shadow-lg ${LAYER_STYLES[node.layer]}`}
-          style={{ left: `${node.x}%`, top: `${node.y}%`, transform: 'translate(-50%, -50%)' }}
+          style={{
+            left: `${node.x}%`,
+            top: `${node.y}%`,
+            transform: "translate(-50%, -50%)",
+          }}
         >
           <p className="uppercase tracking-wide text-white/60">{node.layer}</p>
           <p className="text-sm text-white font-semibold">{node.name}</p>
@@ -207,35 +312,178 @@ function EcosystemMap({ nodes, connections }: { nodes: EcosystemNode[]; connecti
 }
 
 const SystemOverviewPage: React.FC = () => {
-  const [activeSystemId, setActiveSystemId] = useState<string>(SYSTEM_TABS[0].id);
-  const [activeSectionId, setActiveSectionId] = useState<string>(systemOverviewManifest.sections[0]?.id || 'executive-summary');
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [activeSystemId, setActiveSystemId] = useState<string>(
+    SYSTEM_TABS[0].id,
+  );
+  const [activeSectionId, setActiveSectionId] = useState<string>(
+    systemOverviewManifest.sections[0]?.id || "executive-summary",
+  );
+  const [handbookSearchQuery, setHandbookSearchQuery] = useState("");
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">(
+    "idle",
+  );
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [shareLinksLoading, setShareLinksLoading] = useState(false);
   const [shareCreating, setShareCreating] = useState(false);
-  const [shareRevokingToken, setShareRevokingToken] = useState<string | null>(null);
+  const [shareRevokingToken, setShareRevokingToken] = useState<string | null>(
+    null,
+  );
   const [shareLinks, setShareLinks] = useState<SystemOverviewShareLink[]>([]);
   const [shareError, setShareError] = useState<string | null>(null);
   const [sharePasscodeEnabled, setSharePasscodeEnabled] = useState(false);
-  const [sharePasscode, setSharePasscode] = useState('');
+  const [sharePasscode, setSharePasscode] = useState("");
   const artifactContentRef = React.useRef<HTMLDivElement | null>(null);
 
   // Derive filtered sidebar sections for the active system tab
-  const activeSystemTab = useMemo(() => SYSTEM_TABS.find((t) => t.id === activeSystemId) || SYSTEM_TABS[0], [activeSystemId]);
+  const activeSystemTab = useMemo(
+    () => SYSTEM_TABS.find((t) => t.id === activeSystemId) || SYSTEM_TABS[0],
+    [activeSystemId],
+  );
   const filteredSections = useMemo(
-    () => systemOverviewManifest.sections.filter((s) => activeSystemTab.sectionIds.includes(s.id)),
-    [activeSystemTab]
+    () =>
+      systemOverviewManifest.sections.filter((s) =>
+        activeSystemTab.sectionIds.includes(s.id),
+      ),
+    [activeSystemTab],
+  );
+  const trimmedHandbookSearchQuery = handbookSearchQuery.trim();
+  const normalizedHandbookSearchQuery =
+    trimmedHandbookSearchQuery.toLowerCase();
+  const handbookSearchIndex = useMemo(
+    () =>
+      systemOverviewManifest.sections.map((section) => {
+        const systemId = getSystemForSection(section.id);
+        const systemTab =
+          SYSTEM_TABS.find((tab) => tab.id === systemId) || SYSTEM_TABS[0];
+        const searchTerms = [
+          section.label,
+          section.description,
+          section.id.replace(/-/g, " "),
+          systemTab.label,
+        ];
+
+        switch (section.id) {
+          case "product-handbooks":
+            searchTerms.push(
+              ...systemOverviewManifest.products.map((product) => product.name),
+              ...systemOverviewManifest.products.flatMap((product) =>
+                product.featureInventory.map((feature) => feature.name),
+              ),
+            );
+            break;
+          case "backend-data":
+            searchTerms.push(
+              ...systemOverviewManifest.backendServices.map(
+                (service) => service.name,
+              ),
+              ...systemOverviewManifest.dataCollections.map(
+                (collection) => collection.name,
+              ),
+            );
+            break;
+          case "integrations":
+            searchTerms.push(
+              ...systemOverviewManifest.integrations.map(
+                (integration) => integration.name,
+              ),
+            );
+            break;
+          case "end-to-end-flows":
+            searchTerms.push(
+              ...systemOverviewManifest.flows.map((flow) => flow.name),
+            );
+            break;
+          case "ownership-release-matrix":
+            searchTerms.push(
+              ...systemOverviewManifest.ownershipMatrix.map(
+                (owner) => owner.domain,
+              ),
+            );
+            break;
+          case "risks-gaps":
+            searchTerms.push(
+              ...systemOverviewManifest.risksAndGaps.map((risk) => risk.title),
+            );
+            break;
+          case "glossary":
+            searchTerms.push(
+              ...systemOverviewManifest.glossary.map((term) => term.term),
+            );
+            break;
+          default:
+            break;
+        }
+
+        return {
+          section,
+          systemId,
+          systemLabel: systemTab.label,
+          searchText: searchTerms.join(" ").toLowerCase(),
+        };
+      }),
+    [],
+  );
+  const handbookSearchResults = useMemo(() => {
+    if (!normalizedHandbookSearchQuery) return [];
+
+    const queryTerms = normalizedHandbookSearchQuery
+      .split(/\s+/)
+      .filter(Boolean);
+
+    return handbookSearchIndex
+      .map((item) => {
+        const label = item.section.label.toLowerCase();
+        const description = item.section.description.toLowerCase();
+        const idText = item.section.id.replace(/-/g, " ").toLowerCase();
+        let score = 0;
+
+        if (label.startsWith(normalizedHandbookSearchQuery)) score += 7;
+        else if (label.includes(normalizedHandbookSearchQuery)) score += 5;
+
+        if (description.includes(normalizedHandbookSearchQuery)) score += 3;
+        if (idText.includes(normalizedHandbookSearchQuery)) score += 2;
+
+        score += queryTerms.reduce(
+          (total, term) => total + (item.searchText.includes(term) ? 1 : 0),
+          0,
+        );
+
+        if (score === 0) return null;
+
+        return {
+          ...item,
+          score,
+        };
+      })
+      .filter((item): item is NonNullable<typeof item> => Boolean(item))
+      .sort(
+        (left, right) =>
+          right.score - left.score ||
+          left.section.label.localeCompare(right.section.label),
+      );
+  }, [handbookSearchIndex, normalizedHandbookSearchQuery]);
+  const sidebarSections = useMemo(
+    () =>
+      normalizedHandbookSearchQuery
+        ? handbookSearchResults.map((result) => result.section)
+        : filteredSections,
+    [filteredSections, handbookSearchResults, normalizedHandbookSearchQuery],
   );
   const activeSectionMeta = useMemo(
-    () => systemOverviewManifest.sections.find((section) => section.id === activeSectionId),
-    [activeSectionId]
+    () =>
+      systemOverviewManifest.sections.find(
+        (section) => section.id === activeSectionId,
+      ),
+    [activeSectionId],
   );
 
   // Read initial section from URL hash if present
   useEffect(() => {
-    const hash = window.location.hash.replace('#', '');
+    const hash = window.location.hash.replace("#", "");
     if (hash) {
-      const matchingSection = systemOverviewManifest.sections.find((s) => s.id === hash);
+      const matchingSection = systemOverviewManifest.sections.find(
+        (s) => s.id === hash,
+      );
       if (matchingSection) {
         setActiveSectionId(hash);
         // Also set the correct system tab
@@ -251,52 +499,68 @@ const SystemOverviewPage: React.FC = () => {
     if (tab && tab.sectionIds.length > 0) {
       const firstSectionId = tab.sectionIds[0];
       setActiveSectionId(firstSectionId);
-      window.history.replaceState(null, '', `#${firstSectionId}`);
+      window.history.replaceState(null, "", `#${firstSectionId}`);
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSectionChange = (sectionId: string) => {
     setActiveSectionId(sectionId);
     // Update URL hash without scrolling
-    window.history.replaceState(null, '', `#${sectionId}`);
+    window.history.replaceState(null, "", `#${sectionId}`);
     // Scroll to top of content area
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleHandbookSearchResultSelect = (sectionId: string) => {
+    setActiveSystemId(getSystemForSection(sectionId));
+    handleSectionChange(sectionId);
+  };
+
+  const handleHandbookSearchSubmit = (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    const bestMatch = handbookSearchResults[0];
+    if (!bestMatch) return;
+    handleHandbookSearchResultSelect(bestMatch.section.id);
   };
 
   const handleCopyActiveSection = async () => {
     const content = artifactContentRef.current?.innerText?.trim();
     if (!content) {
-      setCopyState('error');
+      setCopyState("error");
       return;
     }
 
     const headerLines = [
       systemOverviewManifest.title,
       activeSectionMeta?.label || activeSectionId,
-      '',
-    ].join('\n');
+      "",
+    ].join("\n");
 
     try {
       await navigator.clipboard.writeText(`${headerLines}${content}`);
-      setCopyState('copied');
+      setCopyState("copied");
     } catch (error) {
-      console.error('[SystemOverview] Failed to copy artifact text:', error);
-      setCopyState('error');
+      console.error("[SystemOverview] Failed to copy artifact text:", error);
+      setCopyState("error");
     }
   };
 
   useEffect(() => {
-    setCopyState('idle');
+    setCopyState("idle");
     setShareMenuOpen(false);
+    setShareLinks([]);
+    setShareLinksLoading(false);
     setShareError(null);
     setSharePasscodeEnabled(false);
-    setSharePasscode('');
+    setSharePasscode("");
   }, [activeSectionId]);
 
   useEffect(() => {
-    if (copyState !== 'copied') return;
-    const timeout = window.setTimeout(() => setCopyState('idle'), 2000);
+    if (copyState !== "copied") return;
+    const timeout = window.setTimeout(() => setCopyState("idle"), 2000);
     return () => window.clearTimeout(timeout);
   }, [copyState]);
 
@@ -304,7 +568,7 @@ const SystemOverviewPage: React.FC = () => {
     let cancelled = false;
 
     const loadShareLinks = async () => {
-      if (!activeSectionId) return;
+      if (!activeSectionId || !shareMenuOpen) return;
       setShareLinksLoading(true);
       setShareError(null);
 
@@ -314,10 +578,10 @@ const SystemOverviewPage: React.FC = () => {
           setShareLinks(links.filter((link) => !link.revokedAt));
         }
       } catch (error) {
-        console.error('[SystemOverview] Failed to load share links:', error);
+        console.error("[SystemOverview] Failed to load share links:", error);
         if (!cancelled) {
           setShareLinks([]);
-          setShareError('Failed to load share links.');
+          setShareError("Failed to load share links.");
         }
       } finally {
         if (!cancelled) {
@@ -331,17 +595,17 @@ const SystemOverviewPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeSectionId]);
+  }, [activeSectionId, shareMenuOpen]);
 
   const handleCreateShareLink = async () => {
     const snapshotText = artifactContentRef.current?.innerText?.trim();
     if (!snapshotText || !activeSectionMeta) {
-      setShareError('Nothing available to share.');
+      setShareError("Nothing available to share.");
       return;
     }
 
     if (sharePasscodeEnabled && sharePasscode.trim().length < 4) {
-      setShareError('Passcode must be at least 4 characters.');
+      setShareError("Passcode must be at least 4 characters.");
       return;
     }
 
@@ -355,16 +619,16 @@ const SystemOverviewPage: React.FC = () => {
         sectionLabel: activeSectionMeta.label,
         sectionDescription: activeSectionMeta.description,
         snapshotText,
-        passcode: sharePasscodeEnabled ? sharePasscode.trim() : '',
+        passcode: sharePasscodeEnabled ? sharePasscode.trim() : "",
       });
 
       setShareLinks((current) => [createdLink, ...current]);
       await navigator.clipboard.writeText(createdLink.shareUrl);
       setSharePasscodeEnabled(false);
-      setSharePasscode('');
+      setSharePasscode("");
     } catch (error) {
-      console.error('[SystemOverview] Failed to create share link:', error);
-      setShareError('Failed to create share link.');
+      console.error("[SystemOverview] Failed to create share link:", error);
+      setShareError("Failed to create share link.");
     } finally {
       setShareCreating(false);
     }
@@ -374,8 +638,8 @@ const SystemOverviewPage: React.FC = () => {
     try {
       await navigator.clipboard.writeText(shareUrl);
     } catch (error) {
-      console.error('[SystemOverview] Failed to copy share link:', error);
-      setShareError('Failed to copy share link.');
+      console.error("[SystemOverview] Failed to copy share link:", error);
+      setShareError("Failed to copy share link.");
     }
   };
 
@@ -385,10 +649,12 @@ const SystemOverviewPage: React.FC = () => {
 
     try {
       await systemOverviewShareService.revoke(token);
-      setShareLinks((current) => current.filter((link) => link.token !== token));
+      setShareLinks((current) =>
+        current.filter((link) => link.token !== token),
+      );
     } catch (error) {
-      console.error('[SystemOverview] Failed to revoke share link:', error);
-      setShareError('Failed to revoke share link.');
+      console.error("[SystemOverview] Failed to revoke share link:", error);
+      setShareError("Failed to revoke share link.");
     } finally {
       setShareRevokingToken(null);
     }
@@ -397,52 +663,63 @@ const SystemOverviewPage: React.FC = () => {
   const summaryCards = useMemo(
     () => [
       {
-        title: 'Products',
+        title: "Products",
         value: String(systemOverviewManifest.products.length),
         icon: <Layers className="w-5 h-5" />,
-        caption: 'QuickLifts iOS, Android, PulseCheck, Web',
-        tone: 'from-blue-500/30 to-blue-300/10',
+        caption: "QuickLifts iOS, Android, PulseCheck, Web",
+        tone: "from-blue-500/30 to-blue-300/10",
       },
       {
-        title: 'Backend Services',
+        title: "Backend Services",
         value: String(systemOverviewManifest.backendServices.length),
         icon: <Server className="w-5 h-5" />,
-        caption: 'Core platform runtime services',
-        tone: 'from-purple-500/30 to-purple-300/10',
+        caption: "Core platform runtime services",
+        tone: "from-purple-500/30 to-purple-300/10",
       },
       {
-        title: 'Integrations',
+        title: "Integrations",
         value: String(systemOverviewManifest.integrations.length),
         icon: <Link2 className="w-5 h-5" />,
-        caption: 'Billing, messaging, AI, health data',
-        tone: 'from-amber-500/30 to-amber-300/10',
+        caption: "Billing, messaging, AI, health data",
+        tone: "from-amber-500/30 to-amber-300/10",
       },
       {
-        title: 'End-to-End Flows',
+        title: "End-to-End Flows",
         value: String(systemOverviewManifest.flows.length),
         icon: <Activity className="w-5 h-5" />,
-        caption: 'Cross-product lifecycle maps',
-        tone: 'from-green-500/30 to-green-300/10',
+        caption: "Cross-product lifecycle maps",
+        tone: "from-green-500/30 to-green-300/10",
       },
     ],
-    []
+    [],
   );
 
   /* ---- SECTION CONTENT RENDERER ---- */
   const renderSectionContent = () => {
     switch (activeSectionId) {
-      case 'executive-summary':
+      case "executive-summary":
         return (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-4 gap-4">
               {summaryCards.map((card) => (
-                <div key={card.title} className={`bg-gradient-to-br ${card.tone} border border-white/5 rounded-2xl p-4 flex items-center justify-between`}>
+                <div
+                  key={card.title}
+                  className={`bg-gradient-to-br ${card.tone} border border-white/5 rounded-2xl p-4 flex items-center justify-between`}
+                >
                   <div>
-                    <p className="text-xs uppercase tracking-wide text-zinc-400">{card.title}</p>
-                    <p className="text-2xl font-semibold text-white mt-1">{card.value}</p>
-                    <p className="text-[11px] text-white/70 mt-0.5">{card.caption}</p>
+                    <p className="text-xs uppercase tracking-wide text-zinc-400">
+                      {card.title}
+                    </p>
+                    <p className="text-2xl font-semibold text-white mt-1">
+                      {card.value}
+                    </p>
+                    <p className="text-[11px] text-white/70 mt-0.5">
+                      {card.caption}
+                    </p>
                   </div>
-                  <div className="p-3 rounded-full bg-black/30 text-white">{card.icon}</div>
+                  <div className="p-3 rounded-full bg-black/30 text-white">
+                    {card.icon}
+                  </div>
                 </div>
               ))}
             </div>
@@ -450,25 +727,37 @@ const SystemOverviewPage: React.FC = () => {
             <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-4">
               <div>
                 <h2 className="text-xl font-semibold">Mission</h2>
-                <p className="text-sm text-zinc-300 mt-1">{systemOverviewManifest.executiveSummary.mission}</p>
-                <p className="text-xs text-zinc-500 mt-2">Audience: {systemOverviewManifest.executiveSummary.audience}</p>
+                <p className="text-sm text-zinc-300 mt-1">
+                  {systemOverviewManifest.executiveSummary.mission}
+                </p>
+                <p className="text-xs text-zinc-500 mt-2">
+                  Audience: {systemOverviewManifest.executiveSummary.audience}
+                </p>
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 <div className="bg-black/20 border border-zinc-800 rounded-xl p-4">
-                  <p className="text-xs uppercase tracking-wide text-zinc-500 mb-2">What Changed Recently</p>
+                  <p className="text-xs uppercase tracking-wide text-zinc-500 mb-2">
+                    What Changed Recently
+                  </p>
                   <ul className="list-disc pl-5 space-y-1 text-sm text-zinc-300">
-                    {systemOverviewManifest.executiveSummary.whatChangedRecently.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
+                    {systemOverviewManifest.executiveSummary.whatChangedRecently.map(
+                      (item) => (
+                        <li key={item}>{item}</li>
+                      ),
+                    )}
                   </ul>
                 </div>
                 <div className="bg-black/20 border border-zinc-800 rounded-xl p-4">
-                  <p className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Highlights</p>
+                  <p className="text-xs uppercase tracking-wide text-zinc-500 mb-2">
+                    Highlights
+                  </p>
                   <ul className="list-disc pl-5 space-y-1 text-sm text-zinc-300">
-                    {systemOverviewManifest.executiveSummary.highlights.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
+                    {systemOverviewManifest.executiveSummary.highlights.map(
+                      (item) => (
+                        <li key={item}>{item}</li>
+                      ),
+                    )}
                   </ul>
                 </div>
               </div>
@@ -476,28 +765,46 @@ const SystemOverviewPage: React.FC = () => {
           </div>
         );
 
-      case 'ecosystem-map':
+      case "ecosystem-map":
         return (
           <div className="space-y-4">
             <div>
               <h2 className="text-xl font-semibold">Ecosystem Map</h2>
-              <p className="text-sm text-zinc-400 mt-1">Layered map of system surfaces, backend, integrations, and agent infrastructure.</p>
+              <p className="text-sm text-zinc-400 mt-1">
+                Layered map of system surfaces, backend, integrations, and agent
+                infrastructure.
+              </p>
             </div>
-            <EcosystemMap nodes={systemOverviewManifest.ecosystemMap.nodes} connections={systemOverviewManifest.ecosystemMap.connections} />
+            <EcosystemMap
+              nodes={systemOverviewManifest.ecosystemMap.nodes}
+              connections={systemOverviewManifest.ecosystemMap.connections}
+            />
             <div className="text-xs text-zinc-500 flex flex-wrap items-center gap-4">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#38bdf8] inline-block" />Data</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#a78bfa] inline-block" />Auth</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#facc15] inline-block" />Events</span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-[#38bdf8] inline-block" />
+                Data
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-[#a78bfa] inline-block" />
+                Auth
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-3 h-3 rounded-full bg-[#facc15] inline-block" />
+                Events
+              </span>
             </div>
           </div>
         );
 
-      case 'product-handbooks':
+      case "product-handbooks":
         return (
           <div className="space-y-6">
             <div>
               <h2 className="text-xl font-semibold">Product Handbooks</h2>
-              <p className="text-sm text-zinc-400 mt-1">Feature-by-feature inventory with dependencies, data paths, ownership, and release channels.</p>
+              <p className="text-sm text-zinc-400 mt-1">
+                Feature-by-feature inventory with dependencies, data paths,
+                ownership, and release channels.
+              </p>
             </div>
             {systemOverviewManifest.products.map((product) => (
               <ProductHandbook key={product.id} product={product} />
@@ -505,21 +812,23 @@ const SystemOverviewPage: React.FC = () => {
           </div>
         );
 
-      case 'pulse-club-activation-architecture':
+      case "pulse-club-activation-architecture":
         return <PulseClubActivationArchitectureTab />;
 
-      case 'smart-routes-v1-architecture':
+      case "smart-routes-v1-architecture":
         return <SmartRoutesV1ArchitectureTab />;
 
-      case 'shared-link-preview-strategy':
+      case "shared-link-preview-strategy":
         return <SharedLinkPreviewStrategyTab />;
 
-      case 'backend-data':
+      case "backend-data":
         return (
           <div className="space-y-4">
             <div>
               <h2 className="text-xl font-semibold">Backend and Data</h2>
-              <p className="text-sm text-zinc-400 mt-1">Platform service inventory and canonical data collection usage.</p>
+              <p className="text-sm text-zinc-400 mt-1">
+                Platform service inventory and canonical data collection usage.
+              </p>
             </div>
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
               <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3">
@@ -529,11 +838,21 @@ const SystemOverviewPage: React.FC = () => {
                 </div>
                 <div className="space-y-3 text-sm">
                   {systemOverviewManifest.backendServices.map((service) => (
-                    <div key={service.id} className="border border-zinc-800 rounded-xl p-3 bg-black/20">
+                    <div
+                      key={service.id}
+                      className="border border-zinc-800 rounded-xl p-3 bg-black/20"
+                    >
                       <p className="text-white font-semibold">{service.name}</p>
-                      <p className="text-zinc-400 text-xs mt-1">{service.purpose}</p>
-                      <p className="text-zinc-500 text-xs mt-2">Owner: {service.owner} | Environments: {service.environments.join(', ')}</p>
-                      <p className="text-zinc-500 text-xs">Dependencies: {service.keyDependencies.join(', ')}</p>
+                      <p className="text-zinc-400 text-xs mt-1">
+                        {service.purpose}
+                      </p>
+                      <p className="text-zinc-500 text-xs mt-2">
+                        Owner: {service.owner} | Environments:{" "}
+                        {service.environments.join(", ")}
+                      </p>
+                      <p className="text-zinc-500 text-xs">
+                        Dependencies: {service.keyDependencies.join(", ")}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -545,12 +864,25 @@ const SystemOverviewPage: React.FC = () => {
                 </div>
                 <div className="space-y-3 text-sm max-h-[560px] overflow-auto pr-1">
                   {systemOverviewManifest.dataCollections.map((collection) => (
-                    <div key={collection.id} className="border border-zinc-800 rounded-xl p-3 bg-black/20">
-                      <p className="text-white font-semibold font-mono text-xs">{collection.name}</p>
-                      <p className="text-zinc-400 text-xs mt-1">{collection.purpose}</p>
-                      <p className="text-zinc-500 text-xs mt-2">Written by: {collection.writtenBy}</p>
-                      <p className="text-zinc-500 text-xs">Read by: {collection.readBy}</p>
-                      <p className="text-zinc-500 text-xs">Critical fields: {collection.criticalFields.join(', ')}</p>
+                    <div
+                      key={collection.id}
+                      className="border border-zinc-800 rounded-xl p-3 bg-black/20"
+                    >
+                      <p className="text-white font-semibold font-mono text-xs">
+                        {collection.name}
+                      </p>
+                      <p className="text-zinc-400 text-xs mt-1">
+                        {collection.purpose}
+                      </p>
+                      <p className="text-zinc-500 text-xs mt-2">
+                        Written by: {collection.writtenBy}
+                      </p>
+                      <p className="text-zinc-500 text-xs">
+                        Read by: {collection.readBy}
+                      </p>
+                      <p className="text-zinc-500 text-xs">
+                        Critical fields: {collection.criticalFields.join(", ")}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -559,54 +891,93 @@ const SystemOverviewPage: React.FC = () => {
           </div>
         );
 
-      case 'integrations':
+      case "integrations":
         return (
           <div className="space-y-4">
             <div>
               <h2 className="text-xl font-semibold">Integrations</h2>
-              <p className="text-sm text-zinc-400 mt-1">External systems, operational ownership, and credential origin visibility.</p>
+              <p className="text-sm text-zinc-400 mt-1">
+                External systems, operational ownership, and credential origin
+                visibility.
+              </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {systemOverviewManifest.integrations.map((integration) => (
-                <article key={integration.id} className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-4">
+                <article
+                  key={integration.id}
+                  className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-4"
+                >
                   <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-lg font-semibold text-white">{integration.name}</h3>
-                    <span className="text-[11px] uppercase tracking-wide text-zinc-400">{integration.status}</span>
+                    <h3 className="text-lg font-semibold text-white">
+                      {integration.name}
+                    </h3>
+                    <span className="text-[11px] uppercase tracking-wide text-zinc-400">
+                      {integration.status}
+                    </span>
                   </div>
-                  <p className="text-sm text-zinc-300 mt-2">{integration.purpose}</p>
-                  <p className="text-xs text-zinc-500 mt-2">Owner: {integration.owner}</p>
-                  <p className="text-xs text-zinc-500">Credential source: {integration.credentialSource}</p>
-                  <p className="text-xs text-zinc-500">Products: {integration.products.join(', ')}</p>
+                  <p className="text-sm text-zinc-300 mt-2">
+                    {integration.purpose}
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-2">
+                    Owner: {integration.owner}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    Credential source: {integration.credentialSource}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    Products: {integration.products.join(", ")}
+                  </p>
                 </article>
               ))}
             </div>
           </div>
         );
 
-      case 'end-to-end-flows':
+      case "end-to-end-flows":
         return (
           <div className="space-y-4">
             <div>
               <h2 className="text-xl font-semibold">End-to-End Flows</h2>
-              <p className="text-sm text-zinc-400 mt-1">Trigger-to-outcome maps with data touchpoints and failure modes.</p>
+              <p className="text-sm text-zinc-400 mt-1">
+                Trigger-to-outcome maps with data touchpoints and failure modes.
+              </p>
             </div>
             <div className="space-y-4">
               {systemOverviewManifest.flows.map((flow) => (
-                <article key={flow.id} className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3">
+                <article
+                  key={flow.id}
+                  className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-5 space-y-3"
+                >
                   <div>
-                    <h3 className="text-lg font-semibold text-white">{flow.name}</h3>
-                    <p className="text-sm text-zinc-400 mt-1">Trigger: {flow.trigger}</p>
+                    <h3 className="text-lg font-semibold text-white">
+                      {flow.name}
+                    </h3>
+                    <p className="text-sm text-zinc-400 mt-1">
+                      Trigger: {flow.trigger}
+                    </p>
                   </div>
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 text-xs">
                     <div className="border border-zinc-800 rounded-xl p-3 bg-black/20">
-                      <p className="uppercase tracking-wide text-zinc-500 mb-1">System Path</p>
-                      <p className="text-zinc-300">{flow.backendPath.join(' -> ')}</p>
-                      <p className="text-zinc-500 mt-2 break-words">Products: {flow.involvedProducts.join(', ')}</p>
-                      <p className="text-zinc-500 break-words">Collections: {flow.collectionsTouched.join(', ')}</p>
-                      <p className="text-zinc-500 break-words">Integrations: {flow.integrations.join(', ') || 'N/A'}</p>
+                      <p className="uppercase tracking-wide text-zinc-500 mb-1">
+                        System Path
+                      </p>
+                      <p className="text-zinc-300">
+                        {flow.backendPath.join(" -> ")}
+                      </p>
+                      <p className="text-zinc-500 mt-2 break-words">
+                        Products: {flow.involvedProducts.join(", ")}
+                      </p>
+                      <p className="text-zinc-500 break-words">
+                        Collections: {flow.collectionsTouched.join(", ")}
+                      </p>
+                      <p className="text-zinc-500 break-words">
+                        Integrations: {flow.integrations.join(", ") || "N/A"}
+                      </p>
                     </div>
                     <div className="border border-zinc-800 rounded-xl p-3 bg-black/20">
-                      <p className="uppercase tracking-wide text-zinc-500 mb-1">Failure Points</p>
+                      <p className="uppercase tracking-wide text-zinc-500 mb-1">
+                        Failure Points
+                      </p>
                       <ul className="list-disc pl-4 text-zinc-300 space-y-1">
                         {flow.failurePoints.map((failure) => (
                           <li key={failure}>{failure}</li>
@@ -616,10 +987,19 @@ const SystemOverviewPage: React.FC = () => {
                   </div>
                   <ol className="space-y-2">
                     {flow.steps.map((step) => (
-                      <li key={step.id} className="border border-zinc-800 rounded-xl p-3 bg-black/20">
-                        <p className="text-xs text-zinc-500 uppercase tracking-wide">{step.actor}</p>
-                        <p className="text-sm text-white font-semibold mt-1">{step.action}</p>
-                        <p className="text-xs text-zinc-400 mt-1">Output: {step.output}</p>
+                      <li
+                        key={step.id}
+                        className="border border-zinc-800 rounded-xl p-3 bg-black/20"
+                      >
+                        <p className="text-xs text-zinc-500 uppercase tracking-wide">
+                          {step.actor}
+                        </p>
+                        <p className="text-sm text-white font-semibold mt-1">
+                          {step.action}
+                        </p>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          Output: {step.output}
+                        </p>
                       </li>
                     ))}
                   </ol>
@@ -629,12 +1009,17 @@ const SystemOverviewPage: React.FC = () => {
           </div>
         );
 
-      case 'ownership-release-matrix':
+      case "ownership-release-matrix":
         return (
           <div className="space-y-4">
             <div>
-              <h2 className="text-xl font-semibold">Ownership and Release Matrix</h2>
-              <p className="text-sm text-zinc-400 mt-1">Primary operational ownership, escalation backup, and cadence references.</p>
+              <h2 className="text-xl font-semibold">
+                Ownership and Release Matrix
+              </h2>
+              <p className="text-sm text-zinc-400 mt-1">
+                Primary operational ownership, escalation backup, and cadence
+                references.
+              </p>
             </div>
             <div className="overflow-x-auto border border-zinc-800 rounded-2xl">
               <table className="w-full text-sm min-w-[860px]">
@@ -651,10 +1036,18 @@ const SystemOverviewPage: React.FC = () => {
                   {systemOverviewManifest.ownershipMatrix.map((row) => (
                     <tr key={row.domain} className="border-t border-zinc-800">
                       <td className="px-3 py-3 text-zinc-200">{row.domain}</td>
-                      <td className="px-3 py-3 text-zinc-300">{row.primaryOwner}</td>
-                      <td className="px-3 py-3 text-zinc-300">{row.backupOwner}</td>
-                      <td className="px-3 py-3 text-zinc-300">{row.releaseCadence}</td>
-                      <td className="px-3 py-3 text-zinc-500 text-xs font-mono break-all">{row.runbookPath}</td>
+                      <td className="px-3 py-3 text-zinc-300">
+                        {row.primaryOwner}
+                      </td>
+                      <td className="px-3 py-3 text-zinc-300">
+                        {row.backupOwner}
+                      </td>
+                      <td className="px-3 py-3 text-zinc-300">
+                        {row.releaseCadence}
+                      </td>
+                      <td className="px-3 py-3 text-zinc-500 text-xs font-mono break-all">
+                        {row.runbookPath}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -663,12 +1056,17 @@ const SystemOverviewPage: React.FC = () => {
           </div>
         );
 
-      case 'agent-infrastructure-handbook':
+      case "agent-infrastructure-handbook":
         return (
           <div className="space-y-4">
             <div>
-              <h2 className="text-xl font-semibold">Agent Infrastructure Handbook</h2>
-              <p className="text-sm text-zinc-400 mt-1">Embedded chapter preserving current heartbeat protocol, data schema, and operator docs.</p>
+              <h2 className="text-xl font-semibold">
+                Agent Infrastructure Handbook
+              </h2>
+              <p className="text-sm text-zinc-400 mt-1">
+                Embedded chapter preserving current heartbeat protocol, data
+                schema, and operator docs.
+              </p>
             </div>
             <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-4 overflow-hidden">
               <HeartbeatProtocolTab />
@@ -676,12 +1074,15 @@ const SystemOverviewPage: React.FC = () => {
           </div>
         );
 
-      case 'hunter-world-handbook':
+      case "hunter-world-handbook":
         return (
           <div className="space-y-4">
             <div>
               <h2 className="text-xl font-semibold">Hunter World Handbook</h2>
-              <p className="text-sm text-zinc-400 mt-1">Embedded chapter for leveling mechanics, specialty classes, and creator narrative system.</p>
+              <p className="text-sm text-zinc-400 mt-1">
+                Embedded chapter for leveling mechanics, specialty classes, and
+                creator narrative system.
+              </p>
             </div>
             <div className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-4 overflow-hidden">
               <HunterWorldTab />
@@ -689,164 +1090,347 @@ const SystemOverviewPage: React.FC = () => {
           </div>
         );
 
-      case 'risks-gaps':
+      case "risks-gaps":
         return (
           <div className="space-y-4">
             <div>
               <h2 className="text-xl font-semibold">Risks and Gaps</h2>
-              <p className="text-sm text-zinc-400 mt-1">Known system risks and active mitigation posture.</p>
+              <p className="text-sm text-zinc-400 mt-1">
+                Known system risks and active mitigation posture.
+              </p>
             </div>
             <div className="space-y-3">
               {systemOverviewManifest.risksAndGaps.map((risk) => (
-                <article key={risk.id} className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-4">
+                <article
+                  key={risk.id}
+                  className="bg-[#090f1c] border border-zinc-800 rounded-2xl p-4"
+                >
                   <div className="flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-300" />
-                    <h3 className="text-lg font-semibold text-white">{risk.title}</h3>
-                    <span className="text-[11px] uppercase tracking-wide text-zinc-400 ml-auto">{risk.severity}</span>
+                    <h3 className="text-lg font-semibold text-white">
+                      {risk.title}
+                    </h3>
+                    <span className="text-[11px] uppercase tracking-wide text-zinc-400 ml-auto">
+                      {risk.severity}
+                    </span>
                   </div>
-                  <p className="text-sm text-zinc-300 mt-2">Impact: {risk.impact}</p>
-                  <p className="text-sm text-zinc-400 mt-1">Mitigation: {risk.mitigation}</p>
-                  <p className="text-xs text-zinc-500 mt-2">Owner: {risk.owner}</p>
+                  <p className="text-sm text-zinc-300 mt-2">
+                    Impact: {risk.impact}
+                  </p>
+                  <p className="text-sm text-zinc-400 mt-1">
+                    Mitigation: {risk.mitigation}
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-2">
+                    Owner: {risk.owner}
+                  </p>
                 </article>
               ))}
             </div>
           </div>
         );
 
-      case 'glossary':
+      case "glossary":
         return (
           <div className="space-y-4">
             <div>
               <h2 className="text-xl font-semibold">Glossary</h2>
-              <p className="text-sm text-zinc-400 mt-1">Shared language across product, engineering, and operations.</p>
+              <p className="text-sm text-zinc-400 mt-1">
+                Shared language across product, engineering, and operations.
+              </p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {systemOverviewManifest.glossary.map((entry) => (
-                <article key={entry.term} className="bg-[#090f1c] border border-zinc-800 rounded-xl p-4">
-                  <p className="text-sm font-semibold text-white">{entry.term}</p>
-                  <p className="text-xs text-zinc-400 mt-1">{entry.definition}</p>
+                <article
+                  key={entry.term}
+                  className="bg-[#090f1c] border border-zinc-800 rounded-xl p-4"
+                >
+                  <p className="text-sm font-semibold text-white">
+                    {entry.term}
+                  </p>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    {entry.definition}
+                  </p>
                 </article>
               ))}
             </div>
           </div>
         );
 
-      case 'simulation-taxonomy':
+      case "simulation-taxonomy":
         return <SimulationTaxonomyTab />;
 
-      case 'sim-family-tree':
+      case "sim-family-tree":
         return <SimFamilyTreeTab />;
 
-      case 'promotion-protocol':
+      case "promotion-protocol":
         return <PromotionProtocolTab />;
 
-      case 'sim-spec-standards':
+      case "sim-spec-standards":
         return <SimSpecStandardsTab />;
 
-      case 'variant-registry':
+      case "variant-registry":
         return <VariantRegistryTab />;
 
-      case 'sim-family-specs':
+      case "protocol-registry":
+        return <ProtocolRegistryTab />;
+
+      case "pulsecheck-protocol-governance-spec":
+        return <PulseCheckProtocolGovernanceSpecTab />;
+
+      case "pulsecheck-protocol-authoring-workflow":
+        return <PulseCheckProtocolAuthoringWorkflowTab />;
+
+      case "pulsecheck-protocol-responsiveness-profile-spec":
+        return <PulseCheckProtocolResponsivenessProfileSpecTab />;
+
+      case "pulsecheck-protocol-responsiveness-inspector":
+        return <PulseCheckProtocolResponsivenessInspectorTab />;
+
+      case "sim-family-specs":
         return <SimFamilySpecTab />;
 
-      case 'athlete-journey':
+      case "athlete-journey":
         return <AthleteJourneyTab />;
 
-      case 'coach-journey':
+      case "coach-journey":
         return <CoachJourneyTab />;
 
-      case 'pulsecheck-runtime-architecture':
+      case "pulsecheck-runtime-architecture":
         return <PulseCheckRuntimeArchitectureTab />;
 
-      case 'pulsecheck-state-signal-layer':
+      case "pulsecheck-state-signal-layer":
         return <PulseCheckStateSignalLayerTab />;
 
-      case 'pulsecheck-state-snapshot-freshness-policy':
+      case "pulsecheck-checkin-signal-layer-integration-spec":
+        return <PulseCheckCheckInSignalLayerIntegrationSpecTab />;
+
+      case "pulsecheck-health-chat-architecture":
+        return <PulseCheckHealthChatArchitectureTab />;
+
+      case "pulsecheck-athlete-health-context-snapshot-spec":
+        return <PulseCheckAthleteHealthContextSnapshotSpecTab />;
+
+      case "pulsecheck-health-context-source-record-spec":
+        return <PulseCheckHealthContextSourceRecordSpecTab />;
+
+      case "pulsecheck-health-context-snapshot-assembler-spec":
+        return <PulseCheckHealthContextSnapshotAssemblerSpecTab />;
+
+      case "pulsecheck-health-context-persistence-storage-spec":
+        return <PulseCheckHealthContextPersistenceStorageSpecTab />;
+
+      case "pulsecheck-health-context-operational-orchestration-spec":
+        return <PulseCheckHealthContextOperationalOrchestrationSpecTab />;
+
+      case "pulsecheck-health-context-implementation-rollout-plan":
+        return <PulseCheckHealthContextImplementationRolloutPlanTab />;
+
+      case "pulsecheck-health-context-operator-runbook":
+        return <PulseCheckHealthContextOperatorRunbookTab />;
+
+      case "pulsecheck-health-context-definition-of-done":
+        return <PulseCheckHealthContextDefinitionOfDoneTab />;
+
+      case "pulsecheck-health-context-engineering-task-breakdown":
+        return <PulseCheckHealthContextEngineeringTaskBreakdownTab />;
+
+      case "pulsecheck-health-context-firestore-schema-index-spec":
+        return <PulseCheckHealthContextFirestoreSchemaIndexSpecTab />;
+
+      case "pulsecheck-oura-integration-strategy":
+        return <PulseCheckOuraIntegrationStrategyTab />;
+
+      case "pulsecheck-device-integration-strategy":
+        return <PulseCheckDeviceIntegrationStrategyTab />;
+
+      case "pulsecheck-device-integration-partnership-matrix":
+        return <PulseCheckDeviceIntegrationPartnershipMatrixTab />;
+
+      case "pulsecheck-patent-eligibility-audit":
+        return <PulseCheckPatentEligibilityAuditTab />;
+
+      case "firestore-index-registry":
+        return <FirestoreIndexRegistryTab />;
+
+      case "pulsecheck-state-snapshot-freshness-policy":
         return <PulseCheckStateSnapshotFreshnessPolicyTab />;
 
-      case 'pulsecheck-performance-state-flag-definitions':
+      case "pulsecheck-performance-state-flag-definitions":
         return <PulseCheckPerformanceStateFlagDefinitionsTab />;
 
-      case 'pulsecheck-nora-assignment-rules':
+      case "pulsecheck-nora-assignment-rules":
         return <PulseCheckNoraAssignmentRulesTab />;
 
-      case 'pulsecheck-nora-qa-edge-case-matrix':
+      case "pulsecheck-nora-qa-edge-case-matrix":
         return <PulseCheckNoraQaEdgeCaseScenarioMatrixTab />;
 
-      case 'pulsecheck-state-escalation-orchestration':
+      case "pulsecheck-state-escalation-orchestration":
         return <PulseCheckStateEscalationOrchestrationTab />;
 
-      case 'pulsecheck-escalation-integration-spec':
+      case "pulsecheck-escalation-integration-spec":
         return <PulseCheckEscalationIntegrationSpecTab />;
 
-      case 'pulsecheck-member-onboarding-guide':
+      case "pulsecheck-member-onboarding-guide":
         return <PulseCheckMemberOnboardingGuideTab />;
 
-      case 'pulsecheck-team-pilot-cohort-onboarding-architecture':
+      case "pulsecheck-team-pilot-cohort-onboarding-architecture":
         return <PulseCheckTeamPilotCohortOnboardingArchitectureTab />;
 
-      case 'pulsecheck-permissions-visibility-model':
+      case "pulsecheck-permissions-visibility-model":
         return <PulseCheckPermissionsVisibilityModelTab />;
 
-      case 'pulsecheck-coach-dashboard-information-architecture':
+      case "pulsecheck-coach-dashboard-information-architecture":
         return <PulseCheckCoachDashboardInformationArchitectureTab />;
 
-      case 'pulsecheck-profile-architecture':
+      case "pulsecheck-profile-architecture":
         return <PulseCheckProfileArchitectureTab />;
 
-      case 'pulsecheck-profile-snapshot-export-spec':
+      case "pulsecheck-profile-snapshot-export-spec":
         return <PulseCheckProfileSnapshotExportSpecTab />;
 
-      case 'pulsecheck-vision-pro-immersive-tests':
+      case "pulsecheck-vision-pro-immersive-tests":
         return <PulseCheckVisionProImmersiveTestsTab />;
 
-      case 'system-design-language':
+      case "system-design-language":
         return <PulseSystemDesignLanguageTab />;
 
-      case 'auntedna-integration-strategy':
+      case "auntedna-integration-strategy":
         return <AuntEdnaIntegrationStrategyTab />;
 
-      case 'playwright-testing-strategy':
+      case "playwright-testing-strategy":
         return <PlaywrightTestingStrategyTab />;
 
-      case 'android-testing-strategy':
+      case "android-testing-strategy":
         return <AndroidTestingStrategyTab />;
 
-      case 'xcuitest-testing-strategy':
+      case "xcuitest-testing-strategy":
         return <XCUITestingStrategyTab />;
 
-      case 'workout-share-cards':
+      case "workout-share-cards":
         return (
           <div className="space-y-6">
             <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-6">
-              <h2 className="text-xl font-bold text-white mb-1">Workout Share Cards</h2>
-              <p className="text-sm text-zinc-400">Branded 1080×1350 (4:5) shareable image cards for each workout category. Supports two export modes: a dark-background <strong className="text-white">Story Card</strong> (saved as JPEG) and a fully transparent <strong className="text-white">Sticker PNG</strong> (alpha channel preserved via <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">PHPhotoLibrary</code>) that can be overlaid on any photo.</p>
+              <h2 className="text-xl font-bold text-white mb-1">
+                Workout Share Cards
+              </h2>
+              <p className="text-sm text-zinc-400">
+                Branded 1080×1350 (4:5) shareable image cards for each workout
+                category. Supports two export modes: a dark-background{" "}
+                <strong className="text-white">Story Card</strong> (saved as
+                JPEG) and a fully transparent{" "}
+                <strong className="text-white">Sticker PNG</strong> (alpha
+                channel preserved via{" "}
+                <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">
+                  PHPhotoLibrary
+                </code>
+                ) that can be overlaid on any photo.
+              </p>
             </div>
 
             {/* Why PHPhotoLibrary for transparent PNGs */}
             <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-6">
-              <h3 className="font-semibold text-amber-300 mb-2">💡 Transparent PNG Save Implementation</h3>
-              <p className="text-sm text-zinc-300 mb-3"><code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">UIImageWriteToSavedPhotosAlbum</code> always re-encodes as JPEG and silently strips the alpha channel — so a transparent card would save with a black background.</p>
-              <p className="text-sm text-zinc-300">To preserve transparency we use <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">PHPhotoLibrary.shared().performChanges</code> with a <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">PHAssetCreationRequest</code> supplying raw <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">img.pngData()</code> and <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">uniformTypeIdentifier: &quot;public.png&quot;</code>. This writes a real PNG asset with full alpha channel intact.</p>
+              <h3 className="font-semibold text-amber-300 mb-2">
+                💡 Transparent PNG Save Implementation
+              </h3>
+              <p className="text-sm text-zinc-300 mb-3">
+                <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">
+                  UIImageWriteToSavedPhotosAlbum
+                </code>{" "}
+                always re-encodes as JPEG and silently strips the alpha channel
+                — so a transparent card would save with a black background.
+              </p>
+              <p className="text-sm text-zinc-300">
+                To preserve transparency we use{" "}
+                <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">
+                  PHPhotoLibrary.shared().performChanges
+                </code>{" "}
+                with a{" "}
+                <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">
+                  PHAssetCreationRequest
+                </code>{" "}
+                supplying raw{" "}
+                <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">
+                  img.pngData()
+                </code>{" "}
+                and{" "}
+                <code className="text-amber-400 text-xs bg-amber-500/10 px-1 rounded">
+                  uniformTypeIdentifier: &quot;public.png&quot;
+                </code>
+                . This writes a real PNG asset with full alpha channel intact.
+              </p>
             </div>
 
             {/* Category cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {[
-                { label: 'Run', color: '#3b82f6', icon: '🏃', file: 'RunSummaryView.swift / RunShareStoryView.swift', stats: 'Distance · Pace · Time · Calories', note: 'Swipeable Map Route + Stats-Only cards. Stats-only center uses subtle radial glow; icon moves to stats bar corner.' },
-                { label: 'Bike', color: '#06b6d4', icon: '🚴', file: 'BikeSummaryView.swift / BikeShareStoryView.swift', stats: 'Distance · Speed · Biking Time · Calories', note: 'GPS route shown when available. Indoor/no-GPS sessions use stats-only center + icon in stats bar.' },
-                { label: 'Lift', color: '#22c55e', icon: '🏋', file: 'WorkoutShareStoryView.swift / WorkoutSummaryView.swift', stats: 'Duration · Exercises · Calories', note: 'Workout title as center hero. Category icon in stats bar corner. Dark teal-green background.' },
-                { label: 'Stretch', color: '#a855f7', icon: '🧘', file: 'WorkoutShareStoryView.swift / WorkoutSummaryView.swift', stats: 'Duration · Stretches · Calories', note: 'Same WorkoutShareStoryView as Lift, themed purple. inferredHistoryType == .stretch triggers purple palette.' },
-                { label: 'Fat Burn', color: '#ef4444', icon: '🔥', file: 'FatBurnShareStoryView.swift / FatBurnSummaryView.swift', stats: 'Duration · Floors or Distance · Calories', note: 'Equipment-specific middle stat: Floors (Stairmaster), Distance (elliptical/treadmill/bike). Equipment icon in stats bar.' },
+                {
+                  label: "Run",
+                  color: "#3b82f6",
+                  icon: "🏃",
+                  file: "RunSummaryView.swift / RunShareStoryView.swift",
+                  stats: "Distance · Pace · Time · Calories",
+                  note: "Swipeable Map Route + Stats-Only cards. Stats-only center uses subtle radial glow; icon moves to stats bar corner.",
+                },
+                {
+                  label: "Bike",
+                  color: "#06b6d4",
+                  icon: "🚴",
+                  file: "BikeSummaryView.swift / BikeShareStoryView.swift",
+                  stats: "Distance · Speed · Biking Time · Calories",
+                  note: "GPS route shown when available. Indoor/no-GPS sessions use stats-only center + icon in stats bar.",
+                },
+                {
+                  label: "Lift",
+                  color: "#22c55e",
+                  icon: "🏋",
+                  file: "WorkoutShareStoryView.swift / WorkoutSummaryView.swift",
+                  stats: "Duration · Exercises · Calories",
+                  note: "Workout title as center hero. Category icon in stats bar corner. Dark teal-green background.",
+                },
+                {
+                  label: "Stretch",
+                  color: "#a855f7",
+                  icon: "🧘",
+                  file: "WorkoutShareStoryView.swift / WorkoutSummaryView.swift",
+                  stats: "Duration · Stretches · Calories",
+                  note: "Same WorkoutShareStoryView as Lift, themed purple. inferredHistoryType == .stretch triggers purple palette.",
+                },
+                {
+                  label: "Fat Burn",
+                  color: "#ef4444",
+                  icon: "🔥",
+                  file: "FatBurnShareStoryView.swift / FatBurnSummaryView.swift",
+                  stats: "Duration · Floors or Distance · Calories",
+                  note: "Equipment-specific middle stat: Floors (Stairmaster), Distance (elliptical/treadmill/bike). Equipment icon in stats bar.",
+                },
               ].map((cat) => (
-                <div key={cat.label} className="rounded-xl border p-4 space-y-2" style={{ borderColor: `${cat.color}30`, background: `${cat.color}08` }}>
+                <div
+                  key={cat.label}
+                  className="rounded-xl border p-4 space-y-2"
+                  style={{
+                    borderColor: `${cat.color}30`,
+                    background: `${cat.color}08`,
+                  }}
+                >
                   <div className="flex items-center gap-2">
                     <span className="text-xl">{cat.icon}</span>
-                    <span className="font-semibold text-white">{cat.label}</span>
-                    <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: `${cat.color}20`, color: cat.color }}>active</span>
+                    <span className="font-semibold text-white">
+                      {cat.label}
+                    </span>
+                    <span
+                      className="ml-auto text-[10px] px-2 py-0.5 rounded-full font-medium"
+                      style={{ background: `${cat.color}20`, color: cat.color }}
+                    >
+                      active
+                    </span>
                   </div>
                   <p className="text-xs text-zinc-400 font-mono">{cat.file}</p>
-                  <p className="text-xs text-zinc-300"><span className="font-medium" style={{ color: cat.color }}>Stats: </span>{cat.stats}</p>
+                  <p className="text-xs text-zinc-300">
+                    <span className="font-medium" style={{ color: cat.color }}>
+                      Stats:{" "}
+                    </span>
+                    {cat.stats}
+                  </p>
                   <p className="text-xs text-zinc-400">{cat.note}</p>
                 </div>
               ))}
@@ -854,39 +1438,97 @@ const SystemOverviewPage: React.FC = () => {
 
             {/* Code architecture */}
             <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-6 space-y-4">
-              <h3 className="font-semibold text-white">Code Architecture Pattern</h3>
+              <h3 className="font-semibold text-white">
+                Code Architecture Pattern
+              </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                 <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-4">
-                  <p className="font-medium text-zinc-200 mb-2">*ShareStoryView</p>
-                  <p className="text-zinc-400 text-xs">Pure SwiftUI view, 1080×1350 frame. Accepts a <code className="text-amber-400">style: RunShareStyle</code> param (.story | .transparent). Rendered off-screen via <code className="text-amber-400">ImageRenderer</code>. No state.</p>
+                  <p className="font-medium text-zinc-200 mb-2">
+                    *ShareStoryView
+                  </p>
+                  <p className="text-zinc-400 text-xs">
+                    Pure SwiftUI view, 1080×1350 frame. Accepts a{" "}
+                    <code className="text-amber-400">style: RunShareStyle</code>{" "}
+                    param (.story | .transparent). Rendered off-screen via{" "}
+                    <code className="text-amber-400">ImageRenderer</code>. No
+                    state.
+                  </p>
                 </div>
                 <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-4">
-                  <p className="font-medium text-zinc-200 mb-2">prepare*ShareImages()</p>
-                  <p className="text-zinc-400 text-xs"><code className="text-amber-400">@MainActor</code> function on the summary view. Calls <code className="text-amber-400">ImageRenderer</code> twice (story + sticker), caches <code className="text-amber-400">UIImage</code> in <code className="text-amber-400">@State</code>, then sets <code className="text-amber-400">show*ShareComposer = true</code>.</p>
+                  <p className="font-medium text-zinc-200 mb-2">
+                    prepare*ShareImages()
+                  </p>
+                  <p className="text-zinc-400 text-xs">
+                    <code className="text-amber-400">@MainActor</code> function
+                    on the summary view. Calls{" "}
+                    <code className="text-amber-400">ImageRenderer</code> twice
+                    (story + sticker), caches{" "}
+                    <code className="text-amber-400">UIImage</code> in{" "}
+                    <code className="text-amber-400">@State</code>, then sets{" "}
+                    <code className="text-amber-400">
+                      show*ShareComposer = true
+                    </code>
+                    .
+                  </p>
                 </div>
                 <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-4">
-                  <p className="font-medium text-zinc-200 mb-2">*ShareComposerSheet</p>
-                  <p className="text-zinc-400 text-xs">Bottom sheet with preview card, style picker (Story / Transparent), Share (UIActivityViewController), Save Story Card (UIImageWriteToSavedPhotosAlbum — JPEG), and Save Transparent PNG (PHPhotoLibrary — PNG).</p>
+                  <p className="font-medium text-zinc-200 mb-2">
+                    *ShareComposerSheet
+                  </p>
+                  <p className="text-zinc-400 text-xs">
+                    Bottom sheet with preview card, style picker (Story /
+                    Transparent), Share (UIActivityViewController), Save Story
+                    Card (UIImageWriteToSavedPhotosAlbum — JPEG), and Save
+                    Transparent PNG (PHPhotoLibrary — PNG).
+                  </p>
                 </div>
               </div>
             </div>
 
             {/* Key files */}
             <div className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-6">
-              <h3 className="font-semibold text-white mb-3">Key Source Files</h3>
+              <h3 className="font-semibold text-white mb-3">
+                Key Source Files
+              </h3>
               <div className="space-y-2">
                 {[
-                  ['RunShareStoryView.swift', 'Run story card. Supports GPS map route + stats-only center.'],
-                  ['RunSummaryView.swift', 'Run composer sheet, saveTransparentImageToPhotos, saveImageToPhotos helpers.'],
-                  ['BikeShareStoryView.swift', 'Bike story card. GPS route or stats-only center (no large icon). Cyan theme.'],
-                  ['BikeSummaryView.swift', 'Bike composer sheet with Save Transparent PNG (PHPhotoLibrary).'],
-                  ['WorkoutShareStoryView.swift', 'Lift + Stretch card. Workout title as hero, category icon in stats bar. Green / Purple theme.'],
-                  ['WorkoutSummaryView.swift', 'Lift/Stretch composer sheet + prepareWorkoutShareImages().'],
-                  ['FatBurnShareStoryView.swift', 'Fat Burn card. Equipment chip + equipment-specific middle stat. Red theme.'],
-                  ['FatBurnSummaryView.swift', 'Fat Burn composer sheet + prepareFatBurnShareImages().'],
+                  [
+                    "RunShareStoryView.swift",
+                    "Run story card. Supports GPS map route + stats-only center.",
+                  ],
+                  [
+                    "RunSummaryView.swift",
+                    "Run composer sheet, saveTransparentImageToPhotos, saveImageToPhotos helpers.",
+                  ],
+                  [
+                    "BikeShareStoryView.swift",
+                    "Bike story card. GPS route or stats-only center (no large icon). Cyan theme.",
+                  ],
+                  [
+                    "BikeSummaryView.swift",
+                    "Bike composer sheet with Save Transparent PNG (PHPhotoLibrary).",
+                  ],
+                  [
+                    "WorkoutShareStoryView.swift",
+                    "Lift + Stretch card. Workout title as hero, category icon in stats bar. Green / Purple theme.",
+                  ],
+                  [
+                    "WorkoutSummaryView.swift",
+                    "Lift/Stretch composer sheet + prepareWorkoutShareImages().",
+                  ],
+                  [
+                    "FatBurnShareStoryView.swift",
+                    "Fat Burn card. Equipment chip + equipment-specific middle stat. Red theme.",
+                  ],
+                  [
+                    "FatBurnSummaryView.swift",
+                    "Fat Burn composer sheet + prepareFatBurnShareImages().",
+                  ],
                 ].map(([file, desc]) => (
                   <div key={file} className="flex gap-3 items-start">
-                    <code className="text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded shrink-0">{file}</code>
+                    <code className="text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded shrink-0">
+                      {file}
+                    </code>
                     <p className="text-xs text-zinc-400">{desc}</p>
                   </div>
                 ))}
@@ -909,10 +1551,18 @@ const SystemOverviewPage: React.FC = () => {
 
         <div className="w-full max-w-[1440px] mx-auto px-4 md:px-6 py-8 md:py-10 space-y-6">
           <header className="space-y-2">
-            <p className="text-xs uppercase tracking-wide text-zinc-500">Operations Handbook</p>
-            <h1 className="text-3xl font-semibold">{systemOverviewManifest.title}</h1>
-            <p className="text-zinc-300 text-sm max-w-4xl">{systemOverviewManifest.subtitle}</p>
-            <p className="text-xs text-zinc-500">Last updated: {systemOverviewManifest.lastUpdated}</p>
+            <p className="text-xs uppercase tracking-wide text-zinc-500">
+              Operations Handbook
+            </p>
+            <h1 className="text-3xl font-semibold">
+              {systemOverviewManifest.title}
+            </h1>
+            <p className="text-zinc-300 text-sm max-w-4xl">
+              {systemOverviewManifest.subtitle}
+            </p>
+            <p className="text-xs text-zinc-500">
+              Last updated: {systemOverviewManifest.lastUpdated}
+            </p>
           </header>
 
           {/* ---- SYSTEM-LEVEL TABS ---- */}
@@ -924,46 +1574,174 @@ const SystemOverviewPage: React.FC = () => {
                 <button
                   key={tab.id}
                   onClick={() => handleSystemChange(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${isActive
-                    ? 'text-white shadow-lg'
-                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03] border border-transparent hover:border-zinc-800'
-                    }`}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${
+                    isActive
+                      ? "text-white shadow-lg"
+                      : "text-zinc-500 hover:text-zinc-300 hover:bg-white/[0.03] border border-transparent hover:border-zinc-800"
+                  }`}
                   style={
                     isActive
                       ? {
-                        background: `linear-gradient(135deg, ${tab.accent}18, ${tab.accent}08)`,
-                        border: `1px solid ${tab.accent}35`,
-                        boxShadow: `0 0 20px ${tab.accent}10`,
-                      }
+                          background: `linear-gradient(135deg, ${tab.accent}18, ${tab.accent}08)`,
+                          border: `1px solid ${tab.accent}35`,
+                          boxShadow: `0 0 20px ${tab.accent}10`,
+                        }
                       : undefined
                   }
                 >
-                  <Icon className="w-4 h-4" style={isActive ? { color: tab.accent } : undefined} />
+                  <Icon
+                    className="w-4 h-4"
+                    style={isActive ? { color: tab.accent } : undefined}
+                  />
                   {tab.label}
                 </button>
               );
             })}
           </nav>
 
+          <section className="rounded-2xl border border-zinc-800 bg-[#090f1c] p-4">
+            <form onSubmit={handleHandbookSearchSubmit}>
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                    Search Handbook Docs
+                  </p>
+                  <div className="relative mt-2">
+                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+                    <input
+                      type="text"
+                      value={handbookSearchQuery}
+                      onChange={(event) =>
+                        setHandbookSearchQuery(event.target.value)
+                      }
+                      placeholder="Search docs, specs, flows, or playbooks"
+                      className="w-full rounded-xl border border-zinc-700 bg-black/20 py-3 pl-11 pr-11 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-zinc-500"
+                    />
+                    {trimmedHandbookSearchQuery ? (
+                      <button
+                        type="button"
+                        onClick={() => setHandbookSearchQuery("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-zinc-500 transition hover:bg-white/5 hover:text-white"
+                        aria-label="Clear handbook search"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 xl:self-end">
+                  <button
+                    type="submit"
+                    disabled={!handbookSearchResults.length}
+                    className="inline-flex items-center justify-center rounded-xl border border-zinc-700 bg-black/20 px-4 py-3 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Open Best Match
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <span>
+                Searches titles, descriptions, and core handbook inventory terms
+                across all docs.
+              </span>
+              {trimmedHandbookSearchQuery ? (
+                <span className="text-zinc-400">
+                  {handbookSearchResults.length}{" "}
+                  {handbookSearchResults.length === 1 ? "match" : "matches"}
+                </span>
+              ) : null}
+            </div>
+
+            {trimmedHandbookSearchQuery ? (
+              handbookSearchResults.length > 0 ? (
+                <div className="mt-4 grid grid-cols-1 gap-2 lg:grid-cols-2 2xl:grid-cols-3">
+                  {handbookSearchResults.slice(0, 9).map((result) => {
+                    const isActive = result.section.id === activeSectionId;
+                    return (
+                      <button
+                        key={result.section.id}
+                        type="button"
+                        onClick={() =>
+                          handleHandbookSearchResultSelect(result.section.id)
+                        }
+                        className={`rounded-xl border p-3 text-left transition ${
+                          isActive
+                            ? "border-white bg-white text-black"
+                            : "border-zinc-800 bg-black/20 text-white hover:border-zinc-600 hover:bg-white/5"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p
+                              className={`text-sm font-semibold ${isActive ? "text-black" : "text-white"}`}
+                            >
+                              {result.section.label}
+                            </p>
+                            <p
+                              className={`mt-1 text-[11px] uppercase tracking-[0.16em] ${isActive ? "text-zinc-700" : "text-zinc-500"}`}
+                            >
+                              {result.systemLabel}
+                            </p>
+                          </div>
+                        </div>
+                        <p
+                          className={`mt-2 text-xs leading-relaxed ${isActive ? "text-zinc-700" : "text-zinc-400"}`}
+                        >
+                          {result.section.description}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-xl border border-dashed border-zinc-700 bg-black/20 px-4 py-4 text-sm text-zinc-400">
+                  No docs matched "{trimmedHandbookSearchQuery}". Try a section
+                  title, product name, or keyword like "Nora" or "Vision Pro".
+                </div>
+              )
+            ) : null}
+          </section>
+
           <main className="grid grid-cols-1 xl:grid-cols-[260px_minmax(0,1fr)] gap-6 items-start min-w-0">
             <SectionNav
-              sections={filteredSections}
+              sections={sidebarSections}
               activeSectionId={activeSectionId}
               onSectionChange={handleSectionChange}
+              title={
+                trimmedHandbookSearchQuery
+                  ? "Search Results"
+                  : "Handbook Sections"
+              }
+              emptyMessage={
+                trimmedHandbookSearchQuery
+                  ? `No docs matched "${trimmedHandbookSearchQuery}".`
+                  : "No handbook sections available."
+              }
             />
 
             <div className="min-w-0">
               <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-[#090f1c] p-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Artifact Actions</p>
-                  <p className="mt-1 text-sm font-semibold text-white">{activeSectionMeta?.label || 'Current Section'}</p>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+                    Artifact Actions
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-white">
+                    {activeSectionMeta?.label || "Current Section"}
+                  </p>
                   {activeSectionMeta?.description ? (
-                    <p className="mt-1 text-xs text-zinc-400">{activeSectionMeta.description}</p>
+                    <p className="mt-1 text-xs text-zinc-400">
+                      {activeSectionMeta.description}
+                    </p>
                   ) : null}
                 </div>
                 <div className="flex items-center gap-3">
-                  {copyState === 'error' ? (
-                    <p className="text-xs text-red-400">Copy failed. Try again.</p>
+                  {copyState === "error" ? (
+                    <p className="text-xs text-red-400">
+                      Copy failed. Try again.
+                    </p>
                   ) : null}
                   {shareError ? (
                     <p className="text-xs text-red-400">{shareError}</p>
@@ -982,8 +1760,12 @@ const SystemOverviewPage: React.FC = () => {
                       <div className="absolute right-0 z-30 mt-2 w-[360px] rounded-2xl border border-zinc-800 bg-[#090f1c] p-3 shadow-2xl">
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <p className="text-sm font-semibold text-white">Share Links</p>
-                            <p className="text-xs text-zinc-500">Each share creates a unique revocable public link.</p>
+                            <p className="text-sm font-semibold text-white">
+                              Share Links
+                            </p>
+                            <p className="text-xs text-zinc-500">
+                              Each share creates a unique revocable public link.
+                            </p>
                           </div>
                           <button
                             type="button"
@@ -991,8 +1773,12 @@ const SystemOverviewPage: React.FC = () => {
                             disabled={shareCreating}
                             className="inline-flex items-center gap-2 rounded-xl bg-amber-500 px-3 py-2 text-xs font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
                           >
-                            {shareCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
-                            {shareCreating ? 'Creating...' : 'New Link'}
+                            {shareCreating ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Share2 className="h-3.5 w-3.5" />
+                            )}
+                            {shareCreating ? "Creating..." : "New Link"}
                           </button>
                         </div>
 
@@ -1000,35 +1786,50 @@ const SystemOverviewPage: React.FC = () => {
                           <div className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-3">
                             <div className="flex items-center justify-between gap-3">
                               <div>
-                                <p className="text-xs font-semibold text-white">Passcode Protection</p>
+                                <p className="text-xs font-semibold text-white">
+                                  Passcode Protection
+                                </p>
                                 <p className="mt-1 text-[11px] text-zinc-500">
-                                  Require a passcode before the shared artifact can be viewed.
+                                  Require a passcode before the shared artifact
+                                  can be viewed.
                                 </p>
                               </div>
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setSharePasscodeEnabled((current) => !current);
-                                  setSharePasscode('');
+                                  setSharePasscodeEnabled(
+                                    (current) => !current,
+                                  );
+                                  setSharePasscode("");
                                 }}
                                 className={`inline-flex h-6 w-11 items-center rounded-full border transition ${
-                                  sharePasscodeEnabled ? 'border-amber-400/40 bg-amber-500/20' : 'border-zinc-700 bg-black/20'
+                                  sharePasscodeEnabled
+                                    ? "border-amber-400/40 bg-amber-500/20"
+                                    : "border-zinc-700 bg-black/20"
                                 }`}
                               >
                                 <span
                                   className={`block h-4 w-4 rounded-full bg-white transition-transform ${
-                                    sharePasscodeEnabled ? 'translate-x-5' : 'translate-x-1'
+                                    sharePasscodeEnabled
+                                      ? "translate-x-5"
+                                      : "translate-x-1"
                                   }`}
                                 />
                               </button>
                             </div>
                             {sharePasscodeEnabled ? (
                               <label className="mt-3 block">
-                                <span className="mb-1 block text-[11px] uppercase tracking-wide text-zinc-500">Passcode</span>
+                                <span className="mb-1 block text-[11px] uppercase tracking-wide text-zinc-500">
+                                  Passcode
+                                </span>
                                 <input
                                   type="password"
                                   value={sharePasscode}
-                                  onChange={(event) => setSharePasscode(event.target.value.toUpperCase())}
+                                  onChange={(event) =>
+                                    setSharePasscode(
+                                      event.target.value.toUpperCase(),
+                                    )
+                                  }
                                   autoCapitalize="characters"
                                   autoCorrect="off"
                                   spellCheck={false}
@@ -1050,18 +1851,30 @@ const SystemOverviewPage: React.FC = () => {
                             </div>
                           ) : (
                             shareLinks.map((link) => (
-                              <div key={link.token} className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-3">
-                                <p className="truncate text-xs font-medium text-white">{link.shareUrl}</p>
+                              <div
+                                key={link.token}
+                                className="rounded-xl border border-zinc-800 bg-black/20 px-3 py-3"
+                              >
+                                <p className="truncate text-xs font-medium text-white">
+                                  {link.shareUrl}
+                                </p>
                                 <p className="mt-1 text-[11px] text-zinc-500">
-                                  Created {link.createdAt ? new Date(link.createdAt).toLocaleString() : 'just now'}
+                                  Created{" "}
+                                  {link.createdAt
+                                    ? new Date(link.createdAt).toLocaleString()
+                                    : "just now"}
                                 </p>
                                 {link.passcodeProtected ? (
-                                  <p className="mt-1 text-[11px] text-amber-300">Passcode protected</p>
+                                  <p className="mt-1 text-[11px] text-amber-300">
+                                    Passcode protected
+                                  </p>
                                 ) : null}
                                 <div className="mt-3 flex items-center gap-2">
                                   <button
                                     type="button"
-                                    onClick={() => void handleCopyShareLink(link.shareUrl)}
+                                    onClick={() =>
+                                      void handleCopyShareLink(link.shareUrl)
+                                    }
                                     className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] text-zinc-200 transition hover:border-zinc-500 hover:text-white"
                                   >
                                     <Copy className="h-3.5 w-3.5" />
@@ -1078,11 +1891,17 @@ const SystemOverviewPage: React.FC = () => {
                                   </a>
                                   <button
                                     type="button"
-                                    onClick={() => void handleRevokeShareLink(link.token)}
+                                    onClick={() =>
+                                      void handleRevokeShareLink(link.token)
+                                    }
                                     disabled={shareRevokingToken === link.token}
                                     className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/25 px-2.5 py-1.5 text-[11px] text-red-200 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                                   >
-                                    {shareRevokingToken === link.token ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                    {shareRevokingToken === link.token ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    )}
                                     Revoke
                                   </button>
                                 </div>
@@ -1097,20 +1916,22 @@ const SystemOverviewPage: React.FC = () => {
                     type="button"
                     onClick={handleCopyActiveSection}
                     className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition-colors ${
-                      copyState === 'copied'
-                        ? 'border-green-500/30 bg-green-500/10 text-green-200'
-                        : 'border-zinc-700 bg-black/20 text-zinc-200 hover:border-zinc-500 hover:text-white'
+                      copyState === "copied"
+                        ? "border-green-500/30 bg-green-500/10 text-green-200"
+                        : "border-zinc-700 bg-black/20 text-zinc-200 hover:border-zinc-500 hover:text-white"
                     }`}
                   >
-                    {copyState === 'copied' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    {copyState === 'copied' ? 'Copied' : 'Copy to Clipboard'}
+                    {copyState === "copied" ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                    {copyState === "copied" ? "Copied" : "Copy to Clipboard"}
                   </button>
                 </div>
               </div>
 
-              <div ref={artifactContentRef}>
-                {renderSectionContent()}
-              </div>
+              <div ref={artifactContentRef}>{renderSectionContent()}</div>
             </div>
           </main>
         </div>

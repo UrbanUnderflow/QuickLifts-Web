@@ -218,7 +218,7 @@ const ChallengeDetailView = () => {
     let allExerciseVideos: ExerciseVideo[] = [];
     try {
       const videoSnapshot = await getDocs(firestoreCollection(db, 'exerciseVideos'));
-      allExerciseVideos = videoSnapshot.docs.map(doc => new ExerciseVideo({ id: doc.id, ...doc.data() }));
+      allExerciseVideos = videoSnapshot.docs.map(doc => new ExerciseVideo({ ...doc.data(), id: doc.id }));
       console.log(`[ChallengeDetailView] Fetched ${allExerciseVideos.length} exercise videos.`);
     } catch (videoError) {
       console.error('[ChallengeDetailView] Error fetching exercise videos:', videoError);
@@ -251,7 +251,7 @@ const ChallengeDetailView = () => {
           const stacksCollectionRef = firestoreCollection(db, 'stacks');
           const q = query(stacksCollectionRef, where(documentId(), 'in', chunkOfIds));
           const snapshot = await getDocs(q);
-          snapshot.docs.forEach(doc => fetchedDocsData.push({ id: doc.id, ...doc.data() }));
+          snapshot.docs.forEach(doc => fetchedDocsData.push({ ...doc.data(), id: doc.id }));
         } catch (batchError) {
           console.error(`[ChallengeDetailView] Error fetching workout batch:`, batchError);
           setError(`Failed to fetch some workouts.`);

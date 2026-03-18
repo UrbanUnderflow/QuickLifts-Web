@@ -418,6 +418,19 @@ export interface MentalCheckIn {
   date: string; // YYYY-MM-DD for grouping
 }
 
+export interface SubmitPulseCheckCheckInInput {
+  userId: string;
+  type: CheckInType;
+  readinessScore: number;
+  moodWord?: string;
+  energyLevel?: number;
+  stressLevel?: number;
+  sleepQuality?: number;
+  notes?: string;
+  taxonomyState?: TaxonomyCheckInState;
+  sourceDate?: string;
+}
+
 // ============================================================================
 // PROGRAM TYPES (Future)
 // ============================================================================
@@ -690,7 +703,375 @@ export enum PulseCheckDailyAssignmentStatus {
   Superseded = 'superseded',
 }
 
-export type PulseCheckDailyAssignmentActionType = 'sim' | 'lighter_sim' | 'defer';
+export type PulseCheckDailyAssignmentActionType = 'sim' | 'lighter_sim' | 'protocol' | 'defer';
+export type PulseCheckAssignmentEventType = 'viewed' | 'started' | 'completed' | 'deferred' | 'overridden';
+export type PulseCheckAssignmentEventActorType = 'athlete' | 'coach' | 'staff' | 'system';
+export type PulseCheckStateConfidence = 'high' | 'medium' | 'low';
+export type PulseCheckStateFreshness = 'current' | 'degraded' | 'refresh_required';
+export type PulseCheckOverallReadiness = 'green' | 'yellow' | 'red';
+export type PulseCheckAssignmentCandidateType = 'sim' | 'protocol' | 'trial';
+export type PulseCheckDecisionSource = 'ai' | 'fallback_rules';
+export type PulseCheckProtocolClass = 'regulation' | 'priming' | 'recovery' | 'none';
+export type PulseCheckProtocolPublishStatus = 'draft' | 'published' | 'archived';
+export type PulseCheckProtocolFamilyStatus = 'candidate' | 'locked';
+export type PulseCheckProtocolGovernanceStage =
+  | 'nominated'
+  | 'structured'
+  | 'sandbox'
+  | 'pilot'
+  | 'published'
+  | 'restricted'
+  | 'archived';
+export type PulseCheckProtocolResponseFamily =
+  | 'acute_downshift'
+  | 'steady_regulation'
+  | 'activation_upshift'
+  | 'focus_narrowing'
+  | 'confidence_priming'
+  | 'imagery_priming'
+  | 'recovery_downregulation'
+  | 'recovery_reflection'
+  | 'cognitive_reframe';
+export type PulseCheckProtocolDeliveryMode =
+  | 'guided_breathing'
+  | 'guided_focus'
+  | 'guided_imagery'
+  | 'guided_reframe'
+  | 'guided_reflection'
+  | 'embodied_reset';
+export type PulseCheckProtocolHistoryAction =
+  | 'created'
+  | 'saved'
+  | 'published'
+  | 'archived'
+  | 'seeded';
+export type PulseCheckProtocolReviewStatus = 'not_started' | 'in_review' | 'approved' | 'blocked';
+export type PulseCheckProtocolEvidenceStatus = 'insufficient' | 'developing' | 'credible' | 'watch';
+export type PulseCheckProtocolReviewGateStatus = 'pending' | 'passed' | 'blocked';
+export type PulseCheckRoutingRecommendation =
+  | 'protocol_only'
+  | 'sim_only'
+  | 'trial_only'
+  | 'protocol_then_sim'
+  | 'sim_then_protocol'
+  | 'defer_alternate_path';
+
+export interface PulseCheckProtocolReviewGate {
+  key: string;
+  label: string;
+  status: PulseCheckProtocolReviewGateStatus;
+  note?: string;
+}
+
+export interface PulseCheckProtocolEvidenceSummary {
+  sampleSize: number;
+  positiveSignals: number;
+  neutralSignals: number;
+  negativeSignals: number;
+  responseDirection: 'positive' | 'neutral' | 'negative' | 'mixed';
+  confidence: PulseCheckStateConfidence;
+  lastObservedAt?: number;
+  explanation?: string;
+}
+
+export interface PulseCheckProtocolResponsivenessSummary {
+  protocolFamilyId?: string;
+  protocolFamilyLabel?: string;
+  variantId?: string;
+  variantLabel?: string;
+  protocolClass?: Exclude<PulseCheckProtocolClass, 'none'>;
+  responseFamily?: PulseCheckProtocolResponseFamily;
+  responseDirection: 'positive' | 'neutral' | 'negative' | 'mixed';
+  confidence: PulseCheckStateConfidence;
+  freshness: PulseCheckStateFreshness;
+  sampleSize: number;
+  positiveSignals: number;
+  neutralSignals: number;
+  negativeSignals: number;
+  stateFit: string[];
+  supportingEvidence: string[];
+  lastObservedAt?: number;
+  lastConfirmedAt?: number;
+}
+
+export interface PulseCheckProtocolResponsivenessProfile {
+  id: string;
+  athleteId: string;
+  familyResponses: Record<string, PulseCheckProtocolResponsivenessSummary>;
+  variantResponses: Record<string, PulseCheckProtocolResponsivenessSummary>;
+  sourceEventIds: string[];
+  staleAt: number;
+  lastUpdatedAt: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PulseCheckProtocolFamily {
+  id: string;
+  label: string;
+  protocolClass: Exclude<PulseCheckProtocolClass, 'none'>;
+  responseFamily: PulseCheckProtocolResponseFamily;
+  familyStatus: PulseCheckProtocolFamilyStatus;
+  governanceStage: PulseCheckProtocolGovernanceStage;
+  mechanismSummary: string;
+  targetBottleneck: string;
+  expectedStateShift: string;
+  useWindowTags: string[];
+  avoidWindowTags: string[];
+  contraindicationTags: string[];
+  evidenceSummary?: string;
+  sourceReferences: string[];
+  reviewNotes?: string;
+  reviewStatus: PulseCheckProtocolReviewStatus;
+  reviewChecklist: PulseCheckProtocolReviewGate[];
+  evidenceStatus: PulseCheckProtocolEvidenceStatus;
+  evidencePanel?: PulseCheckProtocolEvidenceSummary;
+  reviewCadenceDays: number;
+  lastReviewedAt?: number;
+  nextReviewAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PulseCheckProtocolVariant {
+  id: string;
+  familyId: string;
+  label: string;
+  variantKey: string;
+  variantVersion: string;
+  category: ExerciseCategory;
+  deliveryMode: PulseCheckProtocolDeliveryMode;
+  legacyExerciseId: string;
+  rationale: string;
+  scriptSummary: string;
+  durationSeconds: number;
+  triggerTags: string[];
+  preferredContextTags: string[];
+  useWindowTags: string[];
+  avoidWindowTags: string[];
+  contraindicationTags: string[];
+  evidenceSummary?: string;
+  reviewNotes?: string;
+  approvalStatus: PulseCheckProtocolReviewStatus;
+  reviewChecklist: PulseCheckProtocolReviewGate[];
+  evidenceStatus: PulseCheckProtocolEvidenceStatus;
+  evidencePanel?: PulseCheckProtocolEvidenceSummary;
+  reviewCadenceDays: number;
+  lastReviewedAt?: number;
+  nextReviewAt?: number;
+  governanceStage: PulseCheckProtocolGovernanceStage;
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PulseCheckProtocolDefinition {
+  id: string;
+  label: string;
+  familyId: string;
+  familyLabel: string;
+  familyStatus: PulseCheckProtocolFamilyStatus;
+  variantId: string;
+  variantKey: string;
+  variantLabel: string;
+  variantVersion: string;
+  governanceStage: PulseCheckProtocolGovernanceStage;
+  legacyExerciseId: string;
+  protocolClass: Exclude<PulseCheckProtocolClass, 'none'>;
+  category: ExerciseCategory;
+  responseFamily: PulseCheckProtocolResponseFamily;
+  deliveryMode: PulseCheckProtocolDeliveryMode;
+  triggerTags: string[];
+  preferredContextTags: string[];
+  useWindowTags: string[];
+  avoidWindowTags: string[];
+  contraindicationTags: string[];
+  rationale: string;
+  mechanism: string;
+  expectedStateShift: string;
+  reviewNotes?: string;
+  evidenceSummary?: string;
+  durationSeconds: number;
+  sortOrder: number;
+  publishStatus: PulseCheckProtocolPublishStatus;
+  isActive: boolean;
+  reviewStatus: PulseCheckProtocolReviewStatus;
+  reviewChecklist: PulseCheckProtocolReviewGate[];
+  evidenceStatus: PulseCheckProtocolEvidenceStatus;
+  evidencePanel?: PulseCheckProtocolEvidenceSummary;
+  reviewCadenceDays: number;
+  lastReviewedAt?: number;
+  nextReviewAt?: number;
+  publishedAt?: number;
+  archivedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PulseCheckProtocolHistoryEntry {
+  id: string;
+  protocolId: string;
+  action: PulseCheckProtocolHistoryAction;
+  summary: string;
+  createdAt: number;
+  snapshot: PulseCheckProtocolDefinition;
+}
+
+export interface PulseCheckProtocolFamilyHistoryEntry {
+  id: string;
+  familyId: string;
+  action: Exclude<PulseCheckProtocolHistoryAction, 'published' | 'archived'>;
+  summary: string;
+  createdAt: number;
+  snapshot: PulseCheckProtocolFamily;
+}
+
+export interface PulseCheckProtocolVariantHistoryEntry {
+  id: string;
+  variantId: string;
+  action: Exclude<PulseCheckProtocolHistoryAction, 'published' | 'archived'>;
+  summary: string;
+  createdAt: number;
+  snapshot: PulseCheckProtocolVariant;
+}
+
+export interface PulseCheckStateDimensions {
+  activation: number;
+  focusReadiness: number;
+  emotionalLoad: number;
+  cognitiveFatigue: number;
+}
+
+export interface PulseCheckRawSignalSummary {
+  explicitSelfReport: {
+    readinessScore: number;
+    moodWord?: string;
+    energyLevel?: number;
+    stressLevel?: number;
+    sleepQuality?: number;
+    notes?: string;
+  };
+  activeProgramContext?: {
+    sessionType?: SessionType;
+    durationMode?: DurationMode;
+    recommendedSimId?: string;
+    recommendedLegacyExerciseId?: string;
+  };
+  normalizedReadinessScore?: number;
+  signalCount: number;
+  contradictionFlags: string[];
+}
+
+export interface PulseCheckEnrichedInterpretation {
+  summary: string;
+  likelyPrimaryFactor:
+    | 'activation'
+    | 'focus_readiness'
+    | 'emotional_load'
+    | 'cognitive_fatigue'
+    | 'mixed';
+  supportingSignals: string[];
+  contradictions: string[];
+  plannerNotes: string[];
+  confidenceRationale?: string;
+  supportFlag?: boolean;
+  modelSource: PulseCheckDecisionSource;
+}
+
+export interface PulseCheckAssignmentCandidate {
+  id: string;
+  type: PulseCheckAssignmentCandidateType;
+  label: string;
+  actionType: PulseCheckDailyAssignmentActionType;
+  rationale: string;
+  simSpecId?: string;
+  legacyExerciseId?: string;
+  protocolId?: string;
+  protocolLabel?: string;
+  protocolClass?: PulseCheckProtocolClass;
+  protocolCategory?: ExerciseCategory;
+  protocolResponseFamily?: PulseCheckProtocolResponseFamily;
+  protocolDeliveryMode?: PulseCheckProtocolDeliveryMode;
+  responsivenessDirection?: PulseCheckProtocolResponsivenessSummary['responseDirection'];
+  responsivenessConfidence?: PulseCheckStateConfidence;
+  responsivenessFreshness?: PulseCheckStateFreshness;
+  responsivenessSummary?: string;
+  responsivenessStateFit?: string[];
+  sessionType?: SessionType;
+  durationMode?: DurationMode;
+  durationSeconds?: number;
+}
+
+export interface PulseCheckAssignmentCandidateSet {
+  id: string;
+  athleteId: string;
+  sourceDate: string;
+  sourceStateSnapshotId: string;
+  candidates: PulseCheckAssignmentCandidate[];
+  candidateIds: string[];
+  candidateClassHints: PulseCheckAssignmentCandidateType[];
+  constraintReasons: string[];
+  inventoryGaps: string[];
+  plannerEligible: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PulseCheckAssignmentPlannerDecision {
+  decisionSource: PulseCheckDecisionSource;
+  selectedCandidateId?: string;
+  selectedCandidateType?: PulseCheckAssignmentCandidateType;
+  actionType: PulseCheckDailyAssignmentActionType;
+  confidence: PulseCheckStateConfidence;
+  rationaleSummary: string;
+  supportFlag: boolean;
+}
+
+export interface PulseCheckPlannerAuditCandidate {
+  candidateId: string;
+  label: string;
+  type: PulseCheckAssignmentCandidateType;
+  actionType: PulseCheckDailyAssignmentActionType;
+  rationale: string;
+  selected?: boolean;
+  responsivenessDirection?: PulseCheckProtocolResponsivenessSummary['responseDirection'];
+  responsivenessConfidence?: PulseCheckStateConfidence;
+  responsivenessFreshness?: PulseCheckStateFreshness;
+  responsivenessSummary?: string;
+}
+
+export interface PulseCheckPlannerAudit {
+  generatedAt: number;
+  stateConfidence: PulseCheckStateConfidence;
+  responsivenessApplied: boolean;
+  selectedCandidateId?: string;
+  rankedCandidates: PulseCheckPlannerAuditCandidate[];
+}
+
+export interface PulseCheckStateSnapshot {
+  id: string;
+  athleteId: string;
+  sourceDate: string;
+  sourceCheckInId: string;
+  rawSignalSummary?: PulseCheckRawSignalSummary;
+  stateDimensions: PulseCheckStateDimensions;
+  overallReadiness: PulseCheckOverallReadiness;
+  confidence: PulseCheckStateConfidence;
+  freshness: PulseCheckStateFreshness;
+  enrichedInterpretation?: PulseCheckEnrichedInterpretation;
+  sourcesUsed: string[];
+  sourceEventIds: string[];
+  contextTags: string[];
+  recommendedRouting: PulseCheckRoutingRecommendation;
+  recommendedProtocolClass?: PulseCheckProtocolClass;
+  candidateClassHints?: PulseCheckAssignmentCandidateType[];
+  readinessScore?: number;
+  supportFlag?: boolean;
+  decisionSource?: PulseCheckDecisionSource;
+  executionLink?: string;
+  createdAt: number;
+  updatedAt: number;
+}
 
 /**
  * PulseCheckDailyAssignment - Nora's concrete post-check-in daily task
@@ -698,21 +1079,38 @@ export type PulseCheckDailyAssignmentActionType = 'sim' | 'lighter_sim' | 'defer
  */
 export interface PulseCheckDailyAssignment {
   id: string;
+  lineageId: string;
+  revision: number;
+  previousRevision?: number;
   athleteId: string;
   teamId: string;
   teamMembershipId: string;
   coachId?: string;
   sourceCheckInId: string;
+  sourceStateSnapshotId?: string;
+  sourceCandidateSetId?: string;
   sourceDate: string; // YYYY-MM-DD
   assignedBy: 'nora';
   status: PulseCheckDailyAssignmentStatus;
   actionType: PulseCheckDailyAssignmentActionType;
+  chosenCandidateId?: string;
+  chosenCandidateType?: PulseCheckAssignmentCandidateType;
   simSpecId?: string;
   legacyExerciseId?: string;
+  protocolId?: string;
+  protocolLabel?: string;
+  protocolClass?: PulseCheckProtocolClass;
+  protocolCategory?: ExerciseCategory;
+  protocolResponseFamily?: PulseCheckProtocolResponseFamily;
+  protocolDeliveryMode?: PulseCheckProtocolDeliveryMode;
   sessionType?: SessionType;
   durationMode?: DurationMode;
   durationSeconds?: number;
   rationale: string;
+  plannerSummary?: string;
+  plannerAudit?: PulseCheckPlannerAudit;
+  plannerConfidence?: PulseCheckStateConfidence;
+  decisionSource?: PulseCheckDecisionSource;
   readinessScore?: number;
   readinessBand?: 'low' | 'medium' | 'high';
   escalationTier?: number;
@@ -723,8 +1121,76 @@ export interface PulseCheckDailyAssignment {
   completedAt?: number;
   overriddenBy?: string;
   overrideReason?: string;
+  supersededAt?: number;
+  supersededByRevision?: number;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface PulseCheckCheckInSubmissionResult {
+  checkIn: MentalCheckIn;
+  stateSnapshot: PulseCheckStateSnapshot;
+  candidateSet?: PulseCheckAssignmentCandidateSet;
+  dailyAssignment: PulseCheckDailyAssignment | null;
+}
+
+export interface RecordPulseCheckAssignmentEventInput {
+  assignmentId: string;
+  eventType: PulseCheckAssignmentEventType;
+  reason?: string;
+  actorUserId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PulseCheckAssignmentEvent {
+  id: string;
+  assignmentId: string;
+  athleteId: string;
+  teamId: string;
+  sourceDate: string;
+  eventType: PulseCheckAssignmentEventType;
+  actorType: PulseCheckAssignmentEventActorType;
+  actorUserId: string;
+  eventAt: number;
+  metadata?: Record<string, unknown>;
+  createdAt: number;
+}
+
+export interface PulseCheckAssignmentEventRecordResult {
+  assignment: PulseCheckDailyAssignment;
+  event: PulseCheckAssignmentEvent;
+  stateSnapshot?: PulseCheckStateSnapshot | null;
+}
+
+export interface PulseCheckConversationDerivedSignalDelta {
+  activationDelta?: number;
+  focusReadinessDelta?: number;
+  emotionalLoadDelta?: number;
+  cognitiveFatigueDelta?: number;
+  overallReadiness?: PulseCheckOverallReadiness;
+  recommendedRouting?: PulseCheckRoutingRecommendation;
+  recommendedProtocolClass?: 'regulation' | 'priming' | 'recovery' | 'none';
+  supportFlag?: boolean;
+  summary?: string;
+  contradictionSummary?: string;
+  supportingEvidence?: string[];
+  contextTags?: string[];
+}
+
+export interface PulseCheckConversationDerivedSignalEvent {
+  id: string;
+  athleteId: string;
+  conversationId: string;
+  messageId: string;
+  sourceDate: string;
+  sourceAssignmentId?: string;
+  sourceStateSnapshotId: string;
+  supersedesSnapshotId?: string;
+  confidence: PulseCheckStateConfidence;
+  inferredDelta: PulseCheckConversationDerivedSignalDelta;
+  eventAt: number;
+  createdAt: number;
+  decisionSource?: PulseCheckDecisionSource;
 }
 
 /**
@@ -1196,6 +1662,8 @@ export function pulseCheckDailyAssignmentToFirestore(
   assignment: PulseCheckDailyAssignment
 ): Record<string, any> {
   const data: Record<string, any> = {
+    lineageId: assignment.lineageId,
+    revision: assignment.revision,
     athleteId: assignment.athleteId,
     teamId: assignment.teamId,
     teamMembershipId: assignment.teamMembershipId,
@@ -1210,11 +1678,26 @@ export function pulseCheckDailyAssignmentToFirestore(
   };
 
   if (assignment.coachId) data.coachId = assignment.coachId;
+  if (typeof assignment.previousRevision === 'number') data.previousRevision = assignment.previousRevision;
+  if (assignment.sourceStateSnapshotId) data.sourceStateSnapshotId = assignment.sourceStateSnapshotId;
   if (assignment.simSpecId) data.simSpecId = assignment.simSpecId;
   if (assignment.legacyExerciseId) data.legacyExerciseId = assignment.legacyExerciseId;
+  if (assignment.protocolId) data.protocolId = assignment.protocolId;
+  if (assignment.protocolLabel) data.protocolLabel = assignment.protocolLabel;
+  if (assignment.protocolClass) data.protocolClass = assignment.protocolClass;
+  if (assignment.protocolCategory) data.protocolCategory = assignment.protocolCategory;
+  if (assignment.protocolResponseFamily) data.protocolResponseFamily = assignment.protocolResponseFamily;
+  if (assignment.protocolDeliveryMode) data.protocolDeliveryMode = assignment.protocolDeliveryMode;
   if (assignment.sessionType) data.sessionType = assignment.sessionType;
   if (assignment.durationMode) data.durationMode = assignment.durationMode;
   if (typeof assignment.durationSeconds === 'number') data.durationSeconds = assignment.durationSeconds;
+  if (assignment.sourceCandidateSetId) data.sourceCandidateSetId = assignment.sourceCandidateSetId;
+  if (assignment.chosenCandidateId) data.chosenCandidateId = assignment.chosenCandidateId;
+  if (assignment.chosenCandidateType) data.chosenCandidateType = assignment.chosenCandidateType;
+  if (assignment.plannerSummary) data.plannerSummary = assignment.plannerSummary;
+  if (assignment.plannerAudit) data.plannerAudit = sanitizeFirestoreValue(assignment.plannerAudit);
+  if (assignment.plannerConfidence) data.plannerConfidence = assignment.plannerConfidence;
+  if (assignment.decisionSource) data.decisionSource = assignment.decisionSource;
   if (typeof assignment.readinessScore === 'number') data.readinessScore = assignment.readinessScore;
   if (assignment.readinessBand) data.readinessBand = assignment.readinessBand;
   if (typeof assignment.escalationTier === 'number') data.escalationTier = assignment.escalationTier;
@@ -1225,6 +1708,8 @@ export function pulseCheckDailyAssignmentToFirestore(
   if (typeof assignment.completedAt === 'number') data.completedAt = assignment.completedAt;
   if (assignment.overriddenBy) data.overriddenBy = assignment.overriddenBy;
   if (assignment.overrideReason) data.overrideReason = assignment.overrideReason;
+  if (typeof assignment.supersededAt === 'number') data.supersededAt = assignment.supersededAt;
+  if (typeof assignment.supersededByRevision === 'number') data.supersededByRevision = assignment.supersededByRevision;
 
   return data;
 }
@@ -1235,21 +1720,38 @@ export function pulseCheckDailyAssignmentFromFirestore(
 ): PulseCheckDailyAssignment {
   return {
     id,
+    lineageId: data.lineageId || id,
+    revision: typeof data.revision === 'number' ? data.revision : 1,
+    previousRevision: data.previousRevision,
     athleteId: data.athleteId || '',
     teamId: data.teamId || '',
     teamMembershipId: data.teamMembershipId || '',
     coachId: data.coachId,
     sourceCheckInId: data.sourceCheckInId || '',
+    sourceStateSnapshotId: data.sourceStateSnapshotId,
+    sourceCandidateSetId: data.sourceCandidateSetId,
     sourceDate: data.sourceDate || '',
     assignedBy: 'nora',
     status: data.status || PulseCheckDailyAssignmentStatus.Assigned,
     actionType: data.actionType || 'sim',
+    chosenCandidateId: data.chosenCandidateId,
+    chosenCandidateType: data.chosenCandidateType,
     simSpecId: data.simSpecId,
     legacyExerciseId: data.legacyExerciseId,
+    protocolId: data.protocolId,
+    protocolLabel: data.protocolLabel,
+    protocolClass: data.protocolClass,
+    protocolCategory: data.protocolCategory,
+    protocolResponseFamily: data.protocolResponseFamily,
+    protocolDeliveryMode: data.protocolDeliveryMode,
     sessionType: data.sessionType,
     durationMode: data.durationMode,
     durationSeconds: data.durationSeconds,
     rationale: data.rationale || '',
+    plannerSummary: data.plannerSummary,
+    plannerAudit: data.plannerAudit,
+    plannerConfidence: data.plannerConfidence,
+    decisionSource: data.decisionSource,
     readinessScore: data.readinessScore,
     readinessBand: data.readinessBand,
     escalationTier: data.escalationTier,
@@ -1260,6 +1762,334 @@ export function pulseCheckDailyAssignmentFromFirestore(
     completedAt: data.completedAt,
     overriddenBy: data.overriddenBy,
     overrideReason: data.overrideReason,
+    supersededAt: data.supersededAt,
+    supersededByRevision: data.supersededByRevision,
+    createdAt: data.createdAt || Date.now(),
+    updatedAt: data.updatedAt || Date.now(),
+  };
+}
+
+export function pulseCheckProtocolDefinitionToFirestore(
+  protocol: PulseCheckProtocolDefinition
+): Record<string, any> {
+  return {
+    label: protocol.label,
+    familyId: protocol.familyId,
+    familyLabel: protocol.familyLabel,
+    familyStatus: protocol.familyStatus,
+    variantId: protocol.variantId,
+    variantKey: protocol.variantKey,
+    variantLabel: protocol.variantLabel,
+    variantVersion: protocol.variantVersion,
+    governanceStage: protocol.governanceStage,
+    legacyExerciseId: protocol.legacyExerciseId,
+    protocolClass: protocol.protocolClass,
+    category: protocol.category,
+    responseFamily: protocol.responseFamily,
+    deliveryMode: protocol.deliveryMode,
+    triggerTags: protocol.triggerTags,
+    preferredContextTags: protocol.preferredContextTags,
+    useWindowTags: protocol.useWindowTags,
+    avoidWindowTags: protocol.avoidWindowTags,
+    contraindicationTags: protocol.contraindicationTags,
+    rationale: protocol.rationale,
+    mechanism: protocol.mechanism,
+    expectedStateShift: protocol.expectedStateShift,
+    reviewNotes: protocol.reviewNotes || null,
+    evidenceSummary: protocol.evidenceSummary || null,
+    durationSeconds: protocol.durationSeconds,
+    sortOrder: protocol.sortOrder,
+    publishStatus: protocol.publishStatus,
+    isActive: protocol.isActive,
+    reviewStatus: protocol.reviewStatus,
+    reviewChecklist: protocol.reviewChecklist,
+    evidenceStatus: protocol.evidenceStatus,
+    evidencePanel: protocol.evidencePanel || null,
+    reviewCadenceDays: protocol.reviewCadenceDays,
+    lastReviewedAt: protocol.lastReviewedAt || null,
+    nextReviewAt: protocol.nextReviewAt || null,
+    publishedAt: protocol.publishedAt || null,
+    archivedAt: protocol.archivedAt || null,
+    createdAt: protocol.createdAt,
+    updatedAt: protocol.updatedAt,
+  };
+}
+
+export function pulseCheckProtocolDefinitionFromFirestore(
+  id: string,
+  data: Record<string, any>
+): PulseCheckProtocolDefinition {
+  return {
+    id,
+    label: data.label || id,
+    familyId: data.familyId || id,
+    familyLabel: data.familyLabel || data.label || id,
+    familyStatus: data.familyStatus || 'candidate',
+    variantId: data.variantId || id,
+    variantKey: data.variantKey || id,
+    variantLabel: data.variantLabel || data.label || id,
+    variantVersion: data.variantVersion || 'v1',
+    governanceStage: data.governanceStage || (data.publishStatus === 'published' ? 'published' : data.publishStatus === 'archived' ? 'archived' : 'structured'),
+    legacyExerciseId: data.legacyExerciseId || '',
+    protocolClass: data.protocolClass || 'regulation',
+    category: data.category || ExerciseCategory.Breathing,
+    responseFamily: data.responseFamily || 'steady_regulation',
+    deliveryMode: data.deliveryMode || 'guided_breathing',
+    triggerTags: Array.isArray(data.triggerTags) ? data.triggerTags : [],
+    preferredContextTags: Array.isArray(data.preferredContextTags) ? data.preferredContextTags : [],
+    useWindowTags: Array.isArray(data.useWindowTags) ? data.useWindowTags : (Array.isArray(data.preferredContextTags) ? data.preferredContextTags : []),
+    avoidWindowTags: Array.isArray(data.avoidWindowTags) ? data.avoidWindowTags : [],
+    contraindicationTags: Array.isArray(data.contraindicationTags) ? data.contraindicationTags : [],
+    rationale: data.rationale || '',
+    mechanism: data.mechanism || data.rationale || '',
+    expectedStateShift: data.expectedStateShift || '',
+    reviewNotes: data.reviewNotes || undefined,
+    evidenceSummary: data.evidenceSummary || undefined,
+    durationSeconds: typeof data.durationSeconds === 'number' ? data.durationSeconds : 180,
+    sortOrder: typeof data.sortOrder === 'number' ? data.sortOrder : 999,
+    publishStatus: data.publishStatus || 'draft',
+    isActive: data.isActive ?? true,
+    reviewStatus: data.reviewStatus || 'not_started',
+    reviewChecklist: Array.isArray(data.reviewChecklist) ? data.reviewChecklist : [],
+    evidenceStatus: data.evidenceStatus || 'insufficient',
+    evidencePanel: data.evidencePanel || undefined,
+    reviewCadenceDays: typeof data.reviewCadenceDays === 'number' ? data.reviewCadenceDays : 30,
+    lastReviewedAt: data.lastReviewedAt || undefined,
+    nextReviewAt: data.nextReviewAt || undefined,
+    publishedAt: data.publishedAt || undefined,
+    archivedAt: data.archivedAt || undefined,
+    createdAt: data.createdAt || Date.now(),
+    updatedAt: data.updatedAt || Date.now(),
+  };
+}
+
+export function pulseCheckProtocolFamilyToFirestore(
+  family: PulseCheckProtocolFamily
+): Record<string, any> {
+  return {
+    label: family.label,
+    protocolClass: family.protocolClass,
+    responseFamily: family.responseFamily,
+    familyStatus: family.familyStatus,
+    governanceStage: family.governanceStage,
+    mechanismSummary: family.mechanismSummary,
+    targetBottleneck: family.targetBottleneck,
+    expectedStateShift: family.expectedStateShift,
+    useWindowTags: family.useWindowTags,
+    avoidWindowTags: family.avoidWindowTags,
+    contraindicationTags: family.contraindicationTags,
+    evidenceSummary: family.evidenceSummary || null,
+    sourceReferences: family.sourceReferences,
+    reviewNotes: family.reviewNotes || null,
+    reviewStatus: family.reviewStatus,
+    reviewChecklist: family.reviewChecklist,
+    evidenceStatus: family.evidenceStatus,
+    evidencePanel: family.evidencePanel || null,
+    reviewCadenceDays: family.reviewCadenceDays,
+    lastReviewedAt: family.lastReviewedAt || null,
+    nextReviewAt: family.nextReviewAt || null,
+    createdAt: family.createdAt,
+    updatedAt: family.updatedAt,
+  };
+}
+
+export function pulseCheckProtocolFamilyFromFirestore(
+  id: string,
+  data: Record<string, any>
+): PulseCheckProtocolFamily {
+  return {
+    id,
+    label: data.label || id,
+    protocolClass: data.protocolClass || 'regulation',
+    responseFamily: data.responseFamily || 'steady_regulation',
+    familyStatus: data.familyStatus || 'candidate',
+    governanceStage: data.governanceStage || 'structured',
+    mechanismSummary: data.mechanismSummary || '',
+    targetBottleneck: data.targetBottleneck || '',
+    expectedStateShift: data.expectedStateShift || '',
+    useWindowTags: Array.isArray(data.useWindowTags) ? data.useWindowTags : [],
+    avoidWindowTags: Array.isArray(data.avoidWindowTags) ? data.avoidWindowTags : [],
+    contraindicationTags: Array.isArray(data.contraindicationTags) ? data.contraindicationTags : [],
+    evidenceSummary: data.evidenceSummary || undefined,
+    sourceReferences: Array.isArray(data.sourceReferences) ? data.sourceReferences : [],
+    reviewNotes: data.reviewNotes || undefined,
+    reviewStatus: data.reviewStatus || 'not_started',
+    reviewChecklist: Array.isArray(data.reviewChecklist) ? data.reviewChecklist : [],
+    evidenceStatus: data.evidenceStatus || 'insufficient',
+    evidencePanel: data.evidencePanel || undefined,
+    reviewCadenceDays: typeof data.reviewCadenceDays === 'number' ? data.reviewCadenceDays : 30,
+    lastReviewedAt: data.lastReviewedAt || undefined,
+    nextReviewAt: data.nextReviewAt || undefined,
+    createdAt: data.createdAt || Date.now(),
+    updatedAt: data.updatedAt || Date.now(),
+  };
+}
+
+export function pulseCheckProtocolVariantToFirestore(
+  variant: PulseCheckProtocolVariant
+): Record<string, any> {
+  return {
+    familyId: variant.familyId,
+    label: variant.label,
+    variantKey: variant.variantKey,
+    variantVersion: variant.variantVersion,
+    category: variant.category,
+    deliveryMode: variant.deliveryMode,
+    legacyExerciseId: variant.legacyExerciseId,
+    rationale: variant.rationale,
+    scriptSummary: variant.scriptSummary,
+    durationSeconds: variant.durationSeconds,
+    triggerTags: variant.triggerTags,
+    preferredContextTags: variant.preferredContextTags,
+    useWindowTags: variant.useWindowTags,
+    avoidWindowTags: variant.avoidWindowTags,
+    contraindicationTags: variant.contraindicationTags,
+    evidenceSummary: variant.evidenceSummary || null,
+    reviewNotes: variant.reviewNotes || null,
+    approvalStatus: variant.approvalStatus,
+    reviewChecklist: variant.reviewChecklist,
+    evidenceStatus: variant.evidenceStatus,
+    evidencePanel: variant.evidencePanel || null,
+    reviewCadenceDays: variant.reviewCadenceDays,
+    lastReviewedAt: variant.lastReviewedAt || null,
+    nextReviewAt: variant.nextReviewAt || null,
+    governanceStage: variant.governanceStage,
+    isActive: variant.isActive,
+    createdAt: variant.createdAt,
+    updatedAt: variant.updatedAt,
+  };
+}
+
+export function pulseCheckProtocolVariantFromFirestore(
+  id: string,
+  data: Record<string, any>
+): PulseCheckProtocolVariant {
+  return {
+    id,
+    familyId: data.familyId || '',
+    label: data.label || id,
+    variantKey: data.variantKey || id,
+    variantVersion: data.variantVersion || 'v1',
+    category: data.category || ExerciseCategory.Breathing,
+    deliveryMode: data.deliveryMode || 'guided_breathing',
+    legacyExerciseId: data.legacyExerciseId || '',
+    rationale: data.rationale || '',
+    scriptSummary: data.scriptSummary || '',
+    durationSeconds: typeof data.durationSeconds === 'number' ? data.durationSeconds : 180,
+    triggerTags: Array.isArray(data.triggerTags) ? data.triggerTags : [],
+    preferredContextTags: Array.isArray(data.preferredContextTags) ? data.preferredContextTags : [],
+    useWindowTags: Array.isArray(data.useWindowTags) ? data.useWindowTags : [],
+    avoidWindowTags: Array.isArray(data.avoidWindowTags) ? data.avoidWindowTags : [],
+    contraindicationTags: Array.isArray(data.contraindicationTags) ? data.contraindicationTags : [],
+    evidenceSummary: data.evidenceSummary || undefined,
+    reviewNotes: data.reviewNotes || undefined,
+    approvalStatus: data.approvalStatus || 'not_started',
+    reviewChecklist: Array.isArray(data.reviewChecklist) ? data.reviewChecklist : [],
+    evidenceStatus: data.evidenceStatus || 'insufficient',
+    evidencePanel: data.evidencePanel || undefined,
+    reviewCadenceDays: typeof data.reviewCadenceDays === 'number' ? data.reviewCadenceDays : 30,
+    lastReviewedAt: data.lastReviewedAt || undefined,
+    nextReviewAt: data.nextReviewAt || undefined,
+    governanceStage: data.governanceStage || 'structured',
+    isActive: data.isActive ?? true,
+    createdAt: data.createdAt || Date.now(),
+    updatedAt: data.updatedAt || Date.now(),
+  };
+}
+
+export function pulseCheckProtocolResponsivenessProfileToFirestore(
+  profile: PulseCheckProtocolResponsivenessProfile
+): Record<string, any> {
+  return {
+    athleteId: profile.athleteId,
+    familyResponses: profile.familyResponses,
+    variantResponses: profile.variantResponses,
+    sourceEventIds: profile.sourceEventIds,
+    staleAt: profile.staleAt,
+    lastUpdatedAt: profile.lastUpdatedAt,
+    createdAt: profile.createdAt,
+    updatedAt: profile.updatedAt,
+  };
+}
+
+export function pulseCheckProtocolResponsivenessProfileFromFirestore(
+  id: string,
+  data: Record<string, any>
+): PulseCheckProtocolResponsivenessProfile {
+  return {
+    id,
+    athleteId: data.athleteId || id,
+    familyResponses: data.familyResponses && typeof data.familyResponses === 'object' ? data.familyResponses : {},
+    variantResponses: data.variantResponses && typeof data.variantResponses === 'object' ? data.variantResponses : {},
+    sourceEventIds: Array.isArray(data.sourceEventIds) ? data.sourceEventIds : [],
+    staleAt: typeof data.staleAt === 'number' ? data.staleAt : Date.now(),
+    lastUpdatedAt: typeof data.lastUpdatedAt === 'number' ? data.lastUpdatedAt : (typeof data.updatedAt === 'number' ? data.updatedAt : Date.now()),
+    createdAt: typeof data.createdAt === 'number' ? data.createdAt : Date.now(),
+    updatedAt: typeof data.updatedAt === 'number' ? data.updatedAt : Date.now(),
+  };
+}
+
+export function pulseCheckStateSnapshotToFirestore(
+  snapshot: PulseCheckStateSnapshot
+): Record<string, any> {
+  const data: Record<string, any> = {
+    athleteId: snapshot.athleteId,
+    sourceDate: snapshot.sourceDate,
+    sourceCheckInId: snapshot.sourceCheckInId,
+    stateDimensions: sanitizeFirestoreValue(snapshot.stateDimensions),
+    overallReadiness: snapshot.overallReadiness,
+    confidence: snapshot.confidence,
+    freshness: snapshot.freshness,
+    sourcesUsed: snapshot.sourcesUsed,
+    sourceEventIds: snapshot.sourceEventIds,
+    contextTags: snapshot.contextTags,
+    recommendedRouting: snapshot.recommendedRouting,
+    createdAt: snapshot.createdAt,
+    updatedAt: snapshot.updatedAt,
+  };
+
+  if (snapshot.rawSignalSummary) data.rawSignalSummary = sanitizeFirestoreValue(snapshot.rawSignalSummary);
+  if (snapshot.enrichedInterpretation) data.enrichedInterpretation = sanitizeFirestoreValue(snapshot.enrichedInterpretation);
+  if (snapshot.recommendedProtocolClass) data.recommendedProtocolClass = snapshot.recommendedProtocolClass;
+  if (snapshot.candidateClassHints) data.candidateClassHints = snapshot.candidateClassHints;
+  if (typeof snapshot.readinessScore === 'number') data.readinessScore = snapshot.readinessScore;
+  if (typeof snapshot.supportFlag === 'boolean') data.supportFlag = snapshot.supportFlag;
+  if (snapshot.decisionSource) data.decisionSource = snapshot.decisionSource;
+  if (snapshot.executionLink) data.executionLink = snapshot.executionLink;
+
+  return data;
+}
+
+export function pulseCheckStateSnapshotFromFirestore(
+  id: string,
+  data: Record<string, any>
+): PulseCheckStateSnapshot {
+  return {
+    id,
+    athleteId: data.athleteId || '',
+    sourceDate: data.sourceDate || '',
+    sourceCheckInId: data.sourceCheckInId || '',
+    rawSignalSummary: data.rawSignalSummary,
+    stateDimensions: {
+      activation: data.stateDimensions?.activation ?? 50,
+      focusReadiness: data.stateDimensions?.focusReadiness ?? 50,
+      emotionalLoad: data.stateDimensions?.emotionalLoad ?? 50,
+      cognitiveFatigue: data.stateDimensions?.cognitiveFatigue ?? 50,
+    },
+    overallReadiness: data.overallReadiness || 'yellow',
+    confidence: data.confidence || 'low',
+    freshness: data.freshness || 'degraded',
+    enrichedInterpretation: data.enrichedInterpretation,
+    sourcesUsed: Array.isArray(data.sourcesUsed) ? data.sourcesUsed : [],
+    sourceEventIds: Array.isArray(data.sourceEventIds) ? data.sourceEventIds : [],
+    contextTags: Array.isArray(data.contextTags) ? data.contextTags : [],
+    recommendedRouting: data.recommendedRouting || 'sim_only',
+    recommendedProtocolClass: data.recommendedProtocolClass,
+    candidateClassHints: Array.isArray(data.candidateClassHints) ? data.candidateClassHints : [],
+    readinessScore: data.readinessScore,
+    supportFlag: typeof data.supportFlag === 'boolean' ? data.supportFlag : undefined,
+    decisionSource: data.decisionSource,
+    executionLink: data.executionLink,
     createdAt: data.createdAt || Date.now(),
     updatedAt: data.updatedAt || Date.now(),
   };
