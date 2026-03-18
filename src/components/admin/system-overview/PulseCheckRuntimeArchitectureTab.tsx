@@ -12,12 +12,12 @@ import PulseCheckStateEscalationOrchestrationTab from './PulseCheckStateEscalati
 import PulseCheckEscalationIntegrationSpecTab from './PulseCheckEscalationIntegrationSpecTab';
 
 const SOURCE_OF_TRUTH = [
-  ['Hard safety policy', 'Admin escalation conditions and explicit safety language govern clinical action.', 'Safety response always wins over a benign state or training goal.'],
-  ['Lane orchestration', 'State & Escalation Orchestration governs lane boundaries and override behavior.', 'Use when performance, support, and safety logic intersect.'],
-  ['Shared perception', 'State Signal Layer defines the state snapshot schema and routing vocabulary.', 'Downstream systems consume one shared state view.'],
-  ['Performance routing', 'Nora Assignment Rules govern Protocol, Sim, Trial, and defer decisions.', 'Applies only after safety and lane boundaries are resolved.'],
-  ['Execution truth', 'Signal Layer v1 Assignment Orchestrator writes one Nora daily assignment after check-in and profile sync, then exposes it for athlete surfaces, chat, and coach review.', 'Use this as the task source instead of copy-only next-step hints.'],
-  ['Safety integration', 'Escalation Integration Spec governs the bridge into classify-escalation and write-back.', 'Use for payload shape and runtime field updates.'],
+  ['1. Hard safety policy', 'Admin escalation conditions and explicit safety language govern clinical action.', 'Safety always wins, even over a strong state-based training idea.'],
+  ['2. Current state and readiness', 'State Signal Layer defines the current snapshot, freshness, confidence, and routing vocabulary.', 'Use the latest valid data first; stale goal/context never outranks it.'],
+  ['3. Training need and lane boundaries', 'State & Escalation Orchestration and Nora Assignment Rules govern whether the athlete should regulate, prime, recover, train, assess, or defer.', 'Use when deciding the next usable performance action from the current state.'],
+  ['4. Goal / context', 'Athlete goal, season timing, competition timing, and broader program intent.', 'Secondary guidance only; it can shape framing, not outrank the data-driven decision.'],
+  ['5. Execution truth', 'Signal Layer v1 Assignment Orchestrator writes one Nora daily assignment after check-in and profile sync, then exposes it for athlete surfaces, chat, and coach review.', 'Use this as the task source instead of copy-only next-step hints.'],
+  ['6. Safety integration', 'Escalation Integration Spec governs the bridge into classify-escalation and write-back.', 'Use for payload shape and runtime field updates.'],
 ];
 
 const RUNTIME_LAYERS = [
@@ -29,7 +29,7 @@ const RUNTIME_LAYERS = [
   {
     title: 'Performance Lane',
     accent: 'green' as const,
-    body: 'Nora decides whether the athlete needs a Protocol, Sim, Trial, mixed sequence, or defer path based on state-fit and program intent. Signal Layer v1 then materializes the athlete-facing daily assignment from that decision and opens the coach intervention window.',
+    body: 'Nora decides whether the athlete needs a Protocol, Sim, Trial, mixed sequence, or defer path based on state-fit and training need. Athlete goal and broader context can shape the explanation, but they never outrank the current state that drives the routing decision. Signal Layer v1 then materializes the athlete-facing daily assignment from that decision and opens the coach intervention window.',
   },
   {
     title: 'Support Lane',
@@ -66,7 +66,7 @@ const FLOW_STEPS = [
   },
   {
     title: 'Routing Decision',
-    body: 'Nora applies safety overrides first, then decides whether performance should continue as Protocol, Sim, Trial, mixed sequence, or defer.',
+    body: 'Nora applies safety overrides first, then resolves current state/readiness, then training need, and only then uses athlete goal and broader context as a secondary bias when deciding whether performance should continue as Protocol, Sim, Trial, mixed sequence, or defer.',
     owner: 'Nora Assignment Rules',
   },
   {
@@ -141,7 +141,7 @@ const RuntimeArchitectureOverviewDoc: React.FC = () => {
           },
           {
             title: 'Explicit Source-of-Truth Order',
-            body: 'Hard safety policy outranks orchestration, which outranks schema, which outranks performance routing, which outranks implementation details.',
+            body: 'Safety outranks current state and readiness, current state outranks training need, and training need outranks goal/context. Goal/context can shape framing, but it never outranks the data.',
           },
           {
             title: 'Pilot-Ready Operations Layer',
@@ -197,6 +197,8 @@ const RuntimeArchitectureOverviewDoc: React.FC = () => {
                 items={[
                   'Tier 2 and Tier 3 escalation outcomes suppress normal training assignment.',
                   'Admin-defined hard safety conditions outrank a benign, stale, or low-confidence state snapshot.',
+                  'Current state and readiness outrank longer-lived goal context when the two point in different directions.',
+                  'Training need can shape the task only after safety and current state say the athlete is fit to train.',
                   'Persistent red changes support visibility and programming aggressiveness even when it does not trigger clinical escalation.',
                   'Coach locks can narrow options, but they still must respect safety overrides.',
                 ]}

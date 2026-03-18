@@ -92,7 +92,7 @@ const ATHLETE_STEPS = [
   },
   {
     title: 'Nora captures member profile and rhythm',
-    body: 'The athlete provides preferred name, sport, optional position, season phase, primary mental challenge, and daily reflection preference.',
+    body: 'The athlete provides preferred name, sport, optional position, season phase, primary mental challenge, primary performance goal, and daily reflection preference. The UI should explain that challenge means the pattern that breaks performance down, while goal means the outcome the athlete wants training to support.',
     owner: 'Athlete',
   },
   {
@@ -140,7 +140,7 @@ const DATA_WRITE_ROWS = [
   ['Pilot and cohort setup', 'pilotId, teamId, studyMode, checkpoint cadence, cohort grouping, enrollment rules', 'Controls pilot-aware branching, research posture, and cohort-specific reporting or experimentation.'],
   ['Role and invite setup', 'inviteType, defaultRole, permissionSetId, teamId, targetPilotId, status, expiresAt', 'Determines who can enter, what they become at entry, and which onboarding questions or views they should see.'],
   ['Clinician routing setup', 'ClinicianBridge mapping, team default clinician profile, athlete override when needed', 'Ensures the clinical escalation route exists before any real support or safety events occur.'],
-  ['Athlete runtime onboarding', 'preferredName, pulseCheckOnboardingComplete, dailyReflectionPreferences, sport, position, seasonPhase, primaryMentalChallenge, initialPathway', 'Stores the in-app athlete onboarding truth and the first training signal.'],
+  ['Athlete runtime onboarding', 'preferredName, pulseCheckOnboardingComplete, dailyReflectionPreferences, sport, position, seasonPhase, primaryMentalChallenge, primaryPerformanceGoal, initialPathway', 'Stores the in-app athlete onboarding truth, the primary training bottleneck, and the athlete-stated outcome context.'],
   ['Athlete task gate', 'athleteOnboarding.productConsentAccepted, athleteOnboarding.baselinePathStatus, athlete-mental-progress/{uid}.assessmentNeeded', 'Creates the required-task lane that must clear before normal assignments or simulations should unlock. Team membership task state is synchronized from either web or native baseline completion.'],
   ['Athlete baseline routing', 'assessmentNeeded, currentPathway, recommendedPathway, baselineAssessment or baselineProbe', 'Connects onboarding to the first training prescription, writes the first canonical snapshot, and closes the onboarding loop no matter which client captured the baseline.'],
 ];
@@ -299,6 +299,26 @@ const MemberOnboardingGuideOverviewDoc: React.FC = () => {
 
       <SectionBlock icon={Brain} title="Athlete Onboarding and Baseline Flow">
         <StepRail steps={ATHLETE_STEPS} />
+      </SectionBlock>
+
+      <SectionBlock icon={Brain} title="Primary Challenge and Primary Goal">
+        <CardGrid columns="md:grid-cols-3">
+          <InfoCard
+            title="Primary Mental Challenge"
+            accent="amber"
+            body="The mental-performance bottleneck that tends to get in the way when the rep gets hard. Examples include overthinking, choking under pressure, loss of focus, emotional spillover, or inconsistency."
+          />
+          <InfoCard
+            title="Primary Performance Goal"
+            accent="green"
+            body="The performance outcome the athlete actually wants. Examples include winning a specific event, staying composed through a show, or holding form under pressure."
+          />
+          <InfoCard
+            title="Why Both Matter"
+            accent="purple"
+            body="Challenge helps Nora choose what to train. Goal helps Nora explain why it matters and what the athlete is working toward. The current state still outranks both when the system decides what to do next."
+          />
+        </CardGrid>
       </SectionBlock>
 
       <SectionBlock icon={KeyRound} title="Invite and Permission Rules">

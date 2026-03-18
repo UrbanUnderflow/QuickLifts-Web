@@ -35,6 +35,7 @@ export { stateSnapshotService } from './stateSnapshotService';
 export { pulseCheckCheckInSubmissionService } from './pulseCheckCheckInSubmissionService';
 export { protocolRegistryService } from './protocolRegistryService';
 export { protocolResponsivenessService } from './protocolResponsivenessService';
+export { protocolAudioAssetService } from './protocolAudioAssetService';
 export { profileSnapshotService } from './profileSnapshotService';
 export type {
   CanonicalProfileSnapshot,

@@ -31,6 +31,8 @@ import {
   SimModule,
   ExerciseCategory,
 } from '../../api/firebase/mentaltraining/types';
+import { assignmentOrchestratorService } from '../../api/firebase/mentaltraining/assignmentOrchestratorService';
+import { protocolAudioAssetService } from '../../api/firebase/mentaltraining/protocolAudioAssetService';
 import type { ProfileSnapshotMilestone } from '../../api/firebase/mentaltraining/taxonomy';
 import { ResetGame } from './ResetGame';
 import { SimRuntimePlayer } from './SimRuntimePlayer';
@@ -82,6 +84,11 @@ interface ExercisePlayerProps {
   /** Called when a writing exercise should be started in Nora chat */
   onStartInChat?: (exercise: SimModule) => void;
   previewMode?: boolean;
+  dailyAssignmentId?: string;
+  protocolAudioContext?: {
+    protocolId: string;
+    protocolLabel?: string | null;
+  } | null;
 }
 
 type PlayerState = 'intro' | 'pre-mood' | 'active' | 'post-mood' | 'complete';
@@ -103,6 +110,8 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   profileSnapshotMilestone,
   onStartInChat,
   previewMode = false,
+  dailyAssignmentId,
+  protocolAudioContext = null,
 }) => {
   // Check if this exercise requires writing - show different flow
   const requiresWriting = exerciseRequiresWriting(exercise);
@@ -113,9 +122,16 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
   const [preExerciseMood, setPreExerciseMood] = useState<number | undefined>();
   const [postExerciseMood, setPostExerciseMood] = useState<number | undefined>();
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [resolvedProtocolAudioContext, setResolvedProtocolAudioContext] = useState<{
+    protocolId: string;
+    protocolLabel?: string | null;
+  } | null>(protocolAudioContext);
+  const [protocolCueUrl, setProtocolCueUrl] = useState<string | null>(null);
 
   const startTimeRef = useRef<number>(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const protocolCueAudioRef = useRef<HTMLAudioElement | null>(null);
+  const protocolCuePlayedKeyRef = useRef<string | null>(null);
 
   // Voice selection is admin-configured globally (see /admin/ai-voice).
 
@@ -134,6 +150,146 @@ export const ExercisePlayer: React.FC<ExercisePlayerProps> = ({
       }
     };
   }, [state, isPaused]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (protocolAudioContext?.protocolId?.trim()) {
+      setResolvedProtocolAudioContext({
+        protocolId: protocolAudioContext.protocolId.trim(),
+        protocolLabel: protocolAudioContext.protocolLabel ?? null,
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (!dailyAssignmentId) {
+      setResolvedProtocolAudioContext(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    assignmentOrchestratorService.getById(dailyAssignmentId)
+      .then((assignment) => {
+        if (cancelled) return;
+        if (assignment?.protocolId?.trim()) {
+          setResolvedProtocolAudioContext({
+            protocolId: assignment.protocolId.trim(),
+            protocolLabel: assignment.protocolLabel ?? null,
+          });
+          return;
+        }
+        setResolvedProtocolAudioContext(null);
+      })
+      .catch((error) => {
+        console.warn('[ExercisePlayer] Failed to resolve protocol audio context for daily assignment', error);
+        if (!cancelled) {
+          setResolvedProtocolAudioContext(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dailyAssignmentId, protocolAudioContext]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const protocolId = resolvedProtocolAudioContext?.protocolId?.trim();
+    if (!protocolId) {
+      setProtocolCueUrl(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    protocolAudioAssetService.getSignatureCue(protocolId)
+      .then((asset) => {
+        if (!cancelled) {
+          setProtocolCueUrl(asset?.downloadURL || null);
+        }
+      })
+      .catch((error) => {
+        console.warn('[ExercisePlayer] Failed to resolve protocol signature cue', error);
+        if (!cancelled) {
+          setProtocolCueUrl(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [resolvedProtocolAudioContext?.protocolId]);
+
+  useEffect(() => {
+    return () => {
+      if (protocolCueAudioRef.current) {
+        protocolCueAudioRef.current.pause();
+        protocolCueAudioRef.current.currentTime = 0;
+        protocolCueAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (soundEnabled) return;
+    if (protocolCueAudioRef.current) {
+      protocolCueAudioRef.current.pause();
+      protocolCueAudioRef.current.currentTime = 0;
+      protocolCueAudioRef.current = null;
+    }
+  }, [soundEnabled]);
+
+  useEffect(() => {
+    if (state !== 'active') {
+      protocolCuePlayedKeyRef.current = null;
+      if (protocolCueAudioRef.current) {
+        protocolCueAudioRef.current.pause();
+        protocolCueAudioRef.current.currentTime = 0;
+        protocolCueAudioRef.current = null;
+      }
+      return;
+    }
+
+    const protocolId = resolvedProtocolAudioContext?.protocolId?.trim();
+    if (!soundEnabled || !protocolId || !protocolCueUrl) {
+      return;
+    }
+
+    const playbackKey = `${protocolId}:${state}`;
+    if (protocolCuePlayedKeyRef.current === playbackKey) {
+      return;
+    }
+
+    if (protocolCueAudioRef.current) {
+      protocolCueAudioRef.current.pause();
+      protocolCueAudioRef.current.currentTime = 0;
+      protocolCueAudioRef.current = null;
+    }
+
+    const audio = new Audio(protocolCueUrl);
+    audio.volume = 0.72;
+    protocolCueAudioRef.current = audio;
+    protocolCuePlayedKeyRef.current = playbackKey;
+    audio.play().catch((error) => {
+      console.warn('[ExercisePlayer] Failed to play protocol signature cue', error);
+      if (protocolCueAudioRef.current === audio) {
+        protocolCueAudioRef.current = null;
+      }
+    });
+    audio.onended = () => {
+      if (protocolCueAudioRef.current === audio) {
+        protocolCueAudioRef.current = null;
+      }
+    };
+    audio.onerror = () => {
+      if (protocolCueAudioRef.current === audio) {
+        protocolCueAudioRef.current = null;
+      }
+    };
+  }, [state, soundEnabled, protocolCueUrl, resolvedProtocolAudioContext?.protocolId]);
 
   const handleStart = () => {
     setState(resetOwnedFlow ? 'active' : 'pre-mood');

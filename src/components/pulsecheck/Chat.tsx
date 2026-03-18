@@ -14,7 +14,7 @@ import {
   PulseCheckStateSnapshot,
   SimModule,
 } from '../../api/firebase/mentaltraining/types';
-import { assignmentOrchestratorService, completionService, stateSnapshotService } from '../../api/firebase/mentaltraining';
+import { assignmentOrchestratorService, completionService, protocolAudioAssetService, stateSnapshotService } from '../../api/firebase/mentaltraining';
 import { resolvePulseCheckFunctionUrl } from '../../api/firebase/mentaltraining/pulseCheckFunctionsUrl';
 import { ExerciseInstructionCard } from '../mentaltraining';
 
@@ -247,6 +247,7 @@ const Chat: React.FC = () => {
     }
     return null;
   });
+  const protocolCueAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const handleDismissNoraIntro = () => {
     localStorage.setItem(STORAGE_KEY_NORA_INTRO, 'true');
@@ -263,6 +264,44 @@ const Chat: React.FC = () => {
       assignmentOrchestratorService.markStarted(dailyAssignmentId).catch((error) => {
         console.error('[PulseCheck] Failed to mark daily assignment started in chat', error);
       });
+
+      assignmentOrchestratorService.getById(dailyAssignmentId)
+        .then(async (assignment) => {
+          const protocolId = assignment?.protocolId?.trim();
+          if (!protocolId) return;
+          const asset = await protocolAudioAssetService.getSignatureCue(protocolId);
+          const cueUrl = asset?.downloadURL;
+          if (!cueUrl) return;
+
+          if (protocolCueAudioRef.current) {
+            protocolCueAudioRef.current.pause();
+            protocolCueAudioRef.current.currentTime = 0;
+            protocolCueAudioRef.current = null;
+          }
+
+          const audio = new Audio(cueUrl);
+          audio.volume = 0.72;
+          protocolCueAudioRef.current = audio;
+          audio.play().catch((error) => {
+            console.warn('[PulseCheck] Failed to play chat protocol cue', error);
+            if (protocolCueAudioRef.current === audio) {
+              protocolCueAudioRef.current = null;
+            }
+          });
+          audio.onended = () => {
+            if (protocolCueAudioRef.current === audio) {
+              protocolCueAudioRef.current = null;
+            }
+          };
+          audio.onerror = () => {
+            if (protocolCueAudioRef.current === audio) {
+              protocolCueAudioRef.current = null;
+            }
+          };
+        })
+        .catch((error) => {
+          console.warn('[PulseCheck] Failed to resolve protocol cue for chat launch', error);
+        });
     }
     
     // Add the exercise instruction card to chat
@@ -286,6 +325,16 @@ const Chat: React.FC = () => {
       };
       setMessages(prev => [...prev, promptMsg]);
     }, 500);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (protocolCueAudioRef.current) {
+        protocolCueAudioRef.current.pause();
+        protocolCueAudioRef.current.currentTime = 0;
+        protocolCueAudioRef.current = null;
+      }
+    };
   }, []);
   
   // Check for pending exercise on mount (from navigation)
