@@ -1,4 +1,4 @@
-const { initializeFirebaseAdmin, admin, headers } = require('./config/firebase');
+const { initializeFirebaseAdmin, getFirebaseAdminApp, admin, headers } = require('./config/firebase');
 const { runtimeHelpers: pulseCheckSubmissionRuntime } = require('./submit-pulsecheck-checkin');
 
 const RESPONSE_HEADERS = {
@@ -15,14 +15,14 @@ const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const STAFF_ROLES = new Set(['team-admin', 'coach', 'performance-staff', 'support-staff', 'clinician']);
 const TERMINAL_STATUSES = new Set(['completed', 'overridden', 'deferred', 'superseded']);
 
-async function verifyAuth(event) {
+async function verifyAuth(event, adminApp) {
   const authHeader = event.headers?.authorization || event.headers?.Authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     throw createError(401, 'Missing Authorization header');
   }
 
   const idToken = authHeader.slice('Bearer '.length);
-  return admin.auth().verifyIdToken(idToken);
+  return admin.auth(adminApp).verifyIdToken(idToken);
 }
 
 function createError(statusCode, message) {
@@ -395,8 +395,9 @@ exports.handler = async (event) => {
 
   try {
     initializeFirebaseAdmin({ headers: event.headers || {} });
-    const db = admin.firestore();
-    const decodedToken = await verifyAuth(event);
+    const adminApp = getFirebaseAdminApp({ headers: event.headers || {} });
+    const db = admin.firestore(adminApp);
+    const decodedToken = await verifyAuth(event, adminApp);
     const body = JSON.parse(event.body || '{}');
 
     const assignmentId = typeof body.assignmentId === 'string' ? body.assignmentId.trim() : '';

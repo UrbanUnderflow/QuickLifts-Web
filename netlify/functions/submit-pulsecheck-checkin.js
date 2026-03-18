@@ -1,4 +1,4 @@
-const { initializeFirebaseAdmin, admin, headers } = require('./config/firebase');
+const { initializeFirebaseAdmin, getFirebaseAdminApp, admin, headers } = require('./config/firebase');
 const profileSnapshotRuntime = require('../../src/api/firebase/mentaltraining/profileSnapshotRuntime.js');
 const protocolRegistryRuntime = require('../../src/api/firebase/mentaltraining/protocolRegistryRuntime.js');
 
@@ -18,6 +18,7 @@ const ASSIGNMENT_CANDIDATE_SETS_COLLECTION = 'pulsecheck-assignment-candidate-se
 const PROTOCOLS_COLLECTION = 'pulsecheck-protocols';
 const PROTOCOL_RESPONSIVENESS_COLLECTION = 'pulsecheck-protocol-responsiveness-profiles';
 const TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
+const SIM_MODULES_COLLECTION = 'sim-modules';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CURRENT_RESPONSIVENESS_WINDOW_DAYS = 21;
 const DEGRADED_RESPONSIVENESS_WINDOW_DAYS = 45;
@@ -63,6 +64,106 @@ function normalizeTag(value) {
 function derivePublishedRevisionId(protocolId, publishedAt) {
   if (!protocolId || typeof publishedAt !== 'number' || !Number.isFinite(publishedAt)) return undefined;
   return `${protocolId}@${publishedAt}`;
+}
+
+function hasNonEmptyString(value) {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function normalizeSimModuleRecord(id, data) {
+  return {
+    id,
+    ...data,
+  };
+}
+
+function isPublishedSimModuleRecord(record) {
+  const buildArtifact = record?.buildArtifact && typeof record.buildArtifact === 'object'
+    ? record.buildArtifact
+    : null;
+  const variantSource = record?.variantSource && typeof record.variantSource === 'object'
+    ? record.variantSource
+    : null;
+
+  return Boolean(
+    record
+    && record.isActive !== false
+    && hasNonEmptyString(record.id)
+    && hasNonEmptyString(record.publishedFingerprint)
+    && record.syncStatus === 'in_sync'
+    && buildArtifact
+    && hasNonEmptyString(buildArtifact.sourceFingerprint)
+    && hasNonEmptyString(record.engineKey || buildArtifact.engineKey)
+    && record.runtimeConfig
+    && typeof record.runtimeConfig === 'object'
+    && variantSource
+    && typeof variantSource.publishedAt === 'number'
+    && Number.isFinite(variantSource.publishedAt)
+  );
+}
+
+async function listLivePublishedSimModules(db) {
+  const snap = await db.collection(SIM_MODULES_COLLECTION).get();
+  if (snap.empty) {
+    return [];
+  }
+
+  return snap.docs
+    .map((entry) => normalizeSimModuleRecord(entry.id, entry.data()))
+    .filter((record) => isPublishedSimModuleRecord(record))
+    .sort((left, right) => {
+      if ((left.sortOrder || 999) !== (right.sortOrder || 999)) {
+        return (left.sortOrder || 999) - (right.sortOrder || 999);
+      }
+      return String(left.name || '').localeCompare(String(right.name || ''));
+    });
+}
+
+function resolvePublishedSimCandidate(activeProgram, liveSimRegistry) {
+  if (!activeProgram || (!activeProgram.recommendedSimId && !activeProgram.recommendedLegacyExerciseId)) {
+    return {
+      simModule: null,
+      inventoryGap: null,
+    };
+  }
+
+  const registry = Array.isArray(liveSimRegistry) ? liveSimRegistry : [];
+  const recommendedSimId = hasNonEmptyString(activeProgram.recommendedSimId)
+    ? activeProgram.recommendedSimId.trim().toLowerCase()
+    : null;
+  const recommendedLegacyExerciseId = hasNonEmptyString(activeProgram.recommendedLegacyExerciseId)
+    ? activeProgram.recommendedLegacyExerciseId.trim().toLowerCase()
+    : null;
+
+  const simModule = registry.find((record) => {
+    const recordId = hasNonEmptyString(record.id) ? record.id.trim().toLowerCase() : null;
+    const recordSimSpecId = hasNonEmptyString(record.simSpecId) ? record.simSpecId.trim().toLowerCase() : null;
+
+    return (
+      (recommendedLegacyExerciseId && recordId === recommendedLegacyExerciseId)
+      || (recommendedSimId && recordSimSpecId === recommendedSimId)
+      || (recommendedSimId && recordId === recommendedSimId)
+    );
+  }) || null;
+
+  if (simModule) {
+    return {
+      simModule,
+      inventoryGap: null,
+    };
+  }
+
+  const requestedLabel = humanizeRuntimeLabel(
+    activeProgram.recommendedSimId
+    || activeProgram.recommendedLegacyExerciseId
+    || activeProgram.sessionType
+    || 'simulation'
+  );
+
+  return {
+    simModule: null,
+    inventoryGap: `${requestedLabel} is not currently published and launchable, so Nora should not assign it yet.`,
+  };
 }
 
 function uniqueStrings(values) {
@@ -1040,7 +1141,7 @@ function buildProtocolCandidates({ snapshot, liveProtocolRegistry, responsivenes
   };
 }
 
-function buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress, liveProtocolRegistry, responsivenessProfile }) {
+function buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress, liveProtocolRegistry, liveSimRegistry, responsivenessProfile }) {
   const id = buildCandidateSetId(athleteId, sourceDate);
   const candidates = [];
   const constraintReasons = [];
@@ -1060,13 +1161,16 @@ function buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress
     }
   }
 
-  if (activeProgram?.recommendedSimId || activeProgram?.recommendedLegacyExerciseId) {
+  const publishedSimResolution = resolvePublishedSimCandidate(activeProgram, liveSimRegistry);
+
+  if (publishedSimResolution.simModule) {
+    const simModule = publishedSimResolution.simModule;
     const isTrial = activeProgram.sessionType === 'reassessment';
     candidates.push({
-      id: `${athleteId}_${sourceDate}_${activeProgram.recommendedSimId || activeProgram.recommendedLegacyExerciseId}`,
+      id: `${athleteId}_${sourceDate}_${simModule.simSpecId || simModule.id}`,
       type: isTrial ? 'trial' : 'sim',
-      label: humanizeRuntimeLabel(
-        activeProgram.recommendedSimId || activeProgram.recommendedLegacyExerciseId || activeProgram.sessionType || 'sim'
+      label: simModule.name || humanizeRuntimeLabel(
+        simModule.simSpecId || simModule.id || activeProgram.sessionType || 'sim'
       ),
       actionType:
         snapshot.recommendedRouting === 'protocol_then_sim'
@@ -1074,13 +1178,15 @@ function buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress
         || snapshot.overallReadiness === 'yellow'
           ? 'lighter_sim'
           : 'sim',
-      rationale: 'Bounded simulation candidate from the active program recommendation.',
-      simSpecId: activeProgram.recommendedSimId,
-      legacyExerciseId: activeProgram.recommendedLegacyExerciseId,
+      rationale: 'Bounded simulation candidate from the active program recommendation and published sim inventory.',
+      simSpecId: simModule.simSpecId || activeProgram.recommendedSimId,
+      legacyExerciseId: simModule.id || activeProgram.recommendedLegacyExerciseId,
       sessionType: activeProgram.sessionType,
       durationMode: activeProgram.durationMode,
       durationSeconds: activeProgram.durationSeconds,
     });
+  } else if (publishedSimResolution.inventoryGap) {
+    inventoryGaps.push(publishedSimResolution.inventoryGap);
   } else {
     constraintReasons.push('No active program simulation candidate is currently available.');
   }
@@ -1324,14 +1430,14 @@ function buildSnapshotDrivenRationale({ snapshot, actionType, fallbackRationale 
   return fallbackRationale ? `${runtimeLead} ${fallbackRationale}` : runtimeLead;
 }
 
-async function verifyAuth(event) {
+async function verifyAuth(event, adminApp) {
   const authHeader = event.headers?.authorization || event.headers?.Authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     throw new Error('Missing Authorization header');
   }
 
   const idToken = authHeader.slice('Bearer '.length);
-  return admin.auth().verifyIdToken(idToken);
+  return admin.auth(adminApp).verifyIdToken(idToken);
 }
 
 async function loadOrInitializeProgress(db, athleteId) {
@@ -1574,6 +1680,7 @@ async function orchestratePostCheckIn({
   candidateSet,
   plannerDecision,
   liveProtocolRegistry,
+  liveSimRegistry,
 }) {
   const snapshot =
     (sourceStateSnapshotId ? await getSnapshotById(db, sourceStateSnapshotId) : null) ||
@@ -1618,13 +1725,15 @@ async function orchestratePostCheckIn({
     return existing;
   }
 
+  const publishedSimResolution = resolvePublishedSimCandidate(activeProgram, liveSimRegistry);
+  const hasPublishedSimCandidate = Boolean(publishedSimResolution.simModule);
   const fallbackActionType =
-    activeProgram?.recommendedSimId
+    hasPublishedSimCandidate
       ? (activeProgram.sessionType === 'recovery_rep' || activeProgram.sessionType === 'probe' ? 'lighter_sim' : 'sim')
       : undefined;
   const validatedPlannerDecision = validatePlannerDecision({
-    decision: plannerDecision || buildFallbackPlannerDecision({ snapshot, candidateSet: candidateSet || buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress, liveProtocolRegistry, responsivenessProfile: null }) }),
-    candidateSet: candidateSet || buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress, liveProtocolRegistry, responsivenessProfile: null }),
+    decision: plannerDecision || buildFallbackPlannerDecision({ snapshot, candidateSet: candidateSet || buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress, liveProtocolRegistry, liveSimRegistry, responsivenessProfile: null }) }),
+    candidateSet: candidateSet || buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress, liveProtocolRegistry, liveSimRegistry, responsivenessProfile: null }),
     snapshot,
   });
   const selectedCandidate = validatedPlannerDecision.selectedCandidate;
@@ -1638,8 +1747,7 @@ async function orchestratePostCheckIn({
           hasResolvedExercise: Boolean(
             selectedCandidate?.simSpecId
             || selectedCandidate?.legacyExerciseId
-            || activeProgram?.recommendedSimId
-            || activeProgram?.recommendedLegacyExerciseId
+            || hasPublishedSimCandidate
           ),
           fallbackActionType,
         }));
@@ -1674,8 +1782,8 @@ async function orchestratePostCheckIn({
     actionType,
     chosenCandidateId: selectedCandidate?.id,
     chosenCandidateType: selectedCandidate?.type,
-    simSpecId: selectedCandidate?.simSpecId || activeProgram?.recommendedSimId,
-    legacyExerciseId: selectedCandidate?.legacyExerciseId || activeProgram?.recommendedLegacyExerciseId,
+    simSpecId: selectedCandidate?.simSpecId,
+    legacyExerciseId: selectedCandidate?.legacyExerciseId,
     protocolId: selectedCandidate?.protocolId,
     protocolFamilyId: selectedCandidate?.protocolFamilyId,
     protocolVariantId: selectedCandidate?.protocolVariantId,
@@ -1778,6 +1886,7 @@ async function rematerializeAssignmentFromSnapshot({
   }
 
   const liveProtocolRegistry = await listLiveProtocolRegistry(db);
+  const liveSimRegistry = await listLivePublishedSimModules(db);
   const responsivenessProfile = await getOrRefreshProtocolResponsivenessProfile({
     db,
     athleteId,
@@ -1789,6 +1898,7 @@ async function rematerializeAssignmentFromSnapshot({
     snapshot,
     progress,
     liveProtocolRegistry,
+    liveSimRegistry,
     responsivenessProfile,
   });
   await db.collection(ASSIGNMENT_CANDIDATE_SETS_COLLECTION).doc(candidateSet.id).set(stripUndefinedDeep(candidateSet), { merge: true });
@@ -1811,6 +1921,7 @@ async function rematerializeAssignmentFromSnapshot({
     candidateSet,
     plannerDecision,
     liveProtocolRegistry,
+    liveSimRegistry,
   });
 
   return {
@@ -1836,8 +1947,9 @@ exports.handler = async (event) => {
 
   try {
     initializeFirebaseAdmin({ headers: event.headers || {} });
-    const db = admin.firestore();
-    const decodedToken = await verifyAuth(event);
+    const adminApp = getFirebaseAdminApp({ headers: event.headers || {} });
+    const db = admin.firestore(adminApp);
+    const decodedToken = await verifyAuth(event, adminApp);
 
     const body = JSON.parse(event.body || '{}');
     const userId = body.userId || decodedToken.uid;
@@ -1980,6 +2092,9 @@ exports.runtimeHelpers = {
   syncTaxonomyProfile,
   getSnapshotById,
   listLiveProtocolRegistry,
+  listLivePublishedSimModules,
+  isPublishedSimModuleRecord,
+  resolvePublishedSimCandidate,
   getOrRefreshProtocolResponsivenessProfile,
   buildAssignmentCandidateSet,
   planAssignmentWithAI,

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import type { GetServerSideProps, InferGetServerSidePropsType } from 'next';
 import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut, type User as FirebaseAuthUser } from 'firebase/auth';
 import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, LogIn, LogOut, MailPlus, ShieldCheck, UserPlus, Users } from 'lucide-react';
@@ -55,6 +56,7 @@ const nextHrefByRole = (role: PulseCheckTeamMembershipRole, organizationId: stri
 };
 
 const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServerSideProps>) => {
+  const router = useRouter();
   const [mode, setMode] = useState<AuthMode>('create-account');
   const [authReady, setAuthReady] = useState(false);
   const [authUser, setAuthUser] = useState<FirebaseAuthUser | null>(null);
@@ -75,6 +77,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     teamName: string;
     teamMembershipRole: PulseCheckTeamMembershipRole;
   } | null>(null);
+  const [redirectingAfterRedeem, setRedirectingAfterRedeem] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
@@ -271,6 +274,20 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
   const completionHref = nextHrefByRole(invite.teamMembershipRole, invite.organizationId, invite.teamId);
 
+  useEffect(() => {
+    if (!redeemedState || redirectingAfterRedeem) return;
+
+    setRedirectingAfterRedeem(true);
+    const timeoutId = window.setTimeout(() => {
+      router.replace(completionHref).catch((error) => {
+        console.error('[pulsecheck-team-invite] Failed to redirect after redeem:', error);
+        setRedirectingAfterRedeem(false);
+      });
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [completionHref, redeemedState, redirectingAfterRedeem, router]);
+
   return (
     <div className="min-h-screen bg-[#05070c] text-white">
       <Head>
@@ -369,6 +386,9 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
                     {redeemedState.organizationName} has attached your {roleLabel[redeemedState.teamMembershipRole].toLowerCase()} access to{' '}
                     <span className="font-medium text-white">{redeemedState.teamName}</span>.
+                  </p>
+                  <p className="mt-3 text-sm leading-7 text-zinc-400">
+                    Taking you into setup now. If nothing happens, use Continue below.
                   </p>
                 </div>
 

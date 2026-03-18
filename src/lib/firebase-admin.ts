@@ -2,6 +2,7 @@ import * as admin from 'firebase-admin';
 
 const isE2EDevFirebase = process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true';
 const defaultProjectId = isE2EDevFirebase ? 'quicklifts-dev-01' : 'quicklifts-dd3f1';
+const defaultDevProjectId = process.env.NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID || 'quicklifts-dev-01';
 const selectedProjectId =
   (isE2EDevFirebase
     ? process.env.NEXT_PUBLIC_DEV_FIREBASE_PROJECT_ID
@@ -98,6 +99,46 @@ function initializeAdmin(): void {
   });
 }
 
+function initializeNamedAdmin(forceDevProject: boolean): admin.app.App {
+  const appName = forceDevProject ? 'pulsecheck-dev-admin' : 'pulsecheck-prod-admin';
+  for (const app of admin.apps) {
+    if (app && app.name === appName) {
+      return app;
+    }
+  }
+
+  const projectId = forceDevProject ? defaultDevProjectId : selectedProjectId;
+  const serviceAccount = forceDevProject ? null : getServiceAccount();
+
+  if (serviceAccount?.privateKey && serviceAccount.clientEmail) {
+    return admin.initializeApp(
+      {
+        credential: admin.credential.cert(serviceAccount),
+        projectId: serviceAccount.projectId || projectId,
+      },
+      appName
+    );
+  }
+
+  try {
+    return admin.initializeApp(
+      {
+        projectId,
+        credential: admin.credential.applicationDefault(),
+      },
+      appName
+    );
+  } catch (error) {
+    console.error('[Firebase Admin] Named initialization failed:', error);
+    return admin.initializeApp(
+      {
+        projectId,
+      },
+      appName
+    );
+  }
+}
+
 if (!admin.apps.length) {
   try {
     initializeAdmin();
@@ -110,6 +151,14 @@ if (!admin.apps.length) {
       });
     }
   }
+}
+
+export function getFirebaseAdminApp(forceDevProject = false): admin.app.App {
+  if (!forceDevProject) {
+    return admin.app();
+  }
+
+  return initializeNamedAdmin(true);
 }
 
 export default admin;

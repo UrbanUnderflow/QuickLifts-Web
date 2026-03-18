@@ -32,6 +32,28 @@ import { getSimSpec, getSimSpecByLegacyExerciseId } from './taxonomy';
 
 const COLLECTION = SIM_MODULES_COLLECTION;
 
+function hasNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+export function isLaunchablePublishedExercise(exercise: MentalExercise | null | undefined): exercise is MentalExercise {
+  return Boolean(
+    exercise
+    && exercise.isActive
+    && hasNonEmptyString(exercise.id)
+    && hasNonEmptyString(exercise.publishedFingerprint)
+    && exercise.syncStatus === 'in_sync'
+    && exercise.buildArtifact
+    && hasNonEmptyString(exercise.buildArtifact.sourceFingerprint)
+    && hasNonEmptyString(exercise.engineKey || exercise.buildArtifact.engineKey)
+    && exercise.runtimeConfig
+    && typeof exercise.runtimeConfig === 'object'
+    && exercise.variantSource
+    && typeof exercise.variantSource.publishedAt === 'number'
+    && Number.isFinite(exercise.variantSource.publishedAt)
+  );
+}
+
 // ============================================================================
 // SERVICE
 // ============================================================================
@@ -88,6 +110,16 @@ export const simModuleLibraryService = {
       .sort((left, right) => left.sortOrder - right.sortOrder)[0];
     if (!docSnap) return null;
     return docSnap;
+  },
+
+  async getPublishedById(id: string): Promise<MentalExercise | null> {
+    const exercise = await this.getById(id);
+    return isLaunchablePublishedExercise(exercise) ? exercise : null;
+  },
+
+  async getPublishedBySimSpecId(simSpecId: string): Promise<MentalExercise | null> {
+    const exercise = await this.getBySimSpecId(simSpecId);
+    return isLaunchablePublishedExercise(exercise) ? exercise : null;
   },
 
   /**

@@ -78,9 +78,14 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   }
 
   const idToken = await user.getIdToken();
+  const shouldForceDevFirebase =
+    typeof window !== 'undefined' &&
+    window.localStorage.getItem('forceDevFirebase') === 'true';
+
   return {
     Authorization: `Bearer ${idToken}`,
     'Content-Type': 'application/json',
+    ...(shouldForceDevFirebase ? { 'X-Force-Dev-Firebase': '1' } : {}),
   };
 }
 
@@ -284,6 +289,14 @@ export const assignmentOrchestratorService = {
       return null;
     }
 
+    const publishedExercise =
+      (progress.activeProgram.recommendedLegacyExerciseId
+        ? await simModuleLibraryService.getPublishedById(progress.activeProgram.recommendedLegacyExerciseId)
+        : null)
+      || (progress.activeProgram.recommendedSimId
+        ? await simModuleLibraryService.getPublishedBySimSpecId(progress.activeProgram.recommendedSimId)
+        : null);
+
     const snapshot =
       (sourceStateSnapshotId ? await stateSnapshotService.getById(sourceStateSnapshotId) : null) ||
       (await stateSnapshotService.getForAthleteOnDate(athleteId, sourceDate));
@@ -312,14 +325,14 @@ export const assignmentOrchestratorService = {
 
     const isLowerReadiness =
       progress.activeProgram.sessionType === 'recovery_rep' || progress.activeProgram.sessionType === 'probe';
-    const fallbackActionType = progress.activeProgram.recommendedSimId
+    const fallbackActionType = publishedExercise
       ? isLowerReadiness
         ? 'lighter_sim'
         : 'sim'
       : 'defer';
     const actionType = resolveSnapshotDrivenActionType({
       snapshot,
-      hasResolvedExercise: Boolean(progress.activeProgram.recommendedSimId || progress.activeProgram.recommendedLegacyExerciseId),
+      hasResolvedExercise: Boolean(publishedExercise),
       fallbackActionType,
     });
 
@@ -339,8 +352,8 @@ export const assignmentOrchestratorService = {
       assignedBy: 'nora',
       status: actionType === 'defer' ? PulseCheckDailyAssignmentStatus.Deferred : PulseCheckDailyAssignmentStatus.Assigned,
       actionType,
-      simSpecId: progress.activeProgram.recommendedSimId,
-      legacyExerciseId: progress.activeProgram.recommendedLegacyExerciseId,
+      simSpecId: publishedExercise?.simSpecId,
+      legacyExerciseId: publishedExercise?.id,
       sessionType: progress.activeProgram.sessionType,
       durationMode: progress.activeProgram.durationMode,
       durationSeconds: progress.activeProgram.durationSeconds,

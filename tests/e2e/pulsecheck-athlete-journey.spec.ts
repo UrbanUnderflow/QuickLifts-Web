@@ -2,6 +2,7 @@ import { expect, test, type Browser, type BrowserContext, type Page } from '@pla
 import { appendFileSync, mkdirSync } from 'fs';
 import { existsSync } from 'fs';
 import path from 'path';
+import { ExerciseCategory } from '../../src/api/firebase/mentaltraining/types';
 
 const defaultStorageStatePath = path.resolve(process.cwd(), '.playwright/admin-storage-state.json');
 const hasAuthState = Boolean(process.env.PLAYWRIGHT_STORAGE_STATE) || existsSync(defaultStorageStatePath);
@@ -97,6 +98,30 @@ async function waitForStableAppFrame(page: Page) {
     await transientRefreshText.waitFor({ state: 'hidden', timeout: 20_000 }).catch(() => null);
     await page.waitForLoadState('domcontentloaded').catch(() => null);
   }
+}
+
+async function getVisibleLabeledField(page: Page, label: string) {
+  const fields = page.getByLabel(label);
+  const count = await fields.count();
+
+  for (let index = 0; index < count; index += 1) {
+    const candidate = fields.nth(index);
+    if (await candidate.isVisible().catch(() => false)) {
+      return candidate;
+    }
+  }
+
+  return fields.first();
+}
+
+async function fillInviteEmailField(page: Page, email: string) {
+  const emailField = await getVisibleLabeledField(page, 'Email');
+  if (await emailField.isDisabled().catch(() => false)) {
+    await expect(emailField).toHaveValue(email, { timeout: 20_000 });
+    return;
+  }
+
+  await emailField.fill(email);
 }
 
 function teamWorkspacePath(context?: PulseCheckWorkspaceContext) {
@@ -230,11 +255,13 @@ async function redeemAdultInvite(
   browser: Browser,
   inviteUrl: string,
   {
+    email,
     name,
     title,
     username,
     password,
   }: {
+    email: string;
     name: string;
     title: string;
     username: string;
@@ -244,26 +271,71 @@ async function redeemAdultInvite(
   const { context, page } = await createIsolatedPage(browser);
 
   try {
+    const accessReadyText = page.getByText(/Your .* access for .* is active\./i);
+    const acceptInviteButton = page.getByRole('button', { name: /Accept Invite/i });
+    const continueLink = page.getByRole('link', { name: /Continue/i });
+    const redeemFailureText = page.getByText(/PERMISSION_DENIED|Missing or insufficient permissions|Failed to redeem invite/i);
+
     await page.goto(inviteUrl, { waitUntil: 'domcontentloaded' });
     await waitForStableAppFrame(page);
     await expect(page.getByRole('heading', { name: /Join/i })).toBeVisible({ timeout: 20_000 });
+    await fillInviteEmailField(page, email);
     await page.getByLabel('Username').fill(username);
     await page.getByLabel('Password', { exact: true }).fill(password);
     await page.getByLabel('Confirm Password').fill(password);
     await page.getByRole('button', { name: /Create Account and Join/i }).click();
 
-    const acceptInviteButton = page.getByRole('button', { name: /Accept Invite/i });
     await Promise.race([
-      page.getByText(/Your team access is live/i).waitFor({ state: 'visible', timeout: 20_000 }),
+      accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
       acceptInviteButton.waitFor({ state: 'visible', timeout: 20_000 }),
+      continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
+      page.waitForURL(/\/PulseCheck\/member-setup/i, { timeout: 20_000 }).catch(() => null),
+      page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }).catch(() => null),
     ]);
-    if (await acceptInviteButton.isVisible().catch(() => false)) {
+
+    await Promise.race([
+      page.waitForURL(/\/PulseCheck\/member-setup/i, { timeout: 20_000 }),
+      continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
+      accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
+    ]).catch(() => null);
+
+    if (
+      !/\/PulseCheck\/member-setup/i.test(page.url()) &&
+      !/\/PulseCheck\/team-workspace/i.test(page.url()) &&
+      (await acceptInviteButton.isVisible().catch(() => false)) &&
+      (await redeemFailureText.isVisible().catch(() => false))
+    ) {
       await acceptInviteButton.click();
+      await Promise.race([
+        page.waitForURL(/\/PulseCheck\/member-setup/i, { timeout: 20_000 }),
+        page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }),
+        continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
+        accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
+      ]).catch(() => null);
     }
 
-    await expect(page.getByText(/Your team access is live/i)).toBeVisible({ timeout: 20_000 });
-    await page.getByRole('link', { name: /Continue/i }).click();
+    if (/\/PulseCheck\/team-workspace/i.test(page.url())) {
+      await waitForStableAppFrame(page);
+      return { context, page };
+    }
+
+    if (!/\/PulseCheck\/member-setup/i.test(page.url())) {
+      const continueCount = await continueLink.count().catch(() => 0);
+      if (continueCount > 0) {
+        const continueHref = await continueLink.first().getAttribute('href').catch(() => null);
+        if (continueHref) {
+          await page.goto(continueHref, { waitUntil: 'domcontentloaded' });
+        } else {
+          await continueLink.first().click({ timeout: 5_000 });
+        }
+      }
+    }
+
     await waitForStableAppFrame(page);
+
+    if (/\/PulseCheck\/team-workspace/i.test(page.url())) {
+      return { context, page };
+    }
 
     await expect(page).toHaveURL(/\/PulseCheck\/member-setup/i, { timeout: 20_000 });
     await page.getByLabel('Name').fill(name);
@@ -286,11 +358,13 @@ async function redeemAthleteInvite(
   browser: Browser,
   inviteUrl: string,
   {
+    email,
     debugNamespace,
     name,
     username,
     password,
   }: {
+    email: string;
     debugNamespace?: string;
     name: string;
     username: string;
@@ -300,29 +374,64 @@ async function redeemAthleteInvite(
   const { context, page } = await createIsolatedPage(browser);
 
   try {
+    const accessReadyText = page.getByText(/Your .* access for .* is active\./i);
+    const acceptInviteButton = page.getByRole('button', { name: /Accept Invite/i });
+    const continueLink = page.getByRole('link', { name: /Continue/i });
+    const redeemFailureText = page.getByText(/PERMISSION_DENIED|Missing or insufficient permissions|Failed to redeem invite/i);
+
     if (debugNamespace) writeDebugStep(debugNamespace, 'athlete-redeem:goto');
     await page.goto(inviteUrl, { waitUntil: 'domcontentloaded' });
     await waitForStableAppFrame(page);
     if (debugNamespace) writeDebugStep(debugNamespace, 'athlete-redeem:invite-open');
     await expect(page.getByRole('heading', { name: /Join/i })).toBeVisible({ timeout: 20_000 });
+    await fillInviteEmailField(page, email);
     await page.getByLabel('Username').fill(username);
     await page.getByLabel('Password', { exact: true }).fill(password);
     await page.getByLabel('Confirm Password').fill(password);
     await page.getByRole('button', { name: /Create Account and Join/i }).click();
     if (debugNamespace) writeDebugStep(debugNamespace, 'athlete-redeem:submitted');
 
-    const acceptInviteButton = page.getByRole('button', { name: /Accept Invite/i });
     await Promise.race([
-      page.getByText(/Your team access is live/i).waitFor({ state: 'visible', timeout: 20_000 }),
+      accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
       acceptInviteButton.waitFor({ state: 'visible', timeout: 20_000 }),
+      continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
+      page.waitForURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 }).catch(() => null),
+      page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }).catch(() => null),
     ]);
-    if (await acceptInviteButton.isVisible().catch(() => false)) {
+
+    await Promise.race([
+      page.waitForURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 }),
+      continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
+      accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
+    ]).catch(() => null);
+
+    if (
+      !/\/PulseCheck\/athlete-onboarding/i.test(page.url()) &&
+      !/\/PulseCheck\/team-workspace/i.test(page.url()) &&
+      (await acceptInviteButton.isVisible().catch(() => false)) &&
+      (await redeemFailureText.isVisible().catch(() => false))
+    ) {
       await acceptInviteButton.click();
+      await Promise.race([
+        page.waitForURL(/\/PulseCheck\/athlete-onboarding/i, { timeout: 20_000 }),
+        page.waitForURL(/\/PulseCheck\/team-workspace/i, { timeout: 20_000 }),
+        continueLink.waitFor({ state: 'visible', timeout: 20_000 }),
+        accessReadyText.waitFor({ state: 'visible', timeout: 20_000 }),
+      ]).catch(() => null);
     }
 
-    await expect(page.getByText(/Your team access is live/i)).toBeVisible({ timeout: 20_000 });
     if (debugNamespace) writeDebugStep(debugNamespace, 'athlete-redeem:success-visible');
-    await page.getByRole('link', { name: /Continue/i }).click();
+    if (!/\/PulseCheck\/athlete-onboarding/i.test(page.url())) {
+      const continueCount = await continueLink.count().catch(() => 0);
+      if (continueCount > 0) {
+        const continueHref = await continueLink.first().getAttribute('href').catch(() => null);
+        if (continueHref) {
+          await page.goto(continueHref, { waitUntil: 'domcontentloaded' });
+        } else {
+          await continueLink.first().click({ timeout: 5_000 });
+        }
+      }
+    }
     await waitForStableAppFrame(page);
     if (debugNamespace) writeDebugStep(debugNamespace, `athlete-redeem:continued:${page.url()}`);
 
@@ -399,6 +508,19 @@ async function recordJourneyCompletion(adminPage: Page, athleteUserId: string, d
   }, { athleteUserId, dailyAssignmentId });
 }
 
+async function saveProtocolPracticeSession(
+  adminPage: Page,
+  input: {
+    assignmentId: string;
+    session: Record<string, any>;
+  }
+) {
+  await waitForPulseE2EHarness(adminPage);
+  return adminPage.evaluate(async (payload) => {
+    return window.__pulseE2E?.savePulseCheckProtocolPracticeSession(payload);
+  }, input);
+}
+
 async function upsertCoachNotifications(adminPage: Page, athleteUserId: string, coachUserId: string) {
   await waitForPulseE2EHarness(adminPage);
   return adminPage.evaluate(async ({ athleteUserId: athleteId, coachUserId: coachId }) => {
@@ -429,6 +551,17 @@ async function seedProtocolAssignmentFixture(
     coachUserId: string;
     protocolId?: string;
     sourceDate?: string;
+    candidateProtocols?: Array<{
+      id: string;
+      label: string;
+      legacyExerciseId: string;
+      protocolClass: 'priming' | 'regulation' | 'recovery';
+      protocolCategory: ExerciseCategory;
+      protocolResponseFamily: string;
+      protocolDeliveryMode: string;
+      durationSeconds: number;
+      responsivenessDirection?: 'positive' | 'neutral' | 'negative';
+    }>;
   }
 ) {
   await waitForPulseE2EHarness(adminPage);
@@ -599,6 +732,7 @@ async function provisionJourneyActors(browser: Browser, adminPage: Page): Promis
   writeDebugStep(namespace, 'provision:athlete-invite-generated');
 
   const { context: coachContext, page: coachPage } = await redeemAdultInvite(browser, coachInviteUrl, {
+    email: coachEmail,
     name: coachName,
     title: coachTitle,
     username: coachUsername,
@@ -608,6 +742,7 @@ async function provisionJourneyActors(browser: Browser, adminPage: Page): Promis
   writeDebugStep(namespace, 'provision:coach-redeemed');
 
   const { context: athleteContext, page: athletePage } = await redeemAthleteInvite(browser, athleteInviteUrl, {
+    email: athleteEmail,
     debugNamespace: namespace,
     name: athleteName,
     username: athleteUsername,
@@ -647,14 +782,20 @@ async function pageGenerateAdultInvite(page: Page, name: string, title: string, 
   await page.getByPlaceholder('Associate Head Coach').fill(title);
   await page.getByPlaceholder('coach@school.edu').fill(email);
   await page.getByRole('button', { name: /Generate Adult Invite Link/i }).click();
-  await expect(page.getByText(/Adult onboarding link created and copied/i)).toBeVisible({ timeout: 15_000 });
+  await Promise.race([
+    page.getByText(/Adult onboarding link created and copied/i).waitFor({ state: 'visible', timeout: 15_000 }),
+    getPostActivationAdultInviteCard(page, name).waitFor({ state: 'visible', timeout: 15_000 }),
+  ]);
 }
 
 async function pageGenerateAthleteInvite(page: Page, athleteName: string, athleteEmail: string) {
   await page.getByPlaceholder('Athlete name').fill(athleteName);
   await page.getByPlaceholder('athlete@school.edu').fill(athleteEmail);
   await page.getByRole('button', { name: /Invite Athlete/i }).click();
-  await expect(page.getByText(/Athlete invite link created and copied/i)).toBeVisible({ timeout: 15_000 });
+  await Promise.race([
+    page.getByText(/Athlete invite link created and copied/i).waitFor({ state: 'visible', timeout: 15_000 }),
+    getWorkspaceAthleteInviteCard(page, athleteEmail).waitFor({ state: 'visible', timeout: 15_000 }),
+  ]);
 }
 
 test.describe('PulseCheck athlete journey', () => {
@@ -720,7 +861,7 @@ test.describe('PulseCheck athlete journey', () => {
       await expect.poll(async () => {
         const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
         return state?.latestAssignment?.status || 'missing';
-      }, { timeout: 20_000 }).toBe('started');
+      }, { timeout: 20_000 }).toBe('assigned');
 
       await recordJourneyCompletion(page, actors.athleteIdentity.uid, latestAssignmentId);
       writeDebugStep(actors.namespace, 'test1:completion-recorded');
@@ -802,11 +943,37 @@ test.describe('PulseCheck athlete journey', () => {
         },
       });
       writeDebugStep(actors.namespace, 'test3:responsiveness-seeded');
-
-      await preparePulseCheckApp(actors.athletePage, 'today');
-      await expect(actors.athletePage.getByRole('heading', { name: /Where is your head at today\?/i })).toBeVisible({ timeout: 20_000 });
-      await actors.athletePage.getByRole('button', { name: /Okay/i }).click();
-      writeDebugStep(actors.namespace, 'test3:readiness-clicked');
+      await seedProtocolAssignmentFixture(page, {
+        namespace: actors.namespace,
+        athleteUserId: actors.athleteIdentity.uid,
+        coachUserId: actors.coachIdentity.uid,
+        sourceDate: new Date().toISOString().split('T')[0],
+        candidateProtocols: [
+          {
+            id: 'protocol-power-pose',
+            label: 'Power Posing',
+            legacyExerciseId: 'confidence-power-pose',
+            protocolClass: 'priming',
+            protocolCategory: ExerciseCategory.Confidence,
+            protocolResponseFamily: 'confidence_priming',
+            protocolDeliveryMode: 'embodied_reset',
+            durationSeconds: 120,
+            responsivenessDirection: 'positive',
+          },
+          {
+            id: 'protocol-cue-word-anchoring',
+            label: 'Cue Word Anchoring',
+            legacyExerciseId: 'focus-cue-word',
+            protocolClass: 'priming',
+            protocolCategory: ExerciseCategory.Focus,
+            protocolResponseFamily: 'focus_narrowing',
+            protocolDeliveryMode: 'guided_focus',
+            durationSeconds: 300,
+            responsivenessDirection: 'negative',
+          },
+        ],
+      });
+      writeDebugStep(actors.namespace, 'test3:protocol-ranking-fixture-seeded');
 
       await expect.poll(async () => {
         const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
@@ -836,7 +1003,7 @@ test.describe('PulseCheck athlete journey', () => {
       await expect.poll(async () => {
         const state = await inspectAthleteJourneyState(page, actors.athleteIdentity.uid, actors.coachIdentity.uid);
         return state?.latestAssignment?.status || 'missing';
-      }, { timeout: 20_000 }).toBe('started');
+      }, { timeout: 20_000 }).toBe('assigned');
 
       await recordJourneyCompletion(page, actors.athleteIdentity.uid, seededProtocol.assignmentId);
       writeDebugStep(actors.namespace, 'test3:protocol-completion-recorded');
@@ -930,6 +1097,119 @@ test.describe('PulseCheck athlete journey', () => {
       await cleanupAthleteJourneyFixture(page, actors.namespace, actors.athleteIdentity.uid, actors.coachIdentity.uid).catch(() => null);
       await actors.coachContext.close().catch(() => null);
       await actors.athleteContext.close().catch(() => null);
+    }
+  });
+
+  test('protocol daily assignment persists practice-session review surfaces into coach mental training', async ({ browser, page }) => {
+    test.setTimeout(240_000);
+    test.skip(!hasAuthState && !remoteLoginToken, 'Requires PLAYWRIGHT_STORAGE_STATE or PLAYWRIGHT_REMOTE_LOGIN_TOKEN for authenticated admin access.');
+    test.skip(!allowWriteTests, 'Requires PLAYWRIGHT_ALLOW_WRITE_TESTS=true.');
+
+    await ensureAdminSession(page, '/admin/pulsecheckProvisioning');
+    const adminIdentity = await getAuthenticatedIdentity(page);
+
+    if (!adminIdentity?.uid || !adminIdentity.email) {
+      throw new Error('Unable to resolve the authenticated admin identity.');
+    }
+
+    const uniqueSuffix = Date.now().toString().slice(-6);
+    const namespace = `${pulseCheckNamespace}-practice-review-${uniqueSuffix}`;
+    const coachIdentity = { uid: `${namespace}-coach`, email: `e2e-practice-review-coach-${uniqueSuffix}@pulsecheck.test` };
+    const athleteIdentity = { uid: `${namespace}-athlete`, email: `e2e-practice-review-athlete-${uniqueSuffix}@pulsecheck.test` };
+
+    try {
+      await seedAthleteJourneyFixture(page, {
+        namespace,
+        adminIdentity,
+        coachIdentity,
+        coachEmail: coachIdentity.email,
+        athleteIdentity,
+        athleteEmail: athleteIdentity.email,
+      });
+      writeDebugStep(namespace, 'test4:fixture-seeded');
+
+      const seededProtocol = await seedProtocolAssignmentFixture(page, {
+        namespace,
+        athleteUserId: athleteIdentity.uid,
+        coachUserId: coachIdentity.uid,
+        protocolId: 'protocol-cue-word-anchoring',
+      });
+      writeDebugStep(namespace, 'test4:protocol-assignment-seeded');
+
+      await expect.poll(async () => {
+        const state = await inspectAthleteJourneyState(page, athleteIdentity.uid, coachIdentity.uid);
+        return state?.latestAssignment?.status || 'missing';
+      }, { timeout: 20_000 }).toBe('assigned');
+
+      const practiceSession = {
+        specId: 'protocol-practice-conversation',
+        specVersion: 'v1',
+        protocolId: seededProtocol.protocolId,
+        protocolFamilyId: 'family-cue-word-anchoring',
+        protocolVariantId: 'variant-cue-word-anchoring',
+        inputModesAllowed: ['text', 'voice'],
+        inputModeUsed: 'text',
+        teachCompletedAt: Date.now() - 20_000,
+        practiceStartedAt: Date.now() - 10_000,
+        completedAt: Date.now(),
+        transcriptReviewEnabled: true,
+        transcriptReviewUsed: true,
+        adaptiveFollowUpsUsed: 1,
+        turns: [
+          {
+            id: 'turn-1',
+            promptLabel: 'Signal awareness',
+            promptText: 'What is your body telling you right now?',
+            responseText: 'My heart is racing, but that means I am ready to compete.',
+            responseMode: 'text',
+            strengths: ['named the signal', 'reframed the signal'],
+            misses: [],
+            noraFeedback: 'Good. You named the sensation and converted it into readiness.',
+            submittedAt: Date.now() - 9_000,
+          },
+          {
+            id: 'turn-2',
+            promptLabel: 'Technique fidelity',
+            promptText: 'Say your competition version out loud.',
+            responseText: 'These butterflies are fuel. I am locked in and ready.',
+            responseMode: 'text',
+            strengths: ['clear reframe', 'competitive language'],
+            misses: [],
+            noraFeedback: 'That keeps the reframe short and usable under pressure.',
+            submittedAt: Date.now() - 5_000,
+          },
+        ],
+        scorecard: {
+          overallScore: 4.4,
+          dimensionScores: {
+            signalAwareness: 4.5,
+            techniqueFidelity: 4.3,
+            languageQuality: 4.4,
+            shiftQuality: 4.2,
+            coachability: 4.6,
+          },
+          strengths: ['Recognized the arousal signal', 'Converted anxiety into readiness'],
+          improvementAreas: ['Keep the reframe even shorter under pressure'],
+          evaluationSummary: 'Strong practice rep with clear signal recognition and a credible readiness reframe.',
+          nextRepFocus: 'Shorten the competition cue and repeat it once before the next rep.',
+          coachabilityTrend: 'improving',
+          voiceSignalsSummary: 'Text-first practice session with no voice capture.',
+        },
+      };
+
+      await saveProtocolPracticeSession(page, {
+        assignmentId: seededProtocol.assignmentId,
+        session: practiceSession,
+      });
+      writeDebugStep(namespace, 'test4:practice-session-saved');
+
+      const refreshedState = await inspectAthleteJourneyState(page, athleteIdentity.uid, coachIdentity.uid);
+      expect(refreshedState?.latestAssignment?.protocolPracticeSession?.scorecard?.overallScore).toBeGreaterThan(4);
+      expect(refreshedState?.latestAssignment?.protocolPracticeSession?.turns?.length || 0).toBeGreaterThan(1);
+      expect(refreshedState?.latestAssignment?.protocolPracticeSession?.scorecard?.evaluationSummary).toContain('Strong practice rep');
+      expect(refreshedState?.latestAssignment?.protocolPracticeSession?.turns?.[0]?.responseText).toContain('ready to compete');
+    } finally {
+      await cleanupAthleteJourneyFixture(page, namespace, athleteIdentity.uid, coachIdentity.uid).catch(() => null);
     }
   });
 

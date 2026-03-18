@@ -1652,7 +1652,10 @@ export const pulseCheckProvisioningService = {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${idToken}`,
           },
-          body: JSON.stringify({ token: normalizeString(token) }),
+          body: JSON.stringify({
+            token: normalizeString(token),
+            forceDevFirebase: shouldStampDevFirebaseLinks(),
+          }),
         });
 
         const payload = await response.json().catch(() => null);

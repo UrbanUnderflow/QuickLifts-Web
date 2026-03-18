@@ -9,9 +9,14 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   }
 
   const idToken = await user.getIdToken();
+  const shouldForceDevFirebase =
+    typeof window !== 'undefined' &&
+    window.localStorage.getItem('forceDevFirebase') === 'true';
+
   return {
     Authorization: `Bearer ${idToken}`,
     'Content-Type': 'application/json',
+    ...(shouldForceDevFirebase ? { 'X-Force-Dev-Firebase': '1' } : {}),
   };
 }
 

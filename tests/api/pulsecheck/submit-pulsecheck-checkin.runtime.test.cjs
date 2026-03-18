@@ -323,3 +323,92 @@ test('stripUndefinedDeep removes undefined optional check-in fields before persi
   assert.equal('stressLevel' in sanitized, false);
   assert.equal('sleepQuality' in sanitized, false);
 });
+
+test('buildAssignmentCandidateSet excludes unpublished sim recommendations', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+
+  const candidateSet = runtimeHelpers.buildAssignmentCandidateSet({
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-18',
+    snapshot: {
+      id: 'athlete-1_2026-03-18',
+      athleteId: 'athlete-1',
+      sourceDate: '2026-03-18',
+      recommendedRouting: 'sim_only',
+      candidateClassHints: ['sim'],
+      overallReadiness: 'green',
+    },
+    progress: {
+      activeProgram: {
+        recommendedSimId: 'endurance_lock',
+        recommendedLegacyExerciseId: 'focus-endurance-lock',
+        sessionType: 'training_rep',
+        durationMode: 'standard_rep',
+        durationSeconds: 480,
+      },
+    },
+    liveProtocolRegistry: [],
+    liveSimRegistry: [],
+    responsivenessProfile: null,
+  });
+
+  assert.deepEqual(candidateSet.candidates, []);
+  assert.equal(candidateSet.plannerEligible, false);
+  assert.match(candidateSet.inventoryGaps[0], /not currently published and launchable/i);
+});
+
+test('orchestratePostCheckIn defers when the recommended sim is not published', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+  const snapshot = {
+    id: 'athlete-1_2026-03-18',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-18',
+    sourceCheckInId: 'checkin-1',
+    overallReadiness: 'green',
+    confidence: 'medium',
+    recommendedRouting: 'sim_only',
+    readinessScore: 78,
+    supportFlag: false,
+  };
+  const db = createFirestoreDb({ snapshot });
+
+  const assignment = await runtimeHelpers.orchestratePostCheckIn({
+    db,
+    athleteId: 'athlete-1',
+    sourceCheckInId: 'checkin-1',
+    sourceStateSnapshotId: snapshot.id,
+    sourceCandidateSetId: 'candidate-set-1',
+    sourceDate: snapshot.sourceDate,
+    progress: {
+      coachId: null,
+      activeProgram: {
+        recommendedSimId: 'endurance_lock',
+        recommendedLegacyExerciseId: 'focus-endurance-lock',
+        sessionType: 'training_rep',
+        durationMode: 'standard_rep',
+        durationSeconds: 480,
+        rationale: 'Taxonomy profile still points to Endurance Lock.',
+      },
+      taxonomyProfile: {
+        modifierScores: {
+          readiness: 78,
+        },
+      },
+    },
+    candidateSet: {
+      id: 'candidate-set-1',
+      candidates: [],
+      plannerEligible: false,
+      inventoryGaps: ['Endurance Lock is not currently published and launchable, so Nora should not assign it yet.'],
+    },
+    plannerDecision: null,
+    liveProtocolRegistry: [],
+    liveSimRegistry: [],
+  });
+
+  assert.ok(assignment);
+  assert.equal(assignment.actionType, 'defer');
+  assert.equal(assignment.status, 'deferred');
+  assert.equal(assignment.simSpecId, undefined);
+  assert.equal(assignment.legacyExerciseId, undefined);
+});
