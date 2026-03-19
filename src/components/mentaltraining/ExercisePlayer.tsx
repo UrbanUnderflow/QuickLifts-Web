@@ -28,6 +28,8 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
+import { useSelector } from 'react-redux';
+import mixpanel from 'mixpanel-browser';
 import { speakStep, stopNarration, VoiceChoice } from '../../utils/tts';
 import {
   SimModule,
@@ -45,6 +47,7 @@ import {
   type ProtocolPracticeTurnSpec,
 } from '../../api/firebase/mentaltraining/protocolPracticeConversationService';
 import type { ProfileSnapshotMilestone } from '../../api/firebase/mentaltraining/taxonomy';
+import { RootState } from '../../redux/store';
 import { ResetGame } from './ResetGame';
 import { SimRuntimePlayer } from './SimRuntimePlayer';
 
@@ -2473,6 +2476,7 @@ const ProtocolPracticeConversation: React.FC<{
   const [activeFollowUp, setActiveFollowUp] = useState<ProtocolPracticeAdaptiveFollowUp | null>(null);
   const [isEvaluatingTurn, setIsEvaluatingTurn] = useState(false);
   const [isEvaluatingSession, setIsEvaluatingSession] = useState(false);
+  const currentUser = useSelector((state: RootState) => state.user.currentUser);
 
   const recognitionRef = useRef<any>(null);
   const recordingStartedAtRef = useRef<number | null>(null);
@@ -2504,6 +2508,31 @@ const ProtocolPracticeConversation: React.FC<{
       .filter(Boolean)
       .join(' ')
   );
+
+  const analyticsIdentity = currentUser?.email || currentUser?.id || `protocol-practice:${spec.id}:${previewMode ? 'preview' : 'unknown-user'}`;
+
+  const trackProtocolPracticeEvaluation = (
+    stage: 'turn' | 'session',
+    source: 'ai' | 'heuristic',
+    extra: Record<string, unknown> = {}
+  ) => {
+    try {
+      mixpanel.track('ProtocolPracticeEvaluation', {
+        distinct_id: analyticsIdentity,
+        platform: 'web',
+        specId: spec.id,
+        specTitle: spec.title,
+        protocolFamilyId: spec.protocolFamilyId,
+        protocolVariantId: spec.protocolVariantId,
+        stage,
+        source,
+        previewMode,
+        ...extra,
+      });
+    } catch (error) {
+      console.error('[ProtocolPracticeConversation] Failed to send Mixpanel evaluation telemetry', error);
+    }
+  };
 
   const stopListening = () => {
     if (recognitionRef.current) {
@@ -2755,6 +2784,14 @@ const ProtocolPracticeConversation: React.FC<{
 
       try {
         evaluation = await evaluateTurnWithAI(currentTurnSpec, submission);
+        trackProtocolPracticeEvaluation('turn', evaluation.turn.evaluationSource || 'ai', {
+          turnIndex: turnIndex + 1,
+          promptId: currentTurnSpec.id,
+          usedAdaptiveFollowUp: Boolean(submission.usedAdaptiveFollowUp),
+          followUpPromptId: evaluation.followUpPrompt?.id || null,
+          evaluationLatencyMs: evaluation.turn.evaluationLatencyMs ?? null,
+          modality: submission.modality,
+        });
       } catch (error) {
         console.error('[ProtocolPracticeConversation] AI turn evaluation failed, falling back to heuristic scorer', error);
         evaluation = protocolPracticeConversationService.evaluateTurn(
@@ -2763,6 +2800,15 @@ const ProtocolPracticeConversation: React.FC<{
           submission,
           turns
         );
+        trackProtocolPracticeEvaluation('turn', evaluation.turn.evaluationSource || 'heuristic', {
+          turnIndex: turnIndex + 1,
+          promptId: currentTurnSpec.id,
+          usedAdaptiveFollowUp: Boolean(submission.usedAdaptiveFollowUp),
+          followUpPromptId: evaluation.followUpPrompt?.id || null,
+          evaluationLatencyMs: evaluation.turn.evaluationLatencyMs ?? null,
+          modality: submission.modality,
+          fallbackReason: error instanceof Error ? error.message : 'ai_turn_evaluation_failed',
+        });
       }
 
       setTurns((previous) => [...previous, evaluation.turn]);
@@ -2802,9 +2848,24 @@ const ProtocolPracticeConversation: React.FC<{
       let finalScorecard: NonNullable<PulseCheckProtocolPracticeSession['scorecard']>;
       try {
         finalScorecard = await evaluateSessionWithAI(turns);
+        trackProtocolPracticeEvaluation('session', finalScorecard.evaluationSource || 'ai', {
+          turnCount: turns.length,
+          overallScore: finalScorecard.overallScore,
+          coachabilityTrend: finalScorecard.coachabilityTrend,
+          evaluationLatencyMs: finalScorecard.evaluationLatencyMs ?? null,
+          adaptiveFollowUpsUsed: turns.filter((turn) => turn.usedAdaptiveFollowUp).length,
+        });
       } catch (error) {
         console.error('[ProtocolPracticeConversation] AI session evaluation failed, falling back to heuristic scorer', error);
         finalScorecard = protocolPracticeConversationService.evaluateSession(spec, turns);
+        trackProtocolPracticeEvaluation('session', finalScorecard.evaluationSource || 'heuristic', {
+          turnCount: turns.length,
+          overallScore: finalScorecard.overallScore,
+          coachabilityTrend: finalScorecard.coachabilityTrend,
+          evaluationLatencyMs: finalScorecard.evaluationLatencyMs ?? null,
+          adaptiveFollowUpsUsed: turns.filter((turn) => turn.usedAdaptiveFollowUp).length,
+          fallbackReason: error instanceof Error ? error.message : 'ai_session_evaluation_failed',
+        });
       }
 
       setScorecard(finalScorecard);

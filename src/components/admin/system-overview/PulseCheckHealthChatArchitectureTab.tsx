@@ -13,7 +13,9 @@ import PulseCheckHealthContextDefinitionOfDoneTab from './PulseCheckHealthContex
 import PulseCheckHealthContextEngineeringTaskBreakdownTab from './PulseCheckHealthContextEngineeringTaskBreakdownTab';
 import PulseCheckHealthContextFirestoreSchemaIndexSpecTab from './PulseCheckHealthContextFirestoreSchemaIndexSpecTab';
 import PulseCheckPhysiologyCognitionCorrelationEngineTab from './PulseCheckPhysiologyCognitionCorrelationEngineTab';
+import PulseCheckCorrelationEngineContractLockTab from './PulseCheckCorrelationEngineContractLockTab';
 import PulseCheckCorrelationDataModelSpecTab from './PulseCheckCorrelationDataModelSpecTab';
+import PulseCheckCorrelationEngineEngineeringTaskBreakdownTab from './PulseCheckCorrelationEngineEngineeringTaskBreakdownTab';
 
 const LIVE_NOW_ROWS = [
   ['Shared Firestore health summary', 'PulseCheck can read `daily-health-summaries` from the shared Firebase stack.', 'Live and already important.'],
@@ -266,12 +268,28 @@ const HEALTH_CONTEXT_DOCS: HealthContextDocEntry[] = [
     render: () => <PulseCheckPhysiologyCognitionCorrelationEngineTab />,
   },
   {
+    id: 'correlation-engine-contract-lock',
+    label: 'Contract Lock & Exit Criteria',
+    subtitle: 'Milestone 0 freeze for naming, confidence tiers, messaging rules, and implementation exits.',
+    icon: FileText,
+    accent: '#38bdf8',
+    render: () => <PulseCheckCorrelationEngineContractLockTab />,
+  },
+  {
     id: 'correlation-data-model-spec',
     label: 'Correlation Data Model Spec',
     subtitle: 'Buildable schema for evidence records, pattern models, projections, and assessment flags.',
     icon: Database,
     accent: '#22c55e',
     render: () => <PulseCheckCorrelationDataModelSpecTab />,
+  },
+  {
+    id: 'correlation-engine-engineering-task-breakdown',
+    label: 'Correlation Engine Engineering Task Breakdown',
+    subtitle: 'Full milestone, ownership, QA, and release plan from schema lock to production readiness.',
+    icon: Workflow,
+    accent: '#f59e0b',
+    render: () => <PulseCheckCorrelationEngineEngineeringTaskBreakdownTab />,
   },
   {
     id: 'snapshot-spec',

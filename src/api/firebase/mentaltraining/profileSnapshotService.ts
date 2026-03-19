@@ -6,6 +6,7 @@ import {
   setDoc,
 } from 'firebase/firestore';
 import { db } from '../config';
+import type { AssessmentContextFlag } from './correlationEngineTypes';
 import {
   ATHLETE_MENTAL_PROGRESS_COLLECTION,
   PROFILE_SNAPSHOTS_SUBCOLLECTION,
@@ -37,6 +38,10 @@ export interface ProfileSnapshotPayload {
   nextMilestone: string;
   pressurePattern?: string;
   consistencyState?: string;
+  stateContextAtCapture?: {
+    assessmentContextFlag?: AssessmentContextFlag;
+    [key: string]: unknown;
+  };
 }
 
 export interface ProfileSnapshotSourceRefs {

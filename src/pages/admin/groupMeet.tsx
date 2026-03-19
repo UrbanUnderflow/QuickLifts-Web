@@ -185,6 +185,7 @@ const GroupMeetAdminPage: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const contactImageInputRef = useRef<HTMLInputElement>(null);
+  const activeAdminEmail = auth.currentUser?.email || host.email || null;
 
   const selectedParticipantContacts = useMemo(
     () =>
@@ -210,6 +211,7 @@ const GroupMeetAdminPage: React.FC = () => {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${idToken}`,
       'x-force-dev-firebase': shouldUseDevFirebaseForAdminApi() ? 'true' : 'false',
+      'x-admin-email': currentUser.email || '',
     };
   };
 
@@ -792,6 +794,10 @@ const GroupMeetAdminPage: React.FC = () => {
               {message.text}
             </div>
           )}
+
+          <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-950/70 px-4 py-4 text-sm text-zinc-300">
+            Active admin identity: <span className="font-medium text-white">{activeAdminEmail || 'Unknown'}</span>
+          </div>
 
           <div className="mb-6 flex flex-wrap gap-3">
             <button

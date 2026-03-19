@@ -128,6 +128,8 @@ const PulseCheckProtocolResponsivenessProfileSpecTab: React.FC = () => {
           'Protocol Governance Spec',
           'Protocol Authoring Workflow',
           'Protocol Registry',
+          'Physiology-Cognition Correlation Engine',
+          'Correlation Data Model Spec',
           'State Signal Layer',
           'Nora Assignment Rules',
         ]}
@@ -178,6 +180,11 @@ const PulseCheckProtocolResponsivenessProfileSpecTab: React.FC = () => {
           title="Key Planning Rule"
           accent="red"
           body="Responsiveness confidence should never let Nora overrule a strong contradictory current-state signal. It is a ranking input inside the valid state-fit set, not a license to ignore the latest snapshot."
+        />
+        <InfoCard
+          title="Engine Alignment Rule"
+          accent="blue"
+          body="If responsiveness planning starts using physiology-aware projections from the Physiology-Cognition Correlation Engine, it should consume those shared projections and confidence labels rather than inventing a second body-state personalization model inside the protocol system."
         />
       </SectionBlock>
 

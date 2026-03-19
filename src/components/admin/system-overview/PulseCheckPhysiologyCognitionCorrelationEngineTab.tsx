@@ -150,9 +150,11 @@ const PulseCheckPhysiologyCognitionCorrelationEngineTab: React.FC = () => {
         masterReference="Any source-specific implementation, including Oura, Apple Watch, Garmin, Whoop, or future wearable lanes, should follow this engine spec first. If a proposed correlation or recommendation cannot fit these governance rules, update this engine before shipping the source-specific insight."
         relatedDocs={[
           'Health Context Pipeline',
+          'Contract Lock & Exit Criteria',
           'State Signal Layer',
           'Athlete Context Snapshot Spec',
           'Correlation Data Model Spec',
+          'Correlation Engine Engineering Task Breakdown',
           'Profile Architecture',
           'Nora Assignment Rules',
           'Oura Cognitive Correlation Spec',
