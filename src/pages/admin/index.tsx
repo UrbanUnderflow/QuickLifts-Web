@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket } from 'lucide-react';
+import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -46,6 +46,12 @@ const AdminCard: React.FC<AdminCardProps> = ({ title, description, icon, link })
 };
 
 const adminCardsData = [
+  {
+    title: "Group Meet",
+    description: "Create tracked availability requests, generate one link per invitee, and collect scheduling responses by deadline.",
+    icon: <Calendar className="w-5 h-5" />,
+    link: "/admin/groupMeet"
+  },
   {
     title: "Mission Control",
     description: "Launch autonomous agent missions, monitor North Star progress, and review agent-proposed objectives.",

@@ -22,9 +22,10 @@ import {
   SIM_VARIANTS_COLLECTION,
 } from './collections';
 import type { SimVariantBuildMeta, SimVariantPublishedSnapshot } from './simBuild';
-import { applyDraftSyncState, buildPublishedVariantRecord, buildPublishedModuleFromVariant } from './simBuild';
+import { applyDraftSyncState, buildPublishedVariantRecord, buildPublishedModuleFromVariant, buildVariantSourceFingerprint, buildVariantRecordForBuild } from './simBuild';
 
 const VISION_RUNTIME_PACKAGES_COLLECTION = 'vision-runtime-packages';
+const SPEC_VERSIONS_COLLECTION = 'spec_versions';
 
 export type SimVariantSpecStatus = 'needs-spec' | 'in-progress' | 'complete' | 'not-required';
 export type SimVariantFamilyStatus = 'locked' | 'candidate';
@@ -224,7 +225,8 @@ export interface SimVariantRecord extends SimVariantSeed {
   updatedAt: number;
 }
 
-export type SimVariantHistoryAction = 'created' | 'saved' | 'published' | 'seeded' | 'seed_synced' | 'vision_promoted';
+export type SimVariantHistoryAction = 'created' | 'saved' | 'published' | 'seeded' | 'seed_synced' | 'vision_promoted' | 'rollback';
+export type SimVariantSpecVersionAction = 'created' | 'saved' | 'published' | 'seeded' | 'seed_synced' | 'rollback';
 
 export interface SimVariantHistoryEntry {
   id: string;
@@ -233,6 +235,16 @@ export interface SimVariantHistoryEntry {
   summary: string;
   createdAt: number;
   moduleId?: string;
+  snapshot: SimVariantRecord;
+}
+
+export interface SimVariantSpecVersionEntry {
+  id: string;
+  variantId: string;
+  action: SimVariantSpecVersionAction;
+  summary: string;
+  createdAt: number;
+  sourceFingerprint: string;
   snapshot: SimVariantRecord;
 }
 
@@ -599,8 +611,29 @@ function buildHistorySummary(action: SimVariantHistoryAction, record: SimVariant
       return `Reconciled ${record.name} with the static registry baseline.`;
     case 'vision_promoted':
       return `Promoted ${record.name} in the Vision package pipeline${record.visionPackageStatus ? ` to ${record.visionPackageStatus}` : ''}.`;
+    case 'rollback':
+      return `Rolled ${record.name} back to an earlier saved spec version.`;
     default:
       return `${record.name} updated.`;
+  }
+}
+
+function buildSpecVersionSummary(action: SimVariantSpecVersionAction, record: SimVariantRecord, moduleId?: string) {
+  switch (action) {
+    case 'created':
+      return `Captured initial spec draft for ${record.name}.`;
+    case 'saved':
+      return `Captured a saved spec version for ${record.name}.`;
+    case 'published':
+      return `Captured the published registry spec for ${record.name}${moduleId ? ` as ${moduleId}` : ''}.`;
+    case 'seeded':
+      return `Captured seeded spec state for ${record.name}.`;
+    case 'seed_synced':
+      return `Captured reconciled spec state for ${record.name}.`;
+    case 'rollback':
+      return `Captured rollback result for ${record.name}.`;
+    default:
+      return `Captured a spec version for ${record.name}.`;
   }
 }
 
@@ -631,9 +664,18 @@ function buildHistoryRef(variantId: string) {
   return collection(db, SIM_VARIANTS_COLLECTION, variantId, 'history');
 }
 
+function buildSpecVersionRef(variantId: string) {
+  return collection(db, SIM_VARIANTS_COLLECTION, variantId, SPEC_VERSIONS_COLLECTION);
+}
+
 async function deleteVariantHistory(variantId: string) {
   const historySnap = await getDocs(buildHistoryRef(variantId));
   await Promise.all(historySnap.docs.map((entry) => deleteDoc(entry.ref)));
+}
+
+async function deleteVariantSpecVersions(variantId: string) {
+  const specVersionSnap = await getDocs(buildSpecVersionRef(variantId));
+  await Promise.all(specVersionSnap.docs.map((entry) => deleteDoc(entry.ref)));
 }
 
 function includesResetSwitchToken(value?: string | null) {
@@ -691,6 +733,7 @@ async function purgeLegacyResetArtifacts(existingVariants: SimVariantRecord[]) {
   }
 
   await Promise.all(legacyVariants.map((record) => deleteVariantHistory(record.id)));
+  await Promise.all(legacyVariants.map((record) => deleteVariantSpecVersions(record.id)));
 
   const batch = writeBatch(db);
   legacyVariants.forEach((record) => {
@@ -721,6 +764,141 @@ function writeVariantHistory(
       createdAt,
       moduleId,
       snapshot: record,
+    })
+  );
+}
+
+function specVersionToFirestore(entry: Omit<SimVariantSpecVersionEntry, 'id'>): Record<string, any> {
+  return {
+    variantId: entry.variantId,
+    action: entry.action,
+    summary: entry.summary,
+    createdAt: entry.createdAt,
+    sourceFingerprint: entry.sourceFingerprint,
+    snapshot: variantToFirestore(entry.snapshot),
+  };
+}
+
+function specVersionFromFirestore(id: string, data: Record<string, any>): SimVariantSpecVersionEntry {
+  return {
+    id,
+    variantId: data.variantId || '',
+    action: data.action || 'saved',
+    summary: data.summary || '',
+    createdAt: data.createdAt || Date.now(),
+    sourceFingerprint: data.sourceFingerprint || '',
+    snapshot: variantFromFirestore(data.variantId || '', data.snapshot || {}),
+  };
+}
+
+function hasSavedSpec(record: Pick<SimVariantRecord, 'specRaw'> | null | undefined) {
+  return Boolean(record?.specRaw?.trim());
+}
+
+function deriveSpecStatus(record: SimVariantRecord): SimVariantSpecStatus {
+  if (record.mode === 'hybrid') return 'not-required';
+  if (!hasSavedSpec(record)) return 'needs-spec';
+  if (record.publishedModuleId || record.buildArtifact) return 'complete';
+  return 'in-progress';
+}
+
+function assertLifecycleIntegrity(
+  record: SimVariantRecord,
+  existingRecord: SimVariantRecord | null,
+  operation: 'save' | 'publish' | 'rollback'
+) {
+  if (operation === 'publish') {
+    if (record.mode === 'hybrid') {
+      throw new Error('Hybrid variants cannot be published to sim-modules.');
+    }
+    if (!hasSavedSpec(record)) {
+      throw new Error('Cannot publish a variant without a saved spec.');
+    }
+    if (!record.runtimeConfig) {
+      throw new Error('Cannot publish a variant without runtime config.');
+    }
+    if (!record.moduleDraft?.moduleId || !record.moduleDraft?.name?.trim()) {
+      throw new Error('Cannot publish a variant without a complete module draft.');
+    }
+  }
+
+  const treatedAsPublished = Boolean(existingRecord?.publishedModuleId || record.publishedModuleId);
+  const missingAuthoringSurface = !record.runtimeConfig || !record.moduleDraft?.moduleId || !record.moduleDraft?.name?.trim();
+
+  if (treatedAsPublished && !hasSavedSpec(record)) {
+    throw new Error('Published variants must retain a saved spec before lifecycle changes.');
+  }
+
+  if (treatedAsPublished && missingAuthoringSurface) {
+    throw new Error('Published variants must retain runtime config and module draft data before lifecycle changes.');
+  }
+
+  if (operation === 'rollback' && !hasSavedSpec(record)) {
+    throw new Error('Cannot roll back to an empty spec version.');
+  }
+}
+
+function normalizeLifecycleRecord(
+  record: SimVariantRecord,
+  existingRecord: SimVariantRecord | null,
+  operation: 'save' | 'publish' | 'rollback'
+): SimVariantRecord {
+  const nextRecord: SimVariantRecord = {
+    ...record,
+    specStatus: deriveSpecStatus(record),
+  };
+
+  assertLifecycleIntegrity(nextRecord, existingRecord, operation);
+
+  if (operation === 'publish') {
+    return nextRecord;
+  }
+
+  return applyDraftSyncState(nextRecord);
+}
+
+function shouldCaptureSpecVersion(
+  previousRecord: SimVariantRecord | null,
+  nextRecord: SimVariantRecord,
+  action: SimVariantSpecVersionAction
+) {
+  if (!hasSavedSpec(nextRecord)) {
+    return false;
+  }
+
+  if (action === 'published' || action === 'rollback') {
+    return true;
+  }
+
+  const previousFingerprint = previousRecord?.sourceFingerprint
+    ?? (previousRecord ? buildVariantSourceFingerprint(previousRecord) : undefined);
+  const nextFingerprint = nextRecord.sourceFingerprint;
+
+  return previousFingerprint !== nextFingerprint;
+}
+
+function writeSpecVersion(
+  batch: ReturnType<typeof writeBatch>,
+  previousRecord: SimVariantRecord | null,
+  nextRecord: SimVariantRecord,
+  action: SimVariantSpecVersionAction,
+  moduleId?: string
+) {
+  if (!shouldCaptureSpecVersion(previousRecord, nextRecord, action)) {
+    return;
+  }
+
+  const specVersionDoc = doc(buildSpecVersionRef(nextRecord.id));
+  const createdAt = Date.now();
+  batch.set(
+    specVersionDoc,
+    specVersionToFirestore({
+      variantId: nextRecord.id,
+      action,
+      summary: buildSpecVersionSummary(action, nextRecord, moduleId),
+      createdAt,
+      sourceFingerprint: nextRecord.sourceFingerprint || '',
+      snapshot: nextRecord,
     })
   );
 }
@@ -783,6 +961,7 @@ export const simVariantRegistryService = {
 
         batch.set(doc(db, SIM_VARIANTS_COLLECTION, id), variantToFirestore(reconciledRecord), { merge: true });
         writeVariantHistory(batch, reconciledRecord, 'seed_synced');
+        writeSpecVersion(batch, existingRecord, reconciledRecord, 'seed_synced');
         existingById.set(id, reconciledRecord);
         updated += 1;
         return;
@@ -798,6 +977,7 @@ export const simVariantRegistryService = {
 
       batch.set(doc(db, SIM_VARIANTS_COLLECTION, id), variantToFirestore(nextRecord));
       writeVariantHistory(batch, nextRecord, 'seeded');
+      writeSpecVersion(batch, null, nextRecord, 'seeded');
       existingById.set(id, nextRecord);
       created += 1;
     });
@@ -813,23 +993,30 @@ export const simVariantRegistryService = {
     };
   },
 
-  async save(record: SimVariantRecord): Promise<void> {
+  async save(record: SimVariantRecord): Promise<SimVariantRecord> {
     const variantRef = doc(db, SIM_VARIANTS_COLLECTION, record.id);
     const existing = await getDoc(variantRef);
+    const existingRecord = existing.exists() ? variantFromFirestore(record.id, existing.data() || {}) : null;
     const now = Date.now();
-    const nextRecord = applyDraftSyncState({
+    const candidateRecord: SimVariantRecord = {
       ...record,
-      createdAt: existing.exists() ? (existing.data()?.createdAt || record.createdAt) : now,
+      createdAt: existingRecord?.createdAt || record.createdAt || now,
       updatedAt: now,
-    });
+    };
+    const nextRecord = normalizeLifecycleRecord(candidateRecord, existingRecord, 'save');
     const batch = writeBatch(db);
     batch.set(variantRef, variantToFirestore(nextRecord), { merge: true });
     writeVariantHistory(batch, nextRecord, existing.exists() ? 'saved' : 'created');
+    writeSpecVersion(batch, existingRecord, nextRecord, existing.exists() ? 'saved' : 'created');
     await batch.commit();
+    return nextRecord;
   },
 
   async publish(record: SimVariantRecord, module: MentalExercise): Promise<string> {
     const publishedAt = Date.now();
+    const variantRef = doc(db, SIM_VARIANTS_COLLECTION, record.id);
+    const existing = await getDoc(variantRef);
+    const existingRecord = existing.exists() ? variantFromFirestore(record.id, existing.data() || {}) : null;
     const recordForPublish: SimVariantRecord = {
       ...record,
       publishedModuleId: module.id,
@@ -840,10 +1027,8 @@ export const simVariantRegistryService = {
         }
         : record.moduleDraft,
     };
-    const nextRecord = buildPublishedVariantRecord(
-      recordForPublish,
-      publishedAt
-    );
+    const normalizedRecord = normalizeLifecycleRecord(recordForPublish, existingRecord, 'publish');
+    const nextRecord = buildPublishedVariantRecord(normalizedRecord, publishedAt);
     const publishedModule = buildPublishedModuleFromVariant(nextRecord, {
       ...module,
       updatedAt: publishedAt,
@@ -867,11 +1052,12 @@ export const simVariantRegistryService = {
     );
 
     batch.set(
-      doc(db, SIM_VARIANTS_COLLECTION, record.id),
+      variantRef,
       variantToFirestore(nextRecord),
       { merge: true }
     );
     writeVariantHistory(batch, nextRecord, 'published', module.id);
+    writeSpecVersion(batch, existingRecord, nextRecord, 'published', module.id);
     await batch.commit();
 
     return module.id;
@@ -991,5 +1177,57 @@ export const simVariantRegistryService = {
   async listHistory(variantId: string): Promise<SimVariantHistoryEntry[]> {
     const snap = await getDocs(query(buildHistoryRef(variantId), orderBy('createdAt', 'desc')));
     return snap.docs.map((entry) => historyFromFirestore(entry.id, entry.data()));
+  },
+
+  async listSpecVersions(variantId: string): Promise<SimVariantSpecVersionEntry[]> {
+    const snap = await getDocs(query(buildSpecVersionRef(variantId), orderBy('createdAt', 'desc')));
+    return snap.docs.map((entry) => specVersionFromFirestore(entry.id, entry.data()));
+  },
+
+  async rollbackToSpecVersion(variantId: string, versionId: string): Promise<SimVariantRecord> {
+    const variantRef = doc(db, SIM_VARIANTS_COLLECTION, variantId);
+    const specVersionRef = doc(buildSpecVersionRef(variantId), versionId);
+    const [variantSnap, specVersionSnap] = await Promise.all([
+      getDoc(variantRef),
+      getDoc(specVersionRef),
+    ]);
+
+    if (!variantSnap.exists()) {
+      throw new Error(`Variant ${variantId} was not found.`);
+    }
+
+    if (!specVersionSnap.exists()) {
+      throw new Error(`Spec version ${versionId} was not found for ${variantId}.`);
+    }
+
+    const currentRecord = variantFromFirestore(variantId, variantSnap.data() || {});
+    const specVersion = specVersionFromFirestore(versionId, specVersionSnap.data() || {});
+    const now = Date.now();
+    const restoredAuthoringRecord: SimVariantRecord = {
+      ...currentRecord,
+      specRaw: specVersion.snapshot.specRaw || '',
+      lockedSpec: specVersion.snapshot.lockedSpec,
+      archetypeOverride: specVersion.snapshot.archetypeOverride,
+      runtimeConfig: specVersion.snapshot.runtimeConfig,
+      moduleDraft: specVersion.snapshot.moduleDraft,
+      updatedAt: now,
+    };
+    const rebuiltRecord = buildVariantRecordForBuild(restoredAuthoringRecord);
+    const nextRecord = normalizeLifecycleRecord(
+      {
+        ...rebuiltRecord,
+        updatedAt: now,
+      },
+      currentRecord,
+      'rollback'
+    );
+
+    const batch = writeBatch(db);
+    batch.set(variantRef, variantToFirestore(nextRecord), { merge: true });
+    writeVariantHistory(batch, nextRecord, 'rollback');
+    writeSpecVersion(batch, currentRecord, nextRecord, 'rollback');
+    await batch.commit();
+
+    return nextRecord;
   },
 };

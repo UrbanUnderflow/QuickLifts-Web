@@ -9,7 +9,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-03-18',
+  lastUpdated: '2026-03-19',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -18,6 +18,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'smart-routes-v1-architecture', label: 'Smart Routes v1 Architecture', description: 'First-pass routing recommendation stack, ownership boundaries, API contract, and AI role for Pulse Community.' },
     { id: 'shared-link-preview-strategy', label: 'Shared Link Preview Strategy', description: 'Fallback metadata, branded default image, and crawler-safe preview rules for shared Pulse pages.' },
     { id: 'backend-data', label: 'Backend and Data', description: 'Core services and canonical data collections.' },
+    { id: 'infrastructure-secrets-stack', label: 'Infrastructure & Secrets Stack', description: 'Operational relationship between Netlify, Firebase, Google Cloud, Workspace, and secret storage policy.' },
     { id: 'firestore-index-registry', label: 'Firestore Index Registry', description: 'Shared source-of-truth registry and operating discipline for Firestore indexes across development and production.' },
     { id: 'integrations', label: 'Integrations', description: 'External systems, ownership, and credential sources.' },
     { id: 'end-to-end-flows', label: 'End-to-End Flows', description: 'Cross-product flows from trigger to failure points.' },
@@ -113,6 +114,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       'Extended the shared PulseCheck assignment-event contract so started, completed, deferred, and overridden events now refresh the current-day state snapshot automatically, closing the execution-to-signal half of the bidirectional runtime loop before the chat-derived correction path was added.',
       'Upgraded the PulseCheck Check-In Integration Spec, State Signal Layer, and Nora Assignment Rules artifacts to an AI-native planning model: raw signals feed AI enrichment, Nora plans from a bounded sim/protocol candidate set, and the handbook now reflects the initial live breathing-protocol registry plus the remaining protocol-expansion backlog.',
       'Added a Firestore Index Registry artifact that turns `firestore.indexes.json` into a visible handbook source of truth and locks the operating rule that every new index must update the shared registry and be brought to both dev and prod.',
+      'Added the Infrastructure & Secrets Stack artifact documenting how Netlify, Firebase, Google Cloud Secret Manager, and Google Workspace divide responsibilities, including the Group Meet Google Calendar secret setup.',
       'Added the PulseCheck Device Integration Strategy artifact to the system overview, turning the device wishlist into a documented taxonomy with integration lanes, priorities, and rollout guidance.',
       'Added the PulseCheck Device Integration Partnership Matrix artifact to the system overview, showing which vendors are best suited to data access, platform compatibility, enterprise alliances, or brand-only partnerships.',
       'Added the PulseCheck School Wearable Bundle Plan artifact, locking the school-bundle recommendation for a Pulse-branded screenless band and recording the current OEM, FDA, Bluetooth, and FCC research needed before launch.',

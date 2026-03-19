@@ -15,6 +15,13 @@ interface ResolveSystemOverviewSharePreviewInput {
   isLocked: boolean;
 }
 
+interface ResolveOuraRecoverySharePreviewInput {
+  token: string;
+  athleteName?: string;
+  profileHeadline?: string;
+  siteOrigin: string;
+}
+
 export interface ResolvedSharePreviewMeta {
   title: string;
   description: string;
@@ -63,5 +70,22 @@ export function resolveSystemOverviewSharePreviewMeta({
     description,
     image,
     url,
+  };
+}
+
+export function resolveOuraRecoverySharePreviewMeta({
+  token,
+  athleteName,
+  profileHeadline,
+  siteOrigin,
+}: ResolveOuraRecoverySharePreviewInput): ResolvedSharePreviewMeta {
+  const trimmedName = athleteName?.trim() || 'Athlete';
+  const trimmedHeadline = profileHeadline?.trim() || 'PulseCheck translated today’s Oura signals into a personalized training read.';
+
+  return {
+    title: `${trimmedName}'s PulseCheck recovery read`,
+    description: trimmedHeadline,
+    image: toAbsoluteUrl(siteOrigin, DEFAULT_IMAGE_PATH),
+    url: toAbsoluteUrl(siteOrigin, `/shared/oura-recovery/${token}`),
   };
 }

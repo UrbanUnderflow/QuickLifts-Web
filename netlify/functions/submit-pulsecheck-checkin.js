@@ -55,6 +55,15 @@ function humanizeRuntimeLabel(value) {
   return value ? String(value).replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
 }
 
+function titleizeRuntimeLabel(value) {
+  const normalized = humanizeRuntimeLabel(value);
+  if (!normalized) return '';
+  return normalized
+    .split(' ')
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+}
+
 function normalizeTag(value) {
   return typeof value === 'string'
     ? value.trim().toLowerCase().replace(/[\s-]+/g, '_')
@@ -1172,6 +1181,13 @@ function buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress
       label: simModule.name || humanizeRuntimeLabel(
         simModule.simSpecId || simModule.id || activeProgram.sessionType || 'sim'
       ),
+      familyLabel:
+        simModule?.variantSource?.family
+        || titleizeRuntimeLabel(simModule.simSpecId || activeProgram.recommendedSimId || simModule.id),
+      variantLabel:
+        simModule?.variantSource?.variantName
+        || simModule.name
+        || titleizeRuntimeLabel(simModule.simSpecId || simModule.id || activeProgram.sessionType || 'sim'),
       actionType:
         snapshot.recommendedRouting === 'protocol_then_sim'
         || snapshot.recommendedRouting === 'defer_alternate_path'
@@ -1784,6 +1800,8 @@ async function orchestratePostCheckIn({
     chosenCandidateType: selectedCandidate?.type,
     simSpecId: selectedCandidate?.simSpecId,
     legacyExerciseId: selectedCandidate?.legacyExerciseId,
+    simFamilyLabel: selectedCandidate?.familyLabel || titleizeRuntimeLabel(selectedCandidate?.simSpecId || selectedCandidate?.legacyExerciseId || null) || null,
+    simVariantLabel: selectedCandidate?.variantLabel || selectedCandidate?.label || null,
     protocolId: selectedCandidate?.protocolId,
     protocolFamilyId: selectedCandidate?.protocolFamilyId,
     protocolVariantId: selectedCandidate?.protocolVariantId,
