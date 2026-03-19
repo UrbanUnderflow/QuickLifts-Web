@@ -25,6 +25,7 @@ const FUNCTION_LOADERS: Record<string, () => NetlifyFunctionModule> = {
   'oura-status': () => require('../../../../../netlify/functions/oura-status.js'),
   'oura-disconnect': () => require('../../../../../netlify/functions/oura-disconnect.js'),
   'oura-sync': () => require('../../../../../netlify/functions/oura-sync.js'),
+  'create-pulsecheck-oura-share': () => require('../../../../../netlify/functions/create-pulsecheck-oura-share.js'),
 };
 
 function normalizeQueryValue(value: string | string[] | undefined) {
