@@ -940,6 +940,45 @@ const GroupMeetAdminPage: React.FC = () => {
             <section className="space-y-6">
               <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
                 <div className="flex items-center gap-3 mb-6">
+                  <div className="w-11 h-11 rounded-2xl bg-amber-500/10 text-amber-200 flex items-center justify-center">
+                    <Mail className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold">Send test email</h2>
+                    <p className="text-sm text-zinc-400">Send a standalone delivery preview without creating a real Group Meet request.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
+                  <input
+                    value={testEmailName}
+                    onChange={(event) => setTestEmailName(event.target.value)}
+                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                    placeholder="Recipient name"
+                  />
+                  <input
+                    value={testEmailRecipient}
+                    onChange={(event) => setTestEmailRecipient(event.target.value)}
+                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                    placeholder="Recipient email"
+                  />
+                  <button
+                    type="button"
+                    onClick={sendStandaloneTestEmail}
+                    disabled={testEmailSending}
+                    className="rounded-xl bg-[#E0FE10] px-4 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                  >
+                    {testEmailSending ? 'Sending…' : 'Send test email'}
+                  </button>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/40 px-4 py-4 text-sm text-zinc-400">
+                  This uses the current draft values for title, month, deadline, and timezone. The email is clearly marked as a test and routes back to the internal Group Meet tool.
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
+                <div className="flex items-center gap-3 mb-6">
                   <div className="w-11 h-11 rounded-2xl bg-white/5 text-white flex items-center justify-center">
                     <Users className="w-5 h-5" />
                   </div>
