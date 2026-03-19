@@ -475,7 +475,7 @@ const DEVICE_INTEGRATION_PAGES: ArtifactPageEntry[] = [
   {
     id: 'oura-cognitive-correlation-spec',
     label: 'Oura Cognitive Correlation Spec',
-    subtitle: 'How PulseCheck learns athlete-specific mind-body patterns from Oura physiology plus sim performance.',
+    subtitle: 'First source-specific child spec for feeding Oura physiology into the broader correlation engine.',
     icon: Database,
     accent: '#34d399',
     render: () => <PulseCheckOuraCognitiveCorrelationSpecTab />,
@@ -503,7 +503,7 @@ const PulseCheckDeviceIntegrationStrategyTab: React.FC = () => {
     <ArtifactPageLibrary
       eyebrow="Pulse Check · Device & Wearable Integrations"
       title="Device & Wearable Integrations Library"
-      summary="Integration parent artifact with internal pages for device strategy, run source-of-truth rules, partnership prioritization, and the dedicated Oura lane."
+      summary="Integration parent artifact with internal pages for device strategy, run source-of-truth rules, partnership prioritization, and the Oura-specific connector lane."
       entries={DEVICE_INTEGRATION_PAGES}
     />
   );

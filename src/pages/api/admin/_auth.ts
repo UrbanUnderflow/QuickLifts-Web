@@ -2,6 +2,7 @@ import type { NextApiRequest } from 'next';
 import admin, { getFirebaseAdminApp } from '../../../lib/firebase-admin';
 
 const ADMIN_COLLECTION = 'admin';
+const USERS_COLLECTION = 'users';
 
 export async function requireAdminRequest(req: NextApiRequest): Promise<{ email: string } | null> {
   const authHeader = req.headers.authorization;
@@ -22,12 +23,29 @@ export async function requireAdminRequest(req: NextApiRequest): Promise<{ email:
     try {
       const decoded = await adminAuth.verifyIdToken(idToken);
       const email = decoded.email as string | undefined;
-      if (!email) {
+      const uid = decoded.uid as string | undefined;
+      if (!email && !uid) {
         continue;
       }
 
+      let userDocumentEmail: string | null = null;
+      if (uid) {
+        const userDoc = await adminDb.doc(`${USERS_COLLECTION}/${uid}`).get();
+        if (userDoc.exists) {
+          const userDocData = userDoc.data() || {};
+          const candidateUserEmail = typeof userDocData.email === 'string' ? userDocData.email.trim() : '';
+          if (candidateUserEmail) {
+            userDocumentEmail = candidateUserEmail;
+          }
+        }
+      }
+
       const emailCandidates = Array.from(
-        new Set([email, email.toLowerCase(), email.toUpperCase()])
+        new Set(
+          [email, userDocumentEmail]
+            .filter((value): value is string => Boolean(value))
+            .flatMap((value) => [value, value.toLowerCase(), value.toUpperCase()])
+        )
       );
 
       for (const candidateEmail of emailCandidates) {

@@ -12,6 +12,8 @@ import PulseCheckHealthContextOperatorRunbookTab from './PulseCheckHealthContext
 import PulseCheckHealthContextDefinitionOfDoneTab from './PulseCheckHealthContextDefinitionOfDoneTab';
 import PulseCheckHealthContextEngineeringTaskBreakdownTab from './PulseCheckHealthContextEngineeringTaskBreakdownTab';
 import PulseCheckHealthContextFirestoreSchemaIndexSpecTab from './PulseCheckHealthContextFirestoreSchemaIndexSpecTab';
+import PulseCheckPhysiologyCognitionCorrelationEngineTab from './PulseCheckPhysiologyCognitionCorrelationEngineTab';
+import PulseCheckCorrelationDataModelSpecTab from './PulseCheckCorrelationDataModelSpecTab';
 
 const LIVE_NOW_ROWS = [
   ['Shared Firestore health summary', 'PulseCheck can read `daily-health-summaries` from the shared Firebase stack.', 'Live and already important.'],
@@ -256,6 +258,22 @@ const HEALTH_CONTEXT_DOCS: HealthContextDocEntry[] = [
     render: () => <HealthContextArchitectureOverviewDoc />,
   },
   {
+    id: 'physiology-cognition-correlation-engine',
+    label: 'Physiology-Cognition Correlation Engine',
+    subtitle: 'Joined-model system for learning athlete-specific mind-body patterns from physiology plus sims.',
+    icon: Brain,
+    accent: '#8b5cf6',
+    render: () => <PulseCheckPhysiologyCognitionCorrelationEngineTab />,
+  },
+  {
+    id: 'correlation-data-model-spec',
+    label: 'Correlation Data Model Spec',
+    subtitle: 'Buildable schema for evidence records, pattern models, projections, and assessment flags.',
+    icon: Database,
+    accent: '#22c55e',
+    render: () => <PulseCheckCorrelationDataModelSpecTab />,
+  },
+  {
     id: 'snapshot-spec',
     label: 'Athlete Context Snapshot Spec',
     subtitle: 'Canonical merged athlete-health snapshot contract.',
@@ -353,7 +371,7 @@ const PulseCheckHealthChatArchitectureTab: React.FC = () => {
         </div>
         <h2 className="text-xl font-semibold text-white">Health Context Pipeline Library</h2>
         <p className="text-sm text-zinc-400 mt-1">
-          Architecture parent artifact with internal pages for the related health-context contracts, rollout docs, and operating specs.
+          Architecture parent artifact with internal pages for the related health-context contracts, the physiology-cognition engine, rollout docs, and operating specs.
         </p>
       </div>
 

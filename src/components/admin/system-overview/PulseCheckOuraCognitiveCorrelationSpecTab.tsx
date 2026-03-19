@@ -1,11 +1,11 @@
 import React from 'react';
-import { Activity, BarChart3, Brain, Database, MessageSquareQuote, ShieldCheck, Target, Workflow } from 'lucide-react';
+import { Activity, BarChart3, Brain, Database, Link2, MessageSquareQuote, ShieldCheck, Target, Workflow } from 'lucide-react';
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 
-const DIFFERENTIATOR_ROWS = [
-  ['Oura / wearable partners', 'Sleep, HRV, resting heart rate, readiness, recovery, strain, and time-series physiology.', 'They do not run PulseCheck sims, so they cannot directly observe how the athlete thinks or performs under those states.'],
-  ['PulseCheck sims', 'Composure, focus, decision quality, pressure sensitivity, consistency, error recovery, and protocol response.', 'Sims do not know whether the athlete arrived in a high-recovery or low-recovery physiological state unless that state is joined in.'],
-  ['PulseCheck joined model', 'Physiology plus cognitive performance in the same athlete over time.', 'Lets us learn personal thresholds, ideal windows, and coachable behavior patterns that neither lane can learn alone.'],
+const OURA_ROLE_ROWS = [
+  ['Direct Oura API lane', 'Daily sleep, readiness, recovery markers, HRV, resting heart rate, workouts, heart-rate series, sessions, tags, and SpO2 when consented.', 'Strong first physiology lane for recovery-led mind-body learning.'],
+  ['HealthKit-derived Oura mirror', 'Oura-origin sleep, heart rate, activity, and workout signals that reach PulseCheck through Apple Health when direct OAuth is unavailable.', 'Fallback implementation path, but still valid engine input when provenance stays honest.'],
+  ['What Oura does not do alone', 'Oura does not run PulseCheck sims, own route GPS, or explain mental performance by itself.', 'It informs the engine; it does not replace the cognitive measurement system.'],
 ];
 
 const CORRELATION_FAMILY_ROWS = [
@@ -117,31 +117,32 @@ const PulseCheckOuraCognitiveCorrelationSpecTab: React.FC = () => {
   return (
     <div className="space-y-10">
       <DocHeader
-        eyebrow="PulseCheck Health Context"
+        eyebrow="Physiology-Cognition Correlation Engine"
         title="Oura Cognitive Correlation Spec"
         version="Version 0.1 | March 19, 2026"
-        summary="Product spec for the joined-model layer that turns Oura physiology plus PulseCheck simulation results into athlete-specific cognitive correlations. This is the layer that lets PulseCheck learn how a given athlete’s mental game changes under specific body states, then translate that into evidence-backed guidance about sleep, recovery, timing, and protocol choice."
+        summary="First source-specific child spec for the Physiology-Cognition Correlation Engine. This page defines how Oura-derived physiology should feed joined evidence, what Oura can and cannot contribute, and which Oura-backed correlations PulseCheck should prioritize before more wearable lanes come online."
         highlights={[
           {
-            title: 'This Is The Differentiator',
-            body: 'Wearables see the body and sims see the mind. PulseCheck can see how the mind behaves inside different physiological states.',
+            title: 'First Child Implementation',
+            body: 'Oura is the first physiology source feeding the broader engine, not the full engine itself.',
           },
           {
-            title: 'Personal Thresholds Over Generic Advice',
-            body: 'The product should learn athlete-specific sleep floors, HRV bands, and ideal timing windows instead of handing everyone the same recommendation.',
+            title: 'Oura Informs, Not Decides',
+            body: 'Oura tells us about recovery state. PulseCheck still decides how to interpret that state because it also measures the athlete’s mind.',
           },
           {
-            title: 'Confidence Must Be Visible',
-            body: 'The system should not overstate weak patterns. Observation, recommendation, and coach-grade planning need separate confidence bars.',
+            title: 'Best First Recovery Lane',
+            body: 'Oura gives the richest initial sleep and recovery posture for learning personal thresholds, sleep floors, and timing windows.',
           },
         ]}
       />
 
       <RuntimeAlignmentPanel
-        role="Design artifact for the correlation layer that sits above normalized Oura / health-context ingestion and above raw sim scoring. It defines what kinds of joined physiology-to-cognition relationships PulseCheck should learn, when the system has enough evidence to speak confidently, and how those insights should be translated for athletes and coaches."
-        sourceOfTruth="Use this page to decide which Oura-to-sim correlations are valid product targets, what minimum data is required before an insight can go live, how recommendation confidence should work, and how athlete copy must differ from coach copy."
-        masterReference="Any implementation that tries to generate sleep, HRV, readiness, or timing recommendations from Oura + PulseCheck evidence should follow this spec first. If a proposed insight cannot be expressed through these evidence, confidence, and messaging rules, update this spec before shipping the insight."
+        role="Source-specific implementation artifact for how Oura should feed the Physiology-Cognition Correlation Engine. It defines the Oura-derived evidence lanes, the first Oura-backed correlations to prioritize, and the implementation guardrails for turning Oura recovery context into usable mind-body learning."
+        sourceOfTruth="Use this page when implementing Oura-backed correlation learning, Oura-specific evidence thresholds, or source-aware recommendations that depend on Oura physiology plus PulseCheck simulation outcomes."
+        masterReference="The parent Physiology-Cognition Correlation Engine defines the shared governance for pattern learning, confidence, and recommendation projection. This child page defines how Oura should populate that engine first. If a new rule applies to every device, move it up to the parent engine instead of leaving it Oura-only."
         relatedDocs={[
+          'Physiology-Cognition Correlation Engine',
           'Oura Integration Strategy',
           'Health Context Pipeline',
           'Athlete Context Snapshot Spec',
@@ -151,23 +152,23 @@ const PulseCheckOuraCognitiveCorrelationSpecTab: React.FC = () => {
         ]}
       />
 
-      <SectionBlock icon={Brain} title="Why PulseCheck Can Do This">
-        <DataTable columns={['System', 'What It Can See', 'What It Cannot See']} rows={DIFFERENTIATOR_ROWS} />
+      <SectionBlock icon={Link2} title="How Oura Fits The Engine">
+        <DataTable columns={['Lane', 'What It Contributes', 'Why It Matters']} rows={OURA_ROLE_ROWS} />
         <CardGrid columns="md:grid-cols-3">
           <InfoCard
-            title="Joined-Model Thesis"
+            title="Why Start With Oura"
             accent="purple"
-            body="The product edge is not “we have Oura data.” The edge is “we know how this athlete’s mind performs under different recovery states because we also run the sims.”"
+            body="Oura is the cleanest first recovery lane because it gives sleep, readiness, HRV, and resting heart rate in one coherent physiology posture."
           />
           <InfoCard
-            title="Recommendation Thesis"
+            title="What Oura Unlocks First"
             accent="green"
-            body="The goal is to turn body-state observations into usable coaching guidance, such as when to push, when to steady, when to protect, and what protocol tends to land best."
+            body="Oura is the fastest path to learning sleep floors, HRV bands, readiness-linked consistency, and timing windows for cognitive work."
           />
           <InfoCard
-            title="Trust Thesis"
+            title="What Stays Outside Oura"
             accent="amber"
-            body="The system should only become more specific as it earns the right to be more specific. Confidence must rise with evidence, not with product ambition."
+            body="Oura does not replace PulseCheck sims, protocol evidence, or the broader physiology-cognition engine. It is one strong source, not the whole model."
           />
         </CardGrid>
       </SectionBlock>
@@ -180,7 +181,7 @@ const PulseCheckOuraCognitiveCorrelationSpecTab: React.FC = () => {
         <DataTable columns={['Correlation', 'Question', 'Product Output']} rows={INITIAL_CORRELATION_ROWS} />
       </SectionBlock>
 
-      <SectionBlock icon={Database} title="Minimum Evidence Thresholds">
+      <SectionBlock icon={Database} title="Minimum Oura Evidence Thresholds">
         <DataTable columns={['Maturity Stage', 'Minimum Data', 'Allowed Product Behavior', 'Output Tier']} rows={DATA_THRESHOLD_ROWS} />
       </SectionBlock>
 

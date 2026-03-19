@@ -65,6 +65,8 @@ import PulseCheckHealthContextOperatorRunbookTab from "../../components/admin/sy
 import PulseCheckHealthContextDefinitionOfDoneTab from "../../components/admin/system-overview/PulseCheckHealthContextDefinitionOfDoneTab";
 import PulseCheckHealthContextEngineeringTaskBreakdownTab from "../../components/admin/system-overview/PulseCheckHealthContextEngineeringTaskBreakdownTab";
 import PulseCheckHealthContextFirestoreSchemaIndexSpecTab from "../../components/admin/system-overview/PulseCheckHealthContextFirestoreSchemaIndexSpecTab";
+import PulseCheckPhysiologyCognitionCorrelationEngineTab from "../../components/admin/system-overview/PulseCheckPhysiologyCognitionCorrelationEngineTab";
+import PulseCheckCorrelationDataModelSpecTab from "../../components/admin/system-overview/PulseCheckCorrelationDataModelSpecTab";
 import PulseCheckOuraIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckOuraIntegrationStrategyTab";
 import PulseCheckOuraCognitiveCorrelationSpecTab from "../../components/admin/system-overview/PulseCheckOuraCognitiveCorrelationSpecTab";
 import PulseCheckDeviceIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckDeviceIntegrationStrategyTab";
@@ -186,7 +188,10 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-health-context-definition-of-done",
       "pulsecheck-health-context-engineering-task-breakdown",
       "pulsecheck-health-context-firestore-schema-index-spec",
+      "pulsecheck-physiology-cognition-correlation-engine",
+      "pulsecheck-correlation-data-model-spec",
       "pulsecheck-oura-integration-strategy",
+      "pulsecheck-oura-cognitive-correlation-spec",
       "pulsecheck-device-integration-strategy",
       "pulsecheck-device-integration-partnership-matrix",
       "pulsecheck-school-wearable-bundle-plan",
@@ -1293,6 +1298,12 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-health-context-firestore-schema-index-spec":
         return <PulseCheckHealthContextFirestoreSchemaIndexSpecTab />;
+
+      case "pulsecheck-physiology-cognition-correlation-engine":
+        return <PulseCheckPhysiologyCognitionCorrelationEngineTab />;
+
+      case "pulsecheck-correlation-data-model-spec":
+        return <PulseCheckCorrelationDataModelSpecTab />;
 
       case "pulsecheck-oura-integration-strategy":
         return <PulseCheckOuraIntegrationStrategyTab />;

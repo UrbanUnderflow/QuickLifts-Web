@@ -1120,6 +1120,9 @@ export interface PulseCheckProtocolPracticeTurn {
   strengths: string[];
   misses: string[];
   noraFeedback: string;
+  evaluationSource?: 'ai' | 'heuristic';
+  evaluationModel?: string;
+  evaluationLatencyMs?: number;
   submittedAt: number;
 }
 
@@ -1132,6 +1135,9 @@ export interface PulseCheckProtocolPracticeScorecard {
   nextRepFocus: string;
   coachabilityTrend: 'improving' | 'steady' | 'needs_support';
   voiceSignalsSummary?: string;
+  evaluationSource?: 'ai' | 'heuristic';
+  evaluationModel?: string;
+  evaluationLatencyMs?: number;
 }
 
 export interface PulseCheckProtocolPracticeSession {
