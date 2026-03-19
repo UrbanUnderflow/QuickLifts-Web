@@ -50,6 +50,8 @@ function compileMentalTrainingRuntime() {
     '--outDir', outDir,
     path.join(repoRoot, 'src/api/firebase/mentaltraining/simBuild.ts'),
     path.join(repoRoot, 'src/api/firebase/mentaltraining/variantRegistryService.ts'),
+    path.join(repoRoot, 'src/api/firebase/mentaltraining/protocolPracticeConversationService.ts'),
+    path.join(repoRoot, 'src/pages/api/mentaltraining/evaluate-protocol-practice.ts'),
   ];
 
   const result = spawnSync('npx', compileArgs, {
@@ -59,12 +61,14 @@ function compileMentalTrainingRuntime() {
 
   const simBuildPath = findFileRecursive(outDir, 'simBuild.js');
   const variantRegistryPath = findFileRecursive(outDir, 'variantRegistryService.js');
+  const protocolPracticeServicePath = findFileRecursive(outDir, 'protocolPracticeConversationService.js');
+  const protocolPracticeEvaluatorPath = findFileRecursive(outDir, 'evaluate-protocol-practice.js');
 
-  if ((!simBuildPath || !variantRegistryPath) && result.status !== 0) {
+  if ((!simBuildPath || !variantRegistryPath || !protocolPracticeServicePath || !protocolPracticeEvaluatorPath) && result.status !== 0) {
     throw new Error(`Failed to compile mental training runtime:\n${result.stderr || result.stdout || 'Unknown tsc failure'}`);
   }
 
-  if (!simBuildPath || !variantRegistryPath) {
+  if (!simBuildPath || !variantRegistryPath || !protocolPracticeServicePath || !protocolPracticeEvaluatorPath) {
     throw new Error('Compiled runtime files were not emitted to the temp directory.');
   }
 
@@ -72,6 +76,8 @@ function compileMentalTrainingRuntime() {
     outDir,
     simBuildPath,
     variantRegistryPath,
+    protocolPracticeServicePath,
+    protocolPracticeEvaluatorPath,
   };
 
   return compiledRuntimeCache;
@@ -251,8 +257,20 @@ function loadVariantRegistryRuntime(firestoreMock) {
   }, () => require(variantRegistryPath));
 }
 
+function loadProtocolPracticeRuntime(mocks = {}) {
+  const { protocolPracticeServicePath, protocolPracticeEvaluatorPath } = compileMentalTrainingRuntime();
+  delete require.cache[protocolPracticeServicePath];
+  delete require.cache[protocolPracticeEvaluatorPath];
+
+  return withModuleMocks(mocks, () => ({
+    service: require(protocolPracticeServicePath),
+    evaluator: require(protocolPracticeEvaluatorPath),
+  }));
+}
+
 module.exports = {
   createFirestoreMock,
   loadSimBuildRuntime,
   loadVariantRegistryRuntime,
+  loadProtocolPracticeRuntime,
 };

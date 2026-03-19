@@ -47,7 +47,7 @@ const SNAPSHOT_MOMENT_ROWS = [
 
 const SNAPSHOT_DECISION_ROWS = [
   ['Trigger ownership', 'Each snapshot type has exactly one owner system. No other system may create that snapshot type.'],
-  ['Payload scope', 'Store milestone-safe profile summaries plus state context at capture, not full session logs or conversation transcripts.'],
+  ['Payload scope', 'Store milestone-safe profile summaries plus state context at capture, including `assessmentContextFlag`, not full session logs or conversation transcripts.'],
   ['Idempotency', 'Maintain one canonical snapshot per athlete, milestone, and pilot enrollment. Retries or corrections supersede prior canonicals instead of creating duplicate truths.'],
   ['Nora explanation governance', 'The explanation stays template-bound, max two sentences, performance-only, and refreshes only on emphasis changes or milestone shifts.'],
   ['Research export alignment', 'Primary exports include canonical snapshots by default; superseded snapshots live in a separate audit dataset.'],
@@ -222,7 +222,7 @@ const ProfileArchitectureOverviewDoc: React.FC = () => {
           <InfoCard
             title="What Snapshots Store"
             accent="blue"
-            body="Snapshots store pillar scores, skill score summaries, modifier summaries, trend summary at capture, profile narrative at capture, and state context at capture."
+            body="Snapshots store pillar scores, skill score summaries, modifier summaries, trend summary at capture, profile narrative at capture, and state context at capture, including milestone `assessmentContextFlag` when available."
           />
           <InfoCard
             title="What Snapshots Do Not Store"

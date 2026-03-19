@@ -85,6 +85,159 @@ async function mockInstantAudioPlayback(page: Page) {
   });
 }
 
+async function installProtocolPracticeEvaluationMock(page: Page) {
+  const turnEvaluations = [
+    {
+      noraFeedback: 'You named the body signal quickly. Now tie it to the job you need to do next.',
+      strengths: ['You spotted the body cue right away.'],
+      misses: ['Name the next action, not just the feeling.'],
+      scores: {
+        signalAwareness: 4,
+        techniqueFidelity: 3,
+        languageQuality: 3,
+        shiftQuality: 3,
+        coachability: 4,
+      },
+    },
+    {
+      noraFeedback: 'This is still a little broad. Say exactly what the nerves mean for your next move.',
+      strengths: ['You kept the tone steady under pressure.'],
+      misses: ['Turn the feeling into a direct action cue.'],
+      scores: {
+        signalAwareness: 3,
+        techniqueFidelity: 2,
+        languageQuality: 2,
+        shiftQuality: 2,
+        coachability: 3,
+      },
+      followUpPrompt: {
+        id: 'clarify-next-move',
+        targetDimension: 'shiftQuality',
+        promptText: 'Finish this in one line: these nerves mean I should...',
+      },
+    },
+    {
+      noraFeedback: 'That was clearer. Keep the same tone and make the next answer just as specific.',
+      strengths: ['You turned the feeling into an action cue.'],
+      misses: ['Trim extra words so the cue lands even faster.'],
+      scores: {
+        signalAwareness: 4,
+        techniqueFidelity: 4,
+        languageQuality: 4,
+        shiftQuality: 4,
+        coachability: 5,
+      },
+    },
+    {
+      noraFeedback: 'That sounded competition-usable. You kept it direct and gave yourself a real cue to act on.',
+      strengths: ['You finished with direct, usable language.'],
+      misses: ['Start this specific on the first answer next rep.'],
+      scores: {
+        signalAwareness: 4,
+        techniqueFidelity: 4,
+        languageQuality: 4,
+        shiftQuality: 4,
+        coachability: 4,
+      },
+    },
+  ];
+
+  const sessionScorecard = {
+    overallScore: 4.1,
+    dimensionScores: {
+      signalAwareness: 4.0,
+      techniqueFidelity: 4.2,
+      languageQuality: 4.1,
+      shiftQuality: 4.0,
+      coachability: 4.4,
+    },
+    strengths: [
+      'You got more specific as the rep went on.',
+      'Your final language sounded usable under pressure.',
+    ],
+    improvementAreas: [
+      'Start that specific on the first answer.',
+      'Keep each response tied to one concrete action.',
+    ],
+    evaluationSummary: 'This rep became more competition-ready as it went on. You got more specific and more usable under pressure.',
+    nextRepFocus: 'Turn the first body signal into a one-line action cue right away.',
+    coachabilityTrend: 'improving',
+    voiceSignalsSummary: undefined,
+    evaluationSource: 'ai',
+    evaluationModel: 'gpt-5-nano',
+    evaluationLatencyMs: 37,
+  };
+
+  let turnRequestCount = 0;
+  let sessionRequestCount = 0;
+
+  await page.route('**/api/mentaltraining/evaluate-protocol-practice', async (route) => {
+    const payload = JSON.parse(route.request().postData() || '{}');
+
+    if (payload.action === 'turn') {
+      const template = turnEvaluations[turnRequestCount];
+      turnRequestCount += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          evaluation: {
+            turn: {
+              id: `mock-turn-${turnRequestCount}`,
+              promptId: payload.turnSpecId,
+              promptLabel: `Prompt ${turnRequestCount}`,
+              promptText: payload.input?.followUpPromptText || `Prompt ${turnRequestCount}`,
+              responseText: payload.input?.responseText || '',
+              modality: payload.input?.modality || 'text',
+              followUpPromptId: payload.input?.followUpPromptId,
+              followUpPromptText: payload.input?.followUpPromptText,
+              usedAdaptiveFollowUp: Boolean(payload.input?.usedAdaptiveFollowUp),
+              transcriptReviewed: Boolean(payload.input?.transcriptReviewed),
+              voiceSignals: payload.input?.voiceSignals,
+              scores: template.scores,
+              strengths: template.strengths,
+              misses: template.misses,
+              noraFeedback: template.noraFeedback,
+              evaluationSource: 'ai',
+              evaluationModel: 'gpt-5-nano',
+              evaluationLatencyMs: 31,
+              submittedAt: Date.now(),
+            },
+            shouldUseAdaptiveFollowUp: Boolean(template.followUpPrompt),
+            followUpPrompt: template.followUpPrompt || null,
+          },
+        }),
+      });
+      return;
+    }
+
+    if (payload.action === 'session') {
+      sessionRequestCount += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          scorecard: sessionScorecard,
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Unsupported test action' }),
+    });
+  });
+
+  return {
+    getCounts: () => ({
+      turnRequestCount,
+      sessionRequestCount,
+    }),
+  };
+}
+
 async function selectProtocolRuntime(page: Page, runtimeLabel: string) {
   const runtimeButton = page.getByRole('button', { name: new RegExp(runtimeLabel, 'i') }).last();
   if (await runtimeButton.isVisible().catch(() => false)) {
@@ -217,7 +370,13 @@ test.describe('Protocol Practice Conversation', () => {
 
     await ensureAdminSession(page, '/admin/systemOverview#protocol-registry');
     await mockInstantAudioPlayback(page);
+    const evaluationMock = await installProtocolPracticeEvaluationMock(page);
+    const spokenTexts: string[] = [];
     await page.route('**/tts-mental-step', async (route) => {
+      const body = route.request().postDataJSON() as { text?: string } | undefined;
+      if (body?.text) {
+        spokenTexts.push(body.text);
+      }
       route.fulfill({
         status: 200,
         contentType: 'audio/mpeg',
@@ -236,30 +395,59 @@ test.describe('Protocol Practice Conversation', () => {
     await page.locator('textarea').fill('My heart is racing and my palms are sweaty.');
     await page.getByRole('button', { name: /Submit Answer/i }).click();
     await expect(page.getByText(/Nora Feedback/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('heading', { name: /You named the body signal quickly\. Now tie it to the job you need to do next\./i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/You spotted the body cue right away\./i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/Name the next action, not just the feeling\./i)).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() =>
+      spokenTexts.some((text) =>
+        text.includes('You named the body signal quickly. Now tie it to the job you need to do next.')
+        && text.includes('What landed: You spotted the body cue right away.')
+        && text.includes('What to sharpen: Name the next action, not just the feeling.')
+      )
+    ).toBe(true);
     await expect(page.getByRole('button', { name: /^Continue$/i })).toBeVisible({ timeout: 20_000 });
     await page.getByRole('button', { name: /^Continue$/i }).click({ force: true });
 
     await expect(page.getByText(/Practice Turn 2 of 3/i)).toBeVisible({ timeout: 20_000 });
     await page.locator('textarea').fill('I am nervous.');
     await page.getByRole('button', { name: /Submit Answer/i }).click();
+    await expect(page.getByRole('heading', { name: /This is still a little broad\. Say exactly what the nerves mean for your next move\./i })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: /Try Nora’s Follow-Up/i })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: /Try Nora’s Follow-Up/i })).toBeVisible({ timeout: 20_000 });
     await page.getByRole('button', { name: /Try Nora’s Follow-Up/i }).click({ force: true });
+    await expect(page.getByText(/Finish this in one line: these nerves mean I should\.\.\./i)).toBeVisible({ timeout: 20_000 });
     await page.locator('textarea').fill('The same body signal means I am excited, fueled, and ready, not in danger.');
     await page.getByRole('button', { name: /Submit Answer/i }).click();
+    await expect(page.getByRole('heading', { name: /That was clearer\. Keep the same tone and make the next answer just as specific\./i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/You turned the feeling into an action cue\./i)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: /^Continue$/i })).toBeVisible({ timeout: 20_000 });
     await page.getByRole('button', { name: /^Continue$/i }).click({ force: true });
 
     await expect(page.getByText(/Practice Turn 3 of 3/i)).toBeVisible({ timeout: 20_000 });
     await page.locator('textarea').fill('These butterflies are fuel. I am ready to compete and execute.');
     await page.getByRole('button', { name: /Submit Answer/i }).click();
+    await expect(page.getByRole('heading', { name: /That sounded competition-usable\. You kept it direct and gave yourself a real cue to act on\./i })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: /^Continue$/i })).toBeVisible({ timeout: 20_000 });
     await page.getByRole('button', { name: /^Continue$/i }).click({ force: true });
 
     await expect(page.getByText(/Protocol Evaluation/i)).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByText(/Here is how your reframe rep looked/i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('heading', { name: /This rep became more competition-ready as it went on\. You got more specific and more usable under pressure\./i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/You got more specific as the rep went on\./i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/Start that specific on the first answer\./i)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/4\.2 \/ 5/i)).toBeVisible({ timeout: 20_000 });
+    await expect.poll(() =>
+      spokenTexts.some((text) =>
+        text.includes('This rep became more competition-ready as it went on. You got more specific and more usable under pressure.')
+        && text.includes('What landed: You got more specific as the rep went on.')
+        && text.includes('Next rep focus: Start that specific on the first answer.')
+      )
+    ).toBe(true);
     await expect(page.locator('p').filter({ hasText: /^Signal awareness$/i }).first()).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: /Continue To Closeout/i })).toBeVisible({ timeout: 20_000 });
+    expect(evaluationMock.getCounts()).toEqual({
+      turnRequestCount: 4,
+      sessionRequestCount: 1,
+    });
   });
 
   test('microphone capture populates the transcript review field when speech recognition is available', async ({ page }) => {

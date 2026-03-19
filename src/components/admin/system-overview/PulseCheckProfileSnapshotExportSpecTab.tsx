@@ -21,7 +21,7 @@ const HEAD_FIELD_ROWS = [
   ['Identity', '`snapshotKey`, `athleteId`, `milestoneType`, `pilotEnrollmentId`, `canonicalScopeKey`'],
   ['Lifecycle', '`canonical`, `revision`, `status`, `capturedAt`, `supersededAt`, `writeReason`'],
   ['Determinism', '`idempotencyKey`, `payloadFingerprint`, `writerVersion`, `sourceEventId`'],
-  ['Profile payload', '`pillarScores`, `skillSummaries`, `modifierScores`, `trendSummary`, `currentEmphasis`, `nextMilestone`'],
+  ['Profile payload', '`pillarScores`, `skillSummaries`, `modifierScores`, `trendSummary`, `currentEmphasis`, `nextMilestone`, `stateContextAtCapture.assessmentContextFlag`'],
   ['Narrative payload', '`noraExplanation.templateId`, `templateVersion`, `slots`, `renderedText`, `validated`'],
   ['Lineage', '`sourceRefs`, `derivedFromProgressUpdatedAt`, `derivedFromTrialCompletedAt`'],
 ];
@@ -68,6 +68,7 @@ const VALIDATOR_RULES = [
 const DEFAULT_EXPORT_FIELDS = [
   '`snapshotKey`, `athleteId`, `pilotEnrollmentId`, `milestoneType`, `capturedAt`, `revision`, `profileVersion`',
   '`pillarScores`, `modifierScores`, `currentEmphasis`, `nextMilestone`, `pressurePattern`, `consistencyState`',
+  '`profilePayload.stateContextAtCapture.assessmentContextFlag`',
   '`noraExplanation.templateId`, `noraExplanation.templateVersion`, `noraExplanation.renderedText`',
   '`payloadFingerprint`, `sourceEventId`, `writerVersion`, `validityFlags`',
 ];
@@ -104,6 +105,8 @@ const PulseCheckProfileSnapshotExportSpecTab: React.FC = () => {
           'Profile Architecture v1.3',
           'Runtime Architecture v1.0',
           'State Signal Layer v1.2',
+          'Physiology-Cognition Correlation Engine',
+          'Correlation Data Model Spec',
           'Member Onboarding Guide',
         ]}
       />
@@ -125,6 +128,11 @@ const PulseCheckProfileSnapshotExportSpecTab: React.FC = () => {
             title="Why Head + Revisions"
             accent="green"
             body="This keeps one practical truth for the product and export pipeline while preserving superseded payloads for audit, correction review, and backfill verification."
+          />
+          <InfoCard
+            title="Assessment Context Extension"
+            accent="amber"
+            body="Milestone physiology interpretation extends `profilePayload.stateContextAtCapture` through `assessmentContextFlag`. The snapshot system should not create a second parallel field for the same concept."
           />
         </CardGrid>
       </SectionBlock>

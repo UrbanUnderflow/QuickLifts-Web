@@ -190,6 +190,10 @@ async function evaluateTurnWithAI(
   input: TurnInput,
   priorTurns: PulseCheckProtocolPracticeTurn[]
 ) {
+  const recentFeedback = priorTurns
+    .map((turn) => turn.noraFeedback)
+    .filter(Boolean)
+    .slice(-2);
   const response = await openai.responses.create({
     model,
     temperature: 0.3,
@@ -215,7 +219,10 @@ async function evaluateTurnWithAI(
               'Your feedback must sound like a coach talking to an athlete, not a scientist. ' +
               'Keep noraFeedback to 1-2 direct sentences, simple enough for a smart high-schooler. ' +
               'Strengths and misses should be short card-ready lines. ' +
-              'Only trigger an adaptive follow-up if the answer is genuinely weak and a listed follow-up matches that weakness.',
+              'Only trigger an adaptive follow-up if the answer is genuinely weak and a listed follow-up matches that weakness. ' +
+              'Avoid repetitive openings such as "Good.", "Nice.", "That sounded more usable.", or other generic praise-first patterns. ' +
+              'Lead with the actual coaching point from this answer. ' +
+              'Do not reuse the same sentence structure as the most recent Nora feedback unless the athlete made the exact same mistake again.',
           },
         ],
       },
@@ -248,6 +255,7 @@ async function evaluateTurnWithAI(
                 noraFeedback: turn.noraFeedback,
                 scores: turn.scores,
               })),
+              recentFeedbackToAvoidRepeating: recentFeedback,
               scoringNotes: {
                 rubricScale: '1 = weak / generic, 3 = usable but inconsistent, 5 = highly usable under pressure',
                 coachabilityMeans: 'did the athlete apply the coaching and make the answer more usable under pressure',
@@ -276,6 +284,10 @@ async function evaluateSessionWithAI(
   spec: ProtocolPracticeSpec,
   turns: PulseCheckProtocolPracticeTurn[]
 ) {
+  const recentTurnFeedback = turns
+    .map((turn) => turn.noraFeedback)
+    .filter(Boolean)
+    .slice(-3);
   const response = await openai.responses.create({
     model,
     temperature: 0.35,
@@ -299,7 +311,9 @@ async function evaluateSessionWithAI(
               'Return structured scoring plus a final summary that sounds specific to this athlete, not generic. ' +
               'The summary must be direct, plain-language, and coach-like. ' +
               'Do not repeat the same phrasing used in common canned evaluations. ' +
-              'Base scores on how usable the athlete language sounds under pressure, not just whether they echoed the prompt.',
+              'Base scores on how usable the athlete language sounds under pressure, not just whether they echoed the prompt. ' +
+              'Avoid generic wrap-up lines like "keep sharpening" or "more competition-ready" unless the transcript clearly earns that phrasing. ' +
+              'Make the final summary sound like a specific read on this rep, not a template reused from earlier feedback.',
           },
         ],
       },
@@ -319,7 +333,9 @@ async function evaluateSessionWithAI(
                 responseText: turn.responseText,
                 modality: turn.modality,
                 voiceSignals: turn.voiceSignals,
+                noraFeedback: turn.noraFeedback,
               })),
+              recentFeedbackToAvoidRepeating: recentTurnFeedback,
               scoringNotes: {
                 rubricScale: '1 = weak / generic, 3 = usable but inconsistent, 5 = highly usable under pressure',
                 coachabilityTrend: 'improving if later answers clearly get more usable; steady if similar; needs_support if they stay generic or drift',
@@ -335,8 +351,10 @@ async function evaluateSessionWithAI(
   return parseJsonSafe<{
     overallScore: number;
     dimensionScores: PulseCheckProtocolPracticeDimensionScores;
+    scores?: PulseCheckProtocolPracticeDimensionScores;
     strengths: string[];
     improvementAreas: string[];
+    misses?: string[];
     evaluationSummary: string;
     nextRepFocus: string;
     coachabilityTrend: PulseCheckProtocolPracticeScorecard['coachabilityTrend'];
@@ -437,17 +455,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({ error: 'Invalid AI session evaluation response' });
     }
 
+    const dimensionScores = aiResult.dimensionScores || aiResult.scores;
+    if (!dimensionScores) {
+      return res.status(500).json({ error: 'AI session evaluation is missing dimension scores' });
+    }
+
     const scorecard: PulseCheckProtocolPracticeScorecard = {
       overallScore: Number(Math.min(5, Math.max(1, aiResult.overallScore)).toFixed(1)),
       dimensionScores: {
-        signalAwareness: Number(clampScore(aiResult.dimensionScores.signalAwareness).toFixed(1)),
-        techniqueFidelity: Number(clampScore(aiResult.dimensionScores.techniqueFidelity).toFixed(1)),
-        languageQuality: Number(clampScore(aiResult.dimensionScores.languageQuality).toFixed(1)),
-        shiftQuality: Number(clampScore(aiResult.dimensionScores.shiftQuality).toFixed(1)),
-        coachability: Number(clampScore(aiResult.dimensionScores.coachability).toFixed(1)),
+        signalAwareness: Number(clampScore(dimensionScores.signalAwareness).toFixed(1)),
+        techniqueFidelity: Number(clampScore(dimensionScores.techniqueFidelity).toFixed(1)),
+        languageQuality: Number(clampScore(dimensionScores.languageQuality).toFixed(1)),
+        shiftQuality: Number(clampScore(dimensionScores.shiftQuality).toFixed(1)),
+        coachability: Number(clampScore(dimensionScores.coachability).toFixed(1)),
       },
       strengths: toStringArray(aiResult.strengths, ['You stayed engaged through the rep.']),
-      improvementAreas: toStringArray(aiResult.improvementAreas, ['Keep making the language more specific to the moment.']),
+      improvementAreas: toStringArray(aiResult.improvementAreas || aiResult.misses, ['Keep making the language more specific to the moment.']),
       evaluationSummary: (aiResult.evaluationSummary || `${spec.evaluationLead} Keep sharpening the next rep.`).trim(),
       nextRepFocus: (aiResult.nextRepFocus || spec.nextRepFocus).trim(),
       coachabilityTrend: aiResult.coachabilityTrend || 'steady',

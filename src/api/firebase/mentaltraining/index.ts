@@ -38,6 +38,10 @@ export { protocolResponsivenessService } from './protocolResponsivenessService';
 export { protocolAudioAssetService } from './protocolAudioAssetService';
 export { protocolPracticeConversationService } from './protocolPracticeConversationService';
 export { profileSnapshotService } from './profileSnapshotService';
+export { correlationEngineService, buildAthletePatternKey, buildCorrelationEvidenceId, buildPatternRevisionId, buildRecommendationProjectionKey, buildCorrelationEngineTraceMetadata, buildAthletePhysiologyCognitionRoot } from './correlationEngineService';
+export { correlationEvidenceService } from './correlationEvidenceService';
+export { correlationPatternService } from './correlationPatternService';
+export * from './correlationEngineTypes';
 export type {
   CanonicalProfileSnapshot,
   ProfileSnapshotExportJob,
