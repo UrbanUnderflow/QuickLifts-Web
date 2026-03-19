@@ -576,7 +576,8 @@ exports.handler = async (event, context) => {
       userContext,         // Optional: iOS sends structured user context
       healthContext,       // Optional: iOS sends health data from HealthKit
       lastNoraResponseLength, // Optional: For turn-taking detection
-      recentMessages: clientRecentMessages // Optional: iOS may send its own recent messages
+      recentMessages: clientRecentMessages, // Optional: iOS may send its own recent messages
+      coachDirective // Optional: iOS can send a bounded coaching directive for this turn
     } = body;
 
     if (!userId || !message) {
@@ -948,7 +949,11 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
     }
     
     // Build final system prompt
-    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${assignmentContextSection}${snapshotContextSection}${contextInstructions}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nInstead, acknowledge their answer and advance the topic.`;
+    const coachDirectiveSection = coachDirective
+      ? `\n\n## Active Coaching Directive:\n${coachDirective}`
+      : '';
+
+    let systemPrompt = `${basePersona}\n\n${userContextSection}${healthContextSection}${assignmentContextSection}${snapshotContextSection}${contextInstructions}${coachDirectiveSection}\n\n### Conversation Memory Rule\nBefore asking a question, scan the last 6 messages. If you already asked it and the user answered, **do not ask again**.\nInstead, acknowledge their answer and advance the topic.`;
     
     // Legacy support: If iOS still sends systemPromptContext (old version), use it but log a warning
     if (systemPromptContext && !healthContext) {

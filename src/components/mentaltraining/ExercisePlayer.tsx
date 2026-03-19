@@ -2447,6 +2447,16 @@ const ProtocolPracticeConversation: React.FC<{
   teachCompletedAt,
 }) => {
   type PracticePhase = 'practice-intro' | 'practice-turn' | 'practice-feedback' | 'evaluation';
+  type ProtocolPracticeTurnApiResponse = {
+    evaluation: {
+      turn: PulseCheckProtocolPracticeTurn;
+      shouldUseAdaptiveFollowUp: boolean;
+      followUpPrompt?: ProtocolPracticeAdaptiveFollowUp;
+    };
+  };
+  type ProtocolPracticeSessionApiResponse = {
+    scorecard: NonNullable<PulseCheckProtocolPracticeSession['scorecard']>;
+  };
 
   const [phase, setPhase] = useState<PracticePhase>('practice-intro');
   const [turnIndex, setTurnIndex] = useState(0);
@@ -2461,6 +2471,8 @@ const ProtocolPracticeConversation: React.FC<{
   const [scorecard, setScorecard] = useState<PulseCheckProtocolPracticeSession['scorecard']>();
   const [persisting, setPersisting] = useState(false);
   const [activeFollowUp, setActiveFollowUp] = useState<ProtocolPracticeAdaptiveFollowUp | null>(null);
+  const [isEvaluatingTurn, setIsEvaluatingTurn] = useState(false);
+  const [isEvaluatingSession, setIsEvaluatingSession] = useState(false);
 
   const recognitionRef = useRef<any>(null);
   const recordingStartedAtRef = useRef<number | null>(null);
@@ -2471,6 +2483,27 @@ const ProtocolPracticeConversation: React.FC<{
   const currentPromptText = activeFollowUp?.promptText || currentTurnSpec?.promptText || '';
   const currentPromptId = activeFollowUp?.id || currentTurnSpec?.id || '';
   const currentPromptLabel = activeFollowUp ? `${currentTurnSpec?.label || 'Follow-up'} Follow-Up` : currentTurnSpec?.label;
+
+  const buildTurnNarrationText = (turn: PulseCheckProtocolPracticeTurn) => (
+    [
+      turn.noraFeedback,
+      turn.strengths[0] ? `What landed: ${turn.strengths[0]}` : '',
+      turn.misses[0] ? `What to sharpen: ${turn.misses[0]}` : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+  );
+
+  const buildScorecardNarrationText = (value: NonNullable<PulseCheckProtocolPracticeSession['scorecard']>) => (
+    [
+      value.evaluationSummary,
+      value.strengths[0] ? `What landed: ${value.strengths[0]}` : '',
+      value.improvementAreas[0] ? `Next rep focus: ${value.improvementAreas[0]}` : '',
+      value.nextRepFocus || '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+  );
 
   const stopListening = () => {
     if (recognitionRef.current) {
@@ -2644,36 +2677,105 @@ const ProtocolPracticeConversation: React.FC<{
     }
   };
 
+  const evaluateTurnWithAI = async (
+    turnSpec: ProtocolPracticeTurnSpec,
+    input: {
+      responseText: string;
+      modality: 'text' | 'voice';
+      usedAdaptiveFollowUp?: boolean;
+      followUpPromptId?: string;
+      followUpPromptText?: string;
+      transcriptReviewed?: boolean;
+      voiceSignals?: PulseCheckProtocolPracticeVoiceSignals;
+    }
+  ) => {
+    const response = await fetch('/api/mentaltraining/evaluate-protocol-practice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'turn',
+        specId: spec.id,
+        turnSpecId: turnSpec.id,
+        input,
+        priorTurns: turns,
+      }),
+    });
+
+    const payload = await response.json().catch(() => null) as ProtocolPracticeTurnApiResponse | { error?: string } | null;
+    if (!response.ok || !payload || !('evaluation' in payload)) {
+      throw new Error((payload && 'error' in payload && payload.error) || 'Failed to evaluate turn');
+    }
+
+    return payload.evaluation;
+  };
+
+  const evaluateSessionWithAI = async (submittedTurns: PulseCheckProtocolPracticeTurn[]) => {
+    const response = await fetch('/api/mentaltraining/evaluate-protocol-practice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'session',
+        specId: spec.id,
+        turns: submittedTurns,
+      }),
+    });
+
+    const payload = await response.json().catch(() => null) as ProtocolPracticeSessionApiResponse | { error?: string } | null;
+    if (!response.ok || !payload || !('scorecard' in payload)) {
+      throw new Error((payload && 'error' in payload && payload.error) || 'Failed to evaluate session');
+    }
+
+    return payload.scorecard;
+  };
+
   const submitTurn = async () => {
     const trimmedResponse = responseDraft.trim();
-    if (!trimmedResponse || !currentTurnSpec) return;
+    if (!trimmedResponse || !currentTurnSpec || isEvaluatingTurn) return;
 
     stopListening();
     stopNarration();
 
-    const evaluation = protocolPracticeConversationService.evaluateTurn(
-      spec,
-      currentTurnSpec,
-      {
-        responseText: trimmedResponse,
-        modality: transcriptConfidence != null ? 'voice' : 'text',
-        usedAdaptiveFollowUp: Boolean(activeFollowUp),
-        followUpPromptId: activeFollowUp?.id,
-        followUpPromptText: activeFollowUp?.promptText,
-        transcriptReviewed: transcriptConfidence != null ? true : false,
-        voiceSignals: transcriptConfidence != null ? buildVoiceSignals() : undefined,
-      },
-      turns
-    );
+    const submission = {
+      responseText: trimmedResponse,
+      modality: transcriptConfidence != null ? 'voice' as const : 'text' as const,
+      usedAdaptiveFollowUp: Boolean(activeFollowUp),
+      followUpPromptId: activeFollowUp?.id,
+      followUpPromptText: activeFollowUp?.promptText,
+      transcriptReviewed: transcriptConfidence != null ? true : false,
+      voiceSignals: transcriptConfidence != null ? buildVoiceSignals() : undefined,
+    };
 
-    setTurns((previous) => [...previous, evaluation.turn]);
-    setPendingFeedback(evaluation.turn);
-    setPendingFollowUp(evaluation.shouldUseAdaptiveFollowUp ? evaluation.followUpPrompt || null : null);
-    setPhase('practice-feedback');
-    setResponseDraft('');
-    setLiveTranscript('');
-    setTranscriptConfidence(undefined);
-    recordingStartedAtRef.current = null;
+    setIsEvaluatingTurn(true);
+    try {
+      let evaluation: {
+        turn: PulseCheckProtocolPracticeTurn;
+        shouldUseAdaptiveFollowUp: boolean;
+        followUpPrompt?: ProtocolPracticeAdaptiveFollowUp;
+      };
+
+      try {
+        evaluation = await evaluateTurnWithAI(currentTurnSpec, submission);
+      } catch (error) {
+        console.error('[ProtocolPracticeConversation] AI turn evaluation failed, falling back to heuristic scorer', error);
+        evaluation = protocolPracticeConversationService.evaluateTurn(
+          spec,
+          currentTurnSpec,
+          submission,
+          turns
+        );
+      }
+
+      setTurns((previous) => [...previous, evaluation.turn]);
+      setPendingFeedback(evaluation.turn);
+      setPendingFollowUp(evaluation.shouldUseAdaptiveFollowUp ? evaluation.followUpPrompt || null : null);
+      setPhase('practice-feedback');
+      setResponseDraft('');
+      setLiveTranscript('');
+      setTranscriptConfidence(undefined);
+      recordingStartedAtRef.current = null;
+    } finally {
+      setIsEvaluatingTurn(false);
+    }
   };
 
   const advanceAfterFeedback = async () => {
@@ -2695,10 +2797,22 @@ const ProtocolPracticeConversation: React.FC<{
       return;
     }
 
-    const finalScorecard = protocolPracticeConversationService.evaluateSession(spec, turns);
-    setScorecard(finalScorecard);
-    await persistSessionIfNeeded(finalScorecard);
-    setPhase('evaluation');
+    setIsEvaluatingSession(true);
+    try {
+      let finalScorecard: NonNullable<PulseCheckProtocolPracticeSession['scorecard']>;
+      try {
+        finalScorecard = await evaluateSessionWithAI(turns);
+      } catch (error) {
+        console.error('[ProtocolPracticeConversation] AI session evaluation failed, falling back to heuristic scorer', error);
+        finalScorecard = protocolPracticeConversationService.evaluateSession(spec, turns);
+      }
+
+      setScorecard(finalScorecard);
+      await persistSessionIfNeeded(finalScorecard);
+      setPhase('evaluation');
+    } finally {
+      setIsEvaluatingSession(false);
+    }
   };
 
   const completePracticeConversation = () => {
@@ -2841,14 +2955,14 @@ const ProtocolPracticeConversation: React.FC<{
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={submitTurn}
-              disabled={!responseDraft.trim()}
+              disabled={!responseDraft.trim() || isEvaluatingTurn}
               className={`flex items-center gap-2 px-6 py-3 rounded-xl text-white font-semibold ${
-                responseDraft.trim()
+                responseDraft.trim() && !isEvaluatingTurn
                   ? `bg-gradient-to-r ${categoryColor}`
                   : 'bg-white/10 text-white/40'
               }`}
             >
-              Submit Answer
+              {isEvaluatingTurn ? 'Evaluating...' : 'Submit Answer'}
               <ChevronRight className="w-5 h-5" />
             </motion.button>
           </div>
@@ -2861,7 +2975,7 @@ const ProtocolPracticeConversation: React.FC<{
           <h3 className="mx-auto max-w-2xl text-2xl font-semibold text-white">{pendingFeedback.noraFeedback}</h3>
           <AutoNarrator
             enabled={soundEnabled && !isPaused}
-            text={pendingFeedback.noraFeedback}
+            text={buildTurnNarrationText(pendingFeedback)}
             debugLabel={`ProtocolPractice:${spec.id}:feedback:${pendingFeedback.promptId}`}
             advanceOnError={false}
             onDone={() => undefined}
@@ -2890,9 +3004,10 @@ const ProtocolPracticeConversation: React.FC<{
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => { void advanceAfterFeedback(); }}
-            className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${categoryColor} text-white font-semibold`}
+            disabled={isEvaluatingSession}
+            className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r ${categoryColor} text-white font-semibold ${isEvaluatingSession ? 'opacity-60' : ''}`}
           >
-            {pendingFollowUp ? 'Try Nora’s Follow-Up' : 'Continue'}
+            {isEvaluatingSession ? 'Evaluating...' : pendingFollowUp ? 'Try Nora’s Follow-Up' : 'Continue'}
             <ChevronRight className="w-5 h-5" />
           </motion.button>
         </div>
@@ -2907,7 +3022,7 @@ const ProtocolPracticeConversation: React.FC<{
           </p>
           <AutoNarrator
             enabled={soundEnabled && !isPaused}
-            text={scorecard.evaluationSummary}
+            text={buildScorecardNarrationText(scorecard)}
             debugLabel={`ProtocolPractice:${spec.id}:evaluation`}
             advanceOnError={false}
             onDone={() => undefined}
