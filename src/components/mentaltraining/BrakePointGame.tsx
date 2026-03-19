@@ -16,6 +16,8 @@ interface BrakePointGameProps {
   onComplete: () => void;
   profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
   previewMode?: boolean;
+  skipIntro?: boolean;
+  initialSoundEnabled?: boolean;
 }
 
 type RoundStage = 'intro' | 'ready' | 'response' | 'feedback' | 'summary';
@@ -116,6 +118,8 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
   onComplete,
   profileSnapshotMilestone,
   previewMode = false,
+  skipIntro = false,
+  initialSoundEnabled = true,
 }) => {
   const currentUser = useUser();
   const buildArtifact = exercise.buildArtifact as SimBuildArtifact;
@@ -129,7 +133,7 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
   const [responses, setResponses] = useState<BrakeResponse[]>([]);
   const [feedback, setFeedback] = useState<{ title: string; detail: string; success: boolean } | null>(null);
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
   const {
     warningActive,
     warningMessage,
@@ -348,6 +352,11 @@ export const BrakePointGame: React.FC<BrakePointGameProps> = ({
     roundResolvedRef.current = false;
     beginStage('ready', stageDurations.ready);
   }, [beginStage, resetSession, stageDurations.ready]);
+
+  useEffect(() => {
+    if (!skipIntro || stage !== 'intro') return;
+    startSession();
+  }, [skipIntro, stage, startSession]);
 
   const progressPercent = ((roundIndex + (stage === 'summary' ? 1 : 0)) / rounds.length) * 100;
   const correctPct = responses.length ? Math.round((responses.filter((response) => response.correct).length / responses.length) * 100) : 100;

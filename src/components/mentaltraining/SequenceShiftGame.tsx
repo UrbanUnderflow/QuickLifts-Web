@@ -16,6 +16,8 @@ interface SequenceShiftGameProps {
   onComplete: () => void;
   profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
   previewMode?: boolean;
+  skipIntro?: boolean;
+  initialSoundEnabled?: boolean;
 }
 
 type RoundStage = 'intro' | 'ready' | 'response' | 'feedback' | 'summary';
@@ -188,6 +190,8 @@ export const SequenceShiftGame: React.FC<SequenceShiftGameProps> = ({
   onComplete,
   profileSnapshotMilestone,
   previewMode = false,
+  skipIntro = false,
+  initialSoundEnabled = true,
 }) => {
   const currentUser = useUser();
   const buildArtifact = exercise.buildArtifact as SimBuildArtifact;
@@ -200,7 +204,7 @@ export const SequenceShiftGame: React.FC<SequenceShiftGameProps> = ({
   const [responses, setResponses] = useState<SequenceResponse[]>([]);
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<{ title: string; detail: string; success: boolean } | null>(null);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
   const {
     warningActive,
     warningMessage,
@@ -412,6 +416,11 @@ export const SequenceShiftGame: React.FC<SequenceShiftGameProps> = ({
     roundResolvedRef.current = false;
     beginStage('ready', 1200);
   }, [beginStage, resetSession]);
+
+  useEffect(() => {
+    if (!skipIntro || stage !== 'intro') return;
+    startSession();
+  }, [skipIntro, stage, startSession]);
 
   const progressPercent = ((roundIndex + (stage === 'summary' ? 1 : 0)) / rounds.length) * 100;
   const correctPct = responses.length ? Math.round((responses.filter((response) => response.correct).length / responses.length) * 100) : 100;

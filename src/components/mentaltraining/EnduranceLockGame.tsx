@@ -23,6 +23,8 @@ interface EnduranceLockGameProps {
   onComplete: () => void;
   profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
   previewMode?: boolean;
+  skipIntro?: boolean;
+  initialSoundEnabled?: boolean;
 }
 
 type GameStage = 'intro' | 'active' | 'summary';
@@ -157,6 +159,8 @@ export const EnduranceLockGame: React.FC<EnduranceLockGameProps> = ({
   onComplete,
   profileSnapshotMilestone,
   previewMode = false,
+  skipIntro = false,
+  initialSoundEnabled = true,
 }) => {
   const currentUser = useUser();
   const buildArtifact = exercise.buildArtifact as SimBuildArtifact;
@@ -176,7 +180,7 @@ export const EnduranceLockGame: React.FC<EnduranceLockGameProps> = ({
   const [cueWindowMs, setCueWindowMs] = useState(420);
   const [pulseScale, setPulseScale] = useState(1);
   const [statusLabel, setStatusLabel] = useState('Tap on the pulse and keep the rhythm clean.');
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
   const [summaryDetail, setSummaryDetail] = useState('');
 
   const cueStartRef = useRef<number>(0);
@@ -401,6 +405,11 @@ export const EnduranceLockGame: React.FC<EnduranceLockGameProps> = ({
     resetInputSession();
     setStage('active');
   }, [resetInputSession, runtimeProfile.introLabel]);
+
+  useEffect(() => {
+    if (!skipIntro || stage !== 'intro') return;
+    startSession();
+  }, [skipIntro, stage, startSession]);
 
   useEffect(() => {
     if (stage !== 'active' || !currentCue || isPaused) return undefined;

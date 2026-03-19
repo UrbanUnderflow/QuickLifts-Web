@@ -294,6 +294,20 @@ function createGroupMeetCreateHandlerRuntime({
   adminEmail = 'admin@fitwithpulse.ai',
   baseUrl = 'https://app.fitwithpulse.ai',
   sendInviteEmailResult = async () => ({ success: true }),
+  contacts = {
+    'contact-host': {
+      id: 'contact-host',
+      name: 'Tre',
+      email: 'tre@fitwithpulse.ai',
+      imageUrl: 'https://images.example.com/tre.png',
+    },
+    'contact-avery': {
+      id: 'contact-avery',
+      name: 'Avery',
+      email: 'avery@example.com',
+      imageUrl: 'https://images.example.com/avery.png',
+    },
+  },
 } = {}) {
   const { createHandlerPath } = compileGroupMeetRuntime();
   delete require.cache[createHandlerPath];
@@ -302,6 +316,7 @@ function createGroupMeetCreateHandlerRuntime({
     requestData: null,
     inviteDocs: new Map(),
     emailCalls: [],
+    contacts: clone(contacts),
   };
 
   let requestIdCounter = 0;
@@ -355,27 +370,46 @@ function createGroupMeetCreateHandlerRuntime({
 
   const firestoreInstance = {
     collection(name) {
-      if (name !== 'groupMeetRequests') {
-        throw new Error(`Unexpected top-level collection: ${name}`);
+      if (name === 'groupMeetRequests') {
+        return {
+          doc() {
+            requestIdCounter += 1;
+            if (requestIdCounter > 1) {
+              throw new Error('Unexpected extra request document creation.');
+            }
+            return requestRef;
+          },
+          orderBy() {
+            return this;
+          },
+          limit() {
+            return this;
+          },
+          async get() {
+            return { docs: [] };
+          },
+        };
       }
-      return {
-        doc() {
-          requestIdCounter += 1;
-          if (requestIdCounter > 1) {
-            throw new Error('Unexpected extra request document creation.');
-          }
-          return requestRef;
-        },
-        orderBy() {
-          return this;
-        },
-        limit() {
-          return this;
-        },
-        async get() {
-          return { docs: [] };
-        },
-      };
+
+      if (name === 'groupMeetContacts') {
+        return {
+          doc(contactId) {
+            return {
+              id: contactId,
+              async get() {
+                const contact = state.contacts[contactId];
+                return {
+                  id: contactId,
+                  exists: Boolean(contact),
+                  data: () => clone(contact),
+                };
+              },
+            };
+          },
+        };
+      }
+
+      throw new Error(`Unexpected top-level collection: ${name}`);
     },
     batch() {
       const operations = [];
@@ -428,10 +462,23 @@ function createGroupMeetCreateHandlerRuntime({
   const firebaseAdminMock = { firestore };
 
   const groupMeetAdminMock = {
+    GROUP_MEET_CONTACTS_COLLECTION: 'groupMeetContacts',
     GROUP_MEET_INVITES_SUBCOLLECTION: 'groupMeetInvites',
     GROUP_MEET_REQUESTS_COLLECTION: 'groupMeetRequests',
     getGroupMeetBaseUrl() {
       return baseUrl;
+    },
+    mapGroupMeetContact(docSnap) {
+      const data = docSnap.data() || {};
+      return {
+        id: docSnap.id,
+        name: data.name || '',
+        email: data.email || null,
+        imageUrl: data.imageUrl || null,
+        createdAt: data.createdAt?.toDate?.().toISOString?.() || null,
+        updatedAt: data.updatedAt?.toDate?.().toISOString?.() || null,
+        createdByEmail: data.createdByEmail || null,
+      };
     },
     mapGroupMeetInviteSummary(docSnap) {
       const data = docSnap.data() || {};

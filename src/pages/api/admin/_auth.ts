@@ -1,5 +1,5 @@
 import type { NextApiRequest } from 'next';
-import admin from '../../../lib/firebase-admin';
+import admin, { getFirebaseAdminApp } from '../../../lib/firebase-admin';
 
 const ADMIN_COLLECTION = 'admin';
 
@@ -7,12 +7,19 @@ export async function requireAdminRequest(req: NextApiRequest): Promise<{ email:
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) return null;
 
+  const forceDevFirebase =
+    req.headers['x-force-dev-firebase'] === 'true' ||
+    req.headers['x-force-dev-firebase'] === '1';
+  const adminApp = forceDevFirebase ? getFirebaseAdminApp(true) : admin.app();
+  const adminAuth = adminApp.auth();
+  const adminDb = adminApp.firestore();
+
   try {
-    const decoded = await admin.auth().verifyIdToken(authHeader.slice(7));
+    const decoded = await adminAuth.verifyIdToken(authHeader.slice(7));
     const email = decoded.email as string | undefined;
     if (!email) return null;
 
-    const adminDoc = await admin.firestore().doc(`${ADMIN_COLLECTION}/${email}`).get();
+    const adminDoc = await adminDb.doc(`${ADMIN_COLLECTION}/${email}`).get();
     if (!adminDoc.exists) return null;
 
     return { email };
@@ -21,4 +28,3 @@ export async function requireAdminRequest(req: NextApiRequest): Promise<{ email:
     return null;
   }
 }
-
