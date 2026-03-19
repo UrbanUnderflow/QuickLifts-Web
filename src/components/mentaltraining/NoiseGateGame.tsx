@@ -16,6 +16,8 @@ interface NoiseGateGameProps {
   onComplete: () => void;
   profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
   previewMode?: boolean;
+  skipIntro?: boolean;
+  initialSoundEnabled?: boolean;
 }
 
 type RoundStage = 'intro' | 'prime' | 'noise' | 'feedback' | 'summary';
@@ -106,6 +108,8 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
   onComplete,
   profileSnapshotMilestone,
   previewMode = false,
+  skipIntro = false,
+  initialSoundEnabled = true,
 }) => {
   const currentUser = useUser();
   const buildArtifact = exercise.buildArtifact as SimBuildArtifact;
@@ -126,7 +130,7 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
   const [responses, setResponses] = useState<NoiseResponse[]>([]);
   const [feedback, setFeedback] = useState<{ title: string; detail: string; success: boolean } | null>(null);
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
   const {
     warningActive,
     warningMessage,
@@ -375,6 +379,11 @@ export const NoiseGateGame: React.FC<NoiseGateGameProps> = ({
     noiseResolvedRef.current = false;
     beginStage('prime', stageDurations.prime);
   }, [beginStage, resetSession, stageDurations.prime]);
+
+  useEffect(() => {
+    if (!skipIntro || stage !== 'intro') return;
+    startSession();
+  }, [skipIntro, stage, startSession]);
 
   const noiseRounds = responses.filter((response) => response.channel !== 'baseline');
   const noiseAccuracy = noiseRounds.filter((response) => response.correct).length / Math.max(1, noiseRounds.length);

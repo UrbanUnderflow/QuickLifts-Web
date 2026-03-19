@@ -10,9 +10,11 @@ import {
   isValidGroupMeetMonth,
 } from '../../../../lib/groupMeet';
 import {
+  GROUP_MEET_CONTACTS_COLLECTION,
   GROUP_MEET_INVITES_SUBCOLLECTION,
   GROUP_MEET_REQUESTS_COLLECTION,
   getGroupMeetBaseUrl,
+  mapGroupMeetContact,
   mapGroupMeetInviteSummary,
   sendGroupMeetInviteEmail,
   toIso,
@@ -21,9 +23,6 @@ import { requireAdminRequest } from '../_auth';
 
 type ParticipantInput = {
   contactId?: string;
-  name?: string;
-  email?: string;
-  imageUrl?: string;
 };
 
 type HostInput = ParticipantInput & {
@@ -114,51 +113,62 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'A valid deadline is required.' });
     }
 
+    const hostContactId = (body.host?.contactId || '').trim();
+    if (!hostContactId) {
+      return res.status(400).json({ error: 'Choose the host from your contact list.' });
+    }
+
+    const db = admin.firestore();
+    const contactsRef = db.collection(GROUP_MEET_CONTACTS_COLLECTION);
+    const hostContactSnap = await contactsRef.doc(hostContactId).get();
+    if (!hostContactSnap.exists) {
+      return res.status(400).json({ error: 'The selected host contact could not be found.' });
+    }
+
+    const hostContact = mapGroupMeetContact(hostContactSnap);
     const normalizedHost = {
-      contactId: (body.host?.contactId || '').trim() || null,
-      name: (body.host?.name || '').trim(),
-      email: (body.host?.email || '').trim().toLowerCase() || null,
-      imageUrl: (body.host?.imageUrl || '').trim() || null,
+      contactId: hostContact.id,
+      name: hostContact.name,
+      email: hostContact.email,
+      imageUrl: hostContact.imageUrl,
       availabilityEntries: normalizeGroupMeetAvailabilitySlots(body.host?.availabilityEntries, targetMonth),
     };
-
-    if (!normalizedHost.name) {
-      return res.status(400).json({ error: 'Host name is required.' });
-    }
 
     if (!normalizedHost.availabilityEntries.length) {
       return res.status(400).json({ error: 'Add the host availability before sending the request.' });
     }
 
-    const normalizedParticipants = (Array.isArray(body.participants) ? body.participants : [])
-      .map((participant) => ({
-        contactId: (participant?.contactId || '').trim() || null,
-        name: (participant?.name || '').trim(),
-        email: (participant?.email || '').trim().toLowerCase() || null,
-        imageUrl: (participant?.imageUrl || '').trim() || null,
-      }))
-      .filter((participant) => participant.name);
+    const requestedParticipantIds = Array.from(
+      new Set(
+        (Array.isArray(body.participants) ? body.participants : [])
+          .map((participant) => (participant?.contactId || '').trim())
+          .filter(Boolean)
+      )
+    ).filter((contactId) => contactId !== normalizedHost.contactId);
 
-    const dedupedParticipants = normalizedParticipants.filter((participant, index, allParticipants) => {
-      const comparisonKey = participant.email || participant.contactId || participant.name.toLowerCase();
-      const matchesHost =
-        comparisonKey ===
-        (normalizedHost.email || normalizedHost.contactId || normalizedHost.name.toLowerCase());
-      if (matchesHost) return false;
-      return (
-        index ===
-        allParticipants.findIndex(
-          (candidate) =>
-            (candidate.email || candidate.contactId || candidate.name.toLowerCase()) === comparisonKey
-        )
-      );
-    });
+    const participantContactSnapshots = await Promise.all(
+      requestedParticipantIds.map((contactId) => contactsRef.doc(contactId).get())
+    );
 
-    if (!dedupedParticipants.length) {
-      return res.status(400).json({ error: 'Add at least one participant name.' });
+    const missingParticipantContact = participantContactSnapshots.find((snapshot) => !snapshot.exists);
+    if (missingParticipantContact) {
+      return res.status(400).json({ error: 'One or more selected guest contacts could not be found.' });
     }
 
-    const db = admin.firestore();
+    const dedupedParticipants = participantContactSnapshots
+      .map((snapshot) => mapGroupMeetContact(snapshot))
+      .filter((participant) => participant.id !== normalizedHost.contactId)
+      .map((participant) => ({
+        contactId: participant.id,
+        name: participant.name,
+        email: participant.email,
+        imageUrl: participant.imageUrl,
+      }));
+
+    if (!dedupedParticipants.length) {
+      return res.status(400).json({ error: 'Choose at least one guest from your contact list.' });
+    }
+
     const requestRef = db.collection(GROUP_MEET_REQUESTS_COLLECTION).doc();
     const baseUrl = getGroupMeetBaseUrl(req);
     const createdInvites: Array<{

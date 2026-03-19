@@ -62,6 +62,63 @@ function buildNetlifyEvent(req: NextApiRequest) {
   };
 }
 
+function resolveSiteOrigin(req: NextApiRequest) {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const forwardedHost = req.headers['x-forwarded-host'];
+  const protocol = typeof forwardedProto === 'string' && forwardedProto.trim() ? forwardedProto : 'https';
+  const host = typeof forwardedHost === 'string' && forwardedHost.trim()
+    ? forwardedHost
+    : typeof req.headers.host === 'string' && req.headers.host.trim()
+      ? req.headers.host
+      : 'fitwithpulse.ai';
+
+  return `${protocol}://${host}`;
+}
+
+async function proxyNetlifyBinaryFunction(name: string, req: NextApiRequest, res: NextApiResponse) {
+  const targetURL = new URL(`/.netlify/functions/${name}`, resolveSiteOrigin(req));
+
+  Object.entries(req.query).forEach(([key, value]) => {
+    if (key === 'name') return;
+
+    const normalizedValue = normalizeQueryValue(value);
+    if (typeof normalizedValue === 'string') {
+      targetURL.searchParams.set(key, normalizedValue);
+    }
+  });
+
+  const requestHeaders = new Headers();
+  Object.entries(req.headers).forEach(([key, value]) => {
+    if (typeof value === 'undefined') return;
+    if (key.toLowerCase() === 'host' || key.toLowerCase() === 'content-length') return;
+    requestHeaders.set(key, Array.isArray(value) ? value.join(',') : String(value));
+  });
+
+  const body = req.method === 'GET' || req.method === 'HEAD'
+    ? undefined
+    : typeof req.body === 'string'
+      ? req.body
+      : JSON.stringify(req.body ?? {});
+
+  const upstreamResponse = await fetch(targetURL, {
+    method: req.method || 'GET',
+    headers: requestHeaders,
+    body,
+  });
+
+  res.status(upstreamResponse.status);
+
+  upstreamResponse.headers.forEach((headerValue, headerName) => {
+    if (headerName.toLowerCase() === 'content-length' || headerName.toLowerCase() === 'transfer-encoding') {
+      return;
+    }
+    res.setHeader(headerName, headerValue);
+  });
+
+  const arrayBuffer = await upstreamResponse.arrayBuffer();
+  res.send(Buffer.from(arrayBuffer));
+}
+
 async function invokeNetlifyFunction(name: string, req: NextApiRequest) {
   const loadModule = FUNCTION_LOADERS[name];
   if (!loadModule) {
@@ -99,6 +156,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    if (requestedName === 'tts-mental-step') {
+      await proxyNetlifyBinaryFunction(requestedName, req, res);
+      return;
+    }
+
     const functionResponse = await invokeNetlifyFunction(requestedName, req);
     const statusCode = functionResponse?.statusCode || 200;
 

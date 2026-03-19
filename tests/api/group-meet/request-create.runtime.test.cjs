@@ -19,16 +19,12 @@ test('POST on Group Meet create rejects requests that do not include host availa
       meetingDurationMinutes: 30,
       sendEmails: true,
       host: {
-        name: 'Tre',
-        email: 'tre@fitwithpulse.ai',
-        imageUrl: 'https://images.example.com/tre.png',
+        contactId: 'contact-host',
         availabilityEntries: [],
       },
       participants: [
         {
-          name: 'Avery',
-          email: 'avery@example.com',
-          imageUrl: 'https://images.example.com/avery.png',
+          contactId: 'contact-avery',
         },
       ],
     },
@@ -39,6 +35,38 @@ test('POST on Group Meet create rejects requests that do not include host availa
 
   assert.equal(res.statusCode, 400);
   assert.equal(res.payload.error, 'Add the host availability before sending the request.');
+});
+
+test('POST on Group Meet create rejects requests that are not built from saved contacts', async () => {
+  const { handler } = createGroupMeetCreateHandlerRuntime();
+
+  const req = {
+    method: 'POST',
+    body: {
+      title: 'April sync',
+      targetMonth: '2026-04',
+      deadlineAt: '2026-03-26T17:00:00.000Z',
+      timezone: 'America/New_York',
+      meetingDurationMinutes: 30,
+      sendEmails: true,
+      host: {
+        availabilityEntries: [
+          { date: '2026-04-10', startMinutes: 540, endMinutes: 660 },
+        ],
+      },
+      participants: [
+        {
+          contactId: 'contact-avery',
+        },
+      ],
+    },
+  };
+  const res = createApiResponseRecorder();
+
+  await handler(req, res);
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.payload.error, 'Choose the host from your contact list.');
 });
 
 test('POST on Group Meet create stores the host as a responded invite and emails only the guests', async () => {
@@ -57,9 +85,6 @@ test('POST on Group Meet create stores the host as a responded invite and emails
       sendEmails: true,
       host: {
         contactId: 'contact-host',
-        name: 'Tre',
-        email: 'tre@fitwithpulse.ai',
-        imageUrl: 'https://images.example.com/tre.png',
         availabilityEntries: [
           { date: '2026-04-10', startMinutes: 540, endMinutes: 660 },
         ],
@@ -67,15 +92,9 @@ test('POST on Group Meet create stores the host as a responded invite and emails
       participants: [
         {
           contactId: 'contact-avery',
-          name: 'Avery',
-          email: 'avery@example.com',
-          imageUrl: 'https://images.example.com/avery.png',
         },
         {
           contactId: 'contact-host',
-          name: 'Tre',
-          email: 'tre@fitwithpulse.ai',
-          imageUrl: 'https://images.example.com/tre.png',
         },
       ],
     },

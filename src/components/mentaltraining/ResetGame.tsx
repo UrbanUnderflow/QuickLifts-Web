@@ -135,6 +135,8 @@ interface ResetGameProps {
     onClose: () => void;
     profileSnapshotMilestone?: Extract<ProfileSnapshotMilestone, 'midpoint' | 'endpoint' | 'retention'>;
     previewMode?: boolean;
+    skipIntro?: boolean;
+    initialSoundEnabled?: boolean;
 }
 
 // ============================================================================
@@ -147,6 +149,8 @@ export const ResetGame: React.FC<ResetGameProps> = ({
     onClose,
     profileSnapshotMilestone,
     previewMode = false,
+    skipIntro = false,
+    initialSoundEnabled = true,
 }) => {
     const currentUser = useUser();
     const buildArtifact = exercise.buildArtifact;
@@ -264,7 +268,7 @@ export const ResetGame: React.FC<ResetGameProps> = ({
     const pulseTimerRef = useRef<NodeJS.Timeout | null>(null);
     const trackingTimerRef = useRef<NodeJS.Timeout | null>(null);
     const sessionStartRef = useRef<number>(Date.now());
-    const [soundEnabled, setSoundEnabled] = useState(true);
+    const [soundEnabled, setSoundEnabled] = useState(initialSoundEnabled);
     const audioContextRef = useRef<AudioContext | null>(null);
     const cueAudioRef = useRef<HTMLAudioElement | null>(null);
     const timeoutRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -644,6 +648,11 @@ export const ResetGame: React.FC<ResetGameProps> = ({
         sessionStartRef.current = Date.now();
         startNextRound();
     }, [resetInputSession, startNextRound]);
+
+    useEffect(() => {
+        if (!skipIntro || gameState !== 'intro') return;
+        setGameState('preMood');
+    }, [gameState, skipIntro]);
 
     // End round
     const endRound = useCallback(() => {

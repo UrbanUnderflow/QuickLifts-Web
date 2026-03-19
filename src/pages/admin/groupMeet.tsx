@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import { format, parse } from 'date-fns';
-import { Calendar, CheckCircle2, Copy, Link as LinkIcon, Mail, Plus, RefreshCw, Sparkles, Trash2, Users } from 'lucide-react';
+import { Calendar, CheckCircle2, Copy, Link as LinkIcon, Mail, RefreshCw, Sparkles, Upload, Users } from 'lucide-react';
+import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import GroupMeetAvailabilityPicker from '../../components/group-meet/GroupMeetAvailabilityPicker';
-import { auth } from '../../api/firebase/config';
+import { auth, storage } from '../../api/firebase/config';
 import {
   buildGroupMeetCandidateKey,
   formatMinutesAsTime,
@@ -16,19 +17,14 @@ import {
   type GroupMeetRequestSummary,
 } from '../../lib/groupMeet';
 
-type ParticipantDraft = {
-  contactId: string | null;
-  name: string;
-  email: string;
-  imageUrl: string;
-};
-
 type HostDraft = {
   contactId: string | null;
   name: string;
   email: string;
   imageUrl: string;
 };
+
+type ComposerTab = 'create' | 'contacts';
 
 type ApiRequestListResponse = {
   requests: GroupMeetRequestSummary[];
@@ -72,13 +68,6 @@ const buildDefaultDeadlineValue = () => {
 
 const buildDefaultMonthValue = () => format(new Date(), 'yyyy-MM');
 
-const buildEmptyParticipant = (): ParticipantDraft => ({
-  contactId: null,
-  name: '',
-  email: '',
-  imageUrl: '',
-});
-
 const buildEmptyHost = (): HostDraft => ({
   contactId: null,
   name: '',
@@ -120,6 +109,23 @@ const buildAvatarUrl = (name: string, imageUrl?: string | null) =>
   imageUrl?.trim() ||
   `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Pulse')}&background=111827&color=ffffff&size=96`;
 
+const shouldUseDevFirebaseForAdminApi = () => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  if (process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true') {
+    return true;
+  }
+
+  const hostname = window.location.hostname;
+  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
+  const forceDevFirebase = window.localStorage.getItem('forceDevFirebase') === 'true';
+  const devMode = window.localStorage.getItem('devMode') === 'true';
+
+  return forceDevFirebase || devMode || isLocalhost;
+};
+
 const AvatarBubble: React.FC<{ name: string; imageUrl?: string | null; size?: string }> = ({
   name,
   imageUrl,
@@ -139,6 +145,7 @@ const formatCandidateLabel = (candidate: GroupMeetCandidateWindow) => {
 };
 
 const GroupMeetAdminPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<ComposerTab>('create');
   const [title, setTitle] = useState('Group Meet');
   const [targetMonth, setTargetMonth] = useState(buildDefaultMonthValue);
   const [deadlineAt, setDeadlineAt] = useState(buildDefaultDeadlineValue);
@@ -147,17 +154,15 @@ const GroupMeetAdminPage: React.FC = () => {
   const [sendEmails, setSendEmails] = useState(true);
   const [host, setHost] = useState<HostDraft>(buildEmptyHost);
   const [hostAvailabilityEntries, setHostAvailabilityEntries] = useState<GroupMeetAvailabilitySlot[]>([]);
-  const [participants, setParticipants] = useState<ParticipantDraft[]>([
-    buildEmptyParticipant(),
-    buildEmptyParticipant(),
-    buildEmptyParticipant(),
-  ]);
+  const [selectedParticipantContactIds, setSelectedParticipantContactIds] = useState<string[]>([]);
   const [contacts, setContacts] = useState<GroupMeetContact[]>([]);
   const [contactsLoading, setContactsLoading] = useState(false);
   const [savingContact, setSavingContact] = useState(false);
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
-  const [contactImageUrl, setContactImageUrl] = useState('');
+  const [contactImageFile, setContactImageFile] = useState<File | null>(null);
+  const [contactImagePreviewUrl, setContactImagePreviewUrl] = useState('');
+  const [adminAuthReady, setAdminAuthReady] = useState(Boolean(auth.currentUser));
   const [testEmailName, setTestEmailName] = useState('');
   const [testEmailRecipient, setTestEmailRecipient] = useState('');
   const [testEmailSending, setTestEmailSending] = useState(false);
@@ -179,10 +184,19 @@ const GroupMeetAdminPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const contactImageInputRef = useRef<HTMLInputElement>(null);
 
-  const populatedParticipants = useMemo(
-    () => participants.filter((participant) => participant.name.trim()),
-    [participants]
+  const selectedParticipantContacts = useMemo(
+    () =>
+      selectedParticipantContactIds
+        .map((contactId) => contacts.find((contact) => contact.id === contactId) || null)
+        .filter((contact): contact is GroupMeetContact => Boolean(contact)),
+    [contacts, selectedParticipantContactIds]
+  );
+
+  const availableGuestContacts = useMemo(
+    () => contacts.filter((contact) => contact.id !== host.contactId),
+    [contacts, host.contactId]
   );
 
   const getAdminHeaders = async () => {
@@ -195,6 +209,7 @@ const GroupMeetAdminPage: React.FC = () => {
     return {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${idToken}`,
+      'x-force-dev-firebase': shouldUseDevFirebaseForAdminApi() ? 'true' : 'false',
     };
   };
 
@@ -218,22 +233,31 @@ const GroupMeetAdminPage: React.FC = () => {
   };
 
   useEffect(() => {
-    loadRequests();
+    const unsubscribe = auth.onIdTokenChanged((currentUser) => {
+      setAdminAuthReady(Boolean(currentUser));
+
+      if (!currentUser) return;
+
+      setHost((current) => ({
+        contactId: current.contactId || null,
+        name: current.name || currentUser.displayName || 'Host',
+        email: current.email || currentUser.email || '',
+        imageUrl: current.imageUrl || currentUser.photoURL || '',
+      }));
+      setTestEmailName((current) => current || currentUser.displayName || 'Test Recipient');
+      setTestEmailRecipient((current) => current || currentUser.email || '');
+    });
+
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
-
-    setHost((current) => ({
-      contactId: current.contactId || null,
-      name: current.name || currentUser.displayName || 'Host',
-      email: current.email || currentUser.email || '',
-      imageUrl: current.imageUrl || currentUser.photoURL || '',
-    }));
-    setTestEmailName((current) => current || currentUser.displayName || 'Test Recipient');
-    setTestEmailRecipient((current) => current || currentUser.email || '');
-  }, []);
+    return () => {
+      if (contactImagePreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(contactImagePreviewUrl);
+      }
+    };
+  }, [contactImagePreviewUrl]);
 
   const loadContacts = async () => {
     setContactsLoading(true);
@@ -255,8 +279,14 @@ const GroupMeetAdminPage: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!adminAuthReady) return;
+    loadRequests();
+  }, [adminAuthReady]);
+
+  useEffect(() => {
+    if (!adminAuthReady) return;
     loadContacts();
-  }, []);
+  }, [adminAuthReady]);
 
   const loadRequestDetail = async (requestId: string) => {
     setDetailLoading(true);
@@ -286,54 +316,6 @@ const GroupMeetAdminPage: React.FC = () => {
     loadRequestDetail(selectedRequestId);
   }, [selectedRequestId]);
 
-  const updateParticipant = (index: number, field: keyof ParticipantDraft, value: string) => {
-    setParticipants((current) =>
-      current.map((participant, participantIndex) =>
-        participantIndex === index ? { ...participant, [field]: value } : participant
-      )
-    );
-  };
-
-  const updateHost = (field: keyof HostDraft, value: string | null) => {
-    setHost((current) => ({ ...current, [field]: value ?? '' }));
-  };
-
-  const addContactToParticipants = (contact: GroupMeetContact) => {
-    const comparisonKey =
-      (contact.email || '').toLowerCase() || contact.id || contact.name.toLowerCase();
-    const hostKey =
-      host.email.trim().toLowerCase() || host.contactId || host.name.trim().toLowerCase();
-
-    if (comparisonKey && comparisonKey === hostKey) {
-      setMessage({ type: 'error', text: `${contact.name} is already set as the host.` });
-      return;
-    }
-
-    setParticipants((current) => {
-      const hasMatch = current.some((participant) => {
-        const participantKey =
-          participant.email.trim().toLowerCase() ||
-          participant.contactId ||
-          participant.name.trim().toLowerCase();
-        return participantKey && participantKey === comparisonKey;
-      });
-
-      if (hasMatch) {
-        return current;
-      }
-
-      return [
-        ...current.filter((participant) => participant.name.trim() || participant.email.trim()),
-        {
-          contactId: contact.id,
-          name: contact.name,
-          email: contact.email || '',
-          imageUrl: contact.imageUrl || '',
-        },
-      ];
-    });
-  };
-
   const useContactAsHost = (contact: GroupMeetContact) => {
     setHost({
       contactId: contact.id,
@@ -341,25 +323,57 @@ const GroupMeetAdminPage: React.FC = () => {
       email: contact.email || '',
       imageUrl: contact.imageUrl || '',
     });
-    setParticipants((current) =>
-      current.filter((participant) => {
-        const participantKey =
-          participant.email.trim().toLowerCase() ||
-          participant.contactId ||
-          participant.name.trim().toLowerCase();
-        const contactKey =
-          (contact.email || '').toLowerCase() || contact.id || contact.name.toLowerCase();
-        return !participantKey || participantKey !== contactKey;
-      })
+    setSelectedParticipantContactIds((current) => current.filter((contactId) => contactId !== contact.id));
+  };
+
+  useEffect(() => {
+    if (!contacts.length) {
+      setSelectedParticipantContactIds([]);
+      setHost((current) => (current.contactId ? buildEmptyHost() : current));
+      return;
+    }
+
+    setSelectedParticipantContactIds((current) =>
+      current.filter((contactId) => contacts.some((contact) => contact.id === contactId && contact.id !== host.contactId))
     );
-  };
 
-  const removeParticipant = (index: number) => {
-    setParticipants((current) => (current.length === 1 ? current : current.filter((_, i) => i !== index)));
-  };
+    const selectedHostContact = host.contactId
+      ? contacts.find((contact) => contact.id === host.contactId) || null
+      : null;
 
-  const addParticipant = () => {
-    setParticipants((current) => [...current, buildEmptyParticipant()]);
+    if (selectedHostContact) {
+      const nextHost = {
+        contactId: selectedHostContact.id,
+        name: selectedHostContact.name,
+        email: selectedHostContact.email || '',
+        imageUrl: selectedHostContact.imageUrl || '',
+      };
+
+      if (
+        host.name !== nextHost.name ||
+        host.email !== nextHost.email ||
+        host.imageUrl !== nextHost.imageUrl
+      ) {
+        setHost(nextHost);
+      }
+      return;
+    }
+
+    const currentUserEmail = auth.currentUser?.email?.trim().toLowerCase() || '';
+    if (!currentUserEmail) return;
+
+    const matchingContact = contacts.find((contact) => (contact.email || '').toLowerCase() === currentUserEmail);
+    if (matchingContact) {
+      useContactAsHost(matchingContact);
+    }
+  }, [contacts, host.contactId, host.email, host.imageUrl, host.name]);
+
+  const toggleParticipantContact = (contactId: string) => {
+    setSelectedParticipantContactIds((current) =>
+      current.includes(contactId)
+        ? current.filter((currentContactId) => currentContactId !== contactId)
+        : [...current, contactId]
+    );
   };
 
   const copyText = async (text: string, successText = 'Copied to clipboard') => {
@@ -372,8 +386,8 @@ const GroupMeetAdminPage: React.FC = () => {
   };
 
   const createRequest = async () => {
-    if (!host.name.trim()) {
-      setMessage({ type: 'error', text: 'Add the host name before creating the request.' });
+    if (!host.contactId) {
+      setMessage({ type: 'error', text: 'Choose the host from your contact list before creating the request.' });
       return;
     }
 
@@ -382,8 +396,8 @@ const GroupMeetAdminPage: React.FC = () => {
       return;
     }
 
-    if (!populatedParticipants.length) {
-      setMessage({ type: 'error', text: 'Add at least one participant name.' });
+    if (!selectedParticipantContacts.length) {
+      setMessage({ type: 'error', text: 'Choose at least one guest from your contact list.' });
       return;
     }
 
@@ -404,12 +418,11 @@ const GroupMeetAdminPage: React.FC = () => {
           sendEmails,
           host: {
             contactId: host.contactId,
-            name: host.name,
-            email: host.email,
-            imageUrl: host.imageUrl,
             availabilityEntries: hostAvailabilityEntries,
           },
-          participants,
+          participants: selectedParticipantContacts.map((participant) => ({
+            contactId: participant.id,
+          })),
         }),
       });
 
@@ -421,7 +434,7 @@ const GroupMeetAdminPage: React.FC = () => {
       setCreatedRequest(payload.request);
       setSelectedRequestId(payload.request.id);
       setMessage({ type: 'success', text: 'Group Meet request created.' });
-      setParticipants([buildEmptyParticipant(), buildEmptyParticipant(), buildEmptyParticipant()]);
+      setSelectedParticipantContactIds([]);
       setHostAvailabilityEntries([]);
       await loadRequests();
     } catch (error: any) {
@@ -431,13 +444,17 @@ const GroupMeetAdminPage: React.FC = () => {
     }
   };
 
-  const saveContact = async (prefill?: HostDraft | ParticipantDraft) => {
-    const name = (prefill?.name || contactName).trim();
-    const email = (prefill?.email || contactEmail).trim();
-    const imageUrl = (prefill?.imageUrl || contactImageUrl).trim();
+  const saveContact = async () => {
+    const name = contactName.trim();
+    const email = contactEmail.trim();
 
     if (!name) {
       setMessage({ type: 'error', text: 'Contact name is required.' });
+      return;
+    }
+
+    if (contactImageFile && !contactImageFile.type.startsWith('image/')) {
+      setMessage({ type: 'error', text: 'Choose a valid image file.' });
       return;
     }
 
@@ -445,6 +462,24 @@ const GroupMeetAdminPage: React.FC = () => {
     setMessage(null);
 
     try {
+      let imageUrl = '';
+
+      if (contactImageFile) {
+        const currentUser = auth.currentUser;
+        const ownerKey =
+          currentUser?.uid ||
+          currentUser?.email?.replace(/[^a-zA-Z0-9]/g, '-') ||
+          'admin';
+        const safeFileName = contactImageFile.name.replace(/[^a-zA-Z0-9.-]/g, '');
+        const filePath = `group-meet/contacts/${ownerKey}/${Date.now()}-${safeFileName}`;
+        const imageRef = storageRef(storage, filePath);
+
+        await uploadBytes(imageRef, contactImageFile, {
+          contentType: contactImageFile.type || 'image/jpeg',
+        });
+        imageUrl = await getDownloadURL(imageRef);
+      }
+
       const headers = await getAdminHeaders();
       const response = await fetch('/api/admin/group-meet/contacts', {
         method: 'POST',
@@ -459,10 +494,15 @@ const GroupMeetAdminPage: React.FC = () => {
       }
 
       await loadContacts();
-      if (!prefill) {
-        setContactName('');
-        setContactEmail('');
-        setContactImageUrl('');
+      setContactName('');
+      setContactEmail('');
+      if (contactImagePreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(contactImagePreviewUrl);
+      }
+      setContactImageFile(null);
+      setContactImagePreviewUrl('');
+      if (contactImageInputRef.current) {
+        contactImageInputRef.current.value = '';
       }
       setMessage({ type: 'success', text: `${name} saved to Group Meet contacts.` });
     } catch (error: any) {
@@ -689,6 +729,32 @@ const GroupMeetAdminPage: React.FC = () => {
       invite.availabilityEntries.some((slot) => slot.date === date)
     );
 
+  const handleContactImageSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextFile = event.target.files?.[0] || null;
+
+    if (!nextFile) {
+      if (contactImagePreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(contactImagePreviewUrl);
+      }
+      setContactImageFile(null);
+      setContactImagePreviewUrl('');
+      return;
+    }
+
+    if (!nextFile.type.startsWith('image/')) {
+      setMessage({ type: 'error', text: 'Choose a valid image file.' });
+      event.target.value = '';
+      return;
+    }
+
+    if (contactImagePreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(contactImagePreviewUrl);
+    }
+
+    setContactImageFile(nextFile);
+    setContactImagePreviewUrl(URL.createObjectURL(nextFile));
+  };
+
   return (
     <AdminRouteGuard>
       <div className="min-h-screen bg-black text-white">
@@ -727,214 +793,402 @@ const GroupMeetAdminPage: React.FC = () => {
             </div>
           )}
 
+          <div className="mb-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveTab('create')}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                activeTab === 'create'
+                  ? 'bg-[#E0FE10] text-black'
+                  : 'border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900'
+              }`}
+            >
+              Create request
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('contacts')}
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                activeTab === 'contacts'
+                  ? 'bg-[#E0FE10] text-black'
+                  : 'border border-zinc-800 bg-zinc-950 text-zinc-300 hover:bg-zinc-900'
+              }`}
+            >
+              Contact list
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-8">
             <section className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-11 h-11 rounded-2xl bg-[#E0FE10]/10 text-[#E0FE10] flex items-center justify-center">
-                  <Calendar className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-semibold">Create request</h2>
-                  <p className="text-zinc-400 text-sm">The host adds their own availability first, then sends tracked links to everyone else.</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className="block">
-                  <span className="block text-sm text-zinc-300 mb-2">Meeting title</span>
-                  <input
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                    placeholder="Board sync"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="block text-sm text-zinc-300 mb-2">Target month</span>
-                  <input
-                    type="month"
-                    value={targetMonth}
-                    onChange={(event) => setTargetMonth(event.target.value)}
-                    className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="block text-sm text-zinc-300 mb-2">Deadline</span>
-                  <input
-                    type="datetime-local"
-                    value={deadlineAt}
-                    onChange={(event) => setDeadlineAt(event.target.value)}
-                    className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                  />
-                </label>
-
-                <label className="block">
-                  <span className="block text-sm text-zinc-300 mb-2">Meeting length</span>
-                  <select
-                    value={meetingDurationMinutes}
-                    onChange={(event) => setMeetingDurationMinutes(Number(event.target.value))}
-                    className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                  >
-                    <option value={15}>15 minutes</option>
-                    <option value={30}>30 minutes</option>
-                    <option value={45}>45 minutes</option>
-                    <option value={60}>60 minutes</option>
-                    <option value={90}>90 minutes</option>
-                  </select>
-                </label>
-              </div>
-
-              <label className="block mt-4">
-                <span className="block text-sm text-zinc-300 mb-2">Timezone</span>
-                <input
-                  value={timezone}
-                  onChange={(event) => setTimezone(event.target.value)}
-                  className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                  placeholder="America/New_York"
-                />
-              </label>
-
-              <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-black/60 px-4 py-4">
-                <div>
-                  <div className="font-medium">Email invites now</div>
-                  <div className="text-sm text-zinc-400">If an email is present, Group Meet will send the participant their personal link right away.</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSendEmails((current) => !current)}
-                  className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                    sendEmails ? 'bg-[#E0FE10] text-black' : 'bg-zinc-900 text-zinc-200 border border-zinc-700'
-                  }`}
-                >
-                  {sendEmails ? 'Enabled' : 'Disabled'}
-                </button>
-              </div>
-
-              <div className="mt-8 rounded-3xl border border-zinc-800 bg-black/50 p-5">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold">Host profile</h3>
-                    <p className="text-sm text-zinc-400">The host is treated like a real participant, so their availability shapes the meeting options from the start.</p>
-                  </div>
-                  <AvatarBubble name={host.name || 'Host'} imageUrl={host.imageUrl} />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <input
-                    value={host.name}
-                    onChange={(event) => updateHost('name', event.target.value)}
-                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                    placeholder="Host name"
-                  />
-                  <input
-                    value={host.email}
-                    onChange={(event) => updateHost('email', event.target.value)}
-                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                    placeholder="Host email"
-                  />
-                  <input
-                    value={host.imageUrl}
-                    onChange={(event) => updateHost('imageUrl', event.target.value)}
-                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                    placeholder="Host image URL"
-                  />
-                </div>
-
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => saveContact(host)}
-                    disabled={savingContact}
-                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm hover:bg-zinc-800 disabled:opacity-50"
-                  >
-                    <Plus className="w-4 h-4" />
-                    {savingContact ? 'Saving…' : 'Save host as contact'}
-                  </button>
-                  {host.contactId && (
-                    <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-400">
-                      Using saved contact
-                    </span>
-                  )}
-                </div>
-
-                <GroupMeetAvailabilityPicker
-                  className="mt-5"
-                  targetMonth={targetMonth}
-                  availabilityEntries={hostAvailabilityEntries}
-                  onChange={setHostAvailabilityEntries}
-                  title="Host availability"
-                  subtitle="Set the days and time ranges you can actually do before the request goes out."
-                />
-              </div>
-
-              <div className="mt-8">
-                <div className="flex items-center justify-between gap-4 mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold">Participants</h3>
-                    <p className="text-sm text-zinc-400">Pick from saved contacts or add a custom person. Email is optional. Images will show up in the overlap view.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={addParticipant}
-                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm hover:bg-zinc-800"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add person
-                  </button>
-                </div>
-
-                <div className="space-y-3">
-                  {participants.map((participant, index) => (
-                    <div key={`participant-${index}`} className="grid grid-cols-1 md:grid-cols-[auto_1fr_1fr_1fr_auto] gap-3 rounded-2xl border border-zinc-800 bg-black/60 p-3">
-                      <div className="flex items-center justify-center">
-                        <AvatarBubble name={participant.name || 'Guest'} imageUrl={participant.imageUrl} />
-                      </div>
-                      <input
-                        value={participant.name}
-                        onChange={(event) => updateParticipant(index, 'name', event.target.value)}
-                        className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                        placeholder="Name"
-                      />
-                      <input
-                        value={participant.email}
-                        onChange={(event) => updateParticipant(index, 'email', event.target.value)}
-                        className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                        placeholder="Email (optional)"
-                      />
-                      <input
-                        value={participant.imageUrl}
-                        onChange={(event) => updateParticipant(index, 'imageUrl', event.target.value)}
-                        className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                        placeholder="Image URL (optional)"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeParticipant(index)}
-                        className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-3 text-zinc-300 hover:bg-zinc-900"
-                        aria-label={`Remove participant ${index + 1}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+              {activeTab === 'create' ? (
+                <>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-11 h-11 rounded-2xl bg-[#E0FE10]/10 text-[#E0FE10] flex items-center justify-center">
+                      <Calendar className="w-5 h-5" />
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div>
+                      <h2 className="text-xl font-semibold">Create request</h2>
+                      <p className="text-zinc-400 text-sm">Choose the host and guests from your saved contacts, then collect availability from there.</p>
+                    </div>
+                  </div>
 
-              <div className="mt-8 flex items-center justify-between gap-4 border-t border-zinc-800 pt-6">
-                <div className="text-sm text-zinc-400">
-                  Host availability locked in • {populatedParticipants.length} guest{populatedParticipants.length === 1 ? '' : 's'} ready
-                </div>
-                <button
-                  type="button"
-                  onClick={createRequest}
-                  disabled={creating}
-                  className="rounded-xl bg-[#E0FE10] px-5 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
-                >
-                  {creating ? 'Creating…' : 'Create Group Meet request'}
-                </button>
-              </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="block">
+                      <span className="block text-sm text-zinc-300 mb-2">Meeting title</span>
+                      <input
+                        value={title}
+                        onChange={(event) => setTitle(event.target.value)}
+                        className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                        placeholder="Board sync"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="block text-sm text-zinc-300 mb-2">Target month</span>
+                      <input
+                        type="month"
+                        value={targetMonth}
+                        onChange={(event) => setTargetMonth(event.target.value)}
+                        className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="block text-sm text-zinc-300 mb-2">Deadline</span>
+                      <input
+                        type="datetime-local"
+                        value={deadlineAt}
+                        onChange={(event) => setDeadlineAt(event.target.value)}
+                        className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="block text-sm text-zinc-300 mb-2">Meeting length</span>
+                      <select
+                        value={meetingDurationMinutes}
+                        onChange={(event) => setMeetingDurationMinutes(Number(event.target.value))}
+                        className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                      >
+                        <option value={15}>15 minutes</option>
+                        <option value={30}>30 minutes</option>
+                        <option value={45}>45 minutes</option>
+                        <option value={60}>60 minutes</option>
+                        <option value={90}>90 minutes</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <label className="block mt-4">
+                    <span className="block text-sm text-zinc-300 mb-2">Timezone</span>
+                    <input
+                      value={timezone}
+                      onChange={(event) => setTimezone(event.target.value)}
+                      className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                      placeholder="America/New_York"
+                    />
+                  </label>
+
+                  <div className="mt-6 flex items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-black/60 px-4 py-4">
+                    <div>
+                      <div className="font-medium">Email invites now</div>
+                      <div className="text-sm text-zinc-400">If an email is present, Group Meet will send the participant their personal link right away.</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSendEmails((current) => !current)}
+                      className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                        sendEmails ? 'bg-[#E0FE10] text-black' : 'bg-zinc-900 text-zinc-200 border border-zinc-700'
+                      }`}
+                    >
+                      {sendEmails ? 'Enabled' : 'Disabled'}
+                    </button>
+                  </div>
+
+                  <div className="mt-8 rounded-3xl border border-zinc-800 bg-black/50 p-5">
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <div>
+                        <h3 className="text-lg font-semibold">Host</h3>
+                        <p className="text-sm text-zinc-400">Pick the organizer from your saved contacts, then lock in their availability before the request goes out.</p>
+                      </div>
+                      <AvatarBubble name={host.name || 'Host'} imageUrl={host.imageUrl} />
+                    </div>
+
+                    {contacts.length ? (
+                      <>
+                        <label className="block">
+                          <span className="block text-sm text-zinc-300 mb-2">Host contact</span>
+                          <select
+                            value={host.contactId || ''}
+                            onChange={(event) => {
+                              const nextContact = contacts.find((contact) => contact.id === event.target.value) || null;
+                              if (nextContact) {
+                                useContactAsHost(nextContact);
+                              } else {
+                                setHost(buildEmptyHost());
+                              }
+                            }}
+                            className="w-full rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                          >
+                            <option value="">Select a contact</option>
+                            {contacts.map((contact) => (
+                              <option key={contact.id} value={contact.id}>
+                                {contact.name}{contact.email ? ` • ${contact.email}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        {host.contactId && (
+                          <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4">
+                            <div className="flex items-center gap-3">
+                              <AvatarBubble name={host.name} imageUrl={host.imageUrl} />
+                              <div>
+                                <div className="font-medium">{host.name}</div>
+                                <div className="text-sm text-zinc-400">{host.email || 'No email on file'}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                        Add your contacts first, then come back here to choose the host.
+                        <div className="mt-4">
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('contacts')}
+                            className="rounded-xl border border-zinc-800 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-900"
+                          >
+                            Open contact list
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <GroupMeetAvailabilityPicker
+                      className="mt-5"
+                      targetMonth={targetMonth}
+                      availabilityEntries={hostAvailabilityEntries}
+                      onChange={setHostAvailabilityEntries}
+                      title="Host availability"
+                      subtitle={
+                        host.contactId
+                          ? 'Set the days and time ranges the host can actually do before the request goes out.'
+                          : 'Choose a host contact first, then add the organizer availability.'
+                      }
+                    />
+                  </div>
+
+                  <div className="mt-8">
+                    <div className="flex items-center justify-between gap-4 mb-4">
+                      <div>
+                        <h3 className="text-lg font-semibold">Guests</h3>
+                        <p className="text-sm text-zinc-400">Only saved contacts can be invited. Tap the people you want to include in this request.</p>
+                      </div>
+                      <div className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-400">
+                        {selectedParticipantContacts.length} selected
+                      </div>
+                    </div>
+
+                    {!contacts.length ? (
+                      <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                        Your guest picker will unlock once you have contacts saved.
+                      </div>
+                    ) : !availableGuestContacts.length ? (
+                      <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                        Everyone in your contact list is currently being used as the host, so add more contacts to build the guest list.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {availableGuestContacts.map((contact) => {
+                          const selected = selectedParticipantContactIds.includes(contact.id);
+                          return (
+                            <button
+                              key={contact.id}
+                              type="button"
+                              onClick={() => toggleParticipantContact(contact.id)}
+                              className={`flex w-full items-center justify-between gap-4 rounded-2xl border p-4 text-left transition-colors ${
+                                selected
+                                  ? 'border-[#E0FE10]/40 bg-[#E0FE10]/10'
+                                  : 'border-zinc-800 bg-black/60 hover:bg-zinc-900/80'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <AvatarBubble name={contact.name} imageUrl={contact.imageUrl} />
+                                <div>
+                                  <div className="font-medium">{contact.name}</div>
+                                  <div className="text-sm text-zinc-400">{contact.email || 'Manual link only'}</div>
+                                </div>
+                              </div>
+                              <div className={`rounded-full px-3 py-2 text-xs font-semibold ${selected ? 'bg-[#E0FE10] text-black' : 'border border-zinc-700 text-zinc-300'}`}>
+                                {selected ? 'Selected' : 'Add guest'}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-8 flex items-center justify-between gap-4 border-t border-zinc-800 pt-6">
+                    <div className="text-sm text-zinc-400">
+                      Host availability locked in • {selectedParticipantContacts.length} guest{selectedParticipantContacts.length === 1 ? '' : 's'} ready
+                    </div>
+                    <button
+                      type="button"
+                      onClick={createRequest}
+                      disabled={creating}
+                      className="rounded-xl bg-[#E0FE10] px-5 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                    >
+                      {creating ? 'Creating…' : 'Create Group Meet request'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-11 h-11 rounded-2xl bg-white/5 text-white flex items-center justify-center">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-semibold">Contact list</h2>
+                      <p className="text-sm text-zinc-400">Create the reusable profiles here. The meeting builder only pulls from this saved list.</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1.2fr_auto] gap-3">
+                    <input
+                      value={contactName}
+                      onChange={(event) => setContactName(event.target.value)}
+                      className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                      placeholder="Contact name"
+                    />
+                    <input
+                      value={contactEmail}
+                      onChange={(event) => setContactEmail(event.target.value)}
+                      className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                      placeholder="Email"
+                    />
+                    <div className="rounded-xl border border-zinc-800 bg-black px-4 py-3">
+                      <input
+                        ref={contactImageInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleContactImageSelection}
+                        className="hidden"
+                      />
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <AvatarBubble
+                            name={contactName || 'Contact'}
+                            imageUrl={contactImagePreviewUrl || null}
+                            size="h-10 w-10"
+                          />
+                          <div className="min-w-0">
+                            <div className="text-sm text-white truncate">
+                              {contactImageFile ? contactImageFile.name : 'Upload contact image'}
+                            </div>
+                            <div className="text-xs text-zinc-500">
+                              PNG, JPG, or WEBP
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {contactImageFile && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (contactImagePreviewUrl.startsWith('blob:')) {
+                                  URL.revokeObjectURL(contactImagePreviewUrl);
+                                }
+                                setContactImageFile(null);
+                                setContactImagePreviewUrl('');
+                                if (contactImageInputRef.current) {
+                                  contactImageInputRef.current.value = '';
+                                }
+                              }}
+                              className="rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-900"
+                            >
+                              Clear
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => contactImageInputRef.current?.click()}
+                            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-100 hover:bg-zinc-900"
+                          >
+                            <Upload className="h-4 w-4" />
+                            {contactImageFile ? 'Replace' : 'Choose file'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={saveContact}
+                      disabled={savingContact}
+                      className="rounded-xl bg-[#E0FE10] px-4 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                    >
+                      {savingContact ? 'Saving…' : 'Save contact'}
+                    </button>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/40 px-4 py-4 text-sm text-zinc-400">
+                    Save yourself here too. The host has to be selected from this list before a Group Meet request can be created.
+                  </div>
+
+                  <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm text-zinc-400">
+                      {contacts.length} saved contact{contacts.length === 1 ? '' : 's'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('create')}
+                      className="rounded-xl border border-zinc-800 px-4 py-2 text-sm hover:bg-zinc-900"
+                    >
+                      Back to request builder
+                    </button>
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    {contacts.map((contact) => {
+                      const isHost = host.contactId === contact.id;
+                      const isSelectedGuest = selectedParticipantContactIds.includes(contact.id);
+
+                      return (
+                        <div key={contact.id} className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-black/40 p-4 md:flex-row md:items-center md:justify-between">
+                          <div className="flex items-center gap-3">
+                            <AvatarBubble name={contact.name} imageUrl={contact.imageUrl} />
+                            <div>
+                              <div className="font-medium">{contact.name}</div>
+                              <div className="text-sm text-zinc-400">{contact.email || 'No email on file'}</div>
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs">
+                            {isHost && (
+                              <span className="rounded-full border border-[#E0FE10]/30 bg-[#E0FE10]/10 px-3 py-2 text-[#E0FE10]">
+                                Current host
+                              </span>
+                            )}
+                            {isSelectedGuest && (
+                              <span className="rounded-full border border-zinc-700 bg-zinc-900 px-3 py-2 text-zinc-300">
+                                Selected guest
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {!contacts.length && !contactsLoading && (
+                      <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                        No saved contacts yet.
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </section>
 
             <section className="space-y-6">
@@ -974,83 +1228,6 @@ const GroupMeetAdminPage: React.FC = () => {
 
                 <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/40 px-4 py-4 text-sm text-zinc-400">
                   This uses the current draft values for title, month, deadline, and timezone. The email is clearly marked as a test and routes back to the internal Group Meet tool.
-                </div>
-              </div>
-
-              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-11 h-11 rounded-2xl bg-white/5 text-white flex items-center justify-center">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold">Contact library</h2>
-                    <p className="text-sm text-zinc-400">Save the people you schedule with often, then tap them into the next request.</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3">
-                  <input
-                    value={contactName}
-                    onChange={(event) => setContactName(event.target.value)}
-                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                    placeholder="Contact name"
-                  />
-                  <input
-                    value={contactEmail}
-                    onChange={(event) => setContactEmail(event.target.value)}
-                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                    placeholder="Email"
-                  />
-                  <input
-                    value={contactImageUrl}
-                    onChange={(event) => setContactImageUrl(event.target.value)}
-                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
-                    placeholder="Image URL"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => saveContact()}
-                    disabled={savingContact}
-                    className="rounded-xl bg-[#E0FE10] px-4 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
-                  >
-                    {savingContact ? 'Saving…' : 'Save contact'}
-                  </button>
-                </div>
-
-                <div className="mt-5 space-y-3">
-                  {contacts.map((contact) => (
-                    <div key={contact.id} className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-black/40 p-4 md:flex-row md:items-center md:justify-between">
-                      <div className="flex items-center gap-3">
-                        <AvatarBubble name={contact.name} imageUrl={contact.imageUrl} />
-                        <div>
-                          <div className="font-medium">{contact.name}</div>
-                          <div className="text-sm text-zinc-400">{contact.email || 'No email on file'}</div>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => useContactAsHost(contact)}
-                          className="rounded-lg border border-zinc-800 px-3 py-2 text-xs hover:bg-zinc-900"
-                        >
-                          Use as host
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => addContactToParticipants(contact)}
-                          className="rounded-lg border border-zinc-800 px-3 py-2 text-xs hover:bg-zinc-900"
-                        >
-                          Add to guests
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {!contacts.length && !contactsLoading && (
-                    <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
-                      No saved contacts yet.
-                    </div>
-                  )}
                 </div>
               </div>
 
