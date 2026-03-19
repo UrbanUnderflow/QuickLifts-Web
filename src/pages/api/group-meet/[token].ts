@@ -13,6 +13,8 @@ type GroupMeetInvitePayload = {
     token: string;
     name: string;
     email: string | null;
+    imageUrl: string | null;
+    participantType: 'host' | 'participant';
     shareUrl: string;
     responseSubmittedAt: string | null;
     availabilityEntries: GroupMeetAvailabilitySlot[];
@@ -66,6 +68,8 @@ function buildInvitePayload(args: {
       token: args.token,
       name: args.inviteData.name || '',
       email: args.inviteData.email || null,
+      imageUrl: args.inviteData.imageUrl || null,
+      participantType: args.inviteData.participantType === 'host' ? 'host' : 'participant',
       shareUrl: args.inviteData.shareUrl || '',
       responseSubmittedAt: toIso(args.inviteData.responseSubmittedAt),
       availabilityEntries: Array.isArray(args.inviteData.availabilityEntries)

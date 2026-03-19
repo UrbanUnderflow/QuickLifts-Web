@@ -3212,6 +3212,13 @@ function getArtifactRiskPattern(variant: VariantEntry, theme: VariantTheme) {
         ];
     }
 
+    if (variant.family === 'Noise Gate' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            ...theme.artifactRisks,
+            'If visual clutter, peripheral bait, motion clutter, or salience conflict makes the live cue ambiguous enough to create a new search or divided-attention task, classify it as a build defect rather than athlete failure.',
+        ];
+    }
+
     if (variant.family === 'Endurance Lock' && resolveVariantArchetype(variant) === 'visual_channel') {
         return [
             ...theme.artifactRisks,
@@ -3231,6 +3238,66 @@ function getVariantSpecificModifierMatrix(variant: VariantEntry) {
             'Tier 1 allows one modifier at a time only: `flash` or `target_disappearance` or `layout_scramble`.',
             'Tier 2 allows one modifier at a time or `flash + layout_scramble`; `target_disappearance` may pair only with low-salience flash and may not pair with simultaneous scramble.',
             'Tier 3 allows `flash + target_disappearance` or `flash + layout_scramble`; `target_disappearance + layout_scramble` remains disallowed because it risks changing the mechanic from reset recovery into target-search or rule-discovery.',
+        ];
+    }
+
+    if (variant.family === 'Brake Point') {
+        return [
+            '`stop_signal_delay_profile` = the standardized stop/cancel timing profile that determines how long Go momentum is allowed before inhibition is required; it must remain reproducible and may not drift trial to trial.',
+            '`no_go_type` = the inhibitory challenge class presented on a given trial; approved values are `obvious_stop`, `fakeout_lure`, `late_reveal_stop`, and `spatial_cancel`.',
+            '`lure_timing_profile` = the timing bucket describing when a false or competing lure appears relative to the Go cue; approved values are `early_lure`, `mid_lure`, and `late_lure`.',
+            '`modifier_profile_id` = one named Brake Point package selected per published module; approved profile ids are `go_no_go_v1`, `fakeout_lure_v1`, `late_reveal_v1`, and `spatial_cancel_v1` and they may not be mixed inside the same build.',
+            '`go_no_go_v1` maps one-to-one to Tier 1 = `no_go_type=obvious_stop` with fixed stop-signal timing and no fakeout lures layered in.',
+            '`fakeout_lure_v1` maps one-to-one to Tier 2 = `no_go_type=fakeout_lure` with fixed `lure_timing_profile=mid_lure` and a standardized stop-signal delay profile.',
+            '`late_reveal_v1` maps one-to-one to Tier 3 = `no_go_type=late_reveal_stop` with fixed `lure_timing_profile=late_lure` and the published late-reveal stop schedule.',
+            '`spatial_cancel_v1` maps one-to-one to Tier 3 = `no_go_type=spatial_cancel` with fixed spatial-cancel lane mapping and no additional lure-timing rotation.',
+            'Only one `modifier_profile_id` may be active per published module; if fakeout, late-reveal, or spatial-cancel mechanics are mixed inside one build, the profile is no longer comparison-safe and must be flagged for promotion review.',
+        ];
+    }
+
+    if (variant.family === 'Signal Window') {
+        return [
+            '`window_length_profile` = the standardized cue-exposure duration profile that determines how long the athlete has to read and commit before the decision window closes.',
+            '`ambiguity_tier` = the degree of cue ambiguity or information incompleteness; approved values are `low`, `medium`, and `high`.',
+            '`decoy_classification` = the plausible-wrong cue family presented on a given read; approved values are `none`, `adjacent_plausible`, `timing_bait`, and `spatial_bait`.',
+            '`modifier_profile_id` = one named Signal Window package selected per published module; approved profile ids are `rapid_recognition_v1`, `ambiguous_cue_v1`, `decoy_cue_v1`, `shot_clock_v1`, and `spatial_read_v1` and they may not be mixed inside the same build.',
+            '`rapid_recognition_v1` maps one-to-one to Tier 1 = fixed short decision windows with `ambiguity_tier=low` and `decoy_classification=none`.',
+            '`ambiguous_cue_v1` maps one-to-one to Tier 2 = fixed medium decision windows with `ambiguity_tier=high` and `decoy_classification=none`.',
+            '`decoy_cue_v1` maps one-to-one to Tier 2 = fixed medium decision windows with `ambiguity_tier=medium` and `decoy_classification=adjacent_plausible`.',
+            '`shot_clock_v1` maps one-to-one to Tier 3 = fixed short decision windows with `ambiguity_tier=medium`, `decoy_classification=timing_bait`, and sport-context urgency language only if the module is sport-context packaged.',
+            '`spatial_read_v1` maps one-to-one to Tier 3 = fixed medium decision windows with `ambiguity_tier=medium` and `decoy_classification=spatial_bait`.',
+            'Only one `modifier_profile_id` may be active per published module; window length, ambiguity tier, and decoy class may not rotate outside the named profile schedule.',
+        ];
+    }
+
+    if (variant.family === 'Sequence Shift') {
+        return [
+            '`rule_change_type` = the active shift mechanic for the published module; approved values are `pattern_change`, `dual_rule_swap`, `sequence_memory_shift`, and `playbook_shift`.',
+            '`shift_schedule_profile` = the standardized cadence and spacing of rule changes through the session; it must remain fixed for the selected module and may not drift round to round.',
+            '`intrusion_pressure` = the amount of old-rule carryover pressure built into the post-shift window; approved values are `low`, `medium`, and `high`.',
+            '`modifier_profile_id` = one named Sequence Shift package selected per published module; approved profile ids are `pattern_change_v1`, `dual_rule_v1`, `sequence_memory_v1`, and `playbook_shift_v1` and they may not be mixed inside the same build.',
+            '`pattern_change_v1` maps one-to-one to Tier 1 = `rule_change_type=pattern_change` with fixed shift schedule and `intrusion_pressure=medium`.',
+            '`dual_rule_v1` maps one-to-one to Tier 2 = `rule_change_type=dual_rule_swap` with fixed shift schedule and `intrusion_pressure=high`.',
+            '`sequence_memory_v1` maps one-to-one to Tier 2 = `rule_change_type=sequence_memory_shift` with fixed sequence-memory overlay and `intrusion_pressure=medium`.',
+            '`playbook_shift_v1` maps one-to-one to Tier 3 = `rule_change_type=playbook_shift` with fixed shift schedule, sport-context packaging if applicable, and `intrusion_pressure=high`.',
+            'Only one `modifier_profile_id` may be active per published module; shift cadence, rule-change type, and post-shift window may not rotate outside the selected named profile.',
+        ];
+    }
+
+    if (variant.family === 'Noise Gate' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            '`visual_density` = non-target visual clutter around the live cue that increases crowding pressure without changing the target rule or making distractors into a second monitored target.',
+            '`peripheral_bait` = edge-loaded decoys, flickers, or lure stimuli that compete for attention while the true target remains primary and central to the task.',
+            '`motion_clutter` = irrelevant background or peripheral motion that raises screen noise without changing the target-response mapping.',
+            '`distractor_salience` = bounded increases in distractor contrast, brightness, or prominence relative to the live cue; distractor salience may rise, but the live cue must remain legible above the approved floor.',
+            '`visual_profile_id` = one named visual Noise Gate package selected per published module; approved profile ids are `clutter_ramp_v1`, `peripheral_competition_v1`, or `salience_conflict_v1` and they may not be mixed inside the same build.',
+            'Tier 1 = `visual_density + one visual_profile_id`.',
+            'Tier 2 = `visual_density + one visual_profile_id + peripheral_bait` or `visual_density + one visual_profile_id + motion_clutter`.',
+            'Tier 3 = `visual_density + one visual_profile_id + peripheral_bait + distractor_salience` only if the live cue remains visually unambiguous and distractors remain irrelevant.',
+            '`visual_profile_id` may not rotate between clutter, peripheral, and salience-conflict packages inside a single assignment; choose one normalized profile per published module so Distractor Cost stays comparable across runs.',
+            '`clutter_ramp_v1` fixed recipe = clean-reference baseline for the first 60 seconds with `visual_density_tier=low`, controlled clutter ramp for minutes 2-3 with `visual_density_tier=medium`, and sustained clutter challenge for minutes 4-5 with `visual_density_tier=high` while `peripheral_load_tier=low`, `motion_profile=static_noise`, and `distractor_salience_tier=medium` stay fixed.',
+            '`peripheral_competition_v1` fixed recipe = clean-reference baseline for the first 60 seconds with `peripheral_load_tier=low`, medium edge-bait competition for minutes 2-3 with `peripheral_load_tier=medium`, and repeated peripheral competition for minutes 4-5 with `peripheral_load_tier=high` while `visual_density_tier=medium`, `motion_profile=edge_flicker`, and `distractor_salience_tier=medium` stay fixed.',
+            '`salience_conflict_v1` fixed recipe = clean-reference baseline for the first 60 seconds with `distractor_salience_tier=low`, controlled salience rise for minutes 2-3 with `distractor_salience_tier=medium`, and fixed salience-conflict challenge for minutes 4-5 with `distractor_salience_tier=high` while `visual_density_tier=medium`, `peripheral_load_tier=medium`, and `motion_profile=soft_drift` stay fixed.',
         ];
     }
 
@@ -3310,6 +3377,38 @@ function getVariantSpecificTrialProfile(variant: VariantEntry) {
         ];
     }
 
+    if (variant.family === 'Brake Point') {
+        return [
+            'If Trial Mode is used for this variant, lock one named Brake Point profile: `modifier_profile_id` fixed, 175 total trials, adaptive difficulty off, fixed seed, fixed device class, fixed stop-signal delay profile, and fixed lure-timing schedule.',
+            'Recommended fixed schedule: early segment establishes Go/No-Go baseline distribution, middle segment applies the locked inhibitory challenge for the selected `modifier_profile_id`, and late segment repeats the same challenge under the same timing rules with no profile substitutions.',
+            'Keep `modifier_profile_id`, `no_go_type`, `stop_signal_delay_profile`, `lure_timing_profile`, and total trial count fixed for the full trial so Stop Latency, false alarms, and over-inhibition outputs remain reproducible across runs.',
+        ];
+    }
+
+    if (variant.family === 'Signal Window') {
+        return [
+            'If Trial Mode is used for this variant, lock one named Signal Window profile: `modifier_profile_id` fixed, 60 total reads, adaptive difficulty off, fixed seed, fixed device class, fixed window-length profile, and fixed cue-order schedule.',
+            'Recommended fixed schedule: early reads establish clean baseline commitment behavior, middle reads apply the locked ambiguity / decoy pattern for the selected `modifier_profile_id`, and late reads repeat the same read structure without changing cue-order logic or decision-window length.',
+            'Keep `modifier_profile_id`, `window_length_profile`, `ambiguity_tier`, `decoy_classification`, and cue-order schedule fixed for the full trial so correct-read quality and decision-latency comparisons stay reproducible across builds.',
+        ];
+    }
+
+    if (variant.family === 'Sequence Shift') {
+        return [
+            'If Trial Mode is used for this variant, lock one named Sequence Shift profile: `modifier_profile_id` fixed, 60 total shift opportunities, adaptive difficulty off, fixed seed, fixed device class, fixed shift-schedule profile, and fixed post-shift measurement window.',
+            'Recommended fixed schedule: early segment establishes pre-shift baseline under the active rule, middle segment applies the locked shift cadence for the selected `modifier_profile_id`, and late segment repeats the same rule-change structure with no additional schedule variation.',
+            'Keep `modifier_profile_id`, `rule_change_type`, `shift_schedule_profile`, `intrusion_pressure`, and post-shift measurement window fixed for the full trial so post-shift accuracy, old-rule intrusions, and switch-cost outputs remain reproducible across runs.',
+        ];
+    }
+
+    if (variant.family === 'Noise Gate' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            'If Trial Mode is used for this variant, lock one named visual Noise Gate profile: 5 minutes, adaptive difficulty off, fixed seed, fixed device class, fixed audio route, and one approved `visual_profile_id`.',
+            'Recommended fixed schedule: minute 1 clean-reference baseline with no noise profile active, then apply the exact minute-by-minute display-state recipe defined by the selected `visual_profile_id` for minutes 2-5 with no substitutions or in-session profile changes.',
+            'Keep baseline acquisition method, selected `visual_profile_id`, selected `visual_profile_schedule_version`, `visual_density_tier`, `peripheral_load_tier`, `motion_profile`, `distractor_salience_tier`, and `contrast_profile` fixed to the locked recipe so Distractor Cost and false-alarm outputs remain comparable across devices and runs.',
+        ];
+    }
+
     if (variant.family === 'Endurance Lock' && resolveVariantArchetype(variant) === 'fatigue_load') {
         const name = variant.name.toLowerCase();
         if (name.includes('late-pressure')) {
@@ -3363,6 +3462,71 @@ function getCanonicalAnalyticsTagVocabulary(variant: VariantEntry) {
             '`peripheral_load_tier`: allowed values = `low`, `medium`, `high`.',
             '`visual_density_tier`: allowed values = `tier_1`, `tier_2`, `tier_3`.',
             '`delivery_surface`: allowed values = `web_desktop`, `web_mobile`, `phone_native`, `tablet_native`.',
+        ];
+    }
+
+    if (variant.family === 'Brake Point') {
+        return [
+            'Session fields must stay distinct from event tags and derived metrics; do not flatten them into one unlabeled analytics list.',
+            '`modifier_profile_id`: session field, allowed values = `go_no_go_v1`, `fakeout_lure_v1`, `late_reveal_v1`, `spatial_cancel_v1`.',
+            '`device_class`: session field, allowed values = `web_desktop`, `web_mobile`, `phone_native`, `tablet_native`.',
+            '`delivery_surface`: session field, allowed values = `browser`, `native_phone`, `native_tablet`, `headset`.',
+            '`stop_signal_delay_profile`: session field, allowed values = `standard_stop_v1`, `late_reveal_stop_v1`, `spatial_cancel_stop_v1`.',
+            '`no_go_type`: event tag, allowed values = `obvious_stop`, `fakeout_lure`, `late_reveal_stop`, `spatial_cancel`.',
+            '`lure_timing_profile`: event tag, allowed values = `early_lure`, `mid_lure`, `late_lure`.',
+            '`trial_segment`: event tag, allowed values = `early`, `middle`, `late`.',
+            '`stop_latency`, `false_alarm_rate`, and `over_inhibition_rate`: derived metrics and must not be stored as free-form tags.',
+        ];
+    }
+
+    if (variant.family === 'Signal Window') {
+        return [
+            'Session fields must stay distinct from event tags and derived metrics; do not flatten them into one unlabeled analytics list.',
+            '`modifier_profile_id`: session field, allowed values = `rapid_recognition_v1`, `ambiguous_cue_v1`, `decoy_cue_v1`, `shot_clock_v1`, `spatial_read_v1`.',
+            '`device_class`: session field, allowed values = `web_desktop`, `web_mobile`, `phone_native`, `tablet_native`.',
+            '`delivery_surface`: session field, allowed values = `browser`, `native_phone`, `native_tablet`, `headset`.',
+            '`window_length_profile`: session field, allowed values = `short_window_v1`, `medium_window_v1`, `extended_window_v1`.',
+            '`cue_type`: event tag, allowed values = `primary_cue`, `ambiguous_cue`, `decoy_cue`, `spatial_cue`.',
+            '`ambiguity_tier`: event tag, allowed values = `low`, `medium`, `high`.',
+            '`decoy_classification`: event tag, allowed values = `none`, `adjacent_plausible`, `timing_bait`, `spatial_bait`.',
+            '`trial_segment`: event tag, allowed values = `early`, `middle`, `late`.',
+            '`correct_read_under_time_pressure`, `window_utilization`, and `decision_latency`: derived metrics and must not be stored as free-form tags.',
+        ];
+    }
+
+    if (variant.family === 'Sequence Shift') {
+        return [
+            'Session fields must stay distinct from event tags and derived metrics; do not flatten them into one unlabeled analytics list.',
+            '`modifier_profile_id`: session field, allowed values = `pattern_change_v1`, `dual_rule_v1`, `sequence_memory_v1`, `playbook_shift_v1`.',
+            '`device_class`: session field, allowed values = `web_desktop`, `web_mobile`, `phone_native`, `tablet_native`.',
+            '`delivery_surface`: session field, allowed values = `browser`, `native_phone`, `native_tablet`, `headset`.',
+            '`shift_schedule_profile`: session field, allowed values = `standard_shift_v1`, `dense_shift_v1`, `memory_shift_v1`, `playbook_shift_v1`.',
+            '`rule_change_type`: event tag, allowed values = `pattern_change`, `dual_rule_swap`, `sequence_memory_shift`, `playbook_shift`.',
+            '`intrusion_pressure`: event tag, allowed values = `low`, `medium`, `high`.',
+            '`trial_segment`: event tag, allowed values = `pre_shift`, `post_shift_early`, `post_shift_late`.',
+            '`post_shift_window`: event tag, allowed values = `trials_1_3`, `trials_1_5`.',
+            '`old_rule_intrusion_rate`, `switch_cost`, and `post_shift_accuracy`: derived metrics and must not be stored as free-form tags.',
+        ];
+    }
+
+    if (variant.family === 'Noise Gate' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            'Session fields must stay distinct from event tags and derived metrics; do not flatten them into one unlabeled analytics list.',
+            '`visual_profile_id`: session field, allowed values = `clutter_ramp_v1`, `peripheral_competition_v1`, `salience_conflict_v1`.',
+            '`visual_profile_schedule_version`: session field, allowed values = `clutter_ramp_v1_schedule`, `peripheral_competition_v1_schedule`, `salience_conflict_v1_schedule`.',
+            '`baseline_reference_method`: session field, allowed values = `minute_1_clean_reference`.',
+            '`device_class`: session field, allowed values = `web_desktop`, `web_mobile`, `phone_native`, `tablet_native`.',
+            '`delivery_surface`: session field, allowed values = `browser`, `native_phone`, `native_tablet`, `headset`.',
+            '`audio_route`: session field, allowed values = `device_speakers`, `wired_headphones`, `bluetooth_headphones`, `muted_visual_only`.',
+            '`block_identity`: event tag, allowed values = `baseline_minute_1`, `noise_minute_2`, `noise_minute_3`, `noise_minute_4`, `noise_minute_5`.',
+            '`visual_density_tier`: event tag, allowed values = `low`, `medium`, `high`.',
+            '`peripheral_load_tier`: event tag, allowed values = `low`, `medium`, `high`.',
+            '`motion_profile`: event tag, allowed values = `static_noise`, `edge_flicker`, `soft_drift`, `crowd_scroll`.',
+            '`distractor_salience_tier`: event tag, allowed values = `low`, `medium`, `high`.',
+            '`contrast_profile`: event tag, allowed values = `normal_contrast`, `reduced_contrast`, `glare_wash`.',
+            '`distractor_type`: event tag, allowed values = `central_clutter`, `peripheral_bait`, `motion_clutter`, `salience_conflict`.',
+            '`false_alarm_basis`: derived export field, allowed values = `per_distractor_exposure`.',
+            '`distractor_cost`, `false_alarm_rate`, and `rt_shift`: derived metrics and must not be stored as free-form tags.',
         ];
     }
 
@@ -3453,6 +3617,18 @@ function getNonTrialMeasurementNotes(variant: VariantEntry, theme: VariantTheme)
         const channelBreakdownNote = archetype === 'audio_channel'
             ? 'Channel Vulnerability must be reported by distractor type, with audio-channel breakdowns carried by crowd, commentary, whistle, and off-rhythm sound tags.'
             : 'Channel Vulnerability must be reported by distractor type rather than flattened into one unlabeled distractor score.';
+
+        if (archetype === 'visual_channel') {
+            return [
+                'Baseline acquisition method = the first 60 seconds / first clean-reference minute with no visual noise profile active; all Distractor Cost calculations must use this in-session clean-reference baseline rather than a drifting normative baseline.',
+                'Distractor Cost = clean-reference baseline accuracy - noise-phase accuracy, with RT shift reported alongside it. Accuracy remains the headline number.',
+                'Valid response = correct response to the primary target during the noise phase, inside the target response window, and above 150 ms.',
+                'False Alarm Rate = distractor-directed responses divided by distractor exposure opportunities, classified by `distractor_type`; do not use per-response-opportunity or unlabeled denominators.',
+                'Channel Vulnerability must be reported by distractor type rather than flattened into one unlabeled distractor score.',
+                'Pressure Stability should be read as Distractor Cost under baseline versus pressure modifier conditions, stratified by modifier condition rather than averaged together.',
+                'Visual display-state tags such as `visual_density_tier`, `peripheral_load_tier`, `motion_profile`, `distractor_salience_tier`, and `contrast_profile` may support interpretation, but they must remain decomposition fields rather than a replacement scoring system.',
+            ];
+        }
 
         return [
             'Distractor Cost = baseline accuracy - noise-phase accuracy, with RT shift reported alongside it. Accuracy remains the headline number.',
@@ -3552,6 +3728,57 @@ function getNonTrialModeNotes(variant: VariantEntry, theme: VariantTheme) {
     const trainingMode = [...theme.trainingMode];
     const trialMode = [...theme.trialMode, ...getVariantSpecificTrialProfile(variant)];
 
+    if (variant.family === 'Brake Point') {
+        return {
+            trainingMode: [
+                ...trainingMode,
+                'show per-type inhibition coaching so the athlete can see whether misses came from obvious stops, fakeouts, late-reveal stops, or spatial cancel demands rather than one generic false-alarm score',
+                'training-mode adaptation may change stop-signal cadence only inside approved family bounds, but it may not change the target rule, selected `modifier_profile_id`, or the denominator basis for false alarms and over-inhibition tracking',
+            ],
+            trialMode: [
+                ...trialMode,
+                'if trial-layer packaging is used, hold selected `modifier_profile_id`, stop-signal delay profile, lure timing schedule, device class, and trial count constant so inhibition comparisons stay reproducible',
+            ],
+        };
+    }
+
+    if (variant.family === 'Signal Window') {
+        const sportContextTrainingNotes = archetype === 'sport_context'
+            ? ['use sport-native cue language and shot-clock or scenario tags, but keep coaching anchored to correct reads, decision latency, and cue commitment quality']
+            : [];
+        const sportContextTrialNotes = archetype === 'sport_context'
+            ? ['if trial-layer packaging is used, hold sport scenario, cue type, window length, and ambiguity profile constant across comparison sessions']
+            : [];
+
+        return {
+            trainingMode: [
+                ...trainingMode,
+                'show read-quality coaching by ambiguity tier and decoy class so the athlete can see whether misses came from rushed reads, plausible wrong reads, or slow commitments',
+                'training-mode adaptation may change pacing cadence or cue order only inside approved family bounds, but it may not change the target rule, selected `modifier_profile_id`, or the first-commit scoring rule',
+                ...sportContextTrainingNotes,
+            ],
+            trialMode: [
+                ...trialMode,
+                'if trial-layer packaging is used, hold selected `modifier_profile_id`, window-length profile, ambiguity tier, decoy classification, device class, and cue-order schedule constant so correct-read comparisons stay reproducible',
+                ...sportContextTrialNotes,
+            ],
+        };
+    }
+
+    if (variant.family === 'Sequence Shift') {
+        return {
+            trainingMode: [
+                ...trainingMode,
+                'show post-shift coaching that separates old-rule intrusions, novel errors, and first-correct-after-shift timing so the athlete can see exactly how update quality is breaking down',
+                'training-mode adaptation may change shift cadence only inside approved family bounds, but it may not change the active rule family, selected `modifier_profile_id`, or the post-shift measurement window',
+            ],
+            trialMode: [
+                ...trialMode,
+                'if trial-layer packaging is used, hold selected `modifier_profile_id`, shift-schedule profile, rule-change type, device class, and post-shift measurement window constant so switch-cost and intrusion comparisons stay reproducible',
+            ],
+        };
+    }
+
     if (variant.family === 'Reset' && archetype === 'sport_context') {
         return {
             trainingMode: [
@@ -3578,15 +3805,16 @@ function getNonTrialModeNotes(variant: VariantEntry, theme: VariantTheme) {
         };
     }
 
-    if (variant.family === 'Signal Window' && archetype === 'sport_context') {
+    if (variant.family === 'Noise Gate' && archetype === 'visual_channel') {
         return {
             trainingMode: [
                 ...trainingMode,
-                'use sport-native cue language and shot-clock or scenario tags, but keep coaching anchored to correct reads, decision latency, and cue commitment quality',
+                'show round-level filtering feedback with visual-channel coaching so the athlete can see whether misses came from clutter density, peripheral bait, motion clutter, or salience conflict rather than one generic visual score',
+                'training-mode adaptation may change density tier or timing cadence inside approved family bounds, but it may not change the target rule, selected `visual_profile_id`, baseline acquisition method, or the false-alarm denominator basis',
             ],
             trialMode: [
                 ...trialMode,
-                'if trial-layer packaging is used, hold sport scenario, cue type, window length, and ambiguity profile constant across comparison sessions',
+                'if trial-layer packaging is used, hold baseline acquisition method, selected `visual_profile_id`, selected `visual_profile_schedule_version`, device class, audio route, and display-state progression constant so visual-channel comparisons stay reproducible',
             ],
         };
     }
@@ -3664,6 +3892,16 @@ function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
         ];
     }
 
+    if (variant.family === 'Noise Gate' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            ...theme.buildNotes,
+            'Store `visual_profile_id`, `visual_profile_schedule_version`, `baseline_reference_method`, `visual_density_tier`, `peripheral_load_tier`, `motion_profile`, `distractor_salience_tier`, `contrast_profile`, `device_class`, `delivery_surface`, and `audio_route` using the canonical allowed values only.',
+            'Store `distractor_type` on every false alarm or distractor-contact event so channel-vulnerability output can be joined back to the actual display-state conditions.',
+            'Export false alarms using a fixed denominator basis of `per_distractor_exposure`; do not allow per-response-opportunity or unlabeled basis changes across builds.',
+            'Keep the live cue visually legible under every approved display state; if clutter, salience conflict, or peripheral bait changes the task identity instead of the noise pressure, fail the variant for review.',
+        ];
+    }
+
     if (variant.family === 'Noise Gate' && resolveVariantArchetype(variant) === 'audio_channel') {
         return [
             ...theme.buildNotes,
@@ -3675,6 +3913,7 @@ function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
     if (variant.family === 'Brake Point') {
         return [
             ...theme.buildNotes,
+            'Store `modifier_profile_id`, `stop_signal_delay_profile`, `device_class`, and `delivery_surface` as session fields so inhibition builds remain inspectable and reproducible.',
             'Store No-Go type tags, stop-signal delay, Go reaction-time window, and lure timing so false alarms can be separated into obvious, fakeout, and late-reveal conditions.',
             'Export false alarms, Go misses, over-inhibition markers, and motor artifacts separately from the headline Stop Latency metric.',
         ];
@@ -3692,13 +3931,16 @@ function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
     if (variant.family === 'Signal Window') {
         return [
             ...theme.buildNotes,
+            'Store `modifier_profile_id`, `window_length_profile`, `device_class`, and `delivery_surface` as session fields so read-window builds remain inspectable and reproducible.',
             'Store cue type, ambiguity level, window length, and decoy classification tags in the session record so read-quality errors are interpretable.',
+            'Export first-commit timing, decision latency, decoy susceptibility, and window-utilization fields separately instead of flattening all misses into one read score.',
         ];
     }
 
     if (variant.family === 'Sequence Shift') {
         return [
             ...theme.buildNotes,
+            'Store `modifier_profile_id`, `shift_schedule_profile`, `device_class`, and `delivery_surface` as session fields so shift builds remain inspectable and reproducible.',
             'Store shift type, rule-change schedule, old-rule intrusion tags, and post-shift window markers in the session record so update failures are interpretable.',
             'Export switch-cost, post-shift accuracy, intrusion classification, and motor artifacts separately rather than flattening all shift errors into one bucket.',
         ];

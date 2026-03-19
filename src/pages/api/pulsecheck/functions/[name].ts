@@ -9,6 +9,9 @@ type NetlifyFunctionResponse = {
 
 type NetlifyFunctionModule = {
   handler?: (event: Record<string, any>, context?: Record<string, any>) => Promise<NetlifyFunctionResponse> | NetlifyFunctionResponse;
+  default?: {
+    handler?: (event: Record<string, any>, context?: Record<string, any>) => Promise<NetlifyFunctionResponse> | NetlifyFunctionResponse;
+  };
 };
 
 const FUNCTION_LOADERS: Record<string, () => NetlifyFunctionModule> = {
@@ -70,7 +73,14 @@ async function invokeNetlifyFunction(name: string, req: NextApiRequest) {
   }
 
   const loadedModule = loadModule();
-  if (typeof loadedModule?.handler !== 'function') {
+  const resolvedHandler =
+    typeof loadedModule?.handler === 'function'
+      ? loadedModule.handler
+      : typeof loadedModule?.default?.handler === 'function'
+        ? loadedModule.default.handler
+        : null;
+
+  if (!resolvedHandler) {
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -78,7 +88,7 @@ async function invokeNetlifyFunction(name: string, req: NextApiRequest) {
     } satisfies NetlifyFunctionResponse;
   }
 
-  return loadedModule.handler(buildNetlifyEvent(req), {});
+  return resolvedHandler(buildNetlifyEvent(req), {});
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

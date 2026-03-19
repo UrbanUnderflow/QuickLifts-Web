@@ -4,6 +4,7 @@ import {
   buildGroupMeetShareUrl,
   normalizeGroupMeetAvailabilitySlots,
   resolveGroupMeetStatus,
+  type GroupMeetContact,
   type GroupMeetInviteDetail,
   type GroupMeetInviteSummary,
   type GroupMeetRequestSummary,
@@ -11,6 +12,7 @@ import {
 
 export const GROUP_MEET_REQUESTS_COLLECTION = 'groupMeetRequests';
 export const GROUP_MEET_INVITES_SUBCOLLECTION = 'groupMeetInvites';
+export const GROUP_MEET_CONTACTS_COLLECTION = 'groupMeetContacts';
 
 export const toIso = (value: FirebaseFirestore.Timestamp | null | undefined) =>
   value?.toDate?.().toISOString?.() || null;
@@ -39,6 +41,9 @@ export function mapGroupMeetInviteSummary(
     token: docSnap.id,
     name: data.name || '',
     email: data.email || null,
+    imageUrl: data.imageUrl || null,
+    participantType: data.participantType === 'host' ? 'host' : 'participant',
+    contactId: data.contactId || null,
     shareUrl: data.shareUrl || '',
     emailStatus: data.emailStatus || 'not_sent',
     emailError: data.emailError || null,
@@ -57,12 +62,30 @@ export function mapGroupMeetInviteDetail(
     token: docSnap.id,
     name: data.name || '',
     email: data.email || null,
+    imageUrl: data.imageUrl || null,
+    participantType: data.participantType === 'host' ? 'host' : 'participant',
+    contactId: data.contactId || null,
     shareUrl: data.shareUrl || '',
     emailStatus: data.emailStatus || 'not_sent',
     emailError: data.emailError || null,
     respondedAt: toIso(data.responseSubmittedAt),
     availabilityCount: availabilityEntries.length,
     availabilityEntries,
+  };
+}
+
+export function mapGroupMeetContact(
+  docSnap: FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot
+): GroupMeetContact {
+  const data = docSnap.data() || {};
+  return {
+    id: docSnap.id,
+    name: data.name || '',
+    email: data.email || null,
+    imageUrl: data.imageUrl || null,
+    createdAt: toIso(data.createdAt),
+    updatedAt: toIso(data.updatedAt),
+    createdByEmail: data.createdByEmail || null,
   };
 }
 
@@ -100,36 +123,55 @@ export async function sendGroupMeetInviteEmail(args: {
   recipientName: string;
   recipientEmail: string;
   shareUrl: string;
+  mode?: 'live' | 'test';
 }) {
   const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
   if (!apiKey) {
     return { success: false, error: 'Brevo not configured' };
   }
 
+  const mode = args.mode || 'live';
   const senderEmail = process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
   const senderName = process.env.BREVO_SENDER_NAME || 'Pulse';
-  const subject = `${args.requestTitle} availability request`;
+  const subject =
+    mode === 'test'
+      ? `[Test] ${args.requestTitle} availability request`
+      : `${args.requestTitle} availability request`;
   const deadlineLabel = new Date(args.deadlineAt).toLocaleString('en-US', {
     dateStyle: 'medium',
     timeStyle: 'short',
     timeZone: args.timezone,
   });
+  const introHtml =
+    mode === 'test'
+      ? `<p style="margin:0 0 14px;padding:12px 14px;border-radius:12px;background:#f4f4f5;color:#18181b;"><strong>Test email:</strong> this is a standalone Group Meet delivery preview. The button below is only for previewing the email experience.</p>`
+      : '';
+  const promptCopy =
+    mode === 'test'
+      ? 'This is how a Group Meet invite email will look when you send a real request.'
+      : `Please send your availability for <strong>${escapeHtml(args.requestTitle)}</strong>.`;
+  const buttonLabel = mode === 'test' ? 'Open Group Meet admin' : 'Enter availability';
+  const footerCopy =
+    mode === 'test'
+      ? 'Because this is only a test email, the button routes back to the internal Group Meet tool.'
+      : 'If the button does not work, use this link:';
 
   const htmlContent = `
     <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
+      ${introHtml}
       <p>Hi ${escapeHtml(args.recipientName || 'there')},</p>
-      <p>Please send your availability for <strong>${escapeHtml(args.requestTitle)}</strong>.</p>
+      <p>${promptCopy}</p>
       <p>
         Month: <strong>${escapeHtml(args.targetMonth)}</strong><br/>
         Deadline: <strong>${escapeHtml(deadlineLabel)}</strong>
       </p>
-      <p>Open your link and tap the days that work for you:</p>
+      <p>${mode === 'test' ? 'Open the internal tool preview here:' : 'Open your link and tap the days that work for you:'}</p>
       <p>
         <a href="${args.shareUrl}" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#18181b;color:#fff;text-decoration:none;font-weight:600;">
-          Enter availability
+          ${buttonLabel}
         </a>
       </p>
-      <p style="color:#52525b;font-size:13px;">If the button does not work, use this link:<br/>${escapeHtml(args.shareUrl)}</p>
+      <p style="color:#52525b;font-size:13px;">${footerCopy}<br/>${escapeHtml(args.shareUrl)}</p>
     </div>
   `;
 

@@ -3,19 +3,31 @@ import Head from 'next/head';
 import { format, parse } from 'date-fns';
 import { Calendar, CheckCircle2, Copy, Link as LinkIcon, Mail, Plus, RefreshCw, Sparkles, Trash2, Users } from 'lucide-react';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
+import GroupMeetAvailabilityPicker from '../../components/group-meet/GroupMeetAvailabilityPicker';
 import { auth } from '../../api/firebase/config';
 import {
   buildGroupMeetCandidateKey,
   formatMinutesAsTime,
+  type GroupMeetAvailabilitySlot,
   type GroupMeetCandidateWindow,
+  type GroupMeetContact,
   type GroupMeetInviteSummary,
   type GroupMeetRequestDetail,
   type GroupMeetRequestSummary,
 } from '../../lib/groupMeet';
 
 type ParticipantDraft = {
+  contactId: string | null;
   name: string;
   email: string;
+  imageUrl: string;
+};
+
+type HostDraft = {
+  contactId: string | null;
+  name: string;
+  email: string;
+  imageUrl: string;
 };
 
 type ApiRequestListResponse = {
@@ -39,6 +51,18 @@ type ApiInviteResponse = {
   invite?: GroupMeetInviteSummary;
 };
 
+type ApiContactsResponse = {
+  contacts: GroupMeetContact[];
+};
+
+type ApiContactSaveResponse = {
+  contact: GroupMeetContact;
+};
+
+type ApiSimpleSuccessResponse = {
+  success?: boolean;
+};
+
 const buildDefaultDeadlineValue = () => {
   const date = new Date();
   date.setDate(date.getDate() + 5);
@@ -48,7 +72,19 @@ const buildDefaultDeadlineValue = () => {
 
 const buildDefaultMonthValue = () => format(new Date(), 'yyyy-MM');
 
-const buildEmptyParticipant = (): ParticipantDraft => ({ name: '', email: '' });
+const buildEmptyParticipant = (): ParticipantDraft => ({
+  contactId: null,
+  name: '',
+  email: '',
+  imageUrl: '',
+});
+
+const buildEmptyHost = (): HostDraft => ({
+  contactId: null,
+  name: '',
+  email: '',
+  imageUrl: '',
+});
 
 const toDateTimeLocalInputValue = (value: string | null) => {
   if (!value) return '';
@@ -80,6 +116,22 @@ const formatMonthDate = (value: string) => {
   }
 };
 
+const buildAvatarUrl = (name: string, imageUrl?: string | null) =>
+  imageUrl?.trim() ||
+  `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'Pulse')}&background=111827&color=ffffff&size=96`;
+
+const AvatarBubble: React.FC<{ name: string; imageUrl?: string | null; size?: string }> = ({
+  name,
+  imageUrl,
+  size = 'h-10 w-10',
+}) => (
+  <img
+    src={buildAvatarUrl(name, imageUrl)}
+    alt={name}
+    className={`${size} rounded-2xl object-cover border border-white/10 bg-zinc-900`}
+  />
+);
+
 const formatCandidateLabel = (candidate: GroupMeetCandidateWindow) => {
   const start = formatMinutesAsTime(candidate.suggestedStartMinutes);
   const end = formatMinutesAsTime(candidate.suggestedEndMinutes);
@@ -93,11 +145,22 @@ const GroupMeetAdminPage: React.FC = () => {
   const [meetingDurationMinutes, setMeetingDurationMinutes] = useState(30);
   const [timezone, setTimezone] = useState('America/New_York');
   const [sendEmails, setSendEmails] = useState(true);
+  const [host, setHost] = useState<HostDraft>(buildEmptyHost);
+  const [hostAvailabilityEntries, setHostAvailabilityEntries] = useState<GroupMeetAvailabilitySlot[]>([]);
   const [participants, setParticipants] = useState<ParticipantDraft[]>([
     buildEmptyParticipant(),
     buildEmptyParticipant(),
     buildEmptyParticipant(),
   ]);
+  const [contacts, setContacts] = useState<GroupMeetContact[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [savingContact, setSavingContact] = useState(false);
+  const [contactName, setContactName] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [contactImageUrl, setContactImageUrl] = useState('');
+  const [testEmailName, setTestEmailName] = useState('');
+  const [testEmailRecipient, setTestEmailRecipient] = useState('');
+  const [testEmailSending, setTestEmailSending] = useState(false);
   const [requests, setRequests] = useState<GroupMeetRequestSummary[]>([]);
   const [createdRequest, setCreatedRequest] = useState<GroupMeetRequestSummary | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
@@ -158,6 +221,43 @@ const GroupMeetAdminPage: React.FC = () => {
     loadRequests();
   }, []);
 
+  useEffect(() => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    setHost((current) => ({
+      contactId: current.contactId || null,
+      name: current.name || currentUser.displayName || 'Host',
+      email: current.email || currentUser.email || '',
+      imageUrl: current.imageUrl || currentUser.photoURL || '',
+    }));
+    setTestEmailName((current) => current || currentUser.displayName || 'Test Recipient');
+    setTestEmailRecipient((current) => current || currentUser.email || '');
+  }, []);
+
+  const loadContacts = async () => {
+    setContactsLoading(true);
+    try {
+      const headers = await getAdminHeaders();
+      const response = await fetch('/api/admin/group-meet/contacts', { headers });
+      const payload = (await response.json().catch(() => ({}))) as Partial<ApiContactsResponse> & {
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error || 'Failed to load contacts.');
+      }
+      setContacts(Array.isArray(payload.contacts) ? payload.contacts : []);
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || 'Failed to load contacts.' });
+    } finally {
+      setContactsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadContacts();
+  }, []);
+
   const loadRequestDetail = async (requestId: string) => {
     setDetailLoading(true);
     try {
@@ -194,6 +294,66 @@ const GroupMeetAdminPage: React.FC = () => {
     );
   };
 
+  const updateHost = (field: keyof HostDraft, value: string | null) => {
+    setHost((current) => ({ ...current, [field]: value ?? '' }));
+  };
+
+  const addContactToParticipants = (contact: GroupMeetContact) => {
+    const comparisonKey =
+      (contact.email || '').toLowerCase() || contact.id || contact.name.toLowerCase();
+    const hostKey =
+      host.email.trim().toLowerCase() || host.contactId || host.name.trim().toLowerCase();
+
+    if (comparisonKey && comparisonKey === hostKey) {
+      setMessage({ type: 'error', text: `${contact.name} is already set as the host.` });
+      return;
+    }
+
+    setParticipants((current) => {
+      const hasMatch = current.some((participant) => {
+        const participantKey =
+          participant.email.trim().toLowerCase() ||
+          participant.contactId ||
+          participant.name.trim().toLowerCase();
+        return participantKey && participantKey === comparisonKey;
+      });
+
+      if (hasMatch) {
+        return current;
+      }
+
+      return [
+        ...current.filter((participant) => participant.name.trim() || participant.email.trim()),
+        {
+          contactId: contact.id,
+          name: contact.name,
+          email: contact.email || '',
+          imageUrl: contact.imageUrl || '',
+        },
+      ];
+    });
+  };
+
+  const useContactAsHost = (contact: GroupMeetContact) => {
+    setHost({
+      contactId: contact.id,
+      name: contact.name,
+      email: contact.email || '',
+      imageUrl: contact.imageUrl || '',
+    });
+    setParticipants((current) =>
+      current.filter((participant) => {
+        const participantKey =
+          participant.email.trim().toLowerCase() ||
+          participant.contactId ||
+          participant.name.trim().toLowerCase();
+        const contactKey =
+          (contact.email || '').toLowerCase() || contact.id || contact.name.toLowerCase();
+        return !participantKey || participantKey !== contactKey;
+      })
+    );
+  };
+
   const removeParticipant = (index: number) => {
     setParticipants((current) => (current.length === 1 ? current : current.filter((_, i) => i !== index)));
   };
@@ -212,6 +372,16 @@ const GroupMeetAdminPage: React.FC = () => {
   };
 
   const createRequest = async () => {
+    if (!host.name.trim()) {
+      setMessage({ type: 'error', text: 'Add the host name before creating the request.' });
+      return;
+    }
+
+    if (!hostAvailabilityEntries.length) {
+      setMessage({ type: 'error', text: 'Add the host availability before sending the request.' });
+      return;
+    }
+
     if (!populatedParticipants.length) {
       setMessage({ type: 'error', text: 'Add at least one participant name.' });
       return;
@@ -232,6 +402,13 @@ const GroupMeetAdminPage: React.FC = () => {
           timezone,
           meetingDurationMinutes,
           sendEmails,
+          host: {
+            contactId: host.contactId,
+            name: host.name,
+            email: host.email,
+            imageUrl: host.imageUrl,
+            availabilityEntries: hostAvailabilityEntries,
+          },
           participants,
         }),
       });
@@ -245,11 +422,53 @@ const GroupMeetAdminPage: React.FC = () => {
       setSelectedRequestId(payload.request.id);
       setMessage({ type: 'success', text: 'Group Meet request created.' });
       setParticipants([buildEmptyParticipant(), buildEmptyParticipant(), buildEmptyParticipant()]);
+      setHostAvailabilityEntries([]);
       await loadRequests();
     } catch (error: any) {
       setMessage({ type: 'error', text: error?.message || 'Failed to create Group Meet request.' });
     } finally {
       setCreating(false);
+    }
+  };
+
+  const saveContact = async (prefill?: HostDraft | ParticipantDraft) => {
+    const name = (prefill?.name || contactName).trim();
+    const email = (prefill?.email || contactEmail).trim();
+    const imageUrl = (prefill?.imageUrl || contactImageUrl).trim();
+
+    if (!name) {
+      setMessage({ type: 'error', text: 'Contact name is required.' });
+      return;
+    }
+
+    setSavingContact(true);
+    setMessage(null);
+
+    try {
+      const headers = await getAdminHeaders();
+      const response = await fetch('/api/admin/group-meet/contacts', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ name, email, imageUrl }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as Partial<ApiContactSaveResponse> & {
+        error?: string;
+      };
+      if (!response.ok || !payload.contact) {
+        throw new Error(payload.error || 'Failed to save contact.');
+      }
+
+      await loadContacts();
+      if (!prefill) {
+        setContactName('');
+        setContactEmail('');
+        setContactImageUrl('');
+      }
+      setMessage({ type: 'success', text: `${name} saved to Group Meet contacts.` });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || 'Failed to save contact.' });
+    } finally {
+      setSavingContact(false);
     }
   };
 
@@ -425,6 +644,51 @@ const GroupMeetAdminPage: React.FC = () => {
     }
   };
 
+  const sendStandaloneTestEmail = async () => {
+    if (!testEmailRecipient.trim()) {
+      setMessage({ type: 'error', text: 'Add a recipient email for the test send.' });
+      return;
+    }
+
+    setTestEmailSending(true);
+    setMessage(null);
+
+    try {
+      const headers = await getAdminHeaders();
+      const response = await fetch('/api/admin/group-meet/test-email', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          recipientName: testEmailName || 'Test Recipient',
+          recipientEmail: testEmailRecipient,
+          requestTitle: title,
+          targetMonth,
+          deadlineAt: new Date(deadlineAt).toISOString(),
+          timezone,
+        }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as ApiSimpleSuccessResponse & {
+        error?: string;
+      };
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Failed to send Group Meet test email.');
+      }
+      setMessage({ type: 'success', text: `Test Group Meet email sent to ${testEmailRecipient}.` });
+    } catch (error: any) {
+      setMessage({ type: 'error', text: error?.message || 'Failed to send Group Meet test email.' });
+    } finally {
+      setTestEmailSending(false);
+    }
+  };
+
+  const resolveSelectedInvitesForCandidate = (candidate: GroupMeetCandidateWindow) =>
+    (selectedRequest?.invites || []).filter((invite) => candidate.participantTokens.includes(invite.token));
+
+  const resolveSelectedInvitesForDate = (date: string) =>
+    (selectedRequest?.invites || []).filter((invite) =>
+      invite.availabilityEntries.some((slot) => slot.date === date)
+    );
+
   return (
     <AdminRouteGuard>
       <div className="min-h-screen bg-black text-white">
@@ -471,7 +735,7 @@ const GroupMeetAdminPage: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold">Create request</h2>
-                  <p className="text-zinc-400 text-sm">This first pass stores invites, can optionally send email, and gives every person a tracked link.</p>
+                  <p className="text-zinc-400 text-sm">The host adds their own availability first, then sends tracked links to everyone else.</p>
                 </div>
               </div>
 
@@ -548,11 +812,68 @@ const GroupMeetAdminPage: React.FC = () => {
                 </button>
               </div>
 
+              <div className="mt-8 rounded-3xl border border-zinc-800 bg-black/50 p-5">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold">Host profile</h3>
+                    <p className="text-sm text-zinc-400">The host is treated like a real participant, so their availability shapes the meeting options from the start.</p>
+                  </div>
+                  <AvatarBubble name={host.name || 'Host'} imageUrl={host.imageUrl} />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <input
+                    value={host.name}
+                    onChange={(event) => updateHost('name', event.target.value)}
+                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                    placeholder="Host name"
+                  />
+                  <input
+                    value={host.email}
+                    onChange={(event) => updateHost('email', event.target.value)}
+                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                    placeholder="Host email"
+                  />
+                  <input
+                    value={host.imageUrl}
+                    onChange={(event) => updateHost('imageUrl', event.target.value)}
+                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                    placeholder="Host image URL"
+                  />
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => saveContact(host)}
+                    disabled={savingContact}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm hover:bg-zinc-800 disabled:opacity-50"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {savingContact ? 'Saving…' : 'Save host as contact'}
+                  </button>
+                  {host.contactId && (
+                    <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-400">
+                      Using saved contact
+                    </span>
+                  )}
+                </div>
+
+                <GroupMeetAvailabilityPicker
+                  className="mt-5"
+                  targetMonth={targetMonth}
+                  availabilityEntries={hostAvailabilityEntries}
+                  onChange={setHostAvailabilityEntries}
+                  title="Host availability"
+                  subtitle="Set the days and time ranges you can actually do before the request goes out."
+                />
+              </div>
+
               <div className="mt-8">
                 <div className="flex items-center justify-between gap-4 mb-4">
                   <div>
                     <h3 className="text-lg font-semibold">Participants</h3>
-                    <p className="text-sm text-zinc-400">Email is optional. No email means we still generate a tracked manual link.</p>
+                    <p className="text-sm text-zinc-400">Pick from saved contacts or add a custom person. Email is optional. Images will show up in the overlap view.</p>
                   </div>
                   <button
                     type="button"
@@ -566,7 +887,10 @@ const GroupMeetAdminPage: React.FC = () => {
 
                 <div className="space-y-3">
                   {participants.map((participant, index) => (
-                    <div key={`participant-${index}`} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3 rounded-2xl border border-zinc-800 bg-black/60 p-3">
+                    <div key={`participant-${index}`} className="grid grid-cols-1 md:grid-cols-[auto_1fr_1fr_1fr_auto] gap-3 rounded-2xl border border-zinc-800 bg-black/60 p-3">
+                      <div className="flex items-center justify-center">
+                        <AvatarBubble name={participant.name || 'Guest'} imageUrl={participant.imageUrl} />
+                      </div>
                       <input
                         value={participant.name}
                         onChange={(event) => updateParticipant(index, 'name', event.target.value)}
@@ -578,6 +902,12 @@ const GroupMeetAdminPage: React.FC = () => {
                         onChange={(event) => updateParticipant(index, 'email', event.target.value)}
                         className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
                         placeholder="Email (optional)"
+                      />
+                      <input
+                        value={participant.imageUrl}
+                        onChange={(event) => updateParticipant(index, 'imageUrl', event.target.value)}
+                        className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                        placeholder="Image URL (optional)"
                       />
                       <button
                         type="button"
@@ -594,7 +924,7 @@ const GroupMeetAdminPage: React.FC = () => {
 
               <div className="mt-8 flex items-center justify-between gap-4 border-t border-zinc-800 pt-6">
                 <div className="text-sm text-zinc-400">
-                  {populatedParticipants.length} participant{populatedParticipants.length === 1 ? '' : 's'} ready
+                  Host availability locked in • {populatedParticipants.length} guest{populatedParticipants.length === 1 ? '' : 's'} ready
                 </div>
                 <button
                   type="button"
@@ -608,6 +938,83 @@ const GroupMeetAdminPage: React.FC = () => {
             </section>
 
             <section className="space-y-6">
+              <div className="rounded-3xl border border-zinc-800 bg-zinc-950/70 p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-11 h-11 rounded-2xl bg-white/5 text-white flex items-center justify-center">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold">Contact library</h2>
+                    <p className="text-sm text-zinc-400">Save the people you schedule with often, then tap them into the next request.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-3">
+                  <input
+                    value={contactName}
+                    onChange={(event) => setContactName(event.target.value)}
+                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                    placeholder="Contact name"
+                  />
+                  <input
+                    value={contactEmail}
+                    onChange={(event) => setContactEmail(event.target.value)}
+                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                    placeholder="Email"
+                  />
+                  <input
+                    value={contactImageUrl}
+                    onChange={(event) => setContactImageUrl(event.target.value)}
+                    className="rounded-xl border border-zinc-800 bg-black px-4 py-3 text-white"
+                    placeholder="Image URL"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => saveContact()}
+                    disabled={savingContact}
+                    className="rounded-xl bg-[#E0FE10] px-4 py-3 font-semibold text-black hover:bg-lime-300 disabled:opacity-50"
+                  >
+                    {savingContact ? 'Saving…' : 'Save contact'}
+                  </button>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {contacts.map((contact) => (
+                    <div key={contact.id} className="flex flex-col gap-3 rounded-2xl border border-zinc-800 bg-black/40 p-4 md:flex-row md:items-center md:justify-between">
+                      <div className="flex items-center gap-3">
+                        <AvatarBubble name={contact.name} imageUrl={contact.imageUrl} />
+                        <div>
+                          <div className="font-medium">{contact.name}</div>
+                          <div className="text-sm text-zinc-400">{contact.email || 'No email on file'}</div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => useContactAsHost(contact)}
+                          className="rounded-lg border border-zinc-800 px-3 py-2 text-xs hover:bg-zinc-900"
+                        >
+                          Use as host
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addContactToParticipants(contact)}
+                          className="rounded-lg border border-zinc-800 px-3 py-2 text-xs hover:bg-zinc-900"
+                        >
+                          Add to guests
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {!contacts.length && !contactsLoading && (
+                    <div className="rounded-2xl border border-dashed border-zinc-800 px-4 py-8 text-center text-sm text-zinc-500">
+                      No saved contacts yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {createdRequest && (
                 <div className="rounded-3xl border border-emerald-500/20 bg-emerald-500/10 p-6">
                   <div className="flex items-center justify-between gap-4 mb-4">
@@ -631,8 +1038,17 @@ const GroupMeetAdminPage: React.FC = () => {
                     {createdRequest.invites.map((invite) => (
                       <div key={invite.token} className="rounded-2xl border border-white/10 bg-black/20 p-4">
                         <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <div className="font-medium">{invite.name}</div>
+                          <div className="flex items-start gap-3">
+                            <AvatarBubble name={invite.name} imageUrl={invite.imageUrl} />
+                            <div>
+                            <div className="font-medium">
+                              {invite.name}
+                              {invite.participantType === 'host' && (
+                                <span className="ml-2 rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-zinc-300">
+                                  Host
+                                </span>
+                              )}
+                            </div>
                             <div className="text-sm text-zinc-300">{invite.email || 'Manual link only'}</div>
                             <div className="text-xs text-zinc-400 mt-2">
                               {invite.emailStatus === 'sent'
@@ -644,6 +1060,7 @@ const GroupMeetAdminPage: React.FC = () => {
                                     : invite.emailStatus === 'no_email'
                                       ? 'No email stored'
                                       : 'Awaiting send'}
+                            </div>
                             </div>
                           </div>
                           <button
@@ -732,10 +1149,16 @@ const GroupMeetAdminPage: React.FC = () => {
                       <div className="mt-4 grid grid-cols-1 gap-2">
                         {request.invites.map((invite) => (
                           <div key={invite.token} className="flex flex-col gap-2 rounded-xl border border-zinc-800/70 bg-zinc-950/80 px-3 py-3 md:flex-row md:items-center md:justify-between">
-                            <div>
-                              <div className="text-sm font-medium">{invite.name}</div>
+                            <div className="flex items-center gap-3">
+                              <AvatarBubble name={invite.name} imageUrl={invite.imageUrl} size="h-9 w-9" />
+                              <div>
+                              <div className="text-sm font-medium">
+                                {invite.name}
+                                {invite.participantType === 'host' ? ' • Host' : ''}
+                              </div>
                               <div className="text-xs text-zinc-500">
                                 {invite.email || 'Manual link'} • {invite.respondedAt ? 'Responded' : 'Waiting'} • {invite.emailStatus}
+                              </div>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -1151,6 +1574,15 @@ const GroupMeetAdminPage: React.FC = () => {
                                 </button>
                               </div>
 
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {resolveSelectedInvitesForCandidate(candidate).map((invite) => (
+                                  <div key={`${candidate.date}-${candidate.earliestStartMinutes}-${invite.token}`} className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-black px-3 py-1.5 text-xs text-zinc-300">
+                                    <AvatarBubble name={invite.name} imageUrl={invite.imageUrl} size="h-6 w-6" />
+                                    <span>{invite.name}</span>
+                                  </div>
+                                ))}
+                              </div>
+
                               <div className="mt-3 text-sm text-zinc-300">
                                 Available: {candidate.participantNames.join(', ') || 'None'}
                               </div>
@@ -1190,6 +1622,14 @@ const GroupMeetAdminPage: React.FC = () => {
                               <div className="text-sm text-zinc-400 mt-1">
                                 {day.availableParticipantCount}/{selectedRequest.analysis.totalParticipants} participants added availability
                               </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {resolveSelectedInvitesForDate(day.date).map((invite) => (
+                                  <div key={`${day.date}-${invite.token}`} className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-black px-3 py-1.5 text-xs text-zinc-300">
+                                    <AvatarBubble name={invite.name} imageUrl={invite.imageUrl} size="h-6 w-6" />
+                                    <span>{invite.name}</span>
+                                  </div>
+                                ))}
+                              </div>
                               <div className="text-xs text-zinc-500 mt-2">
                                 {day.participantNames.join(', ') || 'No one yet'}
                               </div>
@@ -1209,32 +1649,40 @@ const GroupMeetAdminPage: React.FC = () => {
                         <div className="space-y-2">
                           {selectedRequest.invites.map((invite) => (
                             <div key={invite.token} className="rounded-xl border border-zinc-800/70 bg-zinc-950/80 px-4 py-3">
-                              <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                                <div>
-                                  <div className="font-medium">{invite.name}</div>
+                              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div className="flex items-center gap-3">
+                                  <AvatarBubble name={invite.name} imageUrl={invite.imageUrl} />
+                                  <div>
+                                  <div className="font-medium">
+                                    {invite.name}
+                                    {invite.participantType === 'host' ? ' • Host' : ''}
+                                  </div>
                                   <div className="text-xs text-zinc-500">
                                     {invite.email || 'Manual link'} • {invite.respondedAt ? 'Responded' : 'Waiting'} • {invite.availabilityCount} slots
                                   </div>
+                                  </div>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => copyText(invite.shareUrl, `Copied ${invite.name}'s link`)}
-                                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900"
-                                >
-                                  <LinkIcon className="w-4 h-4" />
-                                  Copy link
-                                </button>
-                                {invite.email && (
+                                <div className="flex flex-wrap gap-2">
                                   <button
                                     type="button"
-                                    onClick={() => resendInvite(invite)}
-                                    disabled={resendingInviteToken === invite.token}
-                                    className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900 disabled:opacity-50"
+                                    onClick={() => copyText(invite.shareUrl, `Copied ${invite.name}'s link`)}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900"
                                   >
-                                    <Mail className="w-4 h-4" />
-                                    {resendingInviteToken === invite.token ? 'Sending…' : 'Resend invite'}
+                                    <LinkIcon className="w-4 h-4" />
+                                    Copy link
                                   </button>
-                                )}
+                                  {invite.email && invite.participantType !== 'host' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => resendInvite(invite)}
+                                      disabled={resendingInviteToken === invite.token}
+                                      className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-900 disabled:opacity-50"
+                                    >
+                                      <Mail className="w-4 h-4" />
+                                      {resendingInviteToken === invite.token ? 'Sending…' : 'Resend invite'}
+                                    </button>
+                                  )}
+                                </div>
                               </div>
 
                               <div className="mt-3 flex flex-wrap gap-2">

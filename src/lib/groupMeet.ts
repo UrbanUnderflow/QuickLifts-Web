@@ -8,6 +8,9 @@ export type GroupMeetInviteSummary = {
   token: string;
   name: string;
   email: string | null;
+  imageUrl?: string | null;
+  participantType?: 'host' | 'participant';
+  contactId?: string | null;
   shareUrl: string;
   emailStatus:
     | 'sent'
@@ -18,6 +21,16 @@ export type GroupMeetInviteSummary = {
   emailError?: string | null;
   respondedAt: string | null;
   availabilityCount: number;
+};
+
+export type GroupMeetContact = {
+  id: string;
+  name: string;
+  email: string | null;
+  imageUrl: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  createdByEmail: string | null;
 };
 
 export type GroupMeetInviteDetail = GroupMeetInviteSummary & {
