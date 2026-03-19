@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronDown,
@@ -51,6 +51,7 @@ import {
     buildSimVariantId,
     resolveDefaultVisionPackageId,
     type SimVariantHistoryEntry,
+    type SimVariantSpecVersionEntry,
     type SimVariantFamilyStatus,
     type SimVariantLockedSpec,
     type SimVariantMode,
@@ -100,16 +101,25 @@ interface SpecAuditFinding {
     message: string;
 }
 
+interface SpecAuditAiReview {
+    model: string;
+    summary: string;
+    findings: SpecAuditFinding[];
+    applied: boolean;
+    unavailableReason?: string;
+}
+
 interface SpecAuditReport {
     status: 'pass' | 'pass_with_warnings' | 'needs_input';
     score: number;
     findings: SpecAuditFinding[];
     autoFixes: string[];
     fixedRaw: string;
+    aiReview?: SpecAuditAiReview | null;
 }
 
 interface WarningFixAction {
-    key: 'protocol_wording' | 'sport_wording' | 'normalize_terms' | 'tighten_wording' | 'consolidate_build_notes';
+    key: 'protocol_wording' | 'sport_wording' | 'normalize_terms' | 'tighten_wording' | 'consolidate_build_notes' | 'upgrade_family_sections';
     label: string;
     codes: string[];
 }
@@ -188,6 +198,24 @@ interface VariantProfileOverride {
     runtimeDefaults?: Partial<VariantArchetypeProfile['runtimeDefaults']>;
     durationMinutes?: number;
 }
+
+interface VariantSpecAiAuditResult {
+    success: boolean;
+    model: string;
+    summary: string;
+    findings: SpecAuditFinding[];
+    suggestedSpecRaw: string;
+}
+
+interface VariantSpecAiGenerationResult {
+    success: boolean;
+    model: string;
+    summary: string;
+    generatedSpecRaw: string;
+}
+
+const AI_SPEC_GENERATION_TIMEOUT_MS = 120_000;
+const AI_SPEC_AUDIT_TIMEOUT_MS = 45_000;
 
 /* ---- STATUS CONFIG ---- */
 const SPEC_STATUS_CONFIG: Record<SpecStatus, { label: string; color: string; icon: React.ElementType }> = {
@@ -847,6 +875,59 @@ function replaceSectionBullets(raw: string, sectionKeyword: string, bullets: str
         .join('\n\n');
 }
 
+function replaceSectionContent(raw: string, sectionKeyword: string, content: string) {
+    const parsed = parseVariantSpec(raw);
+    const nextSections = parsed.rawSections.map((entry) => {
+        if (!entry.heading.toLowerCase().includes(sectionKeyword.toLowerCase())) {
+            return entry;
+        }
+        return {
+            ...entry,
+            content: content.trim(),
+        };
+    });
+
+    return nextSections
+        .map((entry) => {
+            const body = entry.content?.trim();
+            return body ? `${entry.heading}\n${body}` : entry.heading;
+        })
+        .join('\n\n');
+}
+
+function normalizeSectionHeadingTitle(heading: string) {
+    return heading
+        .replace(/^§?\d{1,2}[.):\-]\s*/, '')
+        .toLowerCase()
+        .replace(/[`*_]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+        .replace(/\s+/g, ' ');
+}
+
+function rebuildSpecWithCanonicalSections(variant: VariantEntry, raw: string) {
+    const referenceSpec = buildGeneratedVariantSpec(variant);
+    const referenceParsed = parseVariantSpec(referenceSpec);
+    const currentParsed = parseVariantSpec(raw);
+    const expectedHeadings = buildExpectedSectionLabels(variant);
+
+    const referenceByTitle = new Map(
+        referenceParsed.rawSections.map((section) => [normalizeSectionHeadingTitle(section.heading), section])
+    );
+    const currentByTitle = new Map(
+        currentParsed.rawSections.map((section) => [normalizeSectionHeadingTitle(section.heading), section])
+    );
+
+    const rebuilt = expectedHeadings.map((heading) => {
+        const normalizedTitle = normalizeSectionHeadingTitle(heading);
+        const sourceSection = currentByTitle.get(normalizedTitle) ?? referenceByTitle.get(normalizedTitle);
+        const content = sourceSection?.content?.trim() ?? '';
+        return content ? `${heading}\n${content}` : heading;
+    });
+
+    return normalizeSpecText(rebuilt.join('\n\n'));
+}
+
 function normalizeAuditPhrase(text: string) {
     return text
         .toLowerCase()
@@ -1144,7 +1225,12 @@ function runNonTrialArchetypeAudit(variant: VariantEntry, lowerRaw: string, find
         lowerRaw,
         'missing_feedback_default',
         'Non-trial spec should document default feedback mode and adaptation behavior.',
-        ['default feedback mode is', 'adaptive difficulty is']
+        [
+            'default feedback mode is',
+            'default feedback mode:',
+            'adaptive difficulty is',
+            'adaptive difficulty:',
+        ]
     );
 
     switch (archetype) {
@@ -1491,12 +1577,74 @@ function runNonTrialFamilyAudit(variant: VariantEntry, lowerRaw: string, finding
     }
 
     if (variant.family === 'Endurance Lock') {
+        if (archetype === 'fatigue_load') {
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'endurance_missing_fixed_block_schema',
+                'Endurance Lock fatigue-load variants should define a fixed or formulaic block structure for baseline, middle, and finish segmentation.',
+                ['6 fixed pacing blocks', 'blocks 1-2', 'blocks 3-4', 'blocks 5-6', 'six-block']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'endurance_missing_schema_grade_vocab',
+                'Endurance Lock fatigue-load variants should define schema-grade analytics fields and enums for block identity, device class, delivery surface, and modifier profile.',
+                ['modifier_profile_id', 'block_identity', 'device_class', 'delivery_surface']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'endurance_missing_training_adaptation_guardrails',
+                'Endurance Lock fatigue-load variants should explicitly constrain what Training Mode adaptation may change so the family mechanic does not drift.',
+                ['training-mode adaptation may', 'may change pacing', 'may not change the task identity', 'may not change the block schema']
+            );
+        }
+
+        if (archetype === 'visual_channel') {
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'endurance_visual_missing_fixed_block_schema',
+                'Endurance Lock visual-channel variants should define a fixed or formulaic block structure for baseline, middle, and finish segmentation.',
+                ['blocks 1-2', 'blocks 3-4', 'blocks 5-6', 'six-block', 'clean-reference baseline']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'endurance_visual_missing_modifier_profiles',
+                'Endurance Lock visual-channel variants should define named visual modifier profiles, co-occurrence tiers, and display-state constraints.',
+                ['visual_profile_id', 'visual_density', 'peripheral_bait', 'contrast_drift']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'endurance_visual_missing_profile_schedule',
+                'Endurance Lock visual-channel variants should define a fixed per-block display-state recipe for each approved visual profile.',
+                ['clutter_ramp_v1', 'peripheral_bait_v1', 'contrast_decay_v1', 'fixed recipe', 'blocks 1-2', 'blocks 3-4', 'blocks 5-6']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'endurance_visual_missing_schema_grade_vocab',
+                'Endurance Lock visual-channel variants should define schema-grade analytics fields and enums for block identity, visual state, device class, and delivery surface.',
+                ['block_identity', 'visual_density_tier', 'peripheral_load_tier', 'contrast_profile', 'device_class', 'delivery_surface']
+            );
+            pushArchetypeRequirementFinding(
+                findings,
+                lowerRaw,
+                'endurance_visual_missing_training_adaptation_guardrails',
+                'Endurance Lock visual-channel variants should explicitly constrain what Training Mode adaptation may change so the family mechanic does not drift.',
+                ['training-mode adaptation may', 'density step size', 'may not change the task identity', 'may not change the block schema']
+            );
+        }
+
         pushArchetypeRequirementFinding(
             findings,
             lowerRaw,
             'endurance_missing_baseline_period',
             'Endurance Lock specs should explicitly define the baseline period before degradation is measured.',
-            ['first 2-3 minutes', 'first 2–3 minutes', 'baseline period', '100% baseline']
+            ['first 2-3 minutes', 'first 2–3 minutes', 'baseline period', '100% baseline', 'baseline performance = mean accuracy across blocks 1-2', 'block 1-2 baseline', 'blocks 1-2 baseline', 'baseline (blocks 1-2)', 'blocks 1-2']
         );
         pushArchetypeRequirementFinding(
             findings,
@@ -1586,7 +1734,21 @@ function runSpecAuditPipeline(variant: VariantEntry, raw: string): SpecAuditRepo
         ];
 
         requiredTrialPhrases.forEach((phrase) => {
-            if (!lowerRaw.includes(phrase)) {
+            const normalizedPhrase = phrase.trim().toLowerCase();
+            const matchesDurationPhrase = (() => {
+                const durationMatch = normalizedPhrase.match(/^(\d+)\s+minutes?$/);
+                if (!durationMatch) {
+                    return false;
+                }
+
+                const amount = durationMatch[1];
+                return lowerRaw.includes(`${amount} minutes`)
+                    || lowerRaw.includes(`${amount} minute`)
+                    || lowerRaw.includes(`${amount}-minute`)
+                    || lowerRaw.includes(`${amount}‑minute`);
+            })();
+
+            if (!lowerRaw.includes(normalizedPhrase) && !matchesDurationPhrase) {
                 findings.push({
                     severity: 'error',
                     code: 'missing_trial_protocol_detail',
@@ -1645,7 +1807,72 @@ function runSpecAuditPipeline(variant: VariantEntry, raw: string): SpecAuditRepo
         findings,
         autoFixes,
         fixedRaw,
+        aiReview: null,
     };
+}
+
+function dedupeAuditFindings(findings: SpecAuditFinding[]) {
+    const seen = new Set<string>();
+    return findings.filter((finding) => {
+        const key = `${finding.severity}:${finding.code}:${finding.message}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function mergeAuditReportWithAiReview(base: SpecAuditReport, aiReview: SpecAuditAiReview | null): SpecAuditReport {
+    if (!aiReview) {
+        return {
+            ...base,
+            aiReview: null,
+        };
+    }
+
+    const findings = dedupeAuditFindings([...base.findings, ...aiReview.findings]);
+    const errorCount = findings.filter((finding) => finding.severity === 'error').length;
+    const warningCount = findings.filter((finding) => finding.severity === 'warning').length;
+    const autoFixPenalty = base.autoFixes.length > 0 ? Math.min(6, base.autoFixes.length * 3) : 0;
+    const score = Math.max(0, 100 - (errorCount * 20) - (warningCount * 8) - autoFixPenalty);
+    const status: SpecAuditReport['status'] = errorCount > 0
+        ? 'needs_input'
+        : warningCount > 0 || base.autoFixes.length > 0
+            ? 'pass_with_warnings'
+            : 'pass';
+
+    return {
+        ...base,
+        status,
+        score,
+        findings,
+        aiReview,
+    };
+}
+
+function normalizeAiReviewSummaryForFinalAudit(
+    aiReview: SpecAuditAiReview | null,
+    audit: SpecAuditReport,
+    variant: VariantEntry
+): SpecAuditAiReview | null {
+    if (!aiReview) return null;
+    if (aiReview.unavailableReason) return aiReview;
+
+    const warningCount = audit.findings.filter((finding) => finding.severity === 'warning').length;
+    const errorCount = audit.findings.filter((finding) => finding.severity === 'error').length;
+
+    if (errorCount === 0 && warningCount === 0 && audit.status === 'pass') {
+        const maturity = getAuditPromotedSpecReleaseMetadata(variant, audit);
+        const summary = aiReview.applied
+            ? `Gold-standard review completed. The draft now aligns with the ${variant.family} publishing standard, all supported fixes have been applied, and the spec currently passes the registry audit as ${maturity.status}.`
+            : `Gold-standard review completed. The draft aligns with the ${variant.family} publishing standard and currently passes the registry audit as ${maturity.status}.`;
+
+        return {
+            ...aiReview,
+            summary,
+        };
+    }
+
+    return aiReview;
 }
 
 function mapPriority(priority: VariantEntry['priority']) {
@@ -1707,6 +1934,86 @@ function getGeneratedSpecReleaseMetadata(variant: VariantEntry) {
     return {
         status: 'Draft Auto-Generated',
         version: 'v0.1',
+    };
+}
+
+function getAuditPromotedSpecReleaseMetadata(variant: VariantEntry, audit: SpecAuditReport) {
+    const current = getGeneratedSpecReleaseMetadata(variant);
+
+    if (current.status === 'Published Registry Spec' || current.status === 'Build-Ready Registry Spec') {
+        return current;
+    }
+
+    if (audit.status === 'pass' && audit.score >= 95) {
+        return {
+            status: 'Reviewed Registry Draft',
+            version: 'v0.7',
+        };
+    }
+
+    return current;
+}
+
+function promoteSpecReleaseMetadata(raw: string, variant: VariantEntry, audit: SpecAuditReport) {
+    const parsed = parseVariantSpec(raw);
+    const coreSection = extractSectionByKeyword(parsed, 'core identity');
+    if (!coreSection) return raw;
+
+    const release = getAuditPromotedSpecReleaseMetadata(variant, audit);
+    const nextLines = coreSection.content.split('\n').map((line) => {
+        if (/^Status:/i.test(line.trim())) {
+            return `Status: ${release.status}`;
+        }
+        if (/^Version:/i.test(line.trim())) {
+            return `Version: ${release.version}`;
+        }
+        return line;
+    });
+
+    return replaceSectionContent(raw, 'core identity', nextLines.join('\n'));
+}
+
+function syncReadinessChecklist(raw: string, variant: VariantEntry) {
+    const parsed = parseVariantSpec(raw);
+    const checklistSection = extractSectionByKeyword(parsed, 'variant readiness checklist');
+    if (!checklistSection) return raw;
+
+    const isPublished = Boolean(variant.publishedModuleId) || variant.buildStatus === 'published' || Boolean((variant as Partial<SimVariantRecord>).publishedAt);
+    if (!isPublished) {
+        return raw;
+    }
+
+    const nextContent = checklistSection.content
+        .split('\n')
+        .map((line) => line.replace(/^- \[ \]/, '- [x]'))
+        .join('\n');
+
+    return replaceSectionContent(raw, 'variant readiness checklist', nextContent);
+}
+
+function finalizeSpecForVariantState(
+    raw: string,
+    variant: VariantEntry,
+    audit?: SpecAuditReport,
+) {
+    let nextRaw = normalizeSpecText(raw);
+    let nextAudit = audit ?? runSpecAuditPipeline(variant, nextRaw);
+
+    const promotedRaw = normalizeSpecText(promoteSpecReleaseMetadata(nextRaw, variant, nextAudit));
+    if (promotedRaw !== nextRaw) {
+        nextRaw = promotedRaw;
+        nextAudit = runSpecAuditPipeline(variant, nextRaw);
+    }
+
+    const checklistAlignedRaw = normalizeSpecText(syncReadinessChecklist(nextRaw, variant));
+    if (checklistAlignedRaw !== nextRaw) {
+        nextRaw = checklistAlignedRaw;
+        nextAudit = runSpecAuditPipeline(variant, nextRaw);
+    }
+
+    return {
+        raw: nextRaw,
+        audit: nextAudit,
     };
 }
 
@@ -2423,9 +2730,52 @@ function getVariantSpecificProfileOverride(variant: VariantEntry, archetype: Sim
             return {
                 purpose: 'This variant expresses Endurance Lock through stable sustained-focus demands so the athlete must preserve clean execution over extended duration without late collapse.',
                 expectedBenefit: 'Improve vigilance maintenance and delay the onset of duration-driven degradation.',
+                bestUse: [
+                    'the athlete looks stable early but loses control late when monotony and duration compound',
+                    'Nora needs a variant that highlights fatigue sensitivity instead of finish-phase stakes',
+                    'the program wants a long-form endurance branch with reproducible sustained-focus packaging',
+                ],
+                changes: [
+                    'the six-block schema stays fixed while the pressure source remains monotony plus sustained load rather than finish-phase consequence',
+                    'modifier profiles map one-to-one to approved sustained-focus compositions so analytics can reconstruct the active load package deterministically',
+                    'training adaptation may adjust pacing only inside approved block-level bounds and may not change the named profile or block segmentation',
+                ],
+                buildNotes: [
+                    'Keep naming, analytics keys, and admin labels aligned with the registry entry.',
+                    `Mark this variant as archetype ${ARCHETYPE_LABELS[archetype]} so generation and runtime config stay aligned.`,
+                    'Store variant assignment, family, mode, and any variant-specific tags in the session record.',
+                    'Store fixed block duration, inter-block micro-rest schedule, and named sustained-focus profile id so long-form deterioration is reproducible rather than interpretive.',
+                ],
                 runtimeDefaults: {
                     emphasis: ['stable long focus', 'attention maintenance', 'late-session clean execution'],
                     analyticsFocus: ['Degradation Slope', 'block stability', 'late-session deterioration'],
+                },
+                durationMinutes: 6,
+            };
+        }
+        if (name.includes('long-reset')) {
+            return {
+                purpose: 'This variant expresses Endurance Lock through an extended-load endurance package that preserves the same task while forcing the athlete to repeatedly re-stabilize clean execution across a fixed long-form six-block schema.',
+                expectedBenefit: 'Expose deterioration patterns and long-run reset weakness that shorter endurance reps can miss.',
+                bestUse: [
+                    'the athlete looks stable early but loses control late under accumulating duration and reduced recovery room',
+                    'Nora needs a long-form endurance branch that emphasizes repeated re-stabilization rather than late-phase stakes',
+                    'the program wants a publish-grade long-duration profile with fixed block and recovery structure',
+                ],
+                changes: [
+                    'the pressure source is extended sustained load plus progressively tighter recovery room, not finish-phase consequence or channel interference',
+                    'analysis must separate baseline, middle, and finish blocks inside the same fixed six-block schema',
+                    'one named endurance profile remains fixed for the full session so load progression is reproducible and interpretable',
+                ],
+                buildNotes: [
+                    'Keep naming, analytics keys, and admin labels aligned with the registry entry.',
+                    `Mark this variant as archetype ${ARCHETYPE_LABELS[archetype]} so generation and runtime config stay aligned.`,
+                    'Store variant assignment, family, mode, and any variant-specific tags in the session record.',
+                    'Store fixed block duration, inter-block micro-rest schedule, and the named long-reset profile id so repeated re-stabilization is reproducible across builds.',
+                ],
+                runtimeDefaults: {
+                    emphasis: ['extended sustained load', 're-stabilization under fatigue', 'late-session clean execution'],
+                    analyticsFocus: ['Degradation Slope', 'block recovery stability', 'late-session deterioration'],
                 },
                 durationMinutes: 6,
             };
@@ -2466,6 +2816,24 @@ function inferVariantTheme(variant: VariantEntry): VariantTheme {
     const familyBase = FAMILY_SPEC_BASES[variant.family];
     const archetype = resolveVariantArchetype(variant);
     const profile = buildArchetypeProfile(variant, familyBase, archetype);
+    const boundarySafeguards = [
+        `Do not violate the family boundary: ${familyBase?.boundaryRule ?? 'the parent family rules still govern'}.`,
+        'If the variant starts producing a different mechanism or divergent score logic, flag it for promotion review rather than extending the variant.',
+    ];
+
+    if (variant.family === 'Endurance Lock' && archetype === 'fatigue_load') {
+        boundarySafeguards.push(
+            'Block structure must remain fixed to the approved six-block schema; do not alter baseline, middle, or finish-phase segmentation for this variant.',
+            'One `modifier_profile_id` must remain fixed per published module and per session; no profile mixing or in-session rotation is allowed.'
+        );
+    }
+
+    if (variant.family === 'Endurance Lock' && archetype === 'visual_channel') {
+        boundarySafeguards.push(
+            'Block structure must remain fixed to the approved six-block schema; do not alter baseline, middle, or finish-phase segmentation for this variant.',
+            'One `visual_profile_id` must remain fixed per published module and per session; no profile mixing or in-session rotation is allowed.'
+        );
+    }
 
     return {
         archetype,
@@ -2480,10 +2848,7 @@ function inferVariantTheme(variant: VariantEntry): VariantTheme {
         trainingMode: [...(familyBase?.trainingModeDefaults ?? ['show feedback according to the parent family defaults'])],
         trialMode: [...(familyBase?.trialModeDefaults ?? ['standardize conditions and suppress intra-session feedback for comparison use'])],
         buildNotes: profile.buildNotes,
-        boundarySafeguards: [
-            `Do not violate the family boundary: ${familyBase?.boundaryRule ?? 'the parent family rules still govern'}.`,
-            'If the variant starts producing a different mechanism or divergent score logic, flag it for promotion review rather than extending the variant.',
-        ],
+        boundarySafeguards,
     };
 }
 
@@ -2847,6 +3212,13 @@ function getArtifactRiskPattern(variant: VariantEntry, theme: VariantTheme) {
         ];
     }
 
+    if (variant.family === 'Endurance Lock' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            ...theme.artifactRisks,
+            'If visual clutter, peripheral bait, or contrast drift makes the live cue ambiguous enough to create a new search task, classify it as a build defect rather than athlete failure.',
+        ];
+    }
+
     return theme.artifactRisks;
 }
 
@@ -2859,6 +3231,67 @@ function getVariantSpecificModifierMatrix(variant: VariantEntry) {
             'Tier 1 allows one modifier at a time only: `flash` or `target_disappearance` or `layout_scramble`.',
             'Tier 2 allows one modifier at a time or `flash + layout_scramble`; `target_disappearance` may pair only with low-salience flash and may not pair with simultaneous scramble.',
             'Tier 3 allows `flash + target_disappearance` or `flash + layout_scramble`; `target_disappearance + layout_scramble` remains disallowed because it risks changing the mechanic from reset recovery into target-search or rule-discovery.',
+        ];
+    }
+
+    if (variant.family === 'Endurance Lock' && resolveVariantArchetype(variant) === 'fatigue_load') {
+        const name = variant.name.toLowerCase();
+        if (name.includes('late-pressure')) {
+            return [
+                '`sustained_load` = a fixed six-block endurance structure with minimal rest, stable task identity, and load carried through repetition density rather than task-switching.',
+                '`late_pressure_profile` = one named finish-phase pressure package applied only in Blocks 5-6; approved profile ids are `clock_compression_v1`, `score_weight_v1`, or `error_consequence_v1` and they may not be mixed inside the same build.',
+                '`stakes_messaging` = optional explicit finish-phase cueing that reminds the athlete the final blocks matter more; it may amplify the named late-pressure profile but may not introduce a new mechanic.',
+                'Tier 2 = `sustained_load + one late_pressure_profile`.',
+                'Tier 3 = `sustained_load + one late_pressure_profile + stakes_messaging`.',
+                '`late_pressure_profile` may not rotate between time pressure, scoring weight, and consequence inside a single assignment; choose one normalized profile per published module so comparisons stay interpretable.',
+            ];
+        }
+
+        if (name.includes('sustained-focus')) {
+            return [
+                '`sustained_load` = a fixed six-block endurance structure with stable task identity, minimal rest, and repetition density that rises without introducing a new problem.',
+                '`micro_rest_suppression` = reduced recovery room between blocks while preserving the same target rule and pacing architecture.',
+                '`attention_hold` = monotony-preserving presentation that keeps the task visually and cognitively stable so deterioration comes from time-on-task rather than surprise.',
+                '`modifier_profile_id` = one named sustained-focus package selected per published module; approved profile ids are `steady_focus_v1`, `reduced_rest_v1`, or `steady_focus_monotony_v1` and they may not be mixed inside the same build.',
+                '`steady_focus_v1` maps one-to-one to Tier 1 = `sustained_load` only across all six blocks with fixed 60-second blocks and fixed 4-second micro-rest after Blocks 1-5.',
+                '`reduced_rest_v1` maps one-to-one to Tier 2 = `sustained_load + micro_rest_suppression`, with fixed 60-second blocks, 4-second micro-rest after Blocks 1-2, and 2-second micro-rest after Blocks 3-5.',
+                '`steady_focus_monotony_v1` maps one-to-one to Tier 3 = `sustained_load + micro_rest_suppression + attention_hold`, with fixed 60-second blocks, 2-second micro-rest after Blocks 1-5, and monotony-preserving presentation held constant across the full session.',
+                'No pressure-profile or distraction modifier may be layered into this variant; the pressure source must remain duration-dependent maintenance rather than finish-phase stakes or channel noise.',
+            ];
+        }
+
+        if (name.includes('long-reset')) {
+            return [
+                '`sustained_load` = a fixed six-block endurance structure with stable task identity, 60-second blocks, and repetition density that stays high enough to require repeated re-stabilization without changing the task.',
+                '`micro_rest_suppression` = fixed recovery-room compression between blocks that raises long-form endurance demand without changing the target rule or response mapping.',
+                '`attention_hold` = monotony-preserving presentation that keeps the same task active so deterioration comes from extended load rather than novelty or stakes.',
+                '`modifier_profile_id` = one named long-reset endurance package selected per published module; approved profile ids are `long_reset_v1` only and it may not be mixed with any other profile inside the same build.',
+                '`long_reset_v1` maps one-to-one to Tier 1 in Blocks 1-2 = `sustained_load`, Tier 2 in Blocks 3-4 = `sustained_load + micro_rest_suppression`, and Tier 3 in Blocks 5-6 = `sustained_load + micro_rest_suppression + attention_hold`.',
+                'The `long_reset_v1` package requires fixed 60-second blocks, 4-second micro-rest after Blocks 1-2, and 2-second micro-rest after Blocks 3-5; no alternative rest schedule or profile rotation is allowed within a published module.',
+            ];
+        }
+
+        return [
+            '`sustained_load` = a fixed block-based endurance structure where the same task identity is preserved while repetition density and fatigue load accumulate.',
+            '`load_modifier_profile` = one named endurance-load packaging profile chosen per published module; it must be normalized and may not change mid-session.',
+            'If a second modifier is used, its co-occurrence rules must be explicit and block-stable rather than improvised round to round.',
+            'Every fatigue-load variant must define valid Tier 1, Tier 2, and Tier 3 combinations before publish; undefined overlap rules mean the build is not ready.',
+        ];
+    }
+
+    if (variant.family === 'Endurance Lock' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            '`visual_density` = a fixed six-block endurance structure where non-target visual clutter increases through approved density tiers while the task identity and correct target mapping remain unchanged.',
+            '`peripheral_bait` = peripheral motion, decoy pulses, or edge-loaded competition that competes for attention without becoming a second task or changing the correct response rule.',
+            '`contrast_drift` = a bounded reduction in cue salience or background contrast that preserves live-cue legibility above the approved floor and may not turn the task into target search.',
+            '`visual_profile_id` = one named visual-load package selected per published module; approved profile ids are `clutter_ramp_v1`, `peripheral_bait_v1`, or `contrast_decay_v1` and they may not be mixed inside the same build.',
+            'Tier 1 = `visual_density + one visual_profile_id`.',
+            'Tier 2 = `visual_density + one visual_profile_id + peripheral_bait` or `visual_density + one visual_profile_id + contrast_drift`.',
+            'Tier 3 = `visual_density + one visual_profile_id + peripheral_bait + contrast_drift` only if cue legibility remains above the approved threshold for the full six-block session.',
+            '`visual_profile_id` may not rotate between clutter, peripheral bait, and contrast-decay packages inside a single assignment; choose one normalized visual profile per published module so degradation curves stay interpretable.',
+            '`clutter_ramp_v1` fixed recipe = Blocks 1-2 clean-reference baseline with `visual_density_tier=low`; Blocks 3-4 controlled clutter ramp at `visual_density_tier=medium`; Blocks 5-6 high-clutter continuation at `visual_density_tier=high` with no added peripheral bait or contrast drift.',
+            '`peripheral_bait_v1` fixed recipe = Blocks 1-2 clean-reference baseline with `peripheral_load_tier=low`; Blocks 3-4 low-salience edge decoys at `peripheral_load_tier=medium`; Blocks 5-6 repeated peripheral competition at `peripheral_load_tier=high` while `visual_density_tier` stays fixed at `medium` and `contrast_profile` stays `normal_contrast`.',
+            '`contrast_decay_v1` fixed recipe = Blocks 1-2 clean-reference baseline with `contrast_profile=normal_contrast`; Blocks 3-4 controlled cue-salience reduction at `contrast_profile=reduced_contrast`; Blocks 5-6 repeated low-salience continuation at `contrast_profile=glare_wash` while `visual_density_tier` stays `medium` and `peripheral_load_tier` stays `low`.',
         ];
     }
 
@@ -2877,6 +3310,45 @@ function getVariantSpecificTrialProfile(variant: VariantEntry) {
         ];
     }
 
+    if (variant.family === 'Endurance Lock' && resolveVariantArchetype(variant) === 'fatigue_load') {
+        const name = variant.name.toLowerCase();
+        if (name.includes('late-pressure')) {
+            return [
+                'If Trial Mode is used for this variant, lock one named six-block profile: 6 minutes, adaptive difficulty off, fixed seed, fixed device class, and one approved late-pressure profile id.',
+                'Recommended fixed schedule: Blocks 1-2 baseline reference, Blocks 3-4 controlled sustained-load continuation, Block 5 late-pressure activation, Block 6 repeated late-pressure activation at the same normalized severity.',
+                'Keep block duration, pacing cadence, and finish-phase profile constant for the full trial so degradation curves and finish-phase comparisons remain reproducible.',
+            ];
+        }
+
+        if (name.includes('sustained-focus')) {
+            return [
+                'If Trial Mode is used for this variant, lock one named six-block profile: `modifier_profile_id=steady_focus_monotony_v1`, 6 minutes, adaptive difficulty off, fixed seed, fixed device class, fixed 60-second blocks, and fixed micro-rest schedule.',
+                'Recommended fixed schedule: Blocks 1-2 baseline reference with 60-second blocks and 2-second micro-rest, Blocks 3-4 steady sustained-load continuation with the same block duration and rest schedule, Blocks 5-6 finish-phase endurance continuation with the same monotony-preserving profile and no added pressure overlays.',
+                'Keep block duration, micro-rest values, monotony profile, and selected `modifier_profile_id` fixed for the full trial so the score reflects duration-driven deterioration rather than implementation interpretation.',
+            ];
+        }
+
+        if (name.includes('long-reset')) {
+            return [
+                'If Trial Mode is used for this variant, lock one named six-block profile: `modifier_profile_id=long_reset_v1`, 6 minutes, adaptive difficulty off, fixed seed, fixed device class, fixed 60-second blocks, and the approved long-reset micro-rest schedule.',
+                'Recommended fixed schedule: Blocks 1-2 baseline reference with 60-second blocks and 4-second micro-rest, Blocks 3-4 controlled sustained-load continuation with 60-second blocks and 2-second micro-rest, Blocks 5-6 finish-phase continuation with the same 60-second block duration, 2-second micro-rest, and fixed `attention_hold` overlay.',
+                'Keep block duration, micro-rest values, block identities, and the `long_reset_v1` profile fixed for the full trial so long-form deterioration and repeated re-stabilization are reproducible across builds.',
+            ];
+        }
+
+        return [
+            'If Trial Mode is used for this variant, lock one named endurance profile with fixed block structure, fixed seed, fixed device class, fixed duration, and adaptive difficulty disabled.',
+        ];
+    }
+
+    if (variant.family === 'Endurance Lock' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            'If Trial Mode is used for this variant, lock one named six-block profile: 6 minutes, adaptive difficulty off, fixed seed, fixed device class, and one approved `visual_profile_id`.',
+            'Recommended fixed schedule: Blocks 1-2 clean-reference baseline, then apply the exact per-block display-state recipe defined by the selected `visual_profile_id` with no substitutions or in-session profile changes.',
+            'Keep block duration, block schema, selected `visual_profile_id`, and selected `visual_profile_schedule_version` fixed for the full trial; per-block display-state values must follow the locked recipe exactly and may not be manually varied or substituted.',
+        ];
+    }
+
     return [
         'If Trial Mode is used for this variant, lock one named modifier profile with fixed seed, fixed device class, fixed duration, and adaptive difficulty disabled rather than relying on prose-only standardization.',
     ];
@@ -2891,6 +3363,48 @@ function getCanonicalAnalyticsTagVocabulary(variant: VariantEntry) {
             '`peripheral_load_tier`: allowed values = `low`, `medium`, `high`.',
             '`visual_density_tier`: allowed values = `tier_1`, `tier_2`, `tier_3`.',
             '`delivery_surface`: allowed values = `web_desktop`, `web_mobile`, `phone_native`, `tablet_native`.',
+        ];
+    }
+
+    if (variant.family === 'Endurance Lock' && resolveVariantArchetype(variant) === 'fatigue_load') {
+        const name = variant.name.toLowerCase();
+        const modifierProfileValues = name.includes('late-pressure')
+            ? '`clock_compression_v1`, `score_weight_v1`, `error_consequence_v1`'
+            : name.includes('sustained-focus')
+                ? '`steady_focus_v1`, `reduced_rest_v1`, `steady_focus_monotony_v1`'
+                : name.includes('long-reset')
+                    ? '`long_reset_v1`'
+                : '`endurance_profile_v1`';
+        const activeModifierValues = name.includes('late-pressure')
+            ? '`sustained_load`, `late_pressure_profile`, `stakes_messaging`'
+            : '`sustained_load`, `micro_rest_suppression`, `attention_hold`';
+
+        return [
+            'Session fields must stay distinct from event tags and derived metrics; do not flatten them into one unlabeled analytics list.',
+            `\`modifier_profile_id\`: session field, allowed values = ${modifierProfileValues}.`,
+            '`device_class`: session field, allowed values = `web_desktop`, `web_mobile`, `phone_native`, `tablet_native`.',
+            '`delivery_surface`: session field, allowed values = `browser`, `native_phone`, `native_tablet`, `headset`.',
+            '`block_structure_version`: session field, allowed values = `six_block_v1`.',
+            '`block_identity`: event tag, allowed values = `baseline_1`, `baseline_2`, `mid_1`, `mid_2`, `finish_1`, `finish_2`.',
+            `\`active_modifier\`: event tag, allowed values = ${activeModifierValues}.`,
+            '`baseline_performance`, `degradation_onset_block`, and `degradation_slope`: derived metrics and must not be stored as free-form tags.',
+        ];
+    }
+
+    if (variant.family === 'Endurance Lock' && resolveVariantArchetype(variant) === 'visual_channel') {
+        return [
+            'Session fields must stay distinct from event tags and derived metrics; do not flatten them into one unlabeled analytics list.',
+            '`visual_profile_id`: session field, allowed values = `clutter_ramp_v1`, `peripheral_bait_v1`, `contrast_decay_v1`.',
+            '`visual_profile_schedule_version`: session field, allowed values = `clutter_ramp_v1_schedule`, `peripheral_bait_v1_schedule`, `contrast_decay_v1_schedule`.',
+            '`device_class`: session field, allowed values = `web_desktop`, `web_mobile`, `phone_native`, `tablet_native`.',
+            '`delivery_surface`: session field, allowed values = `browser`, `native_phone`, `native_tablet`, `headset`.',
+            '`block_structure_version`: session field, allowed values = `six_block_v1`.',
+            '`visual_density_tier`: block-scoped event tag, allowed values = `low`, `medium`, `high`.',
+            '`peripheral_load_tier`: block-scoped event tag, allowed values = `low`, `medium`, `high`.',
+            '`contrast_profile`: block-scoped event tag, allowed values = `normal_contrast`, `reduced_contrast`, `glare_wash`.',
+            '`block_identity`: event tag, allowed values = `baseline_1`, `baseline_2`, `mid_1`, `mid_2`, `finish_1`, `finish_2`.',
+            '`active_modifier`: event tag, allowed values = `visual_density`, `peripheral_bait`, `contrast_drift`.',
+            '`baseline_performance`, `degradation_onset_block`, and `degradation_slope`: derived metrics and must not be stored as free-form tags.',
         ];
     }
 
@@ -2984,6 +3498,42 @@ function getNonTrialMeasurementNotes(variant: VariantEntry, theme: VariantTheme)
     }
 
     if (variant.family === 'Endurance Lock') {
+        const archetype = resolveVariantArchetype(variant);
+        if (archetype === 'fatigue_load') {
+            const name = variant.name.toLowerCase();
+            const latePhaseLine = name.includes('late-pressure')
+                ? 'Late-pressure profiles must stay normalized: Training Mode may change pacing cadence or rest ratio only inside the approved six-block schema, but it may not swap the active late-pressure profile, change block identities, alter finish-phase segmentation, or rewrite the finish-phase scoring logic.'
+                : 'Training-mode adaptation may change pacing cadence or micro-rest only inside the approved six-block schema, but it may not change the task identity, block identities, or headline measurement logic.';
+
+            return [
+                'Baseline Performance = mean accuracy across Blocks 1-2.',
+                'Mid-Session Performance = mean accuracy across Blocks 3-4.',
+                'Finish-Phase Performance = mean accuracy across Blocks 5-6.',
+                'Degradation Onset = the first block where performance drops below 90% of the Block 1-2 baseline and stays below that threshold through the next block.',
+                'Degradation Slope is the headline metric and should be calculated from the fitted drop across Blocks 4-6, reported as % accuracy loss per minute.',
+                name.includes('late-pressure')
+                    ? 'Late-phase comparison must compare Blocks 5-6 against the same athlete\'s Block 1-2 baseline under the same core task mapping; the pressure profile may change, the task may not.'
+                    : 'Finish-phase comparison must compare Blocks 5-6 against the same athlete\'s Block 1-2 baseline under the same core task mapping.',
+                'Embedded task attribution must stay with Endurance Lock; if another family task is embedded, the measured phenomenon is duration-dependent degradation, not the embedded family score.',
+                'Block identity, onset timing, modifier profile id, and device class may support interpretation, but they must remain context fields rather than a replacement scoring system.',
+                latePhaseLine,
+            ];
+        }
+
+        if (archetype === 'visual_channel') {
+            return [
+                'Baseline Performance = mean accuracy across Blocks 1-2 under the clean-reference visual state.',
+                'Mid-Session Performance = mean accuracy across Blocks 3-4 under the approved visual-load continuation state.',
+                'Finish-Phase Performance = mean accuracy across Blocks 5-6 under the same named `visual_profile_id` at fixed normalized severity.',
+                'Degradation Onset = the first block where performance drops below 90% of the Block 1-2 baseline and stays below that threshold through the next block.',
+                'Degradation Slope is the headline metric and should be calculated from the fitted drop across Blocks 4-6, reported as % accuracy loss per minute.',
+                'Finish-phase comparison must compare Blocks 5-6 against the same athlete\'s Block 1-2 baseline under the same core task mapping; the active visual profile may change the display state, but it may not change the task.',
+                'Embedded task attribution must stay with Endurance Lock; if another family task is embedded, the measured phenomenon is duration-dependent degradation, not the embedded family score.',
+                'Block identity, visual_profile_id, visual density tier, peripheral load tier, contrast profile, and device class may support interpretation, but they must remain context fields rather than a replacement scoring system.',
+                'Visual-channel profiles must stay normalized: Training Mode may change pacing cadence or density step size inside approved family bounds, but it may not swap the active visual profile, change block identities, or rewrite the finish-phase scoring logic.',
+            ];
+        }
+
         return [
             'Baseline Performance = the first 2-3 minutes of the session, treated as the 100% reference window for all later blocks.',
             'Degradation Onset = the point when performance first drops below 90% of baseline and stays there for at least one full block; one isolated low block does not count.',
@@ -3042,14 +3592,34 @@ function getNonTrialModeNotes(variant: VariantEntry, theme: VariantTheme) {
     }
 
     if (variant.family === 'Endurance Lock' && archetype === 'fatigue_load') {
+        const name = variant.name.toLowerCase();
         return {
             trainingMode: [
                 ...trainingMode,
                 'show block-by-block fatigue coaching so the athlete can see whether execution is slipping early, mid, or late rather than over-reading one bad moment',
+                name.includes('late-pressure')
+                    ? 'training-mode adaptation may change pacing cadence or rest ratio only inside the approved six-block schema, but it may not change the task identity, block schema, baseline/middle/finish segmentation, or the named late-pressure profile'
+                    : 'training-mode adaptation may change pacing cadence only inside the approved six-block schema, but it may not change total session duration, fixed block duration, baseline/middle/finish segmentation, the approved micro-rest schedule, or the named modifier_profile_id',
             ],
             trialMode: [
                 ...trialMode,
-                'if trial-layer packaging is used, hold baseline window, pacing structure, and late-probe timing constant so degradation curves stay comparable',
+                name.includes('late-pressure')
+                    ? 'if trial-layer packaging is used, hold baseline window, pacing structure, and late-probe timing constant so degradation curves stay comparable'
+                    : 'if trial-layer packaging is used, hold baseline window, six-block structure, fixed block duration, named modifier_profile_id, and approved micro-rest schedule constant so degradation curves stay comparable',
+            ],
+        };
+    }
+
+    if (variant.family === 'Endurance Lock' && archetype === 'visual_channel') {
+        return {
+            trainingMode: [
+                ...trainingMode,
+                'show block-by-block visual-load coaching so the athlete can see whether degradation came from clutter density, peripheral competition, or contrast drift rather than over-reading one bad block',
+                'training-mode adaptation may change pacing cadence, density step size, or micro-rest inside approved family bounds, but it may not change the task identity, block schema, or named visual profile',
+            ],
+            trialMode: [
+                ...trialMode,
+                'if trial-layer packaging is used, hold baseline window, block schema, visual profile id, and display-state progression constant so visual endurance comparisons stay reproducible',
             ],
         };
     }
@@ -3135,10 +3705,21 @@ function getNonTrialBuildNotes(variant: VariantEntry, theme: VariantTheme) {
     }
 
     if (variant.family === 'Endurance Lock') {
+        if (resolveVariantArchetype(variant) === 'visual_channel') {
+            return [
+                ...theme.buildNotes,
+                'Store visual_profile_id, visual_profile_schedule_version, device_class, delivery_surface, and block_structure_version as session fields, plus baseline-window markers and block identities so visual endurance failures are interpretable.',
+                'Export baseline performance, mid-session performance, finish-phase performance, block-by-block accuracy, degradation slope, onset timing, and display-state transitions separately rather than flattening the full session into one fatigue score.',
+                'Treat block_identity, active_modifier, visual_density_tier, peripheral_load_tier, and contrast_profile as block-scoped event tags; treat visual_profile_id / visual_profile_schedule_version / device_class / delivery_surface / block_structure_version as session fields; and treat baseline_performance / degradation_onset_block / degradation_slope as derived metrics.',
+                'Keep the live cue visually legible under every approved display state; if clutter, contrast drift, or peripheral bait changes the task identity instead of visual endurance pressure, fail the variant for review.',
+            ];
+        }
+
         return [
             ...theme.buildNotes,
-            'Store baseline-window markers, block identities, degradation-onset tags, and late-probe markers in the session record so endurance failures are interpretable.',
-            'Export baseline performance, block-by-block accuracy, degradation slope, onset timing, and embedded-task attribution separately rather than flattening the full session into one fatigue score.',
+            'Store baseline-window markers, block identities, degradation-onset tags, modifier_profile_id, device_class, and delivery_surface in the session record so endurance failures are interpretable.',
+            'Export baseline performance, mid-session performance, finish-phase performance, block-by-block accuracy, degradation slope, onset timing, and embedded-task attribution separately rather than flattening the full session into one fatigue score.',
+            'Treat block_identity and active_modifier as event tags, modifier_profile_id / device_class / delivery_surface as session fields, and baseline_performance / degradation_onset_block / degradation_slope as derived metrics.',
         ];
     }
 
@@ -3260,6 +3841,31 @@ function buildSupportedWarningFixActions(variant: VariantEntry, findings: SpecAu
         }
     }
 
+    const familyUpgradeSignals = findings.filter((finding) => {
+        const lowerMessage = finding.message.toLowerCase();
+        return finding.code.startsWith('endurance_missing_')
+            || finding.code.startsWith('reset_missing_')
+            || finding.code.startsWith('noise_gate_missing_')
+            || finding.code.startsWith('brake_point_missing_')
+            || finding.code.startsWith('signal_window_missing_')
+            || finding.code.startsWith('sequence_shift_missing_')
+            || lowerMessage.includes('modifier matrix')
+            || lowerMessage.includes('modifier/profile')
+            || lowerMessage.includes('trial standardization')
+            || lowerMessage.includes('schema-grade')
+            || lowerMessage.includes('analytics vocab')
+            || lowerMessage.includes('baseline, middle, and finish')
+            || lowerMessage.includes('adaptive difficulty');
+    });
+
+    if (familyUpgradeSignals.length > 0) {
+        actions.push({
+            key: 'upgrade_family_sections',
+            label: 'Upgrade Family Gold Standard',
+            codes: Array.from(new Set(familyUpgradeSignals.map((finding) => finding.code))),
+        });
+    }
+
     if (
         warningCodes.has('overlapping_build_notes')
         || warningCodes.has('near_duplicate_build_note')
@@ -3360,7 +3966,79 @@ function applyAuditWarningFixes(variant: VariantEntry, raw: string, action: Warn
         }
     }
 
+    if (action.key === 'upgrade_family_sections') {
+        const referenceSpec = buildGeneratedVariantSpec(variant);
+        const referenceParsed = parseVariantSpec(referenceSpec);
+        const sectionKeywords = ['archetype packaging', 'variant modifier', 'measurement', 'mode behavior', 'canonical analytics', 'build', 'boundary'];
+
+        sectionKeywords.forEach((keyword) => {
+            const referenceSection = extractSectionByKeyword(referenceParsed, keyword);
+            if (referenceSection) {
+                next = replaceSectionContent(next, keyword, referenceSection.content);
+            }
+        });
+    }
+
     return normalizeSpecText(next);
+}
+
+function autoApplySupportedAuditFixes(
+    variant: VariantEntry,
+    raw: string,
+    auditReport: SpecAuditReport,
+) {
+    let currentRaw = normalizeSpecText(raw);
+    let currentAudit = auditReport;
+    const appliedLabels: string[] = [];
+    const exhaustedKeys = new Set<string>();
+
+    const hasMissingSections = currentAudit.findings.some((finding) => finding.code === 'missing_section');
+    if (hasMissingSections) {
+        const rebuiltRaw = rebuildSpecWithCanonicalSections(variant, currentRaw);
+        if (rebuiltRaw !== currentRaw) {
+            currentRaw = rebuiltRaw;
+            currentAudit = runSpecAuditPipeline(variant, currentRaw);
+            appliedLabels.push('Restore Required Sections');
+        }
+    }
+
+    for (let index = 0; index < 6; index += 1) {
+        const nextAction = buildSupportedWarningFixActions(variant, currentAudit.findings)
+            .find((action) => !exhaustedKeys.has(action.key));
+        if (!nextAction) {
+            break;
+        }
+
+        const nextRaw = applyAuditWarningFixes(variant, currentRaw, nextAction);
+        exhaustedKeys.add(nextAction.key);
+        if (normalizeSpecText(nextRaw) === currentRaw) {
+            continue;
+        }
+
+        appliedLabels.push(nextAction.label);
+        currentRaw = normalizeSpecText(nextRaw);
+        currentAudit = runSpecAuditPipeline(variant, currentRaw);
+    }
+
+    const promotedRaw = normalizeSpecText(promoteSpecReleaseMetadata(currentRaw, variant, currentAudit));
+    if (promotedRaw !== currentRaw) {
+        currentRaw = promotedRaw;
+        currentAudit = runSpecAuditPipeline(variant, currentRaw);
+        appliedLabels.push('Promote Spec Metadata');
+    }
+
+    const checklistAlignedRaw = normalizeSpecText(syncReadinessChecklist(currentRaw, variant));
+    if (checklistAlignedRaw !== currentRaw) {
+        currentRaw = checklistAlignedRaw;
+        currentAudit = runSpecAuditPipeline(variant, currentRaw);
+        appliedLabels.push('Complete Published Checklist');
+    }
+
+    return {
+        raw: currentRaw,
+        audit: currentAudit,
+        appliedLabels,
+    };
 }
 
 function materializeWarningFixGroups(
@@ -3475,6 +4153,96 @@ function buildGeneratedVariantSpec(variant: VariantEntry): string {
         '- [ ] Artifact risks and boundary safeguards documented',
         '- [ ] Build and data notes translated into implementation tasks',
     ].join('\n'));
+}
+
+async function requestAiVariantSpecAudit(
+    variant: VariantEntry,
+    rawSpec: string,
+    findings: SpecAuditFinding[]
+): Promise<VariantSpecAiAuditResult> {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), AI_SPEC_AUDIT_TIMEOUT_MS);
+    try {
+        const response = await fetch('/api/admin/audit-variant-spec', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+                variant: {
+                    name: variant.name,
+                    family: variant.family,
+                    familyStatus: variant.familyStatus,
+                    mode: variant.mode,
+                    priority: variant.priority,
+                    specStatus: variant.specStatus,
+                    archetype: resolveVariantArchetype(variant),
+                    publishedModuleId: variant.publishedModuleId ?? null,
+                    buildStatus: variant.buildStatus ?? null,
+                },
+                rawSpec,
+                deterministicFindings: findings,
+            }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data?.error || 'Failed to run AI spec audit');
+        }
+        return data as VariantSpecAiAuditResult;
+    } catch (error: any) {
+        if (error?.name === 'AbortError') {
+            throw new Error('AI spec audit timed out after 45 seconds.');
+        }
+        throw error;
+    } finally {
+        window.clearTimeout(timeoutId);
+    }
+}
+
+async function requestAiVariantSpecGeneration(
+    variant: VariantEntry,
+    seedSpec: string
+): Promise<VariantSpecAiGenerationResult> {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), AI_SPEC_GENERATION_TIMEOUT_MS);
+    try {
+        const response = await fetch('/api/admin/generate-variant-spec', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+                variant: {
+                    name: variant.name,
+                    family: variant.family,
+                    familyStatus: variant.familyStatus,
+                    mode: variant.mode,
+                    priority: variant.priority,
+                    specStatus: variant.specStatus,
+                    archetype: resolveVariantArchetype(variant),
+                    publishedModuleId: variant.publishedModuleId ?? null,
+                    buildStatus: variant.buildStatus ?? null,
+                },
+                seedSpec,
+            }),
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data?.error || 'Failed to generate AI variant spec');
+        }
+        return data as VariantSpecAiGenerationResult;
+    } catch (error: any) {
+        if (error?.name === 'AbortError') {
+            throw new Error('AI draft generation timed out after 120 seconds.');
+        }
+        throw error;
+    } finally {
+        window.clearTimeout(timeoutId);
+    }
 }
 
 function inferModuleDifficulty(variant: VariantEntry): ExerciseDifficulty {
@@ -3861,6 +4629,7 @@ function VariantWorkspaceModal({
     onSave,
     onBuild,
     onPublish,
+    onRollback,
     initialSpecRaw,
     initialTab = 'spec',
     saving,
@@ -3872,6 +4641,7 @@ function VariantWorkspaceModal({
     onSave: (next: SimVariantRecord) => Promise<void>;
     onBuild: (next: SimVariantRecord) => Promise<void>;
     onPublish: (next: SimVariantRecord) => Promise<void>;
+    onRollback: (next: SimVariantRecord) => void;
     initialSpecRaw?: string;
     initialTab?: 'general' | 'locks' | 'spec' | 'config' | 'publish' | 'history';
     saving: boolean;
@@ -3889,9 +4659,14 @@ function VariantWorkspaceModal({
     const [benefitsText, setBenefitsText] = useState((normalizeModuleDraft(variant, variant.moduleDraft, 0).benefits ?? []).join('\n'));
     const [bestForText, setBestForText] = useState((normalizeModuleDraft(variant, variant.moduleDraft, 0).bestFor ?? []).join('\n'));
     const [historyEntries, setHistoryEntries] = useState<SimVariantHistoryEntry[]>([]);
+    const [specVersions, setSpecVersions] = useState<SimVariantSpecVersionEntry[]>([]);
     const [historyLoading, setHistoryLoading] = useState(true);
     const [restoringHistoryId, setRestoringHistoryId] = useState<string | null>(null);
+    const [rollingBackVersionId, setRollingBackVersionId] = useState<string | null>(null);
+    const [timelineRefreshToken, setTimelineRefreshToken] = useState(0);
     const [auditReport, setAuditReport] = useState<SpecAuditReport | null>(null);
+    const [specGenerationLoading, setSpecGenerationLoading] = useState(false);
+    const [aiAuditLoading, setAiAuditLoading] = useState(false);
     const [warningFixFeedback, setWarningFixFeedback] = useState<WarningFixFeedback | null>(null);
     const [disabledWarningFixKeys, setDisabledWarningFixKeys] = useState<string[]>([]);
     const [showDetailedFindings, setShowDetailedFindings] = useState(false);
@@ -3954,13 +4729,24 @@ function VariantWorkspaceModal({
     useEffect(() => {
         const nextRawSpec = initialSpecRaw ?? variant.specRaw ?? '';
         const nextModuleDraft = normalizeModuleDraft(variant, variant.moduleDraft, 0);
+        const normalizedNextRawSpec = normalizeSpecText(nextRawSpec);
         setVariantMeta(variant);
         setActiveTab(initialTab);
         setRawSpec(nextRawSpec);
         setParsed(nextRawSpec.trim() ? parseVariantSpec(nextRawSpec) : null);
         setConfigText(JSON.stringify(variant.runtimeConfig ?? buildDefaultRuntimeConfig(variant), null, 2));
         setConfigError(null);
-        setAuditReport(nextRawSpec.trim() ? runSpecAuditPipeline(variant, nextRawSpec) : null);
+        setAuditReport((current) => {
+            if (
+                current
+                && normalizeSpecText(current.fixedRaw) === normalizedNextRawSpec
+            ) {
+                return current;
+            }
+            return nextRawSpec.trim() ? runSpecAuditPipeline(variant, nextRawSpec) : null;
+        });
+        setSpecGenerationLoading(false);
+        setAiAuditLoading(false);
         setWarningFixFeedback(null);
         setDisabledWarningFixKeys([]);
         setShowDetailedFindings(false);
@@ -3972,34 +4758,38 @@ function VariantWorkspaceModal({
         setBestForText((nextModuleDraft.bestFor ?? []).join('\n'));
     }, [variant, initialSpecRaw, initialTab]);
 
-    useEffect(() => {
-        let cancelled = false;
-
-        const loadHistory = async () => {
-            setHistoryLoading(true);
-            try {
-                const entries = await simVariantRegistryService.listHistory(variant.id);
-                if (!cancelled) {
-                    setHistoryEntries(entries);
-                }
-            } catch (error) {
-                console.error('Failed to load variant history:', error);
-                if (!cancelled) {
-                    setHistoryEntries([]);
-                }
-            } finally {
-                if (!cancelled) {
-                    setHistoryLoading(false);
-                }
+    const loadTimeline = useCallback(async (variantId: string, cancelledRef?: { cancelled: boolean }) => {
+        setHistoryLoading(true);
+        try {
+            const [entries, versionEntries] = await Promise.all([
+                simVariantRegistryService.listHistory(variantId),
+                simVariantRegistryService.listSpecVersions(variantId),
+            ]);
+            if (!cancelledRef?.cancelled) {
+                setHistoryEntries(entries);
+                setSpecVersions(versionEntries);
             }
-        };
+        } catch (error) {
+            console.error('Failed to load variant timeline:', error);
+            if (!cancelledRef?.cancelled) {
+                setHistoryEntries([]);
+                setSpecVersions([]);
+            }
+        } finally {
+            if (!cancelledRef?.cancelled) {
+                setHistoryLoading(false);
+            }
+        }
+    }, []);
 
-        loadHistory();
+    useEffect(() => {
+        const cancelledRef = { cancelled: false };
+        loadTimeline(variant.id, cancelledRef);
 
         return () => {
-            cancelled = true;
+            cancelledRef.cancelled = true;
         };
-    }, [variant.id, variant.updatedAt, variant.publishedAt]);
+    }, [loadTimeline, variant.id, variant.updatedAt, variant.publishedAt, timelineRefreshToken]);
 
     const parseConfig = (value: string) => {
         setConfigText(value);
@@ -4011,27 +4801,127 @@ function VariantWorkspaceModal({
         }
     };
 
-    const handleGenerateSpec = () => {
-        const generated = buildGeneratedVariantSpec(variantMeta);
-        const audit = runSpecAuditPipeline(variantMeta, generated);
-        setRawSpec(audit.fixedRaw);
-        setParsed(parseVariantSpec(audit.fixedRaw));
-        setAuditReport(audit);
+    const runAuditWithOptionalAi = useCallback(async (specRaw: string) => {
+        const deterministicAudit = runSpecAuditPipeline(variantMeta, specRaw);
+        let nextRawSpec = deterministicAudit.fixedRaw;
+        let nextAudit = deterministicAudit;
+        let aiReview: SpecAuditAiReview | null = null;
+        let autoFixFeedback: WarningFixFeedback | null = null;
+
+        setRawSpec(deterministicAudit.fixedRaw);
+        setParsed(deterministicAudit.fixedRaw.trim() ? parseVariantSpec(deterministicAudit.fixedRaw) : null);
+        setAuditReport(deterministicAudit);
         setWarningFixFeedback(null);
         setDisabledWarningFixKeys([]);
         setShowDetailedFindings(false);
-        setActiveTab('spec');
+
+        try {
+            setAiAuditLoading(true);
+            const aiAudit = await requestAiVariantSpecAudit(variantMeta, deterministicAudit.fixedRaw, deterministicAudit.findings);
+            const suggestedSpecRaw = normalizeSpecText(aiAudit.suggestedSpecRaw || deterministicAudit.fixedRaw);
+            const shouldApplyAiSpec = Boolean(suggestedSpecRaw.trim()) && suggestedSpecRaw !== normalizeSpecText(deterministicAudit.fixedRaw);
+            const validatedAudit = runSpecAuditPipeline(variantMeta, shouldApplyAiSpec ? suggestedSpecRaw : deterministicAudit.fixedRaw);
+
+            nextRawSpec = validatedAudit.fixedRaw;
+            aiReview = {
+                model: aiAudit.model,
+                summary: aiAudit.summary,
+                findings: aiAudit.findings ?? [],
+                applied: shouldApplyAiSpec,
+            };
+            nextAudit = mergeAuditReportWithAiReview(validatedAudit, aiReview);
+
+            const warningCountBeforeAutoFix = nextAudit.findings.filter((finding) => finding.severity === 'warning').length;
+            const autoApplied = autoApplySupportedAuditFixes(variantMeta, nextRawSpec, nextAudit);
+            if (autoApplied.appliedLabels.length > 0) {
+                nextRawSpec = autoApplied.raw;
+                nextAudit = {
+                    ...autoApplied.audit,
+                    aiReview: {
+                        ...aiReview,
+                        applied: true,
+                        summary: `${aiReview.summary} System auto-applied: ${autoApplied.appliedLabels.join(', ')}.`,
+                    },
+                };
+                const remainingActions = buildSupportedWarningFixActions(variantMeta, nextAudit.findings);
+                autoFixFeedback = {
+                    label: autoApplied.appliedLabels.join(', '),
+                    previousWarningCount: warningCountBeforeAutoFix,
+                    currentWarningCount: nextAudit.findings.filter((finding) => finding.severity === 'warning').length,
+                    remainingFixableSteps: remainingActions.length,
+                    nextLabel: remainingActions[0]?.label ?? null,
+                };
+            }
+        } catch (error: any) {
+            aiReview = {
+                model: 'unavailable',
+                summary: 'AI gold-standard review was unavailable, so the registry rule set remained the source of truth for this pass.',
+                findings: [],
+                applied: false,
+                unavailableReason: error?.message || 'Failed to reach the AI audit service.',
+            };
+            nextAudit = mergeAuditReportWithAiReview(deterministicAudit, aiReview);
+        } finally {
+            setAiAuditLoading(false);
+        }
+
+        const promotedAfterAudit = normalizeSpecText(promoteSpecReleaseMetadata(nextRawSpec, variantMeta, nextAudit));
+        if (promotedAfterAudit !== nextRawSpec) {
+            nextRawSpec = promotedAfterAudit;
+            nextAudit = runSpecAuditPipeline(variantMeta, nextRawSpec);
+        }
+
+        const checklistAlignedAfterAudit = normalizeSpecText(syncReadinessChecklist(nextRawSpec, variantMeta));
+        if (checklistAlignedAfterAudit !== nextRawSpec) {
+            nextRawSpec = checklistAlignedAfterAudit;
+            nextAudit = runSpecAuditPipeline(variantMeta, nextRawSpec);
+        }
+
+        const normalizedAiReview = normalizeAiReviewSummaryForFinalAudit(nextAudit.aiReview ?? aiReview, nextAudit, variantMeta);
+        if (normalizedAiReview) {
+            nextAudit = {
+                ...nextAudit,
+                aiReview: normalizedAiReview,
+            };
+        }
+
+        setRawSpec(nextRawSpec);
+        setParsed(nextRawSpec.trim() ? parseVariantSpec(nextRawSpec) : null);
+        setAuditReport(nextAudit);
+        setWarningFixFeedback(autoFixFeedback);
+        return nextAudit;
+    }, [variantMeta]);
+
+    const handleGenerateSpec = async () => {
+        setWorkspaceActionError(null);
+        setSpecGenerationLoading(true);
+        let generationFallbackReason: string | null = null;
+        try {
+            const seedSpec = buildGeneratedVariantSpec(variantMeta);
+            let generated = seedSpec;
+
+            try {
+                const aiGeneration = await requestAiVariantSpecGeneration(variantMeta, seedSpec);
+                const candidate = normalizeSpecText(aiGeneration.generatedSpecRaw || seedSpec);
+                if (candidate.trim()) {
+                    generated = candidate;
+                }
+            } catch (error: any) {
+                generationFallbackReason = `AI draft generation via GPT-4.1 was unavailable, so the registry fell back to the local scaffold. ${error?.message || ''}`.trim();
+            }
+
+            await runAuditWithOptionalAi(generated);
+            setActiveTab('spec');
+            if (generationFallbackReason) {
+                setWorkspaceActionError(generationFallbackReason);
+            }
+        } finally {
+            setSpecGenerationLoading(false);
+        }
     };
 
-    const handleRunAudit = () => {
-        const audit = runSpecAuditPipeline(variantMeta, rawSpec);
-        setRawSpec(audit.fixedRaw);
-        setParsed(audit.fixedRaw.trim() ? parseVariantSpec(audit.fixedRaw) : null);
-        setAuditReport(audit);
-        setWarningFixFeedback(null);
-        setDisabledWarningFixKeys([]);
-        setShowDetailedFindings(false);
-        return audit;
+    const handleRunAudit = async () => {
+        return runAuditWithOptionalAi(rawSpec);
     };
 
     const handleFixAuditWarnings = () => {
@@ -4057,15 +4947,23 @@ function VariantWorkspaceModal({
             return;
         }
         const audit = runSpecAuditPipeline(variantMeta, nextRawSpec);
-        setRawSpec(audit.fixedRaw);
-        setParsed(audit.fixedRaw.trim() ? parseVariantSpec(audit.fixedRaw) : null);
-        setAuditReport(audit);
+        const promotedRaw = normalizeSpecText(promoteSpecReleaseMetadata(audit.fixedRaw, variantMeta, audit));
+        const promotedAudit = promotedRaw === audit.fixedRaw ? audit : runSpecAuditPipeline(variantMeta, promotedRaw);
+        const checklistAlignedRaw = normalizeSpecText(syncReadinessChecklist(promotedRaw, variantMeta));
+        const checklistAlignedAudit = checklistAlignedRaw === promotedRaw ? promotedAudit : runSpecAuditPipeline(variantMeta, checklistAlignedRaw);
+        setRawSpec(checklistAlignedRaw);
+        setParsed(checklistAlignedRaw.trim() ? parseVariantSpec(checklistAlignedRaw) : null);
+        setAuditReport(checklistAlignedAudit);
         setDisabledWarningFixKeys([]);
-        const remainingActions = buildSupportedWarningFixActions(variantMeta, audit.findings);
+        const remainingActions = buildSupportedWarningFixActions(variantMeta, checklistAlignedAudit.findings);
         setWarningFixFeedback({
-            label: nextAction.label,
+            label: [
+                nextAction.label,
+                promotedRaw !== audit.fixedRaw ? 'Promote Spec Metadata' : null,
+                checklistAlignedRaw !== promotedRaw ? 'Complete Published Checklist' : null,
+            ].filter(Boolean).join(', '),
             previousWarningCount,
-            currentWarningCount: audit.findings.filter((finding) => finding.severity === 'warning').length,
+            currentWarningCount: checklistAlignedAudit.findings.filter((finding) => finding.severity === 'warning').length,
             remainingFixableSteps: remainingActions.length,
             nextLabel: remainingActions[0]?.label ?? null,
         });
@@ -4188,15 +5086,10 @@ function VariantWorkspaceModal({
         setWorkspaceActionError(null);
         setWorkspaceActionLabel('Saving draft...');
         try {
-            const audit = handleRunAudit();
-            if (audit.status === 'needs_input') {
-                setActiveTab('spec');
-                return;
-            }
-            const next = buildNextRecord(audit.fixedRaw);
+            const next = buildNextRecord(rawSpec);
             if (!next) return;
-            if (audit.fixedRaw.trim()) {
-                setParsed(parseVariantSpec(audit.fixedRaw));
+            if (rawSpec.trim()) {
+                setParsed(parseVariantSpec(rawSpec));
             }
             await onSave(next);
         } catch (error: any) {
@@ -4213,11 +5106,23 @@ function VariantWorkspaceModal({
         return buildVariantRecordForBuild(nextWithAudio);
     };
 
+    const getResolvedAuditForAction = async () => {
+        const normalizedCurrentRaw = normalizeSpecText(rawSpec);
+        if (
+            auditReport
+            && auditReport.status !== 'needs_input'
+            && normalizeSpecText(auditReport.fixedRaw) === normalizedCurrentRaw
+        ) {
+            return auditReport;
+        }
+        return handleRunAudit();
+    };
+
     const handleBuild = async () => {
         setWorkspaceActionError(null);
-        setWorkspaceActionLabel('Building module...');
+        setWorkspaceActionLabel('Auditing + compiling module...');
         try {
-            const audit = handleRunAudit();
+            const audit = await getResolvedAuditForAction();
             if (audit.status === 'needs_input') {
                 setActiveTab('spec');
                 return;
@@ -4235,14 +5140,47 @@ function VariantWorkspaceModal({
 
     const handlePublish = async () => {
         setWorkspaceActionError(null);
-        setWorkspaceActionLabel('Building and publishing module...');
+        setWorkspaceActionLabel('Auditing + compiling + publishing module...');
         try {
-            const audit = handleRunAudit();
+            const audit = await getResolvedAuditForAction();
             if (audit.status === 'needs_input') {
                 setActiveTab('spec');
                 return;
             }
-            const builtRecord = await prepareBuildRecord(audit.fixedRaw);
+            const publishStateVariant: SimVariantRecord = {
+                ...variantMeta,
+                buildStatus: 'published',
+            };
+            const publishStateSeedAudit = runSpecAuditPipeline(publishStateVariant, audit.fixedRaw);
+            const publishStateAuto = autoApplySupportedAuditFixes(publishStateVariant, audit.fixedRaw, publishStateSeedAudit);
+            const finalizedPublishState = finalizeSpecForVariantState(
+                publishStateAuto.raw,
+                publishStateVariant,
+                publishStateAuto.audit,
+            );
+
+            setRawSpec(finalizedPublishState.raw);
+            setParsed(finalizedPublishState.raw.trim() ? parseVariantSpec(finalizedPublishState.raw) : null);
+            setAuditReport(finalizedPublishState.audit);
+
+            if (publishStateAuto.audit.status === 'needs_input' || finalizedPublishState.audit.status === 'needs_input') {
+                setActiveTab('spec');
+                return;
+            }
+
+            if (publishStateAuto.appliedLabels.length > 0) {
+                const beforeWarnings = audit.findings.filter((finding) => finding.severity === 'warning').length;
+                const remainingActions = buildSupportedWarningFixActions(publishStateVariant, finalizedPublishState.audit.findings);
+                setWarningFixFeedback({
+                    label: publishStateAuto.appliedLabels.join(', '),
+                    previousWarningCount: beforeWarnings,
+                    currentWarningCount: finalizedPublishState.audit.findings.filter((finding) => finding.severity === 'warning').length,
+                    remainingFixableSteps: remainingActions.length,
+                    nextLabel: remainingActions[0]?.label ?? null,
+                });
+            }
+
+            const builtRecord = await prepareBuildRecord(finalizedPublishState.raw);
             if (!builtRecord) return;
             setVariantMeta(builtRecord);
             await onPublish(builtRecord);
@@ -4255,16 +5193,27 @@ function VariantWorkspaceModal({
 
     const handlePreviewBuild = async () => {
         setWorkspaceActionError(null);
-        setWorkspaceActionLabel('Preparing preview...');
+        if (variantMeta.buildArtifact) {
+            setWorkspaceActionLabel('Opening built module...');
+            try {
+                setPreviewModule(buildPublishedModule(variantMeta));
+            } catch (error: any) {
+                setWorkspaceActionError(error?.message || 'Failed to open built module preview.');
+            } finally {
+                setWorkspaceActionLabel(null);
+            }
+            return;
+        }
+
+        setWorkspaceActionLabel('Auditing + compiling preview...');
         try {
-            const audit = handleRunAudit();
+            const audit = await getResolvedAuditForAction();
             if (audit.status === 'needs_input') {
                 setActiveTab('spec');
                 return;
             }
             const builtRecord = await prepareBuildRecord(audit.fixedRaw);
             if (!builtRecord) return;
-            setVariantMeta(builtRecord);
             setPreviewModule(buildPublishedModule(builtRecord));
         } catch (error: any) {
             setWorkspaceActionError(error?.message || 'Failed to prepare preview.');
@@ -4276,7 +5225,7 @@ function VariantWorkspaceModal({
     const handlePreviewPublishedModule = async () => {
         if (!variantMeta.publishedModuleId) return;
         setWorkspaceActionError(null);
-        setWorkspaceActionLabel('Loading published module...');
+        setWorkspaceActionLabel('Fetching published module...');
         setLoadingPublishedPreview(true);
         try {
             const module = await simModuleLibraryService.getById(variantMeta.publishedModuleId);
@@ -4297,7 +5246,7 @@ function VariantWorkspaceModal({
         setWorkspaceActionError(null);
         setWorkspaceActionLabel('Saving Vision package state...');
         try {
-            const audit = handleRunAudit();
+            const audit = await getResolvedAuditForAction();
             if (audit.status === 'needs_input') {
                 setActiveTab('spec');
                 return;
@@ -4332,9 +5281,8 @@ function VariantWorkspaceModal({
         }
     };
 
-    const handleRestoreSnapshot = (entry: SimVariantHistoryEntry) => {
-        setRestoringHistoryId(entry.id);
-        const snapshot = applyDraftSyncState(entry.snapshot);
+    const loadRecordIntoWorkspace = (record: SimVariantRecord, nextTab: 'general' | 'spec' = 'general') => {
+        const snapshot = applyDraftSyncState(record);
         const nextRawSpec = snapshot.specRaw ?? '';
         const nextModuleDraft = normalizeModuleDraft(snapshot, snapshot.moduleDraft, 0);
         setVariantMeta(snapshot);
@@ -4349,8 +5297,30 @@ function VariantWorkspaceModal({
         setModuleDraft(nextModuleDraft);
         setBenefitsText((nextModuleDraft.benefits ?? []).join('\n'));
         setBestForText((nextModuleDraft.bestFor ?? []).join('\n'));
-        setActiveTab('general');
+        setActiveTab(nextTab);
+    };
+
+    const handleRestoreSnapshot = (entry: SimVariantHistoryEntry) => {
+        setRestoringHistoryId(entry.id);
+        loadRecordIntoWorkspace(entry.snapshot);
         setRestoringHistoryId(null);
+    };
+
+    const handleRollbackToSpecVersion = async (entry: SimVariantSpecVersionEntry) => {
+        setRollingBackVersionId(entry.id);
+        setWorkspaceActionError(null);
+        setWorkspaceActionLabel('Rolling back to saved spec version...');
+        try {
+            const rolledBackRecord = await simVariantRegistryService.rollbackToSpecVersion(variantMeta.id, entry.id);
+            loadRecordIntoWorkspace(rolledBackRecord, 'spec');
+            onRollback(rolledBackRecord);
+            setTimelineRefreshToken((current) => current + 1);
+        } catch (error: any) {
+            setWorkspaceActionError(error?.message || 'Failed to roll back to the saved spec version.');
+        } finally {
+            setWorkspaceActionLabel(null);
+            setRollingBackVersionId(null);
+        }
     };
 
     return (
@@ -4967,11 +5937,12 @@ function VariantWorkspaceModal({
                                         The variant spec is the canonical design document. Save it here, then publish the resulting module from this same workspace.
                                     </p>
                                     <button
-                                        onClick={handleGenerateSpec}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 hover:bg-emerald-500/15 transition-colors"
+                                        onClick={() => void handleGenerateSpec()}
+                                        disabled={aiAuditLoading || specGenerationLoading}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 hover:bg-emerald-500/15 transition-colors disabled:opacity-40"
                                     >
                                         <Sparkles className="w-3.5 h-3.5" />
-                                        Generate Draft
+                                        {specGenerationLoading ? 'Generating...' : 'Generate Draft'}
                                     </button>
                                 </div>
                                 <div className="relative">
@@ -4988,6 +5959,7 @@ function VariantWorkspaceModal({
                                         onChange={(event) => {
                                             setRawSpec(event.target.value);
                                             setAuditReport(null);
+                                            setAiAuditLoading(false);
                                             setWarningFixFeedback(null);
                                             setDisabledWarningFixKeys([]);
                                             setSpecCopied(false);
@@ -5003,12 +5975,12 @@ function VariantWorkspaceModal({
                                     <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest">Formatted Preview</p>
                                     <div className="flex items-center gap-2">
                                         <button
-                                            onClick={() => rawSpec.trim() && handleRunAudit()}
-                                            disabled={!rawSpec.trim()}
+                                            onClick={() => rawSpec.trim() && void handleRunAudit()}
+                                            disabled={!rawSpec.trim() || aiAuditLoading || specGenerationLoading}
                                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 hover:bg-emerald-500/15 transition-colors disabled:opacity-40"
                                         >
                                             <ListChecks className="w-3.5 h-3.5" />
-                                            Audit + Fix
+                                            {aiAuditLoading ? 'Auditing...' : 'Audit + Fix'}
                                         </button>
                                         <button
                                             onClick={() => rawSpec.trim() && setParsed(parseVariantSpec(rawSpec))}
@@ -5034,6 +6006,13 @@ function VariantWorkspaceModal({
                                                 <p className="text-[10px] text-zinc-400">
                                                     Status: {auditReport.status === 'pass' ? 'Pass' : auditReport.status === 'pass_with_warnings' ? 'Pass with Warnings' : 'Needs Input'} · Score {auditReport.score}/100
                                                 </p>
+                                                {auditReport.aiReview && (
+                                                    <p className="text-[10px] text-zinc-500 mt-1">
+                                                        AI review: {auditReport.aiReview.model}
+                                                        {auditReport.aiReview.applied ? ' · upgrade applied' : ' · no AI rewrite applied'}
+                                                        {auditReport.aiReview.unavailableReason ? ' · unavailable' : ''}
+                                                    </p>
+                                                )}
                                                 {warningFindingCount > 0 && (
                                                     <p className="text-[10px] text-zinc-500 mt-1">
                                                         {warningFindingCount} warning finding{warningFindingCount === 1 ? '' : 's'}
@@ -5086,6 +6065,15 @@ function VariantWorkspaceModal({
                                                         <p key={fix} className="text-[11px] text-zinc-300">- {fix}</p>
                                                     ))}
                                                 </div>
+                                            </div>
+                                        )}
+                                        {auditReport.aiReview && (
+                                            <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2">
+                                                <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-300 mb-1.5">AI Review</p>
+                                                <p className="text-[11px] text-cyan-100 leading-relaxed">{displayCopy(auditReport.aiReview.summary)}</p>
+                                                {auditReport.aiReview.unavailableReason && (
+                                                    <p className="text-[11px] text-cyan-200/80 mt-2">{displayCopy(auditReport.aiReview.unavailableReason)}</p>
+                                                )}
                                             </div>
                                         )}
                                         {auditReport.findings.length === 0 ? (
@@ -5376,7 +6364,7 @@ function VariantWorkspaceModal({
                                             {publishing
                                                 ? 'Publishing...'
                                                 : variantMeta.publishedModuleId && syncSummary.hasPublishedSnapshot
-                                                    ? 'Save + Rebuild + Publish'
+                                                    ? 'Save + Rebuild + Republish'
                                                     : 'Publish Built Module'}
                                         </button>
                                     </div>
@@ -5569,7 +6557,7 @@ function VariantWorkspaceModal({
                         <div className="space-y-4">
                             <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-3">
                                 <p className="text-xs text-cyan-300 leading-relaxed">
-                                    Every save, seed, and publish writes a snapshot to Firestore. Load an earlier snapshot into the workspace if you need to inspect or restore a prior state before saving again.
+                                    Every save, publish, and rollback writes both a workspace snapshot and a spec version to Firestore. Use spec rollback to restore the canonical draft on the variant record, or load any older snapshot into the workspace if you want to inspect it before deciding.
                                 </p>
                             </div>
 
@@ -5580,63 +6568,129 @@ function VariantWorkspaceModal({
                                         Loading version history...
                                     </div>
                                 </div>
-                            ) : historyEntries.length === 0 ? (
-                                <div className="min-h-[280px] flex items-center justify-center rounded-xl border border-zinc-800 bg-black/20 text-sm text-zinc-500">
-                                    No history entries yet for this variant.
-                                </div>
                             ) : (
-                                <div className="space-y-3">
-                                    {historyEntries.map((entry) => {
-                                        const snapshotStatus = resolveSpecStatus(entry.snapshot);
-                                        return (
-                                            <div key={entry.id} className="rounded-xl border border-zinc-800 bg-black/20 p-4 space-y-3">
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className="px-2 py-1 rounded-md border border-zinc-700 bg-zinc-900 text-[10px] font-bold uppercase tracking-widest text-zinc-300">
-                                                                {entry.action}
-                                                            </span>
-                                                            <span className="text-[10px] text-zinc-500">
-                                                                {formatVariantHistoryTimestamp(entry.createdAt)}
-                                                            </span>
+                                <div className="space-y-6">
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-sm font-semibold text-white">Spec Versions</p>
+                                                <p className="text-[11px] text-zinc-500">Rollback writes directly to the registry record and leaves the live published module untouched until you rebuild or republish.</p>
+                                            </div>
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">
+                                                {specVersions.length} version{specVersions.length === 1 ? '' : 's'}
+                                            </span>
+                                        </div>
+                                        {specVersions.length === 0 ? (
+                                            <div className="rounded-xl border border-zinc-800 bg-black/20 px-4 py-6 text-sm text-zinc-500">
+                                                No spec versions captured yet for this variant.
+                                            </div>
+                                        ) : (
+                                            specVersions.map((entry) => (
+                                                <div key={entry.id} className="rounded-xl border border-zinc-800 bg-black/20 p-4 space-y-3">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="px-2 py-1 rounded-md border border-zinc-700 bg-zinc-900 text-[10px] font-bold uppercase tracking-widest text-zinc-300">
+                                                                    {entry.action}
+                                                                </span>
+                                                                <span className="text-[10px] text-zinc-500">
+                                                                    {formatVariantHistoryTimestamp(entry.createdAt)}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm text-white">{entry.summary}</p>
+                                                            <p className="text-[11px] text-zinc-500 font-mono">
+                                                                {entry.sourceFingerprint}
+                                                            </p>
                                                         </div>
-                                                        <p className="text-sm text-white">{entry.summary}</p>
-                                                        <p className="text-[11px] text-zinc-500">
-                                                            Snapshot: {entry.snapshot.name} · {entry.snapshot.family} · {MODE_CONFIG[entry.snapshot.mode].label}
-                                                            {entry.moduleId ? ` · Module ${entry.moduleId}` : ''}
+                                                        <button
+                                                            onClick={() => handleRollbackToSpecVersion(entry)}
+                                                            disabled={rollingBackVersionId === entry.id}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#E0FE10]/10 border border-[#E0FE10]/20 text-[#E0FE10] hover:bg-[#E0FE10]/15 disabled:opacity-50 transition-colors"
+                                                        >
+                                                            <RefreshCw className={`w-3.5 h-3.5 ${rollingBackVersionId === entry.id ? 'animate-spin' : ''}`} />
+                                                            {rollingBackVersionId === entry.id ? 'Rolling Back...' : 'Rollback Draft'}
+                                                        </button>
+                                                    </div>
+                                                    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
+                                                        <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Spec Preview</p>
+                                                        <p className="text-xs text-zinc-300 mt-1 line-clamp-3 whitespace-pre-wrap">
+                                                            {entry.snapshot.specRaw?.trim() || 'No saved spec text on this version.'}
                                                         </p>
                                                     </div>
-                                                    <button
-                                                        onClick={() => handleRestoreSnapshot(entry)}
-                                                        disabled={restoringHistoryId === entry.id}
-                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 border border-zinc-700 text-white hover:border-zinc-500 disabled:opacity-50 transition-colors"
-                                                    >
-                                                        <RefreshCw className={`w-3.5 h-3.5 ${restoringHistoryId === entry.id ? 'animate-spin' : ''}`} />
-                                                        {restoringHistoryId === entry.id ? 'Loading...' : 'Load Snapshot'}
-                                                    </button>
                                                 </div>
+                                            ))
+                                        )}
+                                    </div>
 
-                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                                                    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
-                                                        <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Spec Status</p>
-                                                        <p className="text-xs text-white mt-1">{SPEC_STATUS_CONFIG[snapshotStatus].label}</p>
-                                                    </div>
-                                                    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
-                                                        <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Priority</p>
-                                                        <p className="text-xs text-white mt-1">{mapPriority(entry.snapshot.priority)}</p>
-                                                    </div>
-                                                    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
-                                                        <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Runtime Schema</p>
-                                                        <p className="text-xs text-white mt-1">{entry.snapshot.runtimeConfig?.schemaVersion ?? 'n/a'}</p>
-                                                    </div>
-                                                    <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
-                                                        <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Published Module</p>
-                                                        <p className="text-xs text-white mt-1">{entry.snapshot.publishedModuleId ?? 'Not published'}</p>
-                                                    </div>
-                                                </div>
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-sm font-semibold text-white">Workspace Snapshots</p>
+                                                <p className="text-[11px] text-zinc-500">Load a past snapshot into the editor without changing the saved registry record until you explicitly save again.</p>
                                             </div>
-                                        );
-                                    })}
+                                            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">
+                                                {historyEntries.length} snapshot{historyEntries.length === 1 ? '' : 's'}
+                                            </span>
+                                        </div>
+
+                                        {historyEntries.length === 0 ? (
+                                            <div className="rounded-xl border border-zinc-800 bg-black/20 px-4 py-6 text-sm text-zinc-500">
+                                                No history entries yet for this variant.
+                                            </div>
+                                        ) : (
+                                            historyEntries.map((entry) => {
+                                                const snapshotStatus = resolveSpecStatus(entry.snapshot);
+                                                return (
+                                                    <div key={entry.id} className="rounded-xl border border-zinc-800 bg-black/20 p-4 space-y-3">
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <div className="space-y-1">
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <span className="px-2 py-1 rounded-md border border-zinc-700 bg-zinc-900 text-[10px] font-bold uppercase tracking-widest text-zinc-300">
+                                                                        {entry.action}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-zinc-500">
+                                                                        {formatVariantHistoryTimestamp(entry.createdAt)}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-sm text-white">{entry.summary}</p>
+                                                                <p className="text-[11px] text-zinc-500">
+                                                                    Snapshot: {entry.snapshot.name} · {entry.snapshot.family} · {MODE_CONFIG[entry.snapshot.mode].label}
+                                                                    {entry.moduleId ? ` · Module ${entry.moduleId}` : ''}
+                                                                </p>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleRestoreSnapshot(entry)}
+                                                                disabled={restoringHistoryId === entry.id}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 border border-zinc-700 text-white hover:border-zinc-500 disabled:opacity-50 transition-colors"
+                                                            >
+                                                                <RefreshCw className={`w-3.5 h-3.5 ${restoringHistoryId === entry.id ? 'animate-spin' : ''}`} />
+                                                                {restoringHistoryId === entry.id ? 'Loading...' : 'Load Snapshot'}
+                                                            </button>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
+                                                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Spec Status</p>
+                                                                <p className="text-xs text-white mt-1">{SPEC_STATUS_CONFIG[snapshotStatus].label}</p>
+                                                            </div>
+                                                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
+                                                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Priority</p>
+                                                                <p className="text-xs text-white mt-1">{mapPriority(entry.snapshot.priority)}</p>
+                                                            </div>
+                                                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
+                                                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Runtime Schema</p>
+                                                                <p className="text-xs text-white mt-1">{entry.snapshot.runtimeConfig?.schemaVersion ?? 'n/a'}</p>
+                                                            </div>
+                                                            <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2">
+                                                                <p className="text-[9px] font-bold uppercase tracking-widest text-zinc-600">Published Module</p>
+                                                                <p className="text-xs text-white mt-1">{entry.snapshot.publishedModuleId ?? 'Not published'}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -5680,7 +6734,7 @@ function VariantWorkspaceModal({
                             className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-[#E0FE10] text-black hover:bg-[#c8e40e] disabled:opacity-40 transition-colors"
                         >
                             <Upload className="w-3.5 h-3.5" />
-                            {publishing ? 'Publishing...' : variantMeta.publishedModuleId ? 'Save + Rebuild + Publish' : 'Publish Built Module'}
+                            {publishing ? 'Publishing...' : variantMeta.publishedModuleId ? 'Save + Rebuild + Republish' : 'Publish Built Module'}
                         </button>
                     </div>
                 </div>
@@ -5709,6 +6763,7 @@ function FamilyGroup({
     onOpenWorkspace,
     onPasteSpec,
     onGenerateSpec,
+    inlineGenerationStates,
 }: {
     familyName: string;
     familyStatus: FamilyStatus;
@@ -5717,6 +6772,7 @@ function FamilyGroup({
     onOpenWorkspace: (variant: SimVariantRecord, options?: { initialTab?: 'general' | 'locks' | 'spec' | 'config' | 'publish' | 'history'; initialSpecRaw?: string }) => void;
     onPasteSpec: (variant: SimVariantRecord) => void;
     onGenerateSpec: (variant: SimVariantRecord) => void;
+    inlineGenerationStates: Record<string, InlineGenerationJobState>;
 }) {
     const [open, setOpen] = useState(false);
 
@@ -5807,6 +6863,12 @@ function FamilyGroup({
                                 const buildConf = BUILD_STATUS_CONFIG[v.buildStatus ?? 'not_built'];
                                 const visionStatus = resolveVisionPackageStatus(v);
                                 const visionStatusConf = visionStatus ? VISION_STATUS_CONFIG[visionStatus] : null;
+                                const generationState = inlineGenerationStates[v.id] ?? null;
+                                const generationBusy = generationState?.status === 'queued'
+                                    || generationState?.status === 'generating'
+                                    || generationState?.status === 'auditing'
+                                    || generationState?.status === 'saving'
+                                    || generationState?.status === 'publishing';
                                 return (
                                     <div
                                         key={v.name}
@@ -5845,10 +6907,35 @@ function FamilyGroup({
                                             </button>
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); onGenerateSpec(v); }}
-                                                title="Generate variant spec draft"
-                                                className="flex items-center justify-center w-7 h-7 rounded-lg border border-zinc-700 bg-black/20 hover:border-emerald-500/60 hover:bg-emerald-500/10 transition-all group"
+                                                disabled={generationBusy}
+                                                title={generationState?.message || 'Queue variant spec generation'}
+                                                className={`flex items-center justify-center w-7 h-7 rounded-lg border bg-black/20 transition-all group ${
+                                                    generationState?.status === 'published'
+                                                        ? 'border-emerald-500/50 bg-emerald-500/10'
+                                                        : generationState?.status === 'saved_for_review'
+                                                            ? 'border-amber-500/50 bg-amber-500/10'
+                                                            : generationState?.status === 'error'
+                                                                ? 'border-red-500/50 bg-red-500/10'
+                                                                : generationBusy
+                                                                    ? 'border-cyan-500/50 bg-cyan-500/10 cursor-wait'
+                                                                    : 'border-zinc-700 hover:border-emerald-500/60 hover:bg-emerald-500/10'
+                                                } disabled:opacity-100`}
                                             >
-                                                <Sparkles className="w-3.5 h-3.5 text-zinc-600 group-hover:text-emerald-400 transition-colors" />
+                                                {generationState?.status === 'published' ? (
+                                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                                ) : generationState?.status === 'saved_for_review' ? (
+                                                    <Save className="w-3.5 h-3.5 text-amber-400" />
+                                                ) : generationState?.status === 'error' ? (
+                                                    <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
+                                                ) : generationBusy ? (
+                                                    generationState?.status === 'queued' ? (
+                                                        <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                                                    ) : (
+                                                        <RefreshCw className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+                                                    )
+                                                ) : (
+                                                    <Sparkles className="w-3.5 h-3.5 text-zinc-600 group-hover:text-emerald-400 transition-colors" />
+                                                )}
                                             </button>
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); onPasteSpec(v); }}
@@ -5890,6 +6977,24 @@ function FieldRow({ label, placeholder }: { label: string; placeholder: string }
         </div>
     );
 }
+
+type InlineGenerationJobStatus =
+    | 'queued'
+    | 'generating'
+    | 'auditing'
+    | 'saving'
+    | 'publishing'
+    | 'published'
+    | 'saved_for_review'
+    | 'error';
+
+interface InlineGenerationJobState {
+    status: InlineGenerationJobStatus;
+    message: string;
+    updatedAt: number;
+}
+
+const INLINE_GENERATION_RESULT_TTL_MS = 2 * 60 * 1000;
 
 function VariantSpecTemplate() {
     const [open, setOpen] = useState(false);
@@ -6381,6 +7486,9 @@ const VariantRegistryTab: React.FC = () => {
     const [savingVariantId, setSavingVariantId] = useState<string | null>(null);
     const [buildingVariantId, setBuildingVariantId] = useState<string | null>(null);
     const [publishingVariantId, setPublishingVariantId] = useState<string | null>(null);
+    const [inlineGenerationQueue, setInlineGenerationQueue] = useState<string[]>([]);
+    const [activeInlineGenerationId, setActiveInlineGenerationId] = useState<string | null>(null);
+    const [inlineGenerationStates, setInlineGenerationStates] = useState<Record<string, InlineGenerationJobState>>({});
     const [savingVisionPackageId, setSavingVisionPackageId] = useState<string | null>(null);
     const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -6533,12 +7641,251 @@ const VariantRegistryTab: React.FC = () => {
         ? visionPackages.find((record) => record.packageId === packageWorkspaceId) ?? null
         : null;
 
+    const setInlineGenerationState = useCallback((variantId: string, status: InlineGenerationJobStatus, message: string) => {
+        setInlineGenerationStates((current) => ({
+            ...current,
+            [variantId]: {
+                status,
+                message,
+                updatedAt: Date.now(),
+            },
+        }));
+    }, []);
+
+    const buildAutomatedWorkspaceRecord = useCallback((variant: SimVariantRecord, specRaw: string) => {
+        const normalizedSpecRaw = normalizeSpecText(specRaw);
+        const sortOrder = registryVariants.findIndex((entry) => entry.id === variant.id) + 1;
+        const lockedSpec = isTrialVariant(variant) ? (variant.lockedSpec ?? buildDefaultLockedSpec(variant)) : undefined;
+        const runtimeConfig = {
+            ...(variant.runtimeConfig ?? buildDefaultRuntimeConfig(variant)),
+            lockedSpec: lockedSpec ?? null,
+        };
+        const moduleDraft = normalizeModuleDraft(variant, variant.moduleDraft, sortOrder > 0 ? sortOrder : 0);
+
+        return applyDraftSyncState({
+            ...variant,
+            specRaw: normalizedSpecRaw,
+            lockedSpec,
+            specStatus: variant.mode === 'hybrid'
+                ? 'not-required'
+                : resolveWorkspaceSpecStatus(variant, normalizedSpecRaw),
+            runtimeConfig,
+            moduleDraft,
+            updatedAt: Date.now(),
+        });
+    }, [registryVariants]);
+
+    const runAutomatedAuditLifecycle = useCallback(async (variant: SimVariantRecord, specRaw: string) => {
+        const deterministicAudit = runSpecAuditPipeline(variant, specRaw);
+        let nextRawSpec = deterministicAudit.fixedRaw;
+        let nextAudit = deterministicAudit;
+        let aiReview: SpecAuditAiReview | null = null;
+
+        try {
+            const aiAudit = await requestAiVariantSpecAudit(variant, deterministicAudit.fixedRaw, deterministicAudit.findings);
+            const suggestedSpecRaw = normalizeSpecText(aiAudit.suggestedSpecRaw || deterministicAudit.fixedRaw);
+            const shouldApplyAiSpec = Boolean(suggestedSpecRaw.trim()) && suggestedSpecRaw !== normalizeSpecText(deterministicAudit.fixedRaw);
+            const validatedAudit = runSpecAuditPipeline(variant, shouldApplyAiSpec ? suggestedSpecRaw : deterministicAudit.fixedRaw);
+
+            nextRawSpec = validatedAudit.fixedRaw;
+            aiReview = {
+                model: aiAudit.model,
+                summary: aiAudit.summary,
+                findings: aiAudit.findings ?? [],
+                applied: shouldApplyAiSpec,
+            };
+            nextAudit = mergeAuditReportWithAiReview(validatedAudit, aiReview);
+
+            const autoApplied = autoApplySupportedAuditFixes(variant, nextRawSpec, nextAudit);
+            if (autoApplied.appliedLabels.length > 0) {
+                nextRawSpec = autoApplied.raw;
+                nextAudit = {
+                    ...autoApplied.audit,
+                    aiReview: {
+                        ...aiReview,
+                        applied: true,
+                        summary: `${aiReview.summary} System auto-applied: ${autoApplied.appliedLabels.join(', ')}.`,
+                    },
+                };
+            }
+        } catch (error: any) {
+            aiReview = {
+                model: 'unavailable',
+                summary: 'AI gold-standard review was unavailable, so the registry rule set remained the source of truth for this pass.',
+                findings: [],
+                applied: false,
+                unavailableReason: error?.message || 'Failed to reach the AI audit service.',
+            };
+            nextAudit = mergeAuditReportWithAiReview(deterministicAudit, aiReview);
+        }
+
+        const promotedAfterAudit = normalizeSpecText(promoteSpecReleaseMetadata(nextRawSpec, variant, nextAudit));
+        if (promotedAfterAudit !== nextRawSpec) {
+            nextRawSpec = promotedAfterAudit;
+            nextAudit = runSpecAuditPipeline(variant, nextRawSpec);
+        }
+
+        const checklistAlignedAfterAudit = normalizeSpecText(syncReadinessChecklist(nextRawSpec, variant));
+        if (checklistAlignedAfterAudit !== nextRawSpec) {
+            nextRawSpec = checklistAlignedAfterAudit;
+            nextAudit = runSpecAuditPipeline(variant, nextRawSpec);
+        }
+
+        const normalizedAiReview = normalizeAiReviewSummaryForFinalAudit(nextAudit.aiReview ?? aiReview, nextAudit, variant);
+        if (normalizedAiReview) {
+            nextAudit = {
+                ...nextAudit,
+                aiReview: normalizedAiReview,
+            };
+        }
+
+        return {
+            raw: nextRawSpec,
+            audit: nextAudit,
+        };
+    }, []);
+
+    const prepareAutomatedBuildRecord = useCallback(async (variant: SimVariantRecord, specRaw: string) => {
+        const draftRecord = buildAutomatedWorkspaceRecord(variant, specRaw);
+        const nextWithAudio = await resolveVariantAudioAssets(draftRecord);
+        return buildVariantRecordForBuild(nextWithAudio);
+    }, [buildAutomatedWorkspaceRecord]);
+
+    const processInlineGenerationJob = useCallback(async (variantId: string) => {
+        const variant = registryVariants.find((entry) => entry.id === variantId);
+        if (!variant) {
+            throw new Error('Variant no longer exists in the registry.');
+        }
+
+        setInlineGenerationState(variantId, 'generating', `Generating draft for ${displayVariantName(variant.name)}...`);
+        const seedSpec = buildGeneratedVariantSpec(variant);
+        let generatedSpec = seedSpec;
+        try {
+            const aiGeneration = await requestAiVariantSpecGeneration(variant, seedSpec);
+            const candidate = normalizeSpecText(aiGeneration.generatedSpecRaw || seedSpec);
+            if (candidate.trim()) {
+                generatedSpec = candidate;
+            }
+        } catch {
+            generatedSpec = seedSpec;
+        }
+
+        setInlineGenerationState(variantId, 'auditing', `Auditing ${displayVariantName(variant.name)}...`);
+        const audited = await runAutomatedAuditLifecycle(variant, generatedSpec);
+
+        const saveDraftRecord = async (raw: string, message: string) => {
+            setInlineGenerationState(variantId, 'saving', message);
+            const draftRecord = buildAutomatedWorkspaceRecord(variant, raw);
+            const savedRecord = await simVariantRegistryService.save(draftRecord);
+            setRegistryVariants((current) => current.map((entry) => entry.id === variantId ? savedRecord : entry));
+            setInlineGenerationState(variantId, 'saved_for_review', `${displayVariantName(variant.name)} saved for review.`);
+            setToast({
+                type: 'success',
+                message: `${displayVariantName(variant.name)} saved as draft because the audit still needs review.`,
+            });
+        };
+
+        if (audited.audit.status !== 'pass') {
+            await saveDraftRecord(audited.raw, `Saving ${displayVariantName(variant.name)} draft for review...`);
+            return;
+        }
+
+        const publishStateVariant: SimVariantRecord = {
+            ...variant,
+            buildStatus: 'published',
+        };
+        const publishStateSeedAudit = runSpecAuditPipeline(publishStateVariant, audited.raw);
+        const publishStateAuto = autoApplySupportedAuditFixes(publishStateVariant, audited.raw, publishStateSeedAudit);
+        const finalizedPublishState = finalizeSpecForVariantState(
+            publishStateAuto.raw,
+            publishStateVariant,
+            publishStateAuto.audit,
+        );
+
+        if (finalizedPublishState.audit.status !== 'pass') {
+            await saveDraftRecord(finalizedPublishState.raw, `Saving ${displayVariantName(variant.name)} draft after publish validation...`);
+            return;
+        }
+
+        setInlineGenerationState(variantId, 'publishing', `Building + publishing ${displayVariantName(variant.name)}...`);
+        const builtRecord = await prepareAutomatedBuildRecord(variant, finalizedPublishState.raw);
+        const module = buildPublishedModule(builtRecord);
+        const moduleId = await simVariantRegistryService.publish(builtRecord, module);
+        const publishedRecord = buildPublishedVariantRecord({
+            ...builtRecord,
+            publishedModuleId: moduleId,
+        });
+        setRegistryVariants((current) => current.map((entry) => entry.id === variantId ? publishedRecord : entry));
+        setInlineGenerationState(variantId, 'published', `${displayVariantName(variant.name)} published as ${moduleId}.`);
+        setToast({
+            type: 'success',
+            message: `${displayVariantName(variant.name)} generated, audited, and published automatically.`,
+        });
+    }, [buildAutomatedWorkspaceRecord, prepareAutomatedBuildRecord, registryVariants, runAutomatedAuditLifecycle, setInlineGenerationState]);
+
+    const handleQueueInlineGeneration = useCallback((variant: SimVariantRecord) => {
+        if (activeInlineGenerationId === variant.id || inlineGenerationQueue.includes(variant.id)) {
+            return;
+        }
+        setInlineGenerationState(variant.id, 'queued', `${displayVariantName(variant.name)} queued for generation.`);
+        setInlineGenerationQueue((current) => [...current, variant.id]);
+    }, [activeInlineGenerationId, inlineGenerationQueue, setInlineGenerationState]);
+
+    useEffect(() => {
+        if (activeInlineGenerationId || inlineGenerationQueue.length === 0) return;
+
+        const nextVariantId = inlineGenerationQueue[0];
+        setActiveInlineGenerationId(nextVariantId);
+
+        void (async () => {
+            try {
+                await processInlineGenerationJob(nextVariantId);
+            } catch (error: any) {
+                console.error('Failed to process inline generation queue job:', error);
+                setInlineGenerationState(nextVariantId, 'error', error?.message || 'Failed to process queued generation.');
+                const failedVariant = registryVariants.find((entry) => entry.id === nextVariantId);
+                setToast({
+                    type: 'error',
+                    message: failedVariant
+                        ? `Failed to generate ${displayVariantName(failedVariant.name)}.`
+                        : 'Failed to process queued variant generation.',
+                });
+            } finally {
+                setInlineGenerationQueue((current) => current.filter((id) => id !== nextVariantId));
+                setActiveInlineGenerationId(null);
+            }
+        })();
+    }, [activeInlineGenerationId, inlineGenerationQueue, processInlineGenerationJob, registryVariants, setInlineGenerationState]);
+
+    useEffect(() => {
+        const terminalStates: InlineGenerationJobStatus[] = ['published', 'saved_for_review', 'error'];
+        const now = Date.now();
+        const timers = Object.entries(inlineGenerationStates)
+            .filter(([, state]) => terminalStates.includes(state.status))
+            .map(([variantId, state]) => window.setTimeout(() => {
+                setInlineGenerationStates((current) => {
+                    const entry = current[variantId];
+                    if (!entry || entry.updatedAt !== state.updatedAt || !terminalStates.includes(entry.status)) {
+                        return current;
+                    }
+
+                    const next = { ...current };
+                    delete next[variantId];
+                    return next;
+                });
+            }, Math.max(0, INLINE_GENERATION_RESULT_TTL_MS - (now - state.updatedAt))));
+
+        return () => {
+            timers.forEach((timer) => window.clearTimeout(timer));
+        };
+    }, [inlineGenerationStates]);
+
     const handleSaveWorkspace = async (next: SimVariantRecord) => {
         setSavingVariantId(next.id);
         try {
             const draftRecord = applyDraftSyncState(next);
-            await simVariantRegistryService.save(draftRecord);
-            setRegistryVariants((current) => current.map((variant) => variant.id === next.id ? draftRecord : variant));
+            const savedRecord = await simVariantRegistryService.save(draftRecord);
+            setRegistryVariants((current) => current.map((variant) => variant.id === next.id ? savedRecord : variant));
             setToast({
                 type: 'success',
                 message: `${displayVariantName(next.name)} saved to the variant registry.`,
@@ -6558,8 +7905,8 @@ const VariantRegistryTab: React.FC = () => {
         setBuildingVariantId(next.id);
         try {
             const builtRecord = buildVariantRecordForBuild(next);
-            await simVariantRegistryService.save(builtRecord);
-            setRegistryVariants((current) => current.map((variant) => variant.id === next.id ? builtRecord : variant));
+            const savedBuiltRecord = await simVariantRegistryService.save(builtRecord);
+            setRegistryVariants((current) => current.map((variant) => variant.id === next.id ? savedBuiltRecord : variant));
             setToast({
                 type: 'success',
                 message: `${displayVariantName(next.name)} built into a playable runtime artifact.`,
@@ -6602,20 +7949,28 @@ const VariantRegistryTab: React.FC = () => {
         }
     };
 
+    const handleRollbackWorkspace = (next: SimVariantRecord) => {
+        setRegistryVariants((current) => current.map((variant) => variant.id === next.id ? next : variant));
+        setToast({
+            type: 'success',
+            message: `${displayVariantName(next.name)} rolled back to the selected saved spec version.`,
+        });
+    };
+
     const handleCreateVariant = async (seed: SimVariantSeed) => {
         const nextRecord = createDraftVariantRecord(seed, registryVariants.length + 1);
         setCreatingVariant(true);
         try {
-            await simVariantRegistryService.save(nextRecord);
-            setRegistryVariants((current) => [...current, nextRecord]);
+            const savedRecord = await simVariantRegistryService.save(nextRecord);
+            setRegistryVariants((current) => [...current, savedRecord]);
             setShowCreateModal(false);
             setWorkspaceModalState({
-                variantId: nextRecord.id,
+                variantId: savedRecord.id,
                 initialTab: 'general',
             });
             setToast({
                 type: 'success',
-                message: `${displayVariantName(nextRecord.name)} created in the variant registry.`,
+                message: `${displayVariantName(savedRecord.name)} created in the variant registry.`,
             });
         } catch (error) {
             console.error('Failed to create variant:', error);
@@ -6953,17 +8308,14 @@ const VariantRegistryTab: React.FC = () => {
                                         familyStatus={group.familyStatus}
                                         variants={group.variants}
                                         familyColor={FAMILY_COLORS[familyName] || '#06b6d4'}
+                                        inlineGenerationStates={inlineGenerationStates}
                                         onOpenWorkspace={(variant, options) => setWorkspaceModalState({
                                             variantId: variant.id,
                                             initialTab: options?.initialTab,
                                             initialRaw: options?.initialSpecRaw,
                                         })}
                                         onPasteSpec={(variant) => setWorkspaceModalState({ variantId: variant.id, initialTab: 'spec' })}
-                                        onGenerateSpec={(variant) => setWorkspaceModalState({
-                                            variantId: variant.id,
-                                            initialTab: 'spec',
-                                            initialRaw: buildGeneratedVariantSpec(variant),
-                                        })}
+                                        onGenerateSpec={handleQueueInlineGeneration}
                                     />
                                 ))}
                             </div>
@@ -6998,17 +8350,14 @@ const VariantRegistryTab: React.FC = () => {
                             familyStatus={group.familyStatus}
                             variants={group.variants}
                             familyColor={FAMILY_COLORS[familyName] || '#6b7280'}
+                            inlineGenerationStates={inlineGenerationStates}
                             onOpenWorkspace={(variant, options) => setWorkspaceModalState({
                                 variantId: variant.id,
                                 initialTab: options?.initialTab,
                                 initialRaw: options?.initialSpecRaw,
                             })}
                             onPasteSpec={(variant) => setWorkspaceModalState({ variantId: variant.id, initialTab: 'spec' })}
-                            onGenerateSpec={(variant) => setWorkspaceModalState({
-                                variantId: variant.id,
-                                initialTab: 'spec',
-                                initialRaw: buildGeneratedVariantSpec(variant),
-                            })}
+                            onGenerateSpec={handleQueueInlineGeneration}
                         />
                     ))}
 
@@ -7098,6 +8447,7 @@ const VariantRegistryTab: React.FC = () => {
                         onSave={handleSaveWorkspace}
                         onBuild={handleBuildWorkspace}
                         onPublish={handlePublishWorkspace}
+                        onRollback={handleRollbackWorkspace}
                         onClose={() => setWorkspaceModalState(null)}
                     />
                 )}

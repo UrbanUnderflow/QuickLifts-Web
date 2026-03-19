@@ -1201,6 +1201,8 @@ export interface PulseCheckDailyAssignment {
   chosenCandidateType?: PulseCheckAssignmentCandidateType;
   simSpecId?: string;
   legacyExerciseId?: string;
+  simFamilyLabel?: string;
+  simVariantLabel?: string;
   protocolId?: string;
   protocolFamilyId?: string;
   protocolVariantId?: string;
@@ -1793,6 +1795,8 @@ export function pulseCheckDailyAssignmentToFirestore(
   if (assignment.sourceStateSnapshotId) data.sourceStateSnapshotId = assignment.sourceStateSnapshotId;
   if (assignment.simSpecId) data.simSpecId = assignment.simSpecId;
   if (assignment.legacyExerciseId) data.legacyExerciseId = assignment.legacyExerciseId;
+  if (assignment.simFamilyLabel) data.simFamilyLabel = assignment.simFamilyLabel;
+  if (assignment.simVariantLabel) data.simVariantLabel = assignment.simVariantLabel;
   if (assignment.protocolId) data.protocolId = assignment.protocolId;
   if (assignment.protocolFamilyId) data.protocolFamilyId = assignment.protocolFamilyId;
   if (assignment.protocolVariantId) data.protocolVariantId = assignment.protocolVariantId;
@@ -1856,6 +1860,8 @@ export function pulseCheckDailyAssignmentFromFirestore(
     chosenCandidateType: data.chosenCandidateType,
     simSpecId: data.simSpecId,
     legacyExerciseId: data.legacyExerciseId,
+    simFamilyLabel: data.simFamilyLabel,
+    simVariantLabel: data.simVariantLabel,
     protocolId: data.protocolId,
     protocolFamilyId: data.protocolFamilyId,
     protocolVariantId: data.protocolVariantId,

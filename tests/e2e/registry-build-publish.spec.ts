@@ -158,6 +158,23 @@ async function prepareRegistryFixture(page: Page, variantName: string, caseNames
   };
 }
 
+async function cleanupRegistryFixtureNamespace(page: Page, caseNamespace: string, label: string) {
+  if (page.isClosed()) return;
+
+  try {
+    await Promise.race([
+      page.evaluate(async ({ namespace: e2eNamespace }) => {
+        await window.__pulseE2E?.cleanupRegistryFixtures(e2eNamespace);
+      }, { namespace: caseNamespace }),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(`Timed out cleaning registry fixture namespace for ${label}.`)), 15_000);
+      }),
+    ]);
+  } catch (error) {
+    console.warn(`[registry-build-publish] ${label}:`, error);
+  }
+}
+
 async function dismissRegistryOverlays(page: Page) {
   const closeButton = page.getByRole('button', { name: /^Close$/ }).first();
   if (await closeButton.isVisible().catch(() => false)) {
@@ -250,11 +267,7 @@ test.describe('Variant registry harness', () => {
 
         await expect(page.getByText(/published to sim-modules/i)).toBeVisible({ timeout: 20_000 });
       } finally {
-        if (!page.isClosed()) {
-          await page.evaluate(async ({ namespace: e2eNamespace }) => {
-            await window.__pulseE2E?.cleanupRegistryFixtures(e2eNamespace);
-          }, { namespace: caseNamespace });
-        }
+        await cleanupRegistryFixtureNamespace(page, caseNamespace, `cleanup ${fixtureName}`);
       }
     });
   }
@@ -314,11 +327,7 @@ test.describe('Variant registry harness', () => {
       await expect(publishStatusValue(page, 'Build Status')).toHaveText('Published', { timeout: 10_000 });
       await expect(publishStatusValue(page, 'Sync Status')).toHaveText('In Sync', { timeout: 10_000 });
     } finally {
-      if (!page.isClosed()) {
-        await page.evaluate(async ({ namespace: e2eNamespace }) => {
-          await window.__pulseE2E?.cleanupRegistryFixtures(e2eNamespace);
-        }, { namespace: caseNamespace });
-      }
+      await cleanupRegistryFixtureNamespace(page, caseNamespace, `sync cleanup ${fixtureName}`);
     }
   });
 });

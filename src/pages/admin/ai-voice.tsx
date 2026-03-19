@@ -8,11 +8,12 @@ import {
   Smartphone, Zap, CheckCircle, MessageSquare, ChevronDown, ChevronUp,
   Loader2, Wand2, RotateCcw, Eye,
 } from 'lucide-react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { db, storage } from '../../api/firebase/config';
 import type { SimAudioAssetRef } from '../../api/firebase/mentaltraining/audioAssetService';
 import type { PulseCheckProtocolDefinition } from '../../api/firebase/mentaltraining';
+import { SIM_VARIANTS_COLLECTION } from '../../api/firebase/mentaltraining/collections';
 import { persistVoiceConfig, speakStep, stopNarration } from '../../utils/tts';
 import {
   AiVoiceConfig,
@@ -386,7 +387,19 @@ const VP_STAGE_PALETTE: Record<VPCueDef['stageTag'], { label: string; color: str
   countdown:  { label: 'Countdown',   color: '#FFD60A', dimColor: 'rgba(255,214,10,0.15)' },
 };
 
-type AdminAudioTab = 'voice' | 'appLibrary' | 'visionPro' | 'protocols' | 'runAlerts';
+type AdminAudioTab = 'voice' | 'appLibrary' | 'registrySims' | 'visionPro' | 'protocols' | 'runAlerts';
+
+type RegistrySimAudioAssetEntry = {
+  variantId: string;
+  variantName: string;
+  family: string;
+  engineKey: string | null;
+  archetype: string | null;
+  buildStatus: string | null;
+  publishedModuleId: string | null;
+  cueKey: string;
+  asset: SimAudioAssetRef;
+};
 
 type ProtocolCueDef = {
   cueKey: string;
@@ -545,6 +558,77 @@ const AudioTabButton: React.FC<{
       <div className="mt-1 text-xs leading-relaxed text-zinc-500">{description}</div>
     </div>
   </button>
+);
+
+const RegistrySimAssetCard: React.FC<{
+  entry: RegistrySimAudioAssetEntry;
+  isPlaying: boolean;
+  onPlay: () => void;
+  onStop: () => void;
+}> = ({ entry, isPlaying, onPlay, onStop }) => (
+  <motion.div
+    layout
+    initial={{ opacity: 0, y: 8 }}
+    animate={{ opacity: 1, y: 0 }}
+    className={`rounded-xl border p-4 transition-all duration-200 ${
+      isPlaying
+        ? 'border-cyan-400/30 bg-cyan-400/5'
+        : 'border-white/[0.07] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.04]'
+    }`}
+  >
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold text-white">{entry.asset.label}</span>
+          <span className="rounded-md border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-medium text-cyan-200">
+            {entry.cueKey}
+          </span>
+          <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+            {entry.asset.provider}
+          </span>
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-zinc-500">{entry.asset.prompt}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-zinc-600">
+          <span>Variant: {entry.variantName}</span>
+          {entry.buildStatus ? (
+            <>
+              <span>•</span>
+              <span>{entry.buildStatus}</span>
+            </>
+          ) : null}
+          {entry.publishedModuleId ? (
+            <>
+              <span>•</span>
+              <span>{entry.publishedModuleId}</span>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      <button
+        onClick={isPlaying ? onStop : onPlay}
+        className={`flex-shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+          isPlaying
+            ? 'border border-cyan-400/25 bg-cyan-400/15 text-cyan-200 hover:bg-cyan-400/20'
+            : 'border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'
+        }`}
+      >
+        {isPlaying ? (
+          <>
+            <Square className="h-3 w-3" /> Stop
+          </>
+        ) : (
+          <>
+            <Play className="h-3 w-3" /> Preview
+          </>
+        )}
+      </button>
+    </div>
+
+    <div className="mt-3 rounded-lg border border-white/[0.04] bg-zinc-950/60 px-2 py-1.5">
+      <code className="break-all text-[10px] font-mono text-zinc-600">{entry.asset.storagePath}</code>
+    </div>
+  </motion.div>
 );
 
 // ──────────────────────────────────────────────────────────
@@ -1055,6 +1139,11 @@ const AdminAiVoice: React.FC = () => {
   const [protocolGenErrors, setProtocolGenErrors] = useState<Record<string, string>>({});
   const [protocolPlayingId, setProtocolPlayingId] = useState<string | null>(null);
   const protocolAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [registrySimAssets, setRegistrySimAssets] = useState<RegistrySimAudioAssetEntry[]>([]);
+  const [registrySimLoading, setRegistrySimLoading] = useState(false);
+  const [registrySimLoadError, setRegistrySimLoadError] = useState<string | null>(null);
+  const [registrySimPlayingId, setRegistrySimPlayingId] = useState<string | null>(null);
+  const registrySimAudioRef = useRef<HTMLAudioElement | null>(null);
   const [runAlertAssets, setRunAlertAssets] = useState<Record<string, SimAudioAssetRef | null>>({});
   const [runAlertGenerating, setRunAlertGenerating] = useState<Record<string, boolean>>({});
   const [runAlertLoading, setRunAlertLoading] = useState(false);
@@ -1104,6 +1193,27 @@ const AdminAiVoice: React.FC = () => {
     );
   }, []);
 
+  const groupedRegistrySimAssets = useMemo(() => {
+    const grouped = registrySimAssets.reduce<Record<string, Record<string, RegistrySimAudioAssetEntry[]>>>((acc, entry) => {
+      if (!acc[entry.family]) acc[entry.family] = {};
+      if (!acc[entry.family][entry.variantName]) acc[entry.family][entry.variantName] = [];
+      acc[entry.family][entry.variantName].push(entry);
+      return acc;
+    }, {});
+
+    return Object.entries(grouped)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([family, variants]) => ({
+        family,
+        variants: Object.entries(variants)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([variantName, entries]) => ({
+            variantName,
+            entries: [...entries].sort((left, right) => left.asset.label.localeCompare(right.asset.label)),
+          })),
+      }));
+  }, [registrySimAssets]);
+
   const toggleLibrarySection = (sectionKey: string) => {
     setLibrarySectionsOpen((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
   };
@@ -1114,6 +1224,26 @@ const AdminAiVoice: React.FC = () => {
 
   const toggleVPSection = (sectionKey: string) => {
     setVPSectionsOpen((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
+  };
+
+  const stopRegistrySimSound = () => {
+    if (registrySimAudioRef.current) {
+      registrySimAudioRef.current.pause();
+      registrySimAudioRef.current.currentTime = 0;
+      registrySimAudioRef.current = null;
+    }
+    setRegistrySimPlayingId(null);
+  };
+
+  const playRegistrySimSound = (assetId: string, url: string) => {
+    stopRegistrySimSound();
+    setRegistrySimPlayingId(assetId);
+    const audio = new Audio(url);
+    registrySimAudioRef.current = audio;
+    audio.volume = 0.8;
+    audio.play().catch(() => setRegistrySimPlayingId(null));
+    audio.onended = () => setRegistrySimPlayingId(null);
+    audio.onerror = () => setRegistrySimPlayingId(null);
   };
 
   // ── VP load: read Firestore for all Reset cue docs
@@ -1134,6 +1264,56 @@ const AdminAiVoice: React.FC = () => {
       setVPLoadError(e?.message || 'Failed to load Vision Pro sounds');
     } finally {
       setVPLoading(false);
+    }
+  };
+
+  const loadRegistrySimAssets = async () => {
+    setRegistrySimLoading(true);
+    setRegistrySimLoadError(null);
+    try {
+      const snap = await getDocs(collection(db, SIM_VARIANTS_COLLECTION));
+      const nextEntries: RegistrySimAudioAssetEntry[] = [];
+
+      snap.docs.forEach((variantDoc) => {
+        const data = variantDoc.data() as Record<string, any>;
+        const runtimeAudioAssets =
+          (data.runtimeConfig?.audioAssets as Record<string, SimAudioAssetRef> | undefined)
+          ?? (data.buildArtifact?.stimulusModel?.audioAssets as Record<string, SimAudioAssetRef> | undefined)
+          ?? {};
+
+        Object.entries(runtimeAudioAssets).forEach(([cueKey, asset]) => {
+          if (!asset?.downloadURL) return;
+          nextEntries.push({
+            variantId: variantDoc.id,
+            variantName: String(data.name ?? variantDoc.id),
+            family: String(data.family ?? 'Unknown Family'),
+            engineKey: typeof data.engineKey === 'string' ? data.engineKey : null,
+            archetype: typeof data.archetypeOverride === 'string'
+              ? data.archetypeOverride
+              : typeof data.runtimeConfig?.archetype === 'string'
+                ? data.runtimeConfig.archetype
+                : null,
+            buildStatus: typeof data.buildStatus === 'string' ? data.buildStatus : null,
+            publishedModuleId: typeof data.publishedModuleId === 'string' ? data.publishedModuleId : null,
+            cueKey,
+            asset: asset as SimAudioAssetRef,
+          });
+        });
+      });
+
+      nextEntries.sort((left, right) => {
+        const familyCompare = left.family.localeCompare(right.family);
+        if (familyCompare !== 0) return familyCompare;
+        const variantCompare = left.variantName.localeCompare(right.variantName);
+        if (variantCompare !== 0) return variantCompare;
+        return left.asset.label.localeCompare(right.asset.label);
+      });
+
+      setRegistrySimAssets(nextEntries);
+    } catch (e: any) {
+      setRegistrySimLoadError(e?.message || 'Failed to load registry sim audio assets');
+    } finally {
+      setRegistrySimLoading(false);
     }
   };
 
@@ -1495,12 +1675,14 @@ const AdminAiVoice: React.FC = () => {
   useEffect(() => {
     loadConfig();
     loadVPAssets();
+    loadRegistrySimAssets();
     loadProtocolAssets();
     loadRunAlertAssets();
     return () => {
       stopNarration();
       stopSoundEffect();
       stopVPSound();
+      stopRegistrySimSound();
       stopProtocolSound();
       stopRunAlertSound();
     };
@@ -1662,6 +1844,13 @@ const AdminAiVoice: React.FC = () => {
               label="App Library"
               description="Pulse Community and PulseCheck app sound libraries with category-based preview."
               onClick={() => setActiveTab('appLibrary')}
+            />
+            <AudioTabButton
+              active={activeTab === 'registrySims'}
+              icon={<Volume2 className="h-4 w-4" />}
+              label="Registry Sims"
+              description="Generated sim audio assets grouped by family and variant from the variant registry."
+              onClick={() => setActiveTab('registrySims')}
             />
             <AudioTabButton
               active={activeTab === 'visionPro'}
@@ -1934,6 +2123,118 @@ const AdminAiVoice: React.FC = () => {
               </div>
               <div className="ml-auto text-zinc-600">
                 Preview plays from <code className="font-mono">/public/audio/</code> — iOS plays from bundle
+              </div>
+            </div>
+          </div>
+          )}
+
+          {activeTab === 'registrySims' && (
+          <div className="rounded-2xl bg-zinc-900/40 border border-white/10 backdrop-blur-xl p-5 mt-6">
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/25 bg-cyan-500/12">
+                  <Volume2 className="h-4 w-4 text-cyan-300" />
+                </div>
+                <div>
+                  <div className="font-semibold text-white">Registry Sim Audio Assets</div>
+                  <div className="mt-0.5 text-xs text-zinc-500">
+                    Read-only view of generated sim audio already resolved onto variant records during build and publish.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={loadRegistrySimAssets}
+                disabled={registrySimLoading}
+                className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-white transition-colors hover:bg-zinc-700 disabled:opacity-50"
+              >
+                {registrySimLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                Refresh
+              </button>
+            </div>
+
+            <AnimatePresence>
+              {registrySimLoadError && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-3 rounded-xl border border-red-700/40 bg-red-900/20 p-3 text-xs text-red-200"
+                >
+                  {registrySimLoadError}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="mt-4 flex items-start gap-3 rounded-xl border border-white/[0.05] bg-zinc-950/60 p-3 text-xs text-zinc-400">
+              <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-zinc-500" />
+              <div>
+                This page does not regenerate sim audio. It reads the resolved <code className="font-mono text-zinc-300">audioAssets</code> attached to <code className="font-mono text-zinc-300">sim-variants</code> records and lets you preview the stored files that were already generated into <code className="font-mono text-zinc-300">sim-audio-assets/...</code>.
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              {groupedRegistrySimAssets.length === 0 && !registrySimLoading ? (
+                <div className="rounded-2xl border border-white/[0.06] bg-black/10 px-4 py-6 text-sm text-zinc-500">
+                  No registry sim audio assets found yet.
+                </div>
+              ) : null}
+
+              {groupedRegistrySimAssets.map((familyGroup) => (
+                <div key={familyGroup.family} className="rounded-2xl border border-white/[0.06] bg-black/10">
+                  <div className="flex items-center gap-3 px-4 py-4">
+                    <span className="rounded-md border border-cyan-500/30 bg-cyan-500/12 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-200">
+                      Family
+                    </span>
+                    <span className="text-sm font-semibold text-white">{familyGroup.family}</span>
+                    <div className="h-px flex-1 bg-white/[0.05]" />
+                    <span className="text-xs text-zinc-600">
+                      {familyGroup.variants.reduce((sum, variant) => sum + variant.entries.length, 0)} assets
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 px-4 pb-4">
+                    {familyGroup.variants.map((variantGroup) => {
+                      const firstEntry = variantGroup.entries[0];
+                      return (
+                        <div key={`${familyGroup.family}-${variantGroup.variantName}`} className="rounded-xl border border-white/[0.05] bg-zinc-950/30 p-4">
+                          <div className="mb-3 flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-white">{variantGroup.variantName}</span>
+                            {firstEntry?.archetype ? (
+                              <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+                                {firstEntry.archetype}
+                              </span>
+                            ) : null}
+                            {firstEntry?.buildStatus ? (
+                              <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">
+                                {firstEntry.buildStatus}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="grid grid-cols-1 gap-3">
+                            {variantGroup.entries.map((entry) => (
+                              <RegistrySimAssetCard
+                                key={`${entry.variantId}-${entry.asset.id}`}
+                                entry={entry}
+                                isPlaying={registrySimPlayingId === entry.asset.id}
+                                onPlay={() => playRegistrySimSound(entry.asset.id, entry.asset.downloadURL)}
+                                onStop={stopRegistrySimSound}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-white/[0.05] pt-4 text-xs text-zinc-500">
+              <div>
+                <span className="font-semibold text-zinc-300">{registrySimAssets.length}</span> registry-linked audio assets
+              </div>
+              <div className="ml-auto text-zinc-600">
+                Firestore: <code className="font-mono">sim-variants</code> + <code className="font-mono">sim-audio-assets</code>
               </div>
             </div>
           </div>

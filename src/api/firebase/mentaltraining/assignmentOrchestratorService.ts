@@ -71,6 +71,19 @@ const toReadinessBand = (readinessScore?: number): PulseCheckDailyAssignment['re
 const humanizeRuntimeLabel = (value?: string | null) =>
   value ? value.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim() : '';
 
+const resolveSimFamilyLabel = (simSpecId?: string | null, exerciseName?: string | null) => {
+  const normalizedSimSpecId = humanizeRuntimeLabel(simSpecId);
+  if (normalizedSimSpecId) {
+    return normalizedSimSpecId
+      .split(' ')
+      .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+      .join(' ');
+  }
+
+  const normalizedExerciseName = humanizeRuntimeLabel(exerciseName);
+  return normalizedExerciseName || undefined;
+};
+
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const user = auth.currentUser;
   if (!user) {
@@ -383,6 +396,8 @@ export const assignmentOrchestratorService = {
       actionType,
       simSpecId: publishedExercise?.simSpecId,
       legacyExerciseId: publishedExercise?.id,
+      simFamilyLabel: publishedExercise?.variantSource?.family || resolveSimFamilyLabel(publishedExercise?.simSpecId, publishedExercise?.name),
+      simVariantLabel: publishedExercise?.variantSource?.variantName || publishedExercise?.name,
       sessionType: progress.activeProgram.sessionType,
       durationMode: progress.activeProgram.durationMode,
       durationSeconds: progress.activeProgram.durationSeconds,

@@ -48,6 +48,7 @@ import {
 } from './types';
 
 const E2E_HISTORY_COLLECTION = 'history';
+const E2E_SPEC_VERSIONS_COLLECTION = 'spec_versions';
 const USERS_COLLECTION = 'users';
 const COACHES_COLLECTION = 'coaches';
 const COACH_ATHLETES_COLLECTION = 'coachAthletes';
@@ -207,6 +208,11 @@ async function deleteVariantHistory(db: Firestore, variantId: string) {
   await Promise.all(historySnap.docs.map((entry) => deleteDoc(entry.ref)));
 }
 
+async function deleteVariantSpecVersions(db: Firestore, variantId: string) {
+  const specVersionSnap = await getDocs(collection(db, SIM_VARIANTS_COLLECTION, variantId, E2E_SPEC_VERSIONS_COLLECTION));
+  await Promise.all(specVersionSnap.docs.map((entry) => deleteDoc(entry.ref)));
+}
+
 async function cleanupRegistryFixtures(db: Firestore, namespace: string) {
   const prefix = buildPrefix(namespace);
 
@@ -219,6 +225,7 @@ async function cleanupRegistryFixtures(db: Firestore, namespace: string) {
 
   for (const variantId of variantIds) {
     await deleteVariantHistory(db, variantId);
+    await deleteVariantSpecVersions(db, variantId);
     await deleteDoc(doc(db, SIM_VARIANTS_COLLECTION, variantId));
   }
 

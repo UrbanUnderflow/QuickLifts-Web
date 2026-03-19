@@ -159,11 +159,11 @@ function createFirestoreMock(initialCollections = {}) {
       }
       return makeDocRef(pathParts);
     },
-    query(ref) {
-      return { __type: 'query', path: [...ref.path] };
+    query(ref, ...clauses) {
+      return { __type: 'query', path: [...ref.path], clauses: clauses.filter(Boolean) };
     },
-    orderBy(field) {
-      return { __type: 'orderBy', field };
+    orderBy(field, direction = 'asc') {
+      return { __type: 'orderBy', field, direction };
     },
     async getDocs(ref) {
       const pathParts = ref.path;
@@ -172,6 +172,21 @@ function createFirestoreMock(initialCollections = {}) {
         ref: makeDocRef([...pathParts, id]),
         data: () => clone(data),
       }));
+      const orderClauses = Array.isArray(ref.clauses)
+        ? ref.clauses.filter((clause) => clause && clause.__type === 'orderBy')
+        : [];
+      if (orderClauses.length > 0) {
+        docs.sort((left, right) => {
+          for (const clause of orderClauses) {
+            const leftValue = left.data()?.[clause.field];
+            const rightValue = right.data()?.[clause.field];
+            if (leftValue === rightValue) continue;
+            const comparison = leftValue > rightValue ? 1 : -1;
+            return clause.direction === 'desc' ? -comparison : comparison;
+          }
+          return 0;
+        });
+      }
       return { docs };
     },
     async getDoc(ref) {

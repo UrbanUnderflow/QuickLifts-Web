@@ -8,6 +8,7 @@ import {
   type SimSyncStatus,
 } from './types';
 import { getDisplayFamilyName, getDisplaySimText, getDisplayVariantName } from './displayNames';
+import { resolveEnduranceLockRuntimeProfile } from './enduranceLockProfiles';
 import type {
   SimVariantArchetype,
   SimVariantLockedSpec,
@@ -156,6 +157,14 @@ function buildSessionModel(record: SimVariantRecord, engineKey: SimEngineKey, ar
 function buildStimulusModel(record: SimVariantRecord, engineKey: SimEngineKey) {
   const emphasis = getRuntimeConfigValue<string[]>(record, 'stimuli.emphasis', []);
   const priority = record.priority === 'high' ? 'high' : record.priority === 'medium' ? 'medium' : 'low';
+  const archetype = record.archetypeOverride ?? record.runtimeConfig?.archetype ?? 'baseline';
+  const enduranceRuntimeProfile = engineKey === 'endurance_lock'
+    ? resolveEnduranceLockRuntimeProfile({
+        archetype,
+        variantName: record.name,
+        runtimeConfig: record.runtimeConfig ?? null,
+      })
+    : null;
   const defaults: Record<SimEngineKey, Record<string, any>> = {
     reset: {
       primaryTask: 'reset_to_same_task',
@@ -186,6 +195,7 @@ function buildStimulusModel(record: SimVariantRecord, engineKey: SimEngineKey) {
       primaryTask: 'sustained_execution',
       blockProfile: 'baseline_mid_final',
       fatigueProfile: emphasis,
+      runtimeProfile: enduranceRuntimeProfile,
     },
   };
 

@@ -240,6 +240,55 @@ const { simVariantRegistryService } = loadVariantRegistryRuntime(firestore);
 `);
 });
 
+test('save rejects published lifecycle regressions that remove the saved spec', () => {
+  runRegistryScenario(`
+const publishedRecord = simBuild.buildPublishedVariantRecord(createVariantRecord(), 200);
+const invalidInput = {
+  ...publishedRecord,
+  specRaw: '',
+};
+
+const firestore = createFirestoreMock({
+  'sim-variants': [{ id: publishedRecord.id, data: publishedRecord }],
+  'sim-modules': [{ id: publishedRecord.publishedModuleId, data: createModuleDraft({ id: publishedRecord.publishedModuleId }) }],
+});
+const { simVariantRegistryService } = loadVariantRegistryRuntime(firestore);
+
+(async () => {
+  await assert.rejects(
+    () => simVariantRegistryService.save(invalidInput),
+    /Published variants must retain a saved spec/i
+  );
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+`);
+});
+
+test('publish rejects variants that do not have a saved spec', () => {
+  runRegistryScenario(`
+const record = createVariantRecord({ specRaw: '' });
+const module = createModuleDraft({ id: 'published-reset-module', moduleId: undefined });
+
+const firestore = createFirestoreMock({
+  'sim-variants': [{ id: record.id, data: record }],
+  'sim-modules': [],
+});
+const { simVariantRegistryService } = loadVariantRegistryRuntime(firestore);
+
+(async () => {
+  await assert.rejects(
+    () => simVariantRegistryService.publish(record, module),
+    /without a saved spec/i
+  );
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+`);
+});
+
 test('publish derives module and variant snapshots from the current variant state', () => {
   runRegistryScenario(`
 const record = createVariantRecord();
@@ -269,6 +318,50 @@ const { simVariantRegistryService } = loadVariantRegistryRuntime(firestore);
   assert.equal(savedModule.syncStatus, 'in_sync');
   assert.equal(savedModule.variantSource.variantId, record.id);
   assert.equal(savedModule.variantSource.family, record.family);
+})().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
+`);
+});
+
+test('publish and rollback capture spec versions and restore a published draft cleanly', () => {
+  runRegistryScenario(`
+const record = createVariantRecord();
+const module = createModuleDraft({ id: 'published-reset-module', moduleId: undefined });
+
+const firestore = createFirestoreMock({
+  'sim-variants': [{ id: record.id, data: record }],
+  'sim-modules': [],
+});
+const { simVariantRegistryService } = loadVariantRegistryRuntime(firestore);
+
+(async () => {
+  await simVariantRegistryService.publish(record, module);
+  const publishedRecord = firestore.getDoc(\`sim-variants/\${record.id}\`);
+
+  await simVariantRegistryService.save({
+    ...publishedRecord,
+    specRaw: 'Reset spec v2',
+  });
+
+  const specVersionsAfterSave = await simVariantRegistryService.listSpecVersions(record.id);
+  assert.equal(specVersionsAfterSave.length, 2);
+  assert.equal(specVersionsAfterSave[0].action, 'saved');
+  assert.equal(specVersionsAfterSave[1].action, 'published');
+
+  const rolledBack = await simVariantRegistryService.rollbackToSpecVersion(record.id, specVersionsAfterSave[1].id);
+  assert.equal(rolledBack.specRaw, 'Reset spec v1');
+  assert.equal(rolledBack.syncStatus, 'in_sync');
+  assert.equal(rolledBack.buildStatus, 'published');
+  assert.equal(rolledBack.publishedModuleId, module.id);
+
+  const specVersionsAfterRollback = await simVariantRegistryService.listSpecVersions(record.id);
+  assert.equal(specVersionsAfterRollback.length, 3);
+  assert.equal(specVersionsAfterRollback[0].action, 'rollback');
+
+  const historyEntries = await simVariantRegistryService.listHistory(record.id);
+  assert.ok(historyEntries.some((entry) => entry.action === 'rollback'));
 })().catch((error) => {
   console.error(error);
   process.exit(1);

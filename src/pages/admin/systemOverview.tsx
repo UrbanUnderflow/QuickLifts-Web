@@ -71,6 +71,7 @@ import PulseCheckDeviceIntegrationPartnershipMatrixTab from "../../components/ad
 import PulseCheckSchoolWearableBundlePlanTab from "../../components/admin/system-overview/PulseCheckSchoolWearableBundlePlanTab";
 import PulseCheckPatentEligibilityAuditTab from "../../components/admin/system-overview/PulseCheckPatentEligibilityAuditTab";
 import FirestoreIndexRegistryTab from "../../components/admin/system-overview/FirestoreIndexRegistryTab";
+import InfrastructureSecretsStackTab from "../../components/admin/system-overview/InfrastructureSecretsStackTab";
 import PulseCheckStateSnapshotFreshnessPolicyTab from "../../components/admin/system-overview/PulseCheckStateSnapshotFreshnessPolicyTab";
 import PulseCheckPerformanceStateFlagDefinitionsTab from "../../components/admin/system-overview/PulseCheckPerformanceStateFlagDefinitionsTab";
 import PulseCheckNoraAssignmentRulesTab from "../../components/admin/system-overview/PulseCheckNoraAssignmentRulesTab";
@@ -135,6 +136,7 @@ const SYSTEM_TABS: SystemTab[] = [
       "shared-link-preview-strategy",
       "workout-share-cards",
       "backend-data",
+      "infrastructure-secrets-stack",
       "firestore-index-registry",
       "integrations",
       "end-to-end-flows",
@@ -1308,6 +1310,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "firestore-index-registry":
         return <FirestoreIndexRegistryTab />;
+
+      case "infrastructure-secrets-stack":
+        return <InfrastructureSecretsStackTab />;
 
       case "pulsecheck-state-snapshot-freshness-policy":
         return <PulseCheckStateSnapshotFreshnessPolicyTab />;
