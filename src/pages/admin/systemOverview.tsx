@@ -66,6 +66,7 @@ import PulseCheckHealthContextDefinitionOfDoneTab from "../../components/admin/s
 import PulseCheckHealthContextEngineeringTaskBreakdownTab from "../../components/admin/system-overview/PulseCheckHealthContextEngineeringTaskBreakdownTab";
 import PulseCheckHealthContextFirestoreSchemaIndexSpecTab from "../../components/admin/system-overview/PulseCheckHealthContextFirestoreSchemaIndexSpecTab";
 import PulseCheckOuraIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckOuraIntegrationStrategyTab";
+import PulseCheckOuraCognitiveCorrelationSpecTab from "../../components/admin/system-overview/PulseCheckOuraCognitiveCorrelationSpecTab";
 import PulseCheckDeviceIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckDeviceIntegrationStrategyTab";
 import PulseCheckDeviceIntegrationPartnershipMatrixTab from "../../components/admin/system-overview/PulseCheckDeviceIntegrationPartnershipMatrixTab";
 import PulseCheckSchoolWearableBundlePlanTab from "../../components/admin/system-overview/PulseCheckSchoolWearableBundlePlanTab";
@@ -1295,6 +1296,9 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-oura-integration-strategy":
         return <PulseCheckOuraIntegrationStrategyTab />;
+
+      case "pulsecheck-oura-cognitive-correlation-spec":
+        return <PulseCheckOuraCognitiveCorrelationSpecTab />;
 
       case "pulsecheck-device-integration-strategy":
         return <PulseCheckDeviceIntegrationStrategyTab />;

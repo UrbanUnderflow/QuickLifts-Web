@@ -3,6 +3,7 @@ import { Activity, Building2, Database, Link2, ShieldCheck, Smartphone, Workflow
 import { BulletList, CardGrid, DataTable, DocHeader, InfoCard, RuntimeAlignmentPanel, SectionBlock, StepRail } from './PulseCheckRuntimeDocPrimitives';
 import ArtifactPageLibrary, { ArtifactPageEntry } from './ArtifactPageLibrary';
 import PulseCheckDeviceIntegrationPartnershipMatrixTab from './PulseCheckDeviceIntegrationPartnershipMatrixTab';
+import PulseCheckOuraCognitiveCorrelationSpecTab from './PulseCheckOuraCognitiveCorrelationSpecTab';
 import PulseCheckOuraIntegrationStrategyTab from './PulseCheckOuraIntegrationStrategyTab';
 import PulseCheckSchoolWearableBundlePlanTab from './PulseCheckSchoolWearableBundlePlanTab';
 
@@ -470,6 +471,14 @@ const DEVICE_INTEGRATION_PAGES: ArtifactPageEntry[] = [
     icon: Moon,
     accent: '#22c55e',
     render: () => <PulseCheckOuraIntegrationStrategyTab />,
+  },
+  {
+    id: 'oura-cognitive-correlation-spec',
+    label: 'Oura Cognitive Correlation Spec',
+    subtitle: 'How PulseCheck learns athlete-specific mind-body patterns from Oura physiology plus sim performance.',
+    icon: Database,
+    accent: '#34d399',
+    render: () => <PulseCheckOuraCognitiveCorrelationSpecTab />,
   },
   {
     id: 'run-wearable-source-of-truth',
