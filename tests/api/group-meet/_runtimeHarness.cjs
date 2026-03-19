@@ -33,6 +33,28 @@ function findFileRecursive(rootDir, fileName) {
   return null;
 }
 
+function findFileRecursiveBySuffix(rootDir, suffix) {
+  const normalizedSuffix = suffix.split(path.sep).join('/');
+  const stack = [rootDir];
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    const entries = fs.readdirSync(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const nextPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(nextPath);
+        continue;
+      }
+      if (entry.isFile() && nextPath.split(path.sep).join('/').endsWith(normalizedSuffix)) {
+        return nextPath;
+      }
+    }
+  }
+
+  return null;
+}
+
 function compileGroupMeetRuntime() {
   if (compiledRuntimeCache) {
     return compiledRuntimeCache;
@@ -50,6 +72,7 @@ function compileGroupMeetRuntime() {
     '--outDir', outDir,
     path.join(repoRoot, 'src/lib/groupMeet.ts'),
     path.join(repoRoot, 'src/lib/googleCalendar.ts'),
+    path.join(repoRoot, 'src/pages/api/admin/group-meet/index.ts'),
     path.join(repoRoot, 'src/pages/api/admin/group-meet/[requestId].ts'),
   ];
 
@@ -60,15 +83,16 @@ function compileGroupMeetRuntime() {
 
   const groupMeetPath = findFileRecursive(outDir, 'groupMeet.js');
   const googleCalendarPath = findFileRecursive(outDir, 'googleCalendar.js');
+  const createHandlerPath = findFileRecursiveBySuffix(outDir, 'pages/api/admin/group-meet/index.js');
   const requestHandlerPath = findFileRecursive(outDir, '[requestId].js');
 
-  if ((!groupMeetPath || !googleCalendarPath || !requestHandlerPath) && result.status !== 0) {
+  if ((!groupMeetPath || !googleCalendarPath || !createHandlerPath || !requestHandlerPath) && result.status !== 0) {
     throw new Error(
       `Failed to compile Group Meet runtime:\n${result.stderr || result.stdout || 'Unknown tsc failure'}`
     );
   }
 
-  if (!groupMeetPath || !googleCalendarPath || !requestHandlerPath) {
+  if (!groupMeetPath || !googleCalendarPath || !createHandlerPath || !requestHandlerPath) {
     throw new Error('Compiled Group Meet runtime files were not emitted to the temp directory.');
   }
 
@@ -76,6 +100,7 @@ function compileGroupMeetRuntime() {
     outDir,
     groupMeetPath,
     googleCalendarPath,
+    createHandlerPath,
     requestHandlerPath,
   };
 
@@ -265,6 +290,191 @@ function createRequestDetailHandlerRuntime({ requestData, inviteDocs, setupStatu
   };
 }
 
+function createGroupMeetCreateHandlerRuntime({
+  adminEmail = 'admin@fitwithpulse.ai',
+  baseUrl = 'https://app.fitwithpulse.ai',
+  sendInviteEmailResult = async () => ({ success: true }),
+} = {}) {
+  const { createHandlerPath } = compileGroupMeetRuntime();
+  delete require.cache[createHandlerPath];
+
+  const state = {
+    requestData: null,
+    inviteDocs: new Map(),
+    emailCalls: [],
+  };
+
+  let requestIdCounter = 0;
+
+  function cloneForStorage(value) {
+    if (value == null) return value;
+    if (Array.isArray(value)) {
+      return value.map(cloneForStorage);
+    }
+    if (typeof value === 'object') {
+      if (typeof value.toDate === 'function') {
+        return value;
+      }
+      const next = {};
+      for (const [key, child] of Object.entries(value)) {
+        next[key] = cloneForStorage(child);
+      }
+      return next;
+    }
+    return value;
+  }
+
+  function createInviteRef(token) {
+    return {
+      id: token,
+      path: ['groupMeetRequests', 'request-1', 'groupMeetInvites', token],
+      async set(payload, options = {}) {
+        const existing = state.inviteDocs.get(token) || {};
+        const nextPayload = cloneForStorage(payload);
+        state.inviteDocs.set(
+          token,
+          options && options.merge ? { ...existing, ...nextPayload } : nextPayload
+        );
+      },
+    };
+  }
+
+  const requestRef = {
+    id: 'request-1',
+    collection(name) {
+      if (name !== 'groupMeetInvites') {
+        throw new Error(`Unexpected collection: ${name}`);
+      }
+      return {
+        doc(token) {
+          return createInviteRef(token);
+        },
+      };
+    },
+  };
+
+  const firestoreInstance = {
+    collection(name) {
+      if (name !== 'groupMeetRequests') {
+        throw new Error(`Unexpected top-level collection: ${name}`);
+      }
+      return {
+        doc() {
+          requestIdCounter += 1;
+          if (requestIdCounter > 1) {
+            throw new Error('Unexpected extra request document creation.');
+          }
+          return requestRef;
+        },
+        orderBy() {
+          return this;
+        },
+        limit() {
+          return this;
+        },
+        async get() {
+          return { docs: [] };
+        },
+      };
+    },
+    batch() {
+      const operations = [];
+      return {
+        set(ref, payload, options = {}) {
+          operations.push({
+            ref,
+            payload: cloneForStorage(payload),
+            options: clone(options),
+          });
+        },
+        async commit() {
+          for (const operation of operations) {
+            if (operation.ref === requestRef) {
+              state.requestData = operation.options && operation.options.merge && state.requestData
+                ? { ...state.requestData, ...operation.payload }
+                : operation.payload;
+              continue;
+            }
+
+            const token = operation.ref.id;
+            const existing = state.inviteDocs.get(token) || {};
+            state.inviteDocs.set(
+              token,
+              operation.options && operation.options.merge
+                ? { ...existing, ...operation.payload }
+                : operation.payload
+            );
+          }
+        },
+      };
+    },
+  };
+
+  function firestore() {
+    return firestoreInstance;
+  }
+
+  firestore.Timestamp = {
+    fromDate(date) {
+      return makeTimestamp(date.toISOString());
+    },
+  };
+  firestore.FieldValue = {
+    serverTimestamp() {
+      return { __serverTimestamp: true };
+    },
+  };
+
+  const firebaseAdminMock = { firestore };
+
+  const groupMeetAdminMock = {
+    GROUP_MEET_INVITES_SUBCOLLECTION: 'groupMeetInvites',
+    GROUP_MEET_REQUESTS_COLLECTION: 'groupMeetRequests',
+    getGroupMeetBaseUrl() {
+      return baseUrl;
+    },
+    mapGroupMeetInviteSummary(docSnap) {
+      const data = docSnap.data() || {};
+      return {
+        token: docSnap.id,
+        name: data.name || '',
+        email: data.email || null,
+        imageUrl: data.imageUrl || null,
+        participantType: data.participantType === 'host' ? 'host' : 'participant',
+        contactId: data.contactId || null,
+        shareUrl: data.shareUrl || '',
+        emailStatus: data.emailStatus || 'not_sent',
+        emailError: data.emailError || null,
+        respondedAt: data.responseSubmittedAt?.toDate?.().toISOString?.() || null,
+        availabilityCount: Array.isArray(data.availabilityEntries) ? data.availabilityEntries.length : 0,
+      };
+    },
+    sendGroupMeetInviteEmail: async (args) => {
+      state.emailCalls.push(clone(args));
+      return sendInviteEmailResult(args);
+    },
+    toIso(value) {
+      return value?.toDate?.().toISOString?.() || null;
+    },
+  };
+
+  const handlerModule = withModuleMocks(
+    {
+      '../../../../lib/firebase-admin': firebaseAdminMock,
+      '../../../../lib/groupMeetAdmin': groupMeetAdminMock,
+      '../_auth': {
+        requireAdminRequest: async () => ({ email: adminEmail }),
+      },
+    },
+    () => require(createHandlerPath)
+  );
+
+  return {
+    handler: handlerModule.default,
+    state,
+  };
+}
+
 function createApiResponseRecorder() {
   return {
     statusCode: 200,
@@ -282,6 +492,7 @@ function createApiResponseRecorder() {
 
 module.exports = {
   createApiResponseRecorder,
+  createGroupMeetCreateHandlerRuntime,
   createRequestDetailHandlerRuntime,
   loadGoogleCalendarRuntime,
   loadGroupMeetRuntime,

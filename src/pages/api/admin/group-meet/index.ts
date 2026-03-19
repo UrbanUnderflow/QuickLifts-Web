@@ -1,21 +1,33 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { randomBytes } from 'crypto';
 import admin from '../../../../lib/firebase-admin';
-import { requireAdminRequest } from '../_auth';
 import {
   buildGroupMeetShareUrl,
+  normalizeGroupMeetAvailabilitySlots,
   resolveGroupMeetStatus,
   type GroupMeetInviteSummary,
   type GroupMeetRequestSummary,
   isValidGroupMeetMonth,
 } from '../../../../lib/groupMeet';
-
-const REQUESTS_COLLECTION = 'groupMeetRequests';
-const INVITES_SUBCOLLECTION = 'groupMeetInvites';
+import {
+  GROUP_MEET_INVITES_SUBCOLLECTION,
+  GROUP_MEET_REQUESTS_COLLECTION,
+  getGroupMeetBaseUrl,
+  mapGroupMeetInviteSummary,
+  sendGroupMeetInviteEmail,
+  toIso,
+} from '../../../../lib/groupMeetAdmin';
+import { requireAdminRequest } from '../_auth';
 
 type ParticipantInput = {
+  contactId?: string;
   name?: string;
   email?: string;
+  imageUrl?: string;
+};
+
+type HostInput = ParticipantInput & {
+  availabilityEntries?: unknown;
 };
 
 type CreateGroupMeetRequestBody = {
@@ -25,44 +37,17 @@ type CreateGroupMeetRequestBody = {
   timezone?: string;
   meetingDurationMinutes?: number;
   participants?: ParticipantInput[];
+  host?: HostInput;
   sendEmails?: boolean;
 };
 
-const toIso = (value: FirebaseFirestore.Timestamp | null | undefined) =>
-  value?.toDate?.().toISOString?.() || null;
-
-const escapeHtml = (input: string) =>
-  (input || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-
-function getBaseUrl(req: NextApiRequest) {
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}`
-  );
-}
-
 function mapInvite(docSnap: FirebaseFirestore.QueryDocumentSnapshot): GroupMeetInviteSummary {
-  const data = docSnap.data();
-  return {
-    token: docSnap.id,
-    name: data.name || '',
-    email: data.email || null,
-    shareUrl: data.shareUrl || '',
-    emailStatus: data.emailStatus || 'not_sent',
-    emailError: data.emailError || null,
-    respondedAt: toIso(data.responseSubmittedAt),
-    availabilityCount: Array.isArray(data.availabilityEntries) ? data.availabilityEntries.length : 0,
-  };
+  return mapGroupMeetInviteSummary(docSnap);
 }
 
 async function mapRequest(docSnap: FirebaseFirestore.QueryDocumentSnapshot): Promise<GroupMeetRequestSummary> {
   const data = docSnap.data();
-  const invitesSnapshot = await docSnap.ref.collection(INVITES_SUBCOLLECTION).orderBy('createdAt', 'asc').get();
+  const invitesSnapshot = await docSnap.ref.collection(GROUP_MEET_INVITES_SUBCOLLECTION).orderBy('createdAt', 'asc').get();
   const deadlineAt = toIso(data.deadlineAt);
 
   return {
@@ -84,82 +69,12 @@ async function mapRequest(docSnap: FirebaseFirestore.QueryDocumentSnapshot): Pro
 async function listRecentRequests(): Promise<GroupMeetRequestSummary[]> {
   const snapshot = await admin
     .firestore()
-    .collection(REQUESTS_COLLECTION)
+    .collection(GROUP_MEET_REQUESTS_COLLECTION)
     .orderBy('createdAt', 'desc')
     .limit(15)
     .get();
 
   return Promise.all(snapshot.docs.map(mapRequest));
-}
-
-async function sendGroupMeetInviteEmail(args: {
-  requestTitle: string;
-  targetMonth: string;
-  deadlineAt: string;
-  timezone: string;
-  recipientName: string;
-  recipientEmail: string;
-  shareUrl: string;
-}) {
-  const apiKey = process.env.BREVO_MARKETING_KEY || process.env.BREVO_API_KEY;
-  if (!apiKey) {
-    return { success: false, error: 'Brevo not configured' };
-  }
-
-  const senderEmail = process.env.BREVO_SENDER_EMAIL || 'tre@fitwithpulse.ai';
-  const senderName = process.env.BREVO_SENDER_NAME || 'Pulse';
-  const subject = `${args.requestTitle} availability request`;
-  const deadlineLabel = new Date(args.deadlineAt).toLocaleString('en-US', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: args.timezone,
-  });
-
-  const htmlContent = `
-    <div style="font: 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #18181b;">
-      <p>Hi ${escapeHtml(args.recipientName || 'there')},</p>
-      <p>Please send your availability for <strong>${escapeHtml(args.requestTitle)}</strong>.</p>
-      <p>
-        Month: <strong>${escapeHtml(args.targetMonth)}</strong><br/>
-        Deadline: <strong>${escapeHtml(deadlineLabel)}</strong>
-      </p>
-      <p>
-        Open your link and tap the days that work for you:
-      </p>
-      <p>
-        <a href="${args.shareUrl}" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#18181b;color:#fff;text-decoration:none;font-weight:600;">
-          Enter availability
-        </a>
-      </p>
-      <p style="color:#52525b;font-size:13px;">If the button does not work, use this link:<br/>${escapeHtml(args.shareUrl)}</p>
-    </div>
-  `;
-
-  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      'api-key': apiKey,
-    },
-    body: JSON.stringify({
-      sender: { email: senderEmail, name: senderName },
-      to: [{ email: args.recipientEmail, name: args.recipientName || args.recipientEmail }],
-      subject,
-      htmlContent,
-      replyTo: { email: senderEmail, name: senderName },
-    }),
-  });
-
-  if (!response.ok) {
-    const errorPayload = await response.json().catch(() => ({}));
-    return {
-      success: false,
-      error: errorPayload?.message || `Brevo error (${response.status})`,
-    };
-  }
-
-  return { success: true };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -199,27 +114,63 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'A valid deadline is required.' });
     }
 
+    const normalizedHost = {
+      contactId: (body.host?.contactId || '').trim() || null,
+      name: (body.host?.name || '').trim(),
+      email: (body.host?.email || '').trim().toLowerCase() || null,
+      imageUrl: (body.host?.imageUrl || '').trim() || null,
+      availabilityEntries: normalizeGroupMeetAvailabilitySlots(body.host?.availabilityEntries, targetMonth),
+    };
+
+    if (!normalizedHost.name) {
+      return res.status(400).json({ error: 'Host name is required.' });
+    }
+
+    if (!normalizedHost.availabilityEntries.length) {
+      return res.status(400).json({ error: 'Add the host availability before sending the request.' });
+    }
+
     const normalizedParticipants = (Array.isArray(body.participants) ? body.participants : [])
       .map((participant) => ({
+        contactId: (participant?.contactId || '').trim() || null,
         name: (participant?.name || '').trim(),
         email: (participant?.email || '').trim().toLowerCase() || null,
+        imageUrl: (participant?.imageUrl || '').trim() || null,
       }))
       .filter((participant) => participant.name);
 
-    if (!normalizedParticipants.length) {
+    const dedupedParticipants = normalizedParticipants.filter((participant, index, allParticipants) => {
+      const comparisonKey = participant.email || participant.contactId || participant.name.toLowerCase();
+      const matchesHost =
+        comparisonKey ===
+        (normalizedHost.email || normalizedHost.contactId || normalizedHost.name.toLowerCase());
+      if (matchesHost) return false;
+      return (
+        index ===
+        allParticipants.findIndex(
+          (candidate) =>
+            (candidate.email || candidate.contactId || candidate.name.toLowerCase()) === comparisonKey
+        )
+      );
+    });
+
+    if (!dedupedParticipants.length) {
       return res.status(400).json({ error: 'Add at least one participant name.' });
     }
 
     const db = admin.firestore();
-    const requestRef = db.collection(REQUESTS_COLLECTION).doc();
-    const baseUrl = getBaseUrl(req);
+    const requestRef = db.collection(GROUP_MEET_REQUESTS_COLLECTION).doc();
+    const baseUrl = getGroupMeetBaseUrl(req);
     const createdInvites: Array<{
       ref: FirebaseFirestore.DocumentReference;
       summary: GroupMeetInviteSummary;
       email: string | null;
+      participantType: 'host' | 'participant';
+      availabilityEntries: ReturnType<typeof normalizeGroupMeetAvailabilitySlots>;
     }> = [];
 
     const batch = db.batch();
+    const totalParticipants = dedupedParticipants.length + 1;
     batch.set(requestRef, {
       title,
       targetMonth,
@@ -229,31 +180,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       createdByEmail: adminUser.email,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      participantCount: normalizedParticipants.length,
-      responseCount: 0,
+      participantCount: totalParticipants,
+      responseCount: 1,
       status: deadline.getTime() <= Date.now() ? 'closed' : 'collecting',
     });
 
-    for (const participant of normalizedParticipants) {
+    const allInviteInputs = [
+      {
+        ...normalizedHost,
+        participantType: 'host' as const,
+        sendEmail: false,
+      },
+      ...dedupedParticipants.map((participant) => ({
+        ...participant,
+        availabilityEntries: [],
+        participantType: 'participant' as const,
+        sendEmail: sendEmails,
+      })),
+    ];
+
+    for (const participant of allInviteInputs) {
       const token = randomBytes(24).toString('hex');
       const shareUrl = buildGroupMeetShareUrl(baseUrl, token);
-      const inviteRef = requestRef.collection(INVITES_SUBCOLLECTION).doc(token);
+      const inviteRef = requestRef.collection(GROUP_MEET_INVITES_SUBCOLLECTION).doc(token);
       const emailStatus: GroupMeetInviteSummary['emailStatus'] = participant.email
-        ? sendEmails
+        ? participant.sendEmail
           ? 'not_sent'
           : 'manual_only'
         : 'no_email';
+      const hasResponse = participant.availabilityEntries.length > 0;
 
       batch.set(inviteRef, {
         token,
         name: participant.name,
         email: participant.email,
+        imageUrl: participant.imageUrl,
+        participantType: participant.participantType,
+        contactId: participant.contactId,
         shareUrl,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        availabilityEntries: [],
-        responseSubmittedAt: null,
-        hasResponse: false,
+        availabilityEntries: participant.availabilityEntries,
+        responseSubmittedAt: hasResponse ? admin.firestore.FieldValue.serverTimestamp() : null,
+        hasResponse,
         emailStatus,
         emailError: null,
       });
@@ -264,13 +233,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           token,
           name: participant.name,
           email: participant.email,
+          imageUrl: participant.imageUrl,
+          participantType: participant.participantType,
+          contactId: participant.contactId,
           shareUrl,
           emailStatus,
           emailError: null,
-          respondedAt: null,
-          availabilityCount: 0,
+          respondedAt: hasResponse ? new Date().toISOString() : null,
+          availabilityCount: participant.availabilityEntries.length,
         },
         email: participant.email,
+        participantType: participant.participantType,
+        availabilityEntries: participant.availabilityEntries,
       });
     }
 
@@ -279,7 +253,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (sendEmails) {
       await Promise.all(
         createdInvites.map(async (invite) => {
-          if (!invite.email) return;
+          if (!invite.email || invite.participantType === 'host') return;
 
           const result = await sendGroupMeetInviteEmail({
             requestTitle: title,
@@ -317,7 +291,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       createdByEmail: adminUser.email,
       createdAt: new Date().toISOString(),
       participantCount: createdInvites.length,
-      responseCount: 0,
+      responseCount: createdInvites.filter((invite) => invite.summary.respondedAt).length,
       status: resolveGroupMeetStatus(deadline.toISOString()),
       invites: createdInvites.map((invite) => invite.summary),
     };
