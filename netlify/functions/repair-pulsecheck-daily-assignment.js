@@ -1,5 +1,6 @@
 const { initializeFirebaseAdmin, admin, headers } = require('./config/firebase');
 const { runtimeHelpers: pulseCheckSubmissionRuntime } = require('./submit-pulsecheck-checkin');
+const { runtimeHelpers: pulseCheckChatRuntime } = require('./pulsecheck-chat');
 
 const RESPONSE_HEADERS = {
   ...headers,
@@ -162,6 +163,7 @@ exports.handler = async (event) => {
     const userId = body.userId || decoded.uid;
     const sourceDate = isValidSourceDate(body.sourceDate) ? body.sourceDate : todayDateString();
     const preferLaunchableAlternative = parseBoolean(body.preferLaunchableAlternative);
+    const recoverFromConversation = parseBoolean(body.recoverFromConversation);
     const assignmentId = `${userId}_${sourceDate}`;
     const db = admin.firestore();
 
@@ -170,6 +172,7 @@ exports.handler = async (event) => {
       sourceDate,
       assignmentId,
       preferLaunchableAlternative,
+      recoverFromConversation,
     });
 
     const existingAssignmentSnap = await db.collection(DAILY_ASSIGNMENTS_COLLECTION).doc(assignmentId).get();
@@ -186,7 +189,14 @@ exports.handler = async (event) => {
       snapshotId: existingSnapshot?.id || null,
     });
 
-    if (existingAssignment && !preferLaunchableAlternative) {
+    const existingAssignmentIsDeferred =
+      Boolean(existingAssignment)
+      && (
+        String(existingAssignment.status || '') === 'deferred'
+        || String(existingAssignment.actionType || '') === 'defer'
+      );
+
+    if (existingAssignment && !preferLaunchableAlternative && !existingAssignmentIsDeferred) {
       return {
         statusCode: 200,
         headers: RESPONSE_HEADERS,
@@ -213,6 +223,28 @@ exports.handler = async (event) => {
       };
     }
 
+    let workingSnapshot = existingSnapshot;
+    let conversationRecoveryDetail = null;
+
+    if (recoverFromConversation && workingSnapshot) {
+      try {
+        const recoveredConversationContext = await pulseCheckChatRuntime.recoverSnapshotFromSavedConversation({
+          db,
+          userId,
+          sourceDate,
+          snapshot: workingSnapshot,
+          assignment: existingAssignment,
+        });
+
+        if (recoveredConversationContext?.stateSnapshot) {
+          workingSnapshot = recoveredConversationContext.stateSnapshot;
+        }
+        conversationRecoveryDetail = recoveredConversationContext?.detail || null;
+      } catch (conversationRecoveryError) {
+        console.warn('[repair-pulsecheck-daily-assignment] Saved conversation recovery failed (non-blocking):', conversationRecoveryError?.message || conversationRecoveryError);
+      }
+    }
+
     const priorProgress = await pulseCheckSubmissionRuntime.loadOrInitializeProgress(db, userId);
     const syncedProgress = await pulseCheckSubmissionRuntime.syncTaxonomyProfile(db, userId, priorProgress);
     let rematerialized;
@@ -229,7 +261,7 @@ exports.handler = async (event) => {
       const baseCandidateSet = pulseCheckSubmissionRuntime.buildAssignmentCandidateSet({
         athleteId: userId,
         sourceDate,
-        snapshot: existingSnapshot,
+        snapshot: workingSnapshot,
         progress: syncedProgress,
         liveProtocolRegistry,
         liveSimRegistry,
@@ -282,10 +314,10 @@ exports.handler = async (event) => {
         athleteId: userId,
         sourceCheckInId:
           existingAssignment?.sourceCheckInId
-          || existingSnapshot.sourceCheckInId
-          || existingSnapshot.rawSignalSummary?.explicitSelfReport?.id
+          || workingSnapshot.sourceCheckInId
+          || workingSnapshot.rawSignalSummary?.explicitSelfReport?.id
           || '',
-        sourceStateSnapshotId: existingSnapshot.id,
+        sourceStateSnapshotId: workingSnapshot.id,
         sourceCandidateSetId: filteredCandidateSet.id,
         sourceDate,
         progress: syncedProgress,
@@ -296,7 +328,7 @@ exports.handler = async (event) => {
       });
 
       rematerialized = {
-        stateSnapshot: dailyAssignment ? { ...existingSnapshot, executionLink: dailyAssignment.id } : existingSnapshot,
+        stateSnapshot: dailyAssignment ? { ...workingSnapshot, executionLink: dailyAssignment.id } : workingSnapshot,
         candidateSet: filteredCandidateSet,
         plannerDecision,
         dailyAssignment,
@@ -306,10 +338,10 @@ exports.handler = async (event) => {
         db,
         athleteId: userId,
         sourceCheckInId:
-          existingSnapshot.sourceCheckInId
-          || existingSnapshot.rawSignalSummary?.explicitSelfReport?.id
+          workingSnapshot.sourceCheckInId
+          || workingSnapshot.rawSignalSummary?.explicitSelfReport?.id
           || '',
-        sourceStateSnapshotId: existingSnapshot.id,
+        sourceStateSnapshotId: workingSnapshot.id,
         sourceDate,
         progress: syncedProgress,
       });
@@ -319,20 +351,40 @@ exports.handler = async (event) => {
       userId,
       sourceDate,
       preferLaunchableAlternative,
+      recoverFromConversation,
+      conversationRecoveryDetail: conversationRecoveryDetail || 'none',
       repairApplied: Boolean(rematerialized?.dailyAssignment),
+      snapshotRecommendedRouting: workingSnapshot?.recommendedRouting || null,
+      snapshotOverallReadiness: workingSnapshot?.overallReadiness || null,
+      snapshotConfidence: workingSnapshot?.confidence || null,
       candidateCount: rematerialized?.candidateSet?.candidates?.length || 0,
+      plannerDecisionSource: rematerialized?.plannerDecision?.decisionSource || null,
+      plannerActionType: rematerialized?.plannerDecision?.actionType || null,
+      plannerSelectedCandidateId: rematerialized?.plannerDecision?.selectedCandidateId || null,
+      plannerRationaleSummary: rematerialized?.plannerDecision?.rationaleSummary || null,
       dailyAssignmentId: rematerialized?.dailyAssignment?.id || null,
       dailyAssignmentActionType: rematerialized?.dailyAssignment?.actionType || null,
+      dailyAssignmentStatus: rematerialized?.dailyAssignment?.status || null,
     });
+
+    const detail =
+      conversationRecoveryDetail
+      || rematerialized?.plannerDecision?.rationaleSummary
+      || (
+        rematerialized?.dailyAssignment
+          ? `Assignment rematerialized as ${rematerialized.dailyAssignment.actionType || 'unknown'}.`
+          : 'Repair ran but no assignment could be rematerialized from the current snapshot.'
+      );
 
     return {
       statusCode: 200,
       headers: RESPONSE_HEADERS,
       body: JSON.stringify({
-        stateSnapshot: rematerialized?.stateSnapshot || existingSnapshot,
+        stateSnapshot: rematerialized?.stateSnapshot || workingSnapshot,
         candidateSet: rematerialized?.candidateSet || null,
         dailyAssignment: rematerialized?.dailyAssignment || null,
         repairApplied: Boolean(rematerialized?.dailyAssignment),
+        detail,
       }),
     };
   } catch (error) {

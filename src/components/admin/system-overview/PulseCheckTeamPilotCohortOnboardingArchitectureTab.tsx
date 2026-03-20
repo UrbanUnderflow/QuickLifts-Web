@@ -212,6 +212,21 @@ const PulseCheckTeamPilotCohortOnboardingArchitectureTab: React.FC = () => {
         </CardGrid>
       </SectionBlock>
 
+      <SectionBlock icon={Database} title="Reporting Boundary">
+        <CardGrid columns="md:grid-cols-2">
+          <InfoCard
+            title="Pilot Dashboard Scope"
+            accent="green"
+            body="Pilot dashboards should be rooted in `Pilot` and `PilotEnrollment`. They may use organization and team context for navigation, but the monitored population comes from active pilot enrollments, not from all team members."
+          />
+          <InfoCard
+            title="Cohort Reporting Rule"
+            accent="amber"
+            body="Cohorts are filters and subgroups inside one pilot dashboard. They should not replace the pilot as the root reporting object, and athletes outside the pilot should never leak into cohort reads."
+          />
+        </CardGrid>
+      </SectionBlock>
+
       <SectionBlock icon={ClipboardCheck} title="How to Model Hampton Correctly">
         <CardGrid columns="md:grid-cols-2">
           <InfoCard
@@ -282,6 +297,7 @@ const PulseCheckTeamPilotCohortOnboardingArchitectureTab: React.FC = () => {
                 'Allow coaches and staff with the right permission to send the team athlete link directly.',
                 'Treat clinician onboarding as a first-class workflow inside Pulse Check.',
                 'Pilot defines the study posture. Cohort can refine it. Enrollment stores the consent truth.',
+                'Pilot dashboards and pilot reports must read athlete populations from active `PilotEnrollment` truth rather than from whole-team membership.',
                 'Keep pilots internal-only until permissioning, consent, and reporting behavior are stable enough for customer self-serve.',
                 'Keep the object model clean so escalation, reporting, baseline trials, and pilot management all reference the same memberships and enrollments.',
               ]}

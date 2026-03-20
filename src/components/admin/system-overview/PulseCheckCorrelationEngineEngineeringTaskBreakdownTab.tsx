@@ -9,6 +9,7 @@ const STREAM_ROWS = [
   ['Pattern computation', 'Compute Athlete Pattern Models, thresholds, confidence, decay, and contradiction handling.', 'Platform / modeling', 'Near-term'],
   ['Runtime projections', 'Generate Profile-, Nora-, coach-, and protocol-safe Recommendation Projections.', 'Platform + PulseCheck iOS + web', 'After first patterns exist'],
   ['Assessment annotation', 'Extend canonical profile snapshots with `assessmentContextFlag` inside `stateContextAtCapture`.', 'Profile pipeline / platform', 'After pattern confidence exists'],
+  ['Pilot dashboard + governance', 'Build the active-pilot directory, pilot detail dashboard, hypothesis tracking, and pilot-scoped review surfaces rooted in `PilotEnrollment` truth.', 'Web + ops + product', 'In parallel with Milestone 6'],
   ['Ops + research', 'Build operator visibility, export paths, inspection tools, and data-quality monitoring.', 'Web + ops + platform', 'Continuous'],
   ['QA + launch', 'Prove evidence quality, projection honesty, stale handling, milestone annotation correctness, and rollout safety before broad release.', 'QA / ops / product', 'Continuous with formal sign-off at launch'],
 ];
@@ -63,8 +64,12 @@ const M5_ROWS = [
 
 const M6_ROWS = [
   ['Build operator inspection surface', 'Expose evidence density, stale patterns, degraded confidence, projection validity, and milestone flag posture for debugging.', 'Web + ops', 'Needed before broader rollout.'],
+  ['Build active-pilot dashboard directory', 'List active pilots by team and allow drill-in to one pilot dashboard.', 'Web + product', 'Pilot monitoring should start from the pilot index, not from a global engine page.'],
+  ['Materialize pilot-scoped reporting queries', 'Build pilot dashboard reads from `PilotEnrollment`-scoped joins rather than raw team membership or whole-engine aggregates.', 'Platform + web', 'Protects pilot boundaries and denominator honesty.'],
+  ['Add hypothesis tracker storage and review workflow', 'Persist pilot hypotheses, status history, notes, and review timestamps.', 'Web + ops + product', 'Needed for honest pilot governance, not just static docs.'],
   ['Add rebuild and recompute controls', 'Allow safe per-athlete or scoped recompute of evidence, patterns, and projections.', 'Platform + ops', 'Operational resilience.'],
   ['Add quality monitoring', 'Track evidence volume, stale-source rates, contradiction spikes, projection failure rates, and flag coverage.', 'Ops + platform', 'Launch monitoring requirement.'],
+  ['Add pilot adoption telemetry and reporting', 'Track recommendation engagement, follow-through, coach views, and override posture per pilot.', 'Web + platform', 'Adoption is part of pilot success, not optional polish.'],
   ['Add export and research harness', 'Expose canonical exports and validation queries for evidence-to-pattern-to-flag lineage.', 'Platform / research', 'Enables trust and analysis.'],
 ];
 
@@ -85,6 +90,7 @@ const PRODUCTION_GATES = [
   ['Pattern gate', 'Confidence, decay, contradiction, and freshness logic behave correctly across staged evidence maturity levels.', 'Required before athlete-facing projections.'],
   ['Projection gate', 'Athlete, Nora, coach, and protocol projections all point back to supporting patterns and obey messaging guardrails.', 'Required before runtime rollout.'],
   ['Assessment gate', 'Milestone snapshots correctly store `assessmentContextFlag` inside `stateContextAtCapture` and exports remain canonical.', 'Required before trial-aware release.'],
+  ['Pilot-scope gate', 'Pilot dashboard populations resolve from active `PilotEnrollment` truth and exclude non-pilot athletes by default.', 'Required before active pilot monitoring is trusted.'],
   ['Ops gate', 'Inspection tools, rebuild controls, and monitoring exist for evidence, patterns, projections, and flag health.', 'Required before broad release.'],
   ['QA gate', 'Launch-blocking scenarios all pass on pilot data and staged environments.', 'Required before production expansion.'],
 ];
@@ -95,6 +101,7 @@ const FILE_ROWS = [
   ['Engine storage / compute services', 'Own evidence writers, pattern jobs, projection generation, revision handling, and recompute controls.', 'Platform', 'System core.'],
   ['Profile snapshot writer', 'Extend `stateContextAtCapture` with `assessmentContextFlag` at milestone creation time.', 'Platform / profile pipeline', 'Key integration surface.'],
   ['Nora runtime / Profile UI / coach tooling', 'Consume projections and flags with confidence-safe copy and visibility rules.', 'PulseCheck iOS + web', 'Primary consumers.'],
+  ['Pilot dashboard reporting service + UI', 'Own active-pilot listing, pilot detail KPIs, hypothesis workflow, and pilot-scoped athlete drill-down.', 'Web + ops', 'Primary monitoring surface for live pilots.'],
   ['Research and ops tooling', 'Own export views, inspection surfaces, and monitoring dashboards.', 'Web + ops + research', 'Production trust layer.'],
 ];
 
@@ -185,6 +192,8 @@ const PulseCheckCorrelationEngineEngineeringTaskBreakdownTab: React.FC = () => {
         relatedDocs={[
           'Physiology-Cognition Correlation Engine',
           'Correlation Data Model Spec',
+          'Correlation Engine Pilot Dashboard',
+          'Correlation Engine Pilot Ops Runbook',
           'Health Context Pipeline',
           'Profile Snapshot & Export Spec',
           'Oura Cognitive Correlation Spec',

@@ -139,6 +139,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "firebase-tools": "^13.34.0",
     "globals": "^15.12.0",
+    "netlify-cli": "^24.3.0",
     "netlify-plugin-inline-functions-env": "^1.0.9"
   }
 }

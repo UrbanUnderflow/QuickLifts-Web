@@ -1,0 +1,299 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import Head from 'next/head';
+import Link from 'next/link';
+import { Activity, ArrowRight, Building2, FlaskConical, Layers3, RefreshCcw, Users2 } from 'lucide-react';
+import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
+import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
+import type { PilotDashboardDirectoryEntry } from '../../../api/firebase/pulsecheckPilotDashboard/types';
+
+const formatPercent = (value: number) => `${value.toFixed(1)}%`;
+const formatAverage = (value: number) => value.toFixed(1);
+
+const PulseCheckPilotDashboardIndexPage: React.FC = () => {
+  const [entries, setEntries] = useState<PilotDashboardDirectoryEntry[]>([]);
+  const [organizationId, setOrganizationId] = useState('');
+  const [teamId, setTeamId] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async (mode: 'initial' | 'refresh' = 'initial') => {
+    if (mode === 'initial') setLoading(true);
+    if (mode === 'refresh') setRefreshing(true);
+    setError(null);
+    try {
+      const nextEntries = await pulseCheckPilotDashboardService.listActivePilotDirectory();
+      setEntries(nextEntries);
+    } catch (loadError: any) {
+      setError(loadError?.message || 'Failed to load active pilots.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const organizations = useMemo(
+    () =>
+      Array.from(new Map(entries.map((entry) => [entry.organization.id, entry.organization])).values()).sort((left, right) =>
+        left.displayName.localeCompare(right.displayName)
+      ),
+    [entries]
+  );
+
+  const teams = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          entries
+            .filter((entry) => !organizationId || entry.organization.id === organizationId)
+            .map((entry) => [entry.team.id, entry.team])
+        ).values()
+      ).sort((left, right) => left.displayName.localeCompare(right.displayName)),
+    [entries, organizationId]
+  );
+
+  const filteredEntries = useMemo(
+    () =>
+      entries.filter((entry) => {
+        if (organizationId && entry.organization.id !== organizationId) return false;
+        if (teamId && entry.team.id !== teamId) return false;
+        return true;
+      }),
+    [entries, organizationId, teamId]
+  );
+
+  const summary = useMemo(
+    () => ({
+      activePilots: filteredEntries.length,
+      activeAthletes: filteredEntries.reduce((sum, entry) => sum + entry.activeEnrollmentCount, 0),
+      unsupportedHypotheses: filteredEntries.reduce((sum, entry) => sum + entry.unsupportedHypothesisCount, 0),
+      promisingHypotheses: filteredEntries.reduce((sum, entry) => sum + entry.promisingHypothesisCount, 0),
+      highConfidenceHypotheses: filteredEntries.reduce((sum, entry) => sum + entry.highConfidenceHypothesisCount, 0),
+      avgEngineCoverageRate:
+        filteredEntries.length > 0
+          ? filteredEntries.reduce((sum, entry) => sum + entry.engineCoverageRate, 0) / filteredEntries.length
+          : 0,
+      avgStablePatternRate:
+        filteredEntries.length > 0
+          ? filteredEntries.reduce((sum, entry) => sum + entry.stablePatternRate, 0) / filteredEntries.length
+          : 0,
+      avgEvidenceRecordsPerAthlete:
+        filteredEntries.length > 0
+          ? filteredEntries.reduce((sum, entry) => sum + entry.avgEvidenceRecordsPerActiveAthlete, 0) / filteredEntries.length
+          : 0,
+      avgProjectionsPerAthlete:
+        filteredEntries.length > 0
+          ? filteredEntries.reduce((sum, entry) => sum + entry.avgRecommendationProjectionsPerActiveAthlete, 0) /
+            filteredEntries.length
+          : 0,
+    }),
+    [filteredEntries]
+  );
+
+  return (
+    <AdminRouteGuard>
+      <Head>
+        <title>PulseCheck Pilot Dashboard</title>
+      </Head>
+      <div className="min-h-screen bg-[#0b0f17] text-white">
+        <div className="mx-auto max-w-7xl px-6 py-10">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300">PulseCheck Admin</p>
+              <h1 className="text-3xl font-semibold">Active Pilot Dashboard</h1>
+              <p className="max-w-3xl text-sm text-zinc-400">
+                Pilot-native directory for active PulseCheck pilots. Open a pilot to review pilot-scoped athletes,
+                engine health, findings, and manual hypothesis tracking inside the active enrollment boundary.
+              </p>
+            </div>
+            <button
+              onClick={() => void load('refresh')}
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
+            >
+              <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
+            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+              <div className="flex items-center gap-3 text-cyan-300">
+                <FlaskConical className="h-5 w-5" />
+                <span className="text-sm font-medium">Active Pilots</span>
+              </div>
+              <div className="mt-3 text-3xl font-semibold">{summary.activePilots}</div>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+              <div className="flex items-center gap-3 text-emerald-300">
+                <Users2 className="h-5 w-5" />
+                <span className="text-sm font-medium">Active Pilot Athletes</span>
+              </div>
+              <div className="mt-3 text-3xl font-semibold">{summary.activeAthletes}</div>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+              <div className="flex items-center gap-3 text-amber-300">
+                <Activity className="h-5 w-5" />
+                <span className="text-sm font-medium">Unsupported Hypotheses</span>
+              </div>
+              <div className="mt-3 text-3xl font-semibold">{summary.unsupportedHypotheses}</div>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+              <div className="flex items-center gap-3 text-cyan-200">
+                <Layers3 className="h-5 w-5" />
+                <span className="text-sm font-medium">Coverage</span>
+              </div>
+              <div className="mt-3 text-3xl font-semibold">{formatPercent(summary.avgEngineCoverageRate)}</div>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+              <div className="flex items-center gap-3 text-emerald-200">
+                <Users2 className="h-5 w-5" />
+                <span className="text-sm font-medium">Stable Rate</span>
+              </div>
+              <div className="mt-3 text-3xl font-semibold">{formatPercent(summary.avgStablePatternRate)}</div>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+              <div className="flex items-center gap-3 text-violet-200">
+                <Building2 className="h-5 w-5" />
+                <span className="text-sm font-medium">Avg Evidence</span>
+              </div>
+              <div className="mt-3 text-3xl font-semibold">{formatAverage(summary.avgEvidenceRecordsPerAthlete)}</div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Promising Hypotheses</div>
+              <div className="mt-3 text-3xl font-semibold">{summary.promisingHypotheses}</div>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">High Confidence Hypotheses</div>
+              <div className="mt-3 text-3xl font-semibold">{summary.highConfidenceHypotheses}</div>
+            </div>
+            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Avg Projections / Athlete</div>
+              <div className="mt-3 text-3xl font-semibold">{formatAverage(summary.avgProjectionsPerAthlete)}</div>
+            </div>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-3 rounded-3xl border border-white/10 bg-[#11151f] p-4 md:grid-cols-2">
+            <select
+              value={organizationId}
+              onChange={(event) => {
+                setOrganizationId(event.target.value);
+                setTeamId('');
+              }}
+              className="rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+            >
+              <option value="">All organizations</option>
+              {organizations.map((organization) => (
+                <option key={organization.id} value={organization.id}>
+                  {organization.displayName}
+                </option>
+              ))}
+            </select>
+            <select
+              value={teamId}
+              onChange={(event) => setTeamId(event.target.value)}
+              className="rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+            >
+              <option value="">All teams</option>
+              {teams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.displayName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {loading ? (
+            <div className="mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-8 text-sm text-zinc-400">
+              Loading active pilots...
+            </div>
+          ) : error ? (
+            <div className="mt-6 rounded-3xl border border-rose-500/30 bg-rose-500/10 p-8 text-sm text-rose-200">{error}</div>
+          ) : filteredEntries.length === 0 ? (
+            <div className="mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-8 text-sm text-zinc-400">
+              No active pilots match the current filters.
+            </div>
+          ) : (
+            <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
+              {filteredEntries.map((entry) => (
+                <Link
+                  key={entry.pilot.id}
+                  href={`/admin/pulsecheckPilotDashboard/${encodeURIComponent(entry.pilot.id)}`}
+                  className="group rounded-3xl border border-white/10 bg-[#11151f] p-5 transition hover:border-cyan-400/40 hover:bg-[#141b28]"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">{entry.organization.displayName}</p>
+                      <h2 className="mt-2 text-xl font-semibold">{entry.pilot.name}</h2>
+                      <p className="mt-1 text-sm text-zinc-400">{entry.team.displayName}</p>
+                    </div>
+                    <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs uppercase tracking-wide text-cyan-200">
+                      {entry.pilot.studyMode}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-zinc-300">
+                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                      <div className="text-xs uppercase tracking-wide text-zinc-500">Active Athletes</div>
+                      <div className="mt-1 text-lg font-semibold text-white">{entry.activeEnrollmentCount}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                      <div className="text-xs uppercase tracking-wide text-zinc-500">Cohorts</div>
+                      <div className="mt-1 text-lg font-semibold text-white">{entry.activeCohortCount || entry.cohorts.length}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                      <div className="text-xs uppercase tracking-wide text-zinc-500">Hypotheses</div>
+                      <div className="mt-1 text-lg font-semibold text-white">{entry.hypothesisCount}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                      <div className="text-xs uppercase tracking-wide text-zinc-500">Not Supported</div>
+                      <div className="mt-1 text-lg font-semibold text-white">{entry.unsupportedHypothesisCount}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-zinc-300">
+                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                      <div className="text-xs uppercase tracking-wide text-zinc-500">Coverage</div>
+                      <div className="mt-1 text-lg font-semibold text-white">{formatPercent(entry.engineCoverageRate)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                      <div className="text-xs uppercase tracking-wide text-zinc-500">Stable Rate</div>
+                      <div className="mt-1 text-lg font-semibold text-white">{formatPercent(entry.stablePatternRate)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                      <div className="text-xs uppercase tracking-wide text-zinc-500">Avg Evidence</div>
+                      <div className="mt-1 text-lg font-semibold text-white">{formatAverage(entry.avgEvidenceRecordsPerActiveAthlete)}</div>
+                    </div>
+                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
+                      <div className="text-xs uppercase tracking-wide text-zinc-500">Avg Projections</div>
+                      <div className="mt-1 text-lg font-semibold text-white">{formatAverage(entry.avgRecommendationProjectionsPerActiveAthlete)}</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between text-sm text-zinc-400">
+                    <div className="inline-flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      Pilot-native dashboard
+                    </div>
+                    <div className="inline-flex items-center gap-2 text-cyan-200 transition group-hover:translate-x-1">
+                      Open pilot
+                      <ArrowRight className="h-4 w-4" />
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </AdminRouteGuard>
+  );
+};
+
+export default PulseCheckPilotDashboardIndexPage;

@@ -179,7 +179,7 @@ function buildCandidateHints({ routing, assignment }) {
   if (routing === 'trial_only') return ['trial'];
   if (routing === 'protocol_only') return ['protocol'];
   if (routing === 'protocol_then_sim' || routing === 'sim_then_protocol') return ['protocol', 'sim'];
-  if (routing === 'defer_alternate_path') return [];
+  if (routing === 'defer_alternate_path') return ['protocol'];
   if (assignment?.actionType === 'protocol') return ['protocol'];
   if (assignment?.actionType === 'defer') return [];
   return ['sim'];
@@ -204,6 +204,59 @@ function messageMayContainStateSignal(message) {
   if (!t || t.length < 6) return false;
 
   return /\b(sleep|slept|tired|drained|exhausted|fried|scattered|overwhelmed|anxious|anxiety|nervous|rattled|heavy|pressure|stressed|stress|panic|calm|calmer|better|good now|good now|ready|locked in|focused|settled|not up for it|not ready|burned out|burnt out|gassed|flat)\b/.test(t);
+}
+
+function buildFallbackAssignmentPreferenceSignalAnalysis({ message, snapshot, assignment }) {
+  const text = normalizeText(message);
+  if (!text || text.length < 4) {
+    return null;
+  }
+
+  const isDeferredAssessment =
+    String(assignment?.actionType || '') === 'defer'
+    || String(assignment?.status || '') === 'deferred'
+    || String(snapshot?.recommendedRouting || '') === 'defer_alternate_path';
+
+  if (!isDeferredAssessment) {
+    return null;
+  }
+
+  const indicatesPreference = /\b(like|want|prefer|interested in|sounds good|good idea|let'?s do|i'?m into|i am into)\b/.test(text);
+  if (!indicatesPreference) {
+    return null;
+  }
+
+  if (/\b(visuali[sz]ation|visuali[sz]e|imagery|mental rehearsal)\b/.test(text)) {
+    return {
+      shouldCreateEvent: true,
+      confidence: 'medium',
+      summary: 'The athlete explicitly asked for visualization support, which should steer today’s deferred alternate path toward a bounded priming protocol instead of leaving the task unresolved.',
+      supportingEvidence: [
+        'The athlete named visualization as the support lane they want today.',
+        'Today is still in a deferred or alternate-path assessment state.',
+      ],
+      contradictionSummary: 'Latest chat message clarified the athlete’s preferred support modality for today’s alternate-path assignment.',
+      contextTags: [
+        'chat_signal_refresh',
+        'athlete_preference_visualization',
+        'visualization',
+        'pre_training',
+      ],
+      dimensionDeltas: {
+        activation: 0,
+        focusReadiness: 0,
+        emotionalLoad: 0,
+        cognitiveFatigue: 0,
+      },
+      overallReadiness: snapshot?.overallReadiness || 'yellow',
+      recommendedRouting: 'protocol_only',
+      recommendedProtocolClass: 'priming',
+      supportFlag: false,
+      decisionSource: 'fallback_rules',
+    };
+  }
+
+  return null;
 }
 
 function validateDeltaNumber(value) {
@@ -307,11 +360,21 @@ async function getCurrentStateSnapshot(db, userId, todaysNoraAssignment) {
 }
 
 async function deriveConversationSignalAnalysis({ message, recentMessages, snapshot, assignment }) {
-  if (!snapshot || !messageMayContainStateSignal(message)) {
+  if (!snapshot) {
     return null;
   }
 
-  const fallback = buildFallbackConversationSignalAnalysis({ message, snapshot });
+  const stateSignal = messageMayContainStateSignal(message);
+  const preferenceSignal = buildFallbackAssignmentPreferenceSignalAnalysis({ message, snapshot, assignment });
+  if (!stateSignal && !preferenceSignal) {
+    return null;
+  }
+
+  if (preferenceSignal && !stateSignal) {
+    return preferenceSignal;
+  }
+
+  const fallback = buildFallbackConversationSignalAnalysis({ message, snapshot }) || preferenceSignal;
 
   try {
     const raw = await callOpenAiJson({
@@ -518,6 +581,21 @@ function getDailyAssignmentActionLabel(assignment) {
   );
 }
 
+function sourceDateFromUnixSeconds(timestampSeconds) {
+  if (typeof timestampSeconds !== 'number' || !Number.isFinite(timestampSeconds)) {
+    return null;
+  }
+
+  return new Date(timestampSeconds * 1000).toISOString().split('T')[0];
+}
+
+function buildTodaysConversationMessages(conversation, sourceDate) {
+  const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
+  return messages
+    .filter((entry) => sourceDateFromUnixSeconds(entry?.timestamp) === sourceDate)
+    .slice(-20);
+}
+
 async function getTodaysNoraAssignment(db, userId) {
   const todayId = `${userId}_${new Date().toISOString().split('T')[0]}`;
   const snap = await db.collection('pulsecheck-daily-assignments').doc(todayId).get();
@@ -529,6 +607,150 @@ async function getAthleteMentalProgress(db, userId) {
   const snap = await db.collection('athlete-mental-progress').doc(userId).get();
   if (!snap.exists) return null;
   return snap.data() || null;
+}
+
+async function recoverSnapshotFromSavedConversation({
+  db,
+  userId,
+  sourceDate,
+  snapshot,
+  assignment,
+}) {
+  if (!db || !userId || !sourceDate || !snapshot) {
+    return {
+      applied: false,
+      detail: 'Missing recovery context.',
+    };
+  }
+
+  const conversationSnap = await db
+    .collection('conversations')
+    .where('userId', '==', userId)
+    .get();
+
+  const conversations = conversationSnap.docs
+    .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+    .sort((left, right) => (right.updatedAt || 0) - (left.updatedAt || 0));
+
+  const conversation = conversations.find((entry) => buildTodaysConversationMessages(entry, sourceDate).length > 0);
+  if (!conversation) {
+    return {
+      applied: false,
+      detail: 'No saved Nora conversation from today was available.',
+    };
+  }
+
+  const recentMessages = buildTodaysConversationMessages(conversation, sourceDate);
+  const latestUserMessage = [...recentMessages].reverse().find((entry) =>
+    entry?.isFromUser === true
+    && typeof entry?.content === 'string'
+    && entry.content.trim().length > 0
+  );
+
+  if (!latestUserMessage) {
+    return {
+      applied: false,
+      detail: 'No saved athlete message from today was available for recovery.',
+    };
+  }
+
+  const eventSnap = await db
+    .collection(CONVERSATION_SIGNAL_EVENTS_COLLECTION)
+    .where('athleteId', '==', userId)
+    .where('sourceDate', '==', sourceDate)
+    .get();
+  const existingMessageIds = new Set(
+    eventSnap.docs
+      .map((docSnap) => docSnap.data()?.messageId)
+      .filter((value) => typeof value === 'string' && value.trim())
+  );
+
+  if (existingMessageIds.has(latestUserMessage.id)) {
+    return {
+      applied: false,
+      detail: 'Latest saved Nora conversation signal was already applied.',
+      conversationId: conversation.id,
+      messageId: latestUserMessage.id,
+    };
+  }
+
+  const signalAnalysis = await deriveConversationSignalAnalysis({
+    message: latestUserMessage.content,
+    recentMessages,
+    snapshot,
+    assignment,
+  });
+
+  if (!signalAnalysis?.shouldCreateEvent) {
+    return {
+      applied: false,
+      detail: 'Saved Nora conversation did not contain a material assignment signal.',
+      conversationId: conversation.id,
+      messageId: latestUserMessage.id,
+    };
+  }
+
+  const eventRef = db.collection(CONVERSATION_SIGNAL_EVENTS_COLLECTION).doc();
+  const eventAt = Date.now();
+  const refreshedSnapshot = refreshSnapshotFromConversationSignal({
+    snapshot,
+    assignment,
+    signalAnalysis,
+    eventId: eventRef.id,
+    eventAt,
+  });
+
+  if (!refreshedSnapshot) {
+    return {
+      applied: false,
+      detail: 'Conversation recovery could not refresh the current snapshot.',
+      conversationId: conversation.id,
+      messageId: latestUserMessage.id,
+    };
+  }
+
+  const conversationSignalEvent = {
+    id: eventRef.id,
+    athleteId: userId,
+    conversationId: conversation.id,
+    messageId: latestUserMessage.id,
+    sourceDate,
+    sourceAssignmentId: assignment?.id,
+    sourceStateSnapshotId: snapshot.id,
+    supersedesSnapshotId: snapshot.id,
+    confidence: signalAnalysis.confidence || snapshot.confidence || 'medium',
+    inferredDelta: {
+      activationDelta: signalAnalysis.dimensionDeltas?.activation || 0,
+      focusReadinessDelta: signalAnalysis.dimensionDeltas?.focusReadiness || 0,
+      emotionalLoadDelta: signalAnalysis.dimensionDeltas?.emotionalLoad || 0,
+      cognitiveFatigueDelta: signalAnalysis.dimensionDeltas?.cognitiveFatigue || 0,
+      overallReadiness: signalAnalysis.overallReadiness,
+      recommendedRouting: signalAnalysis.recommendedRouting,
+      recommendedProtocolClass: signalAnalysis.recommendedProtocolClass,
+      supportFlag: signalAnalysis.supportFlag,
+      summary: signalAnalysis.summary,
+      contradictionSummary: signalAnalysis.contradictionSummary,
+      supportingEvidence: signalAnalysis.supportingEvidence || [],
+      contextTags: signalAnalysis.contextTags || [],
+    },
+    eventAt,
+    createdAt: eventAt,
+    decisionSource: signalAnalysis.decisionSource || 'fallback_rules',
+  };
+
+  await Promise.all([
+    eventRef.set(stripUndefinedDeep(conversationSignalEvent)),
+    db.collection(SNAPSHOTS_COLLECTION).doc(snapshot.id).set(stripUndefinedDeep(refreshedSnapshot), { merge: true }),
+  ]);
+
+  return {
+    applied: true,
+    detail: 'Recovered today’s assignment context from the saved Nora conversation.',
+    conversationId: conversation.id,
+    messageId: latestUserMessage.id,
+    conversationSignalEvent,
+    stateSnapshot: refreshedSnapshot,
+  };
 }
 
 exports.handler = async (event, context) => {
@@ -746,7 +968,15 @@ exports.handler = async (event, context) => {
           ]);
           currentStateSnapshot = refreshedSnapshot;
 
-          if ((!todaysNoraAssignment || MUTABLE_ASSIGNMENT_STATUSES.has(String(todaysNoraAssignment.status || '')))
+          const assignmentStatus = String(todaysNoraAssignment?.status || '');
+          const assignmentActionType = String(todaysNoraAssignment?.actionType || '');
+          const canRefreshCurrentAssignment =
+            !todaysNoraAssignment
+            || MUTABLE_ASSIGNMENT_STATUSES.has(assignmentStatus)
+            || assignmentStatus === 'deferred'
+            || assignmentActionType === 'defer';
+
+          if (canRefreshCurrentAssignment
             && athleteMentalProgress?.activeProgram) {
             const priorAssignment = todaysNoraAssignment;
             const rematerialized = await pulseCheckSubmissionRuntime.rematerializeAssignmentFromSnapshot({
@@ -910,7 +1140,7 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
         assignmentContextSection += `\n- Source Date: ${todaysNoraAssignment.sourceDate}`;
       }
 
-      assignmentContextSection += `\nRules:\n- Treat this assignment as the source of truth for today's performance task.\n- If the status is deferred, superseded, or coach-adjusted, do not speak as if the original task is still active.\n- If the athlete asks what they should do today, anchor your answer to this assignment before offering broader coaching context.\n- Do not invent a different assignment unless you clearly frame it as separate brainstorming and not the active task.`;
+      assignmentContextSection += `\nRules:\n- Treat this assignment as the source of truth for today's performance task.\n- If the status is deferred, superseded, or coach-adjusted, do not speak as if the original task is still active.\n- If the athlete asks what they should do today, anchor your answer to this assignment before offering broader coaching context.\n- When naming today's rep, use this saved task or a plain-language paraphrase of the same saved task.\n- Do not invent a different assignment unless you clearly frame it as separate brainstorming and not the active task.`;
       if (conversationSignalEvent && !['started', 'completed', 'deferred', 'overridden', 'superseded'].includes(todaysNoraAssignment.status || '')) {
         assignmentContextSection += assignmentRefreshApplied
           ? `\n- A newer chat-derived signal refreshed both the state snapshot and the current mutable assignment. Speak to the updated task, not the stale one.`
@@ -924,7 +1154,7 @@ Don'ts ▸ Never repeat a question they already answered. Never apologize unless
         humanizeAssignmentField(activeProgram.sessionType) ||
         'next best rep';
 
-      assignmentContextSection = `\n\n## Current Program Recommendation (No Daily Task Materialized Yet):\n- Recommended Focus: ${recommendedAction}\n- Rationale: ${activeProgram.rationale || 'No rationale saved.'}\nRules:\n- This is recommendation context, not a confirmed assigned task.\n- If the athlete asks what is assigned today, be honest that no daily Nora task is materialized yet.`;
+      assignmentContextSection = `\n\n## Current Program Recommendation (No Daily Task Materialized Yet):\n- Recommended Focus: ${recommendedAction}\n- Rationale: ${activeProgram.rationale || 'No rationale saved.'}\nRules:\n- This is recommendation context, not a confirmed assigned task.\n- If the athlete asks what is assigned today, be honest that no daily Nora task is materialized yet.\n- Do not invent a branded drill, sim, or protocol name that is not present in the runtime recommendation context.`;
     }
     const snapshotContextSection = buildSnapshotContextSection(currentStateSnapshot, conversationSignalEvent);
     
@@ -1969,3 +2199,11 @@ async function notifyCoachForEscalation(db, escalationId, userId, tier) {
 
   return { success: true, coachId: targetCoachId };
 }
+
+exports.runtimeHelpers = {
+  getTodaysNoraAssignment,
+  getCurrentStateSnapshot,
+  deriveConversationSignalAnalysis,
+  refreshSnapshotFromConversationSignal,
+  recoverSnapshotFromSavedConversation,
+};

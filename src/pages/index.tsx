@@ -113,7 +113,7 @@ const MarketingContent: React.FC<{
       />
 
       {/* Header - Sticky Navigation */}
-      <header className="fixed top-0 left-0 right-0 z-[100] bg-zinc-950 border-b border-zinc-800">
+      <header className={`fixed top-0 left-0 right-0 z-[100] bg-zinc-950 border-b border-zinc-800 ${isSignInModalOpen ? 'hidden' : ''}`}>
         <div className="max-w-7xl mx-auto px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 sm:h-20">
             {/* Logo */}

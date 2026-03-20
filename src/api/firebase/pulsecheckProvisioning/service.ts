@@ -443,6 +443,30 @@ export const pulseCheckProvisioningService = {
     return snapshot.docs.map((docSnap) => toPilotCohort(docSnap.id, docSnap.data() as Record<string, any>));
   },
 
+  async listPilotEnrollments(): Promise<PulseCheckPilotEnrollment[]> {
+    const snapshot = await getDocs(collection(db, PILOT_ENROLLMENTS_COLLECTION));
+    return snapshot.docs
+      .map((docSnap) => toPilotEnrollment(docSnap.id, docSnap.data() as Record<string, any>))
+      .sort((left, right) => {
+        const leftTime = toJsDate(left.createdAt)?.getTime() || 0;
+        const rightTime = toJsDate(right.createdAt)?.getTime() || 0;
+        return rightTime - leftTime;
+      });
+  },
+
+  async listPilotEnrollmentsByPilot(pilotId: string): Promise<PulseCheckPilotEnrollment[]> {
+    const snapshot = await getDocs(
+      query(collection(db, PILOT_ENROLLMENTS_COLLECTION), where('pilotId', '==', normalizeString(pilotId)))
+    );
+    return snapshot.docs
+      .map((docSnap) => toPilotEnrollment(docSnap.id, docSnap.data() as Record<string, any>))
+      .sort((left, right) => {
+        const leftTime = toJsDate(left.createdAt)?.getTime() || 0;
+        const rightTime = toJsDate(right.createdAt)?.getTime() || 0;
+        return rightTime - leftTime;
+      });
+  },
+
   async listClinicianProfiles(): Promise<PulseCheckAuntEdnaClinicianProfile[]> {
     const snapshot = await getDocs(query(collection(db, CLINICIAN_PROFILES_COLLECTION), orderBy('displayName', 'asc')));
     return snapshot.docs.map((docSnap) => toClinicianProfile(docSnap.id, docSnap.data() as Record<string, any>));

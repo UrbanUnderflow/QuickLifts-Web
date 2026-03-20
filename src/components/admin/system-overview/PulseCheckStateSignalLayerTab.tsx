@@ -108,8 +108,8 @@ const PulseCheckStateSignalLayerTab: React.FC = () => {
       <DocHeader
         eyebrow="Pulse Check Runtime"
         title="State Signal Layer"
-        version="Version 1.4 | March 17, 2026"
-        summary="Foundation-layer artifact for the shared perception model. This page now defines the raw-signal intake, AI-enriched state interpretation, confidence logic, freshness defaults, and the persisted snapshot that downstream runtime systems should consume before Nora assignment planning."
+        version="Version 1.5 | March 20, 2026"
+        summary="Foundation-layer artifact for the shared perception model. This page now defines the raw-signal intake, AI-enriched state interpretation, confidence logic, freshness defaults, and the persisted snapshot that downstream runtime systems should consume before Nora assignment planning. Fresh same-day self-report leads current-state readiness; the longer-term profile can bias interpretation, but it must not override a fresh check-in."
         highlights={[
           {
             title: 'One Canonical State Model',
@@ -156,6 +156,7 @@ const PulseCheckStateSignalLayerTab: React.FC = () => {
               <BulletList
                 items={[
                   'State Signal informs routing; it does not itself diagnose or escalate.',
+                  'Fresh same-day self-report leads current-state readiness; the longer-term profile can bias the estimate, but it does not overrule a new check-in.',
                   'Preserve raw source records separately from the AI-enriched interpretation.',
                   'Use AI to verify contradictions and flesh out the state, not to bypass policy or invent unsafe outcomes.',
                   'Keep decisions explainable to staff and athletes with evidence and provenance.',
@@ -220,6 +221,7 @@ const PulseCheckStateSignalLayerTab: React.FC = () => {
                   'High confidence: multiple aligned signals or strong explicit self-report with support.',
                   'Medium confidence: one strong signal plus one weaker supporting signal.',
                   'Low confidence: sparse, stale, or contradictory information.',
+                  'Contradictions should reduce confidence before the planner takes an aggressive or high-cost path.',
                   'Low confidence should bias toward a brief check-in or conservative assignment.',
                 ]}
               />
@@ -234,7 +236,7 @@ const PulseCheckStateSignalLayerTab: React.FC = () => {
           rows={[
             ['Green', 'Stable, ready, and fit for useful work.', 'Go straight to Sim or Trial'],
             ['Yellow', 'Mild anxiety, scatter, flatness, or instability that may reduce rep quality.', 'Short Protocol first, then Sim'],
-            ['Red', 'High activation, emotional spillover, strong fatigue, or poor readiness for a useful rep.', 'Regulate / recover first, or defer Sim / Trial'],
+            ['Red', 'High activation, emotional spillover, strong fatigue, or poor readiness for a useful rep.', 'Protocol-first by default; defer only when the state is severe enough that a normal rep would be inappropriate'],
           ]}
         />
       </SectionBlock>

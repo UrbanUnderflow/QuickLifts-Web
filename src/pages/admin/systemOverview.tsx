@@ -69,6 +69,10 @@ import PulseCheckPhysiologyCognitionCorrelationEngineTab from "../../components/
 import PulseCheckCorrelationEngineContractLockTab from "../../components/admin/system-overview/PulseCheckCorrelationEngineContractLockTab";
 import PulseCheckCorrelationDataModelSpecTab from "../../components/admin/system-overview/PulseCheckCorrelationDataModelSpecTab";
 import PulseCheckCorrelationEngineEngineeringTaskBreakdownTab from "../../components/admin/system-overview/PulseCheckCorrelationEngineEngineeringTaskBreakdownTab";
+import PulseCheckCorrelationEnginePilotDashboardTab from "../../components/admin/system-overview/PulseCheckCorrelationEnginePilotDashboardTab";
+import PulseCheckCorrelationEnginePilotDashboardAddendumTab from "../../components/admin/system-overview/PulseCheckCorrelationEnginePilotDashboardAddendumTab";
+import PulseCheckCorrelationEnginePilotOpsRunbookTab from "../../components/admin/system-overview/PulseCheckCorrelationEnginePilotOpsRunbookTab";
+import PulseCheckCorrelationEnginePilotResearchReadoutTab from "../../components/admin/system-overview/PulseCheckCorrelationEnginePilotResearchReadoutTab";
 import PulseCheckOuraIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckOuraIntegrationStrategyTab";
 import PulseCheckOuraCognitiveCorrelationSpecTab from "../../components/admin/system-overview/PulseCheckOuraCognitiveCorrelationSpecTab";
 import PulseCheckDeviceIntegrationStrategyTab from "../../components/admin/system-overview/PulseCheckDeviceIntegrationStrategyTab";
@@ -194,6 +198,10 @@ const SYSTEM_TABS: SystemTab[] = [
       "pulsecheck-correlation-engine-contract-lock",
       "pulsecheck-correlation-data-model-spec",
       "pulsecheck-correlation-engine-engineering-task-breakdown",
+      "pulsecheck-correlation-engine-pilot-dashboard",
+      "pulsecheck-correlation-engine-pilot-dashboard-addendum",
+      "pulsecheck-correlation-engine-pilot-ops-runbook",
+      "pulsecheck-correlation-engine-pilot-research-readout",
       "pulsecheck-oura-integration-strategy",
       "pulsecheck-oura-cognitive-correlation-spec",
       "pulsecheck-device-integration-strategy",
@@ -1314,6 +1322,18 @@ const SystemOverviewPage: React.FC = () => {
 
       case "pulsecheck-correlation-engine-engineering-task-breakdown":
         return <PulseCheckCorrelationEngineEngineeringTaskBreakdownTab />;
+
+      case "pulsecheck-correlation-engine-pilot-dashboard":
+        return <PulseCheckCorrelationEnginePilotDashboardTab />;
+
+      case "pulsecheck-correlation-engine-pilot-dashboard-addendum":
+        return <PulseCheckCorrelationEnginePilotDashboardAddendumTab />;
+
+      case "pulsecheck-correlation-engine-pilot-ops-runbook":
+        return <PulseCheckCorrelationEnginePilotOpsRunbookTab />;
+
+      case "pulsecheck-correlation-engine-pilot-research-readout":
+        return <PulseCheckCorrelationEnginePilotResearchReadoutTab />;
 
       case "pulsecheck-oura-integration-strategy":
         return <PulseCheckOuraIntegrationStrategyTab />;

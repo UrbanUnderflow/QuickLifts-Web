@@ -9,6 +9,7 @@ const DESIGN_GOAL_ROWS = [
   ['One daily execution artifact', 'After check-in, the orchestrator writes one Nora daily assignment that Today, Nora chat, and Mental Training all reference by id.'],
   ['Bounded assignment choice', 'Nora should decide from the system’s registered simulations and protocols, not invent freeform tasks at runtime.'],
   ['Bidirectional state updates', 'Chat, rep starts, completions, and coach overrides can all refresh the state snapshot rather than living as disconnected events.'],
+  ['Short-horizon posture memory', 'Recent assignment outcomes, especially a fresh Tier 0 defer, should bias today’s routing so Nora does not repeat low-information defers by default.'],
 ];
 
 const CONTRACT_ROWS = [
@@ -28,7 +29,7 @@ const FLOW_STEPS = [
   },
   {
     title: 'Build Raw Snapshot',
-    body: 'The State Signal Layer reads the new self-report plus fresh context, performance, biometrics, and recent conversation signals, then writes one raw shared state snapshot with provenance.',
+    body: 'The State Signal Layer reads the new self-report plus fresh context, performance, biometrics, recent conversation signals, and short-horizon assignment history, then writes one raw shared state snapshot with provenance.',
     owner: 'State snapshot builder',
   },
   {

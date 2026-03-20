@@ -9,7 +9,7 @@ const INPUT_ROWS = [
   ['Program intent', 'Whether today is a probe, training rep, pressure exposure, reassessment, or competition-day support moment.', 'Yes'],
   ['Athlete profile', 'Longer-term strengths, weaknesses, modifier sensitivities, fatigability, and protocol responsiveness.', 'Yes'],
   ['Current active program and daily assignment state', 'Whether today already has an unstarted, started, completed, or coach-overridden Nora task.', 'Yes'],
-  ['Recent session history', 'Recent exposures and whether family, duration, or difficulty should vary.', 'Yes'],
+  ['Recent session history', 'Recent exposures plus recent assignment outcomes, including whether Nora has already deferred the last day and should avoid getting stuck there again.', 'Yes'],
   ['Schedule / context window', 'Pre-game, post-trial, travel, return-to-play, high-stakes week.', 'Yes'],
   ['Eligible assignment candidate set', 'The bounded list of sims, protocols, or trials that are actually valid for this athlete, date, and program state.', 'Yes'],
   ['Coach assignment / manual constraints', 'Cases where a coach has locked or requested a specific family, duration, or trial window.', 'When present'],
@@ -19,11 +19,12 @@ const PRECEDENCE = [
   ['1. Safety overrides', 'Tier 2 and Tier 3 suppress normal training flow. Tier 1 introduces coach-aware caution.'],
   ['2. Candidate-set and coach constraints', 'Before Nora plans anything, the system narrows choices to the valid protocol / sim / trial candidates for this athlete and date.'],
   ['3. Support visibility', 'Persistent-red patterns can reduce aggressiveness even without clinical escalation.'],
-  ['4. State-fit', 'Green / Yellow / Red plus the enriched dimension pattern decides whether the athlete should regulate, prime, recover, train, assess, or defer.'],
-  ['5. Program intent', 'Determines whether the day is a probe, skill rep, pressure exposure, reassessment, or support moment.'],
-  ['6. AI planner choice within bounds', 'The model recommends the best-fit option from the bounded candidate set rather than following a hard-coded family matrix.'],
-  ['7. Progression and dose', 'Set variant, difficulty, modifier intensity, and duration.'],
-  ['8. Preference and presentation', 'Shape athlete-facing framing without changing the core decision.'],
+  ['4. Fresh self-report and assignment-history posture', 'Today’s explicit signal leads, and recent Tier 0 defers can bias Nora away from repeating the same defer posture without new evidence.'],
+  ['5. State-fit', 'Green / Yellow / Red plus the enriched dimension pattern decides whether the athlete should regulate, prime, recover, train, assess, or defer.'],
+  ['6. Program intent', 'Determines whether the day is a probe, skill rep, pressure exposure, reassessment, or support moment.'],
+  ['7. AI planner choice within bounds', 'The model recommends the best-fit option from the bounded candidate set rather than following a hard-coded family matrix.'],
+  ['8. Progression and dose', 'Set variant, difficulty, modifier intensity, and duration.'],
+  ['9. Preference and presentation', 'Shape athlete-facing framing without changing the core decision.'],
 ];
 
 const OUTCOME_CARDS = [
@@ -38,7 +39,7 @@ const OUTCOME_CARDS = [
 const ROUTING_ROWS = [
   ['Green', 'Tier 0', 'Sim only or Trial only', 'Proceed with normal assignment logic.'],
   ['Yellow', 'Tier 0', 'Protocol -> Sim', 'Support first; do not overreact.'],
-  ['Red', 'Tier 0', 'Protocol only or Defer / alternate path', 'State bottleneck without clinical escalation.'],
+  ['Red', 'Tier 0', 'Protocol only by default; Defer / alternate path only for severe or high-cost cases', 'State bottleneck without clinical escalation should usually still produce a bounded protocol path.'],
   ['Any', 'Tier 1', 'Coach-aware routing; reduce intensity if needed', 'Protocols may be used, but coach review is active.'],
   ['Any', 'Tier 2', 'Pause normal programming', 'Consent-based escalation is primary.'],
   ['Any', 'Tier 3', 'Suspend training flow immediately', 'Safety mode overrides all normal assignments.'],
@@ -46,6 +47,7 @@ const ROUTING_ROWS = [
 
 const SUPPORT_AND_STALE_ROWS = [
   ['Persistent red active, Tier 0', 'Reduce aggressiveness, prefer Protocol-first or lighter-load paths, and suppress high-pressure exposure by default.'],
+  ['Consecutive deferred days without safety escalation', 'Re-read a fresh self-report, downweight stale profile drag, and prefer a bounded protocol path before deferring again.'],
   ['Snapshot stale at assignment time', 'Request a short check-in before assigning a non-trivial Protocol, Sim, or Trial.'],
   ['Repeat same-day check-in with unstarted task', 'Assignment Orchestrator may refresh the same daily task in place instead of creating duplicates.'],
   ['Repeat same-day check-in after start or coach override', 'Do not overwrite the existing daily task automatically.'],
@@ -69,8 +71,8 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
       <DocHeader
         eyebrow="Pulse Check Runtime"
         title="Nora Assignment Rules"
-        version="Version 1.3 | March 17, 2026"
-        summary="Execution-layer artifact for how Nora selects the next athlete action. This page now formalizes an AI-led planner that reads the enriched state snapshot, then chooses from a bounded candidate set of valid sims, protocols, and trials after safety and policy constraints are applied."
+        version="Version 1.4 | March 20, 2026"
+        summary="Execution-layer artifact for how Nora selects the next athlete action. This page now formalizes an AI-led planner that reads the enriched state snapshot, then chooses from a bounded candidate set of valid sims, protocols, and trials after safety and policy constraints are applied. Red days are protocol-first by default at Tier 0; defer is reserved for severe or high-cost situations rather than ordinary low-readiness days."
         highlights={[
           {
             title: 'State Is a Routing Input',
@@ -203,7 +205,7 @@ const PulseCheckNoraAssignmentRulesTab: React.FC = () => {
         <CardGrid columns="md:grid-cols-2">
           <InfoCard
             title="Why Underlying Dimensions Still Matter"
-            body="Overall Readiness is only the first routing branch. Nora should preserve the underlying state pattern because an anxious athlete and a cognitively depleted athlete may both appear Yellow, but they should not receive the same next action."
+            body="Overall Readiness is only the first routing branch. Nora should preserve the underlying state pattern because an anxious athlete and a cognitively depleted athlete may both appear Yellow, but they should not receive the same next action. The athlete's fresh same-day self-report should anchor that branch before longer-term profile modifiers bias it."
           />
           <InfoCard
             title="Presentation Rule"
