@@ -222,3 +222,65 @@ test('recovers today conversation context when message timestamps are stored as 
   assert.ok(writes.event, 'expected conversation signal event write');
   assert.ok(writes.snapshot, 'expected refreshed snapshot write');
 });
+
+test('recovers from the most recent material user message instead of only the latest neutral reply', async () => {
+  const { recoverSnapshotFromSavedConversation } = loadRuntimeHelpers();
+  const sourceDate = '2026-03-20';
+  const snapshot = {
+    id: 'athlete-1_2026-03-20',
+    sourceDate,
+    overallReadiness: 'green',
+    confidence: 'medium',
+    recommendedRouting: 'defer_alternate_path',
+    recommendedProtocolClass: 'priming',
+    stateDimensions: {
+      activation: 50,
+      focusReadiness: 50,
+      emotionalLoad: 40,
+      cognitiveFatigue: 30,
+    },
+  };
+  const assignment = {
+    id: 'athlete-1_2026-03-20',
+    sourceDate,
+    actionType: 'defer',
+    status: 'deferred',
+  };
+  const { db, writes } = createConversationRecoveryDb({
+    conversations: [
+      {
+        id: 'conversation-today',
+        updatedAt: 1774028880,
+        messages: [
+          {
+            id: 'message-material',
+            content: 'I feel anxious and scattered right now.',
+            isFromUser: true,
+            timestamp: 1774022400,
+          },
+          {
+            id: 'message-neutral',
+            content: 'okay',
+            isFromUser: true,
+            timestamp: 1774022460,
+          },
+        ],
+      },
+    ],
+  });
+
+  const result = await recoverSnapshotFromSavedConversation({
+    db,
+    userId: 'athlete-1',
+    sourceDate,
+    snapshot,
+    assignment,
+  });
+
+  assert.equal(result.applied, true);
+  assert.equal(result.conversationId, 'conversation-today');
+  assert.equal(result.messageId, 'message-material');
+  assert.ok(writes.event, 'expected conversation signal event write');
+  assert.equal(writes.event.messageId, 'message-material');
+  assert.ok(writes.snapshot, 'expected refreshed snapshot write');
+});

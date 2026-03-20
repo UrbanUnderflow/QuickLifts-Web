@@ -708,23 +708,46 @@ async function recoverSnapshotFromSavedConversation({
       .filter((value) => typeof value === 'string' && value.trim())
   );
 
-  if (existingMessageIds.has(latestUserMessage.id)) {
-    return {
-      applied: false,
-      detail: 'Latest saved Nora conversation signal was already applied.',
-      conversationId: conversation.id,
-      messageId: latestUserMessage.id,
-    };
+  const candidateUserMessages = [...recentMessages]
+    .reverse()
+    .filter((entry) =>
+      entry?.isFromUser === true
+      && typeof entry?.content === 'string'
+      && entry.content.trim().length > 0
+    );
+
+  let selectedUserMessage = null;
+  let signalAnalysis = null;
+
+  for (const candidateUserMessage of candidateUserMessages) {
+    if (existingMessageIds.has(candidateUserMessage.id)) {
+      continue;
+    }
+
+    const candidateSignalAnalysis = await deriveConversationSignalAnalysis({
+      message: candidateUserMessage.content,
+      recentMessages,
+      snapshot,
+      assignment,
+    });
+
+    if (candidateSignalAnalysis?.shouldCreateEvent) {
+      selectedUserMessage = candidateUserMessage;
+      signalAnalysis = candidateSignalAnalysis;
+      break;
+    }
   }
 
-  const signalAnalysis = await deriveConversationSignalAnalysis({
-    message: latestUserMessage.content,
-    recentMessages,
-    snapshot,
-    assignment,
-  });
-
   if (!signalAnalysis?.shouldCreateEvent) {
+    if (existingMessageIds.has(latestUserMessage.id)) {
+      return {
+        applied: false,
+        detail: 'Latest saved Nora conversation signal was already applied.',
+        conversationId: conversation.id,
+        messageId: latestUserMessage.id,
+      };
+    }
+
     return {
       applied: false,
       detail: 'Saved Nora conversation did not contain a material assignment signal.',
@@ -756,7 +779,7 @@ async function recoverSnapshotFromSavedConversation({
     id: eventRef.id,
     athleteId: userId,
     conversationId: conversation.id,
-    messageId: latestUserMessage.id,
+    messageId: selectedUserMessage.id,
     sourceDate,
     sourceAssignmentId: assignment?.id,
     sourceStateSnapshotId: snapshot.id,
@@ -790,7 +813,7 @@ async function recoverSnapshotFromSavedConversation({
     applied: true,
     detail: 'Recovered today’s assignment context from the saved Nora conversation.',
     conversationId: conversation.id,
-    messageId: latestUserMessage.id,
+    messageId: selectedUserMessage.id,
     conversationSignalEvent,
     stateSnapshot: refreshedSnapshot,
   };

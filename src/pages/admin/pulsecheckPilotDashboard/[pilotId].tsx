@@ -12,6 +12,7 @@ import {
   ExternalLink,
   FileText,
   FlaskConical,
+  MonitorPlay,
   RefreshCcw,
   Save,
   ShieldCheck,
@@ -93,6 +94,7 @@ const toScopedPercent = (numerator: number, denominator: number) => (denominator
 const normalizeInvitePreviewValue = (value: string) => value.replace(/\r\n/g, '\n').trim();
 const toDateValue = (value: any): Date | null => {
   if (!value) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return new Date(value);
   if (value instanceof Date) return value;
   if (typeof value?.toDate === 'function') return value.toDate();
   return null;
@@ -276,6 +278,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [resettingInviteConfig, setResettingInviteConfig] = useState(false);
   const [seedingDefaults, setSeedingDefaults] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
+  const [demoModeEnabled, setDemoModeEnabled] = useState(false);
   const [generatingResearchReadout, setGeneratingResearchReadout] = useState(false);
   const [savingResearchReadoutReview, setSavingResearchReadoutReview] = useState(false);
   const [readoutDateWindowStart, setReadoutDateWindowStart] = useState('');
@@ -295,10 +298,18 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     if (mode === 'refresh') setRefreshing(true);
     setError(null);
     try {
+      const isDemoMode = pulseCheckPilotDashboardService.isDemoModeEnabled();
+      setDemoModeEnabled(isDemoMode);
+      if (isDemoMode && pilotId !== pulseCheckPilotDashboardService.getDemoPilotId()) {
+        await router.replace(`/admin/pulsecheckPilotDashboard/${encodeURIComponent(pulseCheckPilotDashboardService.getDemoPilotId())}`);
+        return;
+      }
       const nextDetail = await pulseCheckPilotDashboardService.getPilotDashboardDetail(pilotId);
       setDetail(nextDetail);
       if (nextDetail?.team.id) {
-        const nextInviteLinks = await pulseCheckProvisioningService.listTeamInviteLinks(nextDetail.team.id);
+        const nextInviteLinks = pulseCheckPilotDashboardService.isDemoModeEnabled()
+          ? pulseCheckPilotDashboardService.listDemoInviteLinks()
+          : await pulseCheckProvisioningService.listTeamInviteLinks(nextDetail.team.id);
         setInviteLinks(nextInviteLinks);
       } else {
         setInviteLinks([]);
@@ -326,6 +337,22 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   useEffect(() => {
     void load();
   }, [pilotId]);
+
+  const toggleDemoMode = async () => {
+    const nextValue = !pulseCheckPilotDashboardService.isDemoModeEnabled();
+    pulseCheckPilotDashboardService.setDemoModeEnabled(nextValue);
+    if (nextValue) {
+      pulseCheckPilotDashboardService.resetDemoModeData();
+      await router.push(`/admin/pulsecheckPilotDashboard/${encodeURIComponent(pulseCheckPilotDashboardService.getDemoPilotId())}`);
+      return;
+    }
+    await router.push('/admin/pulsecheckPilotDashboard');
+  };
+
+  const resetDemoModeData = async () => {
+    pulseCheckPilotDashboardService.resetDemoModeData();
+    await load('refresh');
+  };
 
   useEffect(() => {
     if (!detail) return;
@@ -682,6 +709,28 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     setCreatingInvite(true);
     setPageMessage(null);
     try {
+      if (demoModeEnabled) {
+        const createdInvite = pulseCheckPilotDashboardService.createDemoInviteLink({
+            pilotId: detail.pilot.id,
+            pilotName: detail.pilot.name,
+            cohortId: selectedCohort?.id || '',
+            cohortName: selectedCohort?.name || '',
+            createdByUserId: currentUser?.id || '',
+            createdByEmail: currentUser?.email || '',
+          });
+        setInviteLinks(pulseCheckPilotDashboardService.listDemoInviteLinks());
+        if (createdInvite?.activationUrl) {
+          await navigator.clipboard.writeText(createdInvite.activationUrl);
+        }
+        setPageMessage({
+          type: 'success',
+          text: selectedCohort
+            ? `Pilot invite for ${selectedCohort.name} was created and copied.`
+            : 'Pilot athlete invite was created and copied.',
+        });
+        return;
+      }
+
       const inviteId = await pulseCheckProvisioningService.createTeamAccessInviteLink({
         organizationId: detail.organization.id,
         teamId: detail.team.id,
@@ -921,14 +970,44 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => void load('refresh')}
-              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
-            >
-              <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {demoModeEnabled ? (
+                <button
+                  onClick={() => void resetDemoModeData()}
+                  data-testid="pilot-dashboard-detail-demo-reset"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100 transition hover:bg-amber-400/15"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  Reset Demo Data
+                </button>
+              ) : null}
+              <button
+                onClick={() => void toggleDemoMode()}
+                data-testid="pilot-dashboard-detail-demo-toggle"
+                className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition ${
+                  demoModeEnabled
+                    ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/15'
+                    : 'border-cyan-400/30 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15'
+                }`}
+              >
+                <MonitorPlay className="h-4 w-4" />
+                {demoModeEnabled ? 'Exit Demo Mode' : 'Switch To Demo Mode'}
+              </button>
+              <button
+                onClick={() => void load('refresh')}
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
+              >
+                <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
+
+          {demoModeEnabled ? (
+            <div data-testid="pilot-dashboard-detail-demo-banner" className="mt-6 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
+              Demo mode is on. This pilot dashboard is using safe local mock data, mock athlete enrollments, and mock AI research briefs so you can demo and QA without touching live pilot records.
+            </div>
+          ) : null}
 
           {loading ? (
             <div className="mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-8 text-sm text-zinc-400">Loading pilot dashboard...</div>
