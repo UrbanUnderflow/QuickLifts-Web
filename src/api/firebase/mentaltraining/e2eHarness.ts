@@ -18,13 +18,17 @@ import {
 import type { Firestore } from 'firebase/firestore';
 
 import {
+  ATHLETE_PHYSIOLOGY_COGNITION_COLLECTION,
+  ATHLETE_PATTERN_MODELS_SUBCOLLECTION,
   ATHLETE_MENTAL_PROGRESS_COLLECTION,
+  CORRELATION_EVIDENCE_RECORDS_SUBCOLLECTION,
   PULSECHECK_ASSIGNMENT_EVENTS_COLLECTION,
   PULSECHECK_ASSIGNMENT_CANDIDATE_SETS_COLLECTION,
   PULSECHECK_DAILY_ASSIGNMENTS_COLLECTION,
   PULSECHECK_PROTOCOLS_COLLECTION,
   PULSECHECK_PROTOCOL_RESPONSIVENESS_PROFILES_COLLECTION,
   PULSECHECK_STATE_SNAPSHOTS_COLLECTION,
+  RECOMMENDATION_PROJECTIONS_SUBCOLLECTION,
   SIM_CHECKINS_ROOT,
   SIM_COMPLETIONS_ROOT,
   SIM_MODULES_COLLECTION,
@@ -56,8 +60,13 @@ const COACH_REFERRALS_COLLECTION = 'coachReferrals';
 const COACH_NOTIFICATIONS_COLLECTION = 'coach-notifications';
 const PULSECHECK_ORGANIZATIONS_COLLECTION = 'pulsecheck-organizations';
 const PULSECHECK_TEAMS_COLLECTION = 'pulsecheck-teams';
+const PULSECHECK_PILOTS_COLLECTION = 'pulsecheck-pilots';
+const PULSECHECK_PILOT_COHORTS_COLLECTION = 'pulsecheck-pilot-cohorts';
+const PULSECHECK_PILOT_ENROLLMENTS_COLLECTION = 'pulsecheck-pilot-enrollments';
 const PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION = 'pulsecheck-team-memberships';
 const PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION = 'pulsecheck-organization-memberships';
+const PULSECHECK_PILOT_HYPOTHESES_COLLECTION = 'pulsecheck-pilot-hypotheses';
+const PULSECHECK_PILOT_RESEARCH_READOUTS_COLLECTION = 'pulsecheck-pilot-research-readouts';
 const PULSECHECK_LEGACY_MIGRATIONS_COLLECTION = 'pulsecheck-legacy-roster-migrations';
 const REFERRAL_CODE_LOOKUP_COLLECTION = 'referralCodeLookup';
 
@@ -149,6 +158,44 @@ function buildAthleteJourneyFixtureIds(namespace: string) {
     organizationId: workspace.organizationId,
     teamId: workspace.teamId,
     coachAthleteLinkId: `${prefix}coach-athlete-link`,
+  };
+}
+
+function buildPilotDashboardFixtureIds(namespace: string) {
+  const workspace = buildAdminWorkspaceFixtureIds(`${namespace}-pilot-dashboard`);
+  const prefix = buildPrefix(namespace);
+  const label = sanitizeNamespace(namespace).replace(/-/g, ' ');
+  const pilotId = `${prefix}pilot`;
+  const cohortAlphaId = `${prefix}cohort-alpha`;
+  const cohortBetaId = `${prefix}cohort-beta`;
+  const athleteOneId = `${prefix}athlete-a`;
+  const athleteTwoId = `${prefix}athlete-b`;
+  const athleteThreeId = `${prefix}athlete-c`;
+
+  return {
+    namespace: sanitizeNamespace(namespace),
+    organizationId: workspace.organizationId,
+    teamId: workspace.teamId,
+    organizationName: workspace.organizationName,
+    teamName: workspace.teamName,
+    pilotId,
+    pilotName: `E2E Pilot Dashboard ${label}`,
+    pilotObjective: 'Validate whether the correlation engine is learning enough inside the active pilot population to support disciplined pilot review.',
+    cohortAlphaId,
+    cohortBetaId,
+    cohortAlphaName: `Alpha Cohort ${label}`,
+    cohortBetaName: `Beta Cohort ${label}`,
+    athleteOneId,
+    athleteTwoId,
+    athleteThreeId,
+    athleteOneEmail: `${prefix}athlete-a@pulse.test`,
+    athleteTwoEmail: `${prefix}athlete-b@pulse.test`,
+    athleteThreeEmail: `${prefix}athlete-c@pulse.test`,
+    athleteOneName: `E2E Pilot Athlete A ${label}`,
+    athleteTwoName: `E2E Pilot Athlete B ${label}`,
+    athleteThreeName: `E2E Pilot Athlete C ${label}`,
+    hypothesisIds: ['h1', 'h2', 'h3'].map((suffix) => `${prefix}${suffix}`),
+    readoutIds: ['readout-1', 'readout-2'].map((suffix) => `${prefix}${suffix}`),
   };
 }
 
@@ -573,6 +620,661 @@ async function seedPulseCheckAdminWorkspaceFixture(
     ...fixture,
     adminUserId,
     adminEmail: normalizedEmail,
+  };
+}
+
+async function seedPulseCheckPilotDashboardFixture(
+  db: Firestore,
+  input: {
+    namespace: string;
+    adminUserId: string;
+    adminEmail: string;
+  }
+) {
+  const fixture = buildPilotDashboardFixtureIds(input.namespace);
+  const now = new Date();
+  const nowMs = now.getTime();
+  const pilotStart = new Date(nowMs - 1000 * 60 * 60 * 24 * 14);
+  const pilotEnd = new Date(nowMs + 1000 * 60 * 60 * 24 * 21);
+  const olderGeneratedAt = new Date(nowMs - 1000 * 60 * 60 * 24 * 4);
+  const latestGeneratedAt = new Date(nowMs - 1000 * 60 * 60 * 3);
+  const latestReviewedAt = new Date(nowMs - 1000 * 60 * 45);
+
+  await cleanupPulseCheckPilotDashboardFixture(db, input).catch(() => undefined);
+  await seedPulseCheckAdminWorkspaceFixture(db, `${input.namespace}-pilot-dashboard`, input.adminUserId, input.adminEmail);
+
+  const athleteRecords = [
+    {
+      userId: fixture.athleteOneId,
+      email: fixture.athleteOneEmail,
+      displayName: fixture.athleteOneName,
+      cohortId: fixture.cohortAlphaId,
+      cohortName: fixture.cohortAlphaName,
+      evidenceCount: 4,
+      patternModels: [
+        { id: 'pattern-sleep-floor', confidenceTier: 'stable', targetDomain: 'sim_performance', patternFamily: 'sleep_floor' },
+        { id: 'pattern-hrv-window', confidenceTier: 'high_confidence', targetDomain: 'decision_quality', patternFamily: 'hrv_window' },
+      ],
+      projections: [
+        { id: 'projection-profile', consumer: 'profile', warningLevel: 'watch' },
+        { id: 'projection-coach', consumer: 'coach', warningLevel: 'none' },
+      ],
+    },
+    {
+      userId: fixture.athleteTwoId,
+      email: fixture.athleteTwoEmail,
+      displayName: fixture.athleteTwoName,
+      cohortId: fixture.cohortAlphaId,
+      cohortName: fixture.cohortAlphaName,
+      evidenceCount: 2,
+      patternModels: [
+        { id: 'pattern-fatigue', confidenceTier: 'stable', targetDomain: 'focus_stability', patternFamily: 'fatigue_load' },
+      ],
+      projections: [{ id: 'projection-nora', consumer: 'nora', warningLevel: 'caution' }],
+    },
+    {
+      userId: fixture.athleteThreeId,
+      email: fixture.athleteThreeEmail,
+      displayName: fixture.athleteThreeName,
+      cohortId: fixture.cohortBetaId,
+      cohortName: fixture.cohortBetaName,
+      evidenceCount: 0,
+      patternModels: [],
+      projections: [],
+    },
+  ];
+
+  await Promise.all(
+    athleteRecords.map((athlete) =>
+      setDoc(
+        doc(db, USERS_COLLECTION, athlete.userId),
+        {
+          email: athlete.email,
+          displayName: athlete.displayName,
+          username: athlete.displayName.toLowerCase().replace(/[^a-z0-9]+/g, ''),
+          role: 'athlete',
+          createdAt: now,
+          updatedAt: now,
+        },
+        { merge: true }
+      )
+    )
+  );
+
+  await setDoc(
+    doc(db, PULSECHECK_PILOTS_COLLECTION, fixture.pilotId),
+    {
+      organizationId: fixture.organizationId,
+      teamId: fixture.teamId,
+      name: fixture.pilotName,
+      objective: fixture.pilotObjective,
+      status: 'active',
+      studyMode: 'pilot',
+      checkpointCadence: 'weekly',
+      ownerInternalUserId: input.adminUserId,
+      ownerInternalEmail: input.adminEmail.trim().toLowerCase(),
+      startAt: pilotStart,
+      endAt: pilotEnd,
+      notes: 'E2E pilot dashboard fixture',
+      createdAt: now,
+      updatedAt: now,
+    },
+    { merge: true }
+  );
+
+  await Promise.all([
+    setDoc(
+      doc(db, PULSECHECK_PILOT_COHORTS_COLLECTION, fixture.cohortAlphaId),
+      {
+        organizationId: fixture.organizationId,
+        teamId: fixture.teamId,
+        pilotId: fixture.pilotId,
+        name: fixture.cohortAlphaName,
+        cohortType: 'training-group',
+        assignmentRule: 'manual',
+        reportingTags: ['alpha'],
+        status: 'active',
+        notes: 'Primary cohort for E2E pilot dashboard coverage.',
+        createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true }
+    ),
+    setDoc(
+      doc(db, PULSECHECK_PILOT_COHORTS_COLLECTION, fixture.cohortBetaId),
+      {
+        organizationId: fixture.organizationId,
+        teamId: fixture.teamId,
+        pilotId: fixture.pilotId,
+        name: fixture.cohortBetaName,
+        cohortType: 'comparison-group',
+        assignmentRule: 'manual',
+        reportingTags: ['beta'],
+        status: 'active',
+        notes: 'Secondary cohort for E2E pilot dashboard coverage.',
+        createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true }
+    ),
+  ]);
+
+  await Promise.all(
+    athleteRecords.flatMap((athlete) => {
+      const teamMembershipId = `${fixture.teamId}_${athlete.userId}`;
+      const enrollmentId = `${fixture.pilotId}_${athlete.userId}`;
+      return [
+        setDoc(
+          doc(db, PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION, `${fixture.organizationId}_${athlete.userId}`),
+          {
+            organizationId: fixture.organizationId,
+            userId: athlete.userId,
+            email: athlete.email,
+            role: 'athlete',
+            status: 'active',
+            grantedAt: now,
+            createdAt: now,
+            updatedAt: now,
+          },
+          { merge: true }
+        ),
+        setDoc(
+          doc(db, PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION, teamMembershipId),
+          {
+            organizationId: fixture.organizationId,
+            teamId: fixture.teamId,
+            userId: athlete.userId,
+            email: athlete.email,
+            role: 'athlete',
+            permissionSetId: 'pulsecheck-athlete-v1',
+            rosterVisibilityScope: 'none',
+            allowedAthleteIds: [],
+            onboardingStatus: 'complete',
+            athleteOnboarding: {
+              productConsentAccepted: true,
+              productConsentAcceptedAt: now,
+              productConsentVersion: 'e2e-v1',
+              researchConsentStatus: 'not-required',
+              eligibleForResearchDataset: false,
+              enrollmentMode: 'pilot',
+              targetPilotId: fixture.pilotId,
+              targetPilotName: fixture.pilotName,
+              targetCohortId: athlete.cohortId,
+              targetCohortName: athlete.cohortName,
+              baselinePathStatus: 'complete',
+              baselinePathwayId: 'pulsecheck-core-baseline-v1',
+              entryOnboardingName: athlete.displayName,
+            },
+            createdAt: now,
+            updatedAt: now,
+          },
+          { merge: true }
+        ),
+        setDoc(
+          doc(db, PULSECHECK_PILOT_ENROLLMENTS_COLLECTION, enrollmentId),
+          {
+            organizationId: fixture.organizationId,
+            teamId: fixture.teamId,
+            pilotId: fixture.pilotId,
+            cohortId: athlete.cohortId,
+            userId: athlete.userId,
+            teamMembershipId,
+            studyMode: 'pilot',
+            enrollmentMode: 'pilot',
+            status: 'active',
+            productConsentAccepted: true,
+            productConsentAcceptedAt: now,
+            productConsentVersion: 'e2e-v1',
+            researchConsentStatus: 'not-required',
+            eligibleForResearchDataset: false,
+            createdAt: now,
+            updatedAt: now,
+          },
+          { merge: true }
+        ),
+      ];
+    })
+  );
+
+  await Promise.all([
+    setDoc(
+      doc(db, PULSECHECK_PILOT_HYPOTHESES_COLLECTION, fixture.hypothesisIds[0]),
+      {
+        pilotId: fixture.pilotId,
+        code: 'H1',
+        statement: 'Athletes with linked physiology and sim evidence will show more personalized guidance over time.',
+        leadingIndicator: 'Percentage of athletes reaching meaningful engine coverage and stable pattern readiness within the pilot window.',
+        status: 'promising',
+        confidenceLevel: 'medium',
+        keyEvidence: 'Two of three active pilot athletes already have engine coverage and stable patterns inside the frozen frame.',
+        notes: 'Signal is directional, but still needs stronger outcome validation before stronger claims.',
+        lastReviewedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true }
+    ),
+    setDoc(
+      doc(db, PULSECHECK_PILOT_HYPOTHESES_COLLECTION, fixture.hypothesisIds[1]),
+      {
+        pilotId: fixture.pilotId,
+        code: 'H2',
+        statement: 'Stable correlation patterns will emerge for a meaningful share of athletes within the pilot window.',
+        leadingIndicator: 'At least 30% of eligible athletes have one stable pattern by week 6.',
+        status: 'mixed',
+        confidenceLevel: 'medium',
+        keyEvidence: 'Alpha cohort shows stable patterns, while beta cohort remains underpowered.',
+        notes: 'Cohort imbalance is the main reason this remains mixed instead of promising.',
+        lastReviewedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true }
+    ),
+    setDoc(
+      doc(db, PULSECHECK_PILOT_HYPOTHESES_COLLECTION, fixture.hypothesisIds[2]),
+      {
+        pilotId: fixture.pilotId,
+        code: 'H3',
+        statement: 'Recommendations based on body-state-specific patterns will outperform generic recommendations.',
+        leadingIndicator: 'Matched outcome delta between personalized and generic recommendation windows.',
+        status: 'not-enough-data',
+        confidenceLevel: 'low',
+        keyEvidence: 'Outcome validation telemetry is not yet complete enough for stronger interpretation.',
+        notes: 'Hold this in a not-enough-data posture until downstream validation joins are present.',
+        lastReviewedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+      { merge: true }
+    ),
+  ]);
+
+  await Promise.all(
+    athleteRecords
+      .filter((athlete) => athlete.evidenceCount > 0)
+      .map(async (athlete, athleteIndex) => {
+        await setDoc(
+          doc(db, ATHLETE_PHYSIOLOGY_COGNITION_COLLECTION, athlete.userId),
+          {
+            athleteId: athlete.userId,
+            engineVersion: 'e2e-v1',
+            lastEvidenceAt: now,
+            lastPatternRefreshAt: now,
+            lastProjectionRefreshAt: now,
+            lastEngineRefreshAt: now,
+            activePatternKeys: athlete.patternModels.map((pattern) => pattern.id),
+            activeProjectionKeys: athlete.projections.map((projection) => projection.id),
+            createdAt: now,
+            updatedAt: now,
+          },
+          { merge: true }
+        );
+
+        await Promise.all([
+          ...Array.from({ length: athlete.evidenceCount }).map((_, index) =>
+            setDoc(
+              doc(
+                db,
+                ATHLETE_PHYSIOLOGY_COGNITION_COLLECTION,
+                athlete.userId,
+                CORRELATION_EVIDENCE_RECORDS_SUBCOLLECTION,
+                `${athlete.userId}_evidence_${index + 1}`
+              ),
+              {
+                athleteId: athlete.userId,
+                evidenceKey: `${athlete.userId}_evidence_${index + 1}`,
+                createdAt: new Date(nowMs - (athleteIndex + index + 1) * 1000 * 60 * 60),
+                sourceDay: `2026-03-${`${10 + index}`.padStart(2, '0')}`,
+              },
+              { merge: true }
+            )
+          ),
+          ...athlete.patternModels.map((pattern, index) =>
+            setDoc(
+              doc(
+                db,
+                ATHLETE_PHYSIOLOGY_COGNITION_COLLECTION,
+                athlete.userId,
+                ATHLETE_PATTERN_MODELS_SUBCOLLECTION,
+                `${athlete.userId}_${pattern.id}`
+              ),
+              {
+                athleteId: athlete.userId,
+                patternKey: `${athlete.userId}_${pattern.id}`,
+                confidenceTier: pattern.confidenceTier,
+                targetDomain: pattern.targetDomain,
+                patternFamily: pattern.patternFamily,
+                confidenceScore: 0.72 + index * 0.08,
+                updatedAt: new Date(nowMs - index * 1000 * 60 * 30),
+                lastValidatedAt: new Date(nowMs - index * 1000 * 60 * 45),
+              },
+              { merge: true }
+            )
+          ),
+          ...athlete.projections.map((projection, index) =>
+            setDoc(
+              doc(
+                db,
+                ATHLETE_PHYSIOLOGY_COGNITION_COLLECTION,
+                athlete.userId,
+                RECOMMENDATION_PROJECTIONS_SUBCOLLECTION,
+                `${athlete.userId}_${projection.id}`
+              ),
+              {
+                athleteId: athlete.userId,
+                projectionKey: `${athlete.userId}_${projection.id}`,
+                consumer: projection.consumer,
+                projectionDate: '2026-03-20',
+                warningLevel: projection.warningLevel,
+                confidenceTier: index === 0 ? 'stable' : 'high_confidence',
+                generatedAt: new Date(nowMs - index * 1000 * 60 * 20),
+              },
+              { merge: true }
+            )
+          ),
+        ]);
+      })
+  );
+
+  const sharedReadiness = [
+    {
+      gateKey: 'pilot-status',
+      status: 'passed',
+      summary: 'Pilot status active is eligible for readout generation.',
+    },
+    {
+      gateKey: 'sample-size',
+      status: 'passed',
+      summary: 'Three active pilot athletes are included in this frozen frame.',
+    },
+    {
+      gateKey: 'telemetry-completeness',
+      status: 'passed',
+      summary: 'Engine coverage is above the current V1 minimum for readout generation.',
+    },
+    {
+      gateKey: 'freshness-telemetry',
+      status: 'suppressed',
+      summary: 'Freshness-sensitive claims should remain cautious because stale-data telemetry is still partially materialized in V1.',
+    },
+    {
+      gateKey: 'denominator-availability',
+      status: 'passed',
+      summary: 'Pilot-scoped denominators are available for the selected frame.',
+    },
+  ];
+
+  const makeSections = (summaryVariant: 'older' | 'latest') => [
+    {
+      sectionKey: 'pilot-summary',
+      title: 'Pilot Summary',
+      readinessStatus: 'ready',
+      summary:
+        summaryVariant === 'latest'
+          ? 'This frozen frame suggests the pilot is learning meaningful structure for part of the active population, especially in the alpha cohort where engine coverage and stable patterns are already visible.'
+          : 'The earlier frame showed directional learning, but the evidence was still concentrated in a smaller subset of the pilot population.',
+      citations: [
+        {
+          blockKey: 'overview-metrics',
+          blockLabel: 'Pilot Overview Metrics',
+          hypothesisCodes: [],
+          limitationKeys: ['freshness-telemetry'],
+        },
+      ],
+      claims: [
+        {
+          claimKey: 'active-athletes',
+          claimType: 'observed',
+          statement: 'Three active pilot athletes were included in the frozen evidence frame.',
+          denominatorLabel: 'active pilot athletes',
+          denominatorValue: 3,
+          evidenceSources: ['pilot overview metrics', 'pilot enrollment scope'],
+          confidenceLevel: 'high',
+          baselineMode: 'no-baseline',
+          caveatFlag: false,
+        },
+      ],
+      suggestedReviewerResolution: 'accepted',
+    },
+    {
+      sectionKey: 'hypothesis-mapper',
+      title: 'Hypothesis Mapper',
+      readinessStatus: 'ready',
+      summary:
+        summaryVariant === 'latest'
+          ? 'H1 looks directionally promising, H2 remains mixed because the beta cohort is still sparse, and H3 should stay in a not-enough-data posture until stronger outcome validation arrives.'
+          : 'The earlier readout could only say H1 was directionally interesting while H2 and H3 still lacked enough structure for stronger posture changes.',
+      citations: [
+        {
+          blockKey: 'hypothesis-governance',
+          blockLabel: 'Pilot Hypotheses',
+          hypothesisCodes: ['H1', 'H2', 'H3'],
+          limitationKeys: ['freshness-telemetry'],
+        },
+      ],
+      claims: [
+        {
+          claimKey: 'promising-hypothesis-count',
+          claimType: 'observed',
+          statement: 'One of three active pilot hypotheses is currently marked promising in the governed dashboard state.',
+          denominatorLabel: 'pilot hypotheses',
+          denominatorValue: 3,
+          evidenceSources: ['manual hypothesis records'],
+          confidenceLevel: 'medium',
+          baselineMode: 'no-baseline',
+          caveatFlag: true,
+        },
+      ],
+      suggestedReviewerResolution: 'accepted',
+    },
+    {
+      sectionKey: 'findings-interpreter',
+      title: 'Findings Interpreter',
+      readinessStatus: 'ready',
+      summary:
+        summaryVariant === 'latest'
+          ? 'The most credible V1 interpretation is that the pilot is learning enough in one cohort to justify continued monitoring, but not enough across the whole pilot to generalize aggressively.'
+          : 'The earlier frame suggested potential signal concentration in the alpha cohort, but the denominator was still too thin for stronger interpretation.',
+      citations: [
+        {
+          blockKey: 'findings-layer',
+          blockLabel: 'Pilot Findings',
+          hypothesisCodes: ['H1', 'H2'],
+          limitationKeys: ['freshness-telemetry'],
+        },
+      ],
+      claims: [
+        {
+          claimKey: 'engine-coverage',
+          claimType: 'observed',
+          statement: 'Engine coverage is currently concentrated in two of the three active pilot athletes.',
+          denominatorLabel: 'active pilot athletes',
+          denominatorValue: 3,
+          evidenceSources: ['engine coverage rate', 'stable pattern coverage'],
+          confidenceLevel: 'medium',
+          baselineMode: 'no-baseline',
+          caveatFlag: true,
+        },
+      ],
+      suggestedReviewerResolution: 'accepted',
+    },
+    {
+      sectionKey: 'research-notes',
+      title: 'Research Notes',
+      readinessStatus: 'ready',
+      summary:
+        summaryVariant === 'latest'
+          ? 'A plausible publishable-finding candidate is that stable pilot learning may emerge unevenly across cohorts before it becomes whole-pilot wide, but that candidate still needs stronger outcome validation and replication.'
+          : 'The earlier frame suggested a possible finding around early cohort divergence, but it was too early to frame that as more than a directional candidate.',
+      citations: [
+        {
+          blockKey: 'research-notes',
+          blockLabel: 'Research Notes',
+          hypothesisCodes: ['H1', 'H2'],
+          limitationKeys: ['freshness-telemetry'],
+        },
+      ],
+      claims: [
+        {
+          claimKey: 'candidate-finding',
+          claimType: 'speculative',
+          statement: 'Cohort-level differences in stable-pattern emergence may become a publishable candidate if stronger validation and replication continue to support the same direction.',
+          denominatorLabel: 'active cohorts',
+          denominatorValue: 2,
+          evidenceSources: ['cohort rollup', 'stable pattern rate'],
+          confidenceLevel: 'low',
+          baselineMode: 'cross-cohort',
+          caveatFlag: true,
+        },
+      ],
+      suggestedReviewerResolution: 'carry-forward',
+    },
+    {
+      sectionKey: 'limitations',
+      title: 'Limitations',
+      readinessStatus: 'ready',
+      summary:
+        'This frame still has meaningful limitations: one athlete lacks engine coverage, the beta cohort remains sparse, freshness telemetry is only partially materialized, and no stronger causal language should be used from this V1 evidence frame.',
+      citations: [
+        {
+          blockKey: 'limitations',
+          blockLabel: 'Readiness Gates',
+          hypothesisCodes: [],
+          limitationKeys: ['freshness-telemetry', 'sample-size'],
+        },
+      ],
+      claims: [],
+      suggestedReviewerResolution: 'accepted',
+    },
+  ];
+
+  await Promise.all([
+    setDoc(
+      doc(db, PULSECHECK_PILOT_RESEARCH_READOUTS_COLLECTION, fixture.readoutIds[0]),
+      {
+        pilotId: fixture.pilotId,
+        organizationId: fixture.organizationId,
+        teamId: fixture.teamId,
+        cohortId: '',
+        dateWindowStart: '2026-03-01',
+        dateWindowEnd: '2026-03-14',
+        baselineMode: 'no-baseline',
+        reviewState: 'approved',
+        modelVersion: 'e2e-fixture-model',
+        promptVersion: 'pilot-research-readout-v2',
+        readModelVersion: 'pilot-dashboard-v1',
+        readiness: sharedReadiness,
+        sections: makeSections('older'),
+        frozenEvidenceFrame: {
+          pilotId: fixture.pilotId,
+          cohortId: '',
+          activeAthleteCount: 3,
+          stablePatternRate: 66.7,
+        },
+        generatedAt: olderGeneratedAt,
+        reviewedAt: new Date(olderGeneratedAt.getTime() + 1000 * 60 * 90),
+        reviewedByUserId: input.adminUserId,
+        reviewedByEmail: input.adminEmail.trim().toLowerCase(),
+        createdAt: olderGeneratedAt,
+        updatedAt: olderGeneratedAt,
+      },
+      { merge: true }
+    ),
+    setDoc(
+      doc(db, PULSECHECK_PILOT_RESEARCH_READOUTS_COLLECTION, fixture.readoutIds[1]),
+      {
+        pilotId: fixture.pilotId,
+        organizationId: fixture.organizationId,
+        teamId: fixture.teamId,
+        cohortId: '',
+        dateWindowStart: '2026-03-08',
+        dateWindowEnd: '2026-03-20',
+        baselineMode: 'cross-cohort',
+        reviewState: 'reviewed',
+        modelVersion: 'e2e-fixture-model',
+        promptVersion: 'pilot-research-readout-v2',
+        readModelVersion: 'pilot-dashboard-v1',
+        readiness: sharedReadiness,
+        sections: makeSections('latest'),
+        frozenEvidenceFrame: {
+          pilotId: fixture.pilotId,
+          cohortId: '',
+          activeAthleteCount: 3,
+          stablePatternRate: 66.7,
+        },
+        generatedAt: latestGeneratedAt,
+        reviewedAt: latestReviewedAt,
+        reviewedByUserId: input.adminUserId,
+        reviewedByEmail: input.adminEmail.trim().toLowerCase(),
+        createdAt: latestGeneratedAt,
+        updatedAt: latestReviewedAt,
+      },
+      { merge: true }
+    ),
+  ]);
+
+  return {
+    namespace: fixture.namespace,
+    organizationId: fixture.organizationId,
+    teamId: fixture.teamId,
+    pilotId: fixture.pilotId,
+    pilotName: fixture.pilotName,
+    cohortIds: [fixture.cohortAlphaId, fixture.cohortBetaId],
+    athleteIds: athleteRecords.map((athlete) => athlete.userId),
+    athleteNames: athleteRecords.map((athlete) => athlete.displayName),
+    athleteEmails: athleteRecords.map((athlete) => athlete.email),
+    readoutIds: fixture.readoutIds,
+  };
+}
+
+async function cleanupPulseCheckPilotDashboardFixture(
+  db: Firestore,
+  input: {
+    namespace: string;
+    adminUserId: string;
+  }
+) {
+  const fixture = buildPilotDashboardFixtureIds(input.namespace);
+  const athleteIds = [fixture.athleteOneId, fixture.athleteTwoId, fixture.athleteThreeId];
+
+  await Promise.all([
+    deleteQueryDocs(db, PULSECHECK_PILOT_RESEARCH_READOUTS_COLLECTION, 'pilotId', fixture.pilotId),
+    deleteQueryDocs(db, PULSECHECK_PILOT_HYPOTHESES_COLLECTION, 'pilotId', fixture.pilotId),
+    deleteQueryDocs(db, PULSECHECK_PILOT_ENROLLMENTS_COLLECTION, 'pilotId', fixture.pilotId),
+    deleteQueryDocs(db, PULSECHECK_PILOT_COHORTS_COLLECTION, 'pilotId', fixture.pilotId),
+  ]);
+
+  await Promise.all(
+    athleteIds.flatMap((athleteId) => [
+      deleteNestedDocsByParent(db, ATHLETE_PHYSIOLOGY_COGNITION_COLLECTION, athleteId, CORRELATION_EVIDENCE_RECORDS_SUBCOLLECTION),
+      deleteNestedDocsByParent(db, ATHLETE_PHYSIOLOGY_COGNITION_COLLECTION, athleteId, ATHLETE_PATTERN_MODELS_SUBCOLLECTION),
+      deleteNestedDocsByParent(db, ATHLETE_PHYSIOLOGY_COGNITION_COLLECTION, athleteId, RECOMMENDATION_PROJECTIONS_SUBCOLLECTION),
+    ])
+  );
+
+  await Promise.all([
+    deleteDoc(doc(db, PULSECHECK_PILOTS_COLLECTION, fixture.pilotId)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_PILOT_COHORTS_COLLECTION, fixture.cohortAlphaId)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_PILOT_COHORTS_COLLECTION, fixture.cohortBetaId)).catch(() => undefined),
+    ...athleteIds.flatMap((athleteId) => [
+      deleteDoc(doc(db, ATHLETE_PHYSIOLOGY_COGNITION_COLLECTION, athleteId)).catch(() => undefined),
+      deleteDoc(doc(db, PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION, `${fixture.teamId}_${athleteId}`)).catch(() => undefined),
+      deleteDoc(doc(db, PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION, `${fixture.organizationId}_${athleteId}`)).catch(() => undefined),
+      deleteDoc(doc(db, USERS_COLLECTION, athleteId)).catch(() => undefined),
+    ]),
+    deleteDoc(doc(db, PULSECHECK_TEAM_MEMBERSHIPS_COLLECTION, `${fixture.teamId}_${input.adminUserId}`)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_ORGANIZATION_MEMBERSHIPS_COLLECTION, `${fixture.organizationId}_${input.adminUserId}`)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_TEAMS_COLLECTION, fixture.teamId)).catch(() => undefined),
+    deleteDoc(doc(db, PULSECHECK_ORGANIZATIONS_COLLECTION, fixture.organizationId)).catch(() => undefined),
+  ]);
+
+  return {
+    namespace: fixture.namespace,
+    organizationId: fixture.organizationId,
+    teamId: fixture.teamId,
+    pilotId: fixture.pilotId,
+    athleteIds,
   };
 }
 
@@ -1990,6 +2692,32 @@ export interface PulseE2EHarness {
     adminUserId: string;
     adminEmail: string;
   }>;
+  seedPulseCheckPilotDashboardFixture: (input: {
+    namespace: string;
+    adminUserId: string;
+    adminEmail: string;
+  }) => Promise<{
+    namespace: string;
+    organizationId: string;
+    teamId: string;
+    pilotId: string;
+    pilotName: string;
+    cohortIds: string[];
+    athleteIds: string[];
+    athleteNames: string[];
+    athleteEmails: string[];
+    readoutIds: string[];
+  }>;
+  cleanupPulseCheckPilotDashboardFixture: (input: {
+    namespace: string;
+    adminUserId: string;
+  }) => Promise<{
+    namespace: string;
+    organizationId: string;
+    teamId: string;
+    pilotId: string;
+    athleteIds: string[];
+  }>;
   cleanupLegacyCoachRosterFixtures: (namespace: string) => Promise<{
     namespace: string;
     coachId: string;
@@ -2147,6 +2875,8 @@ export function installPulseE2EHarness(db: Firestore) {
       seedLegacyCoachRosterFixture(db, namespace, mode),
     seedPulseCheckAdminWorkspaceFixture: (namespace: string, adminUserId: string, adminEmail: string) =>
       seedPulseCheckAdminWorkspaceFixture(db, namespace, adminUserId, adminEmail),
+    seedPulseCheckPilotDashboardFixture: (input) => seedPulseCheckPilotDashboardFixture(db, input),
+    cleanupPulseCheckPilotDashboardFixture: (input) => cleanupPulseCheckPilotDashboardFixture(db, input),
     cleanupLegacyCoachRosterFixtures: (namespace: string) => cleanupLegacyCoachRosterFixtures(db, namespace),
     seedPulseCheckAthleteJourneyFixture: (input) => seedPulseCheckAthleteJourneyFixture(db, input),
     cleanupPulseCheckAthleteJourneyFixture: (input) => cleanupPulseCheckAthleteJourneyFixture(db, input),

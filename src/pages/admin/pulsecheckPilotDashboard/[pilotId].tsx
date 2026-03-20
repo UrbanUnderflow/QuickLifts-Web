@@ -26,6 +26,7 @@ import type {
   PilotDashboardDetail,
   PilotHypothesisConfidenceLevel,
   PilotHypothesisStatus,
+  PilotResearchReadoutClaim,
   PilotResearchReadout,
   PilotResearchReadoutBaselineMode,
   PilotResearchReadoutReviewState,
@@ -521,6 +522,11 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     return RESEARCH_SECTION_ORDER.map((sectionKey) => sectionMap.get(sectionKey)).filter(Boolean) as PilotResearchReadoutSection[];
   }, [editingReadout]);
 
+  const hypothesesByCode = useMemo(
+    () => new Map((detail?.hypotheses || []).map((hypothesis) => [hypothesis.code, hypothesis])),
+    [detail?.hypotheses]
+  );
+
   const scopedInvite = useMemo(() => {
     if (!detail) return null;
     return inviteLinks.find((invite) => {
@@ -961,6 +967,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
+                    data-testid={`pilot-dashboard-tab-${tab.id}`}
                     className={`rounded-full px-4 py-2 text-sm transition ${
                       activeTab === tab.id ? 'bg-cyan-400 text-black' : 'bg-white/5 text-zinc-300 hover:bg-white/10 hover:text-white'
                     }`}
@@ -995,7 +1002,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
               {activeTab === 'overview' ? (
                 <div className="mt-6 space-y-6">
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5" data-testid="pilot-readout-workspace">
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pilot Objective</div>
                       <div className="mt-3 text-sm text-zinc-300">{detail.pilot.objective || 'No pilot objective recorded yet.'}</div>
                     </div>
@@ -1738,14 +1745,16 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div>
-                        <h2 className="text-lg font-semibold">Research Readout V1 Contract</h2>
+                        <h2 className="text-lg font-semibold">Research Brief</h2>
                         <p className="mt-1 text-sm text-zinc-400">
-                          This tab is reserved for the pilot-scoped, AI-assisted research copilot layer. It will read only from the governed pilot dashboard frame and require human review before any draft becomes an approved readout.
+                          Generate a pilot-scoped research brief that reads more like a strong research partner than an admin report.
+                          Every brief stays grounded in the governed pilot frame, keeps its caveats visible, and still requires human review before it becomes an approved readout.
                         </p>
                       </div>
                       <button
                         onClick={() => void handleGenerateResearchReadout()}
                         disabled={generatingResearchReadout}
+                        data-testid="pilot-readout-generate-button"
                         className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {generatingResearchReadout ? 'Generating...' : 'Generate AI Readout'}
@@ -1753,8 +1762,12 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                     </div>
 
                     <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
-                      Scope freeze: this future readout will lock to pilot <span className="font-medium text-white">{detail.pilot.name}</span>
-                      {selectedCohort ? `, cohort ${selectedCohort.name},` : ','} and the currently selected pilot-scoped denominator frame. It should not interpret athletes outside this pilot.
+                      <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Evidence Frame</span>
+                      <p className="mt-2">
+                        This brief will lock to pilot <span className="font-medium text-white">{detail.pilot.name}</span>
+                        {selectedCohort ? `, cohort ${selectedCohort.name},` : ','} and the currently selected pilot-scoped denominator frame.
+                        It will not interpret athletes outside this pilot.
+                      </p>
                     </div>
                   </div>
 
@@ -1794,7 +1807,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Generation Gates</div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">When This Brief Is Ready</div>
                       <ul className="mt-3 space-y-2 text-sm text-zinc-300">
                         <li>Pilot must be active or completed.</li>
                         <li>Readiness checks must pass for sample size, freshness, telemetry completeness, and denominator availability.</li>
@@ -1802,7 +1815,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </ul>
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Claim Discipline</div>
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">How This Brief Stays Honest</div>
                       <ul className="mt-3 space-y-2 text-sm text-zinc-300">
                         <li>Every claim must be tagged as Observed, Inferred, or Speculative.</li>
                         <li>Every section must cite its evidence frame, linked hypotheses, and active limitations.</li>
@@ -1882,6 +1895,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                             <button
                               key={readout.id}
                               onClick={() => setSelectedReadoutId(readout.id)}
+                              data-testid={`pilot-readout-history-${readout.id}`}
                               className={`w-full rounded-2xl border p-4 text-left transition ${
                                 selectedResearchReadout?.id === readout.id
                                   ? 'border-cyan-400/30 bg-cyan-400/10'
@@ -1915,9 +1929,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                     <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
                       <div>
-                        <h2 className="text-lg font-semibold">Readout Review Workspace</h2>
+                        <h2 className="text-lg font-semibold">Research Review Workspace</h2>
                         <p className="mt-1 text-sm text-zinc-400">
-                          Review state, evidence frame, and limitations stay frozen with the selected saved artifact.
+                          Review state, evidence frame, and limitations stay frozen with the selected saved brief.
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -1926,9 +1940,10 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                             <select
                               value={compareReadoutId}
                               onChange={(event) => setCompareReadoutId(event.target.value)}
+                              data-testid="pilot-readout-compare-select"
                               className="rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
                             >
-                              <option value="">Compare to another readout</option>
+                              <option value="">Compare with an earlier brief</option>
                               {compareReadoutCandidates.map((readout) => (
                                 <option key={readout.id} value={readout.id}>
                                   {formatTimeValue(readout.generatedAt)} • {readout.reviewState}
@@ -1940,6 +1955,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               onChange={(event) =>
                                 setEditingReadout((current) => (current ? { ...current, reviewState: event.target.value as PilotResearchReadoutReviewState } : current))
                               }
+                              data-testid="pilot-readout-review-state"
                               className="rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
                             >
                               {READOUT_REVIEW_STATE_OPTIONS.map((option) => (
@@ -1951,6 +1967,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                             <button
                               onClick={() => void saveResearchReadoutReview()}
                               disabled={savingResearchReadoutReview}
+                              data-testid="pilot-readout-save-review"
                               className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-400/15 disabled:opacity-60"
                             >
                               {savingResearchReadoutReview ? 'Saving Review...' : 'Save Review'}
@@ -2055,86 +2072,227 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         </div>
 
                         <div className="space-y-4">
-                          {editingReadout.sections.map((section) => (
-                            <div key={section.sectionKey} className="rounded-2xl border border-white/5 bg-black/20 p-4">
-                              <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-                                <div>
-                                  <h3 className="text-base font-semibold text-white">{section.title}</h3>
-                                  <p className="mt-2 text-sm text-zinc-300">{section.summary}</p>
-                                </div>
-                                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">
-                                  {section.readinessStatus}
-                                </div>
-                              </div>
+                          {orderedEditingReadoutSections.map((section) => {
+                            const sectionPresentation = RESEARCH_SECTION_PRESENTATION[section.sectionKey];
+                            const citationHypothesisCodes = Array.from(
+                              new Set(
+                                section.citations.flatMap((citation) => citation.hypothesisCodes).filter(Boolean)
+                              )
+                            );
+                            const linkedHypothesisCodes =
+                              citationHypothesisCodes.length > 0
+                                ? citationHypothesisCodes
+                                : section.sectionKey === 'hypothesis-mapper'
+                                  ? detail.hypotheses.map((hypothesis) => hypothesis.code)
+                                  : [];
+                            const linkedHypotheses = linkedHypothesisCodes
+                              .map((code) => hypothesesByCode.get(code))
+                              .filter(Boolean) as PulseCheckPilotHypothesis[];
+                            const activeLimitationKeys = Array.from(
+                              new Set(section.citations.flatMap((citation) => citation.limitationKeys).filter(Boolean))
+                            );
 
-                              <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[220px,1fr]">
-                                <label className="space-y-2 text-sm text-zinc-300">
-                                  <span className="text-xs uppercase tracking-wide text-zinc-500">Reviewer Resolution</span>
-                                  <select
-                                    value={section.reviewerResolution || section.suggestedReviewerResolution || ''}
-                                    onChange={(event) =>
-                                      updateReadoutSection(section.sectionKey, {
-                                        reviewerResolution: event.target.value as PilotResearchReadoutSectionResolution,
-                                      })
-                                    }
-                                    className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
-                                  >
-                                    <option value="">Select resolution</option>
-                                    {READOUT_SECTION_RESOLUTION_OPTIONS.map((option) => (
-                                      <option key={option.value} value={option.value}>
-                                        {option.label}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <label className="space-y-2 text-sm text-zinc-300">
-                                  <span className="text-xs uppercase tracking-wide text-zinc-500">Reviewer Notes</span>
-                                  <textarea
-                                    value={section.reviewerNotes || ''}
-                                    onChange={(event) =>
-                                      updateReadoutSection(section.sectionKey, {
-                                        reviewerNotes: event.target.value,
-                                      })
-                                    }
-                                    rows={3}
-                                    className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
-                                  />
-                                </label>
-                              </div>
+                            return (
+                              <div
+                                key={section.sectionKey}
+                                data-testid={`pilot-readout-section-${section.sectionKey}`}
+                                className="rounded-2xl border border-white/5 bg-black/20 p-4"
+                              >
+                                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                  <div>
+                                    <div className="text-xs uppercase tracking-[0.18em] text-cyan-300">
+                                      {sectionPresentation?.eyebrow || 'Research Brief'}
+                                    </div>
+                                    <h3 className="mt-2 text-base font-semibold text-white">
+                                      {sectionPresentation?.title || section.title}
+                                    </h3>
+                                    <p className="mt-2 text-sm text-zinc-400">
+                                      {sectionPresentation?.helper || 'Review this section against the evidence frame before accepting it.'}
+                                    </p>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span
+                                      className={`rounded-full border px-3 py-1 text-xs ${
+                                        section.readinessStatus === 'suppressed'
+                                          ? 'border-amber-400/30 bg-amber-400/10 text-amber-100'
+                                          : 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100'
+                                      }`}
+                                    >
+                                      {formatReadinessStatusLabel(section.readinessStatus)}
+                                    </span>
+                                    {section.suggestedReviewerResolution ? (
+                                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">
+                                        Suggested: {section.suggestedReviewerResolution}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
 
-                              {section.claims.length > 0 ? (
-                                <div className="mt-4 space-y-3">
-                                  {section.claims.map((claim) => (
-                                    <div key={claim.claimKey} className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-1 text-[11px] uppercase tracking-wide text-cyan-100">
-                                          {claim.claimType}
-                                        </span>
-                                        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-300">
-                                          {claim.confidenceLevel}
-                                        </span>
-                                        {claim.caveatFlag ? (
-                                          <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-[11px] text-amber-100">
-                                            caveat
+                                <div className="mt-4 rounded-2xl border border-white/5 bg-[#0b0f17] p-4 text-sm leading-6 text-zinc-200">
+                                  {section.summary}
+                                </div>
+
+                                {section.sectionKey === 'research-notes' ? (
+                                  <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-100">
+                                    Candidate findings only. Keep these in “worth discussing” posture until outcome validation, replication, and stronger controls are in place.
+                                  </div>
+                                ) : null}
+
+                                {linkedHypotheses.length > 0 ? (
+                                  <div className="mt-4">
+                                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Linked Hypotheses</div>
+                                    <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-2">
+                                      {linkedHypotheses.map((hypothesis) => (
+                                        <div
+                                          key={`${section.sectionKey}-${hypothesis.id}`}
+                                          data-testid={`pilot-readout-hypothesis-${hypothesis.code}`}
+                                          className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4"
+                                        >
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-cyan-100">
+                                              {hypothesis.code}
+                                            </span>
+                                            <span className={`rounded-full border px-2 py-1 text-[11px] ${hypothesisStatusClassName(hypothesis.status)}`}>
+                                              {hypothesisStatusLabel(hypothesis.status)}
+                                            </span>
+                                            <span className={`rounded-full border px-2 py-1 text-[11px] ${confidenceClassName(hypothesis.confidenceLevel)}`}>
+                                              {confidenceLabel(hypothesis.confidenceLevel)}
+                                            </span>
+                                          </div>
+                                          <p className="mt-3 text-sm font-medium text-white">{hypothesis.statement}</p>
+                                          <p className="mt-2 text-xs text-zinc-400">
+                                            Leading indicator: {hypothesis.leadingIndicator || 'Not recorded'}
+                                          </p>
+                                          {hypothesis.keyEvidence ? (
+                                            <p className="mt-2 text-xs text-zinc-400">Current evidence note: {hypothesis.keyEvidence}</p>
+                                          ) : null}
+                                          {hypothesis.notes ? (
+                                            <p className="mt-2 text-xs text-zinc-500">Research note: {hypothesis.notes}</p>
+                                          ) : null}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ) : null}
+
+                                {section.claims.length > 0 ? (
+                                  <div className="mt-4 space-y-3">
+                                    <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Key Claims</div>
+                                    {section.claims.map((claim) => (
+                                      <div key={claim.claimKey} className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span className={`rounded-full border px-2 py-1 text-[11px] uppercase tracking-wide ${claimTypeClassName(claim.claimType)}`}>
+                                            {formatClaimTypeLabel(claim.claimType)}
                                           </span>
+                                          <span className={`rounded-full border px-2 py-1 text-[11px] ${confidenceClassName(claim.confidenceLevel)}`}>
+                                            {confidenceLabel(claim.confidenceLevel)}
+                                          </span>
+                                          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-300">
+                                            {formatBaselineModeLabel(claim.baselineMode)}
+                                          </span>
+                                          {claim.caveatFlag ? (
+                                            <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-[11px] text-amber-100">
+                                              Caveat
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        <p className="mt-3 text-sm leading-6 text-zinc-100">{claim.statement}</p>
+                                        <p className="mt-2 text-xs text-zinc-500">
+                                          Denominator: {claim.denominatorLabel} ({claim.denominatorValue})
+                                        </p>
+                                        {claim.evidenceSources.length > 0 ? (
+                                          <div className="mt-3 flex flex-wrap gap-2">
+                                            {claim.evidenceSources.map((source) => (
+                                              <span
+                                                key={`${claim.claimKey}-${source}`}
+                                                className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-300"
+                                              >
+                                                {source}
+                                              </span>
+                                            ))}
+                                          </div>
                                         ) : null}
                                       </div>
-                                      <p className="mt-3 text-sm text-zinc-200">{claim.statement}</p>
-                                      <p className="mt-2 text-xs text-zinc-500">
-                                        Denominator: {claim.denominatorLabel} ({claim.denominatorValue}) | Baseline: {claim.baselineMode}
-                                      </p>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : null}
+                                    ))}
+                                  </div>
+                                ) : null}
 
-                              {section.citations.length > 0 ? (
-                                <div className="mt-4 text-xs text-zinc-500">
-                                  {section.citations.map((citation) => citation.blockLabel).join(' • ')}
+                                {section.citations.length > 0 || activeLimitationKeys.length > 0 ? (
+                                  <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr),220px]">
+                                    <div>
+                                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Evidence Trace</div>
+                                      <div className="mt-3 flex flex-wrap gap-2">
+                                        {section.citations.map((citation) => (
+                                          <span
+                                            key={`${section.sectionKey}-${citation.blockKey}`}
+                                            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300"
+                                          >
+                                            {citation.blockLabel}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Active Limitations</div>
+                                      <div className="mt-3 flex flex-wrap gap-2">
+                                        {activeLimitationKeys.length > 0 ? (
+                                          activeLimitationKeys.map((limitationKey) => (
+                                            <span
+                                              key={`${section.sectionKey}-${limitationKey}`}
+                                              className="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-xs text-amber-100"
+                                            >
+                                              {limitationKey}
+                                            </span>
+                                          ))
+                                        ) : (
+                                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-400">
+                                            No active limitation tags
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : null}
+
+                                <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[220px,1fr]">
+                                  <label className="space-y-2 text-sm text-zinc-300">
+                                    <span className="text-xs uppercase tracking-wide text-zinc-500">Reviewer Resolution</span>
+                                    <select
+                                      value={section.reviewerResolution || section.suggestedReviewerResolution || ''}
+                                      onChange={(event) =>
+                                        updateReadoutSection(section.sectionKey, {
+                                          reviewerResolution: event.target.value as PilotResearchReadoutSectionResolution,
+                                        })
+                                      }
+                                      data-testid={`pilot-readout-resolution-${section.sectionKey}`}
+                                      className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                                    >
+                                      <option value="">Select resolution</option>
+                                      {READOUT_SECTION_RESOLUTION_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label className="space-y-2 text-sm text-zinc-300">
+                                    <span className="text-xs uppercase tracking-wide text-zinc-500">Reviewer Notes</span>
+                                    <textarea
+                                      value={section.reviewerNotes || ''}
+                                      onChange={(event) =>
+                                        updateReadoutSection(section.sectionKey, {
+                                          reviewerNotes: event.target.value,
+                                        })
+                                      }
+                                      rows={3}
+                                      data-testid={`pilot-readout-notes-${section.sectionKey}`}
+                                      className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                                    />
+                                  </label>
                                 </div>
-                              ) : null}
-                            </div>
-                          ))}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
@@ -2142,22 +2300,22 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                   </div>
 
                   <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-                    <h2 className="text-lg font-semibold">First Build Sequence</h2>
+                    <h2 className="text-lg font-semibold">How To Use This Brief</h2>
                     <div className="mt-4 overflow-x-auto">
                       <table className="min-w-full text-sm">
                         <thead className="text-xs uppercase tracking-wide text-zinc-500">
                           <tr>
                             <th className="px-3 py-2 text-left">Step</th>
-                            <th className="px-3 py-2 text-left">What We Build</th>
-                            <th className="px-3 py-2 text-left">Why</th>
+                            <th className="px-3 py-2 text-left">What To Read</th>
+                            <th className="px-3 py-2 text-left">Why It Matters</th>
                           </tr>
                         </thead>
                         <tbody>
                           {[
-                            ['1', 'Readout storage model and TypeScript contract', 'Locks the saved artifact before generation logic starts drifting.'],
-                            ['2', 'Manual generation path using the governed pilot read model', 'Keeps V1 human-triggered and pilot-scoped.'],
-                            ['3', 'Draft review workflow with section resolution controls', 'Prevents generated output from becoming unofficial truth by accident.'],
-                            ['4', 'Citations, denominators, and limitations rendering', 'Makes the AI layer auditable instead of magical.'],
+                            ['1', 'Pilot Summary', 'Start with the plain-language read before you dive into claims or candidate findings.'],
+                            ['2', 'Hypothesis Mapper', 'Check whether the brief is actually mapping back to the hypotheses you set for the pilot.'],
+                            ['3', 'Candidate Publishable Findings', 'Treat these as disciplined leads for discussion, not finished conclusions.'],
+                            ['4', 'Limitations and Reviewer Resolution', 'This is what keeps the brief honest and prevents overclaiming.'],
                           ].map((row) => (
                             <tr key={row[0]} className="border-t border-white/5">
                               <td className="px-3 py-3 font-medium text-white">{row[0]}</td>
