@@ -70,6 +70,38 @@ const OUTPUT_ROWS = [
   ['Limitations', 'Explicit uncertainty layer that explains what weakens interpretation or blocks stronger claims.'],
 ];
 
+const DATA_MODEL_ROWS = [
+  ['`pulsecheck-pilot-research-readouts/{readoutId}`', 'Stores the generated readout body, frozen evidence-frame metadata, readiness result, review state, and reviewer audit fields.', 'Canonical saved readout artifact.'],
+  ['`pulsecheck-pilot-research-readout-revisions/{revisionId}`', 'Optional append-only revision or supersession log when approved readouts are regenerated or materially revised.', 'Preserves governance-grade lineage without mutating prior accepted output silently.'],
+  ['Frozen evidence payload reference', 'Reference or embedded snapshot metadata for the exact pilot dashboard frame used to generate the readout.', 'Ties the interpretation to one reproducible evidence frame.'],
+  ['Hypothesis linkage fields', 'Persist hypothesis codes referenced by each section and claim.', 'Supports traceability back to official pilot hypotheses.'],
+];
+
+const API_ROWS = [
+  ['`getPilotResearchReadouts(pilotId)`', 'List saved readouts for one pilot ordered by generation date.', 'Supports tab history, approval review, and superseded readout browsing.'],
+  ['`generatePilotResearchReadout(input)`', 'Run readiness checks, freeze the evidence frame, call the AI layer, and save a draft readout.', 'V1 manual generation entry point.'],
+  ['`updatePilotResearchReadoutReview(input)`', 'Persist review state, section resolutions, reviewer notes, and approval metadata.', 'Keeps human review authoritative.'],
+  ['`supersedePilotResearchReadout(readoutId)`', 'Mark an older approved readout as superseded when a newer governed version replaces it.', 'Protects historical traceability.'],
+];
+
+const UI_STATE_ROWS = [
+  ['Empty', 'No saved readout exists yet for the selected pilot/filter frame.', 'Show readiness requirements, generation controls, and what the tab will produce.'],
+  ['Generating', 'A readout is being generated for a frozen pilot frame.', 'Lock the controls, show the frozen scope summary, and avoid implying the draft is available until saved.'],
+  ['Draft Ready', 'A generated draft exists and is waiting for human review.', 'Show section-by-section citations, claim tags, and reviewer controls.'],
+  ['Reviewed / Approved', 'A reviewer has accepted or revised the draft into governance-grade output.', 'Display review metadata prominently and allow supersession, not silent overwrite.'],
+  ['Suppressed Section', 'A section failed readiness or evidence requirements.', 'Show the exact suppression reason instead of generic summary text.'],
+];
+
+const TICKET_ROWS = [
+  ['R1', 'Define readout Firestore schema and exported TypeScript contracts.', 'Platform + web', 'Unblocks storage, renderer typing, and review workflow.'],
+  ['R2', 'Build pilot readout readiness evaluator against the governed dashboard read model.', 'Platform', 'Prevents unsupported generations.'],
+  ['R3', 'Create manual generation action and service/API path for one pilot frame.', 'Web + platform', 'V1 generation entry point.'],
+  ['R4', 'Build Research Readout tab UI with empty, generating, draft, approved, and suppressed states.', 'Web', 'Makes the product surface match the implementation spec.'],
+  ['R5', 'Persist review state, section resolutions, reviewer notes, and supersession handling.', 'Web + platform', 'Human review must be first-class, not an afterthought.'],
+  ['R6', 'Add section citations, claim tags, denominators, and limitation rendering in the UI.', 'Web', 'Keeps the AI layer auditable instead of magical.'],
+  ['R7', 'Write QA cases for readiness suppression, baseline labeling, and hypothesis-status suggestion boundaries.', 'QA + product', 'Protects against overclaiming and governance drift.'],
+];
+
 const REVIEW_ROWS = [
   ['Readout review state', '`draft`, `reviewed`, `approved`, `superseded`', 'Tracks whether the generated readout has become governance-grade output or remains a draft artifact.'],
   ['Section reviewer resolution', '`accepted`, `revised`, `rejected`, `carry-forward`', 'Lets reviewers operationalize or reject sections instead of letting generated drafts accumulate silently.'],
@@ -161,6 +193,18 @@ const PulseCheckCorrelationEnginePilotResearchReadoutTab: React.FC = () => {
         <DataTable columns={['Section', 'Purpose']} rows={OUTPUT_ROWS} />
       </SectionBlock>
 
+      <SectionBlock icon={Database} title="Implementation Contract">
+        <DataTable columns={['Collection / Contract', 'Meaning', 'Why']} rows={DATA_MODEL_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={Waypoints} title="Generation API Shape">
+        <DataTable columns={['Method', 'Primary Job', 'Why']} rows={API_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={LayoutPanelTop} title="Tab UI States">
+        <DataTable columns={['State', 'Meaning', 'Required Behavior']} rows={UI_STATE_ROWS} />
+      </SectionBlock>
+
       <SectionBlock icon={CheckCircle2} title="Save And Review Workflow">
         <DataTable columns={['Workflow Element', 'Allowed States', 'Rule']} rows={REVIEW_ROWS} />
       </SectionBlock>
@@ -182,6 +226,10 @@ const PulseCheckCorrelationEnginePilotResearchReadoutTab: React.FC = () => {
 
       <SectionBlock icon={ClipboardCheck} title="V1 And V2 Boundary">
         <DataTable columns={['Phase', 'Scope', 'Why']} rows={RELEASE_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={CheckCircle2} title="First V1 Engineering Tickets">
+        <DataTable columns={['Ticket', 'Task', 'Owner', 'Why']} rows={TICKET_ROWS} />
       </SectionBlock>
     </div>
   );

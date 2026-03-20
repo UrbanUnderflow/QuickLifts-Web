@@ -67,6 +67,7 @@ const M6_ROWS = [
   ['Build active-pilot dashboard directory', 'List active pilots by team and allow drill-in to one pilot dashboard.', 'Web + product', 'Pilot monitoring should start from the pilot index, not from a global engine page.'],
   ['Materialize pilot-scoped reporting queries', 'Build pilot dashboard reads from `PilotEnrollment`-scoped joins rather than raw team membership or whole-engine aggregates.', 'Platform + web', 'Protects pilot boundaries and denominator honesty.'],
   ['Add hypothesis tracker storage and review workflow', 'Persist pilot hypotheses, status history, notes, and review timestamps.', 'Web + ops + product', 'Needed for honest pilot governance, not just static docs.'],
+  ['Build pilot research readout storage and generation contract', 'Persist frozen pilot readouts, readiness results, citations, and review state for the Research Readout tab.', 'Web + platform + product', 'Turns the readout from a doc concept into an auditable product surface.'],
   ['Add rebuild and recompute controls', 'Allow safe per-athlete or scoped recompute of evidence, patterns, and projections.', 'Platform + ops', 'Operational resilience.'],
   ['Add quality monitoring', 'Track evidence volume, stale-source rates, contradiction spikes, projection failure rates, and flag coverage.', 'Ops + platform', 'Launch monitoring requirement.'],
   ['Add pilot adoption telemetry and reporting', 'Track recommendation engagement, follow-through, coach views, and override posture per pilot.', 'Web + platform', 'Adoption is part of pilot success, not optional polish.'],
@@ -102,6 +103,7 @@ const FILE_ROWS = [
   ['Profile snapshot writer', 'Extend `stateContextAtCapture` with `assessmentContextFlag` at milestone creation time.', 'Platform / profile pipeline', 'Key integration surface.'],
   ['Nora runtime / Profile UI / coach tooling', 'Consume projections and flags with confidence-safe copy and visibility rules.', 'PulseCheck iOS + web', 'Primary consumers.'],
   ['Pilot dashboard reporting service + UI', 'Own active-pilot listing, pilot detail KPIs, hypothesis workflow, and pilot-scoped athlete drill-down.', 'Web + ops', 'Primary monitoring surface for live pilots.'],
+  ['Pilot research readout service + review UI', 'Own readout generation, frozen-frame display, section citations, review states, and supersession workflow.', 'Web + platform + product', 'Primary interpretation surface for governed pilot analysis.'],
   ['Research and ops tooling', 'Own export views, inspection surfaces, and monitoring dashboards.', 'Web + ops + research', 'Production trust layer.'],
 ];
 
