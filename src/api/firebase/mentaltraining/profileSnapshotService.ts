@@ -7,6 +7,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config';
 import type { AssessmentContextFlag } from './correlationEngineTypes';
+import { correlationAssessmentContextService } from './correlationAssessmentContextService';
 import {
   ATHLETE_MENTAL_PROGRESS_COLLECTION,
   PROFILE_SNAPSHOTS_SUBCOLLECTION,
@@ -146,6 +147,54 @@ function parseCanonicalSnapshot(data: Record<string, unknown>): CanonicalProfile
   return data as unknown as CanonicalProfileSnapshot;
 }
 
+function shouldAttachAssessmentContextFlag(
+  milestoneType: ProfileSnapshotMilestoneType
+): milestoneType is Extract<ProfileSnapshotMilestoneType, 'baseline' | 'midpoint' | 'endpoint' | 'retention' | 'manual_staff_checkpoint'> {
+  return milestoneType !== 'onboarding';
+}
+
+async function enrichAssessmentContextFlag(input: ProfileSnapshotWriteInput): Promise<ProfileSnapshotWriteInput> {
+  if (!shouldAttachAssessmentContextFlag(input.milestoneType)) {
+    return input;
+  }
+
+  try {
+    const assessmentContextFlag = await correlationAssessmentContextService.buildForMilestone({
+      athleteId: input.athleteId,
+      milestoneType: input.milestoneType,
+      capturedAt: input.capturedAt ?? Date.now(),
+    });
+
+    return {
+      ...input,
+      profilePayload: {
+        ...input.profilePayload,
+        stateContextAtCapture: {
+          ...(input.profilePayload.stateContextAtCapture ?? {}),
+          assessmentContextFlag,
+        },
+      },
+    };
+  } catch (error) {
+    console.warn('[profileSnapshotService] Failed to build assessmentContextFlag, writing degraded unknown fallback.', error);
+    const assessmentContextFlag = correlationAssessmentContextService.buildUnknownFlag(
+      input.milestoneType,
+      input.capturedAt ?? Date.now()
+    );
+
+    return {
+      ...input,
+      profilePayload: {
+        ...input.profilePayload,
+        stateContextAtCapture: {
+          ...(input.profilePayload.stateContextAtCapture ?? {}),
+          assessmentContextFlag,
+        },
+      },
+    };
+  }
+}
+
 export const profileSnapshotService = {
   buildSnapshotKey: buildProfileSnapshotKey,
   buildCanonicalScopeKey: buildProfileSnapshotCanonicalScopeKey,
@@ -177,16 +226,17 @@ export const profileSnapshotService = {
   },
 
   async writeCanonicalSnapshot(input: ProfileSnapshotWriteInput): Promise<ProfileSnapshotWriteResult> {
-    const validation = validateProfileExplanation(input.noraExplanation);
+    const resolvedInput = await enrichAssessmentContextFlag(input);
+    const validation = validateProfileExplanation(resolvedInput.noraExplanation);
     if (!validation.valid) {
       throw new Error(validation.reason);
     }
 
-    const progressRef = doc(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, input.athleteId);
-    const snapshotKey = buildProfileSnapshotKey(input);
+    const progressRef = doc(db, ATHLETE_MENTAL_PROGRESS_COLLECTION, resolvedInput.athleteId);
+    const snapshotKey = buildProfileSnapshotKey(resolvedInput);
     const snapshotRef = doc(collection(progressRef, PROFILE_SNAPSHOTS_SUBCOLLECTION), snapshotKey);
     const now = Date.now();
-    const incomingFingerprint = profileSnapshotRuntime.buildSnapshotFingerprint(input, input.noraExplanation);
+    const incomingFingerprint = profileSnapshotRuntime.buildSnapshotFingerprint(resolvedInput, resolvedInput.noraExplanation);
 
     return runTransaction(db, async (transaction) => {
       const progressSnap = await transaction.get(progressRef);
@@ -205,7 +255,7 @@ export const profileSnapshotService = {
       }
 
       const nextRevision = (existingData?.revision ?? 0) + 1;
-      const nextSnapshot = profileSnapshotRuntime.buildCanonicalSnapshot(input, now, nextRevision);
+      const nextSnapshot = profileSnapshotRuntime.buildCanonicalSnapshot(resolvedInput, now, nextRevision);
 
       if (existingData) {
         const revisionRef = doc(collection(snapshotRef, 'revisions'), `r${String(existingData.revision).padStart(4, '0')}`);
@@ -223,8 +273,8 @@ export const profileSnapshotService = {
         {
           lastProfileSnapshotAt: now,
           lastCanonicalSnapshotKey: snapshotKey,
-          lastCanonicalSnapshotMilestone: input.milestoneType,
-          profileVersion: input.profileVersion,
+          lastCanonicalSnapshotMilestone: resolvedInput.milestoneType,
+          profileVersion: resolvedInput.profileVersion,
           currentCanonicalSnapshotIds: {
             ...existingSnapshotIds,
             [snapshotKey]: snapshotKey,

@@ -41,6 +41,10 @@ export { profileSnapshotService } from './profileSnapshotService';
 export { correlationEngineService, buildAthletePatternKey, buildCorrelationEvidenceId, buildPatternRevisionId, buildRecommendationProjectionKey, buildCorrelationEngineTraceMetadata, buildAthletePhysiologyCognitionRoot } from './correlationEngineService';
 export { correlationEvidenceService } from './correlationEvidenceService';
 export { correlationPatternService } from './correlationPatternService';
+export { correlationProjectionService } from './correlationProjectionService';
+export { correlationAssessmentContextService } from './correlationAssessmentContextService';
+export { correlationOpsService } from './correlationOpsService';
+export { correlationLaunchReadinessService } from './correlationLaunchReadinessService';
 export * from './correlationEngineTypes';
 export type {
   CanonicalProfileSnapshot,

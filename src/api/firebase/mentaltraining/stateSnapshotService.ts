@@ -142,15 +142,38 @@ export const stateSnapshotService = {
   },
 
   async getLatestForAthlete(athleteId: string): Promise<PulseCheckStateSnapshot | null> {
+    const snapshots = await this.listForAthlete(athleteId);
+
+    return snapshots[0] || null;
+  },
+
+  async listForAthlete(athleteId: string): Promise<PulseCheckStateSnapshot[]> {
     const snapshot = await getDocs(
       query(collection(db, COLLECTION), where('athleteId', '==', athleteId))
     );
 
-    const snapshots = snapshot.docs
+    return snapshot.docs
       .map((entry) => pulseCheckStateSnapshotFromFirestore(entry.id, entry.data() as Record<string, any>))
       .sort((left, right) => right.updatedAt - left.updatedAt);
+  },
 
-    return snapshots[0] || null;
+  async getClosestForAthleteAtOrBefore(athleteId: string, capturedAt: number): Promise<PulseCheckStateSnapshot | null> {
+    const snapshots = await this.listForAthlete(athleteId);
+    if (!snapshots.length) return null;
+
+    const exactSourceDate = new Date(capturedAt).toISOString().slice(0, 10);
+    const sameDay = snapshots.find((snapshot) => snapshot.sourceDate === exactSourceDate);
+    if (sameDay) return sameDay;
+
+    const prior = snapshots.find((snapshot) => snapshot.updatedAt <= capturedAt);
+    if (prior) return prior;
+
+    return snapshots.reduce<PulseCheckStateSnapshot | null>((closest, snapshot) => {
+      if (!closest) return snapshot;
+      return Math.abs(snapshot.updatedAt - capturedAt) < Math.abs(closest.updatedAt - capturedAt)
+        ? snapshot
+        : closest;
+    }, null);
   },
 
   async upsertFromCheckIn({
