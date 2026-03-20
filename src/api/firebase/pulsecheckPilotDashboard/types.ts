@@ -80,6 +80,7 @@ export interface PilotResearchReadout {
   readModelVersion: string;
   readiness: PilotResearchReadoutReadinessGateResult[];
   sections: PilotResearchReadoutSection[];
+  frozenEvidenceFrame?: Record<string, any>;
   generatedAt?: Timestamp | null;
   reviewedAt?: Timestamp | null;
   reviewedByUserId?: string;
@@ -94,6 +95,16 @@ export interface PilotResearchReadoutGenerationInput {
   dateWindowStart: string;
   dateWindowEnd: string;
   baselineMode: PilotResearchReadoutBaselineMode;
+}
+
+export interface PilotResearchReadoutReviewInput {
+  readoutId: string;
+  reviewState: PilotResearchReadoutReviewState;
+  sections: Array<{
+    sectionKey: PilotResearchReadoutSection['sectionKey'];
+    reviewerResolution?: PilotResearchReadoutSectionResolution;
+    reviewerNotes?: string;
+  }>;
 }
 
 export interface PulseCheckPilotHypothesis {
@@ -354,6 +365,7 @@ export interface PilotDashboardDetail {
   teamInviteConfigDefault: PulseCheckPilotInviteDefaultConfig | null;
   organizationInviteConfigDefault: PulseCheckPilotInviteDefaultConfig | null;
   latestResearchReadout?: PilotResearchReadout | null;
+  researchReadouts: PilotResearchReadout[];
 }
 
 export interface PilotDashboardAthleteDetail {
