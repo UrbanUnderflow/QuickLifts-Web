@@ -1,5 +1,6 @@
 import { addDoc, arrayUnion, collection, doc, getDoc, getDocs, orderBy, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from '../config';
+import { buildPulseCheckTeamInviteOneLink, resolvePulseCheckInvitePreviewImage } from '../../../utils/pulsecheckInviteLinks';
 import type {
   CompletePulseCheckAthleteOnboardingInput,
   CreatePulseCheckPilotCohortInput,
@@ -172,6 +173,7 @@ const toOrganization = (id: string, data: Record<string, any>): PulseCheckOrgani
   displayName: data.displayName || '',
   legalName: data.legalName || '',
   organizationType: data.organizationType || '',
+  invitePreviewImageUrl: data.invitePreviewImageUrl || '',
   status: (data.status as PulseCheckOrganizationStatus) || 'provisioning',
   legacySource: data.legacySource || undefined,
   legacyCoachId: data.legacyCoachId || '',
@@ -193,6 +195,7 @@ const toTeam = (id: string, data: Record<string, any>): PulseCheckTeam => ({
   displayName: data.displayName || '',
   teamType: data.teamType || '',
   sportOrProgram: data.sportOrProgram || '',
+  invitePreviewImageUrl: data.invitePreviewImageUrl || '',
   legacySource: data.legacySource || undefined,
   legacyCoachId: data.legacyCoachId || '',
   siteLabel: data.siteLabel || '',
@@ -933,6 +936,7 @@ export const pulseCheckProvisioningService = {
       displayName: normalizeString(input.displayName),
       legalName: normalizeString(input.legalName),
       organizationType: normalizeString(input.organizationType),
+      invitePreviewImageUrl: normalizeString(input.invitePreviewImageUrl),
       status: input.status || 'provisioning',
       legacySource: input.legacySource || null,
       legacyCoachId: normalizeString(input.legacyCoachId),
@@ -994,6 +998,7 @@ export const pulseCheckProvisioningService = {
       displayName: normalizeString(input.displayName),
       teamType: normalizeString(input.teamType),
       sportOrProgram: normalizeString(input.sportOrProgram),
+      invitePreviewImageUrl: normalizeString(input.invitePreviewImageUrl),
       legacySource: input.legacySource || null,
       legacyCoachId: normalizeString(input.legacyCoachId),
       siteLabel: normalizeString(input.siteLabel),
@@ -1188,7 +1193,37 @@ export const pulseCheckProvisioningService = {
       typeof window !== 'undefined'
         ? window.location.origin
         : process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai';
-    const activationUrl = `${baseUrl}/PulseCheck/team-invite/${token}${shouldStampDevFirebaseLinks() ? '?devFirebase=1' : ''}`;
+    const fallbackPath = `/PulseCheck/team-invite/${token}${shouldStampDevFirebaseLinks() ? '?devFirebase=1' : ''}`;
+    let activationUrl = `${baseUrl}${fallbackPath}`;
+
+    try {
+      const [teamSnapshot, organizationSnapshot] = await Promise.all([
+        getDoc(doc(db, TEAMS_COLLECTION, normalizedTeamId)),
+        getDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizeString(input.organizationId))),
+      ]);
+
+      const teamData = (teamSnapshot.data() || {}) as Record<string, any>;
+      const organizationData = (organizationSnapshot.data() || {}) as Record<string, any>;
+      const resolvedTeamName = normalizeString(teamData.displayName) || normalizeString(input.pilotName) || 'Team';
+      const resolvedOrganizationName = normalizeString(organizationData.displayName);
+      const previewImageUrl = resolvePulseCheckInvitePreviewImage(
+        normalizeString(teamData.invitePreviewImageUrl),
+        normalizeString(organizationData.invitePreviewImageUrl)
+      );
+
+      activationUrl = buildPulseCheckTeamInviteOneLink({
+        token,
+        fallbackPath,
+        role: input.teamMembershipRole,
+        pilotName: normalizeString(input.pilotName),
+        teamName: resolvedTeamName,
+        organizationName: resolvedOrganizationName,
+        cohortName: normalizeString(input.cohortName),
+        imageUrl: previewImageUrl,
+      });
+    } catch (error) {
+      console.warn('[pulsecheckProvisioningService] Failed to resolve invite preview metadata, falling back to direct URL.', error);
+    }
 
     const existingActiveLinks = await getDocs(collection(db, INVITE_LINKS_COLLECTION));
     const linksToRevoke = existingActiveLinks.docs.filter((snapshot) => {
@@ -1237,6 +1272,20 @@ export const pulseCheckProvisioningService = {
     const inviteDocRef = doc(db, INVITE_LINKS_COLLECTION, token);
     await setDoc(inviteDocRef, payload);
     return inviteDocRef.id;
+  },
+
+  async updateOrganizationInvitePreviewImage(organizationId: string, invitePreviewImageUrl: string): Promise<void> {
+    await updateDoc(doc(db, ORGANIZATIONS_COLLECTION, normalizeString(organizationId)), {
+      invitePreviewImageUrl: normalizeString(invitePreviewImageUrl),
+      updatedAt: serverTimestamp(),
+    });
+  },
+
+  async updateTeamInvitePreviewImage(teamId: string, invitePreviewImageUrl: string): Promise<void> {
+    await updateDoc(doc(db, TEAMS_COLLECTION, normalizeString(teamId)), {
+      invitePreviewImageUrl: normalizeString(invitePreviewImageUrl),
+      updatedAt: serverTimestamp(),
+    });
   },
 
   async savePostActivationSetup(input: SavePulseCheckPostActivationSetupInput): Promise<void> {

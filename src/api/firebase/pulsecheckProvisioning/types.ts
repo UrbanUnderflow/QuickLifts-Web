@@ -63,6 +63,7 @@ export interface PulseCheckOrganization {
   displayName: string;
   legalName: string;
   organizationType: string;
+  invitePreviewImageUrl?: string;
   status: PulseCheckOrganizationStatus;
   legacySource?: 'legacy-coach-roster';
   legacyCoachId?: string;
@@ -82,6 +83,7 @@ export interface CreatePulseCheckOrganizationInput {
   displayName: string;
   legalName: string;
   organizationType: string;
+  invitePreviewImageUrl?: string;
   status?: PulseCheckOrganizationStatus;
   legacySource?: 'legacy-coach-roster';
   legacyCoachId?: string;
@@ -101,6 +103,7 @@ export interface PulseCheckTeam {
   displayName: string;
   teamType: string;
   sportOrProgram: string;
+  invitePreviewImageUrl?: string;
   legacySource?: 'legacy-coach-roster';
   legacyCoachId?: string;
   siteLabel?: string;
@@ -123,6 +126,7 @@ export interface CreatePulseCheckTeamInput {
   displayName: string;
   teamType: string;
   sportOrProgram: string;
+  invitePreviewImageUrl?: string;
   legacySource?: 'legacy-coach-roster';
   legacyCoachId?: string;
   siteLabel?: string;
