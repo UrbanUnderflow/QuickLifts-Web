@@ -20,6 +20,7 @@ import {
   RECOMMENDATION_PROJECTIONS_SUBCOLLECTION,
 } from '../mentaltraining/collections';
 import { pulseCheckProvisioningService } from '../pulsecheckProvisioning/service';
+import { pilotDashboardDemoMode } from './demoMode';
 import type { PulseCheckPilot, PulseCheckPilotCohort, PulseCheckPilotEnrollment, PulseCheckTeamMembership } from '../pulsecheckProvisioning/types';
 import type {
   PilotDashboardAthleteDetail,
@@ -101,6 +102,7 @@ const toAverage = (total: number, count: number) => (count > 0 ? roundMetric(tot
 
 const toDate = (value: any): Date | null => {
   if (!value) return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return new Date(value);
   if (value instanceof Date) return value;
   if (typeof value?.toDate === 'function') return value.toDate();
   return null;
@@ -620,11 +622,49 @@ async function loadAthleteTimelineItems(athleteId: string) {
 }
 
 export const pulseCheckPilotDashboardService = {
+  isDemoModeEnabled(): boolean {
+    return pilotDashboardDemoMode.isEnabled();
+  },
+
+  setDemoModeEnabled(enabled: boolean) {
+    pilotDashboardDemoMode.setEnabled(enabled);
+  },
+
+  resetDemoModeData(): PilotDashboardDetail {
+    return pilotDashboardDemoMode.reset();
+  },
+
+  getDemoPilotId(): string {
+    return pilotDashboardDemoMode.getPilotId();
+  },
+
+  listDemoInviteLinks() {
+    return pilotDashboardDemoMode.listInviteLinks();
+  },
+
+  createDemoInviteLink(input: {
+    pilotId: string;
+    pilotName: string;
+    cohortId?: string;
+    cohortName?: string;
+    createdByUserId?: string;
+    createdByEmail?: string;
+  }) {
+    return pilotDashboardDemoMode.createInviteLink(input);
+  },
+
   async listPilotHypotheses(pilotId: string): Promise<PulseCheckPilotHypothesis[]> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return pilotDashboardDemoMode.getPilotDashboardDetail(pilotId)?.hypotheses || [];
+    }
     return listPilotHypotheses(pilotId);
   },
 
   async seedDefaultHypotheses(pilotId: string): Promise<void> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      pilotDashboardDemoMode.seedDefaultHypotheses(DEFAULT_PILOT_HYPOTHESES);
+      return;
+    }
     const existing = await listPilotHypotheses(pilotId);
     if (existing.length > 0) return;
 
@@ -648,6 +688,9 @@ export const pulseCheckPilotDashboardService = {
   },
 
   async saveHypothesis(input: PulseCheckPilotHypothesisInput): Promise<string> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return pilotDashboardDemoMode.saveHypothesis(input);
+    }
     const id = normalizeString(input.id) || buildHypothesisId(input.pilotId, input.code);
     const hypothesisRef = doc(db, PILOT_HYPOTHESES_COLLECTION, id);
     const existingSnap = await getDoc(hypothesisRef);
@@ -672,6 +715,9 @@ export const pulseCheckPilotDashboardService = {
   },
 
   async saveInviteConfig(input: PulseCheckPilotInviteConfigInput): Promise<string> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return pilotDashboardDemoMode.saveInviteConfig(input);
+    }
     const configRef = doc(db, PILOT_INVITE_CONFIGS_COLLECTION, normalizeString(input.pilotId));
     const existingSnap = await getDoc(configRef);
     await setDoc(
@@ -701,6 +747,9 @@ export const pulseCheckPilotDashboardService = {
   },
 
   async saveInviteDefault(input: PulseCheckPilotInviteDefaultConfigInput): Promise<string> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return pilotDashboardDemoMode.saveInviteDefault(input);
+    }
     const scopeId = input.scopeType === 'team' ? normalizeString(input.teamId) : normalizeString(input.organizationId);
     const collectionName = input.scopeType === 'team' ? TEAM_INVITE_DEFAULTS_COLLECTION : ORGANIZATION_INVITE_DEFAULTS_COLLECTION;
     const configRef = doc(db, collectionName, scopeId);
@@ -733,6 +782,10 @@ export const pulseCheckPilotDashboardService = {
   },
 
   async resetInviteConfigOverride(pilotId: string): Promise<void> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      pilotDashboardDemoMode.resetInviteConfigOverride();
+      return;
+    }
     const normalizedPilotId = normalizeString(pilotId);
     if (!normalizedPilotId) {
       throw new Error('Pilot id is required to reset invite config override.');
@@ -742,6 +795,9 @@ export const pulseCheckPilotDashboardService = {
   },
 
   async listPilotResearchReadouts(pilotId: string): Promise<PilotResearchReadout[]> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return pilotDashboardDemoMode.getPilotDashboardDetail(pilotId)?.researchReadouts || [];
+    }
     const normalizedPilotId = normalizeString(pilotId);
     if (!normalizedPilotId) return [];
     const readoutSnap = await getDocs(query(collection(db, PILOT_RESEARCH_READOUTS_COLLECTION), where('pilotId', '==', normalizedPilotId)));
@@ -754,6 +810,9 @@ export const pulseCheckPilotDashboardService = {
     frame: Record<string, any>;
     options: PilotResearchReadoutGenerationInput;
   }): Promise<{ readoutId: string }> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return pilotDashboardDemoMode.generatePilotResearchReadout(input);
+    }
     const currentUser = auth.currentUser;
     if (!currentUser) {
       throw new Error('Authenticated admin session required.');
@@ -781,6 +840,10 @@ export const pulseCheckPilotDashboardService = {
   },
 
   async updatePilotResearchReadoutReview(input: PilotResearchReadoutReviewInput): Promise<void> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      pilotDashboardDemoMode.updatePilotResearchReadoutReview(input, auth.currentUser?.email || '');
+      return;
+    }
     const currentUser = auth.currentUser;
     if (!currentUser) {
       throw new Error('Authenticated admin session required.');
@@ -804,6 +867,9 @@ export const pulseCheckPilotDashboardService = {
   },
 
   async listActivePilotDirectory(): Promise<PilotDashboardDirectoryEntry[]> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return pilotDashboardDemoMode.listActivePilotDirectory();
+    }
     const [organizations, teams, pilots, cohorts, enrollments, hypotheses] = await Promise.all([
       pulseCheckProvisioningService.listOrganizations(),
       pulseCheckProvisioningService.listTeams(),
@@ -893,6 +959,9 @@ export const pulseCheckPilotDashboardService = {
   },
 
   async getPilotDashboardDetail(pilotId: string): Promise<PilotDashboardDetail | null> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return pilotDashboardDemoMode.getPilotDashboardDetail(pilotId);
+    }
     const pilot = await pulseCheckProvisioningService.getPilot(pilotId);
     if (!pilot || !isActivePilotDashboardScope(pilot)) return null;
 
@@ -980,6 +1049,9 @@ export const pulseCheckPilotDashboardService = {
   },
 
   async getPilotAthleteDetail(pilotId: string, athleteId: string): Promise<PilotDashboardAthleteDetail | null> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return pilotDashboardDemoMode.getPilotAthleteDetail(pilotId, athleteId);
+    }
     const pilot = await pulseCheckProvisioningService.getPilot(pilotId);
     if (!pilot || !isActivePilotDashboardScope(pilot)) return null;
 

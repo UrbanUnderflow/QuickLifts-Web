@@ -162,6 +162,26 @@ async function cleanupPilotDashboardFixture(page: Page, adminIdentity: AuthIdent
 test.describe.serial('PulseCheck pilot dashboard', () => {
   test.skip(!hasAuthState && !remoteLoginToken, 'Requires Playwright admin auth state or PLAYWRIGHT_REMOTE_LOGIN_TOKEN.');
 
+  test('@smoke switches into dashboard demo mode', async ({ page }) => {
+    await ensureAdminSession(page, '/admin/pulsecheckPilotDashboard');
+
+    await page.goto('/admin/pulsecheckPilotDashboard', { waitUntil: 'domcontentloaded' });
+    await waitForStableAppFrame(page);
+
+    await page.getByTestId('pilot-dashboard-demo-toggle').click();
+
+    await expect(page.getByTestId('pilot-dashboard-demo-banner')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Correlation Engine Spring Pilot Demo' })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Correlation Engine Spring Pilot Demo' }).click();
+    await expect(page.getByTestId('pilot-dashboard-detail-demo-banner')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Correlation Engine Spring Pilot Demo' })).toBeVisible();
+    await expect(page.getByTestId('pilot-dashboard-tab-research-readout')).toBeVisible();
+
+    await page.getByTestId('pilot-dashboard-detail-demo-toggle').click();
+    await expect(page).toHaveURL(/\/admin\/pulsecheckPilotDashboard$/);
+  });
+
   test('@smoke shows the active pilot directory and research brief in pilot scope', async ({ page }) => {
     const { fixture, adminIdentity } = await seedPilotDashboardFixture(page);
 

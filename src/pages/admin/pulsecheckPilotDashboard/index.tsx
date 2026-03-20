@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { Activity, ArrowRight, Building2, FlaskConical, Layers3, RefreshCcw, Users2 } from 'lucide-react';
+import { Activity, ArrowRight, Building2, FlaskConical, Layers3, MonitorPlay, RefreshCcw, Users2 } from 'lucide-react';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
 import type { PilotDashboardDirectoryEntry } from '../../../api/firebase/pulsecheckPilotDashboard/types';
@@ -16,12 +16,14 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [demoModeEnabled, setDemoModeEnabled] = useState(false);
 
   const load = async (mode: 'initial' | 'refresh' = 'initial') => {
     if (mode === 'initial') setLoading(true);
     if (mode === 'refresh') setRefreshing(true);
     setError(null);
     try {
+      setDemoModeEnabled(pulseCheckPilotDashboardService.isDemoModeEnabled());
       const nextEntries = await pulseCheckPilotDashboardService.listActivePilotDirectory();
       setEntries(nextEntries);
     } catch (loadError: any) {
@@ -35,6 +37,22 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   useEffect(() => {
     void load();
   }, []);
+
+  const toggleDemoMode = () => {
+    const nextValue = !pulseCheckPilotDashboardService.isDemoModeEnabled();
+    pulseCheckPilotDashboardService.setDemoModeEnabled(nextValue);
+    if (nextValue) {
+      pulseCheckPilotDashboardService.resetDemoModeData();
+    }
+    setOrganizationId('');
+    setTeamId('');
+    void load('refresh');
+  };
+
+  const resetDemoModeData = () => {
+    pulseCheckPilotDashboardService.resetDemoModeData();
+    void load('refresh');
+  };
 
   const organizations = useMemo(
     () =>
@@ -110,14 +128,44 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                 engine health, findings, and manual hypothesis tracking inside the active enrollment boundary.
               </p>
             </div>
-            <button
-              onClick={() => void load('refresh')}
-              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
-            >
-              <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {demoModeEnabled ? (
+                <button
+                  onClick={resetDemoModeData}
+                  data-testid="pilot-dashboard-demo-reset"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100 transition hover:bg-amber-400/15"
+                >
+                  <RefreshCcw className="h-4 w-4" />
+                  Reset Demo Data
+                </button>
+              ) : null}
+              <button
+                onClick={toggleDemoMode}
+                data-testid="pilot-dashboard-demo-toggle"
+                className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition ${
+                  demoModeEnabled
+                    ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/15'
+                    : 'border-cyan-400/30 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15'
+                }`}
+              >
+                <MonitorPlay className="h-4 w-4" />
+                {demoModeEnabled ? 'Exit Demo Mode' : 'Switch To Demo Mode'}
+              </button>
+              <button
+                onClick={() => void load('refresh')}
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
+              >
+                <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
+
+          {demoModeEnabled ? (
+            <div data-testid="pilot-dashboard-demo-banner" className="mt-6 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
+              Demo mode is on. This dashboard is using mock pilots, mock athletes, mock hypotheses, and mock AI research briefs stored locally in your browser so you can demo and QA safely.
+            </div>
+          ) : null}
 
           <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
             <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">

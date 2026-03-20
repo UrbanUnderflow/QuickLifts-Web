@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Activity, ArrowLeft, Brain, Database, FileText, RefreshCcw, Users2 } from 'lucide-react';
+import { Activity, ArrowLeft, Brain, Database, FileText, MonitorPlay, RefreshCcw, Users2 } from 'lucide-react';
 import AdminRouteGuard from '../../../../../components/auth/AdminRouteGuard';
 import { pulseCheckPilotDashboardService } from '../../../../../api/firebase/pulsecheckPilotDashboard/service';
 import type { PilotDashboardAthleteDetail } from '../../../../../api/firebase/pulsecheckPilotDashboard/types';
@@ -29,6 +29,7 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [demoModeEnabled, setDemoModeEnabled] = useState(false);
 
   const load = async (mode: 'initial' | 'refresh' = 'initial') => {
     if (!pilotId || !athleteId) return;
@@ -36,6 +37,12 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
     if (mode === 'refresh') setRefreshing(true);
     setError(null);
     try {
+      const isDemoMode = pulseCheckPilotDashboardService.isDemoModeEnabled();
+      setDemoModeEnabled(isDemoMode);
+      if (isDemoMode && pilotId !== pulseCheckPilotDashboardService.getDemoPilotId()) {
+        await router.replace(`/admin/pulsecheckPilotDashboard/${encodeURIComponent(pulseCheckPilotDashboardService.getDemoPilotId())}`);
+        return;
+      }
       const nextDetail = await pulseCheckPilotDashboardService.getPilotAthleteDetail(pilotId, athleteId);
       setDetail(nextDetail);
     } catch (loadError: any) {
@@ -49,6 +56,17 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
   useEffect(() => {
     void load();
   }, [pilotId, athleteId]);
+
+  const toggleDemoMode = async () => {
+    const nextValue = !pulseCheckPilotDashboardService.isDemoModeEnabled();
+    pulseCheckPilotDashboardService.setDemoModeEnabled(nextValue);
+    if (nextValue) {
+      pulseCheckPilotDashboardService.resetDemoModeData();
+      await router.push(`/admin/pulsecheckPilotDashboard/${encodeURIComponent(pulseCheckPilotDashboardService.getDemoPilotId())}`);
+      return;
+    }
+    await router.push('/admin/pulsecheckPilotDashboard');
+  };
 
   return (
     <AdminRouteGuard>
@@ -76,14 +94,34 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => void load('refresh')}
-              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
-            >
-              <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => void toggleDemoMode()}
+                data-testid="pilot-dashboard-athlete-demo-toggle"
+                className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition ${
+                  demoModeEnabled
+                    ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100 hover:bg-emerald-400/15'
+                    : 'border-cyan-400/30 bg-cyan-400/10 text-cyan-100 hover:bg-cyan-400/15'
+                }`}
+              >
+                <MonitorPlay className="h-4 w-4" />
+                {demoModeEnabled ? 'Exit Demo Mode' : 'Switch To Demo Mode'}
+              </button>
+              <button
+                onClick={() => void load('refresh')}
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
+              >
+                <RefreshCcw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
           </div>
+
+          {demoModeEnabled ? (
+            <div data-testid="pilot-dashboard-athlete-demo-banner" className="mt-6 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
+              Demo mode is on. This athlete drill-down is showing mock pilot enrollment, evidence, and snapshot history for walkthrough and QA use only.
+            </div>
+          ) : null}
 
           {loading ? (
             <div className="mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-8 text-sm text-zinc-400">Loading athlete detail...</div>
