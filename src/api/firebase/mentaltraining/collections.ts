@@ -26,3 +26,4 @@ export const CORRELATION_EVIDENCE_RECORDS_SUBCOLLECTION = 'evidence-records' as 
 export const ATHLETE_PATTERN_MODELS_SUBCOLLECTION = 'pattern-models' as const;
 export const PATTERN_MODEL_REVISIONS_SUBCOLLECTION = 'revisions' as const;
 export const RECOMMENDATION_PROJECTIONS_SUBCOLLECTION = 'recommendation-projections' as const;
+export const CORRELATION_ENGINE_MONITOR_EVENTS_COLLECTION = 'correlation-engine-monitor-events' as const;
