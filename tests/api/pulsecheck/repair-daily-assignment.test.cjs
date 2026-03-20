@@ -57,29 +57,95 @@ function loadHandler({ db, runtimeHelpers, chatRuntimeHelpers = {}, decodedUid =
   return require(repairPath).handler;
 }
 
-function createDb({ existingAssignment }) {
+function createDb({
+  existingAssignment,
+  launchableLegacyExerciseIds = [],
+  launchableSimSpecIds = [],
+  launchableLabels = [],
+}) {
+  const legacyIds = new Set(launchableLegacyExerciseIds.map((value) => String(value).toLowerCase()));
+  const simSpecIds = new Set(launchableSimSpecIds.map((value) => String(value).toLowerCase()));
+  const labels = new Set(launchableLabels.map((value) => String(value).toLowerCase()));
+
   return {
     collection(name) {
-      if (name !== 'pulsecheck-daily-assignments') {
-        throw new Error(`Unexpected collection: ${name}`);
+      if (name === 'pulsecheck-daily-assignments') {
+        return {
+          doc(id) {
+            return {
+              async get() {
+                if (!existingAssignment) {
+                  return { exists: false, id, data: () => undefined };
+                }
+                return {
+                  exists: true,
+                  id,
+                  data: () => existingAssignment,
+                };
+              },
+            };
+          },
+        };
       }
 
-      return {
-        doc(id) {
-          return {
-            async get() {
-              if (!existingAssignment) {
-                return { exists: false, id, data: () => undefined };
-              }
-              return {
-                exists: true,
-                id,
-                data: () => existingAssignment,
-              };
-            },
-          };
-        },
-      };
+      if (name === 'mental-exercises') {
+        return {
+          doc(id) {
+            return {
+              async get() {
+                const normalizedId = String(id).toLowerCase();
+                return {
+                  exists: legacyIds.has(normalizedId),
+                  id,
+                  data: () => (legacyIds.has(normalizedId) ? { isActive: true } : undefined),
+                };
+              },
+            };
+          },
+          where(field, _operator, value) {
+            const filters = [[field, value]];
+            const query = {
+              where(nextField, _nextOperator, nextValue) {
+                filters.push([nextField, nextValue]);
+                return query;
+              },
+              limit() {
+                return query;
+              },
+              async get() {
+                const normalizedFilters = new Map(
+                  filters.map(([key, filterValue]) => [key, String(filterValue).toLowerCase()])
+                );
+                const simSpecId = normalizedFilters.get('simSpecId');
+                const label = normalizedFilters.get('name');
+                const isActive = normalizedFilters.get('isActive');
+                const hasMatch =
+                  (simSpecId && simSpecIds.has(simSpecId) && isActive === 'true')
+                  || (label && labels.has(label) && isActive === 'true');
+                return {
+                  empty: !hasMatch,
+                  docs: hasMatch ? [{}] : [],
+                };
+              },
+            };
+            return query;
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-assignment-candidate-sets') {
+        return {
+          doc(id) {
+            return {
+              async set(data) {
+                return { id, data };
+              },
+            };
+          },
+        };
+      }
+
+      throw new Error(`Unexpected collection: ${name}`);
     },
   };
 }
@@ -156,6 +222,7 @@ test('rematerializes deferred assignment so assessment chat can promote it into 
       },
     }),
     runtimeHelpers: {
+      stripUndefinedDeep: (value) => value,
       getSnapshotById: async () => snapshot,
       loadOrInitializeProgress: async () => ({ athleteId: 'athlete-1' }),
       syncTaxonomyProfile: async (_db, athleteId, progress) => {
@@ -318,4 +385,121 @@ test('replays saved Nora conversation context before rematerializing a missing a
   assert.equal(body.debugTrace.conversationRecoveryApplied, true);
   assert.equal(body.debugTrace.plannerActionType, null);
   assert.equal(body.debugTrace.finalAssignmentActionType, 'protocol');
+});
+
+test('preferLaunchableAlternative deterministically selects a launchable sim during deferred repair', async () => {
+  let aiCalled = false;
+  let orchestrateCalled = false;
+  const snapshot = {
+    id: 'athlete-1_2026-03-20',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-20',
+    sourceCheckInId: 'checkin-1',
+    overallReadiness: 'green',
+    confidence: 'medium',
+    recommendedRouting: 'protocol_then_sim',
+    recommendedProtocolClass: 'regulation',
+    supportFlag: false,
+  };
+  const candidateSet = {
+    id: 'candidate-set-1',
+    candidates: [
+      {
+        id: 'athlete-1_2026-03-20_protocol-perfect-execution-replay',
+        type: 'protocol',
+        label: 'Perfect Execution Replay',
+        actionType: 'protocol',
+        protocolId: 'protocol-perfect-execution-replay',
+        protocolLabel: 'Perfect Execution Replay',
+      },
+      {
+        id: 'athlete-1_2026-03-20_noise_gate',
+        type: 'sim',
+        label: 'Noise Gate',
+        actionType: 'sim',
+        simSpecId: 'noise_gate',
+        legacyExerciseId: 'focus-noise-gate',
+      },
+    ],
+    candidateIds: [
+      'athlete-1_2026-03-20_protocol-perfect-execution-replay',
+      'athlete-1_2026-03-20_noise_gate',
+    ],
+    plannerEligible: true,
+  };
+
+  const handler = loadHandler({
+    db: createDb({
+      existingAssignment: {
+        athleteId: 'athlete-1',
+        sourceDate: '2026-03-20',
+        status: 'deferred',
+        actionType: 'defer',
+      },
+      launchableLegacyExerciseIds: ['focus-noise-gate'],
+      launchableLabels: ['Perfect Execution Replay'],
+    }),
+    runtimeHelpers: {
+      stripUndefinedDeep: (value) => value,
+      getSnapshotById: async () => snapshot,
+      loadOrInitializeProgress: async () => ({ athleteId: 'athlete-1' }),
+      syncTaxonomyProfile: async (_db, athleteId, progress) => ({
+        ...progress,
+        athleteId,
+        activeProgram: {
+          recommendedSimId: 'noise_gate',
+          recommendedLegacyExerciseId: 'focus-noise-gate',
+          sessionType: 'training_rep',
+          durationMode: 'standard_rep',
+          durationSeconds: 480,
+        },
+      }),
+      listLiveProtocolRegistry: async () => [],
+      listLivePublishedSimModules: async () => [],
+      getOrRefreshProtocolResponsivenessProfile: async () => null,
+      buildAssignmentCandidateSet: () => candidateSet,
+      planAssignmentWithAI: async () => {
+        aiCalled = true;
+        return {
+          decisionSource: 'ai',
+          selectedCandidateId: 'athlete-1_2026-03-20_protocol-perfect-execution-replay',
+          selectedCandidateType: 'protocol',
+          actionType: 'protocol',
+          confidence: 'medium',
+          rationaleSummary: 'AI preferred the protocol.',
+          supportFlag: false,
+        };
+      },
+      orchestratePostCheckIn: async ({ candidateSet: incomingCandidateSet, plannerDecision }) => {
+        orchestrateCalled = true;
+        assert.equal(incomingCandidateSet.candidates.length, 2);
+        assert.equal(plannerDecision.decisionSource, 'repair_launchable_preference');
+        assert.equal(plannerDecision.selectedCandidateId, 'athlete-1_2026-03-20_noise_gate');
+        assert.equal(plannerDecision.actionType, 'sim');
+        return {
+          id: 'athlete-1_2026-03-20',
+          athleteId: 'athlete-1',
+          sourceDate: '2026-03-20',
+          status: 'assigned',
+          actionType: 'sim',
+          chosenCandidateId: 'athlete-1_2026-03-20_noise_gate',
+          simSpecId: 'noise_gate',
+        };
+      },
+    },
+  });
+
+  const body = parseBody(await handler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer fake-token' },
+    body: JSON.stringify({ sourceDate: '2026-03-20', preferLaunchableAlternative: true }),
+  }));
+
+  assert.equal(aiCalled, false);
+  assert.equal(orchestrateCalled, true);
+  assert.equal(body.dailyAssignment.actionType, 'sim');
+  assert.equal(body.repairApplied, true);
+  assert.equal(body.debugTrace.plannerActionType, 'sim');
+  assert.equal(body.debugTrace.plannerSelectedCandidateId, 'athlete-1_2026-03-20_noise_gate');
+  assert.equal(body.debugTrace.finalAssignmentActionType, 'sim');
 });

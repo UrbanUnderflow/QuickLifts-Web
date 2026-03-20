@@ -196,6 +196,60 @@ async function filterLaunchableCandidates(db, candidates, existingAssignment) {
   return launchable;
 }
 
+function buildPreferredLaunchableRepairDecision({ snapshot, candidateSet }) {
+  const candidates = Array.isArray(candidateSet?.candidates) ? candidateSet.candidates : [];
+  const protocolCandidate = candidates.find((candidate) => candidate?.type === 'protocol');
+  const simCandidate = candidates.find((candidate) => candidate?.type === 'sim' || candidate?.type === 'trial');
+  const shouldPreferProtocol =
+    snapshot?.overallReadiness === 'red'
+    || snapshot?.recommendedRouting === 'protocol_only'
+    || snapshot?.recommendedRouting === 'defer_alternate_path';
+
+  if (shouldPreferProtocol && protocolCandidate) {
+    return {
+      decisionSource: 'repair_launchable_preference',
+      selectedCandidateId: protocolCandidate.id,
+      selectedCandidateType: protocolCandidate.type,
+      actionType: protocolCandidate.actionType,
+      confidence: snapshot?.confidence || 'medium',
+      rationaleSummary: `Repair selected ${protocolCandidate.label} because the current state posture still favors protocol-first work.`,
+      supportFlag: Boolean(snapshot?.supportFlag),
+    };
+  }
+
+  if (simCandidate) {
+    return {
+      decisionSource: 'repair_launchable_preference',
+      selectedCandidateId: simCandidate.id,
+      selectedCandidateType: simCandidate.type,
+      actionType: simCandidate.actionType,
+      confidence: snapshot?.confidence || 'medium',
+      rationaleSummary: `Repair selected ${simCandidate.label} because a launchable sim is available for today's recovery path.`,
+      supportFlag: Boolean(snapshot?.supportFlag),
+    };
+  }
+
+  if (protocolCandidate) {
+    return {
+      decisionSource: 'repair_launchable_preference',
+      selectedCandidateId: protocolCandidate.id,
+      selectedCandidateType: protocolCandidate.type,
+      actionType: protocolCandidate.actionType,
+      confidence: snapshot?.confidence || 'low',
+      rationaleSummary: `Repair selected ${protocolCandidate.label} because no launchable sim candidate was available.`,
+      supportFlag: Boolean(snapshot?.supportFlag),
+    };
+  }
+
+  return {
+    decisionSource: 'repair_launchable_preference',
+    actionType: 'defer',
+    confidence: snapshot?.confidence || 'low',
+    rationaleSummary: 'Repair did not find any launchable candidate to assign.',
+    supportFlag: Boolean(snapshot?.supportFlag),
+  };
+}
+
 async function verifyAuth(event) {
   const authHeader = event.headers?.authorization || event.headers?.Authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -367,11 +421,9 @@ exports.handler = async (event) => {
         .doc(filteredCandidateSet.id)
         .set(pulseCheckSubmissionRuntime.stripUndefinedDeep(filteredCandidateSet), { merge: true });
 
-      const plannerDecision = await pulseCheckSubmissionRuntime.planAssignmentWithAI({
-        snapshot: existingSnapshot,
+      const plannerDecision = buildPreferredLaunchableRepairDecision({
+        snapshot: workingSnapshot,
         candidateSet: filteredCandidateSet,
-        progress: syncedProgress,
-        responsivenessProfile,
       });
 
       const dailyAssignment = await pulseCheckSubmissionRuntime.orchestratePostCheckIn({
