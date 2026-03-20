@@ -19,6 +19,82 @@ import type {
 export type PilotHypothesisStatus = 'not-enough-data' | 'promising' | 'mixed' | 'not-supported';
 export type PilotHypothesisConfidenceLevel = 'low' | 'medium' | 'high';
 export type PilotDashboardTimeValue = number | Timestamp | null;
+export type PilotResearchReadoutReviewState = 'draft' | 'reviewed' | 'approved' | 'superseded';
+export type PilotResearchReadoutSectionResolution = 'accepted' | 'revised' | 'rejected' | 'carry-forward';
+export type PilotResearchReadoutClaimType = 'observed' | 'inferred' | 'speculative';
+export type PilotResearchReadoutBaselineMode =
+  | 'within-athlete'
+  | 'cross-cohort'
+  | 'pre-pilot-baseline'
+  | 'no-baseline';
+
+export interface PilotResearchReadoutReadinessGateResult {
+  gateKey: string;
+  status: 'passed' | 'failed' | 'suppressed';
+  summary: string;
+}
+
+export interface PilotResearchReadoutCitation {
+  blockKey: string;
+  blockLabel: string;
+  hypothesisCodes: string[];
+  limitationKeys: string[];
+}
+
+export interface PilotResearchReadoutClaim {
+  claimKey: string;
+  claimType: PilotResearchReadoutClaimType;
+  statement: string;
+  denominatorLabel: string;
+  denominatorValue: number;
+  evidenceSources: string[];
+  confidenceLevel: PilotHypothesisConfidenceLevel;
+  baselineMode: PilotResearchReadoutBaselineMode;
+  caveatFlag: boolean;
+}
+
+export interface PilotResearchReadoutSection {
+  sectionKey: 'pilot-summary' | 'hypothesis-mapper' | 'findings-interpreter' | 'research-notes' | 'limitations';
+  title: string;
+  readinessStatus: 'ready' | 'suppressed';
+  summary: string;
+  citations: PilotResearchReadoutCitation[];
+  claims: PilotResearchReadoutClaim[];
+  suggestedReviewerResolution?: PilotResearchReadoutSectionResolution;
+  reviewerResolution?: PilotResearchReadoutSectionResolution;
+  reviewerNotes?: string;
+}
+
+export interface PilotResearchReadout {
+  id: string;
+  pilotId: string;
+  organizationId: string;
+  teamId: string;
+  cohortId?: string | null;
+  dateWindowStart: string;
+  dateWindowEnd: string;
+  baselineMode: PilotResearchReadoutBaselineMode;
+  reviewState: PilotResearchReadoutReviewState;
+  modelVersion: string;
+  promptVersion: string;
+  readModelVersion: string;
+  readiness: PilotResearchReadoutReadinessGateResult[];
+  sections: PilotResearchReadoutSection[];
+  generatedAt?: Timestamp | null;
+  reviewedAt?: Timestamp | null;
+  reviewedByUserId?: string;
+  reviewedByEmail?: string;
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+}
+
+export interface PilotResearchReadoutGenerationInput {
+  pilotId: string;
+  cohortId?: string;
+  dateWindowStart: string;
+  dateWindowEnd: string;
+  baselineMode: PilotResearchReadoutBaselineMode;
+}
 
 export interface PulseCheckPilotHypothesis {
   id: string;
@@ -277,6 +353,7 @@ export interface PilotDashboardDetail {
   hasPilotInviteConfigOverride: boolean;
   teamInviteConfigDefault: PulseCheckPilotInviteDefaultConfig | null;
   organizationInviteConfigDefault: PulseCheckPilotInviteDefaultConfig | null;
+  latestResearchReadout?: PilotResearchReadout | null;
 }
 
 export interface PilotDashboardAthleteDetail {

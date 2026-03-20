@@ -10,9 +10,11 @@ import {
   Clipboard,
   Database,
   ExternalLink,
+  FileText,
   FlaskConical,
   RefreshCcw,
   Save,
+  ShieldCheck,
   Users2,
 } from 'lucide-react';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
@@ -28,7 +30,7 @@ import type {
   PulseCheckPilotHypothesis,
 } from '../../../api/firebase/pulsecheckPilotDashboard/types';
 
-type DetailTab = 'overview' | 'engine-health' | 'findings' | 'hypotheses';
+type DetailTab = 'overview' | 'engine-health' | 'findings' | 'hypotheses' | 'research-readout';
 
 const STATUS_OPTIONS: Array<{ value: PilotHypothesisStatus; label: string }> = [
   { value: 'not-enough-data', label: 'Not enough data' },
@@ -48,6 +50,7 @@ const tabs: Array<{ id: DetailTab; label: string }> = [
   { id: 'engine-health', label: 'Engine Health' },
   { id: 'findings', label: 'Findings' },
   { id: 'hypotheses', label: 'Hypotheses' },
+  { id: 'research-readout', label: 'Research Readout' },
 ];
 
 type InvitePreviewField =
@@ -1295,6 +1298,113 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       })}
                     </div>
                   )}
+                </div>
+              ) : null}
+
+              {activeTab === 'research-readout' ? (
+                <div className="mt-6 space-y-6">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex items-center gap-3 text-cyan-300">
+                        <FileText className="h-5 w-5" />
+                        <span className="text-sm font-medium">Saved Readout</span>
+                      </div>
+                      <div className="mt-3 text-3xl font-semibold">{detail.latestResearchReadout ? '1' : '0'}</div>
+                    </div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex items-center gap-3 text-emerald-300">
+                        <ShieldCheck className="h-5 w-5" />
+                        <span className="text-sm font-medium">Readiness Frame</span>
+                      </div>
+                      <div className="mt-3 text-3xl font-semibold">
+                        {selectedCohort ? selectedCohort.name : 'Whole Pilot'}
+                      </div>
+                    </div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex items-center gap-3 text-amber-300">
+                        <Users2 className="h-5 w-5" />
+                        <span className="text-sm font-medium">Eligible Athletes</span>
+                      </div>
+                      <div className="mt-3 text-3xl font-semibold">{visibleMetrics.activeAthleteCount}</div>
+                    </div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex items-center gap-3 text-violet-300">
+                        <CheckCircle2 className="h-5 w-5" />
+                        <span className="text-sm font-medium">Hypotheses In Scope</span>
+                      </div>
+                      <div className="mt-3 text-3xl font-semibold">{detail.hypotheses.length}</div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold">Research Readout V1 Contract</h2>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          This tab is reserved for the pilot-scoped, AI-assisted research copilot layer. It will read only from the governed pilot dashboard frame and require human review before any draft becomes an approved readout.
+                        </p>
+                      </div>
+                      <button
+                        disabled
+                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-400 opacity-70"
+                      >
+                        Generate AI Readout
+                      </button>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
+                      Scope freeze: this future readout will lock to pilot <span className="font-medium text-white">{detail.pilot.name}</span>
+                      {selectedCohort ? `, cohort ${selectedCohort.name},` : ','} and the currently selected pilot-scoped denominator frame. It should not interpret athletes outside this pilot.
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Generation Gates</div>
+                      <ul className="mt-3 space-y-2 text-sm text-zinc-300">
+                        <li>Pilot must be active or completed.</li>
+                        <li>Readiness checks must pass for sample size, freshness, telemetry completeness, and denominator availability.</li>
+                        <li>Sections that fail evidence thresholds will be suppressed instead of softened into generic prose.</li>
+                      </ul>
+                    </div>
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Claim Discipline</div>
+                      <ul className="mt-3 space-y-2 text-sm text-zinc-300">
+                        <li>Every claim must be tagged as Observed, Inferred, or Speculative.</li>
+                        <li>Every section must cite its evidence frame, linked hypotheses, and active limitations.</li>
+                        <li>The system may suggest hypothesis posture, but only a human reviewer sets the official hypothesis status.</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <h2 className="text-lg font-semibold">First Build Sequence</h2>
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="min-w-full text-sm">
+                        <thead className="text-xs uppercase tracking-wide text-zinc-500">
+                          <tr>
+                            <th className="px-3 py-2 text-left">Step</th>
+                            <th className="px-3 py-2 text-left">What We Build</th>
+                            <th className="px-3 py-2 text-left">Why</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            ['1', 'Readout storage model and TypeScript contract', 'Locks the saved artifact before generation logic starts drifting.'],
+                            ['2', 'Manual generation path using the governed pilot read model', 'Keeps V1 human-triggered and pilot-scoped.'],
+                            ['3', 'Draft review workflow with section resolution controls', 'Prevents generated output from becoming unofficial truth by accident.'],
+                            ['4', 'Citations, denominators, and limitations rendering', 'Makes the AI layer auditable instead of magical.'],
+                          ].map((row) => (
+                            <tr key={row[0]} className="border-t border-white/5">
+                              <td className="px-3 py-3 font-medium text-white">{row[0]}</td>
+                              <td className="px-3 py-3 text-zinc-300">{row[1]}</td>
+                              <td className="px-3 py-3 text-zinc-300">{row[2]}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               ) : null}
             </>
