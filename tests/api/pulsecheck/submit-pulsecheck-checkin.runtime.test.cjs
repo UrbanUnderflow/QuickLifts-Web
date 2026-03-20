@@ -42,7 +42,10 @@ function loadRuntimeHelpers() {
     id: protocolRegistryRuntimePath,
     filename: protocolRegistryRuntimePath,
     loaded: true,
-    exports: {},
+    exports: {
+      normalizeProtocolRecord: (record) => record,
+      listPulseCheckProtocolSeedRecords: () => [],
+    },
   };
 
   return require(submitPath).runtimeHelpers;
@@ -188,6 +191,217 @@ function createResponsivenessDb() {
   };
 }
 
+function createMaterializationDb({ snapshot, simModules = [], protocols = [] }) {
+  const writes = {
+    snapshots: [],
+    assignments: [],
+    revisions: [],
+    progress: [],
+    responsivenessProfiles: [],
+    candidateSets: [],
+  };
+
+  const emptyQueryResult = { empty: true, docs: [] };
+
+  function toDoc(id, data) {
+    return {
+      id,
+      data: () => data,
+    };
+  }
+
+  return {
+    writes,
+    batch() {
+      const operations = [];
+      return {
+        set(ref, data) {
+          operations.push({ ref, data });
+        },
+        async commit() {
+          for (const operation of operations) {
+            await operation.ref.set(operation.data);
+          }
+        },
+      };
+    },
+    collection(name) {
+      if (name === 'state-snapshots') {
+        return {
+          doc(id) {
+            return {
+              async get() {
+                if (id === snapshot.id) {
+                  return { exists: true, id, data: () => snapshot };
+                }
+                return { exists: false, id, data: () => undefined };
+              },
+              async set(data) {
+                writes.snapshots.push({ id, data });
+              },
+            };
+          },
+          where(field, operator, value) {
+            assert.equal(field, 'athleteId');
+            assert.equal(operator, '==');
+            if (value !== snapshot.athleteId) {
+              return {
+                async get() {
+                  return emptyQueryResult;
+                },
+              };
+            }
+            return {
+              async get() {
+                return { empty: false, docs: [toDoc(snapshot.id, snapshot)] };
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-daily-assignments') {
+        return {
+          doc(id) {
+            return {
+              async get() {
+                return { exists: false, id, data: () => undefined };
+              },
+              async set(data) {
+                writes.assignments.push({ id, data });
+              },
+              collection(childName) {
+                assert.equal(childName, 'revisions');
+                return {
+                  doc(revisionId) {
+                    return {
+                      async set(data) {
+                        writes.revisions.push({ revisionId, data });
+                      },
+                    };
+                  },
+                };
+              },
+            };
+          },
+          where(field, operator, value) {
+            assert.equal(field, 'athleteId');
+            assert.equal(operator, '==');
+            return {
+              async get() {
+                return { empty: true, docs: [] };
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-assignment-events') {
+        return {
+          where(field, operator, value) {
+            assert.equal(field, 'athleteId');
+            assert.equal(operator, '==');
+            return {
+              async get() {
+                return { empty: true, docs: [] };
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-protocol-responsiveness-profiles') {
+        return {
+          doc(id) {
+            return {
+              async get() {
+                return { exists: false, id, data: () => undefined };
+              },
+              async set(data) {
+                writes.responsivenessProfiles.push({ id, data });
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-assignment-candidate-sets') {
+        return {
+          doc(id) {
+            return {
+              async set(data) {
+                writes.candidateSets.push({ id, data });
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-protocols') {
+        return {
+          doc(id) {
+            return {
+              async set(data) {
+                protocols.push({ id, ...data });
+              },
+            };
+          },
+          async get() {
+            return {
+              empty: protocols.length === 0,
+              docs: protocols.map((protocol) => toDoc(protocol.id, protocol)),
+            };
+          },
+        };
+      }
+
+      if (name === 'sim-modules') {
+        return {
+          async get() {
+            return {
+              empty: simModules.length === 0,
+              docs: simModules.map((module) => toDoc(module.id, module)),
+            };
+          },
+        };
+      }
+
+      if (name === 'pulsecheck-team-memberships') {
+        return {
+          where() {
+            return {
+              where() {
+                return {
+                  async get() {
+                    return { docs: [] };
+                  },
+                };
+              },
+              async get() {
+                return { docs: [] };
+              },
+            };
+          },
+        };
+      }
+
+      if (name === 'athlete-mental-progress') {
+        return {
+          doc(id) {
+            return {
+              async set(data) {
+                writes.progress.push({ id, data });
+              },
+            };
+          },
+        };
+      }
+
+      throw new Error(`Unexpected collection: ${name}`);
+    },
+  };
+}
+
 test('orchestratePostCheckIn materializes a protocol assignment when activeProgram is missing', async () => {
   const runtimeHelpers = loadRuntimeHelpers();
   const snapshot = {
@@ -265,6 +479,189 @@ test('orchestratePostCheckIn materializes a protocol assignment when activeProgr
   assert.equal(db.writes.assignments.length, 1);
   assert.equal(db.writes.snapshots.length, 1);
   assert.equal(db.writes.snapshots[0].data.executionLink, assignment.id);
+});
+
+test('orchestratePostCheckIn falls back to a bounded sim when AI defers despite a valid candidate', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+  const snapshot = {
+    id: 'athlete-1_2026-03-20',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-20',
+    sourceCheckInId: 'checkin-1',
+    overallReadiness: 'green',
+    confidence: 'medium',
+    recommendedRouting: 'sim_only',
+    readinessScore: 76,
+    supportFlag: false,
+  };
+  const db = createFirestoreDb({ snapshot });
+
+  const assignment = await runtimeHelpers.orchestratePostCheckIn({
+    db,
+    athleteId: 'athlete-1',
+    sourceCheckInId: 'checkin-1',
+    sourceStateSnapshotId: snapshot.id,
+    sourceCandidateSetId: 'candidate-set-1',
+    sourceDate: snapshot.sourceDate,
+    progress: {
+      coachId: null,
+      activeProgram: {
+        recommendedSimId: 'noise_gate',
+        recommendedLegacyExerciseId: 'focus-noise-gate',
+        sessionType: 'training_rep',
+        durationMode: 'standard_rep',
+        durationSeconds: 480,
+      },
+      taxonomyProfile: {
+        modifierScores: {
+          readiness: 76,
+        },
+      },
+    },
+    candidateSet: {
+      id: 'candidate-set-1',
+      candidates: [
+        {
+          id: 'athlete-1_2026-03-20_noise_gate',
+          type: 'sim',
+          label: 'Noise Gate',
+          actionType: 'sim',
+          rationale: 'Bounded simulation candidate from the active program recommendation.',
+          simSpecId: 'noise_gate',
+          legacyExerciseId: 'focus-noise-gate',
+          sessionType: 'training_rep',
+          durationMode: 'standard_rep',
+          durationSeconds: 480,
+        },
+      ],
+      plannerEligible: true,
+    },
+    plannerDecision: {
+      decisionSource: 'ai',
+      selectedCandidateId: undefined,
+      selectedCandidateType: undefined,
+      actionType: 'defer',
+      confidence: 'low',
+      rationaleSummary: 'AI incorrectly deferred despite a valid candidate.',
+      supportFlag: false,
+    },
+    liveProtocolRegistry: [],
+    liveSimRegistry: [],
+  });
+
+  assert.ok(assignment);
+  assert.equal(assignment.actionType, 'sim');
+  assert.equal(assignment.status, 'assigned');
+  assert.equal(assignment.simSpecId, 'noise_gate');
+  assert.equal(assignment.legacyExerciseId, 'focus-noise-gate');
+});
+
+test('rematerializeAssignmentFromSnapshot falls back to the bounded sim when the AI planner defers', async () => {
+  const originalApiKey = process.env.OPEN_AI_SECRET_KEY;
+  const originalFetch = global.fetch;
+  process.env.OPEN_AI_SECRET_KEY = 'test-key';
+  global.fetch = async () => ({
+    ok: true,
+    async json() {
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                selectedCandidateId: '',
+                selectedCandidateType: '',
+                actionType: 'defer',
+                confidence: 'low',
+                rationaleSummary: 'AI deferred despite a valid sim candidate.',
+                supportFlag: false,
+              }),
+            },
+          },
+        ],
+      };
+    },
+  });
+
+  try {
+    const runtimeHelpers = loadRuntimeHelpers();
+    const snapshot = {
+      id: 'athlete-1_2026-03-20',
+      athleteId: 'athlete-1',
+      sourceDate: '2026-03-20',
+      sourceCheckInId: 'checkin-1',
+      overallReadiness: 'green',
+      confidence: 'medium',
+      recommendedRouting: 'sim_only',
+      recommendedProtocolClass: 'none',
+      candidateClassHints: [],
+      contextTags: [],
+      readinessScore: 78,
+      supportFlag: false,
+    };
+    const db = createMaterializationDb({
+      snapshot,
+      simModules: [
+        {
+          id: 'focus-noise-gate',
+          name: 'Noise Gate',
+          simSpecId: 'noise_gate',
+          isActive: true,
+          publishedFingerprint: 'pub-1',
+          syncStatus: 'in_sync',
+          engineKey: 'pulsecheck',
+          runtimeConfig: { version: 1 },
+          buildArtifact: {
+            sourceFingerprint: 'src-1',
+            engineKey: 'pulsecheck',
+          },
+          variantSource: {
+            family: 'Noise Gate',
+            variantName: 'Noise Gate',
+            publishedAt: 1773945600000,
+          },
+        },
+      ],
+      protocols: [
+        {
+          id: 'proto-box-breathing',
+          label: 'Box Breathing',
+          familyId: 'regulation-breathing',
+          variantId: 'regulation-breathing-v1',
+          isActive: true,
+          publishStatus: 'published',
+          governanceStage: 'approved',
+          legacyExerciseId: 'box-breathing',
+        },
+      ],
+    });
+
+    const result = await runtimeHelpers.rematerializeAssignmentFromSnapshot({
+      db,
+      athleteId: 'athlete-1',
+      sourceCheckInId: 'checkin-1',
+      sourceStateSnapshotId: snapshot.id,
+      sourceDate: snapshot.sourceDate,
+      progress: {
+        coachId: null,
+        activeProgram: {
+          recommendedSimId: 'noise_gate',
+          recommendedLegacyExerciseId: 'focus-noise-gate',
+          sessionType: 'training_rep',
+          durationMode: 'standard_rep',
+          durationSeconds: 480,
+        },
+      },
+    });
+
+    assert.ok(result.dailyAssignment);
+    assert.equal(result.dailyAssignment.actionType, 'sim');
+    assert.equal(result.dailyAssignment.status, 'assigned');
+    assert.equal(result.dailyAssignment.simSpecId, 'noise_gate');
+    assert.equal(result.dailyAssignment.legacyExerciseId, 'focus-noise-gate');
+  } finally {
+    process.env.OPEN_AI_SECRET_KEY = originalApiKey;
+    global.fetch = originalFetch;
+  }
 });
 
 test('getOrRefreshProtocolResponsivenessProfile reads assignment events without throwing', async () => {

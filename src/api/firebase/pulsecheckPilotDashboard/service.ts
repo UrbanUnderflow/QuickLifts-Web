@@ -42,6 +42,9 @@ import type {
   PilotResearchReadoutReadinessGateResult,
   PilotDashboardSnapshotHistoryItem,
   PulseCheckPilotHypothesis,
+  PilotHypothesisAssistFrame,
+  PilotHypothesisAssistGenerationInput,
+  PilotHypothesisAssistGenerationResult,
   PulseCheckPilotInviteDefaultConfig,
   PulseCheckPilotInviteDefaultConfigInput,
   PulseCheckPilotInviteConfig,
@@ -712,6 +715,38 @@ export const pulseCheckPilotDashboardService = {
       { merge: true }
     );
     return id;
+  },
+
+  async generatePilotHypothesisAssist(input: {
+    frame: PilotHypothesisAssistFrame;
+    options: PilotHypothesisAssistGenerationInput;
+  }): Promise<PilotHypothesisAssistGenerationResult> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Authenticated admin session required.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+    const response = await fetch('/api/admin/pulsecheck/pilot-hypothesis-assist/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+        'x-admin-email': currentUser.email || '',
+      },
+      body: JSON.stringify(input),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Failed to generate pilot hypothesis suggestions.');
+    }
+
+    return {
+      suggestions: Array.isArray(payload?.suggestions) ? payload.suggestions : [],
+      modelVersion: normalizeString(payload?.modelVersion) || 'unknown',
+      promptVersion: normalizeString(payload?.promptVersion) || 'pilot-hypothesis-assist-v1',
+    };
   },
 
   async saveInviteConfig(input: PulseCheckPilotInviteConfigInput): Promise<string> {

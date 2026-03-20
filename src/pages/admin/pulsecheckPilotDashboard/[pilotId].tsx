@@ -16,15 +16,19 @@ import {
   RefreshCcw,
   Save,
   ShieldCheck,
+  Sparkles,
   Users2,
 } from 'lucide-react';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
+import NoraMetricHelpButton from '../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
+import type { PilotDashboardMetricExplanationKey } from '../../../components/admin/pilot-dashboard/noraMetricCatalog';
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
 import type { PulseCheckInviteLink } from '../../../api/firebase/pulsecheckProvisioning/types';
 import { useUser } from '../../../hooks/useUser';
 import type {
   PilotDashboardDetail,
+  PilotHypothesisAssistSuggestion,
   PilotHypothesisConfidenceLevel,
   PilotHypothesisStatus,
   PilotResearchReadoutClaim,
@@ -273,6 +277,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [editingHypotheses, setEditingHypotheses] = useState<Record<string, PulseCheckPilotHypothesis>>({});
   const [inviteConfigDraft, setInviteConfigDraft] = useState<PulseCheckPilotInviteConfig | null>(null);
   const [savingHypothesisId, setSavingHypothesisId] = useState<string | null>(null);
+  const [generatingHypothesisAssist, setGeneratingHypothesisAssist] = useState(false);
+  const [creatingSuggestedHypothesisKey, setCreatingSuggestedHypothesisKey] = useState<string | null>(null);
   const [savingInviteConfig, setSavingInviteConfig] = useState(false);
   const [savingInviteDefaultScope, setSavingInviteDefaultScope] = useState<'team' | 'organization' | null>(null);
   const [resettingInviteConfig, setResettingInviteConfig] = useState(false);
@@ -287,6 +293,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [selectedReadoutId, setSelectedReadoutId] = useState('');
   const [editingReadout, setEditingReadout] = useState<PilotResearchReadout | null>(null);
   const [compareReadoutId, setCompareReadoutId] = useState('');
+  const [hypothesisAssistSuggestions, setHypothesisAssistSuggestions] = useState<PilotHypothesisAssistSuggestion[]>([]);
+  const [hypothesisAssistMeta, setHypothesisAssistMeta] = useState<{ modelVersion: string; promptVersion: string } | null>(null);
   const [historyReviewStateFilter, setHistoryReviewStateFilter] = useState<'all' | PilotResearchReadoutReviewState>('all');
   const [historyCohortScopeFilter, setHistoryCohortScopeFilter] = useState<'all' | 'whole-pilot' | 'cohort-only'>('all');
   const [historyWindowStartFilter, setHistoryWindowStartFilter] = useState('');
@@ -421,6 +429,11 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     [availableCohorts, cohortFilter]
   );
 
+  useEffect(() => {
+    setHypothesisAssistSuggestions([]);
+    setHypothesisAssistMeta(null);
+  }, [pilotId, cohortFilter]);
+
   const visibleAthletes = useMemo(() => {
     if (!detail) return [];
     if (!cohortFilter) return detail.athletes;
@@ -554,6 +567,27 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     [detail?.hypotheses]
   );
 
+  const existingHypothesisStatementSet = useMemo(
+    () =>
+      new Set(
+        (detail?.hypotheses || [])
+          .map((hypothesis) => normalizeInvitePreviewValue(hypothesis.statement).toLowerCase())
+          .filter(Boolean)
+      ),
+    [detail?.hypotheses]
+  );
+
+  const nextHypothesisCode = useMemo(() => {
+    const nextNumericCode =
+      (detail?.hypotheses || [])
+        .map((hypothesis) => {
+          const match = /^H(\d+)$/i.exec(hypothesis.code || '');
+          return match ? Number(match[1]) : 0;
+        })
+        .reduce((max, current) => Math.max(max, current), 0) + 1;
+    return `H${nextNumericCode}`;
+  }, [detail?.hypotheses]);
+
   const scopedInvite = useMemo(() => {
     if (!detail) return null;
     return inviteLinks.find((invite) => {
@@ -639,10 +673,30 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const overviewCards = useMemo(() => {
     if (!detail) return [];
     return [
-      { label: 'Active Pilot Athletes', value: String(visibleMetrics.activeAthleteCount), icon: <Users2 className="h-5 w-5" /> },
-      { label: cohortFilter ? 'Selected Cohort' : 'Active Cohorts', value: String(visibleMetrics.cohortCount), icon: <FlaskConical className="h-5 w-5" /> },
-      { label: 'Athletes With Stable Patterns', value: String(visibleMetrics.athletesWithStablePatterns), icon: <Brain className="h-5 w-5" /> },
-      { label: 'Hypotheses', value: String(detail.metrics.hypothesisCount), icon: <CheckCircle2 className="h-5 w-5" /> },
+      {
+        label: 'Active Pilot Athletes',
+        value: String(visibleMetrics.activeAthleteCount),
+        icon: <Users2 className="h-5 w-5" />,
+        metricKey: 'active-pilot-athletes' as PilotDashboardMetricExplanationKey,
+      },
+      {
+        label: cohortFilter ? 'Selected Cohort' : 'Active Cohorts',
+        value: String(visibleMetrics.cohortCount),
+        icon: <FlaskConical className="h-5 w-5" />,
+        metricKey: (cohortFilter ? 'selected-cohort' : 'active-cohorts') as PilotDashboardMetricExplanationKey,
+      },
+      {
+        label: 'Athletes With Stable Patterns',
+        value: String(visibleMetrics.athletesWithStablePatterns),
+        icon: <Brain className="h-5 w-5" />,
+        metricKey: 'athletes-with-stable-patterns' as PilotDashboardMetricExplanationKey,
+      },
+      {
+        label: 'Hypotheses',
+        value: String(detail.metrics.hypothesisCount),
+        icon: <CheckCircle2 className="h-5 w-5" />,
+        metricKey: 'hypotheses' as PilotDashboardMetricExplanationKey,
+      },
     ];
   }, [cohortFilter, detail, visibleMetrics.activeAthleteCount, visibleMetrics.athletesWithStablePatterns, visibleMetrics.cohortCount]);
 
@@ -691,6 +745,99 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       setError(seedError?.message || 'Failed to seed default hypotheses.');
     } finally {
       setSeedingDefaults(false);
+    }
+  };
+
+  const handleGenerateHypothesisAssist = async () => {
+    if (!detail) return;
+
+    setGeneratingHypothesisAssist(true);
+    setPageMessage(null);
+    try {
+      const result = await pulseCheckPilotDashboardService.generatePilotHypothesisAssist({
+        options: {
+          pilotId: detail.pilot.id,
+          cohortId: selectedCohort?.id || '',
+        },
+        frame: {
+          pilotId: detail.pilot.id,
+          organizationId: detail.organization.id,
+          organizationName: detail.organization.displayName,
+          teamId: detail.team.id,
+          teamName: detail.team.displayName,
+          pilotName: detail.pilot.name,
+          pilotStatus: detail.pilot.status,
+          pilotStudyMode: detail.pilot.studyMode,
+          cohortId: selectedCohort?.id || '',
+          cohortName: selectedCohort?.name || '',
+          metrics: {
+            ...visibleMetrics,
+            totalEnrollmentCount: detail.metrics.totalEnrollmentCount,
+            hypothesisCount: detail.metrics.hypothesisCount,
+          },
+          coverage: visibleCoverage,
+          cohortSummaries: visibleCohortSummaries,
+          hypotheses: detail.hypotheses.map((hypothesis) => ({
+            code: hypothesis.code,
+            statement: hypothesis.statement,
+            leadingIndicator: hypothesis.leadingIndicator,
+            status: hypothesis.status,
+            confidenceLevel: hypothesis.confidenceLevel,
+            keyEvidence: hypothesis.keyEvidence || '',
+            notes: hypothesis.notes || '',
+          })),
+        },
+      });
+
+      setHypothesisAssistSuggestions(result.suggestions);
+      setHypothesisAssistMeta({
+        modelVersion: result.modelVersion,
+        promptVersion: result.promptVersion,
+      });
+      setPageMessage({
+        type: 'success',
+        text:
+          result.suggestions.length > 0
+            ? `Hypothesis Assist generated ${result.suggestions.length} pilot-scoped suggestion${result.suggestions.length === 1 ? '' : 's'}.`
+            : 'Hypothesis Assist did not find a strong new suggestion in the current pilot frame.',
+      });
+    } catch (assistError) {
+      console.error('[PulseCheckPilotDashboard] Failed to generate hypothesis suggestions:', assistError);
+      setPageMessage({ type: 'error', text: 'Failed to generate pilot hypothesis suggestions.' });
+    } finally {
+      setGeneratingHypothesisAssist(false);
+    }
+  };
+
+  const handleCreateSuggestedHypothesis = async (suggestion: PilotHypothesisAssistSuggestion) => {
+    if (!detail) return;
+
+    setCreatingSuggestedHypothesisKey(suggestion.suggestionKey);
+    setPageMessage(null);
+    try {
+      const assignedCode = nextHypothesisCode;
+      await pulseCheckPilotDashboardService.saveHypothesis({
+        pilotId: detail.pilot.id,
+        code: assignedCode,
+        statement: suggestion.statement,
+        leadingIndicator: suggestion.leadingIndicator,
+        status: 'not-enough-data',
+        confidenceLevel: suggestion.confidenceLevel,
+        keyEvidence: '',
+        notes: `Seeded by Hypothesis Assist (${hypothesisAssistMeta?.modelVersion || 'unknown model'}). Why suggested: ${suggestion.whySuggested}${suggestion.caveat ? ` Caveat: ${suggestion.caveat}` : ''}`,
+      });
+      setHypothesisAssistSuggestions((current) => current.filter((item) => item.suggestionKey !== suggestion.suggestionKey));
+      await load('refresh');
+      setActiveTab('hypotheses');
+      setPageMessage({
+        type: 'success',
+        text: `Created ${assignedCode} from Hypothesis Assist.`,
+      });
+    } catch (createError) {
+      console.error('[PulseCheckPilotDashboard] Failed to create suggested hypothesis:', createError);
+      setPageMessage({ type: 'error', text: 'Failed to create suggested hypothesis.' });
+    } finally {
+      setCreatingSuggestedHypothesisKey(null);
     }
   };
 
@@ -1031,7 +1178,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
 
               <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
                 {overviewCards.map((card) => (
-                  <div key={card.label} className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                  <div key={card.label} className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <NoraMetricHelpButton metricKey={card.metricKey} className="absolute right-4 top-4" />
                     <div className="flex items-center gap-3 text-cyan-300">
                       {card.icon}
                       <span className="text-sm font-medium">{card.label}</span>
@@ -1374,7 +1522,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                   ) : null}
 
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="enrollment-boundary" className="absolute right-4 top-4" />
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Enrollment Boundary</div>
                       <div className="mt-3 text-2xl font-semibold text-white">
                         {visibleMetrics.activeAthleteCount} / {detail.metrics.totalEnrollmentCount}
@@ -1383,14 +1532,16 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         Active pilot athletes in view versus total enrollments recorded for this pilot.
                       </div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="engine-coverage" className="absolute right-4 top-4" />
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Engine Coverage</div>
                       <div className="mt-3 text-2xl font-semibold text-white">{formatPercent(visibleCoverage.engineCoverageRate)}</div>
                       <div className="mt-2 text-sm text-zinc-400">
                         Active pilot athletes with a correlation-engine record.
                       </div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="stable-pattern-rate" className="absolute right-4 top-4" />
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Stable Pattern Rate</div>
                       <div className="mt-3 text-2xl font-semibold text-white">{formatPercent(visibleCoverage.stablePatternRate)}</div>
                       <div className="mt-2 text-sm text-zinc-400">
@@ -1512,35 +1663,40 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
               {activeTab === 'engine-health' ? (
                 <div className="mt-6 space-y-6">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="athletes-with-engine-record" className="absolute right-4 top-4" />
                       <div className="flex items-center gap-3 text-emerald-300">
                         <Database className="h-5 w-5" />
                         <span className="text-sm font-medium">Athletes With Engine Record</span>
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{visibleMetrics.athletesWithEngineRecord}</div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="evidence-records" className="absolute right-4 top-4" />
                       <div className="flex items-center gap-3 text-cyan-300">
                         <Activity className="h-5 w-5" />
                         <span className="text-sm font-medium">Evidence Records</span>
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{visibleMetrics.totalEvidenceRecords}</div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="pattern-models" className="absolute right-4 top-4" />
                       <div className="flex items-center gap-3 text-amber-300">
                         <Brain className="h-5 w-5" />
                         <span className="text-sm font-medium">Pattern Models</span>
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{visibleMetrics.totalPatternModels}</div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="engine-coverage" className="absolute right-4 top-4" />
                       <div className="flex items-center gap-3 text-violet-300">
                         <Users2 className="h-5 w-5" />
                         <span className="text-sm font-medium">Engine Coverage</span>
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{formatPercent(visibleCoverage.engineCoverageRate)}</div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="avg-evidence-per-athlete" className="absolute right-4 top-4" />
                       <div className="flex items-center gap-3 text-cyan-300">
                         <FlaskConical className="h-5 w-5" />
                         <span className="text-sm font-medium">Avg Evidence / Athlete</span>
@@ -1549,7 +1705,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="pattern-density" className="absolute right-4 top-4" />
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pattern Density</div>
                       <div className="mt-3 text-sm text-zinc-300">
                         Average pattern models per active pilot athlete: <span className="font-medium text-white">{formatAverage(visibleCoverage.avgPatternModelsPerActiveAthlete)}</span>
@@ -1558,7 +1715,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         Average recommendation projections per active pilot athlete: <span className="font-medium text-white">{formatAverage(visibleCoverage.avgRecommendationProjectionsPerActiveAthlete)}</span>
                       </div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="pilot-health-read" className="absolute right-4 top-4" />
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pilot Health Read</div>
                       <div className="mt-3 text-sm text-zinc-300">
                         Stable pattern rate currently sits at <span className="font-medium text-white">{formatPercent(visibleCoverage.stablePatternRate)}</span>. This remains a trustworthy V1 signal because it is derived from persisted pattern-model confidence tiers inside the active pilot population.
@@ -1647,26 +1805,152 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
               {activeTab === 'hypotheses' ? (
                 <div className="mt-6 space-y-6">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="not-enough-data" className="absolute right-4 top-4" />
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Not Enough Data</div>
                       <div className="mt-3 text-3xl font-semibold">{detail.hypothesisSummary.notEnoughDataCount}</div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="promising" className="absolute right-4 top-4" />
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Promising</div>
                       <div className="mt-3 text-3xl font-semibold">{detail.hypothesisSummary.promisingCount}</div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="mixed" className="absolute right-4 top-4" />
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Mixed</div>
                       <div className="mt-3 text-3xl font-semibold">{detail.hypothesisSummary.mixedCount}</div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="not-supported" className="absolute right-4 top-4" />
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Not Supported</div>
                       <div className="mt-3 text-3xl font-semibold">{detail.hypothesisSummary.notSupportedCount}</div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="high-confidence" className="absolute right-4 top-4" />
                       <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">High Confidence</div>
                       <div className="mt-3 text-3xl font-semibold">{detail.hypothesisSummary.highConfidenceCount}</div>
                     </div>
+                  </div>
+                  <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="max-w-3xl">
+                        <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-xs uppercase tracking-[0.18em] text-cyan-100">
+                          <Sparkles className="h-3.5 w-3.5" />
+                          Hypothesis Assist
+                        </div>
+                        <h2 className="mt-3 text-lg font-semibold">Ask Nora what this pilot should test next</h2>
+                        <p className="mt-2 text-sm text-zinc-400">
+                          Nora can suggest pilot-scoped hypotheses from the governed dashboard frame, including the current cohort filter.
+                          These are candidate research questions, not conclusions. You still choose which ones become official pilot hypotheses.
+                        </p>
+                        <div className="mt-3 text-xs text-zinc-500">
+                          Current frame: {selectedCohort ? `${selectedCohort.name}` : 'Whole pilot'} • {visibleMetrics.activeAthleteCount} active athletes • {formatPercent(visibleCoverage.engineCoverageRate)} coverage
+                        </div>
+                        {hypothesisAssistMeta ? (
+                          <div className="mt-2 text-xs text-zinc-500">
+                            Last assist run used {hypothesisAssistMeta.modelVersion} with prompt {hypothesisAssistMeta.promptVersion}.
+                          </div>
+                        ) : null}
+                      </div>
+                      <button
+                        onClick={() => void handleGenerateHypothesisAssist()}
+                        disabled={generatingHypothesisAssist}
+                        data-testid="pilot-hypothesis-assist-generate"
+                        className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        {generatingHypothesisAssist ? 'Generating suggestions...' : 'Generate Suggested Hypotheses'}
+                      </button>
+                    </div>
+
+                    {hypothesisAssistSuggestions.length > 0 ? (
+                      <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-2">
+                        {hypothesisAssistSuggestions.map((suggestion) => {
+                          const alreadyExists = existingHypothesisStatementSet.has(
+                            normalizeInvitePreviewValue(suggestion.statement).toLowerCase()
+                          );
+                          const nextCodeLabel = alreadyExists ? 'Existing hypothesis' : nextHypothesisCode;
+
+                          return (
+                            <div
+                              key={suggestion.suggestionKey}
+                              data-testid={`pilot-hypothesis-assist-suggestion-${suggestion.suggestionKey}`}
+                              className="rounded-3xl border border-cyan-400/15 bg-cyan-400/5 p-5"
+                            >
+                              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div>
+                                  <div className="text-xs uppercase tracking-[0.2em] text-cyan-300">{suggestion.title}</div>
+                                  <h3 className="mt-2 text-lg font-semibold text-white">{suggestion.statement}</h3>
+                                </div>
+                                <div className="inline-flex items-center gap-2">
+                                  <span className={`rounded-full border px-2 py-1 text-[11px] ${confidenceClassName(suggestion.confidenceLevel)}`}>
+                                    {confidenceLabel(suggestion.confidenceLevel)}
+                                  </span>
+                                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-300">
+                                    {nextCodeLabel}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="mt-4 space-y-3 text-sm text-zinc-300">
+                                <div>
+                                  <div className="text-xs uppercase tracking-wide text-zinc-500">Why Nora Suggested It</div>
+                                  <p className="mt-1 leading-6">{suggestion.whySuggested}</p>
+                                </div>
+                                <div>
+                                  <div className="text-xs uppercase tracking-wide text-zinc-500">Leading Indicator</div>
+                                  <p className="mt-1 leading-6">{suggestion.leadingIndicator}</p>
+                                </div>
+                                <div>
+                                  <div className="text-xs uppercase tracking-wide text-zinc-500">Evidence Signals</div>
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    {suggestion.evidenceSignals.map((signal) => (
+                                      <span key={`${suggestion.suggestionKey}-${signal}`} className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-300">
+                                        {signal}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-50">
+                                  <div className="text-xs uppercase tracking-wide text-amber-100">Caveat</div>
+                                  <p className="mt-1 leading-6">{suggestion.caveat}</p>
+                                </div>
+                              </div>
+
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                <button
+                                  onClick={() => void handleCreateSuggestedHypothesis(suggestion)}
+                                  disabled={alreadyExists || creatingSuggestedHypothesisKey === suggestion.suggestionKey}
+                                  data-testid={`pilot-hypothesis-assist-create-${suggestion.suggestionKey}`}
+                                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <Save className="h-4 w-4" />
+                                  {alreadyExists
+                                    ? 'Already in hypotheses'
+                                    : creatingSuggestedHypothesisKey === suggestion.suggestionKey
+                                      ? 'Creating...'
+                                      : `Create ${nextHypothesisCode}`}
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    setHypothesisAssistSuggestions((current) =>
+                                      current.filter((item) => item.suggestionKey !== suggestion.suggestionKey)
+                                    )
+                                  }
+                                  className="rounded-2xl border border-white/10 bg-transparent px-4 py-3 text-sm text-zinc-300 transition hover:bg-white/5 hover:text-white"
+                                >
+                                  Dismiss
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="mt-5 rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-400">
+                        No assist suggestions are loaded yet. Generate suggestions to see candidate hypotheses Nora thinks are worth testing from this pilot frame.
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center justify-between gap-3 rounded-3xl border border-white/10 bg-[#11151f] p-5">
                     <div>
@@ -1789,14 +2073,16 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
               {activeTab === 'research-readout' ? (
                 <div className="mt-6 space-y-6">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="saved-readout" className="absolute right-4 top-4" />
                       <div className="flex items-center gap-3 text-cyan-300">
                         <FileText className="h-5 w-5" />
                         <span className="text-sm font-medium">Saved Readout</span>
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{detail.researchReadouts.length}</div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="readiness-frame" className="absolute right-4 top-4" />
                       <div className="flex items-center gap-3 text-emerald-300">
                         <ShieldCheck className="h-5 w-5" />
                         <span className="text-sm font-medium">Readiness Frame</span>
@@ -1805,14 +2091,16 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         {selectedCohort ? selectedCohort.name : 'Whole Pilot'}
                       </div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="eligible-athletes" className="absolute right-4 top-4" />
                       <div className="flex items-center gap-3 text-amber-300">
                         <Users2 className="h-5 w-5" />
                         <span className="text-sm font-medium">Eligible Athletes</span>
                       </div>
                       <div className="mt-3 text-3xl font-semibold">{visibleMetrics.activeAthleteCount}</div>
                     </div>
-                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <NoraMetricHelpButton metricKey="hypotheses-in-scope" className="absolute right-4 top-4" />
                       <div className="flex items-center gap-3 text-violet-300">
                         <CheckCircle2 className="h-5 w-5" />
                         <span className="text-sm font-medium">Hypotheses In Scope</span>

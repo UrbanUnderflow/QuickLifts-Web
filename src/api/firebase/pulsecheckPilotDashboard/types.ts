@@ -134,6 +134,79 @@ export interface PulseCheckPilotHypothesisInput {
   notes?: string;
 }
 
+export interface PilotHypothesisAssistSuggestion {
+  suggestionKey: string;
+  title: string;
+  statement: string;
+  leadingIndicator: string;
+  whySuggested: string;
+  confidenceLevel: PilotHypothesisConfidenceLevel;
+  evidenceSignals: string[];
+  caveat: string;
+}
+
+export interface PilotHypothesisAssistFrame {
+  pilotId: string;
+  organizationId: string;
+  organizationName: string;
+  teamId: string;
+  teamName: string;
+  pilotName: string;
+  pilotStatus: string;
+  pilotStudyMode: string;
+  cohortId?: string;
+  cohortName?: string;
+  metrics: {
+    activeAthleteCount: number;
+    totalEnrollmentCount: number;
+    cohortCount: number;
+    athletesWithEngineRecord: number;
+    athletesWithStablePatterns: number;
+    totalEvidenceRecords: number;
+    totalPatternModels: number;
+    totalRecommendationProjections: number;
+    hypothesisCount: number;
+  };
+  coverage: {
+    engineCoverageRate: number;
+    stablePatternRate: number;
+    avgEvidenceRecordsPerActiveAthlete: number;
+    avgPatternModelsPerActiveAthlete: number;
+    avgRecommendationProjectionsPerActiveAthlete: number;
+  };
+  cohortSummaries: Array<{
+    cohortId: string;
+    cohortName: string;
+    cohortStatus: string;
+    activeAthleteCount: number;
+    athletesWithEngineRecord: number;
+    athletesWithStablePatterns: number;
+    totalEvidenceRecords: number;
+    totalPatternModels: number;
+    totalRecommendationProjections: number;
+  }>;
+  hypotheses: Array<{
+    code: string;
+    statement: string;
+    leadingIndicator: string;
+    status: PilotHypothesisStatus;
+    confidenceLevel: PilotHypothesisConfidenceLevel;
+    keyEvidence?: string;
+    notes?: string;
+  }>;
+}
+
+export interface PilotHypothesisAssistGenerationInput {
+  pilotId: string;
+  cohortId?: string;
+}
+
+export interface PilotHypothesisAssistGenerationResult {
+  suggestions: PilotHypothesisAssistSuggestion[];
+  modelVersion: string;
+  promptVersion: string;
+}
+
 export interface PulseCheckPilotInviteConfig {
   id: string;
   pilotId: string;

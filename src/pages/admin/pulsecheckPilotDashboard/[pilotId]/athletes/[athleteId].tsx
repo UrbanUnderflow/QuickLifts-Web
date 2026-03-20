@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { Activity, ArrowLeft, Brain, Database, FileText, MonitorPlay, RefreshCcw, Users2 } from 'lucide-react';
 import AdminRouteGuard from '../../../../../components/auth/AdminRouteGuard';
+import NoraMetricHelpButton from '../../../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
 import { pulseCheckPilotDashboardService } from '../../../../../api/firebase/pulsecheckPilotDashboard/service';
 import type { PilotDashboardAthleteDetail } from '../../../../../api/firebase/pulsecheckPilotDashboard/types';
 
@@ -134,28 +135,32 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
           ) : (
             <>
               <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-                <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                  <NoraMetricHelpButton metricKey="cohort" className="absolute right-4 top-4" />
                   <div className="flex items-center gap-3 text-cyan-300">
                     <Users2 className="h-5 w-5" />
                     <span className="text-sm font-medium">Cohort</span>
                   </div>
                   <div className="mt-3 text-lg font-semibold">{detail.cohort?.name || 'No cohort'}</div>
                 </div>
-                <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                  <NoraMetricHelpButton metricKey="evidence-records" className="absolute right-4 top-4" />
                   <div className="flex items-center gap-3 text-emerald-300">
                     <Database className="h-5 w-5" />
                     <span className="text-sm font-medium">Evidence Records</span>
                   </div>
                   <div className="mt-3 text-3xl font-semibold">{detail.engineSummary.evidenceRecordCount}</div>
                 </div>
-                <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                  <NoraMetricHelpButton metricKey="stable-patterns" className="absolute right-4 top-4" />
                   <div className="flex items-center gap-3 text-amber-300">
                     <Brain className="h-5 w-5" />
                     <span className="text-sm font-medium">Stable Patterns</span>
                   </div>
                   <div className="mt-3 text-3xl font-semibold">{detail.engineSummary.stablePatternCount}</div>
                 </div>
-                <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                  <NoraMetricHelpButton metricKey="profile-snapshots" className="absolute right-4 top-4" />
                   <div className="flex items-center gap-3 text-violet-300">
                     <FileText className="h-5 w-5" />
                     <span className="text-sm font-medium">Profile Snapshots</span>
@@ -165,7 +170,8 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
               </div>
 
               <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
-                <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                  <NoraMetricHelpButton metricKey="pilot-enrollment" className="absolute right-4 top-4" />
                   <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Pilot Enrollment</div>
                   <div className="mt-3 space-y-3 text-sm text-zinc-300">
                     <div>Email: {detail.email || 'No email on team membership'}</div>
@@ -175,7 +181,8 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                     <div>Product consent: {detail.pilotEnrollment.productConsentAccepted ? 'Accepted' : 'Pending'}</div>
                   </div>
                 </div>
-                <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                  <NoraMetricHelpButton metricKey="engine-summary" className="absolute right-4 top-4" />
                   <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Engine Summary</div>
                   <div className="mt-3 space-y-3 text-sm text-zinc-300">
                     <div>Engine record: {detail.engineSummary.hasEngineRecord ? 'Present' : 'Missing'}</div>
@@ -188,7 +195,8 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-5">
+              <div className="relative mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <NoraMetricHelpButton metricKey="milestone-context" className="absolute right-4 top-4" />
                 <div className="flex items-center gap-3 text-cyan-300">
                   <Activity className="h-5 w-5" />
                   <span className="text-sm font-medium">Milestone Context</span>
@@ -200,7 +208,8 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
               </div>
 
               <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-3">
-                <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                  <NoraMetricHelpButton metricKey="recent-evidence" className="absolute right-4 top-4" />
                   <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Recent Evidence</div>
                   <div className="mt-4 space-y-3">
                     {detail.recentEvidence.length === 0 ? (
@@ -219,7 +228,8 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                  <NoraMetricHelpButton metricKey="recent-patterns" className="absolute right-4 top-4" />
                   <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Recent Patterns</div>
                   <div className="mt-4 space-y-3">
                     {detail.recentPatterns.length === 0 ? (
@@ -238,7 +248,8 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <div className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                  <NoraMetricHelpButton metricKey="recent-projections" className="absolute right-4 top-4" />
                   <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Recent Projections</div>
                   <div className="mt-4 space-y-3">
                     {detail.recentProjections.length === 0 ? (
@@ -258,7 +269,8 @@ const PulseCheckPilotDashboardAthletePage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-5">
+              <div className="relative mt-6 rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <NoraMetricHelpButton metricKey="snapshot-history" className="absolute right-4 top-4" />
                 <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Snapshot History</div>
                 <div className="mt-4 space-y-3">
                   {detail.snapshotHistory.length === 0 ? (

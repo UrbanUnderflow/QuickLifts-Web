@@ -1462,6 +1462,23 @@ async function planAssignmentWithAI({ snapshot, candidateSet, progress, responsi
 
 function validatePlannerDecision({ decision, candidateSet, snapshot }) {
   if (decision.actionType === 'defer' || !decision.selectedCandidateId) {
+    if ((candidateSet?.candidates || []).length > 0) {
+      const fallback = buildFallbackPlannerDecision({ snapshot, candidateSet });
+      if (fallback.actionType !== 'defer' && fallback.selectedCandidateId) {
+        console.info('[submit-pulsecheck-checkin] Planner defer overridden by bounded fallback candidate', {
+          athleteId: snapshot?.athleteId || null,
+          sourceDate: snapshot?.sourceDate || null,
+          candidateCount: candidateSet.candidates.length,
+          plannerActionType: decision.actionType || null,
+          plannerSelectedCandidateId: decision.selectedCandidateId || null,
+          fallbackActionType: fallback.actionType || null,
+          fallbackSelectedCandidateId: fallback.selectedCandidateId || null,
+          fallbackSelectedCandidateType: fallback.selectedCandidateType || null,
+        });
+        return validatePlannerDecision({ decision: fallback, candidateSet, snapshot });
+      }
+    }
+
     return {
       decision: {
         ...decision,
