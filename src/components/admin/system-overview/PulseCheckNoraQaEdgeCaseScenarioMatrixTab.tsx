@@ -8,6 +8,7 @@ const SCENARIO_ROWS = [
   ['Coach locked a specific assignment but athlete is Red', 'Respect coach intent only if it does not violate safety or defer rules. Otherwise route through the override path.', 'Nora routing + Coaching controls'],
   ['Tier 1 escalation with Green readiness', 'Coach-aware performance routing remains active. Do not suppress training unnecessarily.', 'Orchestration'],
   ['Persistent red without safety language', 'Create support visibility, reduce aggressiveness, and do not jump directly to clinical escalation.', 'Support lane'],
+  ['Two consecutive deferred days at Tier 0', 'Require fresh same-day signal weighting and prefer a bounded protocol route if one is valid before deferring again.', 'State Signal + Nora'],
   ['Conflicting signals across self-report, sentiment, and performance', 'Lower confidence and prefer confirmatory check rather than decisive routing.', 'State Signal'],
   ['Stale snapshot at time of assignment', 'Refresh or request a quick check-in before high-confidence routing.', 'State Signal + Nora'],
   ['Low protocol responsiveness across repeated sessions', 'Reduce reliance on that protocol, increase staff visibility, and reconsider routing strategy.', 'Nora + Protocol layer'],

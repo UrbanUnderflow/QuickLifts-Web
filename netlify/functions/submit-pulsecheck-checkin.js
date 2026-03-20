@@ -47,8 +47,16 @@ function clamp(value, min = 0, max = 100) {
   return Math.max(min, Math.min(max, Math.round(value)));
 }
 
+function normalizeExplicitReadinessScore(readinessScore) {
+  return clamp(((Number(readinessScore || 1) - 1) / 4) * 100);
+}
+
 function isValidSourceDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function compareSourceDateDesc(left, right) {
+  return String(right || '').localeCompare(String(left || ''));
 }
 
 function humanizeRuntimeLabel(value) {
@@ -177,6 +185,67 @@ function resolvePublishedSimCandidate(activeProgram, liveSimRegistry) {
 
 function uniqueStrings(values) {
   return Array.from(new Set((Array.isArray(values) ? values : []).filter((value) => typeof value === 'string' && value.trim()).map((value) => value.trim())));
+}
+
+async function listRecentDailyAssignments({ db, athleteId, sourceDate, limit = 5 }) {
+  if (!db || !athleteId || !isValidSourceDate(sourceDate)) {
+    return [];
+  }
+
+  const assignmentsSnap = await db.collection(DAILY_ASSIGNMENTS_COLLECTION).where('athleteId', '==', athleteId).get();
+  return assignmentsSnap.docs
+    .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+    .filter((assignment) => isValidSourceDate(assignment.sourceDate) && assignment.sourceDate < sourceDate)
+    .sort((left, right) => {
+      const sourceDateComparison = compareSourceDateDesc(left.sourceDate, right.sourceDate);
+      if (sourceDateComparison !== 0) return sourceDateComparison;
+      return (right.updatedAt || right.createdAt || 0) - (left.updatedAt || left.createdAt || 0);
+    })
+    .slice(0, limit);
+}
+
+function deriveRecentAssignmentHistoryContext(assignments = []) {
+  const orderedAssignments = (Array.isArray(assignments) ? assignments : [])
+    .filter((assignment) => assignment && isValidSourceDate(assignment.sourceDate))
+    .sort((left, right) => {
+      const sourceDateComparison = compareSourceDateDesc(left.sourceDate, right.sourceDate);
+      if (sourceDateComparison !== 0) return sourceDateComparison;
+      return (right.updatedAt || right.createdAt || 0) - (left.updatedAt || left.createdAt || 0);
+    });
+
+  let consecutiveTier0Defers = 0;
+  for (const assignment of orderedAssignments) {
+    const isTier0 = Number(assignment.escalationTier || 0) === 0;
+    const isDeferred = assignment.actionType === 'defer' || assignment.status === 'deferred';
+    if (isTier0 && isDeferred) {
+      consecutiveTier0Defers += 1;
+      continue;
+    }
+    break;
+  }
+
+  const recentWindow = orderedAssignments.slice(0, 3);
+  const recentTier0DeferCount = recentWindow.filter((assignment) =>
+    Number(assignment.escalationTier || 0) === 0
+    && (assignment.actionType === 'defer' || assignment.status === 'deferred')
+  ).length;
+  const recentProtocolAssigned = recentWindow.some((assignment) =>
+    assignment.actionType === 'protocol' && assignment.status !== 'deferred' && assignment.status !== 'overridden'
+  );
+  const recentCompletedCount = recentWindow.filter((assignment) => assignment.status === 'completed').length;
+  const latestAssignment = orderedAssignments[0] || null;
+
+  return {
+    recentAssignmentsConsidered: orderedAssignments.length,
+    recentTier0DeferCount,
+    consecutiveTier0Defers,
+    recentProtocolAssigned,
+    recentCompletedCount,
+    latestAssignmentActionType: latestAssignment?.actionType,
+    latestAssignmentStatus: latestAssignment?.status,
+    latestAssignmentDate: latestAssignment?.sourceDate,
+    shouldAvoidRepeatDefer: consecutiveTier0Defers >= 1,
+  };
 }
 
 function deriveProtocolPolicySnapshotTags(snapshot) {
@@ -692,12 +761,18 @@ function toTimestampMillis(value) {
 }
 
 function normalizeReadinessScore({ checkIn, progress }) {
+  const explicitReadiness = normalizeExplicitReadinessScore(checkIn?.readinessScore);
   const profileReadiness = progress?.taxonomyProfile?.modifierScores?.readiness;
+
   if (typeof profileReadiness === 'number' && Number.isFinite(profileReadiness)) {
-    return clamp(profileReadiness);
+    const boundedProfileReadiness = clamp(profileReadiness);
+    const gap = Math.abs(explicitReadiness - boundedProfileReadiness);
+    const profileWeight = gap >= 30 ? 0.15 : 0.25;
+
+    return clamp(explicitReadiness * (1 - profileWeight) + boundedProfileReadiness * profileWeight);
   }
 
-  return clamp(((Number(checkIn.readinessScore || 1) - 1) / 4) * 100);
+  return explicitReadiness;
 }
 
 function deriveStateDimensions({ checkIn, progress }) {
@@ -722,7 +797,7 @@ function deriveOverallReadiness({ readinessScore, dimensions }) {
   return 'yellow';
 }
 
-function deriveConfidence({ checkIn, progress }) {
+function deriveConfidence({ checkIn, progress, contradictionFlags = [] }) {
   let signalCount = 1;
   if (typeof checkIn.energyLevel === 'number') signalCount += 1;
   if (typeof checkIn.stressLevel === 'number') signalCount += 1;
@@ -730,15 +805,53 @@ function deriveConfidence({ checkIn, progress }) {
   if (checkIn.taxonomyState) signalCount += 1;
   if (progress?.taxonomyProfile) signalCount += 1;
 
-  if (signalCount >= 4) return 'high';
-  if (signalCount >= 2) return 'medium';
-  return 'low';
+  let confidence = 'low';
+  if (signalCount >= 4) confidence = 'high';
+  else if (signalCount >= 2) confidence = 'medium';
+
+  if (contradictionFlags.length >= 2) {
+    return 'low';
+  }
+
+  if (contradictionFlags.length === 1 && confidence === 'high') {
+    return 'medium';
+  }
+
+  return confidence;
 }
 
-function deriveRouting({ readiness, progress }) {
+function deriveRouting({ readiness, readinessScore, dimensions, confidence, contradictionFlags = [], progress, recentAssignmentHistory }) {
   const sessionType = progress?.activeProgram?.sessionType;
+  const durationMode = progress?.activeProgram?.durationMode;
+  const severeRedState =
+    readinessScore < 30
+    || dimensions.activation >= 85
+    || dimensions.emotionalLoad >= 85
+    || dimensions.cognitiveFatigue >= 85;
+  const criticalRedState =
+    readinessScore < 20
+    || [dimensions.activation, dimensions.emotionalLoad, dimensions.cognitiveFatigue].filter((value) => value >= 90).length >= 2;
+  const highCostDay =
+    sessionType === 'reassessment'
+    || sessionType === 'pressure_exposure'
+    || durationMode === 'extended_stress_test';
+  const fragileEvidence = confidence === 'low' || contradictionFlags.length >= 2;
+  const shouldAvoidRepeatDefer = Boolean(recentAssignmentHistory?.shouldAvoidRepeatDefer);
+
   if (readiness === 'red') {
-    return sessionType === 'recovery_rep' ? 'protocol_only' : 'defer_alternate_path';
+    if (sessionType === 'recovery_rep') {
+      return 'protocol_only';
+    }
+
+    if (shouldAvoidRepeatDefer && !criticalRedState) {
+      return 'protocol_only';
+    }
+
+    if ((severeRedState && highCostDay) || (severeRedState && fragileEvidence)) {
+      return 'defer_alternate_path';
+    }
+
+    return 'protocol_only';
   }
   if (readiness === 'yellow') {
     return 'protocol_then_sim';
@@ -755,13 +868,16 @@ function deriveProtocolClass({ dimensions, progress }) {
   return 'none';
 }
 
-function deriveContextTags(progress) {
+function deriveContextTags(progress, assignmentHistoryContext) {
   const tags = new Set();
   const sessionType = progress?.activeProgram?.sessionType;
   const durationMode = progress?.activeProgram?.durationMode;
   if (sessionType) tags.add(sessionType);
   if (durationMode) tags.add(durationMode);
   if (durationMode === 'extended_stress_test') tags.add('high_load_window');
+  if (assignmentHistoryContext?.recentTier0DeferCount >= 1) tags.add('recent_tier0_defer');
+  if (assignmentHistoryContext?.consecutiveTier0Defers >= 2) tags.add('consecutive_tier0_defers');
+  if (assignmentHistoryContext?.shouldAvoidRepeatDefer) tags.add('avoid_repeat_defer');
   return Array.from(tags);
 }
 
@@ -816,6 +932,17 @@ function buildRawSignalSummary({ checkIn, progress, normalizedScore, contradicti
           durationMode: progress.activeProgram.durationMode,
           recommendedSimId: progress.activeProgram.recommendedSimId,
           recommendedLegacyExerciseId: progress.activeProgram.recommendedLegacyExerciseId,
+        }
+      : undefined,
+    assignmentHistoryContext: progress?.recentAssignmentHistoryContext
+      ? {
+          recentAssignmentsConsidered: progress.recentAssignmentHistoryContext.recentAssignmentsConsidered,
+          recentTier0DeferCount: progress.recentAssignmentHistoryContext.recentTier0DeferCount,
+          consecutiveTier0Defers: progress.recentAssignmentHistoryContext.consecutiveTier0Defers,
+          latestAssignmentActionType: progress.recentAssignmentHistoryContext.latestAssignmentActionType,
+          latestAssignmentStatus: progress.recentAssignmentHistoryContext.latestAssignmentStatus,
+          latestAssignmentDate: progress.recentAssignmentHistoryContext.latestAssignmentDate,
+          shouldAvoidRepeatDefer: progress.recentAssignmentHistoryContext.shouldAvoidRepeatDefer,
         }
       : undefined,
     normalizedReadinessScore: normalizedScore,
@@ -1034,6 +1161,7 @@ function buildProtocolCandidates({ snapshot, liveProtocolRegistry, responsivenes
       const matchedPreferredContextTags = preferredContextTags.filter((tag) => snapshotTags.has(tag));
       const matchedAvoidWindowTags = avoidWindowTags.filter((tag) => snapshotTags.has(tag));
       const matchedContraindicationTags = contraindicationTags.filter((tag) => snapshotTags.has(tag));
+      const categoryTag = normalizeTag(protocol.category);
 
       if (!protocol.familyId || !protocol.variantId || !protocol.legacyExerciseId) {
         inventoryGapReasons.add('One or more published protocols are missing required runtime linkage or asset metadata.');
@@ -1064,11 +1192,13 @@ function buildProtocolCandidates({ snapshot, liveProtocolRegistry, responsivenes
         runtime: protocol,
         responsivenessProfile,
       });
-      const contextFitScore = matchedTriggerTags.length * 6 + matchedUseWindowTags.length * 8 + matchedPreferredContextTags.length * 5;
+      const categoryFitScore = categoryTag && snapshotTags.has(categoryTag) ? 12 : 0;
+      const contextFitScore = matchedTriggerTags.length * 6 + matchedUseWindowTags.length * 8 + matchedPreferredContextTags.length * 5 + categoryFitScore;
       const contextFitSummary = [
         matchedTriggerTags.length ? `Trigger fit: ${matchedTriggerTags.map((tag) => humanizeRuntimeLabel(tag)).join(', ')}.` : '',
         matchedUseWindowTags.length ? `Window fit: ${matchedUseWindowTags.map((tag) => humanizeRuntimeLabel(tag)).join(', ')}.` : '',
         matchedPreferredContextTags.length ? `Context fit: ${matchedPreferredContextTags.map((tag) => humanizeRuntimeLabel(tag)).join(', ')}.` : '',
+        categoryFitScore ? `Athlete preference fit: ${humanizeRuntimeLabel(protocol.category)}.` : '',
       ].filter(Boolean).join(' ');
 
       return {
@@ -1159,7 +1289,8 @@ function buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress
   const wantsProtocol = (snapshot.candidateClassHints || []).includes('protocol')
     || snapshot.recommendedRouting === 'protocol_only'
     || snapshot.recommendedRouting === 'protocol_then_sim'
-    || snapshot.recommendedRouting === 'sim_then_protocol';
+    || snapshot.recommendedRouting === 'sim_then_protocol'
+    || snapshot.recommendedRouting === 'defer_alternate_path';
 
   if (wantsProtocol) {
     const protocolResult = buildProtocolCandidates({ snapshot, liveProtocolRegistry, responsivenessProfile });
@@ -1507,17 +1638,20 @@ async function getSnapshotById(db, id) {
   return { id: snap.id, ...snap.data() };
 }
 
-async function upsertStateSnapshot({ db, athleteId, checkIn, progress }) {
+async function upsertStateSnapshot({ db, athleteId, checkIn, progress, recentAssignmentHistoryContext = null }) {
   const snapshotId = `${athleteId}_${checkIn.date}`;
   const existing = await getSnapshotById(db, snapshotId);
   const readinessScore = normalizeReadinessScore({ checkIn, progress });
   const stateDimensions = deriveStateDimensions({ checkIn, progress });
   const overallReadiness = deriveOverallReadiness({ readinessScore, dimensions: stateDimensions });
-  const confidence = deriveConfidence({ checkIn, progress });
   const contradictionFlags = detectContradictionFlags({ checkIn, normalizedScore: readinessScore, dimensions: stateDimensions });
+  const confidence = deriveConfidence({ checkIn, progress, contradictionFlags });
   const rawSignalSummary = buildRawSignalSummary({
     checkIn,
-    progress,
+    progress: {
+      ...progress,
+      recentAssignmentHistoryContext,
+    },
     normalizedScore: readinessScore,
     contradictionFlags,
   });
@@ -1540,8 +1674,16 @@ async function upsertStateSnapshot({ db, athleteId, checkIn, progress }) {
       ...(progress?.activeProgram ? ['active_program_context'] : []),
     ],
     sourceEventIds: Array.from(new Set([...(existing?.sourceEventIds || []), checkIn.id])),
-    contextTags: deriveContextTags(progress),
-    recommendedRouting: deriveRouting({ readiness: overallReadiness, progress }),
+    contextTags: deriveContextTags(progress, recentAssignmentHistoryContext),
+    recommendedRouting: deriveRouting({
+      readiness: overallReadiness,
+      readinessScore,
+      dimensions: stateDimensions,
+      confidence,
+      contradictionFlags,
+      progress,
+      recentAssignmentHistory: recentAssignmentHistoryContext,
+    }),
     recommendedProtocolClass: deriveProtocolClass({ dimensions: stateDimensions, progress }),
     candidateClassHints: [],
     readinessScore,
@@ -2029,6 +2171,12 @@ exports.handler = async (event) => {
     const persistedCheckIn = { id: checkInRef.id, ...sanitizedCheckIn };
 
     const syncedProgress = await syncTaxonomyProfile(db, userId, priorProgress);
+    const recentAssignments = await listRecentDailyAssignments({
+      db,
+      athleteId: userId,
+      sourceDate,
+    });
+    const recentAssignmentHistoryContext = deriveRecentAssignmentHistoryContext(recentAssignments);
     console.info('[submit-pulsecheck-checkin] Synced progress for submission', {
       userId,
       sourceDate,
@@ -2036,12 +2184,15 @@ exports.handler = async (event) => {
       recommendedSimId: syncedProgress?.activeProgram?.recommendedSimId || null,
       recommendedLegacyExerciseId: syncedProgress?.activeProgram?.recommendedLegacyExerciseId || null,
       sessionType: syncedProgress?.activeProgram?.sessionType || null,
+      recentTier0DeferCount: recentAssignmentHistoryContext.recentTier0DeferCount,
+      consecutiveTier0Defers: recentAssignmentHistoryContext.consecutiveTier0Defers,
     });
     const rawStateSnapshot = await upsertStateSnapshot({
       db,
       athleteId: userId,
       checkIn: persistedCheckIn,
       progress: syncedProgress,
+      recentAssignmentHistoryContext,
     });
 
     const stateSnapshot = await enrichStateSnapshotWithAI({
@@ -2109,6 +2260,12 @@ exports.runtimeHelpers = {
   loadOrInitializeProgress,
   syncTaxonomyProfile,
   getSnapshotById,
+  listRecentDailyAssignments,
+  deriveRecentAssignmentHistoryContext,
+  normalizeReadinessScore,
+  deriveStateDimensions,
+  deriveOverallReadiness,
+  deriveRouting,
   listLiveProtocolRegistry,
   listLivePublishedSimModules,
   isPublishedSimModuleRecord,

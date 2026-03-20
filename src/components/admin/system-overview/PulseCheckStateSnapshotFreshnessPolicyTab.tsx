@@ -104,6 +104,7 @@ const PulseCheckStateSnapshotFreshnessPolicyTab: React.FC = () => {
                   'Persist source timestamps in every snapshot.',
                   'Store confidence separately from readiness so low-confidence Green is not treated like strong Green.',
                   'Refresh before high-stakes Trials and before Protocol routing off Red state if the current snapshot is stale.',
+                  'Use recent assignment history as short-horizon posture memory, but never let it outweigh a fresh explicit self-report.',
                   'When in doubt, ask the athlete rather than assuming.',
                 ]}
               />

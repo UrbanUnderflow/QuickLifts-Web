@@ -324,6 +324,160 @@ test('stripUndefinedDeep removes undefined optional check-in fields before persi
   assert.equal('sleepQuality' in sanitized, false);
 });
 
+test('normalizeReadinessScore keeps the fresh check-in as the primary signal', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+
+  const normalized = runtimeHelpers.normalizeReadinessScore({
+    checkIn: {
+      readinessScore: 5,
+    },
+    progress: {
+      taxonomyProfile: {
+        modifierScores: {
+          readiness: 20,
+        },
+      },
+    },
+  });
+
+  assert.equal(normalized, 88);
+});
+
+test('deriveRouting prefers protocol-only for an ordinary red training day', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+
+  const routing = runtimeHelpers.deriveRouting({
+    readiness: 'red',
+    readinessScore: 40,
+    dimensions: {
+      activation: 74,
+      focusReadiness: 42,
+      emotionalLoad: 73,
+      cognitiveFatigue: 66,
+    },
+    confidence: 'medium',
+    contradictionFlags: [],
+    progress: {
+      activeProgram: {
+        sessionType: 'training_rep',
+        durationMode: 'standard_rep',
+      },
+    },
+  });
+
+  assert.equal(routing, 'protocol_only');
+});
+
+test('deriveRouting reserves defer-alternate-path for severe red high-cost days', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+
+  const routing = runtimeHelpers.deriveRouting({
+    readiness: 'red',
+    readinessScore: 22,
+    dimensions: {
+      activation: 88,
+      focusReadiness: 28,
+      emotionalLoad: 86,
+      cognitiveFatigue: 89,
+    },
+    confidence: 'medium',
+    contradictionFlags: [],
+    progress: {
+      activeProgram: {
+        sessionType: 'pressure_exposure',
+        durationMode: 'extended_stress_test',
+      },
+    },
+  });
+
+  assert.equal(routing, 'defer_alternate_path');
+});
+
+test('deriveRecentAssignmentHistoryContext marks repeat defer risk after a recent Tier 0 defer', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+
+  const history = runtimeHelpers.deriveRecentAssignmentHistoryContext([
+    {
+      id: 'athlete-1_2026-03-19',
+      sourceDate: '2026-03-19',
+      actionType: 'defer',
+      status: 'deferred',
+      escalationTier: 0,
+      updatedAt: 20,
+    },
+    {
+      id: 'athlete-1_2026-03-18',
+      sourceDate: '2026-03-18',
+      actionType: 'protocol',
+      status: 'completed',
+      escalationTier: 0,
+      updatedAt: 10,
+    },
+  ]);
+
+  assert.equal(history.recentTier0DeferCount, 1);
+  assert.equal(history.consecutiveTier0Defers, 1);
+  assert.equal(history.shouldAvoidRepeatDefer, true);
+});
+
+test('deriveRouting avoids a second consecutive Tier 0 defer when a protocol-first path is still viable', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+
+  const routing = runtimeHelpers.deriveRouting({
+    readiness: 'red',
+    readinessScore: 28,
+    dimensions: {
+      activation: 87,
+      focusReadiness: 24,
+      emotionalLoad: 86,
+      cognitiveFatigue: 84,
+    },
+    confidence: 'medium',
+    contradictionFlags: [],
+    recentAssignmentHistory: {
+      shouldAvoidRepeatDefer: true,
+      consecutiveTier0Defers: 1,
+    },
+    progress: {
+      activeProgram: {
+        sessionType: 'pressure_exposure',
+        durationMode: 'extended_stress_test',
+      },
+    },
+  });
+
+  assert.equal(routing, 'protocol_only');
+});
+
+test('deriveRouting still allows defer when the repeat-defer day is critically red', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+
+  const routing = runtimeHelpers.deriveRouting({
+    readiness: 'red',
+    readinessScore: 16,
+    dimensions: {
+      activation: 93,
+      focusReadiness: 18,
+      emotionalLoad: 92,
+      cognitiveFatigue: 95,
+    },
+    confidence: 'medium',
+    contradictionFlags: [],
+    recentAssignmentHistory: {
+      shouldAvoidRepeatDefer: true,
+      consecutiveTier0Defers: 1,
+    },
+    progress: {
+      activeProgram: {
+        sessionType: 'pressure_exposure',
+        durationMode: 'extended_stress_test',
+      },
+    },
+  });
+
+  assert.equal(routing, 'defer_alternate_path');
+});
+
 test('buildAssignmentCandidateSet excludes unpublished sim recommendations', async () => {
   const runtimeHelpers = loadRuntimeHelpers();
 
@@ -355,6 +509,66 @@ test('buildAssignmentCandidateSet excludes unpublished sim recommendations', asy
   assert.deepEqual(candidateSet.candidates, []);
   assert.equal(candidateSet.plannerEligible, false);
   assert.match(candidateSet.inventoryGaps[0], /not currently published and launchable/i);
+});
+
+test('buildAssignmentCandidateSet includes protocol alternatives for deferred alternate-path routing and prefers matching visualization category', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+
+  const candidateSet = runtimeHelpers.buildAssignmentCandidateSet({
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-20',
+    snapshot: {
+      id: 'athlete-1_2026-03-20',
+      athleteId: 'athlete-1',
+      sourceDate: '2026-03-20',
+      recommendedRouting: 'defer_alternate_path',
+      recommendedProtocolClass: 'priming',
+      candidateClassHints: ['protocol'],
+      overallReadiness: 'yellow',
+      contextTags: ['visualization', 'pre_training'],
+    },
+    progress: {
+      activeProgram: {
+        recommendedSimId: 'endurance_lock',
+        recommendedLegacyExerciseId: 'focus-endurance-lock',
+        sessionType: 'training_rep',
+        durationMode: 'standard_rep',
+        durationSeconds: 480,
+      },
+    },
+    liveProtocolRegistry: [
+      {
+        id: 'proto-focus',
+        label: 'Focus Primer',
+        familyId: 'priming-focus',
+        variantId: 'priming-focus--v1',
+        legacyExerciseId: 'focus-primer',
+        protocolClass: 'priming',
+        category: 'focus',
+        preferredContextTags: ['pre_training'],
+        triggerTags: [],
+        useWindowTags: [],
+      },
+      {
+        id: 'proto-visualization',
+        label: 'Visualization Primer',
+        familyId: 'priming-visualization',
+        variantId: 'priming-visualization--v1',
+        legacyExerciseId: 'visualization-primer',
+        protocolClass: 'priming',
+        category: 'visualization',
+        preferredContextTags: ['pre_training'],
+        triggerTags: [],
+        useWindowTags: [],
+      },
+    ],
+    liveSimRegistry: [],
+    responsivenessProfile: null,
+  });
+
+  assert.equal(candidateSet.plannerEligible, true);
+  assert.equal(candidateSet.candidates[0].type, 'protocol');
+  assert.equal(candidateSet.candidates[0].protocolLabel, 'Visualization Primer');
 });
 
 test('orchestratePostCheckIn defers when the recommended sim is not published', async () => {
@@ -411,4 +625,90 @@ test('orchestratePostCheckIn defers when the recommended sim is not published', 
   assert.equal(assignment.status, 'deferred');
   assert.equal(assignment.simSpecId, undefined);
   assert.equal(assignment.legacyExerciseId, undefined);
+});
+
+test('orchestratePostCheckIn can materialize a protocol alternative from a deferred alternate-path day', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+  const snapshot = {
+    id: 'athlete-1_2026-03-20',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-20',
+    sourceCheckInId: 'checkin-visualization',
+    overallReadiness: 'yellow',
+    confidence: 'medium',
+    recommendedRouting: 'defer_alternate_path',
+    recommendedProtocolClass: 'priming',
+    candidateClassHints: ['protocol'],
+    contextTags: ['visualization', 'pre_training'],
+    readinessScore: 62,
+    supportFlag: false,
+  };
+  const db = createFirestoreDb({ snapshot });
+
+  const candidateSet = runtimeHelpers.buildAssignmentCandidateSet({
+    athleteId: 'athlete-1',
+    sourceDate: snapshot.sourceDate,
+    snapshot,
+    progress: {
+      coachId: null,
+      activeProgram: {
+        recommendedSimId: 'endurance_lock',
+        recommendedLegacyExerciseId: 'focus-endurance-lock',
+        sessionType: 'training_rep',
+        durationMode: 'standard_rep',
+        durationSeconds: 480,
+      },
+    },
+    liveProtocolRegistry: [
+      {
+        id: 'proto-visualization',
+        label: 'Visualization Primer',
+        familyId: 'priming-visualization',
+        variantId: 'priming-visualization--v1',
+        legacyExerciseId: 'visualization-primer',
+        protocolClass: 'priming',
+        category: 'visualization',
+        preferredContextTags: ['pre_training'],
+        triggerTags: [],
+        useWindowTags: [],
+      },
+    ],
+    liveSimRegistry: [],
+    responsivenessProfile: null,
+  });
+
+  const assignment = await runtimeHelpers.orchestratePostCheckIn({
+    db,
+    athleteId: 'athlete-1',
+    sourceCheckInId: 'checkin-visualization',
+    sourceStateSnapshotId: snapshot.id,
+    sourceCandidateSetId: candidateSet.id,
+    sourceDate: snapshot.sourceDate,
+    progress: {
+      coachId: null,
+      activeProgram: {
+        recommendedSimId: 'endurance_lock',
+        recommendedLegacyExerciseId: 'focus-endurance-lock',
+        sessionType: 'training_rep',
+        durationMode: 'standard_rep',
+        durationSeconds: 480,
+        rationale: 'No published sim is available, so use a bounded support rep instead.',
+      },
+      taxonomyProfile: {
+        modifierScores: {
+          readiness: 62,
+        },
+      },
+    },
+    candidateSet,
+    plannerDecision: null,
+    liveProtocolRegistry: [],
+    liveSimRegistry: [],
+  });
+
+  assert.ok(assignment);
+  assert.equal(assignment.actionType, 'protocol');
+  assert.equal(assignment.status, 'assigned');
+  assert.equal(assignment.protocolLabel, 'Visualization Primer');
+  assert.equal(assignment.legacyExerciseId, 'visualization-primer');
 });

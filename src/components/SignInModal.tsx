@@ -130,6 +130,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   // Added state for password visibility
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;
@@ -140,8 +141,9 @@ const SignInModal: React.FC<SignInModalProps> = ({
   const isOnCoachPage = router.pathname.startsWith('/coach/') || router.asPath.startsWith('/coach/');
   const shouldBypassSubscriptionGate = isPulseCheckPage || isOnCoachPage;
 
-  // Detect if the user is on an iPhone
+  // Detect if the user is on an iPhone and component mount
   useEffect(() => {
+    setMounted(true);
     if (typeof window !== 'undefined' && window.navigator) {
       const ua = window.navigator.userAgent || window.navigator.vendor || '';
       setIsIphone(/iPhone/i.test(ua));
@@ -2533,7 +2535,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black z-50 sm:p-6">
       <div className="relative bg-zinc-900 w-full h-full sm:h-auto sm:w-[480px] sm:rounded-xl p-6 sm:p-8 border-none sm:border sm:border-zinc-700 shadow-xl overflow-y-auto">
-        {typeof window !== 'undefined' && window.location.hostname === 'localhost' && <DevModeToggle />}
+        {mounted && window.location.hostname === 'localhost' && <DevModeToggle />}
         {/* iPhone App Download Banner */}
         {iphoneBanner}
         

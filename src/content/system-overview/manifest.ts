@@ -9,7 +9,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
   title: 'System Overview Handbook',
   subtitle:
     'Document-first source of truth for Pulse architecture, products, data flows, ownership, and operational dependencies.',
-  lastUpdated: '2026-03-19',
+  lastUpdated: '2026-03-20',
   sections: [
     { id: 'executive-summary', label: 'Executive Summary', description: 'Scope, mission, and latest changes.' },
     { id: 'ecosystem-map', label: 'Ecosystem Map', description: 'Layered map of products, backend, integrations, and agents.' },
@@ -65,6 +65,10 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     { id: 'pulsecheck-correlation-engine-contract-lock', label: 'Contract Lock & Exit Criteria', description: 'Milestone 0 contract freeze for baseline artifacts, naming, confidence tiers, messaging boundaries, and implementation exit criteria.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
     { id: 'pulsecheck-correlation-data-model-spec', label: 'Correlation Data Model Spec', description: 'Implementation-facing schema for Correlation Evidence Record, Athlete Pattern Model, Recommendation Projection, and Assessment Context Flag.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
     { id: 'pulsecheck-correlation-engine-engineering-task-breakdown', label: 'Correlation Engine Engineering Task Breakdown', description: 'End-to-end engineering workstream and milestone breakdown from schema lock through production-ready launch for the correlation engine.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
+    { id: 'pulsecheck-correlation-engine-pilot-dashboard', label: 'Correlation Engine Pilot Dashboard', description: 'Pilot-native monitoring surface for active pilots, rooted in Pilot and PilotEnrollment rather than whole-system analytics.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
+    { id: 'pulsecheck-correlation-engine-pilot-dashboard-addendum', label: 'Pilot Dashboard Addendum', description: 'Pilot KPI glossary and reporting-separation rules for the pilot dashboard.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
+    { id: 'pulsecheck-correlation-engine-pilot-ops-runbook', label: 'Pilot Ops Runbook', description: 'Operational ownership, cadence, escalation, and queue guidance for active pilot monitoring.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
+    { id: 'pulsecheck-correlation-engine-pilot-research-readout', label: 'Pilot Research Readout Implementation Spec', description: 'AI-assisted, evidence-bounded interpretation-layer spec for one pilot’s governed dashboard data, including gating, output schema, and review workflow.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
     { id: 'pulsecheck-oura-integration-strategy', label: 'Oura Integration Strategy', description: 'Direct Oura OAuth/API lane, HealthKit-derived fallback lane, source-record mapping, merge precedence, and rollout recommendation for PulseCheck.', parentSectionId: 'pulsecheck-device-integration-strategy' },
     { id: 'pulsecheck-oura-cognitive-correlation-spec', label: 'Oura Cognitive Correlation Spec', description: 'First source-specific child spec for feeding Oura physiology into the broader Physiology-Cognition Correlation Engine.', parentSectionId: 'pulsecheck-physiology-cognition-correlation-engine' },
     { id: 'pulsecheck-device-integration-strategy', label: 'Device & Wearable Integrations', description: 'Parent artifact for wearable strategy, partnership prioritization, and source-lane recommendations across device ecosystems.' },
@@ -97,6 +101,8 @@ export const systemOverviewManifest: SystemOverviewManifest = {
     audience:
       'Exec + Internal Mixed: quick strategic readability with deep technical drill-down for builders.',
     whatChangedRecently: [
+      'Added a pilot-scoped Correlation Engine dashboard stack, including the pilot dashboard, KPI addendum, and pilot ops runbook, and clarified that active-pilot monitoring is rooted in Pilot and PilotEnrollment rather than whole-team analytics.',
+      'Added a Pilot Research Readout Implementation Spec to the Correlation Engine pilot stack, defining the AI-assisted interpretation tab, readiness gates, claim-discipline rules, frozen evidence frame, and human-review workflow for pilot-level research summaries.',
       'Reorganized the PulseCheck handbook around artifact-level libraries so Health Context Pipeline, Protocol System, Runtime Stack, Profile System, Onboarding & Access, and Device & Wearable Integrations now hold their related docs internally instead of exposing long sibling runs in the sidebar.',
       'Added a Protocol Practice Conversation Spec artifact to the Protocol System chapter so protocol execution now has an explicit teach -> practice -> evaluate runtime target instead of ending at narrated instruction.',
       'Extended PulseCheck assignment events so started/completed/deferred/overridden now refresh the athlete protocol responsiveness profile, and persisted planner-audit traces on Nora daily assignments so pilot review can see why a bounded candidate won.',
@@ -399,7 +405,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       environments: ['Development', 'Production'],
       keyDependencies: ['engagement-events', 'users/categoryPoints.creator', 'leaderboards cache', 'Stripe Connect'],
       sourceRefs: [
-        { label: 'iOS Engagement Service', path: '../iOS/QuickLifts/QuickLifts/Services/EngagementService.swift' },
+        { label: 'iOS Engagement Service', path: '../QuickLifts/QuickLifts/Services/EngagementService.swift' },
         { label: 'Unified Earnings Function', path: 'netlify/functions/get-unified-earnings.js' },
         { label: 'Unified Payout Function', path: 'netlify/functions/initiate-unified-payout.js' },
         { label: 'Leaderboard Cache Script', path: 'scripts/cacheLeaderboardsOnce.js' },
@@ -488,8 +494,8 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       readBy: 'Creator analytics, score pipelines, and payout computation surfaces',
       criticalFields: ['type', 'videoId', 'creatorId', 'engagerId', 'engagerSubscription', 'workoutId', 'timestamp'],
       sourceRefs: [
-        { label: 'Engagement Service', path: '../iOS/QuickLifts/QuickLifts/Services/EngagementService.swift' },
-        { label: 'Exercise Logging Hooks', path: '../iOS/QuickLifts/QuickLifts/Models/Exercise.swift' },
+        { label: 'Engagement Service', path: '../QuickLifts/QuickLifts/Services/EngagementService.swift' },
+        { label: 'Exercise Logging Hooks', path: '../QuickLifts/QuickLifts/Models/Exercise.swift' },
       ],
     },
     {
@@ -502,7 +508,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       sourceRefs: [
         { label: 'Exercise Video Types', path: 'src/api/firebase/exercise/types.ts' },
         { label: 'User Video Fetch', path: 'src/api/firebase/user/service.ts' },
-        { label: 'Professional Dashboard', path: '../iOS/QuickLifts/QuickLifts/View/Screens/LibraryView/ProfessionalDashboardCard/ProfessionalDashboadView.swift' },
+        { label: 'Professional Dashboard', path: '../QuickLifts/QuickLifts/View/Screens/LibraryView/ProfessionalDashboardCard/ProfessionalDashboadView.swift' },
       ],
     },
     {
@@ -515,7 +521,7 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       sourceRefs: [
         { label: 'Leaderboard Cache Script', path: 'scripts/cacheLeaderboardsOnce.js' },
         { label: 'Creator Score Backfill', path: 'scripts/backfillCreatorScore.js' },
-        { label: 'Top Creators ViewModel', path: '../iOS/QuickLifts/QuickLifts/View/Screens/Leaderboard/GlobalLeaderboardViewModel.swift' },
+        { label: 'Top Creators ViewModel', path: '../QuickLifts/QuickLifts/View/Screens/Leaderboard/GlobalLeaderboardViewModel.swift' },
       ],
     },
     {
@@ -610,8 +616,8 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       readBy: 'PulseCheck profile and coach views',
       criticalFields: ['category', 'severity', 'status', 'lastDiscussed'],
       sourceRefs: [
-        { label: 'PulseCheck Guide', path: '../iOS/docs/pulsecheck-development-guide.md' },
-        { label: 'Mental Notes UI', path: '../iOS/PulseCheck/PulseCheck/Views/Chat/MentalNotesBar.swift' },
+        { label: 'PulseCheck App', path: '../PulseCheck/PulseCheck/PulseCheckApp.swift' },
+        { label: 'Mental Notes UI', path: '../PulseCheck/PulseCheck/Views/Chat/MentalNotesBar.swift' },
       ],
     },
   ],
@@ -692,8 +698,8 @@ export const systemOverviewManifest: SystemOverviewManifest = {
       products: ['QuickLifts iOS', 'PulseCheck iOS'],
       status: 'active',
       sourceRefs: [
-        { label: 'Shared Services Guide', path: '../iOS/docs/shared-services-and-integration.md' },
-        { label: 'HealthKit Permissions Modal', path: '../iOS/QuickLifts/QuickLifts/View/Components/HealthKitPermissionsModalView.swift' },
+        { label: 'HealthKit Manager', path: '../QuickLifts/QuickLifts/Services/HealthKitManager.swift' },
+        { label: 'HealthKit Permissions Modal', path: '../QuickLifts/QuickLifts/View/Components/HealthKitPermissionsModalView.swift' },
       ],
     },
     {

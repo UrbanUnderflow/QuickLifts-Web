@@ -29,8 +29,8 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       releaseChannel: 'Beta',
       status: 'active',
       sourceRefs: [
-        { label: 'Nora Onboarding', path: '../iOS/PulseCheck/PulseCheck/Views/Onboarding/NoraOnboardingView.swift' },
-        { label: 'PulseCheck Guide', path: '../iOS/docs/pulsecheck-development-guide.md' },
+        { label: 'Nora Onboarding', path: '../PulseCheck/PulseCheck/Views/Onboarding/NoraOnboardingView.swift' },
+        { label: 'PulseCheck App', path: '../PulseCheck/PulseCheck/PulseCheckApp.swift' },
       ],
     },
     {
@@ -46,8 +46,8 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       releaseChannel: 'Beta',
       status: 'active',
       sourceRefs: [
-        { label: 'Chat View', path: '../iOS/PulseCheck/PulseCheck/Views/Chat/ChatView.swift' },
-        { label: 'Chat Bubble', path: '../iOS/PulseCheck/PulseCheck/Views/Chat/ChatBubbleView.swift' },
+        { label: 'Chat View', path: '../PulseCheck/PulseCheck/Views/Chat/ChatView.swift' },
+        { label: 'Chat Bubble', path: '../PulseCheck/PulseCheck/Views/Chat/ChatBubbleView.swift' },
       ],
     },
     {
@@ -63,8 +63,8 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       releaseChannel: 'Beta',
       status: 'active',
       sourceRefs: [
-        { label: 'Mental Notes Bar', path: '../iOS/PulseCheck/PulseCheck/Views/Chat/MentalNotesBar.swift' },
-        { label: 'Mental Note Detail', path: '../iOS/PulseCheck/PulseCheck/Views/Chat/MentalNoteDetailModal.swift' },
+        { label: 'Mental Notes Bar', path: '../PulseCheck/PulseCheck/Views/Chat/MentalNotesBar.swift' },
+        { label: 'Mental Note Detail', path: '../PulseCheck/PulseCheck/Views/Chat/MentalNoteDetailModal.swift' },
       ],
     },
     {
@@ -80,8 +80,8 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       releaseChannel: 'Beta',
       status: 'active',
       sourceRefs: [
-        { label: 'Proactive Card', path: '../iOS/PulseCheck/PulseCheck/Views/Components/ProactiveHealthInsightCard.swift' },
-        { label: 'Health Story Card', path: '../iOS/PulseCheck/PulseCheck/Views/Components/HealthStoryCard.swift' },
+        { label: 'Proactive Card', path: '../PulseCheck/PulseCheck/Views/Components/ProactiveHealthInsightCard.swift' },
+        { label: 'Health Story Card', path: '../PulseCheck/PulseCheck/Views/Components/HealthStoryCard.swift' },
       ],
     },
     {
@@ -97,8 +97,8 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       releaseChannel: 'Beta',
       status: 'active',
       sourceRefs: [
-        { label: 'Baseline Assessment', path: '../iOS/PulseCheck/PulseCheck/Views/MentalTraining/BaselineAssessmentView.swift' },
-        { label: 'Curriculum Assignment', path: '../iOS/PulseCheck/PulseCheck/Views/MentalTraining/CurriculumAssignmentView.swift' },
+        { label: 'Baseline Assessment', path: '../PulseCheck/PulseCheck/Views/MentalTraining/BaselineAssessmentView.swift' },
+        { label: 'Curriculum Assignment', path: '../PulseCheck/PulseCheck/Views/MentalTraining/CurriculumAssignmentView.swift' },
       ],
     },
     {
@@ -114,8 +114,8 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       releaseChannel: 'Beta',
       status: 'active',
       sourceRefs: [
-        { label: 'Exercise Library', path: '../iOS/PulseCheck/PulseCheck/Views/MentalTraining/ExerciseLibraryView.swift' },
-        { label: 'Exercise Player', path: '../iOS/PulseCheck/PulseCheck/Views/MentalTraining/GenericExercisePlayerView.swift' },
+        { label: 'Exercise Library', path: '../PulseCheck/PulseCheck/Views/MentalTraining/ExerciseLibraryView.swift' },
+        { label: 'Exercise Player', path: '../PulseCheck/PulseCheck/Views/MentalTraining/GenericExercisePlayerView.swift' },
       ],
     },
     {
@@ -131,8 +131,8 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       releaseChannel: 'Beta',
       status: 'active',
       sourceRefs: [
-        { label: 'Coach Connection', path: '../iOS/PulseCheck/PulseCheck/Views/Coach/CoachConnectionView.swift' },
-        { label: 'Coach Messaging', path: '../iOS/PulseCheck/PulseCheck/Views/Coach/CoachMessagingView.swift' },
+        { label: 'Coach Connection', path: '../PulseCheck/PulseCheck/Views/Coach/CoachConnectionView.swift' },
+        { label: 'Coach Messaging', path: '../PulseCheck/PulseCheck/Views/Coach/CoachMessagingView.swift' },
       ],
     },
     {
@@ -148,8 +148,8 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       releaseChannel: 'Beta',
       status: 'active',
       sourceRefs: [
-        { label: 'Health Story Test View', path: '../iOS/PulseCheck/PulseCheck/Views/HealthStoryTestView.swift' },
-        { label: 'Insights Section', path: '../iOS/PulseCheck/PulseCheck/Views/ProfileSections/InsightsSection.swift' },
+        { label: 'Health Story Test View', path: '../PulseCheck/PulseCheck/Views/HealthStoryTestView.swift' },
+        { label: 'Insights Section', path: '../PulseCheck/PulseCheck/Views/ProfileSections/InsightsSection.swift' },
       ],
     },
     {
@@ -165,8 +165,8 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       releaseChannel: 'Beta',
       status: 'active',
       sourceRefs: [
-        { label: 'User Profile View', path: '../iOS/PulseCheck/PulseCheck/Views/UserProfileView.swift' },
-        { label: 'Overview Section', path: '../iOS/PulseCheck/PulseCheck/Views/ProfileSections/OverviewSection.swift' },
+        { label: 'User Profile View', path: '../PulseCheck/PulseCheck/Views/UserProfileView.swift' },
+        { label: 'Overview Section', path: '../PulseCheck/PulseCheck/Views/ProfileSections/OverviewSection.swift' },
       ],
     },
     {
@@ -203,8 +203,8 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       releaseChannel: 'Beta',
       status: 'active',
       sourceRefs: [
-        { label: 'Settings View', path: '../iOS/PulseCheck/PulseCheck/Views/Settings/SettingsView.swift' },
-        { label: 'Daily Reflection Settings', path: '../iOS/PulseCheck/PulseCheck/Views/Settings/DailyReflectionSettingsView.swift' },
+        { label: 'Settings View', path: '../PulseCheck/PulseCheck/Views/Settings/SettingsView.swift' },
+        { label: 'Daily Reflection Settings', path: '../PulseCheck/PulseCheck/Views/Settings/DailyReflectionSettingsView.swift' },
       ],
     },
     {
@@ -220,8 +220,8 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       releaseChannel: 'Beta',
       status: 'beta',
       sourceRefs: [
-        { label: 'Subscription View', path: '../iOS/PulseCheck/PulseCheck/Views/Subscription/SubscriptionView.swift' },
-        { label: 'Subscription Card', path: '../iOS/PulseCheck/PulseCheck/Views/Chat/SubscriptionPlansCardContent.swift' },
+        { label: 'Subscription View', path: '../PulseCheck/PulseCheck/Views/Subscription/SubscriptionView.swift' },
+        { label: 'Subscription Card', path: '../PulseCheck/PulseCheck/Views/Chat/SubscriptionPlansCardContent.swift' },
       ],
     },
     {
@@ -237,8 +237,8 @@ export const pulseCheckIosHandbook: ProductHandbook = {
       releaseChannel: 'Beta',
       status: 'active',
       sourceRefs: [
-        { label: 'Privacy Consent Modal', path: '../iOS/PulseCheck/PulseCheck/Views/Components/PrivacyConsentModal.swift' },
-        { label: 'Consent Card Content', path: '../iOS/PulseCheck/PulseCheck/Views/Chat/PrivacyConsentCardContent.swift' },
+        { label: 'Privacy Consent Modal', path: '../PulseCheck/PulseCheck/Views/Components/PrivacyConsentModal.swift' },
+        { label: 'Consent Card Content', path: '../PulseCheck/PulseCheck/Views/Chat/PrivacyConsentCardContent.swift' },
       ],
     },
   ],

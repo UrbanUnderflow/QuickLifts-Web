@@ -13,6 +13,8 @@ const STORE_NAME = 'videoFiles';
  * Initialize localforage
  */
 const initializeStorage = () => {
+  if (typeof window === 'undefined') return false;
+
   try {
     // Don't delete existing database - this can cause issues with persistence
     console.log('[Storage] Available drivers:', 

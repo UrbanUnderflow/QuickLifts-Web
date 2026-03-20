@@ -13,6 +13,7 @@ import {
 const BASELINE_ROWS = [
   ['Parent engine spec', '`Physiology-Cognition Correlation Engine` is the implementation baseline for system role, confidence behavior, messaging posture, and consumer boundaries.', 'Frozen for Milestone 0.'],
   ['Data model spec', '`Correlation Data Model Spec` is the implementation baseline for engine objects, storage boundaries, and field groups.', 'Frozen for Milestone 0.'],
+  ['Pilot dashboard stack', '`Correlation Engine Pilot Dashboard`, addendum, and ops runbook define the pilot monitoring boundary for active pilots.', 'Frozen for pilot dashboard implementation.'],
   ['Oura child spec', '`Oura Cognitive Correlation Spec` is the first source-specific implementation child and may not redefine engine-level rules.', 'Frozen as child implementation, not parent governance.'],
   ['Profile snapshot contract', '`Profile Snapshot & Export Spec` remains the canonical home for milestone snapshot storage and export behavior.', 'Frozen with engine extension rule.'],
   ['Health context contract', '`Athlete Context Snapshot Spec` remains the canonical input contract for physiology posture and provenance.', 'Frozen as upstream input contract.'],
@@ -25,6 +26,7 @@ const NAMING_ROWS = [
   ['Engine object', '`Assessment Context Flag`', 'Use exactly this name for milestone physiology interpretation. Do not create alternate names like `physiologyFlag` or `captureRecoveryTag`.'],
   ['Snapshot field', '`profilePayload.stateContextAtCapture.assessmentContextFlag`', 'This is the only valid storage location for milestone physiology assessment context inside profile snapshots.'],
   ['Confidence enum', '`directional`, `emerging`, `stable`, `high_confidence`, `degraded`', 'These tiers are locked and may not be renamed per consumer or connector.'],
+  ['Pilot reporting scope', '`Pilot`, `PilotCohort`, and `PilotEnrollment`', 'Pilot dashboards must use pilot-scoped truth. Do not substitute raw team membership for pilot populations.'],
 ];
 
 const MESSAGING_ROWS = [
@@ -40,6 +42,7 @@ const EXIT_CRITERIA_ROWS = [
   ['Pattern exit', 'Athlete Pattern Model schema, confidence tiers, decay posture, and contradiction rules are frozen.', 'Required before projection work starts.'],
   ['Projection exit', 'Recommendation Projection schema, consumer boundaries, and messaging validator rules are frozen.', 'Required before athlete-facing or Nora rollout.'],
   ['Snapshot-flag exit', 'Assessment Context Flag path and storage rule are frozen and explicitly integrated into `stateContextAtCapture`.', 'Required before milestone annotation work starts.'],
+  ['Pilot-scope exit', 'Pilot dashboard surfaces and reporting rules are explicitly scoped to active pilots and `PilotEnrollment` truth.', 'Required before pilot monitoring work starts.'],
   ['Ops exit', 'Trace expectations, operator visibility expectations, and rebuild ownership are defined.', 'Required before broad pilot work.'],
   ['QA exit', 'Launch-blocking scenario classes and trust checks are explicitly listed.', 'Required before implementation leaves architecture-only status.'],
   ['Release-gate exit', 'Production readiness gates are written and accepted by product, architecture, and engineering.', 'Required before release planning.'],
@@ -60,6 +63,11 @@ const LOCK_CARDS = [
     title: 'No Runtime Copy Drift',
     accent: 'green' as const,
     body: 'Athlete-facing and coach-facing language must remain subordinate to the locked messaging rules so runtime outputs cannot overclaim before evidence is ready.',
+  },
+  {
+    title: 'No Team-Level Pilot Drift',
+    accent: 'amber' as const,
+    body: 'Pilot dashboards must read active-pilot populations from `PilotEnrollment` truth. They may not quietly widen into team-wide or whole-system analytics.',
   },
 ];
 
@@ -94,6 +102,7 @@ const PulseCheckCorrelationEngineContractLockTab: React.FC = () => {
         relatedDocs={[
           'Physiology-Cognition Correlation Engine',
           'Correlation Data Model Spec',
+          'Correlation Engine Pilot Dashboard',
           'Oura Cognitive Correlation Spec',
           'Profile Snapshot & Export Spec',
           'Athlete Context Snapshot Spec',
@@ -132,6 +141,7 @@ const PulseCheckCorrelationEngineContractLockTab: React.FC = () => {
             <BulletList
               items={[
                 'The parent engine and data-model specs are explicitly frozen as the implementation baseline.',
+                'Pilot monitoring surfaces are explicitly locked to active pilots and `PilotEnrollment` scope.',
                 'All dependent docs use the same object names and confidence tiers.',
                 'The profile snapshot contract explicitly stores milestone physiology interpretation only in `stateContextAtCapture.assessmentContextFlag`.',
                 'Athlete-facing and coach-facing messaging rules are locked in writing.',

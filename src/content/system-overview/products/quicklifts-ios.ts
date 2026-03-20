@@ -29,8 +29,8 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Create Workout', path: '../iOS/QuickLifts/QuickLifts/View/Screens/CreateWorkout/CreateWorkoutView.swift' },
-        { label: 'Workout Service', path: '../iOS/QuickLifts/QuickLifts/Services/WorkoutService.swift' },
+        { label: 'Create Workout', path: '../QuickLifts/QuickLifts/View/Screens/CreateWorkout/CreateWorkoutView.swift' },
+        { label: 'Workout Service', path: '../QuickLifts/QuickLifts/Services/WorkoutService.swift' },
       ],
     },
     {
@@ -46,8 +46,8 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Workout Overview', path: '../iOS/QuickLifts/QuickLifts/View/Screens/WorkoutInProgress/WorkoutOverview/WorkoutOverviewView.swift' },
-        { label: 'Workout Session Service', path: '../iOS/QuickLifts/QuickLifts/Services/WorkoutSessionService.swift' },
+        { label: 'Workout Overview', path: '../QuickLifts/QuickLifts/View/Screens/WorkoutInProgress/WorkoutOverview/WorkoutOverviewView.swift' },
+        { label: 'Workout Session Service', path: '../QuickLifts/QuickLifts/Services/WorkoutSessionService.swift' },
       ],
     },
     {
@@ -63,8 +63,8 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Create Challenge View', path: '../iOS/QuickLifts/QuickLifts/View/Challenge/ChallengeSetupView/CreateChallengeView.swift' },
-        { label: 'Round Generation Flows Doc', path: '../iOS/docs/round-generation-flows.md' },
+        { label: 'Create Challenge View', path: '../QuickLifts/QuickLifts/View/Challenge/ChallengeSetupView/CreateChallengeView.swift' },
+        { label: 'Template Generation Service', path: '../QuickLifts/QuickLifts/Services/TemplateGeneration/TemplateGenerationService.swift' },
       ],
     },
     {
@@ -80,8 +80,8 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Round Detail', path: '../iOS/QuickLifts/QuickLifts/View/Challenge/ChallengeDetailView.swift' },
-        { label: 'Run Round Detail', path: '../iOS/QuickLifts/QuickLifts/View/RunRound/RunRoundDetailView.swift' },
+        { label: 'Round Detail', path: '../QuickLifts/QuickLifts/View/Challenge/ChallengeDetailView.swift' },
+        { label: 'Run Round Detail', path: '../QuickLifts/QuickLifts/View/RunRound/RunRoundDetailView.swift' },
       ],
     },
     {
@@ -97,8 +97,8 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Check-in Callout', path: '../iOS/QuickLifts/QuickLifts/View/Challenge/CheckinCalloutModalView.swift' },
-        { label: 'Check-in System Doc', path: '../iOS/QuickLifts/QuickLifts/README-CHECKIN-SYSTEM.md' },
+        { label: 'Check-in Callout', path: '../QuickLifts/QuickLifts/View/Challenge/CheckinCalloutModalView.swift' },
+        { label: 'Check-in System Doc', path: '../QuickLifts/QuickLifts/README-CHECKIN-SYSTEM.md' },
       ],
     },
     {
@@ -114,8 +114,8 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Scan Food View', path: '../iOS/QuickLifts/QuickLifts/View/Screens/FoodTrackerView/ScanFoodView.swift' },
-        { label: 'Meal Planning Doc', path: '../iOS/QuickLifts/QuickLifts/MEAL_PLANNING_SYSTEM.md' },
+        { label: 'Scan Food View', path: '../QuickLifts/QuickLifts/View/Screens/FoodTrackerView/ScanFoodView.swift' },
+        { label: 'Meal Planning Doc', path: '../QuickLifts/QuickLifts/MEAL_PLANNING_SYSTEM.md' },
       ],
     },
     {
@@ -131,8 +131,8 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Challenge Chat View', path: '../iOS/QuickLifts/QuickLifts/View/Challenge/ChallengeChatView.swift' },
-        { label: 'Message Components', path: '../iOS/QuickLifts/QuickLifts/View/Components/MessageComponents.swift' },
+        { label: 'Challenge Chat View', path: '../QuickLifts/QuickLifts/View/Challenge/ChallengeChatView.swift' },
+        { label: 'Message Components', path: '../QuickLifts/QuickLifts/View/Components/MessageComponents.swift' },
       ],
     },
     {
@@ -148,10 +148,10 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Engagement Service', path: '../iOS/QuickLifts/QuickLifts/Services/EngagementService.swift' },
-        { label: 'Exercise Event Hooks', path: '../iOS/QuickLifts/QuickLifts/Models/Exercise.swift' },
-        { label: 'Engagement Metrics Model', path: '../iOS/QuickLifts/QuickLifts/Models/Analytics/EngagementMetrics.swift' },
-        { label: 'User Like/Bookmark Storage', path: '../iOS/QuickLifts/QuickLifts/Services/UserService/UserService.swift' },
+        { label: 'Engagement Service', path: '../QuickLifts/QuickLifts/Services/EngagementService.swift' },
+        { label: 'Exercise Event Hooks', path: '../QuickLifts/QuickLifts/Models/Exercise.swift' },
+        { label: 'Engagement Metrics Model', path: '../QuickLifts/QuickLifts/Models/Analytics/EngagementMetrics.swift' },
+        { label: 'User Like/Bookmark Storage', path: '../QuickLifts/QuickLifts/Services/UserService/UserService.swift' },
       ],
     },
     {
@@ -167,8 +167,8 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Hunter Rank Service', path: '../iOS/QuickLifts/QuickLifts/Services/HunterRankService.swift' },
-        { label: 'Top Creators ViewModel', path: '../iOS/QuickLifts/QuickLifts/View/Screens/Leaderboard/GlobalLeaderboardViewModel.swift' },
+        { label: 'Hunter Rank Service', path: '../QuickLifts/QuickLifts/Services/HunterRankService.swift' },
+        { label: 'Top Creators ViewModel', path: '../QuickLifts/QuickLifts/View/Screens/Leaderboard/GlobalLeaderboardViewModel.swift' },
         { label: 'Leaderboard Cache Script', path: 'scripts/cacheLeaderboardsOnce.js' },
         { label: 'Creator Score Backfill', path: 'scripts/backfillCreatorScore.js' },
       ],
@@ -186,8 +186,8 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Health Sync Settings', path: '../iOS/QuickLifts/QuickLifts/View/Components/HealthDataSyncSettingsView.swift' },
-        { label: 'Architecture Guide', path: '../iOS/docs/pulse-app-guide.md' },
+        { label: 'Health Sync Settings', path: '../QuickLifts/QuickLifts/View/Components/HealthDataSyncSettingsView.swift' },
+        { label: 'HealthKit Manager', path: '../QuickLifts/QuickLifts/Services/HealthKitManager.swift' },
       ],
     },
     {
@@ -203,7 +203,7 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Subscription Models', path: '../iOS/QuickLifts/QuickLifts/Models/Subscription.swift' },
+        { label: 'Subscription Models', path: '../QuickLifts/QuickLifts/Models/Subscription.swift' },
         { label: 'Subscription Guide', path: 'docs/subscription-system.md' },
       ],
     },
@@ -220,8 +220,8 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Move Upload Screen', path: '../iOS/QuickLifts/QuickLifts/View/Screens/EditMoveDetailsView/EditMoveDetailsView.swift' },
-        { label: 'Video Upload Flow', path: '../iOS/QuickLifts/QuickLifts/View/Screens/ExerciseCaptionView/ExerciseCaptionView.swift' },
+        { label: 'Move Upload Screen', path: '../QuickLifts/QuickLifts/View/Screens/EditMoveDetailsView/EditMoveDetailsView.swift' },
+        { label: 'Video Upload Flow', path: '../QuickLifts/QuickLifts/View/Screens/ExerciseCaptionView/ExerciseCaptionView.swift' },
       ],
     },
     {
@@ -237,8 +237,8 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Production',
       status: 'active',
       sourceRefs: [
-        { label: 'Run Round Configuration', path: '../iOS/QuickLifts/QuickLifts/View/RunRound/RunRoundConfigurationView.swift' },
-        { label: 'Fat Burn Configuration', path: '../iOS/QuickLifts/QuickLifts/View/FatBurnRound/FatBurnRoundConfigurationView.swift' },
+        { label: 'Run Round Configuration', path: '../QuickLifts/QuickLifts/View/RunRound/RunRoundConfigurationView.swift' },
+        { label: 'Fat Burn Configuration', path: '../QuickLifts/QuickLifts/View/FatBurnRound/FatBurnRoundConfigurationView.swift' },
       ],
     },
     {
@@ -254,8 +254,8 @@ export const quickliftsIosHandbook: ProductHandbook = {
       releaseChannel: 'Internal',
       status: 'beta',
       sourceRefs: [
-        { label: 'Migration Dashboard', path: '../iOS/QuickLifts/QuickLifts/View/Admin/MigrationDashboardView.swift' },
-        { label: 'Beta Drawer', path: '../iOS/QuickLifts/QuickLifts/View/Screens/Beta/BetaDrawerView.swift' },
+        { label: 'Migration Dashboard', path: '../QuickLifts/QuickLifts/View/Admin/MigrationDashboardView.swift' },
+        { label: 'Beta Drawer', path: '../QuickLifts/QuickLifts/View/Screens/Beta/BetaDrawerView.swift' },
       ],
     },
   ],

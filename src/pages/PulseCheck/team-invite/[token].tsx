@@ -33,6 +33,7 @@ type TeamInvitePageProps = {
 };
 
 type AuthMode = 'create-account' | 'sign-in';
+type AthleteCompletionMode = 'new-account' | 'existing-account';
 
 const roleLabel: Record<PulseCheckTeamMembershipRole, string> = {
   'team-admin': 'Team Admin',
@@ -78,6 +79,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     teamMembershipRole: PulseCheckTeamMembershipRole;
   } | null>(null);
   const [redirectingAfterRedeem, setRedirectingAfterRedeem] = useState(false);
+  const [athleteCompletionMode, setAthleteCompletionMode] = useState<AthleteCompletionMode>('existing-account');
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
@@ -137,7 +139,10 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     });
   };
 
-  const completeRedeem = async () => {
+  const completeRedeem = async (completionMode: AthleteCompletionMode = 'existing-account') => {
+    if (invite.teamMembershipRole === 'athlete') {
+      setAthleteCompletionMode(completionMode);
+    }
     const result = await pulseCheckProvisioningService.redeemTeamInvite(invite.token);
     setRedeemedState({
       organizationName: result.organizationName,
@@ -186,7 +191,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
       const credential = await createUserWithEmailAndPassword(auth, email, createForm.password);
       await claimUsername(credential.user.uid, username);
       await createTeamInviteUser(credential.user, username);
-      await completeRedeem();
+      await completeRedeem('new-account');
     } catch (error) {
       console.error('[pulsecheck-team-invite] Failed to create account:', error);
       const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code) : '';
@@ -225,7 +230,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
 
     try {
       await signInWithEmailAndPassword(auth, email, signInForm.password);
-      await completeRedeem();
+      await completeRedeem('existing-account');
     } catch (error) {
       console.error('[pulsecheck-team-invite] Failed to sign in:', error);
       const code = typeof error === 'object' && error && 'code' in error ? String((error as { code?: string }).code) : '';
@@ -250,7 +255,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     setSubmitting(true);
     setMessage(null);
     try {
-      await completeRedeem();
+      await completeRedeem('existing-account');
     } catch (error) {
       console.error('[pulsecheck-team-invite] Failed to redeem for signed-in user:', error);
       setMessage({
@@ -272,7 +277,38 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
     }
   };
 
-  const completionHref = nextHrefByRole(invite.teamMembershipRole, invite.organizationId, invite.teamId);
+  const completionHref = useMemo(() => {
+    if (invite.teamMembershipRole !== 'athlete') {
+      return nextHrefByRole(invite.teamMembershipRole, invite.organizationId, invite.teamId);
+    }
+
+    const params = new URLSearchParams({
+      organizationId: invite.organizationId,
+      teamId: invite.teamId,
+      pilotId: invite.pilotId,
+      cohortId: invite.cohortId,
+      organizationName: invite.organizationName,
+      teamName: invite.teamName,
+      pilotName: invite.pilotName,
+      cohortName: invite.cohortName,
+      targetEmail: invite.targetEmail,
+      mode: athleteCompletionMode,
+    });
+
+    return `/PulseCheck/pilot-invite-next-steps?${params.toString()}`;
+  }, [
+    athleteCompletionMode,
+    invite.cohortId,
+    invite.cohortName,
+    invite.organizationId,
+    invite.organizationName,
+    invite.pilotId,
+    invite.pilotName,
+    invite.targetEmail,
+    invite.teamId,
+    invite.teamMembershipRole,
+    invite.teamName,
+  ]);
 
   useEffect(() => {
     if (!redeemedState || redirectingAfterRedeem) return;
@@ -354,7 +390,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                 <p className="mt-2 leading-7">
                   Your team membership is created and this invite is marked redeemed.
                   {invite.cohortId
-                    ? ' Because this link is cohort-linked, your athlete onboarding will also carry pilot and cohort context into the baseline flow.'
+                    ? ' Because this link is cohort-linked, the athlete is attached directly to that pilot scope and the next-steps page explains whether onboarding is needed.'
                     : ' Team admins continue into setup, while other roles land in the shared team workspace.'}
                 </p>
               </div>
@@ -388,7 +424,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                     <span className="font-medium text-white">{redeemedState.teamName}</span>.
                   </p>
                   <p className="mt-3 text-sm leading-7 text-zinc-400">
-                    Taking you into setup now. If nothing happens, use Continue below.
+                    Taking you into your next step now. If nothing happens, use Continue below.
                   </p>
                 </div>
 
@@ -465,7 +501,7 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
                   <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Account Required</p>
                   <h2 className="mt-2 text-3xl font-semibold text-white">Create or access your Pulse account</h2>
                   <p className="mt-3 text-sm leading-7 text-zinc-300">
-                    Use the invited email when one is specified, then accept the invite from this page.
+                    Use the invited email when one is specified, then accept the invite from this page. Existing Pulse athletes will be attached directly to the pilot. New athletes will get a mobile setup walkthrough after redemption.
                   </p>
                 </div>
 

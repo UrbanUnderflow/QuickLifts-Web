@@ -5,24 +5,41 @@ import devModeReducer from './devModeSlice';
 import toastReducer from './toastSlice';
 import loadingReducer from './loadingSlice';
 import tempRedirectReducer from './tempRedirectSlice';
-import { persistStore, persistReducer } from 'redux-persist';
+import { persistStore, persistReducer, FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER } from 'redux-persist';
 import storage from 'redux-persist-indexeddb-storage';
+
+// Next.js SSR-safe storage wrapper
+const createNoopStorage = () => {
+  return {
+    getItem(_key: string) {
+      return Promise.resolve(null);
+    },
+    setItem(_key: string, value: any) {
+      return Promise.resolve(value);
+    },
+    removeItem(_key: string) {
+      return Promise.resolve();
+    },
+  };
+};
+
+const appStorage = typeof window !== 'undefined' ? storage('quickliftsDB') : createNoopStorage();
 
 // Create persist config for each reducer that needs persistence
 const userPersistConfig = {
   key: 'user',
-  storage: storage('quickliftsDB'),
+  storage: appStorage,
   whitelist: ['currentUser', 'isAuthenticated'], // Only persist these user state items
 };
 
 const workoutPersistConfig = {
   key: 'workout',
-  storage: storage('quickliftsDB'),
+  storage: appStorage,
 };
 
 const devModePersistConfig = {
   key: 'devMode',
-  storage: storage('quickliftsDB'),
+  storage: appStorage,
 };
 
 // Create persisted reducers
@@ -46,8 +63,8 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        // Ignore these action types
         ignoredActions: [
+          FLUSH, REHYDRATE, PAUSE, PERSIST, PURGE, REGISTER,
           'user/setUser', 
           'tempRedirect/setRoundIdRedirect', // Can ignore if payload is just string
           'tempRedirect/clearRoundIdRedirect'

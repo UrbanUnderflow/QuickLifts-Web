@@ -10,8 +10,49 @@ let firebaseAuth: Auth;
 let firebaseDb: Firestore;
 let firebaseStorage: FirebaseStorage;
 
+const FIREBASE_REQUIRED_FIELDS = [
+  'apiKey',
+  'authDomain',
+  'projectId',
+  'storageBucket',
+  'messagingSenderId',
+  'appId',
+] as const;
+
+const isBrowserLocalhost = () =>
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const hasFirebaseConfigForPrefix = (prefix: 'NEXT_PUBLIC_FIREBASE_' | 'NEXT_PUBLIC_DEV_FIREBASE_') =>
+  FIREBASE_REQUIRED_FIELDS.every((field) => {
+    const envKey = `${prefix}${field.replace(/[A-Z]/g, (match) => `_${match}`).toUpperCase()}`;
+    return !!process.env[envKey];
+  });
+
+const getPreferredServerMode = () => {
+  if (process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true') {
+    return true;
+  }
+
+  if (process.env.NODE_ENV !== 'development') {
+    return false;
+  }
+
+  const hasDevConfig = hasFirebaseConfigForPrefix('NEXT_PUBLIC_DEV_FIREBASE_');
+  if (hasDevConfig) {
+    return true;
+  }
+
+  const hasProdConfig = hasFirebaseConfigForPrefix('NEXT_PUBLIC_FIREBASE_');
+  if (hasProdConfig) {
+    return false;
+  }
+
+  return true;
+};
+
 const getFirebaseConfig = (isDev: boolean) => {
-  const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  const isLocalhost = isBrowserLocalhost();
   
   // Log specific environment variables we're interested in
   const envVarsToCheck = isDev ? [
@@ -62,17 +103,21 @@ const getFirebaseConfig = (isDev: boolean) => {
 const validateConfig = (config: any, isDev: boolean) => {
   const mode = isDev ? 'development' : 'production';
   const prefix = isDev ? 'NEXT_PUBLIC_DEV_FIREBASE_' : 'NEXT_PUBLIC_FIREBASE_';
-  const requiredFields = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
   
-  const missingFields = requiredFields.filter(field => !config[field]);
+  const missingFields = FIREBASE_REQUIRED_FIELDS.filter(field => !config[field]);
   
   if (missingFields.length > 0) {
     const errorMessage = `
     Missing required Firebase configuration for ${mode} mode.
-    Please check your .env.local file and ensure these environment variables are set:
-    ${missingFields.map(field => `${prefix}${field.toUpperCase()}`).join('\n')}
+    Please ensure these environment variables are available in local dev:
+    ${missingFields.map(field => `${prefix}${field.replace(/[A-Z]/g, (match) => `_${match}`).toUpperCase()}`).join('\n')}
 
-    If you're running in development mode, make sure to:
+    If these values live in Netlify already, make sure this machine is logged in and linked:
+    1. netlify login
+    2. netlify link
+    3. Restart your Next.js development server
+
+    If you use local env files instead, make sure to:
     1. Create a .env.local file in your project root
     2. Add all required Firebase environment variables
     3. Restart your Next.js development server
@@ -82,7 +127,7 @@ const validateConfig = (config: any, isDev: boolean) => {
 };
 
 export const initializeFirebase = (isDev = false) => {
-  const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+  const isLocalhost = isBrowserLocalhost();
 
   console.log('[Firebase] Starting initialization:', {
     environment: isDev ? 'development' : 'production',
@@ -159,12 +204,19 @@ const getInitialMode = () => {
     return true;
   }
   if (typeof window !== 'undefined') {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const isLocalhost = isBrowserLocalhost();
     const forceDevFirebase = window.localStorage.getItem('forceDevFirebase') === 'true';
     const savedDevMode = window.localStorage.getItem('devMode');
     const hasExplicitDevMode = savedDevMode !== null;
-    const mode = forceDevFirebase
+    let mode = forceDevFirebase
       || (hasExplicitDevMode ? savedDevMode === 'true' : isLocalhost);
+      
+    // Fall back to production config if dev keys are missing
+    const hasDevKeys = !!process.env.NEXT_PUBLIC_DEV_FIREBASE_API_KEY;
+    const hasProdKeys = !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+    if (mode && !hasDevKeys && hasProdKeys) {
+      mode = false;
+    }
     console.log('[Firebase] Initial mode:', {
       isDev: mode,
       source: forceDevFirebase
@@ -174,7 +226,15 @@ const getInitialMode = () => {
     });
     return mode;
   }
-  return false;
+  const serverMode = getPreferredServerMode();
+  console.log('[Firebase] Initial mode (server):', {
+    isDev: serverMode,
+    source: process.env.NODE_ENV === 'development'
+      ? 'server development fallback'
+      : 'server production default',
+    timestamp: new Date().toISOString()
+  });
+  return serverMode;
 };
 
 // Initialize with appropriate config
@@ -186,7 +246,7 @@ if (!auth) {
 }
 
 if (typeof window !== 'undefined') {
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const isLocalhost = isBrowserLocalhost();
   const shouldInstallE2EHarness =
     isLocalhost ||
     process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true' ||

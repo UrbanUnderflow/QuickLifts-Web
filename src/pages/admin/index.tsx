@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import Head from 'next/head';
-import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar } from 'lucide-react';
+import { Users, BarChart2, Bell, FileText, PlusSquare, Image as ImageIcon, TrendingUp, Dumbbell, Tag, Users2, Activity, Award, Clock, Gift, Edit3, Send, Server, ChevronDown, MessageCircle, Utensils, Code, Building2, Kanban, Layers, Bug, FolderTree, PenTool, Link as LinkIcon, Scale, Handshake, PieChart, Search, X, AlertTriangle, Brain, Mic2, Database, Mail, Rocket, Calendar, FlaskConical } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { toggleDevMode } from '../../redux/devModeSlice';
@@ -81,6 +81,12 @@ const adminCardsData = [
     description: "Review Vision Pro session outcomes, Transfer Gap summaries, and filtered pilot exports for coach and research workflows.",
     icon: <BarChart2 className="w-5 h-5" />,
     link: "/admin/pulsecheckVisionProReporting"
+  },
+  {
+    title: "Pilot Dashboard",
+    description: "Pilot-native admin directory for active PulseCheck pilots with pilot detail, athlete drill-down, and manual hypothesis tracking.",
+    icon: <FlaskConical className="w-5 h-5" />,
+    link: "/admin/pulsecheckPilotDashboard"
   },
   {
 

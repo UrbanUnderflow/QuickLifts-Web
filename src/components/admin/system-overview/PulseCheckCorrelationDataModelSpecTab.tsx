@@ -101,6 +101,7 @@ const FLAG_RULES = [
 const INTEGRATION_ROWS = [
   ['Health Context Pipeline', 'Writes the physiology posture and source provenance that evidence records use as their input layer.'],
   ['State Signal Layer', 'Provides current-state interpretation that can be referenced inside projections, but should not replace the engine’s learned pattern memory.'],
+  ['PilotEnrollment + provisioning model', 'Provides the pilot scope key used by pilot dashboards, pilot exports, and athlete inclusion rules. Engine storage stays athlete-centric, but pilot reporting must join through enrollment truth.'],
   ['Profile Snapshot & Export Spec', 'Stores `assessmentContextFlag` inside `stateContextAtCapture` on canonical milestone snapshots.'],
   ['Protocol System', 'Consumes body-state-specific projection outputs when protocol responsiveness is tied to recovery posture.'],
   ['Nora Runtime', 'Reads recommendation projections instead of re-learning thresholds from raw physiology or sim history.'],
@@ -189,6 +190,11 @@ const PulseCheckCorrelationDataModelSpecTab: React.FC = () => {
           accent="blue"
           body="The engine should own its own athlete namespace for evidence, learned patterns, and projections. The only place it should write into an existing system contract is the milestone assessment annotation inside the canonical profile snapshot."
         />
+        <InfoCard
+          title="Reporting Scope Principle"
+          accent="amber"
+          body="Pilot dashboards should not force the engine to duplicate pilot keys onto every core object just to make reporting possible. Instead, pilot-scoped reporting should join engine objects back to `PilotEnrollment` and canonical pilot scope truth."
+        />
       </SectionBlock>
 
       <SectionBlock icon={BarChart3} title="Correlation Evidence Record">
@@ -238,6 +244,11 @@ const PulseCheckCorrelationDataModelSpecTab: React.FC = () => {
             title="No Opaque Recommendations"
             accent="green"
             body="Every recommendation projection should point back to supporting pattern keys, confidence posture, and the physiology window that made it eligible."
+          />
+          <InfoCard
+            title="No Denominator Drift"
+            accent="blue"
+            body="Pilot reporting may not substitute `TeamMembership` for `PilotEnrollment` when building dashboard populations. Team scope and pilot scope are different truths."
           />
         </CardGrid>
       </SectionBlock>

@@ -79,6 +79,13 @@ const CONSUMER_ROWS = [
   ['Research and analytics', 'Study how physiology and mental performance interact over time across individuals and cohorts.', 'This becomes a differentiated joined-data asset, not just a UX feature.'],
 ];
 
+const PILOT_SCOPE_ROWS = [
+  ['Primary monitoring surface', 'Active pilot dashboard scoped to one `pilotId`.', 'Pilot dashboards should evaluate one active pilot at a time instead of reading the whole team or whole system by default.'],
+  ['Population boundary', 'Only athletes with an active `PilotEnrollment` in that pilot appear in pilot metrics.', 'Athletes outside the pilot should not leak into pilot trust or outcome reads.'],
+  ['Cohort behavior', 'Cohorts are filters inside the pilot, not replacement top-level dashboards.', 'Keeps the pilot as the root evaluation object while still allowing subgroup reads.'],
+  ['History behavior', 'Completed and archived pilots should live in a separate history mode.', 'Active pilot monitoring should stay focused on what needs attention now.'],
+];
+
 const MESSAGING_RULES = [
   'Athlete-facing language should start with what the athlete can do, not with model jargon.',
   'Speak in terms of correlation and tendency unless the evidence is strong enough to be explicit.',
@@ -151,6 +158,8 @@ const PulseCheckPhysiologyCognitionCorrelationEngineTab: React.FC = () => {
         relatedDocs={[
           'Health Context Pipeline',
           'Contract Lock & Exit Criteria',
+          'Correlation Engine Pilot Dashboard',
+          'Correlation Engine Pilot Ops Runbook',
           'State Signal Layer',
           'Athlete Context Snapshot Spec',
           'Correlation Data Model Spec',
@@ -237,6 +246,10 @@ const PulseCheckPhysiologyCognitionCorrelationEngineTab: React.FC = () => {
 
       <SectionBlock icon={Brain} title="Runtime Consumers">
         <DataTable columns={['Consumer', 'What It Uses', 'Rule']} rows={CONSUMER_ROWS} />
+      </SectionBlock>
+
+      <SectionBlock icon={GitBranch} title="Pilot Evaluation Boundary">
+        <DataTable columns={['Aspect', 'Rule', 'Why']} rows={PILOT_SCOPE_ROWS} />
       </SectionBlock>
 
       <SectionBlock icon={MessageSquareQuote} title="Messaging Rules">
