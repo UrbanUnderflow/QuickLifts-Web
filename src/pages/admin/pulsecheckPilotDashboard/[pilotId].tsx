@@ -17,6 +17,7 @@ import {
   Save,
   ShieldCheck,
   Sparkles,
+  Trash2,
   Users2,
 } from 'lucide-react';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
@@ -284,6 +285,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [resettingInviteConfig, setResettingInviteConfig] = useState(false);
   const [seedingDefaults, setSeedingDefaults] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
+  const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
   const [demoModeEnabled, setDemoModeEnabled] = useState(false);
   const [generatingResearchReadout, setGeneratingResearchReadout] = useState(false);
   const [savingResearchReadoutReview, setSavingResearchReadoutReview] = useState(false);
@@ -588,9 +590,9 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     return `H${nextNumericCode}`;
   }, [detail?.hypotheses]);
 
-  const scopedInvite = useMemo(() => {
-    if (!detail) return null;
-    return inviteLinks.find((invite) => {
+  const scopedActiveInvites = useMemo(() => {
+    if (!detail) return [] as PulseCheckInviteLink[];
+    return inviteLinks.filter((invite) => {
       if (invite.status !== 'active') return false;
       if (invite.inviteType !== 'team-access') return false;
       if (invite.teamMembershipRole !== 'athlete') return false;
@@ -599,8 +601,10 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         return (invite.cohortId || '') === selectedCohort.id;
       }
       return !(invite.cohortId || '');
-    }) || null;
+    });
   }, [detail, inviteLinks, selectedCohort]);
+
+  const scopedInvite = scopedActiveInvites?.[0] || null;
 
   const inviteConfigSource = useMemo(() => {
     if (!detail) {
@@ -882,6 +886,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         organizationId: detail.organization.id,
         teamId: detail.team.id,
         teamMembershipRole: 'athlete',
+        revokeExistingMatchingLinks: false,
         pilotId: detail.pilot.id,
         pilotName: detail.pilot.name,
         cohortId: selectedCohort?.id || '',
@@ -908,6 +913,34 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       setPageMessage({ type: 'error', text: 'Failed to create pilot athlete invite link.' });
     } finally {
       setCreatingInvite(false);
+    }
+  };
+
+  const handleRevokePilotInviteLink = async (invite: PulseCheckInviteLink) => {
+    const confirmed = window.confirm('Deactivate this invite link? Anyone who has not redeemed it will no longer be able to use it.');
+    if (!confirmed) return;
+
+    setRevokingInviteId(invite.id);
+    setPageMessage(null);
+    try {
+      if (demoModeEnabled) {
+        pulseCheckPilotDashboardService.revokeDemoInviteLink(invite.id);
+        setInviteLinks(pulseCheckPilotDashboardService.listDemoInviteLinks());
+      } else {
+        await pulseCheckProvisioningService.revokeInviteLink(invite.id);
+        const refreshedInviteLinks = await pulseCheckProvisioningService.listTeamInviteLinks(detail?.team.id || '');
+        setInviteLinks(refreshedInviteLinks);
+      }
+
+      setPageMessage({
+        type: 'success',
+        text: 'Pilot invite link deactivated.',
+      });
+    } catch (revokeError) {
+      console.error('[PulseCheckPilotDashboard] Failed to deactivate pilot invite link:', revokeError);
+      setPageMessage({ type: 'error', text: 'Failed to deactivate pilot invite link.' });
+    } finally {
+      setRevokingInviteId(null);
     }
   };
 
@@ -1260,35 +1293,14 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {scopedInvite ? (
-                          <>
-                            <button
-                              onClick={() => void copyInviteLink(scopedInvite.activationUrl, 'Pilot athlete invite copied to clipboard.')}
-                              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
-                            >
-                              <Clipboard className="h-4 w-4" />
-                              Copy Invite
-                            </button>
-                            <a
-                              href={scopedInvite.activationUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
-                            >
-                              <ExternalLink className="h-4 w-4" />
-                              Open Invite
-                            </a>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => void handleCreatePilotInviteLink()}
-                            disabled={creatingInvite}
-                            className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            <Clipboard className="h-4 w-4" />
-                            {creatingInvite ? 'Creating Invite...' : 'Create Invite Link'}
-                          </button>
-                        )}
+                        <button
+                          onClick={() => void handleCreatePilotInviteLink()}
+                          disabled={creatingInvite}
+                          className="inline-flex items-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Clipboard className="h-4 w-4" />
+                          {creatingInvite ? 'Generating Link...' : scopedInvite ? 'Generate New Link' : 'Create Invite Link'}
+                        </button>
                       </div>
                     </div>
 
@@ -1299,10 +1311,60 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                           ? `Athletes joining through this link will enter ${detail.pilot.name} and land directly in ${selectedCohort.name}.`
                           : `Athletes joining through this link will enter ${detail.pilot.name}. Apply a cohort filter first if you want a cohort-specific invite.`}
                       </div>
-                      {scopedInvite ? (
-                        <div className="mt-3 break-all text-xs text-cyan-100">{scopedInvite.activationUrl}</div>
-                      ) : null}
+                      <div className="mt-3 text-xs text-zinc-500">
+                        {scopedActiveInvites.length > 0
+                          ? `${scopedActiveInvites.length} active invite link${scopedActiveInvites.length === 1 ? '' : 's'} currently available for this scope.`
+                          : 'No active invite links exist for this scope yet.'}
+                      </div>
                     </div>
+
+                    {scopedActiveInvites.length > 0 ? (
+                      <div className="mt-4 space-y-3">
+                        {scopedActiveInvites.map((invite, index) => (
+                          <div key={invite.id} className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100">
+                                    {index === 0 ? 'Latest link' : `Link ${scopedActiveInvites.length - index}`}
+                                  </span>
+                                  <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                                    Created {formatTimeValue(invite.createdAt)}
+                                  </span>
+                                </div>
+                                <div className="mt-3 break-all text-xs text-cyan-100">{invite.activationUrl}</div>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  onClick={() => void copyInviteLink(invite.activationUrl, 'Pilot athlete invite copied to clipboard.')}
+                                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
+                                >
+                                  <Clipboard className="h-4 w-4" />
+                                  Copy
+                                </button>
+                                <a
+                                  href={invite.activationUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
+                                >
+                                  <ExternalLink className="h-4 w-4" />
+                                  Open
+                                </a>
+                                <button
+                                  onClick={() => void handleRevokePilotInviteLink(invite)}
+                                  disabled={revokingInviteId === invite.id}
+                                  className="inline-flex items-center gap-2 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100 transition hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  {revokingInviteId === invite.id ? 'Deactivating...' : 'Deactivate'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
 
                   {inviteConfigDraft ? (

@@ -656,6 +656,10 @@ export const pulseCheckPilotDashboardService = {
     return pilotDashboardDemoMode.createInviteLink(input);
   },
 
+  revokeDemoInviteLink(inviteId: string) {
+    return pilotDashboardDemoMode.revokeInviteLink(inviteId);
+  },
+
   async listPilotHypotheses(pilotId: string): Promise<PulseCheckPilotHypothesis[]> {
     if (pilotDashboardDemoMode.isEnabled()) {
       return pilotDashboardDemoMode.getPilotDashboardDetail(pilotId)?.hypotheses || [];
