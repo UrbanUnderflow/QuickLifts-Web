@@ -1895,7 +1895,12 @@ async function orchestratePostCheckIn({
   const existingSnap = await assignmentRef.get();
   const existing = existingSnap.exists ? { id: existingSnap.id, ...existingSnap.data() } : null;
 
-  if (existing && !['assigned', 'viewed'].includes(String(existing.status || ''))) {
+  const existingStatus = String(existing?.status || '');
+  const existingIsDeferred =
+    existingStatus === 'deferred'
+    || String(existing?.actionType || '') === 'defer';
+
+  if (existing && !existingIsDeferred && !['assigned', 'viewed'].includes(existingStatus)) {
     await attachExecutionLink(db, sourceStateSnapshotId, assignmentId);
     return existing;
   }

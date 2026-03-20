@@ -51,7 +51,7 @@ function loadRuntimeHelpers() {
   return require(submitPath).runtimeHelpers;
 }
 
-function createFirestoreDb({ snapshot }) {
+function createFirestoreDb({ snapshot, existingAssignment = null }) {
   const writes = {
     snapshots: [],
     assignments: [],
@@ -87,6 +87,9 @@ function createFirestoreDb({ snapshot }) {
           doc(id) {
             return {
               async get() {
+                if (existingAssignment && id === `${snapshot.athleteId}_${snapshot.sourceDate}`) {
+                  return { exists: true, id, data: () => existingAssignment };
+                }
                 return { exists: false, id, data: () => undefined };
               },
               async set(data) {
@@ -554,6 +557,113 @@ test('orchestratePostCheckIn falls back to a bounded sim when AI defers despite 
   assert.equal(assignment.status, 'assigned');
   assert.equal(assignment.simSpecId, 'noise_gate');
   assert.equal(assignment.legacyExerciseId, 'focus-noise-gate');
+});
+
+test('orchestratePostCheckIn replaces a stale deferred assignment when the planner selects a protocol candidate', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+  const snapshot = {
+    id: 'athlete-1_2026-03-20',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-20',
+    sourceCheckInId: 'checkin-1',
+    overallReadiness: 'green',
+    confidence: 'medium',
+    recommendedRouting: 'protocol_then_sim',
+    recommendedProtocolClass: 'regulation',
+    readinessScore: 76,
+    supportFlag: false,
+  };
+  const db = createFirestoreDb({
+    snapshot,
+    existingAssignment: {
+      id: 'athlete-1_2026-03-20',
+      athleteId: 'athlete-1',
+      sourceDate: '2026-03-20',
+      status: 'deferred',
+      actionType: 'defer',
+      rationale: 'Stale deferred assignment should be replaced.',
+      revision: 1,
+    },
+  });
+
+  const assignment = await runtimeHelpers.orchestratePostCheckIn({
+    db,
+    athleteId: 'athlete-1',
+    sourceCheckInId: 'checkin-1',
+    sourceStateSnapshotId: snapshot.id,
+    sourceCandidateSetId: 'candidate-set-1',
+    sourceDate: snapshot.sourceDate,
+    progress: {
+      coachId: null,
+      activeProgram: {
+        recommendedSimId: 'noise_gate',
+        recommendedLegacyExerciseId: 'focus-noise-gate',
+        sessionType: 'training_rep',
+        durationMode: 'standard_rep',
+        durationSeconds: 480,
+      },
+      taxonomyProfile: {
+        modifierScores: {
+          readiness: 76,
+        },
+      },
+    },
+    candidateSet: {
+      id: 'candidate-set-1',
+      candidates: [
+        {
+          id: 'athlete-1_2026-03-20_protocol-perfect-execution-replay',
+          type: 'protocol',
+          label: 'Perfect Execution Replay',
+          actionType: 'protocol',
+          rationale: 'Protocol-first candidate from the bounded set.',
+          protocolId: 'protocol-perfect-execution-replay',
+          protocolLabel: 'Perfect Execution Replay',
+          protocolClass: 'regulation',
+          protocolCategory: 'visualization',
+          protocolResponseFamily: 'regulation',
+          protocolDeliveryMode: 'guided_audio',
+          sessionType: 'regulation',
+          durationMode: 'short',
+          durationSeconds: 240,
+        },
+        {
+          id: 'athlete-1_2026-03-20_noise_gate',
+          type: 'sim',
+          label: 'Noise Gate',
+          actionType: 'lighter_sim',
+          rationale: 'Simulation candidate from the active program recommendation.',
+          simSpecId: 'noise_gate',
+          legacyExerciseId: 'focus-noise-gate',
+          sessionType: 'training_rep',
+          durationMode: 'standard_rep',
+          durationSeconds: 480,
+        },
+      ],
+      plannerEligible: true,
+    },
+    plannerDecision: {
+      decisionSource: 'ai',
+      selectedCandidateId: 'athlete-1_2026-03-20_protocol-perfect-execution-replay',
+      selectedCandidateType: 'protocol',
+      actionType: 'protocol',
+      confidence: 'medium',
+      rationaleSummary: 'Start with the protocol candidate.',
+      supportFlag: false,
+    },
+    liveProtocolRegistry: [],
+    liveSimRegistry: [],
+  });
+
+  assert.ok(assignment);
+  assert.equal(assignment.actionType, 'protocol');
+  assert.equal(assignment.status, 'assigned');
+  assert.equal(assignment.protocolId, 'protocol-perfect-execution-replay');
+  assert.equal(assignment.chosenCandidateId, 'athlete-1_2026-03-20_protocol-perfect-execution-replay');
+  assert.equal(db.writes.assignments.length, 1);
+  assert.equal(db.writes.revisions.length, 1);
+  assert.equal(db.writes.revisions[0].data.status, 'deferred');
+  assert.equal(db.writes.revisions[0].data.actionType, 'defer');
 });
 
 test('rematerializeAssignmentFromSnapshot falls back to the bounded sim when the AI planner defers', async () => {
