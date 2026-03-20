@@ -33,6 +33,71 @@ function parseBoolean(value) {
   return false;
 }
 
+function buildRepairDebugTrace({
+  sourceDate,
+  recoverFromConversation,
+  conversationRecoveryDetail,
+  workingSnapshot,
+  rematerialized,
+}) {
+  const candidatePreview = (rematerialized?.candidateSet?.candidates || []).slice(0, 5).map((candidate) => ({
+    id: asNonEmptyString(candidate?.id),
+    type: asNonEmptyString(candidate?.type),
+    actionType: asNonEmptyString(candidate?.actionType),
+    label:
+      asNonEmptyString(candidate?.label)
+      || asNonEmptyString(candidate?.protocolLabel)
+      || asNonEmptyString(candidate?.variantLabel),
+    simSpecId: asNonEmptyString(candidate?.simSpecId),
+    protocolId: asNonEmptyString(candidate?.protocolId),
+  }));
+
+  const plannerActionType = asNonEmptyString(rematerialized?.plannerDecision?.actionType);
+  const finalAssignmentActionType = asNonEmptyString(rematerialized?.dailyAssignment?.actionType);
+  const plannerDeferOverrideApplied =
+    plannerActionType === 'defer'
+    && finalAssignmentActionType !== null
+    && finalAssignmentActionType !== 'defer';
+
+  const summaryParts = [
+    `sourceDate=${sourceDate}`,
+    `conversationRecovery=${recoverFromConversation ? 'on' : 'off'}`,
+    `conversationApplied=${conversationRecoveryDetail ? 'true' : 'false'}`,
+    `snapshotRouting=${asNonEmptyString(workingSnapshot?.recommendedRouting) || 'nil'}`,
+    `candidateCount=${candidatePreview.length}`,
+    `plannerSource=${asNonEmptyString(rematerialized?.plannerDecision?.decisionSource) || 'nil'}`,
+    `plannerAction=${plannerActionType || 'nil'}`,
+    `plannerSelected=${asNonEmptyString(rematerialized?.plannerDecision?.selectedCandidateId) || 'nil'}`,
+    `finalAction=${finalAssignmentActionType || 'nil'}`,
+    `finalStatus=${asNonEmptyString(rematerialized?.dailyAssignment?.status) || 'nil'}`,
+    `finalCandidate=${asNonEmptyString(rematerialized?.dailyAssignment?.chosenCandidateId) || 'nil'}`,
+    `overrideApplied=${plannerDeferOverrideApplied ? 'true' : 'false'}`,
+  ];
+
+  return {
+    summary: summaryParts.join(' | '),
+    sourceDate,
+    recoverFromConversation,
+    conversationRecoveryApplied: Boolean(conversationRecoveryDetail),
+    conversationRecoveryDetail: conversationRecoveryDetail || null,
+    snapshotRecommendedRouting: asNonEmptyString(workingSnapshot?.recommendedRouting),
+    snapshotOverallReadiness: asNonEmptyString(workingSnapshot?.overallReadiness),
+    snapshotConfidence: asNonEmptyString(workingSnapshot?.confidence),
+    candidateCount: candidatePreview.length,
+    candidatePreview,
+    plannerDecisionSource: asNonEmptyString(rematerialized?.plannerDecision?.decisionSource),
+    plannerActionType,
+    plannerSelectedCandidateId: asNonEmptyString(rematerialized?.plannerDecision?.selectedCandidateId),
+    plannerSelectedCandidateType: asNonEmptyString(rematerialized?.plannerDecision?.selectedCandidateType),
+    plannerDeferOverrideApplied,
+    finalAssignmentActionType,
+    finalAssignmentStatus: asNonEmptyString(rematerialized?.dailyAssignment?.status),
+    finalAssignmentChosenCandidateId: asNonEmptyString(rematerialized?.dailyAssignment?.chosenCandidateId),
+    finalAssignmentSimSpecId: asNonEmptyString(rematerialized?.dailyAssignment?.simSpecId),
+    finalAssignmentProtocolId: asNonEmptyString(rematerialized?.dailyAssignment?.protocolId),
+  };
+}
+
 function humanizeRuntimeLabel(value) {
   return value
     ? String(value)
@@ -347,6 +412,14 @@ exports.handler = async (event) => {
       });
     }
 
+    const debugTrace = buildRepairDebugTrace({
+      sourceDate,
+      recoverFromConversation,
+      conversationRecoveryDetail,
+      workingSnapshot,
+      rematerialized,
+    });
+
     console.info('[repair-pulsecheck-daily-assignment] Repair result', {
       userId,
       sourceDate,
@@ -365,6 +438,7 @@ exports.handler = async (event) => {
       dailyAssignmentId: rematerialized?.dailyAssignment?.id || null,
       dailyAssignmentActionType: rematerialized?.dailyAssignment?.actionType || null,
       dailyAssignmentStatus: rematerialized?.dailyAssignment?.status || null,
+      debugSummary: debugTrace.summary,
     });
 
     const detail =
@@ -385,6 +459,7 @@ exports.handler = async (event) => {
         dailyAssignment: rematerialized?.dailyAssignment || null,
         repairApplied: Boolean(rematerialized?.dailyAssignment),
         detail,
+        debugTrace,
       }),
     };
   } catch (error) {

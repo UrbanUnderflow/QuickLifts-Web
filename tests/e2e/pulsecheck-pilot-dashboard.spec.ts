@@ -172,11 +172,19 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
 
     await expect(page.getByTestId('pilot-dashboard-demo-banner')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Correlation Engine Spring Pilot Demo' })).toBeVisible();
+    await page.getByTestId('pilot-dashboard-metric-help-stable-rate').click();
+    await expect(page.getByTestId('pilot-dashboard-metric-help-stable-rate-modal')).toBeVisible();
+    await expect(page.getByText('Stable rate is the share of active pilot athletes with at least one stable pattern', { exact: false })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('pilot-dashboard-metric-help-stable-rate-modal')).toBeHidden();
 
     await page.getByRole('link', { name: 'Correlation Engine Spring Pilot Demo' }).click();
     await expect(page.getByTestId('pilot-dashboard-detail-demo-banner')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Correlation Engine Spring Pilot Demo' })).toBeVisible();
     await expect(page.getByTestId('pilot-dashboard-tab-research-readout')).toBeVisible();
+    await page.getByTestId('pilot-dashboard-tab-hypotheses').click();
+    await page.getByTestId('pilot-hypothesis-assist-generate').click();
+    await expect(page.locator('[data-testid^="pilot-hypothesis-assist-suggestion-"]').first()).toBeVisible({ timeout: 30_000 });
 
     await page.getByTestId('pilot-dashboard-detail-demo-toggle').click();
     await expect(page).toHaveURL(/\/admin\/pulsecheckPilotDashboard$/);

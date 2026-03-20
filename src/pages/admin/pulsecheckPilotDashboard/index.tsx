@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
-import Link from 'next/link';
 import { Activity, ArrowRight, Building2, FlaskConical, Layers3, MonitorPlay, RefreshCcw, Users2 } from 'lucide-react';
 import AdminRouteGuard from '../../../components/auth/AdminRouteGuard';
+import NoraMetricHelpButton from '../../../components/admin/pilot-dashboard/NoraMetricHelpButton';
+import type { PilotDashboardMetricExplanationKey } from '../../../components/admin/pilot-dashboard/noraMetricCatalog';
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
 import type { PilotDashboardDirectoryEntry } from '../../../api/firebase/pulsecheckPilotDashboard/types';
 
@@ -52,6 +53,14 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
   const resetDemoModeData = () => {
     pulseCheckPilotDashboardService.resetDemoModeData();
     void load('refresh');
+  };
+
+  const openPilot = (pilotId: string) => {
+    if (!pilotId) return;
+    const target = `/admin/pulsecheckPilotDashboard/${encodeURIComponent(pilotId)}`;
+    if (typeof window !== 'undefined') {
+      window.location.assign(target);
+    }
   };
 
   const organizations = useMemo(
@@ -112,6 +121,65 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
     [filteredEntries]
   );
 
+  const primarySummaryCards: Array<{
+    label: string;
+    value: string;
+    icon: React.ReactNode;
+    iconClassName: string;
+    metricKey: PilotDashboardMetricExplanationKey;
+    testId?: string;
+  }> = [
+    {
+      label: 'Active Pilots',
+      value: String(summary.activePilots),
+      icon: <FlaskConical className="h-5 w-5" />,
+      iconClassName: 'text-cyan-300',
+      metricKey: 'active-pilots',
+    },
+    {
+      label: 'Active Pilot Athletes',
+      value: String(summary.activeAthletes),
+      icon: <Users2 className="h-5 w-5" />,
+      iconClassName: 'text-emerald-300',
+      metricKey: 'active-pilot-athletes',
+    },
+    {
+      label: 'Unsupported Hypotheses',
+      value: String(summary.unsupportedHypotheses),
+      icon: <Activity className="h-5 w-5" />,
+      iconClassName: 'text-amber-300',
+      metricKey: 'unsupported-hypotheses',
+    },
+    {
+      label: 'Coverage',
+      value: formatPercent(summary.avgEngineCoverageRate),
+      icon: <Layers3 className="h-5 w-5" />,
+      iconClassName: 'text-cyan-200',
+      metricKey: 'coverage',
+    },
+    {
+      label: 'Stable Rate',
+      value: formatPercent(summary.avgStablePatternRate),
+      icon: <Users2 className="h-5 w-5" />,
+      iconClassName: 'text-emerald-200',
+      metricKey: 'stable-rate',
+      testId: 'pilot-dashboard-metric-help-stable-rate',
+    },
+    {
+      label: 'Avg Evidence',
+      value: formatAverage(summary.avgEvidenceRecordsPerAthlete),
+      icon: <Building2 className="h-5 w-5" />,
+      iconClassName: 'text-violet-200',
+      metricKey: 'avg-evidence',
+    },
+  ];
+
+  const secondarySummaryCards: Array<{ label: string; value: string; metricKey: PilotDashboardMetricExplanationKey }> = [
+    { label: 'Promising Hypotheses', value: String(summary.promisingHypotheses), metricKey: 'promising-hypotheses' },
+    { label: 'High Confidence Hypotheses', value: String(summary.highConfidenceHypotheses), metricKey: 'high-confidence-hypotheses' },
+    { label: 'Avg Projections / Athlete', value: formatAverage(summary.avgProjectionsPerAthlete), metricKey: 'avg-projections-per-athlete' },
+  ];
+
   return (
     <AdminRouteGuard>
       <Head>
@@ -168,63 +236,26 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
           ) : null}
 
           <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
-            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-              <div className="flex items-center gap-3 text-cyan-300">
-                <FlaskConical className="h-5 w-5" />
-                <span className="text-sm font-medium">Active Pilots</span>
+            {primarySummaryCards.map((card) => (
+              <div key={card.label} className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <NoraMetricHelpButton metricKey={card.metricKey} className="absolute right-4 top-4" testId={card.testId} />
+                <div className={`flex items-center gap-3 ${card.iconClassName}`}>
+                  {card.icon}
+                  <span className="text-sm font-medium">{card.label}</span>
+                </div>
+                <div className="mt-3 text-3xl font-semibold">{card.value}</div>
               </div>
-              <div className="mt-3 text-3xl font-semibold">{summary.activePilots}</div>
-            </div>
-            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-              <div className="flex items-center gap-3 text-emerald-300">
-                <Users2 className="h-5 w-5" />
-                <span className="text-sm font-medium">Active Pilot Athletes</span>
-              </div>
-              <div className="mt-3 text-3xl font-semibold">{summary.activeAthletes}</div>
-            </div>
-            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-              <div className="flex items-center gap-3 text-amber-300">
-                <Activity className="h-5 w-5" />
-                <span className="text-sm font-medium">Unsupported Hypotheses</span>
-              </div>
-              <div className="mt-3 text-3xl font-semibold">{summary.unsupportedHypotheses}</div>
-            </div>
-            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-              <div className="flex items-center gap-3 text-cyan-200">
-                <Layers3 className="h-5 w-5" />
-                <span className="text-sm font-medium">Coverage</span>
-              </div>
-              <div className="mt-3 text-3xl font-semibold">{formatPercent(summary.avgEngineCoverageRate)}</div>
-            </div>
-            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-              <div className="flex items-center gap-3 text-emerald-200">
-                <Users2 className="h-5 w-5" />
-                <span className="text-sm font-medium">Stable Rate</span>
-              </div>
-              <div className="mt-3 text-3xl font-semibold">{formatPercent(summary.avgStablePatternRate)}</div>
-            </div>
-            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-              <div className="flex items-center gap-3 text-violet-200">
-                <Building2 className="h-5 w-5" />
-                <span className="text-sm font-medium">Avg Evidence</span>
-              </div>
-              <div className="mt-3 text-3xl font-semibold">{formatAverage(summary.avgEvidenceRecordsPerAthlete)}</div>
-            </div>
+            ))}
           </div>
 
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Promising Hypotheses</div>
-              <div className="mt-3 text-3xl font-semibold">{summary.promisingHypotheses}</div>
-            </div>
-            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">High Confidence Hypotheses</div>
-              <div className="mt-3 text-3xl font-semibold">{summary.highConfidenceHypotheses}</div>
-            </div>
-            <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
-              <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Avg Projections / Athlete</div>
-              <div className="mt-3 text-3xl font-semibold">{formatAverage(summary.avgProjectionsPerAthlete)}</div>
-            </div>
+            {secondarySummaryCards.map((card) => (
+              <div key={card.label} className="relative rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                <NoraMetricHelpButton metricKey={card.metricKey} className="absolute right-4 top-4" />
+                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">{card.label}</div>
+                <div className="mt-3 text-3xl font-semibold">{card.value}</div>
+              </div>
+            ))}
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-3 rounded-3xl border border-white/10 bg-[#11151f] p-4 md:grid-cols-2">
@@ -270,15 +301,36 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
           ) : (
             <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-2">
               {filteredEntries.map((entry) => (
-                <Link
+                <div
                   key={entry.pilot.id}
-                  href={`/admin/pulsecheckPilotDashboard/${encodeURIComponent(entry.pilot.id)}`}
                   className="group rounded-3xl border border-white/10 bg-[#11151f] p-5 transition hover:border-cyan-400/40 hover:bg-[#141b28]"
                 >
+                  {(() => {
+                    const primaryPilotMetrics: Array<{ label: string; value: string; metricKey: PilotDashboardMetricExplanationKey }> = [
+                      { label: 'Active Athletes', value: String(entry.activeEnrollmentCount), metricKey: 'active-pilot-athletes' },
+                      { label: 'Cohorts', value: String(entry.activeCohortCount || entry.cohorts.length), metricKey: 'active-cohorts' },
+                      { label: 'Hypotheses', value: String(entry.hypothesisCount), metricKey: 'hypotheses' },
+                      { label: 'Not Supported', value: String(entry.unsupportedHypothesisCount), metricKey: 'not-supported' },
+                    ];
+                    const secondaryPilotMetrics: Array<{ label: string; value: string; metricKey: PilotDashboardMetricExplanationKey }> = [
+                      { label: 'Coverage', value: formatPercent(entry.engineCoverageRate), metricKey: 'coverage' },
+                      { label: 'Stable Rate', value: formatPercent(entry.stablePatternRate), metricKey: 'stable-rate' },
+                      { label: 'Avg Evidence', value: formatAverage(entry.avgEvidenceRecordsPerActiveAthlete), metricKey: 'avg-evidence' },
+                      { label: 'Avg Projections', value: formatAverage(entry.avgRecommendationProjectionsPerActiveAthlete), metricKey: 'avg-projections-per-athlete' },
+                    ];
+
+                    return (
+                      <>
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">{entry.organization.displayName}</p>
-                      <h2 className="mt-2 text-xl font-semibold">{entry.pilot.name}</h2>
+                      <button
+                        type="button"
+                        onClick={() => openPilot(entry.pilot.id)}
+                        className="mt-2 inline-block text-left text-xl font-semibold text-white transition hover:text-cyan-200"
+                      >
+                        {entry.pilot.name}
+                      </button>
                       <p className="mt-1 text-sm text-zinc-400">{entry.team.displayName}</p>
                     </div>
                     <div className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs uppercase tracking-wide text-cyan-200">
@@ -287,41 +339,23 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-zinc-300">
-                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
-                      <div className="text-xs uppercase tracking-wide text-zinc-500">Active Athletes</div>
-                      <div className="mt-1 text-lg font-semibold text-white">{entry.activeEnrollmentCount}</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
-                      <div className="text-xs uppercase tracking-wide text-zinc-500">Cohorts</div>
-                      <div className="mt-1 text-lg font-semibold text-white">{entry.activeCohortCount || entry.cohorts.length}</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
-                      <div className="text-xs uppercase tracking-wide text-zinc-500">Hypotheses</div>
-                      <div className="mt-1 text-lg font-semibold text-white">{entry.hypothesisCount}</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
-                      <div className="text-xs uppercase tracking-wide text-zinc-500">Not Supported</div>
-                      <div className="mt-1 text-lg font-semibold text-white">{entry.unsupportedHypothesisCount}</div>
-                    </div>
+                    {primaryPilotMetrics.map((metric) => (
+                      <div key={metric.label} className="relative rounded-2xl border border-white/5 bg-black/20 p-3">
+                        <NoraMetricHelpButton metricKey={metric.metricKey} className="absolute right-3 top-3" />
+                        <div className="text-xs uppercase tracking-wide text-zinc-500">{metric.label}</div>
+                        <div className="mt-1 text-lg font-semibold text-white">{metric.value}</div>
+                      </div>
+                    ))}
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-zinc-300">
-                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
-                      <div className="text-xs uppercase tracking-wide text-zinc-500">Coverage</div>
-                      <div className="mt-1 text-lg font-semibold text-white">{formatPercent(entry.engineCoverageRate)}</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
-                      <div className="text-xs uppercase tracking-wide text-zinc-500">Stable Rate</div>
-                      <div className="mt-1 text-lg font-semibold text-white">{formatPercent(entry.stablePatternRate)}</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
-                      <div className="text-xs uppercase tracking-wide text-zinc-500">Avg Evidence</div>
-                      <div className="mt-1 text-lg font-semibold text-white">{formatAverage(entry.avgEvidenceRecordsPerActiveAthlete)}</div>
-                    </div>
-                    <div className="rounded-2xl border border-white/5 bg-black/20 p-3">
-                      <div className="text-xs uppercase tracking-wide text-zinc-500">Avg Projections</div>
-                      <div className="mt-1 text-lg font-semibold text-white">{formatAverage(entry.avgRecommendationProjectionsPerActiveAthlete)}</div>
-                    </div>
+                    {secondaryPilotMetrics.map((metric) => (
+                      <div key={metric.label} className="relative rounded-2xl border border-white/5 bg-black/20 p-3">
+                        <NoraMetricHelpButton metricKey={metric.metricKey} className="absolute right-3 top-3" />
+                        <div className="text-xs uppercase tracking-wide text-zinc-500">{metric.label}</div>
+                        <div className="mt-1 text-lg font-semibold text-white">{metric.value}</div>
+                      </div>
+                    ))}
                   </div>
 
                   <div className="mt-4 flex items-center justify-between text-sm text-zinc-400">
@@ -329,12 +363,19 @@ const PulseCheckPilotDashboardIndexPage: React.FC = () => {
                       <Building2 className="h-4 w-4" />
                       Pilot-native dashboard
                     </div>
-                    <div className="inline-flex items-center gap-2 text-cyan-200 transition group-hover:translate-x-1">
+                    <button
+                      type="button"
+                      onClick={() => openPilot(entry.pilot.id)}
+                      className="inline-flex items-center gap-2 text-cyan-200 transition group-hover:translate-x-1 hover:text-cyan-100"
+                    >
                       Open pilot
                       <ArrowRight className="h-4 w-4" />
-                    </div>
+                    </button>
                   </div>
-                </Link>
+                      </>
+                    );
+                  })()}
+                </div>
               ))}
             </div>
           )}

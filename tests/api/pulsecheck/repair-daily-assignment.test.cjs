@@ -184,6 +184,8 @@ test('rematerializes deferred assignment so assessment chat can promote it into 
   assert.equal(body.dailyAssignment.id, repairedAssignment.id);
   assert.equal(body.dailyAssignment.actionType, 'sim');
   assert.equal(body.repairApplied, true);
+  assert.equal(body.debugTrace.candidateCount, 0);
+  assert.equal(body.debugTrace.finalAssignmentActionType, 'sim');
 });
 
 test('rematerializes missing assignment when snapshot exists for the day', async () => {
@@ -240,6 +242,7 @@ test('rematerializes missing assignment when snapshot exists for the day', async
   assert.equal(body.dailyAssignment.id, repairedAssignment.id);
   assert.equal(body.repairApplied, true);
   assert.equal(body.stateSnapshot.id, snapshot.id);
+  assert.equal(body.debugTrace.finalAssignmentActionType, 'sim');
 });
 
 test('replays saved Nora conversation context before rematerializing a missing assignment', async () => {
@@ -312,4 +315,7 @@ test('replays saved Nora conversation context before rematerializing a missing a
   assert.equal(rematerializeCalled, true);
   assert.equal(body.dailyAssignment.id, repairedAssignment.id);
   assert.equal(body.detail, 'Recovered today’s assignment context from the saved Nora conversation.');
+  assert.equal(body.debugTrace.conversationRecoveryApplied, true);
+  assert.equal(body.debugTrace.plannerActionType, null);
+  assert.equal(body.debugTrace.finalAssignmentActionType, 'protocol');
 });
