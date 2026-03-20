@@ -55,17 +55,47 @@ const LEGACY_ROSTER_MIGRATIONS_COLLECTION = 'pulsecheck-legacy-roster-migrations
 const USERS_COLLECTION = 'users';
 const COACHES_COLLECTION = 'coaches';
 const COACH_ATHLETES_COLLECTION = 'coachAthletes';
+const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
+const DEFAULT_PUBLIC_SITE_ORIGIN = (process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai').replace(/\/+$/, '');
 
 const normalizeString = (value?: string) => value?.trim() || '';
 const normalizeEmail = (value?: string) => normalizeString(value).toLowerCase();
+const isLocalHostname = (hostname?: string | null) => LOCALHOST_HOSTNAMES.has(normalizeString(hostname ?? undefined).toLowerCase());
+const getCurrentSiteOrigin = () =>
+  typeof window !== 'undefined' ? window.location.origin.replace(/\/+$/, '') : DEFAULT_PUBLIC_SITE_ORIGIN;
 const shouldStampDevFirebaseLinks = () =>
   typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.localStorage.getItem('forceDevFirebase') === 'true');
+  (isLocalHostname(window.location.hostname) ||
+    (window.localStorage.getItem('forceDevFirebase') === 'true' && isLocalHostname(window.location.hostname)));
 const shouldUseLocalRedeemFallback = () =>
   typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' ||
-    window.localStorage.getItem('forceDevFirebase') === 'true' ||
+  (isLocalHostname(window.location.hostname) ||
+    (window.localStorage.getItem('forceDevFirebase') === 'true' && isLocalHostname(window.location.hostname)) ||
     process.env.NEXT_PUBLIC_E2E_FORCE_DEV_FIREBASE === 'true');
+const normalizeInviteActivationUrl = (value?: unknown) => {
+  const rawValue = normalizeString(typeof value === 'string' ? value : '');
+  if (!rawValue) return '';
+
+  if (rawValue.startsWith('/')) {
+    return `${getCurrentSiteOrigin()}${rawValue}`;
+  }
+
+  try {
+    const parsedUrl = new URL(rawValue);
+    if (!isLocalHostname(parsedUrl.hostname)) {
+      return rawValue;
+    }
+
+    const targetOrigin = getCurrentSiteOrigin();
+    if (isLocalHostname(parsedUrl.hostname) && targetOrigin && !isLocalHostname(new URL(targetOrigin).hostname)) {
+      return `${targetOrigin}${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+    }
+
+    return rawValue;
+  } catch {
+    return rawValue;
+  }
+};
 const defaultNotificationPreferences = (): PulseCheckNotificationPreferences => ({
   email: true,
   sms: false,
@@ -285,7 +315,7 @@ const toInviteLink = (id: string, data: Record<string, any>): PulseCheckInviteLi
   recipientName: data.recipientName || '',
   targetEmail: data.targetEmail || '',
   token: data.token || id,
-  activationUrl: data.activationUrl || '',
+  activationUrl: normalizeInviteActivationUrl(data.activationUrl),
   createdByUserId: data.createdByUserId || '',
   createdByEmail: data.createdByEmail || '',
   createdAt: data.createdAt || null,
@@ -1069,10 +1099,7 @@ export const pulseCheckProvisioningService = {
     createdByEmail?: string;
   }): Promise<string> {
     const token = crypto.randomUUID();
-    const baseUrl =
-      typeof window !== 'undefined'
-        ? window.location.origin
-        : process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai';
+    const baseUrl = getCurrentSiteOrigin();
     const activationUrl = `${baseUrl}/PulseCheck/admin-activation/${token}${shouldStampDevFirebaseLinks() ? '?devFirebase=1' : ''}`;
 
     const payload = {
@@ -1135,10 +1162,7 @@ export const pulseCheckProvisioningService = {
     createdByEmail?: string;
   }): Promise<string> {
     const token = crypto.randomUUID();
-    const baseUrl =
-      typeof window !== 'undefined'
-        ? window.location.origin
-        : process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai';
+    const baseUrl = getCurrentSiteOrigin();
     const activationUrl = `${baseUrl}/PulseCheck/clinician-onboarding/${token}${shouldStampDevFirebaseLinks() ? '?devFirebase=1' : ''}`;
 
     const payload = {
@@ -1189,10 +1213,8 @@ export const pulseCheckProvisioningService = {
     const normalizedTargetEmail = normalizeEmail(input.targetEmail);
     const normalizedPilotId = normalizeString(input.pilotId);
     const normalizedCohortId = normalizeString(input.cohortId);
-    const baseUrl =
-      typeof window !== 'undefined'
-        ? window.location.origin
-        : process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai';
+    const shouldRevokeExistingMatchingLinks = input.revokeExistingMatchingLinks !== false;
+    const baseUrl = getCurrentSiteOrigin();
     const fallbackPath = `/PulseCheck/team-invite/${token}${shouldStampDevFirebaseLinks() ? '?devFirebase=1' : ''}`;
     let activationUrl = `${baseUrl}${fallbackPath}`;
 
@@ -1225,28 +1247,30 @@ export const pulseCheckProvisioningService = {
       console.warn('[pulsecheckProvisioningService] Failed to resolve invite preview metadata, falling back to direct URL.', error);
     }
 
-    const existingActiveLinks = await getDocs(collection(db, INVITE_LINKS_COLLECTION));
-    const linksToRevoke = existingActiveLinks.docs.filter((snapshot) => {
-      const link = snapshot.data() as Record<string, any>;
-      return (
-        (link.teamId || '') === normalizedTeamId &&
-        (link.teamMembershipRole || '') === normalizedRole &&
-        normalizeEmail(link.targetEmail || '') === normalizedTargetEmail &&
-        (link.pilotId || '') === normalizedPilotId &&
-        (link.cohortId || '') === normalizedCohortId &&
-        (link.inviteType || '') === 'team-access' &&
-        (link.status || '') === 'active'
-      );
-    });
+    if (shouldRevokeExistingMatchingLinks) {
+      const existingActiveLinks = await getDocs(collection(db, INVITE_LINKS_COLLECTION));
+      const linksToRevoke = existingActiveLinks.docs.filter((snapshot) => {
+        const link = snapshot.data() as Record<string, any>;
+        return (
+          (link.teamId || '') === normalizedTeamId &&
+          (link.teamMembershipRole || '') === normalizedRole &&
+          normalizeEmail(link.targetEmail || '') === normalizedTargetEmail &&
+          (link.pilotId || '') === normalizedPilotId &&
+          (link.cohortId || '') === normalizedCohortId &&
+          (link.inviteType || '') === 'team-access' &&
+          (link.status || '') === 'active'
+        );
+      });
 
-    await Promise.all(
-      linksToRevoke.map((snapshot) =>
-        updateDoc(snapshot.ref, {
-          status: 'revoked',
-          updatedAt: serverTimestamp(),
-        })
-      )
-    );
+      await Promise.all(
+        linksToRevoke.map((snapshot) =>
+          updateDoc(snapshot.ref, {
+            status: 'revoked',
+            updatedAt: serverTimestamp(),
+          })
+        )
+      );
+    }
 
     const payload = {
       inviteType: 'team-access',

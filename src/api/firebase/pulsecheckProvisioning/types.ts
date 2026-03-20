@@ -383,6 +383,7 @@ export interface CreatePulseCheckTeamAccessInviteInput {
   organizationId: string;
   teamId: string;
   teamMembershipRole: PulseCheckTeamMembershipRole;
+  revokeExistingMatchingLinks?: boolean;
   pilotId?: string;
   cohortId?: string;
   pilotName?: string;

@@ -1246,9 +1246,23 @@ export const pilotDashboardDemoMode = {
       createdAt: asTimestamp(now),
       updatedAt: asTimestamp(now),
     } as PulseCheckInviteLink;
-    store.inviteLinks = [invite, ...store.inviteLinks.filter((item) => !(item.pilotId === invite.pilotId && normalizeString(item.cohortId) === normalizeString(invite.cohortId)))];
+    store.inviteLinks = [invite, ...store.inviteLinks];
     writeStore(store);
     return invite;
+  },
+
+  revokeInviteLink(inviteId: string): void {
+    const store = readStore();
+    store.inviteLinks = store.inviteLinks.map((invite) =>
+      invite.id === normalizeString(inviteId)
+        ? {
+            ...invite,
+            status: 'revoked',
+            updatedAt: asTimestamp(Date.now()),
+          }
+        : invite
+    );
+    writeStore(store);
   },
 
   generatePilotResearchReadout(input: { frame: Record<string, any>; options: PilotResearchReadoutGenerationInput }): { readoutId: string } {
