@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Head from 'next/head';
 import { AlertTriangle, ArrowRight, Building2, Clipboard, ClipboardList, ExternalLink, Loader2, MailPlus, ShieldPlus, Sparkles, Stethoscope, Users2, X } from 'lucide-react';
 import type { Timestamp } from 'firebase/firestore';
+import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import AdminRouteGuard from '../../components/auth/AdminRouteGuard';
 import { useUser } from '../../hooks/useUser';
+import { storage } from '../../api/firebase/config';
 import { pulseCheckProvisioningService } from '../../api/firebase/pulsecheckProvisioning/service';
 import type {
   PulseCheckAdminContact,
@@ -26,6 +28,7 @@ import type {
   PulseCheckTeam,
   PulseCheckTeamStatus,
 } from '../../api/firebase/pulsecheckProvisioning/types';
+import { resolvePulseCheckInvitePreviewImage } from '../../utils/pulsecheckInviteLinks';
 
 const defaultOrganizationForm: CreatePulseCheckOrganizationInput = {
   displayName: '',
@@ -242,6 +245,7 @@ const getCohortAssignmentRuleLabel = (value?: string) => {
 };
 
 const normalizeCohortTag = (value: string) => value.trim().replace(/\s+/g, '-').toLowerCase();
+const sanitizeStorageSegment = (value: string) => value.replace(/[^a-zA-Z0-9._-]+/g, '-');
 
 type OnboardingModalState =
   | {
@@ -295,6 +299,8 @@ const PulseCheckProvisioningPage: React.FC = () => {
   const [additionalAdminForm, setAdditionalAdminForm] = useState({ name: '', email: '' });
   const [additionalAdminSubmitting, setAdditionalAdminSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [organizationImageUploadingId, setOrganizationImageUploadingId] = useState<string | null>(null);
+  const [teamImageUploadingId, setTeamImageUploadingId] = useState<string | null>(null);
 
   const selectedOrganization = useMemo(
     () => organizations.find((organization) => organization.id === teamForm.organizationId) || null,
@@ -517,6 +523,66 @@ const PulseCheckProvisioningPage: React.FC = () => {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  const uploadInvitePreviewImage = useCallback(
+    async (scope: 'organization' | 'team', entityId: string, file: File) => {
+      const extension = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+      const fileName = `${Date.now()}-${sanitizeStorageSegment(file.name.replace(/\.[^.]+$/, ''))}.${sanitizeStorageSegment(extension || 'jpg')}`;
+      const path = `pulsecheck/provisioning/${scope}s/${entityId}/invite-preview/${fileName}`;
+      const fileRef = storageRef(storage, path);
+
+      await uploadBytes(fileRef, file, {
+        contentType: file.type || 'image/jpeg',
+      });
+
+      return getDownloadURL(fileRef);
+    },
+    []
+  );
+
+  const handleOrganizationInviteImageUpload = useCallback(
+    async (organizationId: string, file?: File | null) => {
+      if (!file) return;
+
+      setOrganizationImageUploadingId(organizationId);
+      setMessage(null);
+
+      try {
+        const downloadUrl = await uploadInvitePreviewImage('organization', organizationId, file);
+        await pulseCheckProvisioningService.updateOrganizationInvitePreviewImage(organizationId, downloadUrl);
+        await loadData();
+        setMessage({ type: 'success', text: 'Organization invite preview image updated.' });
+      } catch (error) {
+        console.error('[PulseCheckProvisioning] Failed to upload organization invite preview image:', error);
+        setMessage({ type: 'error', text: 'Failed to upload organization image.' });
+      } finally {
+        setOrganizationImageUploadingId((current) => (current === organizationId ? null : current));
+      }
+    },
+    [loadData, uploadInvitePreviewImage]
+  );
+
+  const handleTeamInviteImageUpload = useCallback(
+    async (teamId: string, file?: File | null) => {
+      if (!file) return;
+
+      setTeamImageUploadingId(teamId);
+      setMessage(null);
+
+      try {
+        const downloadUrl = await uploadInvitePreviewImage('team', teamId, file);
+        await pulseCheckProvisioningService.updateTeamInvitePreviewImage(teamId, downloadUrl);
+        await loadData();
+        setMessage({ type: 'success', text: 'Team invite preview image updated.' });
+      } catch (error) {
+        console.error('[PulseCheckProvisioning] Failed to upload team invite preview image:', error);
+        setMessage({ type: 'error', text: 'Failed to upload team image.' });
+      } finally {
+        setTeamImageUploadingId((current) => (current === teamId ? null : current));
+      }
+    },
+    [loadData, uploadInvitePreviewImage]
+  );
 
   useEffect(() => {
     if (!selectedOrganization?.displayName) return;
@@ -2134,6 +2200,35 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                   <p>Clinician routing requirement: {organization.defaultClinicianBridgeMode}</p>
                                   <p>Customer admin: {organization.primaryCustomerAdminEmail || 'Not set'}</p>
                                 </div>
+                                <div className="mt-4 rounded-2xl border border-zinc-800 bg-black/20 p-4">
+                                  <p className="text-xs uppercase tracking-wide text-zinc-500">Organization Invite Artwork</p>
+                                  <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center">
+                                    <img
+                                      src={resolvePulseCheckInvitePreviewImage('', organization.invitePreviewImageUrl)}
+                                      alt={`${organization.displayName} invite preview`}
+                                      className="h-20 w-32 rounded-xl object-cover"
+                                    />
+                                    <div className="space-y-2">
+                                      <p className="text-xs text-zinc-400">
+                                        This image is used by default for invite previews when a team does not have its own image yet.
+                                      </p>
+                                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-blue-400/30 px-3 py-2 text-xs font-semibold text-blue-100 transition hover:border-blue-300 hover:text-white">
+                                        {organizationImageUploadingId === organization.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Building2 className="h-3.5 w-3.5" />}
+                                        {organizationImageUploadingId === organization.id ? 'Uploading...' : 'Upload Organization Image'}
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          className="hidden"
+                                          disabled={organizationImageUploadingId === organization.id}
+                                          onChange={(event) => {
+                                            void handleOrganizationInviteImageUpload(organization.id, event.target.files?.[0] || null);
+                                            event.currentTarget.value = '';
+                                          }}
+                                        />
+                                      </label>
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                               <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-wide ${orgStatus.tone}`}>
                                 {orgStatus.label}
@@ -2171,6 +2266,37 @@ const PulseCheckProvisioningPage: React.FC = () => {
                                               <p>Default admin: {team.defaultAdminEmail || 'Not set'}</p>
                                               <p>Site / campus: {team.siteLabel || 'Not set'}</p>
                                               <p>Created: {formatTimestamp(team.createdAt)}</p>
+                                            </div>
+                                            <div className="mt-4 rounded-2xl border border-zinc-800 bg-[#0b1220] p-4">
+                                              <p className="text-xs uppercase tracking-wide text-zinc-500">Pilot Invite Artwork</p>
+                                              <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center">
+                                                <img
+                                                  src={resolvePulseCheckInvitePreviewImage(team.invitePreviewImageUrl, organization.invitePreviewImageUrl)}
+                                                  alt={`${team.displayName} invite preview`}
+                                                  className="h-20 w-32 rounded-xl object-cover"
+                                                />
+                                                <div className="space-y-2">
+                                                  <p className="text-xs text-zinc-400">
+                                                    {team.invitePreviewImageUrl
+                                                      ? 'This team image will be used for pilot and athlete invite previews.'
+                                                      : 'This team currently inherits the organization image for invite previews. Upload a team image to override it.'}
+                                                  </p>
+                                                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-green-400/30 px-3 py-2 text-xs font-semibold text-green-100 transition hover:border-green-300 hover:text-white">
+                                                    {teamImageUploadingId === team.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Users2 className="h-3.5 w-3.5" />}
+                                                    {teamImageUploadingId === team.id ? 'Uploading...' : 'Upload Team Image'}
+                                                    <input
+                                                      type="file"
+                                                      accept="image/*"
+                                                      className="hidden"
+                                                      disabled={teamImageUploadingId === team.id}
+                                                      onChange={(event) => {
+                                                        void handleTeamInviteImageUpload(team.id, event.target.files?.[0] || null);
+                                                        event.currentTarget.value = '';
+                                                      }}
+                                                    />
+                                                  </label>
+                                                </div>
+                                              </div>
                                             </div>
                                           </div>
                                           <span className={`inline-flex rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-wide ${teamStatus.tone}`}>

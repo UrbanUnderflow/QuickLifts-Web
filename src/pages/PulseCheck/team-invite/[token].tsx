@@ -12,6 +12,7 @@ import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckP
 import type { PulseCheckTeamMembershipRole } from '../../../api/firebase/pulsecheckProvisioning/types';
 import { claimUsername, generateUsernameFromEmail, isUsernameAvailable, isValidUsernameFormat, normalizeUsername } from '../../../api/firebase/auth/username';
 import { SubscriptionPlatform, SubscriptionType, UserLevel, userService } from '../../../api/firebase/user';
+import { resolvePulseCheckInvitePreviewImage } from '../../../utils/pulsecheckInviteLinks';
 
 type TeamInvitePageProps = {
   invite: {
@@ -29,6 +30,10 @@ type TeamInvitePageProps = {
     teamMembershipRole: PulseCheckTeamMembershipRole;
     invitedTitle: string;
     recipientName: string;
+    previewTitle: string;
+    previewDescription: string;
+    previewImageUrl: string;
+    pageUrl: string;
   };
 };
 
@@ -327,14 +332,36 @@ const TeamInvitePage = ({ invite }: InferGetServerSidePropsType<typeof getServer
   return (
     <div className="min-h-screen bg-[#05070c] text-white">
       <Head>
-        <title>PulseCheck Team Invite</title>
+        <title>{invite.previewTitle}</title>
         <meta name="robots" content="noindex,nofollow" />
+        <meta name="description" content={invite.previewDescription} />
+        <meta property="og:title" content={invite.previewTitle} />
+        <meta property="og:description" content={invite.previewDescription} />
+        <meta property="og:image" content={invite.previewImageUrl} />
+        <meta property="og:image:secure_url" content={invite.previewImageUrl} />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:url" content={invite.pageUrl} />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="PulseCheck" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={invite.previewTitle} />
+        <meta name="twitter:description" content={invite.previewDescription} />
+        <meta name="twitter:image" content={invite.previewImageUrl} />
       </Head>
 
       <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center px-4 py-10 md:px-6">
         <section className="grid w-full gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
           <div className="rounded-[32px] border border-cyan-500/15 bg-[radial-gradient(circle_at_top_left,_rgba(34,211,238,0.12),_transparent_42%),#09111e] p-8 shadow-2xl">
-            <div className="space-y-5">
+              <div className="space-y-5">
+              <div className="overflow-hidden rounded-[24px] border border-cyan-500/20 bg-black/20">
+                <img
+                  src={invite.previewImageUrl}
+                  alt={invite.previewTitle}
+                  className="h-44 w-full object-cover"
+                />
+              </div>
+
               <div className="inline-flex rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-3">
                 <Users className="h-6 w-6 text-cyan-200" />
               </div>
@@ -656,6 +683,10 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
 
     let organizationName = 'PulseCheck Organization';
     let teamName = 'Team';
+    let organizationImageUrl = '';
+    let teamImageUrl = '';
+    const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || 'https://fitwithpulse.ai';
+    const pageUrl = `${siteOrigin}/PulseCheck/team-invite/${encodeURIComponent(token)}${forceDevFirebase ? '?devFirebase=1' : ''}`;
 
     try {
       const [organizationSnap, teamSnap] = await Promise.all([
@@ -665,6 +696,8 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
 
       organizationName = organizationSnap.data()?.displayName || organizationName;
       teamName = teamSnap.data()?.displayName || teamName;
+      organizationImageUrl = String(organizationSnap.data()?.invitePreviewImageUrl || '');
+      teamImageUrl = String(teamSnap.data()?.invitePreviewImageUrl || '');
     } catch {
       const [organizationDoc, teamDoc] = await Promise.all([
         getFirestoreDocFallback('pulsecheck-organizations', String(invite.organizationId || ''), forceDevFirebase),
@@ -673,7 +706,17 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
 
       organizationName = String(organizationDoc?.displayName || organizationName);
       teamName = String(teamDoc?.displayName || teamName);
+      organizationImageUrl = String(organizationDoc?.invitePreviewImageUrl || '');
+      teamImageUrl = String(teamDoc?.invitePreviewImageUrl || '');
     }
+
+    const previewTitle = String(invite.pilotName || '').trim()
+      ? `You're Invited to Join ${String(invite.pilotName).trim()}`
+      : `You're Invited to Join ${teamName}`;
+    const previewDescription = invite.cohortId
+      ? `Join ${teamName} inside ${organizationName}. This pilot invite places you into ${String(invite.cohortName || 'the assigned cohort')} automatically.`
+      : `Join ${teamName} inside ${organizationName} on PulseCheck.`;
+    const previewImageUrl = resolvePulseCheckInvitePreviewImage(teamImageUrl, organizationImageUrl);
 
     res.setHeader('Cache-Control', 'private, no-store, max-age=0');
 
@@ -694,6 +737,10 @@ export const getServerSideProps: GetServerSideProps<TeamInvitePageProps> = async
           teamMembershipRole: (String(invite.teamMembershipRole || 'coach') as PulseCheckTeamMembershipRole),
           invitedTitle: String(invite.invitedTitle || ''),
           recipientName: String(invite.recipientName || ''),
+          previewTitle,
+          previewDescription,
+          previewImageUrl,
+          pageUrl,
         },
       },
     };
