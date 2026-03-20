@@ -10,6 +10,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '../config';
+import { auth } from '../config';
 import {
   ATHLETE_MENTAL_PROGRESS_COLLECTION,
   ATHLETE_PATTERN_MODELS_SUBCOLLECTION,
@@ -31,6 +32,13 @@ import type {
   PilotDashboardRecentEvidence,
   PilotDashboardRecentPattern,
   PilotDashboardRecentProjection,
+  PilotResearchReadout,
+  PilotResearchReadoutGenerationInput,
+  PilotResearchReadoutReviewInput,
+  PilotResearchReadoutSection,
+  PilotResearchReadoutClaim,
+  PilotResearchReadoutCitation,
+  PilotResearchReadoutReadinessGateResult,
   PilotDashboardSnapshotHistoryItem,
   PulseCheckPilotHypothesis,
   PulseCheckPilotInviteDefaultConfig,
@@ -44,6 +52,8 @@ const PILOT_HYPOTHESES_COLLECTION = 'pulsecheck-pilot-hypotheses';
 const PILOT_INVITE_CONFIGS_COLLECTION = 'pulsecheck-pilot-invite-configs';
 const TEAM_INVITE_DEFAULTS_COLLECTION = 'pulsecheck-team-invite-defaults';
 const ORGANIZATION_INVITE_DEFAULTS_COLLECTION = 'pulsecheck-organization-invite-defaults';
+const PILOT_RESEARCH_READOUTS_COLLECTION = 'pulsecheck-pilot-research-readouts';
+const PILOT_RESEARCH_READ_MODEL_VERSION = 'pilot-dashboard-v1';
 
 const DEFAULT_PILOT_HYPOTHESES: Array<Pick<PulseCheckPilotHypothesis, 'code' | 'statement' | 'leadingIndicator'> > = [
   {
@@ -138,6 +148,74 @@ const toHypothesis = (id: string, data: Record<string, any>): PulseCheckPilotHyp
   createdAt: data.createdAt || null,
   updatedAt: data.updatedAt || null,
 });
+
+const toResearchReadoutCitation = (data: Record<string, any>): PilotResearchReadoutCitation => ({
+  blockKey: normalizeString(data.blockKey),
+  blockLabel: normalizeString(data.blockLabel),
+  hypothesisCodes: Array.isArray(data.hypothesisCodes) ? data.hypothesisCodes.map((entry) => normalizeString(entry)).filter(Boolean) : [],
+  limitationKeys: Array.isArray(data.limitationKeys) ? data.limitationKeys.map((entry) => normalizeString(entry)).filter(Boolean) : [],
+});
+
+const toResearchReadoutClaim = (data: Record<string, any>): PilotResearchReadoutClaim => ({
+  claimKey: normalizeString(data.claimKey),
+  claimType: normalizeString(data.claimType) as PilotResearchReadoutClaim['claimType'],
+  statement: normalizeString(data.statement),
+  denominatorLabel: normalizeString(data.denominatorLabel),
+  denominatorValue: Number(data.denominatorValue) || 0,
+  evidenceSources: Array.isArray(data.evidenceSources) ? data.evidenceSources.map((entry) => normalizeString(entry)).filter(Boolean) : [],
+  confidenceLevel: (normalizeString(data.confidenceLevel) as PilotResearchReadoutClaim['confidenceLevel']) || 'low',
+  baselineMode: (normalizeString(data.baselineMode) as PilotResearchReadoutClaim['baselineMode']) || 'no-baseline',
+  caveatFlag: Boolean(data.caveatFlag),
+});
+
+const toResearchReadoutSection = (data: Record<string, any>): PilotResearchReadoutSection => ({
+  sectionKey: normalizeString(data.sectionKey) as PilotResearchReadoutSection['sectionKey'],
+  title: normalizeString(data.title),
+  readinessStatus: normalizeString(data.readinessStatus) === 'suppressed' ? 'suppressed' : 'ready',
+  summary: normalizeString(data.summary),
+  citations: Array.isArray(data.citations) ? data.citations.map((entry) => toResearchReadoutCitation(entry as Record<string, any>)) : [],
+  claims: Array.isArray(data.claims) ? data.claims.map((entry) => toResearchReadoutClaim(entry as Record<string, any>)) : [],
+  suggestedReviewerResolution: normalizeString(data.suggestedReviewerResolution) as PilotResearchReadoutSection['suggestedReviewerResolution'],
+  reviewerResolution: normalizeString(data.reviewerResolution) as PilotResearchReadoutSection['reviewerResolution'],
+  reviewerNotes: normalizeString(data.reviewerNotes),
+});
+
+const toResearchReadinessGate = (data: Record<string, any>): PilotResearchReadoutReadinessGateResult => ({
+  gateKey: normalizeString(data.gateKey),
+  status: normalizeString(data.status) as PilotResearchReadoutReadinessGateResult['status'],
+  summary: normalizeString(data.summary),
+});
+
+const toResearchReadout = (id: string, data: Record<string, any>): PilotResearchReadout => ({
+  id,
+  pilotId: normalizeString(data.pilotId),
+  organizationId: normalizeString(data.organizationId),
+  teamId: normalizeString(data.teamId),
+  cohortId: normalizeString(data.cohortId) || null,
+  dateWindowStart: normalizeString(data.dateWindowStart),
+  dateWindowEnd: normalizeString(data.dateWindowEnd),
+  baselineMode: (normalizeString(data.baselineMode) as PilotResearchReadout['baselineMode']) || 'no-baseline',
+  reviewState: (normalizeString(data.reviewState) as PilotResearchReadout['reviewState']) || 'draft',
+  modelVersion: normalizeString(data.modelVersion),
+  promptVersion: normalizeString(data.promptVersion),
+  readModelVersion: normalizeString(data.readModelVersion) || PILOT_RESEARCH_READ_MODEL_VERSION,
+  readiness: Array.isArray(data.readiness) ? data.readiness.map((entry) => toResearchReadinessGate(entry as Record<string, any>)) : [],
+  sections: Array.isArray(data.sections) ? data.sections.map((entry) => toResearchReadoutSection(entry as Record<string, any>)) : [],
+  frozenEvidenceFrame: (data.frozenEvidenceFrame as Record<string, any>) || undefined,
+  generatedAt: data.generatedAt || null,
+  reviewedAt: data.reviewedAt || null,
+  reviewedByUserId: normalizeString(data.reviewedByUserId),
+  reviewedByEmail: normalizeString(data.reviewedByEmail),
+  createdAt: data.createdAt || null,
+  updatedAt: data.updatedAt || null,
+});
+
+const sortResearchReadouts = (items: PilotResearchReadout[]) =>
+  [...items].sort((left, right) => {
+    const generatedDelta = toTimeMs(right.generatedAt) - toTimeMs(left.generatedAt);
+    if (generatedDelta !== 0) return generatedDelta;
+    return toTimeMs(right.updatedAt) - toTimeMs(left.updatedAt);
+  });
 
 const buildHypothesisId = (pilotId: string, code: string) => `${normalizeString(pilotId)}__${normalizeString(code).toLowerCase()}`;
 
@@ -663,6 +741,68 @@ export const pulseCheckPilotDashboardService = {
     await deleteDoc(doc(db, PILOT_INVITE_CONFIGS_COLLECTION, normalizedPilotId));
   },
 
+  async listPilotResearchReadouts(pilotId: string): Promise<PilotResearchReadout[]> {
+    const normalizedPilotId = normalizeString(pilotId);
+    if (!normalizedPilotId) return [];
+    const readoutSnap = await getDocs(query(collection(db, PILOT_RESEARCH_READOUTS_COLLECTION), where('pilotId', '==', normalizedPilotId)));
+    return sortResearchReadouts(
+      readoutSnap.docs.map((docSnap) => toResearchReadout(docSnap.id, docSnap.data() as Record<string, any>))
+    );
+  },
+
+  async generatePilotResearchReadout(input: {
+    frame: Record<string, any>;
+    options: PilotResearchReadoutGenerationInput;
+  }): Promise<{ readoutId: string }> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Authenticated admin session required.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+    const response = await fetch('/api/admin/pulsecheck/pilot-research-readout/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+        'x-admin-email': currentUser.email || '',
+      },
+      body: JSON.stringify(input),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Failed to generate pilot research readout.');
+    }
+
+    return {
+      readoutId: normalizeString(payload?.readoutId),
+    };
+  },
+
+  async updatePilotResearchReadoutReview(input: PilotResearchReadoutReviewInput): Promise<void> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error('Authenticated admin session required.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+    const response = await fetch('/api/admin/pulsecheck/pilot-research-readout/review', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+        'x-admin-email': currentUser.email || '',
+      },
+      body: JSON.stringify(input),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(payload?.error || 'Failed to update pilot research readout review.');
+    }
+  },
+
   async listActivePilotDirectory(): Promise<PilotDashboardDirectoryEntry[]> {
     const [organizations, teams, pilots, cohorts, enrollments, hypotheses] = await Promise.all([
       pulseCheckProvisioningService.listOrganizations(),
@@ -804,10 +944,11 @@ export const pulseCheckPilotDashboardService = {
     };
     const cohortSummaries = buildCohortSummaries(pilotCohorts, athletes);
     const hypothesisSummary = buildHypothesisSummary(hypotheses);
-    const [organizationInviteConfigDefault, teamInviteConfigDefault, pilotInviteConfig] = await Promise.all([
+    const [organizationInviteConfigDefault, teamInviteConfigDefault, pilotInviteConfig, readouts] = await Promise.all([
       getOrganizationInviteDefault(pilot.organizationId),
       getTeamInviteDefault(pilot.teamId),
       getPilotInviteConfig(pilot, organization.displayName, team.displayName),
+      this.listPilotResearchReadouts(pilot.id),
     ]);
     const pilotConfigRef = doc(db, PILOT_INVITE_CONFIGS_COLLECTION, pilot.id);
     const pilotConfigSnap = await getDoc(pilotConfigRef);
@@ -833,6 +974,8 @@ export const pulseCheckPilotDashboardService = {
       hasPilotInviteConfigOverride: pilotConfigSnap.exists(),
       teamInviteConfigDefault,
       organizationInviteConfigDefault,
+      latestResearchReadout: readouts[0] || null,
+      researchReadouts: readouts,
     };
   },
 

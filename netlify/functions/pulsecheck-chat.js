@@ -581,18 +581,61 @@ function getDailyAssignmentActionLabel(assignment) {
   );
 }
 
-function sourceDateFromUnixSeconds(timestampSeconds) {
-  if (typeof timestampSeconds !== 'number' || !Number.isFinite(timestampSeconds)) {
+const APPLE_REFERENCE_EPOCH_MS = Date.UTC(2001, 0, 1, 0, 0, 0, 0);
+
+function normalizeConversationTimestampSeconds(timestampValue) {
+  if (typeof timestampValue === 'number' && Number.isFinite(timestampValue)) {
+    return timestampValue;
+  }
+
+  if (typeof timestampValue === 'string') {
+    const parsed = Number(timestampValue);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  if (!timestampValue || typeof timestampValue !== 'object') {
     return null;
   }
 
-  return new Date(timestampSeconds * 1000).toISOString().split('T')[0];
+  if (typeof timestampValue.toDate === 'function') {
+    const dateValue = timestampValue.toDate();
+    if (dateValue instanceof Date && Number.isFinite(dateValue.getTime())) {
+      return dateValue.getTime() / 1000;
+    }
+  }
+
+  const secondsCandidate = timestampValue.seconds ?? timestampValue._seconds;
+  if (typeof secondsCandidate === 'number' && Number.isFinite(secondsCandidate)) {
+    const nanosecondsCandidate = timestampValue.nanoseconds ?? timestampValue._nanoseconds;
+    if (typeof nanosecondsCandidate === 'number' && Number.isFinite(nanosecondsCandidate)) {
+      return secondsCandidate + (nanosecondsCandidate / 1e9);
+    }
+    return secondsCandidate;
+  }
+
+  return null;
+}
+
+function sourceDatesFromConversationTimestamp(timestampValue) {
+  const timestampSeconds = normalizeConversationTimestampSeconds(timestampValue);
+  if (timestampSeconds === null) {
+    return [];
+  }
+
+  const candidateDates = [
+    new Date(timestampSeconds * 1000),
+    new Date(APPLE_REFERENCE_EPOCH_MS + (timestampSeconds * 1000)),
+  ]
+    .filter((value) => Number.isFinite(value.getTime()))
+    .map((value) => value.toISOString().split('T')[0]);
+
+  return Array.from(new Set(candidateDates));
 }
 
 function buildTodaysConversationMessages(conversation, sourceDate) {
   const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
   return messages
-    .filter((entry) => sourceDateFromUnixSeconds(entry?.timestamp) === sourceDate)
+    .filter((entry) => sourceDatesFromConversationTimestamp(entry?.timestamp).includes(sourceDate))
     .slice(-20);
 }
 

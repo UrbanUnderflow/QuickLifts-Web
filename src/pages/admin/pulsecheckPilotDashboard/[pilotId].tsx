@@ -26,6 +26,11 @@ import type {
   PilotDashboardDetail,
   PilotHypothesisConfidenceLevel,
   PilotHypothesisStatus,
+  PilotResearchReadout,
+  PilotResearchReadoutBaselineMode,
+  PilotResearchReadoutReviewState,
+  PilotResearchReadoutSection,
+  PilotResearchReadoutSectionResolution,
   PulseCheckPilotInviteConfig,
   PulseCheckPilotHypothesis,
 } from '../../../api/firebase/pulsecheckPilotDashboard/types';
@@ -53,6 +58,20 @@ const tabs: Array<{ id: DetailTab; label: string }> = [
   { id: 'research-readout', label: 'Research Readout' },
 ];
 
+const READOUT_REVIEW_STATE_OPTIONS: Array<{ value: PilotResearchReadoutReviewState; label: string }> = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'reviewed', label: 'Reviewed' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'superseded', label: 'Superseded' },
+];
+
+const READOUT_SECTION_RESOLUTION_OPTIONS: Array<{ value: PilotResearchReadoutSectionResolution; label: string }> = [
+  { value: 'accepted', label: 'Accepted' },
+  { value: 'revised', label: 'Revised' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'carry-forward', label: 'Carry Forward' },
+];
+
 type InvitePreviewField =
   | 'welcomeHeadline'
   | 'welcomeBody'
@@ -71,6 +90,26 @@ const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 const formatAverage = (value: number) => value.toFixed(1);
 const toScopedPercent = (numerator: number, denominator: number) => (denominator > 0 ? (numerator / denominator) * 100 : 0);
 const normalizeInvitePreviewValue = (value: string) => value.replace(/\r\n/g, '\n').trim();
+const toDateValue = (value: any): Date | null => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value?.toDate === 'function') return value.toDate();
+  return null;
+};
+const toInputDateValue = (value: Date | null) => {
+  if (!value) return '';
+  const year = value.getFullYear();
+  const month = `${value.getMonth() + 1}`.padStart(2, '0');
+  const day = `${value.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+const formatTimeValue = (value: any) => {
+  const nextDate = toDateValue(value);
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return new Date(value).toLocaleString();
+  }
+  return nextDate ? nextDate.toLocaleString() : 'Not available';
+};
 
 const INVITE_PREVIEW_FIELDS: Array<{ field: InvitePreviewField; label: string }> = [
   { field: 'welcomeHeadline', label: 'Headline' },
@@ -110,6 +149,112 @@ const buildFallbackInvitePreviewConfig = (detail: PilotDashboardDetail): PulseCh
   updatedAt: null,
 });
 
+const cloneResearchReadout = (readout: PilotResearchReadout): PilotResearchReadout => ({
+  ...readout,
+  readiness: readout.readiness.map((gate) => ({ ...gate })),
+  sections: readout.sections.map((section) => ({
+    ...section,
+    citations: section.citations.map((citation) => ({ ...citation, hypothesisCodes: [...citation.hypothesisCodes], limitationKeys: [...citation.limitationKeys] })),
+    claims: section.claims.map((claim) => ({ ...claim, evidenceSources: [...claim.evidenceSources] })),
+  })),
+  frozenEvidenceFrame: readout.frozenEvidenceFrame ? { ...readout.frozenEvidenceFrame } : undefined,
+});
+
+const RESEARCH_SECTION_ORDER: PilotResearchReadoutSection['sectionKey'][] = [
+  'pilot-summary',
+  'hypothesis-mapper',
+  'findings-interpreter',
+  'research-notes',
+  'limitations',
+];
+
+const RESEARCH_SECTION_PRESENTATION: Record<
+  PilotResearchReadoutSection['sectionKey'],
+  { eyebrow: string; title: string; helper: string }
+> = {
+  'pilot-summary': {
+    eyebrow: 'Research Brief',
+    title: 'Pilot Summary',
+    helper: 'Start here for the plain-language read of what happened in this pilot frame and how much evidence is actually in play.',
+  },
+  'hypothesis-mapper': {
+    eyebrow: 'Hypothesis Map',
+    title: 'Hypothesis Mapper',
+    helper: 'This is where the draft connects pilot evidence back to the hypotheses you said mattered before the pilot started.',
+  },
+  'findings-interpreter': {
+    eyebrow: 'Interpretation',
+    title: 'Findings Interpreter',
+    helper: 'Read this as a disciplined interpretation layer, not as proof. Stronger sections should still stay denominator-aware and caveated.',
+  },
+  'research-notes': {
+    eyebrow: 'Research Notes',
+    title: 'Candidate Publishable Findings',
+    helper: 'Treat these as leads worth discussing, not finished conclusions. Strong candidates still need stronger validation and replication.',
+  },
+  limitations: {
+    eyebrow: 'Limitations',
+    title: 'Limitations',
+    helper: 'The most useful readout is honest about what weakens confidence, narrows interpretation, or blocks causal claims altogether.',
+  },
+};
+
+const hypothesisStatusLabel = (value: PilotHypothesisStatus) =>
+  STATUS_OPTIONS.find((option) => option.value === value)?.label || value;
+
+const hypothesisStatusClassName = (value: PilotHypothesisStatus) => {
+  switch (value) {
+    case 'promising':
+      return 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100';
+    case 'mixed':
+      return 'border-amber-400/30 bg-amber-400/10 text-amber-100';
+    case 'not-supported':
+      return 'border-rose-400/30 bg-rose-400/10 text-rose-100';
+    case 'not-enough-data':
+    default:
+      return 'border-white/10 bg-white/5 text-zinc-300';
+  }
+};
+
+const confidenceLabel = (value: PilotHypothesisConfidenceLevel) =>
+  CONFIDENCE_OPTIONS.find((option) => option.value === value)?.label || value;
+
+const confidenceClassName = (value: PilotHypothesisConfidenceLevel) => {
+  switch (value) {
+    case 'high':
+      return 'border-cyan-400/30 bg-cyan-400/10 text-cyan-100';
+    case 'medium':
+      return 'border-blue-400/30 bg-blue-400/10 text-blue-100';
+    case 'low':
+    default:
+      return 'border-white/10 bg-white/5 text-zinc-300';
+  }
+};
+
+const formatClaimTypeLabel = (value: PilotResearchReadoutClaim['claimType']) =>
+  value.charAt(0).toUpperCase() + value.slice(1);
+
+const claimTypeClassName = (value: PilotResearchReadoutClaim['claimType']) => {
+  switch (value) {
+    case 'observed':
+      return 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100';
+    case 'inferred':
+      return 'border-cyan-400/30 bg-cyan-400/10 text-cyan-100';
+    case 'speculative':
+    default:
+      return 'border-amber-400/30 bg-amber-400/10 text-amber-100';
+  }
+};
+
+const formatBaselineModeLabel = (value: PilotResearchReadoutBaselineMode) =>
+  value
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+
+const formatReadinessStatusLabel = (value: PilotResearchReadoutSection['readinessStatus']) =>
+  value === 'suppressed' ? 'Suppressed' : 'Ready';
+
 const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const currentUser = useUser();
   const router = useRouter();
@@ -130,6 +275,18 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [resettingInviteConfig, setResettingInviteConfig] = useState(false);
   const [seedingDefaults, setSeedingDefaults] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
+  const [generatingResearchReadout, setGeneratingResearchReadout] = useState(false);
+  const [savingResearchReadoutReview, setSavingResearchReadoutReview] = useState(false);
+  const [readoutDateWindowStart, setReadoutDateWindowStart] = useState('');
+  const [readoutDateWindowEnd, setReadoutDateWindowEnd] = useState('');
+  const [readoutBaselineMode, setReadoutBaselineMode] = useState<PilotResearchReadoutBaselineMode>('no-baseline');
+  const [selectedReadoutId, setSelectedReadoutId] = useState('');
+  const [editingReadout, setEditingReadout] = useState<PilotResearchReadout | null>(null);
+  const [compareReadoutId, setCompareReadoutId] = useState('');
+  const [historyReviewStateFilter, setHistoryReviewStateFilter] = useState<'all' | PilotResearchReadoutReviewState>('all');
+  const [historyCohortScopeFilter, setHistoryCohortScopeFilter] = useState<'all' | 'whole-pilot' | 'cohort-only'>('all');
+  const [historyWindowStartFilter, setHistoryWindowStartFilter] = useState('');
+  const [historyWindowEndFilter, setHistoryWindowEndFilter] = useState('');
 
   const load = async (mode: 'initial' | 'refresh' = 'initial') => {
     if (!pilotId) return;
@@ -152,6 +309,11 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       const hypothesisMap = Object.fromEntries((nextDetail?.hypotheses || []).map((hypothesis) => [hypothesis.id, cloneHypothesis(hypothesis)]));
       setEditingHypotheses(hypothesisMap);
       setInviteConfigDraft(nextDetail?.inviteConfig || null);
+      setSelectedReadoutId((current) => {
+        if (!nextDetail?.researchReadouts?.length) return '';
+        if (current && nextDetail.researchReadouts.some((readout) => readout.id === current)) return current;
+        return nextDetail.researchReadouts[0].id;
+      });
     } catch (loadError: any) {
       setError(loadError?.message || 'Failed to load pilot dashboard.');
     } finally {
@@ -163,6 +325,61 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   useEffect(() => {
     void load();
   }, [pilotId]);
+
+  useEffect(() => {
+    if (!detail) return;
+    const pilotStart = toDateValue(detail.pilot.startAt);
+    const pilotEnd = toDateValue(detail.pilot.endAt);
+    const now = new Date();
+    const defaultEnd = pilotEnd && pilotEnd.getTime() < now.getTime() ? pilotEnd : now;
+    const defaultStart = pilotStart || new Date(defaultEnd.getTime() - 1000 * 60 * 60 * 24 * 30);
+    setReadoutDateWindowStart((current) => current || toInputDateValue(defaultStart));
+    setReadoutDateWindowEnd((current) => current || toInputDateValue(defaultEnd));
+  }, [detail]);
+
+  useEffect(() => {
+    if (!detail?.researchReadouts?.length) {
+      setEditingReadout(null);
+      return;
+    }
+    const activeReadout =
+      detail.researchReadouts.find((readout) => readout.id === selectedReadoutId) ||
+      detail.researchReadouts[0] ||
+      null;
+    setEditingReadout(activeReadout ? cloneResearchReadout(activeReadout) : null);
+  }, [detail, selectedReadoutId]);
+
+  const filteredResearchReadouts = useMemo(() => {
+    const readouts = detail?.researchReadouts || [];
+    return readouts.filter((readout) => {
+      if (historyReviewStateFilter !== 'all' && readout.reviewState !== historyReviewStateFilter) {
+        return false;
+      }
+      if (historyCohortScopeFilter === 'whole-pilot' && readout.cohortId) {
+        return false;
+      }
+      if (historyCohortScopeFilter === 'cohort-only' && !readout.cohortId) {
+        return false;
+      }
+      if (historyWindowStartFilter && readout.dateWindowEnd < historyWindowStartFilter) {
+        return false;
+      }
+      if (historyWindowEndFilter && readout.dateWindowStart > historyWindowEndFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [detail, historyCohortScopeFilter, historyReviewStateFilter, historyWindowEndFilter, historyWindowStartFilter]);
+
+  useEffect(() => {
+    if (!filteredResearchReadouts.length) {
+      setSelectedReadoutId('');
+      return;
+    }
+    if (!filteredResearchReadouts.some((readout) => readout.id === selectedReadoutId)) {
+      setSelectedReadoutId(filteredResearchReadouts[0].id);
+    }
+  }, [filteredResearchReadouts, selectedReadoutId]);
 
   const activeCohorts = useMemo(
     () => (detail?.cohorts || []).filter((cohort) => cohort.status === 'active'),
@@ -216,6 +433,93 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         ? visibleMetrics.totalRecommendationProjections / visibleMetrics.activeAthleteCount
         : 0,
   }), [visibleMetrics]);
+
+  const selectedResearchReadout = useMemo(
+    () => detail?.researchReadouts.find((readout) => readout.id === selectedReadoutId) || detail?.researchReadouts[0] || null,
+    [detail, selectedReadoutId]
+  );
+
+  const compareReadout = useMemo(
+    () => detail?.researchReadouts.find((readout) => readout.id === compareReadoutId) || null,
+    [compareReadoutId, detail]
+  );
+
+  const compareReadoutCandidates = useMemo(
+    () => (detail?.researchReadouts || []).filter((readout) => readout.id !== selectedResearchReadout?.id),
+    [detail, selectedResearchReadout]
+  );
+
+  useEffect(() => {
+    if (!compareReadoutCandidates.length) {
+      setCompareReadoutId('');
+      return;
+    }
+    if (compareReadoutId && compareReadoutCandidates.some((readout) => readout.id === compareReadoutId)) {
+      return;
+    }
+    setCompareReadoutId('');
+  }, [compareReadoutCandidates, compareReadoutId]);
+
+  const researchReadoutDiff = useMemo(() => {
+    if (!selectedResearchReadout || !compareReadout) return null;
+
+    const metadataChanges: string[] = [];
+    if (selectedResearchReadout.reviewState !== compareReadout.reviewState) {
+      metadataChanges.push(`Review state changed from ${compareReadout.reviewState} to ${selectedResearchReadout.reviewState}.`);
+    }
+    if (selectedResearchReadout.baselineMode !== compareReadout.baselineMode) {
+      metadataChanges.push(`Baseline mode changed from ${compareReadout.baselineMode} to ${selectedResearchReadout.baselineMode}.`);
+    }
+    if (
+      selectedResearchReadout.dateWindowStart !== compareReadout.dateWindowStart ||
+      selectedResearchReadout.dateWindowEnd !== compareReadout.dateWindowEnd
+    ) {
+      metadataChanges.push(
+        `Window changed from ${compareReadout.dateWindowStart} to ${compareReadout.dateWindowEnd} into ${selectedResearchReadout.dateWindowStart} to ${selectedResearchReadout.dateWindowEnd}.`
+      );
+    }
+    if (selectedResearchReadout.modelVersion !== compareReadout.modelVersion) {
+      metadataChanges.push(`Model changed from ${compareReadout.modelVersion || 'unknown'} to ${selectedResearchReadout.modelVersion || 'unknown'}.`);
+    }
+
+    const priorSectionMap = new Map(compareReadout.sections.map((section) => [section.sectionKey, section]));
+    const sectionChanges = selectedResearchReadout.sections
+      .map((section) => {
+        const prior = priorSectionMap.get(section.sectionKey);
+        if (!prior) return `${section.title} was added in the newer readout.`;
+
+        const changes: string[] = [];
+        if (section.readinessStatus !== prior.readinessStatus) {
+          changes.push(`readiness ${prior.readinessStatus} -> ${section.readinessStatus}`);
+        }
+        if (section.summary !== prior.summary) {
+          changes.push('summary changed');
+        }
+        if ((section.reviewerResolution || '') !== (prior.reviewerResolution || '')) {
+          changes.push(`reviewer resolution ${prior.reviewerResolution || 'unset'} -> ${section.reviewerResolution || 'unset'}`);
+        }
+        if ((section.reviewerNotes || '') !== (prior.reviewerNotes || '')) {
+          changes.push('reviewer notes changed');
+        }
+        if (section.claims.length !== prior.claims.length) {
+          changes.push(`claims ${prior.claims.length} -> ${section.claims.length}`);
+        }
+        if (section.citations.length !== prior.citations.length) {
+          changes.push(`citations ${prior.citations.length} -> ${section.citations.length}`);
+        }
+
+        return changes.length > 0 ? `${section.title}: ${changes.join(', ')}.` : null;
+      })
+      .filter(Boolean) as string[];
+
+    return { metadataChanges, sectionChanges };
+  }, [compareReadout, selectedResearchReadout]);
+
+  const orderedEditingReadoutSections = useMemo(() => {
+    if (!editingReadout) return [];
+    const sectionMap = new Map(editingReadout.sections.map((section) => [section.sectionKey, section]));
+    return RESEARCH_SECTION_ORDER.map((sectionKey) => sectionMap.get(sectionKey)).filter(Boolean) as PilotResearchReadoutSection[];
+  }, [editingReadout]);
 
   const scopedInvite = useMemo(() => {
     if (!detail) return null;
@@ -474,6 +778,101 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       });
     } finally {
       setSavingInviteDefaultScope(null);
+    }
+  };
+
+  const handleGenerateResearchReadout = async () => {
+    if (!detail) return;
+    if (!readoutDateWindowStart || !readoutDateWindowEnd) {
+      setPageMessage({ type: 'error', text: 'Choose a valid date window before generating a research readout.' });
+      return;
+    }
+
+    setGeneratingResearchReadout(true);
+    setPageMessage(null);
+    try {
+      await pulseCheckPilotDashboardService.generatePilotResearchReadout({
+        options: {
+          pilotId: detail.pilot.id,
+          cohortId: selectedCohort?.id || '',
+          dateWindowStart: readoutDateWindowStart,
+          dateWindowEnd: readoutDateWindowEnd,
+          baselineMode: readoutBaselineMode,
+        },
+        frame: {
+          pilotId: detail.pilot.id,
+          organizationId: detail.organization.id,
+          organizationName: detail.organization.displayName,
+          teamId: detail.team.id,
+          teamName: detail.team.displayName,
+          pilotName: detail.pilot.name,
+          pilotStatus: detail.pilot.status,
+          pilotStudyMode: detail.pilot.studyMode,
+          cohortId: selectedCohort?.id || '',
+          cohortName: selectedCohort?.name || '',
+          dateWindowStart: readoutDateWindowStart,
+          dateWindowEnd: readoutDateWindowEnd,
+          baselineMode: readoutBaselineMode,
+          metrics: {
+            ...visibleMetrics,
+            totalEnrollmentCount: detail.metrics.totalEnrollmentCount,
+            hypothesisCount: detail.metrics.hypothesisCount,
+          },
+          coverage: visibleCoverage,
+          cohortSummaries: visibleCohortSummaries,
+          hypotheses: detail.hypotheses.map((hypothesis) => ({
+            code: hypothesis.code,
+            statement: hypothesis.statement,
+            leadingIndicator: hypothesis.leadingIndicator,
+            status: hypothesis.status,
+            confidenceLevel: hypothesis.confidenceLevel,
+            keyEvidence: hypothesis.keyEvidence || '',
+            notes: hypothesis.notes || '',
+          })),
+        },
+      });
+      await load('refresh');
+      setActiveTab('research-readout');
+      setPageMessage({ type: 'success', text: 'Pilot research readout generated and saved as a draft.' });
+    } catch (generateError) {
+      console.error('[PulseCheckPilotDashboard] Failed to generate research readout:', generateError);
+      setPageMessage({ type: 'error', text: 'Failed to generate pilot research readout.' });
+    } finally {
+      setGeneratingResearchReadout(false);
+    }
+  };
+
+  const updateReadoutSection = (sectionKey: PilotResearchReadoutSection['sectionKey'], patch: Partial<PilotResearchReadoutSection>) => {
+    setEditingReadout((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        sections: current.sections.map((section) => (section.sectionKey === sectionKey ? { ...section, ...patch } : section)),
+      };
+    });
+  };
+
+  const saveResearchReadoutReview = async () => {
+    if (!editingReadout) return;
+    setSavingResearchReadoutReview(true);
+    setPageMessage(null);
+    try {
+      await pulseCheckPilotDashboardService.updatePilotResearchReadoutReview({
+        readoutId: editingReadout.id,
+        reviewState: editingReadout.reviewState,
+        sections: editingReadout.sections.map((section) => ({
+          sectionKey: section.sectionKey,
+          reviewerResolution: section.reviewerResolution,
+          reviewerNotes: section.reviewerNotes || '',
+        })),
+      });
+      await load('refresh');
+      setPageMessage({ type: 'success', text: 'Research readout review was saved.' });
+    } catch (reviewError) {
+      console.error('[PulseCheckPilotDashboard] Failed to save research readout review:', reviewError);
+      setPageMessage({ type: 'error', text: 'Failed to save research readout review.' });
+    } finally {
+      setSavingResearchReadoutReview(false);
     }
   };
 
@@ -1309,7 +1708,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         <FileText className="h-5 w-5" />
                         <span className="text-sm font-medium">Saved Readout</span>
                       </div>
-                      <div className="mt-3 text-3xl font-semibold">{detail.latestResearchReadout ? '1' : '0'}</div>
+                      <div className="mt-3 text-3xl font-semibold">{detail.researchReadouts.length}</div>
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
                       <div className="flex items-center gap-3 text-emerald-300">
@@ -1345,10 +1744,11 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         </p>
                       </div>
                       <button
-                        disabled
-                        className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-400 opacity-70"
+                        onClick={() => void handleGenerateResearchReadout()}
+                        disabled={generatingResearchReadout}
+                        className="rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Generate AI Readout
+                        {generatingResearchReadout ? 'Generating...' : 'Generate AI Readout'}
                       </button>
                     </div>
 
@@ -1356,6 +1756,40 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       Scope freeze: this future readout will lock to pilot <span className="font-medium text-white">{detail.pilot.name}</span>
                       {selectedCohort ? `, cohort ${selectedCohort.name},` : ','} and the currently selected pilot-scoped denominator frame. It should not interpret athletes outside this pilot.
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                    <label className="space-y-2 text-sm text-zinc-300">
+                      <span className="text-xs uppercase tracking-wide text-zinc-500">Window Start</span>
+                      <input
+                        type="date"
+                        value={readoutDateWindowStart}
+                        onChange={(event) => setReadoutDateWindowStart(event.target.value)}
+                        className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                      />
+                    </label>
+                    <label className="space-y-2 text-sm text-zinc-300">
+                      <span className="text-xs uppercase tracking-wide text-zinc-500">Window End</span>
+                      <input
+                        type="date"
+                        value={readoutDateWindowEnd}
+                        onChange={(event) => setReadoutDateWindowEnd(event.target.value)}
+                        className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                      />
+                    </label>
+                    <label className="space-y-2 text-sm text-zinc-300">
+                      <span className="text-xs uppercase tracking-wide text-zinc-500">Baseline Mode</span>
+                      <select
+                        value={readoutBaselineMode}
+                        onChange={(event) => setReadoutBaselineMode(event.target.value as PilotResearchReadoutBaselineMode)}
+                        className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                      >
+                        <option value="no-baseline">No baseline</option>
+                        <option value="within-athlete">Within-athlete</option>
+                        <option value="cross-cohort">Cross-cohort</option>
+                        <option value="pre-pilot-baseline">Pre-pilot baseline</option>
+                      </select>
+                    </label>
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -1374,6 +1808,336 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                         <li>Every section must cite its evidence frame, linked hypotheses, and active limitations.</li>
                         <li>The system may suggest hypothesis posture, but only a human reviewer sets the official hypothesis status.</li>
                       </ul>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px,1fr]">
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h2 className="text-lg font-semibold">Readout History</h2>
+                          <p className="mt-1 text-sm text-zinc-400">
+                            Saved drafts and reviewed readouts for this pilot frame.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-1 gap-3">
+                        <label className="space-y-2 text-sm text-zinc-300">
+                          <span className="text-xs uppercase tracking-wide text-zinc-500">Review State Filter</span>
+                          <select
+                            value={historyReviewStateFilter}
+                            onChange={(event) => setHistoryReviewStateFilter(event.target.value as 'all' | PilotResearchReadoutReviewState)}
+                            className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                          >
+                            <option value="all">All states</option>
+                            {READOUT_REVIEW_STATE_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="space-y-2 text-sm text-zinc-300">
+                          <span className="text-xs uppercase tracking-wide text-zinc-500">Scope Filter</span>
+                          <select
+                            value={historyCohortScopeFilter}
+                            onChange={(event) => setHistoryCohortScopeFilter(event.target.value as 'all' | 'whole-pilot' | 'cohort-only')}
+                            className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                          >
+                            <option value="all">All scopes</option>
+                            <option value="whole-pilot">Whole pilot only</option>
+                            <option value="cohort-only">Cohort-scoped only</option>
+                          </select>
+                        </label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <label className="space-y-2 text-sm text-zinc-300">
+                            <span className="text-xs uppercase tracking-wide text-zinc-500">Window Start</span>
+                            <input
+                              type="date"
+                              value={historyWindowStartFilter}
+                              onChange={(event) => setHistoryWindowStartFilter(event.target.value)}
+                              className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                            />
+                          </label>
+                          <label className="space-y-2 text-sm text-zinc-300">
+                            <span className="text-xs uppercase tracking-wide text-zinc-500">Window End</span>
+                            <input
+                              type="date"
+                              value={historyWindowEndFilter}
+                              onChange={(event) => setHistoryWindowEndFilter(event.target.value)}
+                              className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      {filteredResearchReadouts.length === 0 ? (
+                        <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-400">
+                          No saved readouts match the current history filters.
+                        </div>
+                      ) : (
+                        <div className="mt-4 space-y-3">
+                          {filteredResearchReadouts.map((readout) => (
+                            <button
+                              key={readout.id}
+                              onClick={() => setSelectedReadoutId(readout.id)}
+                              className={`w-full rounded-2xl border p-4 text-left transition ${
+                                selectedResearchReadout?.id === readout.id
+                                  ? 'border-cyan-400/30 bg-cyan-400/10'
+                                  : 'border-white/5 bg-black/20 hover:bg-white/5'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-sm font-medium text-white">{formatTimeValue(readout.generatedAt)}</div>
+                                <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-300">
+                                  {readout.reviewState}
+                                </span>
+                              </div>
+                              <div className="mt-2 text-xs text-zinc-500">
+                                {readout.dateWindowStart} to {readout.dateWindowEnd}
+                              </div>
+                              <div className="mt-2 text-xs text-zinc-500">
+                                {readout.cohortId ? `Cohort scoped` : 'Whole pilot'} • {readout.modelVersion || 'unknown model'}
+                              </div>
+                              <div className="mt-2 text-xs text-zinc-500">
+                                Reviewed: {readout.reviewedAt ? formatTimeValue(readout.reviewedAt) : 'Not reviewed yet'}
+                              </div>
+                              <div className="mt-1 text-xs text-zinc-500">
+                                Reviewer: {readout.reviewedByEmail || 'Not assigned'}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-[#11151f] p-5">
+                    <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold">Readout Review Workspace</h2>
+                        <p className="mt-1 text-sm text-zinc-400">
+                          Review state, evidence frame, and limitations stay frozen with the selected saved artifact.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {editingReadout ? (
+                          <>
+                            <select
+                              value={compareReadoutId}
+                              onChange={(event) => setCompareReadoutId(event.target.value)}
+                              className="rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                            >
+                              <option value="">Compare to another readout</option>
+                              {compareReadoutCandidates.map((readout) => (
+                                <option key={readout.id} value={readout.id}>
+                                  {formatTimeValue(readout.generatedAt)} • {readout.reviewState}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              value={editingReadout.reviewState}
+                              onChange={(event) =>
+                                setEditingReadout((current) => (current ? { ...current, reviewState: event.target.value as PilotResearchReadoutReviewState } : current))
+                              }
+                              className="rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                            >
+                              {READOUT_REVIEW_STATE_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => void saveResearchReadoutReview()}
+                              disabled={savingResearchReadoutReview}
+                              className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-400/15 disabled:opacity-60"
+                            >
+                              {savingResearchReadoutReview ? 'Saving Review...' : 'Save Review'}
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {!editingReadout ? (
+                      <div className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-400">
+                        Select a saved readout from history or generate a new one.
+                      </div>
+                    ) : (
+                      <div className="mt-4 space-y-4">
+                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-6">
+                          <div className="rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Generated</div>
+                            <div className="mt-2 text-white">{formatTimeValue(editingReadout.generatedAt)}</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Reviewed At</div>
+                            <div className="mt-2 text-white">{editingReadout.reviewedAt ? formatTimeValue(editingReadout.reviewedAt) : 'Not reviewed yet'}</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Reviewer</div>
+                            <div className="mt-2 text-white">{editingReadout.reviewedByEmail || 'Not assigned'}</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Model</div>
+                            <div className="mt-2 text-white">{editingReadout.modelVersion || 'Not recorded'}</div>
+                          </div>
+                          <div className="rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Window</div>
+                            <div className="mt-2 text-white">
+                              {editingReadout.dateWindowStart} to {editingReadout.dateWindowEnd}
+                            </div>
+                          </div>
+                          <div className="rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Baseline Mode</div>
+                            <div className="mt-2 text-white">{editingReadout.baselineMode}</div>
+                          </div>
+                        </div>
+
+                        {researchReadoutDiff ? (
+                          <div className="rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Compare Readout Diff</div>
+                            <div className="mt-2 text-sm text-zinc-400">
+                              Comparing the selected readout against {formatTimeValue(compareReadout?.generatedAt)}.
+                            </div>
+                            <div className="mt-4 space-y-3">
+                              <div>
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Metadata Changes</div>
+                                {researchReadoutDiff.metadataChanges.length > 0 ? (
+                                  <div className="mt-2 space-y-2">
+                                    {researchReadoutDiff.metadataChanges.map((change) => (
+                                      <div key={change} className="rounded-2xl border border-white/5 bg-[#0b0f17] px-3 py-2 text-sm text-zinc-300">
+                                        {change}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="mt-2 text-sm text-zinc-500">No metadata differences detected.</div>
+                                )}
+                              </div>
+                              <div>
+                                <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Section Changes</div>
+                                {researchReadoutDiff.sectionChanges.length > 0 ? (
+                                  <div className="mt-2 space-y-2">
+                                    {researchReadoutDiff.sectionChanges.map((change) => (
+                                      <div key={change} className="rounded-2xl border border-white/5 bg-[#0b0f17] px-3 py-2 text-sm text-zinc-300">
+                                        {change}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="mt-2 text-sm text-zinc-500">No section-level differences detected.</div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <div className="rounded-2xl border border-white/5 bg-black/20 p-4 text-sm text-zinc-300">
+                          <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Readiness Gates</div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {editingReadout.readiness.map((gate) => (
+                              <span
+                                key={gate.gateKey}
+                                className={`rounded-full border px-3 py-1 text-xs ${
+                                  gate.status === 'passed'
+                                    ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-100'
+                                    : gate.status === 'failed'
+                                      ? 'border-rose-400/30 bg-rose-400/10 text-rose-100'
+                                      : 'border-amber-400/30 bg-amber-400/10 text-amber-100'
+                                }`}
+                              >
+                                {gate.gateKey}: {gate.status}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          {editingReadout.sections.map((section) => (
+                            <div key={section.sectionKey} className="rounded-2xl border border-white/5 bg-black/20 p-4">
+                              <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                                <div>
+                                  <h3 className="text-base font-semibold text-white">{section.title}</h3>
+                                  <p className="mt-2 text-sm text-zinc-300">{section.summary}</p>
+                                </div>
+                                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-zinc-300">
+                                  {section.readinessStatus}
+                                </div>
+                              </div>
+
+                              <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[220px,1fr]">
+                                <label className="space-y-2 text-sm text-zinc-300">
+                                  <span className="text-xs uppercase tracking-wide text-zinc-500">Reviewer Resolution</span>
+                                  <select
+                                    value={section.reviewerResolution || section.suggestedReviewerResolution || ''}
+                                    onChange={(event) =>
+                                      updateReadoutSection(section.sectionKey, {
+                                        reviewerResolution: event.target.value as PilotResearchReadoutSectionResolution,
+                                      })
+                                    }
+                                    className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                                  >
+                                    <option value="">Select resolution</option>
+                                    {READOUT_SECTION_RESOLUTION_OPTIONS.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="space-y-2 text-sm text-zinc-300">
+                                  <span className="text-xs uppercase tracking-wide text-zinc-500">Reviewer Notes</span>
+                                  <textarea
+                                    value={section.reviewerNotes || ''}
+                                    onChange={(event) =>
+                                      updateReadoutSection(section.sectionKey, {
+                                        reviewerNotes: event.target.value,
+                                      })
+                                    }
+                                    rows={3}
+                                    className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                                  />
+                                </label>
+                              </div>
+
+                              {section.claims.length > 0 ? (
+                                <div className="mt-4 space-y-3">
+                                  {section.claims.map((claim) => (
+                                    <div key={claim.claimKey} className="rounded-2xl border border-white/5 bg-[#0b0f17] p-4">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-1 text-[11px] uppercase tracking-wide text-cyan-100">
+                                          {claim.claimType}
+                                        </span>
+                                        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-zinc-300">
+                                          {claim.confidenceLevel}
+                                        </span>
+                                        {claim.caveatFlag ? (
+                                          <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-1 text-[11px] text-amber-100">
+                                            caveat
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                      <p className="mt-3 text-sm text-zinc-200">{claim.statement}</p>
+                                      <p className="mt-2 text-xs text-zinc-500">
+                                        Denominator: {claim.denominatorLabel} ({claim.denominatorValue}) | Baseline: {claim.baselineMode}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+
+                              {section.citations.length > 0 ? (
+                                <div className="mt-4 text-xs text-zinc-500">
+                                  {section.citations.map((citation) => citation.blockLabel).join(' • ')}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     </div>
                   </div>
 
