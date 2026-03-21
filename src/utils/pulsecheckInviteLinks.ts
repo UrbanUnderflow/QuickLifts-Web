@@ -68,18 +68,20 @@ export const buildPulseCheckTeamInviteOneLink = ({
     ? `${descriptionParts.join(' ')} on PulseCheck.`
     : 'Join PulseCheck through this invite.';
 
-  const params = new URLSearchParams({
-    pid: 'pulsecheck_team_invite',
-    c: pilotName?.trim() ? 'pulsecheck_pilot_invite' : 'pulsecheck_team_invite',
-    deep_link_value: APPS_FLYER_DEEP_LINK_VALUE,
-    inviteToken: token,
-    af_r: toAbsoluteUrl(fallbackPath),
-    af_og_title: title,
-    af_og_description: description,
-    af_og_image: resolvePulseCheckInvitePreviewImage(imageUrl),
-  });
+  const fallbackUrl = toAbsoluteUrl(fallbackPath);
+  const ogImageUrl = resolvePulseCheckInvitePreviewImage(imageUrl);
+  const pairs = [
+    ['pid', encodeURIComponent('pulsecheck_team_invite')],
+    ['c', encodeURIComponent(pilotName?.trim() ? 'pulsecheck_pilot_invite' : 'pulsecheck_team_invite')],
+    ['deep_link_value', encodeURIComponent(APPS_FLYER_DEEP_LINK_VALUE)],
+    ['inviteToken', encodeURIComponent(token)],
+    ['af_r', fallbackUrl],
+    ['af_og_title', encodeURIComponent(title)],
+    ['af_og_description', encodeURIComponent(description)],
+    ['af_og_image', ogImageUrl],
+  ];
 
-  return `${baseUrl}?${params.toString()}`;
+  return `${baseUrl}?${pairs.map(([key, value]) => `${key}=${value}`).join('&')}`;
 };
 
 export const analyzePulseCheckInviteOneLink = (url?: string | null): PulseCheckInviteLinkDiagnostic => {
