@@ -17,7 +17,7 @@ export type PulseCheckInviteLinkType = 'admin-activation' | 'clinician-onboardin
 export type PulseCheckOrganizationMembershipRole = 'org-admin' | 'implementation-observer';
 export type PulseCheckOperatingRole = 'admin-only' | 'admin-plus-coach' | 'admin-plus-support-staff';
 export type PulseCheckRosterVisibilityScope = 'team' | 'assigned' | 'none';
-export type PulseCheckAthleteEntryOnboardingStep = 'name' | 'consent' | 'starting-point' | 'complete';
+export type PulseCheckAthleteEntryOnboardingStep = 'name' | 'consent' | 'research-consent' | 'starting-point' | 'complete';
 export type PulseCheckResearchConsentStatus = 'not-required' | 'pending' | 'accepted' | 'declined';
 export type PulseCheckTeamMembershipRole =
   | 'team-admin'
@@ -34,6 +34,59 @@ export interface PulseCheckNotificationPreferences {
   weeklyDigest: boolean;
 }
 
+export interface PulseCheckRequiredConsentDocument {
+  id: string;
+  title: string;
+  body: string;
+  version: string;
+}
+
+const DEFAULT_PULSECHECK_REQUIRED_CONSENTS: PulseCheckRequiredConsentDocument[] = [
+  {
+    id: 'pulsecheck-team-participation-v1',
+    title: 'PulseCheck Team Participation',
+    body:
+      [
+        'Your coaching staff invited you into PulseCheck so they can support you more clearly across training.',
+        'When you join, PulseCheck may share the check-ins you complete, the readiness trends you create, and the session activity you log with the staff who support your team.',
+        'That helps your staff notice patterns, follow up with you, and keep your support connected to what is actually happening in training.',
+        'Read this through, and if anything feels unclear, ask your staff before you agree.',
+      ].join('\n\n'),
+    version: 'v1',
+  },
+  {
+    id: 'pulsecheck-data-privacy-v1',
+    title: 'PulseCheck Privacy and Data Use',
+    body:
+      [
+        'PulseCheck uses the information you share in the app, plus any health or wearable connections you approve, to run your team experience.',
+        'That can include things like your check-ins, recovery trends, readiness signals, session activity, and the information you choose to connect.',
+        'We use that information to support your experience in PulseCheck and the permissions you approve here.',
+        'If you want a copy for your records, you can save this agreement as a PDF before you continue.',
+      ].join('\n\n'),
+    version: 'v1',
+  },
+];
+
+export const getDefaultPulseCheckRequiredConsents = (): PulseCheckRequiredConsentDocument[] =>
+  DEFAULT_PULSECHECK_REQUIRED_CONSENTS.map((consent) => ({ ...consent }));
+
+export const mergePulseCheckRequiredConsents = (
+  customConsents?: PulseCheckRequiredConsentDocument[] | null
+): PulseCheckRequiredConsentDocument[] => {
+  const merged = new Map<string, PulseCheckRequiredConsentDocument>();
+
+  getDefaultPulseCheckRequiredConsents().forEach((consent) => {
+    merged.set(consent.id, consent);
+  });
+
+  (customConsents || []).forEach((consent) => {
+    merged.set(consent.id, consent);
+  });
+
+  return Array.from(merged.values());
+};
+
 export interface PulseCheckAthleteOnboardingState {
   productConsentAccepted: boolean;
   productConsentAcceptedAt?: Timestamp | null;
@@ -49,6 +102,8 @@ export interface PulseCheckAthleteOnboardingState {
   targetPilotName?: string;
   targetCohortId?: string;
   targetCohortName?: string;
+  requiredConsents?: PulseCheckRequiredConsentDocument[];
+  completedConsentIds?: string[];
   baselinePathStatus?: 'pending' | 'ready' | 'started' | 'complete';
   baselinePathwayId?: string;
 }
@@ -155,6 +210,7 @@ export interface PulseCheckPilot {
   checkpointCadence?: string;
   startAt?: Timestamp | null;
   endAt?: Timestamp | null;
+  requiredConsents?: PulseCheckRequiredConsentDocument[];
   notes?: string;
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
@@ -172,6 +228,7 @@ export interface CreatePulseCheckPilotInput {
   checkpointCadence?: string;
   startAt?: Timestamp | Date | null;
   endAt?: Timestamp | Date | null;
+  requiredConsents?: PulseCheckRequiredConsentDocument[];
   notes?: string;
 }
 
@@ -207,6 +264,8 @@ export interface PulseCheckPilotEnrollment {
   researchConsentStatus: PulseCheckResearchConsentStatus;
   researchConsentVersion?: string;
   researchConsentRespondedAt?: Timestamp | null;
+  requiredConsentIds?: string[];
+  completedConsentIds?: string[];
   eligibleForResearchDataset: boolean;
   grantedByInviteToken?: string;
   createdAt?: Timestamp | null;

@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pulse Check - Design System v1.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --page-bg: #070711;
+  --deep-bg: #0B0B1C;
+  --card-bg: rgba(255,255,255,0.045);
+  --card-border: rgba(255,255,255,0.10);
+  --card-highlight: linear-gradient(135deg, rgba(255,255,255,0.055) 0%, transparent 55%);
+  --divider: rgba(255,255,255,0.05);
+  --lime: #D4EA04;
+  --purple: #7C3AED;
+  --green: #10B981;
+  --blue: #378ADD;
+  --orange: #FB923C;
+  --red: #E24B4A;
+  --text-100: #FFFFFF;
+  --text-65: rgba(255,255,255,0.65);
+  --text-42: rgba(255,255,255,0.42);
+  --text-28: rgba(255,255,255,0.28);
+  --text-25: rgba(255,255,255,0.25);
+  --sidebar-w: 260px;
+  --font-display: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--page-bg);
+  color: var(--text-100);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+.blob {
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+.blob-1 {
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(124,58,237,0.18) 0%, transparent 70%);
+  filter: blur(80px);
+  top: -120px; left: -120px;
+}
+.blob-2 {
+  width: 360px; height: 360px;
+  background: radial-gradient(circle, rgba(212,234,4,0.06) 0%, transparent 70%);
+  filter: blur(70px);
+  top: 40%; right: -80px;
+}
+.blob-3 {
+  width: 280px; height: 280px;
+  background: radial-gradient(circle, rgba(16,185,129,0.09) 0%, transparent 70%);
+  filter: blur(60px);
+  bottom: 10%; left: 5%;
+}
+
+.sidebar {
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: var(--sidebar-w);
+  background: rgba(11,11,28,0.92);
+  backdrop-filter: blur(20px);
+  border-right: 0.5px solid var(--card-border);
+  z-index: 100;
+  overflow-y: auto;
+  padding: 0 0 40px;
+  scrollbar-width: none;
+}
+.sidebar::-webkit-scrollbar { display: none; }
+
+.sidebar-logo {
+  padding: 28px 24px 20px;
+  border-bottom: 0.5px solid var(--divider);
+  margin-bottom: 8px;
+}
+.sidebar-logo-eyebrow {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-28);
+  margin-bottom: 4px;
+}
+.sidebar-logo-name {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--lime);
+  letter-spacing: -0.3px;
+}
+.sidebar-logo-ver {
+  font-size: 10px;
+  color: var(--text-25);
+  margin-top: 2px;
+}
+
+.nav-section {
+  padding: 16px 16px 4px;
+}
+.nav-section-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--text-28);
+  padding: 0 8px;
+  margin-bottom: 4px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text-42);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.15s;
+  margin-bottom: 1px;
+  position: relative;
+}
+.nav-item:hover {
+  background: rgba(255,255,255,0.05);
+  color: var(--text-65);
+}
+.nav-item.active {
+  background: rgba(212,234,4,0.08);
+  color: var(--lime);
+}
+.nav-item .nav-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--lime);
+  opacity: 0;
+  flex-shrink: 0;
+}
+.nav-item.active .nav-dot { opacity: 1; }
+.nav-num {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-25);
+  min-width: 16px;
+}
+
+.main {
+  margin-left: var(--sidebar-w);
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+.section {
+  padding: 72px 64px 80px;
+  border-bottom: 0.5px solid var(--divider);
+  max-width: 900px;
+}
+
+.cover {
+  padding: 100px 64px 80px;
+  position: relative;
+  border-bottom: 0.5px solid var(--divider);
+}
+.cover-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--lime);
+  margin-bottom: 16px;
+}
+.cover-title {
+  font-family: var(--font-display);
+  font-size: 60px;
+  font-weight: 800;
+  line-height: 1.0;
+  letter-spacing: -1.5px;
+  margin-bottom: 20px;
+}
+.cover-title span { color: var(--lime); }
+.cover-sub {
+  font-size: 16px;
+  color: var(--text-65);
+  max-width: 520px;
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+.cover-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cover-pill {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--card-bg);
+  border: 0.5px solid var(--card-border);
+  color: var(--text-65);
+}
+
+.section-eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--lime);
+  margin-bottom: 10px;
+}
+.section-eyebrow.muted { color: var(--text-28); }
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 12px;
+  line-height: 1.1;
+}
+.section-desc {
+  font-size: 15px;
+  color: var(--text-65);
+  max-width: 600px;
+  line-height: 1.65;
+  margin-bottom: 40px;
+}
+
+h3 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-100);
+  margin: 36px 0 12px;
+}
+h3:first-of-type { margin-top: 0; }
+
+h4 {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  color: var(--text-28);
+  margin: 28px 0 12px;
+}
+
+p {
+  font-size: 14px;
+  color: var(--text-65);
+  line-height: 1.7;
+  margin-bottom: 12px;
+  max-width: 640px;
+}
+
+.glass {
+  background: var(--card-bg);
+  border: 0.5px solid var(--card-border);
+  border-radius: 20px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--card-highlight);
+  pointer-events: none;
+  border-radius: inherit;
+}
+.glass.lime { background: rgba(212,234,4,0.05); border-color: rgba(212,234,4,0.18); }
+.glass.purple { background: rgba(124,58,237,0.07); border-color: rgba(124,58,237,0.20); }
+.glass.green { background: rgba(16,185,129,0.07); border-color: rgba(16,185,129,0.20); }
+.glass.blue { background: rgba(55,138,221,0.07); border-color: rgba(55,138,221,0.20); }
+.glass.red { background: rgba(226,75,74,0.07); border-color: rgba(226,75,74,0.20); }
+
+.glass-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--lime);
+  margin-bottom: 6px;
+}
+.glass-desc {
+  font-size: 13px;
+  color: var(--text-42);
+  margin-bottom: 14px;
+  max-width: none;
+}
+.glass ul {
+  list-style: none;
+  padding: 0;
+}
+.glass ul li {
+  font-size: 13.5px;
+  color: var(--text-65);
+  padding: 5px 0 5px 18px;
+  position: relative;
+  line-height: 1.55;
+  border-bottom: 0.5px solid var(--divider);
+}
+.glass ul li:last-child { border-bottom: none; }
+.glass ul li::before {
+  content: '.';
+  position: absolute;
+  left: 0;
+  color: var(--lime);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+.swatch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  background: var(--card-bg);
+  border: 0.5px solid var(--card-border);
+  border-radius: 12px;
+}
+.swatch-dot {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  border: 0.5px solid rgba(255,255,255,0.1);
+}
+.swatch-name { font-size: 13px; font-weight: 600; color: var(--text-100); }
+.swatch-hex { font-family: var(--font-mono); font-size: 11px; color: var(--text-28); margin-top: 1px; }
+.swatch-usage { font-size: 12px; color: var(--text-42); margin-left: auto; text-align: right; max-width: 220px; }
+
+.token-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+.token-table tr { border-bottom: 0.5px solid var(--divider); }
+.token-table tr:last-child { border-bottom: none; }
+.token-table td { padding: 9px 0; font-size: 13px; vertical-align: top; }
+.token-table td:first-child { color: var(--text-42); width: 200px; }
+.token-table td:last-child { font-family: var(--font-mono); color: var(--lime); font-size: 12px; }
+
+pre {
+  background: rgba(255,255,255,0.03);
+  border: 0.5px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 20px 24px;
+  margin: 14px 0 20px;
+  overflow-x: auto;
+  position: relative;
+}
+pre code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--lime);
+  line-height: 1.7;
+}
+code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--lime);
+  background: rgba(212,234,4,0.07);
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+
+.ba-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.ba-col-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.ba-col-label.before { color: var(--red); }
+.ba-col-label.after { color: var(--green); }
+
+.ba-card {
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 10px;
+  position: relative;
+}
+.ba-card.before {
+  background: rgba(226,75,74,0.05);
+  border: 0.5px solid rgba(226,75,74,0.20);
+}
+.ba-card.after {
+  background: rgba(16,185,129,0.05);
+  border: 0.5px solid rgba(16,185,129,0.20);
+}
+.ba-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 20px;
+  margin-bottom: 8px;
+  display: inline-block;
+}
+.ba-tag.before { background: rgba(226,75,74,0.15); color: #f87171; }
+.ba-tag.after { background: rgba(16,185,129,0.15); color: #34d399; }
+.ba-copy {
+  font-size: 14px;
+  color: var(--text-65);
+  line-height: 1.6;
+  font-style: italic;
+}
+.ba-copy.after { color: var(--text-100); font-style: normal; font-weight: 500; }
+.ba-annotation {
+  font-size: 12px;
+  color: rgba(167,139,250,0.8);
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 0.5px solid rgba(124,58,237,0.2);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+.word-bank {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.word-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--card-bg);
+  border: 0.5px solid var(--card-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.word-kill {
+  padding: 12px 16px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #f87171;
+  background: rgba(226,75,74,0.07);
+  border-right: 0.5px solid rgba(226,75,74,0.2);
+  min-width: 160px;
+  text-decoration: line-through;
+  text-decoration-color: rgba(248,113,113,0.5);
+}
+.word-arrow {
+  padding: 0 14px;
+  color: var(--text-28);
+  font-size: 14px;
+}
+.word-replace {
+  font-size: 13px;
+  color: var(--lime);
+  padding: 12px 0;
+  font-weight: 500;
+}
+.word-why {
+  font-size: 12px;
+  color: var(--text-42);
+  margin-left: auto;
+  padding: 12px 16px;
+  text-align: right;
+  max-width: 260px;
+  line-height: 1.4;
+}
+
+.principle {
+  background: rgba(124,58,237,0.06);
+  border: 0.5px solid rgba(124,58,237,0.18);
+  border-radius: 16px;
+  padding: 20px;
+}
+.principle-num {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 800;
+  color: rgba(124,58,237,0.3);
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.principle-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: #a78bfa;
+  margin-bottom: 8px;
+}
+.principle-body {
+  font-size: 13px;
+  color: var(--text-42);
+  line-height: 1.6;
+  max-width: none;
+  margin: 0;
+}
+
+.type-specimen {
+  background: var(--card-bg);
+  border: 0.5px solid var(--card-border);
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+}
+.type-sample { flex: 1; }
+.type-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-28);
+  text-align: right;
+  flex-shrink: 0;
+  line-height: 1.6;
+}
+
+.anim-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  background: var(--card-bg);
+  border: 0.5px solid var(--card-border);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+.anim-name { font-size: 13px; font-weight: 600; color: var(--text-100); min-width: 180px; }
+.anim-spec { font-family: var(--font-mono); font-size: 11.5px; color: var(--lime); flex: 1; }
+.anim-where { font-size: 12px; color: var(--text-42); text-align: right; }
+
+.cheat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+.rule { border: none; border-top: 0.5px solid var(--divider); margin: 40px 0; }
+
+.scroll-progress {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: rgba(255,255,255,0.05);
+  z-index: 200;
+}
+.scroll-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--purple), var(--lime));
+  width: 0%;
+  transition: width 0.1s;
+}
+
+.dont-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dont-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  background: rgba(226,75,74,0.05);
+  border: 0.5px solid rgba(226,75,74,0.15);
+  border-radius: 12px;
+  font-size: 13px;
+  color: var(--text-65);
+  line-height: 1.5;
+}
+.dont-x {
+  color: #f87171;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+@media (max-width: 1100px) {
+  .sidebar {
+    position: relative;
+    width: 100%;
+    border-right: none;
+    border-bottom: 0.5px solid var(--card-border);
+  }
+
+  .main {
+    margin-left: 0;
+  }
+
+  .cover,
+  .section {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .cover-title {
+    font-size: 44px;
+  }
+
+  .swatch-grid,
+  .two-col,
+  .three-col,
+  .ba-wrap,
+  .cheat-grid,
+  .dont-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="scroll-progress"><div class="scroll-bar" id="scrollBar"></div></div>
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+<div class="blob blob-3"></div>
+
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-eyebrow">Pulse Intelligence Labs</div>
+    <div class="sidebar-logo-name">Pulse Check</div>
+    <div class="sidebar-logo-ver">Design System - v1.0</div>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-label">Visual Design</div>
+    <a href="#foundations" class="nav-item active"><div class="nav-dot"></div><span class="nav-num">01</span>Foundations</a>
+    <a href="#typography" class="nav-item"><div class="nav-dot"></div><span class="nav-num">02</span>Typography</a>
+    <a href="#spacing" class="nav-item"><div class="nav-dot"></div><span class="nav-num">03</span>Spacing &amp; Layout</a>
+    <a href="#ambient" class="nav-item"><div class="nav-dot"></div><span class="nav-num">04</span>Ambient Background</a>
+    <a href="#components" class="nav-item"><div class="nav-dot"></div><span class="nav-num">05</span>Components</a>
+    <a href="#animation" class="nav-item"><div class="nav-dot"></div><span class="nav-num">06</span>Animation</a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-label">Content &amp; Voice</div>
+    <a href="#copy-principles" class="nav-item"><div class="nav-dot"></div><span class="nav-num">07</span>Copy Principles</a>
+    <a href="#word-bank" class="nav-item"><div class="nav-dot"></div><span class="nav-num">08</span>Word Bank</a>
+    <a href="#copy-examples" class="nav-item"><div class="nav-dot"></div><span class="nav-num">09</span>Before / After</a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-section-label">Screen Specs</div>
+    <a href="#screen-profile" class="nav-item"><div class="nav-dot"></div><span class="nav-num">10</span>Profile Screen</a>
+    <a href="#screen-chat" class="nav-item"><div class="nav-dot"></div><span class="nav-num">11</span>Nora Chat</a>
+    <a href="#ai-instructions" class="nav-item"><div class="nav-dot"></div><span class="nav-num">12</span>AI Instructions</a>
+    <a href="#cheatsheet" class="nav-item"><div class="nav-dot"></div><span class="nav-num">13</span>Cheat Sheet</a>
+  </div>
+</nav>
+
+<main class="main">
+<div class="cover" id="cover">
+  <div class="cover-eyebrow">Design System - v1.0 - Confidential</div>
+  <h1 class="cover-title">Pulse Check<br><span>Design System</span></h1>
+  <p class="cover-sub">The complete visual language, component library, copy voice, and AI design instructions for every Pulse Check screen. Do not invent outside this system - extend it intentionally.</p>
+  <div class="cover-pills">
+    <span class="cover-pill">Glassmorphic Dark</span>
+    <span class="cover-pill">Syne + DM Sans</span>
+    <span class="cover-pill">Athlete-First Copy</span>
+    <span class="cover-pill">SwiftUI + Web</span>
+  </div>
+</div>
+
+<section class="section" id="foundations">
+  <div class="section-eyebrow">01 - Foundations</div>
+  <h2 class="section-title">Color &amp; Opacity</h2>
+  <p class="section-desc">Never use colors outside this palette. Apply with the opacity rules below - the entire glass effect depends on them being exact.</p>
+
+  <h3>Backgrounds</h3>
+  <div class="swatch-grid">
+    <div class="swatch-row"><div class="swatch-dot" style="background:#070711;"></div><div><div class="swatch-name">Page BG</div><div class="swatch-hex">#070711</div></div><div class="swatch-usage">Root app background - never pure black</div></div>
+    <div class="swatch-row"><div class="swatch-dot" style="background:#0B0B1C;"></div><div><div class="swatch-name">Deep BG</div><div class="swatch-hex">#0B0B1C</div></div><div class="swatch-usage">Phone frame, deep layer fills</div></div>
+  </div>
+
+  <h3>Brand Colors</h3>
+  <div class="swatch-grid">
+    <div class="swatch-row"><div class="swatch-dot" style="background:#D4EA04;"></div><div><div class="swatch-name">Pulse Lime</div><div class="swatch-hex">#D4EA04</div></div><div class="swatch-usage">Actions, AI output, active states. Use sparingly.</div></div>
+    <div class="swatch-row"><div class="swatch-dot" style="background:#7C3AED;"></div><div><div class="swatch-name">Cognitive Purple</div><div class="swatch-hex">#7C3AED</div></div><div class="swatch-usage">Mental performance, focus, avatar ring start</div></div>
+    <div class="swatch-row"><div class="swatch-dot" style="background:#10B981;"></div><div><div class="swatch-name">Health Green</div><div class="swatch-hex">#10B981</div></div><div class="swatch-usage">Connected, success, wellness, ambient glow</div></div>
+    <div class="swatch-row"><div class="swatch-dot" style="background:#378ADD;"></div><div><div class="swatch-name">Composure Blue</div><div class="swatch-hex">#378ADD</div></div><div class="swatch-usage">Composure pillar, stability, calm</div></div>
+    <div class="swatch-row"><div class="swatch-dot" style="background:#FB923C;"></div><div><div class="swatch-name">Streak Orange</div><div class="swatch-hex">#FB923C</div></div><div class="swatch-usage">Streak, activity, energy metric cards</div></div>
+    <div class="swatch-row"><div class="swatch-dot" style="background:#E24B4A;"></div><div><div class="swatch-name">Alert Red</div><div class="swatch-hex">#E24B4A</div></div><div class="swatch-usage">Errors, warnings - alert states only</div></div>
+  </div>
+
+  <h3>Text Opacity Scale</h3>
+  <div class="glass">
+    <table class="token-table">
+      <tr><td>Text Primary (100%)</td><td>#FFFFFF</td></tr>
+      <tr><td>Text Secondary (65%)</td><td>rgba(255,255,255, 0.65)</td></tr>
+      <tr><td>Text Labels (42%)</td><td>rgba(255,255,255, 0.42)</td></tr>
+      <tr><td>Text Muted (28%)</td><td>rgba(255,255,255, 0.28)</td></tr>
+      <tr><td>Text Ghost (25%)</td><td>rgba(255,255,255, 0.25)</td></tr>
+      <tr><td>Card border</td><td>rgba(255,255,255, 0.10)</td></tr>
+      <tr><td>Divider lines</td><td>rgba(255,255,255, 0.05)</td></tr>
+    </table>
+  </div>
+
+  <h3>Glass Opacity Rules</h3>
+  <p>Glass cards are never opaque. These are the exact values that create the glass effect. Do not approximate.</p>
+  <div class="glass">
+    <table class="token-table">
+      <tr><td>Card background</td><td>rgba(255,255,255, 0.045)</td></tr>
+      <tr><td>Card inner highlight</td><td>linear-gradient(135deg, rgba(255,255,255,0.055) -&gt; transparent)</td></tr>
+      <tr><td>Card border</td><td>0.5px solid rgba(255,255,255, 0.10)</td></tr>
+      <tr><td>Lime tinted bg / border</td><td>rgba(212,234,4, 0.06) / rgba(212,234,4, 0.18)</td></tr>
+      <tr><td>Purple tinted bg / border</td><td>rgba(124,58,237, 0.07) / rgba(124,58,237, 0.20)</td></tr>
+      <tr><td>Green tinted bg / border</td><td>rgba(16,185,129, 0.08) / rgba(16,185,129, 0.22)</td></tr>
+      <tr><td>Blue tinted bg / border</td><td>rgba(55,138,221, 0.08) / rgba(55,138,221, 0.22)</td></tr>
+      <tr><td>Orange tinted bg / border</td><td>rgba(234,88,12, 0.10) / rgba(234,88,12, 0.22)</td></tr>
+      <tr><td>Icon chip bg / border</td><td>rgba([color], 0.18) / rgba([color], 0.30)</td></tr>
+    </table>
+  </div>
+  <p style="font-size:12.5px;color:var(--text-28);">SwiftUI: .ultraThinMaterial layered with Color overlay at these opacities. Web: backdrop-filter: blur(20px) + rgba backgrounds.</p>
+</section>
+
+<section class="section" id="typography">
+  <div class="section-eyebrow">02 - Typography</div>
+  <h2 class="section-title">Type System</h2>
+  <p class="section-desc">Two fonts. No exceptions. Syne for anything that needs to command attention. DM Sans for everything the athlete reads.</p>
+
+  <h3>Font Families</h3>
+  <div class="two-col">
+    <div class="glass">
+      <div class="glass-title">Syne</div>
+      <div class="glass-desc">Display - Headlines - Metrics - AI output</div>
+      <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--text-100);line-height:1.1;margin-bottom:8px;">The quick mind</div>
+      <ul><li>Weights: 700, 800 only</li><li>Use for: page titles, hero names, pillar %, metric values, insight quotes</li><li>Never use below 14pt</li></ul>
+    </div>
+    <div class="glass">
+      <div class="glass-title">DM Sans</div>
+      <div class="glass-desc">Body - UI - Labels - Copy</div>
+      <div style="font-family:'DM Sans',sans-serif;font-size:15px;font-weight:400;color:var(--text-65);line-height:1.6;margin-bottom:8px;">Clarity under pressure. Every word earns its place.</div>
+      <ul><li>Weights: 400, 500, 600 only</li><li>Use for: all body copy, labels, tags, row values, CTAs, navigation</li><li>Never use 700+ weight</li></ul>
+    </div>
+  </div>
+
+  <h3>Type Scale</h3>
+  <div class="type-specimen"><div class="type-sample" style="font-family:'Syne',sans-serif;font-size:26px;font-weight:800;letter-spacing:-0.5px;">Page Title</div><div class="type-meta">Syne 800 - 26pt<br>tracking -0.5 - white 100%</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;letter-spacing:-0.3px;">Hero Name</div><div class="type-meta">Syne 800 - 22pt<br>tracking -0.3 - white 100%</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;">100%</div><div class="type-meta">Syne 800 - 24pt<br>Pillar percentage</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;">0</div><div class="type-meta">Syne 800 - 28pt<br>Metric value</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;line-height:1.4;">Composure is your clearest edge today.</div><div class="type-meta">Syne 700 - 16pt<br>line-height 1.4 - Insight quote</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-size:10.5px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--lime);">WHAT NORA SEES IN YOU</div><div class="type-meta">DM Sans 600 - 10.5pt<br>uppercase - lime - tracking 1.5</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-size:13.5px;color:rgba(255,255,255,0.88);">Body copy that an athlete reads during onboarding, in the profile screen, or inside a chat with Nora.</div><div class="type-meta">DM Sans 400 - 13-14.5pt<br>white 88% - lh 1.55</div></div>
+  <div class="type-specimen"><div class="type-sample" style="font-size:11px;color:rgba(255,255,255,0.38);">Supporting description text, timestamps, metadata</div><div class="type-meta">DM Sans 400 - 11pt<br>white 38%</div></div>
+</section>
+
+<section class="section" id="spacing">
+  <div class="section-eyebrow">03 - Spacing &amp; Layout</div>
+  <h2 class="section-title">Grid &amp; Radii</h2>
+  <p class="section-desc">Every spacing value is intentional. Do not round to the nearest 8 - use these exact numbers.</p>
+
+  <div class="two-col">
+    <div>
+      <h3>Spacing</h3>
+      <div class="glass">
+        <table class="token-table">
+          <tr><td>Screen horizontal padding</td><td>16pt each side</td></tr>
+          <tr><td>Card gap (vertical)</td><td>14pt between cards</td></tr>
+          <tr><td>Card internal padding</td><td>18-20pt all sides</td></tr>
+          <tr><td>Pillar / metric grid gap</td><td>10pt</td></tr>
+          <tr><td>Row internal padding</td><td>11pt top + bottom</td></tr>
+          <tr><td>Icon chip to text gap</td><td>10pt</td></tr>
+          <tr><td>CTA button row gap</td><td>8pt</td></tr>
+        </table>
+      </div>
+    </div>
+    <div>
+      <h3>Border Radius</h3>
+      <div class="glass">
+        <table class="token-table">
+          <tr><td>Page-level cards</td><td>24pt</td></tr>
+          <tr><td>Pillar / metric cards</td><td>18pt</td></tr>
+          <tr><td>Nested insight box</td><td>16pt</td></tr>
+          <tr><td>Shaping sub-cells</td><td>14pt</td></tr>
+          <tr><td>CTA buttons</td><td>12-14pt</td></tr>
+          <tr><td>Training row cells</td><td>12pt</td></tr>
+          <tr><td>Icon chips</td><td>9-10pt</td></tr>
+          <tr><td>Tag / pill</td><td>20pt (full capsule)</td></tr>
+          <tr><td>Detail row icon chips</td><td>8pt</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="ambient">
+  <div class="section-eyebrow">04 - Ambient Background</div>
+  <h2 class="section-title">The Blob System</h2>
+  <p class="section-desc">Every screen has exactly 3 ambient blobs. They sit behind all content at z-index 0 with pointer-events none. They must never be visible as shapes - only as atmospheric glow.</p>
+
+  <div class="three-col">
+    <div class="glass purple">
+      <div class="glass-title" style="color:#a78bfa;">Blob 1 - Purple</div>
+      <ul>
+        <li>Size: 280-300pt diameter</li>
+        <li>Color: rgba(124,58,237, 0.20)</li>
+        <li>Blur: 60-70pt</li>
+        <li>Position: top-left, -60pt offset both axes</li>
+      </ul>
+    </div>
+    <div class="glass lime">
+      <div class="glass-title">Blob 2 - Lime</div>
+      <ul>
+        <li>Size: 200-220pt diameter</li>
+        <li>Color: rgba(212,234,4, 0.07)</li>
+        <li>Blur: 50-60pt</li>
+        <li>Position: top-right, +40pt off edge, ~240pt from top</li>
+      </ul>
+    </div>
+    <div class="glass green">
+      <div class="glass-title" style="color:#34d399;">Blob 3 - Green</div>
+      <ul>
+        <li>Size: 160-180pt diameter</li>
+        <li>Color: rgba(16,185,129, 0.10)</li>
+        <li>Blur: 40-50pt</li>
+        <li>Position: bottom-left, +20pt from edge, -300pt from bottom</li>
+      </ul>
+    </div>
+  </div>
+
+  <pre><code>// SwiftUI - Blob 1 (Purple)
+Circle()
+  .fill(RadialGradient(
+    colors: [Color.purple.opacity(0.20), .clear],
+    center: .center, startRadius: 0, endRadius: 140))
+  .frame(width: 280, height: 280)
+  .blur(radius: 65)
+  .offset(x: -60, y: -60)
+  .allowsHitTesting(false)</code></pre>
+</section>
+
+<section class="section" id="components">
+  <div class="section-eyebrow">05 - Components</div>
+  <h2 class="section-title">Component Library</h2>
+  <p class="section-desc">Every component spec includes what it looks like, what it is for, and the exact values. Never build a component that is not in this library without adding it here first.</p>
+
+  <h3>Glass Card (Base)</h3>
+  <div class="glass">
+    <div class="glass-title">Base glass card</div>
+    <div class="glass-desc">Used for: Nora Sees, Shaping Today, Your Details, any general content section</div>
+    <ul>
+      <li>Background: rgba(255,255,255, 0.045)</li>
+      <li>Inner highlight: linear-gradient(135deg, rgba(255,255,255,0.055) 0%, transparent 55%) as overlay</li>
+      <li>Border: 0.5px solid rgba(255,255,255, 0.10)</li>
+      <li>Border radius: 24pt - Padding: 18-20pt - Backdrop blur: 20pt</li>
+      <li>No drop shadow - depth comes from ambient blobs only</li>
+    </ul>
+  </div>
+
+  <h3>Spinning Avatar Ring</h3>
+  <div class="glass">
+    <div class="glass-title">Animated avatar ring</div>
+    <div class="glass-desc">Profile hero - the ring is the primary identity moment. It must always animate.</div>
+    <ul>
+      <li>Outer ring: 72pt diameter - conic-gradient(from [rotatingdeg], #7C3AED, #D4EA04, #10B981, #7C3AED) - 2.5pt padding</li>
+      <li>Inner circle: background linear-gradient(135deg, #1A1228, #0F1E14) - 50% radius</li>
+      <li>Initials: Syne 800 - 22pt - white</li>
+      <li>Animation: rotate conic-gradient at ~0.4deg/frame (~10deg/sec at 24fps)</li>
+      <li>SwiftUI: AngularGradient + @State rotation via .linear(duration:5).repeatForever()</li>
+    </ul>
+  </div>
+
+  <h3>Section Eyebrow Label</h3>
+  <div class="two-col">
+    <div class="glass lime">
+      <div class="glass-title">AI-driven sections</div>
+      <div style="font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--lime);margin:10px 0;">WHAT NORA SEES IN YOU</div>
+      <ul><li>Color: #D4EA04 (Lime)</li><li>Use for: What Nora Sees, What Is Shaping Today</li></ul>
+    </div>
+    <div class="glass">
+      <div class="glass-title">User data sections</div>
+      <div style="font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.28);margin:10px 0;">YOUR NUMBERS</div>
+      <ul><li>Color: rgba(255,255,255, 0.28)</li><li>Use for: Your Numbers, Your Details</li></ul>
+    </div>
+  </div>
+  <div class="glass" style="padding:14px 18px;">
+    <table class="token-table">
+      <tr><td>Font</td><td>DM Sans 600 - 10.5pt - uppercase - tracking 1.5</td></tr>
+      <tr><td>No background</td><td>plain text label - never in a pill or box</td></tr>
+      <tr><td>Margin bottom</td><td>10-12pt before section content</td></tr>
+    </table>
+  </div>
+
+  <h3>CTA Buttons</h3>
+  <div class="three-col">
+    <div class="glass lime">
+      <div class="glass-title">Primary - Lime solid</div>
+      <div style="margin:12px 0;padding:10px;background:#D4EA04;border-radius:12px;text-align:center;font-size:13px;font-weight:700;color:#0A0A14;">I am ready - join team</div>
+      <ul>
+        <li>Background: #D4EA04 solid</li>
+        <li>Text: #0A0A14 - NOT white</li>
+        <li>Font: DM Sans 700 - 12-13pt</li>
+        <li>Radius: 12-14pt</li>
+      </ul>
+    </div>
+    <div class="glass">
+      <div class="glass-title">Secondary - Ghost</div>
+      <div style="margin:12px 0;padding:10px;background:rgba(255,255,255,0.06);border:0.5px solid rgba(255,255,255,0.10);border-radius:12px;text-align:center;font-size:13px;font-weight:500;color:rgba(255,255,255,0.65);">I will do this later</div>
+      <ul>
+        <li>Background: rgba(255,255,255,0.06)</li>
+        <li>Border: 0.5px rgba(255,255,255,0.10)</li>
+        <li>Text: rgba(255,255,255,0.65)</li>
+        <li>Font: DM Sans 500 - 12-13pt</li>
+      </ul>
+    </div>
+    <div class="glass">
+      <div class="glass-title">Lime Ghost (full-width)</div>
+      <div style="margin:12px 0;padding:10px;background:rgba(212,234,4,0.07);border:0.5px solid rgba(212,234,4,0.20);border-radius:13px;text-align:center;font-size:13px;font-weight:500;color:#D4EA04;">Update profile context</div>
+      <ul>
+        <li>Full width of parent card</li>
+        <li>Background: rgba(212,234,4,0.07)</li>
+        <li>Border: rgba(212,234,4,0.20)</li>
+        <li>Radius: 14pt - Padding: 11pt vertical</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Pillar Cards (3-up Grid)</h3>
+  <div class="glass">
+    <div class="glass-desc">Composure / Focus / Decision - standalone 3-column grid, no wrapping card</div>
+    <ul>
+      <li>Grid: 3 equal columns - gap 10pt - border-radius 18pt</li>
+      <li>Icon chip: 30-32pt square - 9-10pt radius - tinted bg + border - 13-14pt SVG stroke icon</li>
+      <li>Percentage: Syne 800 - 24pt - white - margin-top 9pt after icon</li>
+      <li>Pillar name: DM Sans 600 - 12pt - white 80% - margin-top 4pt</li>
+      <li>Sub-description: DM Sans 400 - 10pt - white 32% - line-height 1.3</li>
+      <li>Composure = Blue tint - Focus = Purple tint - Decision = Green tint</li>
+    </ul>
+  </div>
+
+  <h3>Detail List Rows</h3>
+  <div class="glass">
+    <div class="glass-desc">Used inside a glass card for structured profile data</div>
+    <ul>
+      <li>Padding: 11pt vertical - border-bottom 0.5px rgba(255,255,255,0.05) - last row: no border</li>
+      <li>Left: icon chip (28pt - 8pt radius - white 6% bg - white 8% border) + key label (DM Sans 400 - 13pt - white 42%)</li>
+      <li>Actionable values: DM Sans 500 - 13pt - #D4EA04 + chevron (white 20%)</li>
+      <li>Static values: DM Sans 500 - 13pt - white 78% - no chevron</li>
+      <li>Email / long values: 11pt - white 42%</li>
+    </ul>
+  </div>
+
+  <h3>Bottom Navigation</h3>
+  <div class="glass">
+    <ul>
+      <li>Background: rgba(8,8,20, 0.85-0.92) + backdrop blur 20pt</li>
+      <li>Border-top: 0.5px solid rgba(255,255,255, 0.05)</li>
+      <li>Padding: 10-12pt top - 22-26pt bottom (safe area)</li>
+      <li>3 items - Active icon 100% - Inactive icon 32% - Icon size 22pt</li>
+      <li>Active dot: 4pt circle - #7C3AED - opacity 1</li>
+    </ul>
+  </div>
+</section>
+
+<section class="section" id="animation">
+  <div class="section-eyebrow">06 - Animation</div>
+  <h2 class="section-title">Motion Rules</h2>
+  <p class="section-desc">Motion is earned, not scattered. These are the only things that animate. Everything else is static.</p>
+
+  <div class="anim-row"><div class="anim-name">Avatar ring rotation</div><div class="anim-spec">conic-gradient - ~10deg/sec - linear - infinite</div><div class="anim-where">Profile hero only</div></div>
+  <div class="anim-row"><div class="anim-name">Live status dot pulse</div><div class="anim-spec">scale 1-&gt;0.85 + opacity 1-&gt;0.5 - 1.8s ease-in-out - infinite</div><div class="anim-where">Nora chat header</div></div>
+  <div class="anim-row"><div class="anim-name">Scan bar fill</div><div class="anim-spec">width 0-&gt;100% - 1.2s ease-out - stagger 0.15s per bar</div><div class="anim-where">Nora data-scan bubble</div></div>
+  <div class="anim-row"><div class="anim-name">Confirm ripple ring</div><div class="anim-spec">scale 1-&gt;1.8 + opacity 1-&gt;0 - 2s ease-out - infinite</div><div class="anim-where">Success confirmation states</div></div>
+  <div class="anim-row"><div class="anim-name">Typing dots</div><div class="anim-spec">translateY 0-&gt;-4pt - 0.6s ease-in-out - stagger 0.15s - infinite</div><div class="anim-where">Nora typing indicator</div></div>
+  <div class="anim-row"><div class="anim-name">Voice bar heights</div><div class="anim-spec">height swap every 500ms - 0.4s ease-in-out - infinite</div><div class="anim-where">Input bar mic button</div></div>
+  <div class="anim-row"><div class="anim-name">Message bubble entry</div><div class="anim-spec">opacity 0-&gt;1 + translateY 8pt-&gt;0 + scale 0.96-&gt;1 - 0.3s cubic-bezier(0.34,1.56,0.64,1)</div><div class="anim-where">Each new chat message</div></div>
+
+  <p style="margin-top:20px;font-size:13px;color:var(--text-28);">Nothing else animates. Hover states may use opacity transitions up to 0.2s. No bounce, no spring, no slide-in panels.</p>
+</section>
+
+<section class="section" id="copy-principles">
+  <div class="section-eyebrow">07 - Copy Principles</div>
+  <h2 class="section-title">Writing for Athletes</h2>
+  <p class="section-desc">The biggest problem in Pulse Check copy is not any single word - it is point of view. Every sentence must be written from the athlete's experience, not the system's perspective.</p>
+
+  <div class="three-col">
+    <div class="principle">
+      <div class="principle-num">1</div>
+      <div class="principle-title">Name the feeling, not the feature</div>
+      <div class="principle-body">Athletes do not care about "pilot flows" and "consent steps." They care about what is about to happen to them. Lead with that. Every screen should answer: what does this mean for me, right now?</div>
+    </div>
+    <div class="principle">
+      <div class="principle-num">2</div>
+      <div class="principle-title">Short sentences win</div>
+      <div class="principle-body">If a sentence has more than 20 words, split it. Athletes read fast and scan. Every sentence should be able to stand alone. If cutting a word does not change the meaning, cut it.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-num">3</div>
+      <div class="principle-title">"You" not "the system"</div>
+      <div class="principle-body">Cut words like "flow," "baseline," "pilot," and "context." Replace with what it means for the person holding the phone. "Nora gets to know you" beats "Nora gains sufficient context."</div>
+    </div>
+    <div class="principle">
+      <div class="principle-num">4</div>
+      <div class="principle-title">Set time expectations</div>
+      <div class="principle-body">"This takes 3 minutes" removes anxiety. "Complete your mental baseline" creates it. Tell athletes how long things take. It is the most underused trust signal in onboarding.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-num">5</div>
+      <div class="principle-title">Use trust signals</div>
+      <div class="principle-body">"Your coaching staff set this up for you" is a trust signal. It tells the athlete this was intentional, not random. Anchor new or unfamiliar actions to a person the athlete already trusts.</div>
+    </div>
+    <div class="principle">
+      <div class="principle-num">6</div>
+      <div class="principle-title">Lead with the outcome</div>
+      <div class="principle-body">Do not say what the system does - say what the athlete gets. "Complete the baseline" -&gt; "Tell Nora about yourself so she can actually help you." Same action, completely different feel.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="word-bank">
+  <div class="section-eyebrow">08 - Word Bank</div>
+  <h2 class="section-title">Words to Kill</h2>
+  <p class="section-desc">These words appear constantly in Pulse Check copy and they all mean something specific to us - but nothing to an athlete. Every time one appears, replace it.</p>
+
+  <div class="word-bank">
+    <div class="word-row">
+      <div class="word-kill">flow</div>
+      <div class="word-arrow">-&gt;</div>
+      <div class="word-replace">steps / process / what happens next</div>
+      <div class="word-why">"Flow" is a product term. Athletes know steps, not flows.</div>
+    </div>
+    <div class="word-row">
+      <div class="word-kill">baseline</div>
+      <div class="word-arrow">-&gt;</div>
+      <div class="word-replace">your starting point / first read / where you begin</div>
+      <div class="word-why">Only coaches use "baseline." Athletes just want to know what they are doing.</div>
+    </div>
+    <div class="word-row">
+      <div class="word-kill">pilot</div>
+      <div class="word-arrow">-&gt;</div>
+      <div class="word-replace">program / your team / your season / the training</div>
+      <div class="word-why">"Pilot" signals beta test. Athletes should feel like they are in a program, not an experiment.</div>
+    </div>
+    <div class="word-row">
+      <div class="word-kill">context</div>
+      <div class="word-arrow">-&gt;</div>
+      <div class="word-replace">know you / understand you / read you / your story</div>
+      <div class="word-why">"Context" is ML language. "Nora gets to know you" is human.</div>
+    </div>
+    <div class="word-row">
+      <div class="word-kill">operational</div>
+      <div class="word-arrow">-&gt;</div>
+      <div class="word-replace">[remove entirely]</div>
+      <div class="word-why">This word has never helped an athlete understand anything. Delete on sight.</div>
+    </div>
+    <div class="word-row">
+      <div class="word-kill">onboarding</div>
+      <div class="word-arrow">-&gt;</div>
+      <div class="word-replace">getting started / setup / your first steps</div>
+      <div class="word-why">Onboarding is an internal product term. Athletes are "getting started," not "being onboarded."</div>
+    </div>
+    <div class="word-row">
+      <div class="word-kill">consent steps</div>
+      <div class="word-arrow">-&gt;</div>
+      <div class="word-replace">a quick yes from you / a couple of agreements</div>
+      <div class="word-why">"Consent steps" sounds like a legal process. Keep it human.</div>
+    </div>
+    <div class="word-row">
+      <div class="word-kill">data source</div>
+      <div class="word-arrow">-&gt;</div>
+      <div class="word-replace">your wearable / your Oura / your Apple Watch</div>
+      <div class="word-why">Name the device. Athletes know their gear. "Data source" is a backend term.</div>
+    </div>
+    <div class="word-row">
+      <div class="word-kill">personalize</div>
+      <div class="word-arrow">-&gt;</div>
+      <div class="word-replace">built for you / made for your game / fitted to you</div>
+      <div class="word-why">"Personalize" is overused in SaaS and now meaningless. Show it, do not say it.</div>
+    </div>
+    <div class="word-row">
+      <div class="word-kill">signal</div>
+      <div class="word-arrow">-&gt;</div>
+      <div class="word-replace">read / score / picture / how you are doing</div>
+      <div class="word-why">Only use "signal" when talking to coaches. Athletes want to know how they are doing, not what their signal says.</div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="copy-examples">
+  <div class="section-eyebrow">09 - Before / After</div>
+  <h2 class="section-title">Pilot Invite - Full Rewrite</h2>
+  <p class="section-desc">The pilot invite modal is the first thing a new athlete sees. This is the reference example for how every screen in the app should be rewritten.</p>
+
+  <h3>Eyebrow Label</h3>
+  <div class="ba-wrap">
+    <div>
+      <div class="ba-col-label before">Before</div>
+      <div class="ba-card before">
+        <div class="ba-tag before">Eyebrow</div>
+        <div class="ba-copy">PILOT INVITATION</div>
+        <div class="ba-annotation">Feels like an internal Jira ticket. Athletes have no reference for "pilot invitation."</div>
+      </div>
+    </div>
+    <div>
+      <div class="ba-col-label after">After</div>
+      <div class="ba-card after">
+        <div class="ba-tag after">Eyebrow</div>
+        <div class="ba-copy after">Your coach invited you</div>
+        <div class="ba-annotation">Grounds the athlete immediately. They know who sent this and why it appeared on their screen.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Headline</h3>
+  <div class="ba-wrap">
+    <div>
+      <div class="ba-card before">
+        <div class="ba-tag before">Headline</div>
+        <div class="ba-copy">Welcome to Founders Test Pilot</div>
+        <div class="ba-annotation">"Founders Test Pilot" is an internal program name. It means nothing to an athlete being onboarded for the first time.</div>
+      </div>
+    </div>
+    <div>
+      <div class="ba-card after">
+        <div class="ba-tag after">Headline</div>
+        <div class="ba-copy after">You are in.<br>Hampton University Basketball.</div>
+        <div class="ba-annotation">Confidence first - they have been selected. Then the team name clearly. No program jargon.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Subheading</h3>
+  <div class="ba-wrap">
+    <div>
+      <div class="ba-card before">
+        <div class="ba-tag before">Body</div>
+        <div class="ba-copy">"You are joining Test Basketball Team inside Hampton University Athletics. This flow will get your app setup, consent steps, and baseline lined up cleanly before the pilot begins."</div>
+        <div class="ba-annotation">Three product-jargon words in one sentence: "flow," "consent steps," "baseline." And "pilot" again. Reads like HR paperwork.</div>
+      </div>
+    </div>
+    <div>
+      <div class="ba-card after">
+        <div class="ba-tag after">Body</div>
+        <div class="ba-copy after">Your coaching staff set this up for you. This takes about 3 minutes - then you are ready to train.</div>
+        <div class="ba-annotation">Sets a time expectation. Removes anxiety. "Your coaching staff" is a trust signal. Zero jargon.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>What This Invite Means</h3>
+  <div class="ba-wrap">
+    <div>
+      <div class="ba-card before">
+        <div class="ba-tag before">Section</div>
+        <div class="ba-copy">"Confirm the team and pilot look right, then continue. We will keep your current PulseCheck account and place you directly into the correct pilot flow."</div>
+        <div class="ba-annotation">"Place you directly into the correct pilot flow" is backend language. No athlete thinks in terms of being placed into flows.</div>
+      </div>
+    </div>
+    <div>
+      <div class="ba-card after">
+        <div class="ba-tag after">Section</div>
+        <div class="ba-copy after">Here is what happens next<br><br>1. Make sure everything below looks right - your team and your role.</div>
+        <div class="ba-annotation">One clear action. "Looks right" is how an athlete thinks. No mention of accounts, flows, or pilots.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Wearables Section</h3>
+  <div class="ba-wrap">
+    <div>
+      <div class="ba-card before">
+        <div class="ba-tag before">Section</div>
+        <div class="ba-copy">"Connect the wearable or health data source your staff expects as early as possible so your pilot data starts flowing cleanly.<br><br>Complete your athlete baseline promptly after joining. That gives Nora enough context to personalize what happens next inside the pilot."</div>
+        <div class="ba-annotation">"Pilot data starts flowing cleanly" and "enough context to personalize" - developer-speak. The athlete just wants to know what to do and why it matters to them personally.</div>
+      </div>
+    </div>
+    <div>
+      <div class="ba-card after">
+        <div class="ba-tag after">Section</div>
+        <div class="ba-copy after">Two quick things to do after you join<br><br>1. Connect your wearable (Oura, Apple Watch) as soon as you can. That is how Nora tracks your recovery and readiness.<br><br>2. Complete your mental baseline. It takes 10 minutes and it is how Nora gets to know you before your first session.</div>
+        <div class="ba-annotation">Names the actual devices. Tells them WHY the baseline matters ("gets to know you"). Gives a time estimate. Every sentence is athlete-owned.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>CTAs</h3>
+  <div class="ba-wrap">
+    <div>
+      <div class="ba-card before">
+        <div class="ba-tag before">Buttons</div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <div style="flex:1;padding:10px;border-radius:10px;background:rgba(255,255,255,0.06);border:0.5px solid rgba(255,255,255,0.1);text-align:center;font-size:13px;color:rgba(255,255,255,0.5);">Not now</div>
+          <div style="flex:1;padding:10px;border-radius:10px;background:#2563eb;text-align:center;font-size:13px;font-weight:600;color:#fff;">Join now</div>
+        </div>
+        <div class="ba-annotation">"Not now" leaves the athlete unsure if they will lose their spot. "Join now" is fine but generic - it could be on any app.</div>
+      </div>
+    </div>
+    <div>
+      <div class="ba-card after">
+        <div class="ba-tag after">Buttons</div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <div style="flex:1;padding:10px;border-radius:10px;background:rgba(255,255,255,0.06);border:0.5px solid rgba(255,255,255,0.1);text-align:center;font-size:13px;color:rgba(255,255,255,0.5);">I will do this later</div>
+          <div style="flex:1;padding:10px;border-radius:10px;background:#D4EA04;text-align:center;font-size:13px;font-weight:700;color:#0A0A14;">I am ready - join team</div>
+        </div>
+        <div class="ba-annotation">"I will do this later" is honest - they know they can return. "I am ready - join team" is energizing and specific. The dash gives it momentum.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="screen-profile">
+  <div class="section-eyebrow">10 - Screen Spec</div>
+  <h2 class="section-title">Profile Screen</h2>
+  <p class="section-desc">Build the profile screen in this exact vertical order. All sections must be present. Do not reorder.</p>
+
+  <div class="glass">
+    <table class="token-table">
+      <tr><td style="color:var(--lime);font-weight:600;">Section 1</td><td>Status bar - time (Syne 700 - 15pt) + signal/wifi/battery</td></tr>
+      <tr><td style="color:var(--lime);font-weight:600;">Section 2</td><td>Page header - "Profile" Syne 800 26pt + gear icon button (38pt circle)</td></tr>
+      <tr><td style="color:var(--lime);font-weight:600;">Section 3</td><td>Hero card - spinning avatar ring (72pt) + name + sport + 2 tag pills + full-width lime ghost CTA</td></tr>
+      <tr><td style="color:var(--lime);font-weight:600;">Section 4</td><td>What Nora Sees - lime eyebrow + signal badge + muted desc + nested insight box (quote + 2 CTAs)</td></tr>
+      <tr><td style="color:var(--lime);font-weight:600;">Section 5</td><td>Pillar cards - 3-column standalone grid, no wrapper (Composure/Focus/Decision)</td></tr>
+      <tr><td style="color:var(--lime);font-weight:600;">Section 6</td><td>Shaping Today - lime eyebrow + 2-col grid (Readiness/Pressure) + training row below</td></tr>
+      <tr><td style="color:var(--lime);font-weight:600;">Section 7</td><td>Your Numbers - muted eyebrow + 3-col metric grid + current assignment text</td></tr>
+      <tr><td style="color:var(--lime);font-weight:600;">Section 8</td><td>Your Details - muted eyebrow + 7 detail rows with icon chips</td></tr>
+      <tr><td style="color:var(--lime);font-weight:600;">Section 9</td><td>Bottom nav - active tab: Profile (person icon)</td></tr>
+    </table>
+  </div>
+
+  <h3>Your Details - 7 Rows</h3>
+  <div class="glass">
+    <table class="token-table">
+      <tr><td>Daily reflection</td><td>Bell icon - lime actionable value - chevron</td></tr>
+      <tr><td>Primary challenge</td><td>Chat icon - lime value - chevron</td></tr>
+      <tr><td>Primary goal</td><td>Target icon - lime value - chevron</td></tr>
+      <tr><td>Active team</td><td>People icon - lime value - chevron</td></tr>
+      <tr><td>Subscription</td><td>Crown icon - static white value - no chevron</td></tr>
+      <tr><td>Connected coaches</td><td>Person icon - static white value - no chevron</td></tr>
+      <tr><td>Account email</td><td>Envelope icon - full email - white 42% - 11pt - no chevron</td></tr>
+    </table>
+  </div>
+</section>
+
+<section class="section" id="screen-chat">
+  <div class="section-eyebrow">11 - Screen Spec</div>
+  <h2 class="section-title">Nora Chat Screen</h2>
+  <p class="section-desc">The chat is the primary athlete-Nora interface. Every unique element here exists to make the AI feel present and intentional - not like a chatbot.</p>
+
+  <div class="glass">
+    <div class="glass-title">Unique chat elements (do not remove)</div>
+    <ul>
+      <li>Nora avatar - spinning gradient ring (same spec as profile) with "N" initial</li>
+      <li>Data scan bubble - 3 animated progress bars with "Reading your profile" label - replaces plain loading text</li>
+      <li>Confirm bubble with ripple ring - replaces "Ok got it" with an animated check</li>
+      <li>Insight strip above input - contextually relevant chips (e.g. "Attentional narrowing") that surface related concepts</li>
+      <li>Voice button with animated bars - 5 vertical bars animating height in the mic button</li>
+      <li>Asymmetric bubble tails - Nora: top-left radius 6pt - User: bottom-right radius 6pt</li>
+    </ul>
+  </div>
+
+  <h3>Bubble Specs</h3>
+  <div class="two-col">
+    <div class="glass">
+      <div class="glass-title">Nora bubbles (left)</div>
+      <ul>
+        <li>Background: rgba(255,255,255, 0.055)</li>
+        <li>Border: 0.5px rgba(255,255,255, 0.10)</li>
+        <li>Radius: 20pt all corners, 6pt top-left</li>
+        <li>Text: DM Sans 400 - 14.5pt - white 88%</li>
+      </ul>
+    </div>
+    <div class="glass purple">
+      <div class="glass-title" style="color:#a78bfa;">User bubbles (right)</div>
+      <ul>
+        <li>Background: rgba(124,58,237, 0.18)</li>
+        <li>Border: 0.5px rgba(124,58,237, 0.35)</li>
+        <li>Radius: 20pt all corners, 6pt bottom-right</li>
+        <li>Text: DM Sans 400 - 14.5pt - white 88%</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="ai-instructions">
+  <div class="section-eyebrow">12 - AI Instructions</div>
+  <h2 class="section-title">How to Design a New Screen</h2>
+  <p class="section-desc">When any AI (Cursor, Claude, Copilot, etc.) is asked to design a Pulse Check screen, follow these steps in order. Do not skip steps.</p>
+
+  <div class="glass lime" style="margin-bottom:10px;">
+    <div class="glass-title">Step 1 - Apply the page background</div>
+    <ul><li>Set page/view background to #070711</li><li>Place 3 ambient blobs (Section 04)</li><li>All content at z-index 1+, blobs at z-index 0, pointer-events none</li></ul>
+  </div>
+  <div class="glass" style="margin-bottom:10px;">
+    <div class="glass-title">Step 2 - Build top-to-bottom structure</div>
+    <ul><li>Status bar - Page title header - Scrollable content (16pt horizontal padding, 14pt card gaps) - Sticky bottom nav</li></ul>
+  </div>
+  <div class="glass" style="margin-bottom:10px;">
+    <div class="glass-title">Step 3 - Wrap every section in a glass card</div>
+    <ul><li>Base glass card for general content - Tinted variants for pillars, metrics, shaping cells - Never opaque - No drop shadows</li></ul>
+  </div>
+  <div class="glass" style="margin-bottom:10px;">
+    <div class="glass-title">Step 4 - Apply typography from the scale</div>
+    <ul><li>Syne bold for AI output and key metrics - DM Sans for everything the athlete reads - Never outside the type scale - Never pure white/black text - use rgba opacities</li></ul>
+  </div>
+  <div class="glass" style="margin-bottom:10px;">
+    <div class="glass-title">Step 5 - Apply color semantics</div>
+    <ul><li>Lime = action / AI output (use sparingly) - Purple = cognitive / mental - Green = health / connection - Blue = composure / calm - Orange = streak / energy</li></ul>
+  </div>
+  <div class="glass" style="margin-bottom:10px;">
+    <div class="glass-title">Step 6 - Write copy athlete-first</div>
+    <ul><li>Check every string against the Word Bank (Section 08) - Kill jargon before shipping - Set time expectations - Lead with outcomes, not features - Read it out loud - if it sounds like a developer wrote it, rewrite it</li></ul>
+  </div>
+  <div class="glass" style="margin-bottom:30px;">
+    <div class="glass-title">Step 7 - Animate only what is in Section 06</div>
+    <ul><li>Avatar ring always spins - Live dot always pulses - Everything else is static - No bounces, no slides, no spring physics</li></ul>
+  </div>
+
+  <h3>What NOT to Do</h3>
+  <div class="dont-grid">
+    <div class="dont-item"><div class="dont-x">x</div>Use white or light backgrounds anywhere</div>
+    <div class="dont-item"><div class="dont-x">x</div>Add drop shadows to cards</div>
+    <div class="dont-item"><div class="dont-x">x</div>Use pure black (#000000) - use #070711</div>
+    <div class="dont-item"><div class="dont-x">x</div>Use Inter, Roboto, or system fonts</div>
+    <div class="dont-item"><div class="dont-x">x</div>Invent colors outside Section 01</div>
+    <div class="dont-item"><div class="dont-x">x</div>Make cards fully opaque</div>
+    <div class="dont-item"><div class="dont-x">x</div>Omit the inner highlight gradient</div>
+    <div class="dont-item"><div class="dont-x">x</div>Use purple gradient backgrounds</div>
+    <div class="dont-item"><div class="dont-x">x</div>Use ALL CAPS for anything except eyebrow labels</div>
+    <div class="dont-item"><div class="dont-x">x</div>Use white text on a Lime (#D4EA04) button</div>
+    <div class="dont-item"><div class="dont-x">x</div>Write copy from the system's point of view</div>
+    <div class="dont-item"><div class="dont-x">x</div>Use "flow," "pilot," "baseline," or "onboarding" in user-facing copy</div>
+  </div>
+</section>
+
+<section class="section" id="cheatsheet">
+  <div class="section-eyebrow">13 - Quick Reference</div>
+  <h2 class="section-title">Cheat Sheet</h2>
+  <p class="section-desc">Everything an AI needs in one scannable view.</p>
+
+  <div class="cheat-grid">
+    <div>
+      <h4>Core colors</h4>
+      <pre><code>Page BG:       #070711
+Deep BG:       #0B0B1C
+Card BG:       rgba(255,255,255, 0.045)
+Card border:   rgba(255,255,255, 0.10)
+Card highlight: rgba(255,255,255, 0.055)
+Divider:       rgba(255,255,255, 0.05)
+
+Lime:          #D4EA04
+Purple:        #7C3AED
+Green:         #10B981
+Blue:          #378ADD
+Orange:        #FB923C
+Red:           #E24B4A
+
+Text 100%:     #FFFFFF
+Text 65%:      rgba(255,255,255, 0.65)
+Text 42%:      rgba(255,255,255, 0.42)
+Text 28%:      rgba(255,255,255, 0.28)
+Text 25%:      rgba(255,255,255, 0.25)</code></pre>
+
+      <h4>Tinted cards</h4>
+      <pre><code>Lime:   bg rgba(212,234,4,  0.06)
+        br rgba(212,234,4,  0.18)
+Purple: bg rgba(124,58,237, 0.07)
+        br rgba(124,58,237, 0.20)
+Green:  bg rgba(16,185,129, 0.08)
+        br rgba(16,185,129, 0.22)
+Blue:   bg rgba(55,138,221, 0.08)
+        br rgba(55,138,221, 0.22)
+Orange: bg rgba(234,88,12,  0.10)
+        br rgba(234,88,12,  0.22)</code></pre>
+
+      <h4>Words to kill</h4>
+      <pre><code>flow         -&gt; steps / what happens next
+baseline     -&gt; your starting point
+pilot        -&gt; program / your team
+context      -&gt; know you / read you
+operational  -&gt; [delete]
+onboarding   -&gt; getting started
+data source  -&gt; your Oura / Apple Watch
+personalize  -&gt; built for you</code></pre>
+    </div>
+
+    <div>
+      <h4>Border radii</h4>
+      <pre><code>Page card:    24pt
+Pillar card:  18pt
+Insight box:  16pt
+Sub-cell:     14pt
+CTA button:   12-14pt
+Train cell:   12pt
+Icon chip:    9-10pt
+Tag pill:     20pt (capsule)
+Detail icon:  8pt</code></pre>
+
+      <h4>Type scale</h4>
+      <pre><code>Page title:  Syne 800 - 26pt - -0.5
+Hero name:   Syne 800 - 22pt - -0.3
+Pillar %:    Syne 800 - 24pt
+Metric val:  Syne 800 - 28pt
+Insight:     Syne 700 - 16pt - lh 1.4
+Eyebrow:     DM Sans 600 - 10.5pt - UPPER
+Card title:  DM Sans 600 - 12.5pt
+Body:        DM Sans 400 - 13-14.5pt
+Support:     DM Sans 400 - 11pt
+Status:      DM Sans 600 - 11pt - semantic
+Row key:     DM Sans 400 - 13pt - 42%
+Row val:     DM Sans 500 - 12.5pt - lime
+Timestamp:   DM Sans 400 - 10pt - 25%
+Tag text:    DM Sans 500 - 11.5pt</code></pre>
+
+      <h4>Blob placement</h4>
+      <pre><code>Blob 1 (Purple #7C3AED @ 0.20)
+  Size: 280-300pt - Blur: 65pt
+  Position: top-left -60, -60
+
+Blob 2 (Lime #D4EA04 @ 0.07)
+  Size: 200-220pt - Blur: 55pt
+  Position: top-right +40, +240
+
+Blob 3 (Green #10B981 @ 0.10)
+  Size: 160-180pt - Blur: 45pt
+  Position: bottom-left +20, -300</code></pre>
+    </div>
+  </div>
+
+  <h4>Copy principles - one line each</h4>
+  <div class="glass" style="margin-top:8px;">
+    <table class="token-table">
+      <tr><td>1. Name the feeling</td><td>What does this mean for me, right now?</td></tr>
+      <tr><td>2. Short sentences</td><td>20 words max. If it is longer, split it.</td></tr>
+      <tr><td>3. "You" not "the system"</td><td>Write from the athlete's experience, not the product's.</td></tr>
+      <tr><td>4. Set time expectations</td><td>"This takes 3 minutes" removes more anxiety than any headline.</td></tr>
+      <tr><td>5. Use trust signals</td><td>"Your coaching staff set this up" anchors new actions to known people.</td></tr>
+      <tr><td>6. Lead with the outcome</td><td>Say what the athlete gets, not what the system does.</td></tr>
+    </table>
+  </div>
+
+  <div style="margin-top:48px;padding-top:24px;border-top:0.5px solid var(--divider);text-align:center;">
+    <div style="font-size:11px;color:var(--text-25);letter-spacing:1px;">PULSE INTELLIGENCE LABS - DESIGN SYSTEM v1.0 - CONFIDENTIAL</div>
+  </div>
+</section>
+
+</main>
+
+<script>
+window.addEventListener('scroll', function () {
+  var scrolled = window.scrollY;
+  var total = document.body.scrollHeight - window.innerHeight;
+  document.getElementById('scrollBar').style.width = (scrolled / total * 100) + '%';
+});
+
+var sections = document.querySelectorAll('section[id], div[id="cover"]');
+var navItems = document.querySelectorAll('.nav-item');
+
+var observer = new IntersectionObserver(function (entries) {
+  entries.forEach(function (entry) {
+    if (entry.isIntersecting) {
+      var id = entry.target.id;
+      navItems.forEach(function (item) {
+        item.classList.remove('active');
+        if (item.getAttribute('href') === '#' + id) {
+          item.classList.add('active');
+        }
+      });
+    }
+  });
+}, { rootMargin: '-20% 0px -60% 0px' });
+
+sections.forEach(function (section) {
+  observer.observe(section);
+});
+</script>
+</body>
+</html>

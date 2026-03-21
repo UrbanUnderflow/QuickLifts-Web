@@ -26,6 +26,7 @@ import type { PilotDashboardMetricExplanationKey } from '../../../components/adm
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
 import type { PulseCheckInviteLink } from '../../../api/firebase/pulsecheckProvisioning/types';
+import type { PulseCheckRequiredConsentDocument } from '../../../api/firebase/pulsecheckProvisioning/types';
 import { analyzePulseCheckInviteOneLink, isPulseCheckInviteOneLink } from '../../../utils/pulsecheckInviteLinks';
 import { useUser } from '../../../hooks/useUser';
 import type {
@@ -98,6 +99,12 @@ const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 const formatAverage = (value: number) => value.toFixed(1);
 const toScopedPercent = (numerator: number, denominator: number) => (denominator > 0 ? (numerator / denominator) * 100 : 0);
 const normalizeInvitePreviewValue = (value: string) => value.replace(/\r\n/g, '\n').trim();
+const normalizeRequiredConsentDraft = (consent: PulseCheckRequiredConsentDocument, index: number): PulseCheckRequiredConsentDocument => ({
+  id: consent.id.trim() || `consent-${index + 1}`,
+  title: consent.title.trim(),
+  body: consent.body.trim(),
+  version: consent.version.trim() || 'v1',
+});
 const toDateValue = (value: any): Date | null => {
   if (!value) return null;
   if (typeof value === 'number' && Number.isFinite(value)) return new Date(value);
@@ -278,15 +285,18 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [cohortFilter, setCohortFilter] = useState('');
   const [editingHypotheses, setEditingHypotheses] = useState<Record<string, PulseCheckPilotHypothesis>>({});
   const [inviteConfigDraft, setInviteConfigDraft] = useState<PulseCheckPilotInviteConfig | null>(null);
+  const [requiredConsentDrafts, setRequiredConsentDrafts] = useState<PulseCheckRequiredConsentDocument[]>([]);
   const [savingHypothesisId, setSavingHypothesisId] = useState<string | null>(null);
   const [generatingHypothesisAssist, setGeneratingHypothesisAssist] = useState(false);
   const [creatingSuggestedHypothesisKey, setCreatingSuggestedHypothesisKey] = useState<string | null>(null);
   const [savingInviteConfig, setSavingInviteConfig] = useState(false);
+  const [savingRequiredConsents, setSavingRequiredConsents] = useState(false);
   const [savingInviteDefaultScope, setSavingInviteDefaultScope] = useState<'team' | 'organization' | null>(null);
   const [resettingInviteConfig, setResettingInviteConfig] = useState(false);
   const [seedingDefaults, setSeedingDefaults] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
+  const [unenrollingAthleteId, setUnenrollingAthleteId] = useState<string | null>(null);
   const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [demoModeEnabled, setDemoModeEnabled] = useState(false);
   const [generatingResearchReadout, setGeneratingResearchReadout] = useState(false);
@@ -334,6 +344,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       const hypothesisMap = Object.fromEntries((nextDetail?.hypotheses || []).map((hypothesis) => [hypothesis.id, cloneHypothesis(hypothesis)]));
       setEditingHypotheses(hypothesisMap);
       setInviteConfigDraft(nextDetail?.inviteConfig || null);
+      setRequiredConsentDrafts(nextDetail?.pilot.requiredConsents || []);
       setSelectedReadoutId((current) => {
         if (!nextDetail?.researchReadouts?.length) return '';
         if (current && nextDetail.researchReadouts.some((readout) => readout.id === current)) return current;
@@ -966,8 +977,71 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
+  const handleUnenrollAthlete = async (athlete: PilotDashboardDetail['athletes'][number]) => {
+    if (!detail) return;
+
+    const confirmed = window.confirm(
+      `Unenroll ${athlete.displayName} from ${detail.pilot.name}? They will stop appearing in this pilot's active athlete reporting.`
+    );
+    if (!confirmed) return;
+
+    if (demoModeEnabled) {
+      setPageMessage({ type: 'error', text: 'Demo mode does not support unenrolling athletes.' });
+      return;
+    }
+
+    setUnenrollingAthleteId(athlete.athleteId);
+    setPageMessage(null);
+    try {
+      await pulseCheckProvisioningService.unenrollAthleteFromPilot({
+        pilotId: detail.pilot.id,
+        athleteId: athlete.athleteId,
+        actorUserId: currentUser?.id || '',
+        actorEmail: currentUser?.email || '',
+      });
+      await load('refresh');
+      setPageMessage({
+        type: 'success',
+        text: `${athlete.displayName} was unenrolled from this pilot and no longer counts toward active pilot reporting.`,
+      });
+    } catch (unenrollError: any) {
+      console.error('[PulseCheckPilotDashboard] Failed to unenroll athlete from pilot:', unenrollError);
+      setPageMessage({ type: 'error', text: unenrollError?.message || 'Failed to unenroll athlete from this pilot.' });
+    } finally {
+      setUnenrollingAthleteId(null);
+    }
+  };
+
   const updateInviteConfigField = (field: keyof PulseCheckPilotInviteConfig, value: string) => {
     setInviteConfigDraft((current) => (current ? { ...current, [field]: value } : current));
+  };
+
+  const updateRequiredConsentField = (
+    index: number,
+    field: keyof PulseCheckRequiredConsentDocument,
+    value: string
+  ) => {
+    setRequiredConsentDrafts((current) =>
+      current.map((consent, consentIndex) =>
+        consentIndex === index ? { ...consent, [field]: value } : consent
+      )
+    );
+  };
+
+  const addRequiredConsentDraft = () => {
+    setRequiredConsentDrafts((current) => [
+      ...current,
+      {
+        id: `consent-${current.length + 1}`,
+        title: '',
+        body: '',
+        version: 'v1',
+      },
+    ]);
+  };
+
+  const removeRequiredConsentDraft = (index: number) => {
+    setRequiredConsentDrafts((current) => current.filter((_, consentIndex) => consentIndex !== index));
   };
 
   const saveInviteConfig = async () => {
@@ -998,6 +1072,33 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       setPageMessage({ type: 'error', text: 'Failed to save pilot invite instructions.' });
     } finally {
       setSavingInviteConfig(false);
+    }
+  };
+
+  const saveRequiredConsents = async () => {
+    if (!detail) return;
+    setSavingRequiredConsents(true);
+    setPageMessage(null);
+
+    try {
+      const normalized = requiredConsentDrafts
+        .map((consent, index) => normalizeRequiredConsentDraft(consent, index))
+        .filter((consent) => consent.title && consent.body);
+
+      await pulseCheckPilotDashboardService.savePilotRequiredConsents({
+        pilotId: detail.pilot.id,
+        requiredConsents: normalized,
+      });
+      await load('refresh');
+      setPageMessage({
+        type: 'success',
+        text: normalized.length === 0 ? 'Required agreements cleared for this pilot.' : 'Required agreements saved for this pilot.',
+      });
+    } catch (saveError) {
+      console.error('[PulseCheckPilotDashboard] Failed to save required consents:', saveError);
+      setPageMessage({ type: 'error', text: 'Failed to save required agreements.' });
+    } finally {
+      setSavingRequiredConsents(false);
     }
   };
 
@@ -1654,6 +1755,82 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                           />
                         </label>
                       </div>
+
+                      <div className="mt-6 rounded-3xl border border-white/10 bg-[#0b0f17] p-5">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                          <div>
+                            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">Required Agreements</div>
+                            <div className="mt-2 max-w-2xl text-sm text-zinc-400">
+                              Attach the exact agreements this pilot requires before an athlete can use the app. The native app will keep reopening this gate on launch and resume until every required agreement here is accepted.
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={addRequiredConsentDraft}
+                              className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
+                            >
+                              Add Agreement
+                            </button>
+                            <button
+                              onClick={() => void saveRequiredConsents()}
+                              disabled={savingRequiredConsents}
+                              className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100 transition hover:bg-emerald-400/15 disabled:opacity-60"
+                            >
+                              {savingRequiredConsents ? 'Saving...' : 'Save Agreements'}
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 space-y-4">
+                          {requiredConsentDrafts.length === 0 ? (
+                            <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-5 text-sm text-zinc-500">
+                              No pilot-specific agreements are attached yet.
+                            </div>
+                          ) : null}
+
+                          {requiredConsentDrafts.map((consent, index) => (
+                            <div key={`${consent.id}-${index}`} className="rounded-2xl border border-white/10 bg-[#11151f] p-4">
+                              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.4fr_auto]">
+                                <label className="space-y-2 text-sm text-zinc-300">
+                                  <span className="text-xs uppercase tracking-wide text-zinc-500">Agreement Title</span>
+                                  <input
+                                    value={consent.title}
+                                    onChange={(event) => updateRequiredConsentField(index, 'title', event.target.value)}
+                                    className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                                  />
+                                </label>
+                                <label className="space-y-2 text-sm text-zinc-300">
+                                  <span className="text-xs uppercase tracking-wide text-zinc-500">Version</span>
+                                  <input
+                                    value={consent.version}
+                                    onChange={(event) => updateRequiredConsentField(index, 'version', event.target.value)}
+                                    className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                                  />
+                                </label>
+                                <div className="flex items-end">
+                                  <button
+                                    onClick={() => removeRequiredConsentDraft(index)}
+                                    className="inline-flex items-center gap-2 rounded-2xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100 transition hover:bg-rose-400/15"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+
+                              <label className="mt-4 block space-y-2 text-sm text-zinc-300">
+                                <span className="text-xs uppercase tracking-wide text-zinc-500">Agreement Body</span>
+                                <textarea
+                                  value={consent.body}
+                                  onChange={(event) => updateRequiredConsentField(index, 'body', event.target.value)}
+                                  rows={6}
+                                  className="w-full rounded-2xl border border-white/10 bg-[#0b0f17] px-4 py-3 text-sm text-white"
+                                />
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   ) : null}
 
@@ -1777,14 +1954,24 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                 <td className="px-3 py-3 text-zinc-300">{athlete.engineSummary.patternModelCount}</td>
                                 <td className="px-3 py-3 text-zinc-300">{athlete.engineSummary.recommendationProjectionCount}</td>
                                 <td className="px-3 py-3">
-                                  <Link
-                                    href={`/admin/pulsecheckPilotDashboard/${encodeURIComponent(detail.pilot.id)}/athletes/${encodeURIComponent(
-                                      athlete.athleteId
-                                    )}`}
-                                    className="text-cyan-200 hover:text-cyan-100"
-                                  >
-                                    Open athlete
-                                  </Link>
+                                  <div className="flex flex-col items-start gap-2">
+                                    <Link
+                                      href={`/admin/pulsecheckPilotDashboard/${encodeURIComponent(detail.pilot.id)}/athletes/${encodeURIComponent(
+                                        athlete.athleteId
+                                      )}`}
+                                      className="text-cyan-200 hover:text-cyan-100"
+                                    >
+                                      Open athlete
+                                    </Link>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleUnenrollAthlete(athlete)}
+                                      disabled={unenrollingAthleteId === athlete.athleteId}
+                                      className="text-rose-200 transition hover:text-rose-100 disabled:cursor-not-allowed disabled:text-zinc-500"
+                                    >
+                                      {unenrollingAthleteId === athlete.athleteId ? 'Unenrolling...' : 'Unenroll from pilot'}
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))

@@ -12,6 +12,7 @@ import type {
   PulseCheckPilot,
   PulseCheckPilotCohort,
   PulseCheckPilotEnrollment,
+  PulseCheckRequiredConsentDocument,
   PulseCheckTeam,
   PulseCheckTeamMembership,
 } from '../pulsecheckProvisioning/types';
@@ -242,6 +243,11 @@ export interface PulseCheckPilotInviteConfigInput {
   supportPhone: string;
   iosAppUrl: string;
   androidAppUrl: string;
+}
+
+export interface PulseCheckPilotRequiredConsentInput {
+  pilotId: string;
+  requiredConsents: PulseCheckRequiredConsentDocument[];
 }
 
 export type PulseCheckPilotInviteDefaultScope = 'organization' | 'team';

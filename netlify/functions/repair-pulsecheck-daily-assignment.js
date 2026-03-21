@@ -138,6 +138,12 @@ function candidateMatchesAssignment(candidate, assignment) {
   return false;
 }
 
+function assignmentIsDeferred(assignment) {
+  if (!assignment) return false;
+  return String(assignment.status || '') === 'deferred'
+    || String(assignment.actionType || '') === 'defer';
+}
+
 async function hasLaunchableExerciseForCandidate(db, candidate) {
   const legacyExerciseId = asNonEmptyString(candidate?.legacyExerciseId);
   if (legacyExerciseId) {
@@ -182,9 +188,10 @@ async function hasLaunchableExerciseForCandidate(db, candidate) {
 
 async function filterLaunchableCandidates(db, candidates, existingAssignment) {
   const launchable = [];
+  const shouldExcludeExistingMatch = Boolean(existingAssignment) && !assignmentIsDeferred(existingAssignment);
 
   for (const candidate of candidates || []) {
-    if (candidateMatchesAssignment(candidate, existingAssignment)) {
+    if (shouldExcludeExistingMatch && candidateMatchesAssignment(candidate, existingAssignment)) {
       continue;
     }
 
@@ -394,6 +401,19 @@ exports.handler = async (event) => {
       );
 
       if (!launchableCandidates.length) {
+        const debugTrace = buildRepairDebugTrace({
+          sourceDate,
+          recoverFromConversation,
+          conversationRecoveryDetail,
+          workingSnapshot,
+          rematerialized: {
+            stateSnapshot: workingSnapshot,
+            candidateSet: baseCandidateSet,
+            plannerDecision: null,
+            dailyAssignment: existingAssignment,
+          },
+        });
+
         return {
           statusCode: 200,
           headers: RESPONSE_HEADERS,
@@ -403,6 +423,7 @@ exports.handler = async (event) => {
             dailyAssignment: existingAssignment,
             repairApplied: false,
             detail: 'No alternate launchable PulseCheck assignment is ready right now.',
+            debugTrace,
           }),
         };
       }
