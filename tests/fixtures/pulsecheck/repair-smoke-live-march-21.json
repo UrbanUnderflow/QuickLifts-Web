@@ -1,0 +1,158 @@
+{
+  "name": "repair-smoke-live-march-21",
+  "userId": "Bq6zlqIlSdPUGki6gsv6X9TdVtG3",
+  "decodedUid": "Bq6zlqIlSdPUGki6gsv6X9TdVtG3",
+  "request": {
+    "sourceDate": "2026-03-21",
+    "preferLaunchableAlternative": true,
+    "recoverFromConversation": true
+  },
+  "db": {
+    "priorProgress": {
+      "coachId": null,
+      "activeProgram": {
+        "recommendedSimId": "stale_unpublished_sim",
+        "recommendedLegacyExerciseId": "stale-unpublished-sim",
+        "sessionType": "training_rep",
+        "durationMode": "standard_rep",
+        "durationSeconds": 480,
+        "rationale": "A later sync drifted away from the saved March 21 recommendation."
+      },
+      "taxonomyProfile": {
+        "modifierScores": {
+          "readiness": 62
+        }
+      }
+    },
+    "syncedProgress": {
+      "coachId": null,
+      "activeProgram": {
+        "recommendedSimId": "stale_unpublished_sim",
+        "recommendedLegacyExerciseId": "stale-unpublished-sim",
+        "sessionType": "training_rep",
+        "durationMode": "standard_rep",
+        "durationSeconds": 480,
+        "rationale": "A later sync drifted away from the saved March 21 recommendation."
+      },
+      "taxonomyProfile": {
+        "modifierScores": {
+          "readiness": 62
+        }
+      }
+    },
+    "snapshot": {
+      "id": "Bq6zlqIlSdPUGki6gsv6X9TdVtG3_2026-03-21",
+      "athleteId": "Bq6zlqIlSdPUGki6gsv6X9TdVtG3",
+      "sourceDate": "2026-03-21",
+      "sourceCheckInId": "gybbyN3JBAepdM0YXrT0",
+      "recommendedRouting": "defer_alternate_path",
+      "recommendedProtocolClass": "priming",
+      "overallReadiness": "yellow",
+      "confidence": "medium",
+      "supportFlag": false,
+      "candidateClassHints": [
+        "protocol"
+      ],
+      "rawSignalSummary": {
+        "activeProgramContext": {
+          "recommendedSimId": "noise_gate",
+          "recommendedLegacyExerciseId": "focus-noise-gate",
+          "sessionType": "training_rep",
+          "durationMode": "standard_rep"
+        }
+      }
+    },
+    "existingAssignment": {
+      "athleteId": "Bq6zlqIlSdPUGki6gsv6X9TdVtG3",
+      "sourceDate": "2026-03-21",
+      "sourceCheckInId": "gybbyN3JBAepdM0YXrT0",
+      "status": "deferred",
+      "actionType": "defer",
+      "title": "Nora wants a quick check-in before today's sim"
+    },
+    "liveProtocols": [],
+    "liveSimModules": [
+      {
+        "id": "focus-noise-gate",
+        "simSpecId": "noise_gate",
+        "name": "Noise Gate",
+        "isActive": true,
+        "publishedFingerprint": "noise-gate-fingerprint",
+        "syncStatus": "in_sync",
+        "buildArtifact": {
+          "sourceFingerprint": "noise-gate-source",
+          "engineKey": "vision-pro"
+        },
+        "engineKey": "vision-pro",
+        "runtimeConfig": {
+          "mode": "bounded"
+        },
+        "variantSource": {
+          "family": "Noise Gate",
+          "variantName": "Noise Gate",
+          "publishedAt": 1774000000000
+        },
+        "sortOrder": 1
+      }
+    ],
+    "launchableLegacyExerciseIds": [
+      "focus-noise-gate"
+    ],
+    "launchableSimSpecIds": [
+      "noise_gate"
+    ]
+  },
+  "chatRecoveryResult": {
+    "applied": true,
+    "detail": "Recovered today's sim recommendation from the saved Nora conversation.",
+    "stateSnapshot": {
+      "id": "Bq6zlqIlSdPUGki6gsv6X9TdVtG3_2026-03-21",
+      "athleteId": "Bq6zlqIlSdPUGki6gsv6X9TdVtG3",
+      "sourceDate": "2026-03-21",
+      "sourceCheckInId": "gybbyN3JBAepdM0YXrT0",
+      "recommendedRouting": "sim_only",
+      "recommendedProtocolClass": "none",
+      "overallReadiness": "yellow",
+      "confidence": "medium",
+      "supportFlag": false,
+      "candidateClassHints": [
+        "sim"
+      ],
+      "rawSignalSummary": {
+        "activeProgramContext": {
+          "recommendedSimId": "noise_gate",
+          "recommendedLegacyExerciseId": "focus-noise-gate",
+          "sessionType": "training_rep",
+          "durationMode": "standard_rep"
+        }
+      }
+    }
+  },
+  "expected": {
+    "equals": {
+      "repairApplied": true,
+      "detail": "Recovered today's sim recommendation from the saved Nora conversation.",
+      "dailyAssignment.id": "Bq6zlqIlSdPUGki6gsv6X9TdVtG3_2026-03-21",
+      "dailyAssignment.sourceCheckInId": "gybbyN3JBAepdM0YXrT0",
+      "dailyAssignment.actionType": "lighter_sim",
+      "dailyAssignment.status": "assigned",
+      "dailyAssignment.simSpecId": "noise_gate",
+      "debugTrace.candidateCount": 1,
+      "debugTrace.conversationRecoveryApplied": true,
+      "debugTrace.snapshotRecommendedRouting": "sim_only",
+      "debugTrace.snapshotOverallReadiness": "yellow",
+      "debugTrace.snapshotConfidence": "medium",
+      "debugTrace.plannerActionType": "lighter_sim",
+      "debugTrace.finalAssignmentActionType": "lighter_sim"
+    },
+    "includes": {
+      "debugTrace.summary": [
+        "sourceDate=2026-03-21",
+        "conversationApplied=true",
+        "snapshotRouting=sim_only",
+        "candidateCount=1",
+        "finalAction=lighter_sim"
+      ]
+    }
+  }
+}
