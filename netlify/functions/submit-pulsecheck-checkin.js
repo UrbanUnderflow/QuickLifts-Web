@@ -218,6 +218,33 @@ function resolvePublishedSimCandidate(activeProgram, liveSimRegistry) {
     };
   }
 
+  const familyLookupTags = Array.from(new Set([
+    normalizeTag(activeProgram.recommendedSimId),
+    normalizeTag(activeProgram.recommendedLegacyExerciseId),
+    normalizeTag(activeProgram.recommendedLegacyExerciseId).replace(/^focus_/, ''),
+  ].filter(Boolean)));
+
+  const familyFallback = registry.find((record) => {
+    const recordId = normalizeTag(record.id);
+    const recordSimSpecId = normalizeTag(record.simSpecId);
+    const recordEngineKey = normalizeTag(record.engineKey || record?.buildArtifact?.engineKey);
+    const recordFamily = normalizeTag(record?.variantSource?.family);
+
+    return familyLookupTags.some((lookupTag) => (
+      (recordEngineKey && recordEngineKey === lookupTag)
+      || (recordFamily && recordFamily === lookupTag)
+      || (recordId && recordId.startsWith(`${lookupTag}_`))
+      || (recordSimSpecId && recordSimSpecId.startsWith(`${lookupTag}_`))
+    ));
+  }) || null;
+
+  if (familyFallback) {
+    return {
+      simModule: familyFallback,
+      inventoryGap: null,
+    };
+  }
+
   const requestedLabel = humanizeRuntimeLabel(
     activeProgram.recommendedSimId
     || activeProgram.recommendedLegacyExerciseId

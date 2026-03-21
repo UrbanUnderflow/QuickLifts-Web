@@ -1018,6 +1018,74 @@ test('buildAssignmentCandidateSet excludes unpublished sim recommendations', asy
   assert.match(candidateSet.inventoryGaps[0], /not currently published and launchable/i);
 });
 
+test('buildAssignmentCandidateSet resolves generic sim families to published variant records', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+
+  const candidateSet = runtimeHelpers.buildAssignmentCandidateSet({
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-21',
+    snapshot: {
+      id: 'athlete-1_2026-03-21',
+      athleteId: 'athlete-1',
+      sourceDate: '2026-03-21',
+      recommendedRouting: 'sim_only',
+      candidateClassHints: ['sim'],
+      overallReadiness: 'yellow',
+    },
+    progress: {
+      activeProgram: {
+        recommendedSimId: 'endurance_lock',
+        recommendedLegacyExerciseId: 'focus-endurance-lock',
+        sessionType: 'training_rep',
+        durationMode: 'extended_stress_test',
+        durationSeconds: 480,
+      },
+    },
+    liveProtocolRegistry: [],
+    liveSimRegistry: [
+      {
+        id: 'endurance-lock-library-burn-rate',
+        simSpecId: 'endurance-lock-library-burn-rate',
+        name: 'Burn Rate',
+        engineKey: 'endurance_lock',
+        buildArtifact: {
+          engineKey: 'endurance_lock',
+        },
+        variantSource: {
+          family: 'Endurance Lock',
+          variantName: 'Burn Rate',
+        },
+        sortOrder: 1,
+      },
+      {
+        id: 'endurance-lock-library-grind-line',
+        simSpecId: 'endurance-lock-library-grind-line',
+        name: 'Grind Line',
+        engineKey: 'endurance_lock',
+        buildArtifact: {
+          engineKey: 'endurance_lock',
+        },
+        variantSource: {
+          family: 'Endurance Lock',
+          variantName: 'Grind Line',
+        },
+        sortOrder: 2,
+      },
+    ],
+    responsivenessProfile: null,
+  });
+
+  assert.equal(candidateSet.candidates.length, 1);
+  assert.equal(candidateSet.plannerEligible, true);
+  assert.equal(candidateSet.candidates[0].type, 'sim');
+  assert.equal(candidateSet.candidates[0].actionType, 'lighter_sim');
+  assert.equal(candidateSet.candidates[0].simSpecId, 'endurance-lock-library-burn-rate');
+  assert.equal(candidateSet.candidates[0].legacyExerciseId, 'endurance-lock-library-burn-rate');
+  assert.equal(candidateSet.candidates[0].familyLabel, 'Endurance Lock');
+  assert.equal(candidateSet.candidates[0].variantLabel, 'Burn Rate');
+  assert.equal(candidateSet.inventoryGaps.length, 0);
+});
+
 test('buildAssignmentCandidateSet falls back to the snapshot active program context when synced progress drifts', async () => {
   const runtimeHelpers = loadRuntimeHelpers();
 
