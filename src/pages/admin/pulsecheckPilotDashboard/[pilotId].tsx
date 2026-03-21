@@ -26,7 +26,7 @@ import type { PilotDashboardMetricExplanationKey } from '../../../components/adm
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
 import type { PulseCheckInviteLink } from '../../../api/firebase/pulsecheckProvisioning/types';
-import { isPulseCheckInviteOneLink } from '../../../utils/pulsecheckInviteLinks';
+import { analyzePulseCheckInviteOneLink, isPulseCheckInviteOneLink } from '../../../utils/pulsecheckInviteLinks';
 import { useUser } from '../../../hooks/useUser';
 import type {
   PilotDashboardDetail,
@@ -616,6 +616,10 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   }, [detail, inviteLinks, selectedCohort]);
 
   const scopedInvite = scopedActiveInvites?.[0] || null;
+  const scopedInviteDiagnostic = useMemo(
+    () => analyzePulseCheckInviteOneLink(scopedInvite?.activationUrl || ''),
+    [scopedInvite?.activationUrl]
+  );
 
   const inviteConfigSource = useMemo(() => {
     if (!detail) {
@@ -1339,6 +1343,43 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {scopedInvite ? (
+                      <div
+                        data-testid="pilot-invite-diagnostics"
+                        className={`mt-4 rounded-2xl border p-4 ${
+                          scopedInviteDiagnostic.status === 'valid'
+                            ? 'border-emerald-400/20 bg-emerald-400/10'
+                            : 'border-amber-400/20 bg-amber-400/10'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">Invite Diagnostics</span>
+                          <span
+                            className={`rounded-full px-3 py-1 text-[11px] ${
+                              scopedInviteDiagnostic.status === 'valid'
+                                ? 'border border-emerald-400/25 bg-emerald-400/15 text-emerald-100'
+                                : 'border border-amber-400/25 bg-amber-400/15 text-amber-100'
+                            }`}
+                          >
+                            {scopedInviteDiagnostic.status === 'valid' ? 'Locally valid' : 'Needs attention'}
+                          </span>
+                        </div>
+                        <p className="mt-3 text-sm text-zinc-200">{scopedInviteDiagnostic.summary}</p>
+                        <div className="mt-3 text-xs text-zinc-400">
+                          Fallback redirect:{' '}
+                          <span className="text-zinc-200">{scopedInviteDiagnostic.fallbackUrl || 'Missing'}</span>
+                        </div>
+                        <ul className="mt-3 space-y-2 text-sm text-zinc-300">
+                          {scopedInviteDiagnostic.details.map((detailLine) => (
+                            <li key={detailLine} className="flex gap-2">
+                              <span className="mt-[7px] h-1.5 w-1.5 rounded-full bg-cyan-300/80" />
+                              <span>{detailLine}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
                     {scopedActiveInvites.length > 0 ? (
                       <div className="mt-4 space-y-3">
                         {scopedActiveInvites.map((invite, index) => (
@@ -1364,6 +1405,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               </div>
                               <div className="flex flex-wrap gap-2">
                                 <button
+                                  data-testid={`pilot-invite-copy-${invite.id}`}
                                   onClick={() => void copyInviteLink(invite.id, invite.activationUrl, 'Pilot athlete share link copied to clipboard.')}
                                   className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition-all duration-200 ${
                                     copiedInviteId === invite.id

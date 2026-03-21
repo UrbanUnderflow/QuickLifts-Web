@@ -204,6 +204,11 @@ test.describe.serial('PulseCheck pilot dashboard', () => {
 
       await expect(page.getByRole('heading', { name: fixture.pilotName })).toBeVisible();
       await expect(page.getByText(/Athletes outside this pilot are excluded/i)).toBeVisible();
+      await expect(page.getByTestId('pilot-invite-diagnostics')).toBeVisible();
+      await expect(page.getByTestId('pilot-invite-diagnostics')).toContainText('Fallback redirect');
+      const copyButtons = page.locator('[data-testid^="pilot-invite-copy-"]');
+      await copyButtons.first().click();
+      await expect(copyButtons.first()).toContainText('Copied to Clipboard');
 
       await page.getByTestId('pilot-dashboard-tab-research-readout').click();
 
