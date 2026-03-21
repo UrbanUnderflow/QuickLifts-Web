@@ -65,6 +65,12 @@ const adminCardsData = [
     link: "/admin/systemOverview"
   },
   {
+    title: "PulseCheck Design System",
+    description: "Dedicated PulseCheck visual language artifact with its own navigation for color, type, copy, motion, and screen specs.",
+    icon: <Layers className="w-5 h-5" />,
+    link: "/admin/pulsecheckDesignSystem"
+  },
+  {
     title: "PulseCheck Provisioning",
     description: "Create PulseCheck organizations and teams as the first implementation slice for provisioning and onboarding.",
     icon: <Building2 className="w-5 h-5" />,

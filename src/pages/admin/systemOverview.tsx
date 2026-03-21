@@ -1845,6 +1845,15 @@ const SystemOverviewPage: React.FC = () => {
                   ) : null}
                 </div>
                 <div className="flex items-center gap-3">
+                  {activeSectionId === "system-design-language" ? (
+                    <a
+                      href="/admin/pulsecheckDesignSystem"
+                      className="inline-flex items-center gap-2 rounded-xl border border-orange-400/30 bg-orange-500/10 px-4 py-2 text-sm font-medium text-orange-100 transition-colors hover:border-orange-300/50 hover:bg-orange-500/15 hover:text-white"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Open Design System
+                    </a>
+                  ) : null}
                   {copyState === "error" ? (
                     <p className="text-xs text-red-400">
                       Copy failed. Try again.

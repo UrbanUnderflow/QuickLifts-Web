@@ -21,7 +21,14 @@ import {
 } from '../mentaltraining/collections';
 import { pulseCheckProvisioningService } from '../pulsecheckProvisioning/service';
 import { pilotDashboardDemoMode } from './demoMode';
-import type { PulseCheckPilot, PulseCheckPilotCohort, PulseCheckPilotEnrollment, PulseCheckTeamMembership } from '../pulsecheckProvisioning/types';
+import { mergePulseCheckRequiredConsents } from '../pulsecheckProvisioning/types';
+import type {
+  PulseCheckPilot,
+  PulseCheckPilotCohort,
+  PulseCheckPilotEnrollment,
+  PulseCheckRequiredConsentDocument,
+  PulseCheckTeamMembership,
+} from '../pulsecheckProvisioning/types';
 import type {
   PilotDashboardAthleteDetail,
   PilotDashboardAthleteSummary,
@@ -49,6 +56,7 @@ import type {
   PulseCheckPilotInviteDefaultConfigInput,
   PulseCheckPilotInviteConfig,
   PulseCheckPilotInviteConfigInput,
+  PulseCheckPilotRequiredConsentInput,
   PulseCheckPilotHypothesisInput,
 } from './types';
 
@@ -98,6 +106,23 @@ const DEFAULT_PILOT_HYPOTHESES: Array<Pick<PulseCheckPilotHypothesis, 'code' | '
 ];
 
 const normalizeString = (value?: string | null) => value?.trim() || '';
+const normalizeRequiredConsentDocuments = (value: unknown): PulseCheckRequiredConsentDocument[] => {
+  if (!Array.isArray(value)) return [];
+
+  const normalized = value.reduce<PulseCheckRequiredConsentDocument[]>((acc, entry, index) => {
+    if (!entry || typeof entry !== 'object') return acc;
+    const candidate = entry as Record<string, unknown>;
+    const title = normalizeString(typeof candidate.title === 'string' ? candidate.title : '');
+    const body = normalizeString(typeof candidate.body === 'string' ? candidate.body : '');
+    const version = normalizeString(typeof candidate.version === 'string' ? candidate.version : '') || 'v1';
+    const id = normalizeString(typeof candidate.id === 'string' ? candidate.id : '') || `consent-${index + 1}`;
+    if (!title || !body) return acc;
+    acc.push({ id, title, body, version });
+    return acc;
+  }, []);
+
+  return mergePulseCheckRequiredConsents(normalized);
+};
 const roundMetric = (value: number) => Number(value.toFixed(1));
 const toPercentage = (numerator: number, denominator: number) =>
   denominator > 0 ? roundMetric((numerator / denominator) * 100) : 0;
@@ -254,6 +279,14 @@ const buildDefaultInviteConfig = (
   createdAt: null,
   updatedAt: null,
 });
+
+const normalizePilotRequiredConsentPayload = (requiredConsents: PulseCheckRequiredConsentDocument[]) =>
+  normalizeRequiredConsentDocuments(requiredConsents).map((consent) => ({
+    id: consent.id,
+    title: consent.title,
+    body: consent.body,
+    version: consent.version,
+  }));
 
 const applyInviteConfigFields = <T extends {
   welcomeHeadline: string;
@@ -783,6 +816,22 @@ export const pulseCheckPilotDashboardService = {
     );
 
     return configRef.id;
+  },
+
+  async savePilotRequiredConsents(input: PulseCheckPilotRequiredConsentInput): Promise<void> {
+    if (pilotDashboardDemoMode.isEnabled()) {
+      return;
+    }
+
+    const pilotRef = doc(db, 'pulsecheck-pilots', normalizeString(input.pilotId));
+    await setDoc(
+      pilotRef,
+      {
+        requiredConsents: normalizePilotRequiredConsentPayload(input.requiredConsents),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
   },
 
   async saveInviteDefault(input: PulseCheckPilotInviteDefaultConfigInput): Promise<string> {

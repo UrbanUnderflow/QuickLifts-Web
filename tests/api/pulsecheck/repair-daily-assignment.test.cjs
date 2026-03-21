@@ -503,3 +503,158 @@ test('preferLaunchableAlternative deterministically selects a launchable sim dur
   assert.equal(body.debugTrace.plannerSelectedCandidateId, 'athlete-1_2026-03-20_noise_gate');
   assert.equal(body.debugTrace.finalAssignmentActionType, 'sim');
 });
+
+test('preferLaunchableAlternative does not filter out a launchable sim just because it matches a deferred assignment', async () => {
+  let orchestrateCalled = false;
+  const snapshot = {
+    id: 'athlete-1_2026-03-21',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-21',
+    sourceCheckInId: 'checkin-1',
+    overallReadiness: 'green',
+    confidence: 'medium',
+    recommendedRouting: 'sim_only',
+    supportFlag: false,
+  };
+  const candidateSet = {
+    id: 'candidate-set-2',
+    candidates: [
+      {
+        id: 'athlete-1_2026-03-21_noise_gate',
+        type: 'sim',
+        label: 'Noise Gate',
+        actionType: 'sim',
+        simSpecId: 'noise_gate',
+        legacyExerciseId: 'focus-noise-gate',
+      },
+    ],
+    candidateIds: ['athlete-1_2026-03-21_noise_gate'],
+    plannerEligible: true,
+  };
+
+  const handler = loadHandler({
+    db: createDb({
+      existingAssignment: {
+        athleteId: 'athlete-1',
+        sourceDate: '2026-03-21',
+        status: 'deferred',
+        actionType: 'defer',
+        chosenCandidateId: 'athlete-1_2026-03-21_noise_gate',
+        simSpecId: 'noise_gate',
+        legacyExerciseId: 'focus-noise-gate',
+      },
+      launchableLegacyExerciseIds: ['focus-noise-gate'],
+    }),
+    runtimeHelpers: {
+      stripUndefinedDeep: (value) => value,
+      getSnapshotById: async () => snapshot,
+      loadOrInitializeProgress: async () => ({ athleteId: 'athlete-1' }),
+      syncTaxonomyProfile: async (_db, athleteId, progress) => ({
+        ...progress,
+        athleteId,
+        activeProgram: {
+          recommendedSimId: 'noise_gate',
+          recommendedLegacyExerciseId: 'focus-noise-gate',
+          sessionType: 'training_rep',
+          durationMode: 'standard_rep',
+          durationSeconds: 480,
+        },
+      }),
+      listLiveProtocolRegistry: async () => [],
+      listLivePublishedSimModules: async () => [],
+      getOrRefreshProtocolResponsivenessProfile: async () => null,
+      buildAssignmentCandidateSet: () => candidateSet,
+      orchestratePostCheckIn: async ({ candidateSet: incomingCandidateSet, plannerDecision }) => {
+        orchestrateCalled = true;
+        assert.equal(incomingCandidateSet.candidates.length, 1);
+        assert.equal(plannerDecision.selectedCandidateId, 'athlete-1_2026-03-21_noise_gate');
+        assert.equal(plannerDecision.actionType, 'sim');
+        return {
+          id: 'athlete-1_2026-03-21',
+          athleteId: 'athlete-1',
+          sourceDate: '2026-03-21',
+          status: 'assigned',
+          actionType: 'sim',
+          chosenCandidateId: 'athlete-1_2026-03-21_noise_gate',
+          simSpecId: 'noise_gate',
+        };
+      },
+    },
+  });
+
+  const body = parseBody(await handler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer fake-token' },
+    body: JSON.stringify({ sourceDate: '2026-03-21', preferLaunchableAlternative: true }),
+  }));
+
+  assert.equal(orchestrateCalled, true);
+  assert.equal(body.repairApplied, true);
+  assert.equal(body.dailyAssignment.actionType, 'sim');
+  assert.equal(body.debugTrace.candidateCount, 1);
+  assert.equal(body.debugTrace.plannerActionType, 'sim');
+});
+
+test('preferLaunchableAlternative returns debug trace when no launchable candidate survives filtering', async () => {
+  const snapshot = {
+    id: 'athlete-1_2026-03-21',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-21',
+    sourceCheckInId: 'checkin-1',
+    overallReadiness: 'yellow',
+    confidence: 'medium',
+    recommendedRouting: 'protocol_then_sim',
+    supportFlag: false,
+  };
+  const candidateSet = {
+    id: 'candidate-set-3',
+    candidates: [
+      {
+        id: 'athlete-1_2026-03-21_noise_gate',
+        type: 'sim',
+        label: 'Noise Gate',
+        actionType: 'lighter_sim',
+        simSpecId: 'noise_gate',
+        legacyExerciseId: 'focus-noise-gate',
+      },
+    ],
+    candidateIds: ['athlete-1_2026-03-21_noise_gate'],
+    plannerEligible: true,
+  };
+
+  const handler = loadHandler({
+    db: createDb({
+      existingAssignment: {
+        athleteId: 'athlete-1',
+        sourceDate: '2026-03-21',
+        status: 'deferred',
+        actionType: 'defer',
+      },
+    }),
+    runtimeHelpers: {
+      stripUndefinedDeep: (value) => value,
+      getSnapshotById: async () => snapshot,
+      loadOrInitializeProgress: async () => ({ athleteId: 'athlete-1' }),
+      syncTaxonomyProfile: async (_db, athleteId, progress) => progress,
+      listLiveProtocolRegistry: async () => [],
+      listLivePublishedSimModules: async () => [],
+      getOrRefreshProtocolResponsivenessProfile: async () => null,
+      buildAssignmentCandidateSet: () => candidateSet,
+      orchestratePostCheckIn: async () => {
+        throw new Error('should not orchestrate without launchable candidates');
+      },
+    },
+  });
+
+  const body = parseBody(await handler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer fake-token' },
+    body: JSON.stringify({ sourceDate: '2026-03-21', preferLaunchableAlternative: true }),
+  }));
+
+  assert.equal(body.repairApplied, false);
+  assert.equal(body.detail, 'No alternate launchable PulseCheck assignment is ready right now.');
+  assert.equal(body.debugTrace.candidateCount, 1);
+  assert.equal(body.debugTrace.snapshotRecommendedRouting, 'protocol_then_sim');
+  assert.equal(body.debugTrace.plannerActionType, null);
+});

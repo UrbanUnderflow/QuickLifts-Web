@@ -1,7 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import admin from '../../../../lib/firebase-admin';
 import { getFirebaseAdminApp } from '../../../../lib/firebase-admin';
+import { mergePulseCheckRequiredConsents } from '../../../../api/firebase/pulsecheckProvisioning/types';
 import type {
+  PulseCheckRequiredConsentDocument,
   PulseCheckPilotEnrollmentStatus,
   PulseCheckPilotStudyMode,
   PulseCheckResearchConsentStatus,
@@ -19,6 +21,33 @@ const PILOT_ENROLLMENTS_COLLECTION = 'pulsecheck-pilot-enrollments';
 const normalizeString = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 const normalizeEmail = (value: unknown) => normalizeString(value).toLowerCase();
 const buildPilotEnrollmentId = (pilotId: string, userId: string) => `${normalizeString(pilotId)}_${normalizeString(userId)}`;
+const normalizeRequiredConsentDocuments = (value: unknown): PulseCheckRequiredConsentDocument[] => {
+  if (!Array.isArray(value)) return [];
+
+  const normalized = value.reduce<PulseCheckRequiredConsentDocument[]>((acc, entry, index) => {
+    if (!entry || typeof entry !== 'object') return acc;
+    const candidate = entry as Record<string, unknown>;
+    const title = normalizeString(candidate.title);
+    const body = normalizeString(candidate.body);
+    const version = normalizeString(candidate.version) || 'v1';
+    const id = normalizeString(candidate.id) || `consent-${index + 1}`;
+    if (!title || !body) return acc;
+    acc.push({ id, title, body, version });
+    return acc;
+  }, []);
+
+  return mergePulseCheckRequiredConsents(normalized);
+};
+const normalizeCompletedConsentIds = (
+  value: unknown,
+  requiredConsents: PulseCheckRequiredConsentDocument[]
+): string[] => {
+  if (!Array.isArray(value) || requiredConsents.length === 0) return [];
+  const allowedIds = new Set(requiredConsents.map((consent) => consent.id));
+  return value
+    .map((entry) => normalizeString(entry))
+    .filter((entry, index, entries) => entry && allowedIds.has(entry) && entries.indexOf(entry) === index);
+};
 const resolveResearchConsentStatusForStudyMode = (
   studyMode: PulseCheckPilotStudyMode | null,
   currentStatus?: unknown
@@ -33,12 +62,15 @@ const resolveResearchConsentStatusForStudyMode = (
 const buildAthleteOnboardingFromInvite = (
   invite: Record<string, any>,
   currentState?: Record<string, any> | null,
-  pilotStudyMode: PulseCheckPilotStudyMode | null = null
+  pilotStudyMode: PulseCheckPilotStudyMode | null = null,
+  pilotRequiredConsents: PulseCheckRequiredConsentDocument[] = []
 ) => {
   const pilotId = normalizeString(invite.pilotId);
   const cohortId = normalizeString(invite.cohortId);
   const researchConsentStatus = resolveResearchConsentStatusForStudyMode(pilotStudyMode, currentState?.researchConsentStatus);
   const isResearchMode = pilotStudyMode === 'research';
+  const requiredConsents = pilotRequiredConsents;
+  const completedConsentIds = normalizeCompletedConsentIds(currentState?.completedConsentIds, requiredConsents);
 
   return {
     productConsentAccepted: Boolean(currentState?.productConsentAccepted),
@@ -67,6 +99,8 @@ const buildAthleteOnboardingFromInvite = (
     targetPilotName: normalizeString(invite.pilotName) || normalizeString(currentState?.targetPilotName),
     targetCohortId: cohortId || normalizeString(currentState?.targetCohortId),
     targetCohortName: normalizeString(invite.cohortName) || normalizeString(currentState?.targetCohortName),
+    requiredConsents,
+    completedConsentIds,
     baselinePathStatus: currentState?.baselinePathStatus || 'pending',
     baselinePathwayId: normalizeString(currentState?.baselinePathwayId),
   };
@@ -175,12 +209,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const existingTeamMembership = existingTeamMembershipSnap.exists ? existingTeamMembershipSnap.data() || {} : {};
       const existingPilotEnrollment = existingPilotEnrollmentSnap?.exists ? existingPilotEnrollmentSnap.data() || {} : {};
       const pilotStudyMode = pilotSnap?.data()?.studyMode as PulseCheckPilotStudyMode | undefined;
+      const pilotRequiredConsents = normalizeRequiredConsentDocuments(pilotSnap?.data()?.requiredConsents || []);
       const nextAthleteOnboarding =
         teamMembershipRole === 'athlete'
           ? buildAthleteOnboardingFromInvite(
               invite,
               existingTeamMembership.athleteOnboarding || null,
-              pilotStudyMode || null
+              pilotStudyMode || null,
+              pilotRequiredConsents
             )
           : null;
 
@@ -252,6 +288,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             researchConsentStatus: nextAthleteOnboarding.researchConsentStatus || 'not-required',
             researchConsentVersion: normalizeString(existingPilotEnrollment.researchConsentVersion),
             researchConsentRespondedAt: existingPilotEnrollment.researchConsentRespondedAt || null,
+            requiredConsentIds: pilotRequiredConsents.map((consent) => consent.id),
+            completedConsentIds: Array.isArray(nextAthleteOnboarding.completedConsentIds) ? nextAthleteOnboarding.completedConsentIds : [],
             eligibleForResearchDataset:
               nextAthleteOnboarding.researchConsentStatus === 'accepted'
                 ? true

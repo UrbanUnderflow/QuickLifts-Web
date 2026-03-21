@@ -70,7 +70,10 @@ export function resolvePulseCheckAthleteTaskState(input: {
   athleteOnboarding?: PulseCheckAthleteOnboardingState | null;
   progress?: AthleteMentalProgress | null;
 }): PulseCheckAthleteTaskState {
-  const consentComplete = Boolean(input.athleteOnboarding?.productConsentAccepted);
+  const requiredConsents = input.athleteOnboarding?.requiredConsents || [];
+  const completedConsentIds = new Set(input.athleteOnboarding?.completedConsentIds || []);
+  const requiredConsentsComplete = requiredConsents.every((consent) => completedConsentIds.has(consent.id));
+  const consentComplete = Boolean(input.athleteOnboarding?.productConsentAccepted) && requiredConsentsComplete;
   const baselineEvidence = getCompletedBaselineEvidence(input.progress);
   const membershipBaselineStatus = input.athleteOnboarding?.baselinePathStatus || 'pending';
 
