@@ -1,6 +1,6 @@
 const PULSE_WEB_ORIGIN = 'https://fitwithpulse.ai';
 const APPS_FLYER_SUBDOMAIN = 'fitwithpulse.onelink.me';
-const APPS_FLYER_TEMPLATE_ID = 'yffD';
+const APPS_FLYER_TEMPLATE_ID = 'uT14';
 const APPS_FLYER_DEEP_LINK_VALUE = 'pulsecheck_team_invite';
 const DEFAULT_INVITE_PREVIEW_IMAGE = `${PULSE_WEB_ORIGIN}/round-preview.png`;
 
