@@ -26,6 +26,7 @@ import type { PilotDashboardMetricExplanationKey } from '../../../components/adm
 import { pulseCheckPilotDashboardService } from '../../../api/firebase/pulsecheckPilotDashboard/service';
 import { pulseCheckProvisioningService } from '../../../api/firebase/pulsecheckProvisioning/service';
 import type { PulseCheckInviteLink } from '../../../api/firebase/pulsecheckProvisioning/types';
+import { isPulseCheckInviteOneLink } from '../../../utils/pulsecheckInviteLinks';
 import { useUser } from '../../../hooks/useUser';
 import type {
   PilotDashboardDetail,
@@ -876,8 +877,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
         setPageMessage({
           type: 'success',
           text: selectedCohort
-            ? `Pilot invite for ${selectedCohort.name} was created and copied.`
-            : 'Pilot athlete invite was created and copied.',
+            ? `Pilot share link for ${selectedCohort.name} was created and copied.`
+            : 'Pilot athlete share link was created and copied.',
         });
         return;
       }
@@ -905,8 +906,8 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
       setPageMessage({
         type: 'success',
         text: selectedCohort
-          ? `Pilot invite for ${selectedCohort.name} was created and copied.`
-          : 'Pilot athlete invite was created and copied.',
+          ? `Pilot share link for ${selectedCohort.name} was created and copied.`
+          : 'Pilot athlete share link was created and copied.',
       });
     } catch (inviteError) {
       console.error('[PulseCheckPilotDashboard] Failed to create pilot invite link:', inviteError);
@@ -1285,11 +1286,14 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                       <div>
                         <h2 className="text-lg font-semibold">Pilot Athlete Invite</h2>
                         <p className="mt-1 text-sm text-zinc-400">
-                          Generate the same athlete invite link used in provisioning, but scoped directly to this pilot
+                          Generate the PulseCheck athlete share link used in provisioning, but scoped directly to this pilot
                           {selectedCohort ? ` and ${selectedCohort.name}.` : '.'}
                         </p>
                         <p className="mt-3 text-sm text-zinc-300">
                           Existing Pulse athletes should sign in and get attached to the pilot without replaying onboarding. New athletes should create an account and follow the mobile setup walkthrough.
+                        </p>
+                        <p className="mt-2 text-xs text-zinc-500">
+                          This link is intended to be the preview-ready PulseCheck share link. Once your PulseCheck OneLink template is configured in AppsFlyer, it should open PulseCheck directly instead of Fit With Pulse.
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
@@ -1328,6 +1332,13 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                                   <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-xs text-cyan-100">
                                     {index === 0 ? 'Latest link' : `Link ${scopedActiveInvites.length - index}`}
                                   </span>
+                                  <span className={`rounded-full px-3 py-1 text-[11px] ${
+                                    isPulseCheckInviteOneLink(invite.activationUrl)
+                                      ? 'border border-emerald-400/20 bg-emerald-400/10 text-emerald-100'
+                                      : 'border border-amber-400/20 bg-amber-400/10 text-amber-100'
+                                  }`}>
+                                    {isPulseCheckInviteOneLink(invite.activationUrl) ? 'PulseCheck share link' : 'Fallback web link'}
+                                  </span>
                                   <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">
                                     Created {formatTimeValue(invite.createdAt)}
                                   </span>
@@ -1336,11 +1347,11 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               </div>
                               <div className="flex flex-wrap gap-2">
                                 <button
-                                  onClick={() => void copyInviteLink(invite.activationUrl, 'Pilot athlete invite copied to clipboard.')}
+                                  onClick={() => void copyInviteLink(invite.activationUrl, 'Pilot athlete share link copied to clipboard.')}
                                   className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
                                 >
                                   <Clipboard className="h-4 w-4" />
-                                  Copy
+                                  Copy Share Link
                                 </button>
                                 <a
                                   href={invite.activationUrl}
