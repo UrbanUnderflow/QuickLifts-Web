@@ -186,12 +186,45 @@ async function hasLaunchableExerciseForCandidate(db, candidate) {
   return false;
 }
 
-async function filterLaunchableCandidates(db, candidates, existingAssignment) {
+function hasPublishedSimModuleForCandidate(candidate, liveSimRegistry) {
+  if (!candidate || (candidate.type !== 'sim' && candidate.type !== 'trial')) {
+    return false;
+  }
+
+  const registry = Array.isArray(liveSimRegistry) ? liveSimRegistry : [];
+  if (!registry.length) {
+    return false;
+  }
+
+  const legacyExerciseId = asNonEmptyString(candidate?.legacyExerciseId);
+  const simSpecId = asNonEmptyString(candidate?.simSpecId)?.toLowerCase();
+  const candidateId = asNonEmptyString(candidate?.id)?.toLowerCase();
+  const normalizedLegacyExerciseId = legacyExerciseId ? legacyExerciseId.toLowerCase() : null;
+
+  return registry.some((record) => {
+    const recordId = asNonEmptyString(record?.id)?.toLowerCase();
+    const recordSimSpecId = asNonEmptyString(record?.simSpecId)?.toLowerCase();
+
+    return (
+      (candidateId && recordId && candidateId === recordId)
+      || (normalizedLegacyExerciseId && recordId && normalizedLegacyExerciseId === recordId)
+      || (simSpecId && recordSimSpecId && simSpecId === recordSimSpecId)
+      || (simSpecId && recordId && simSpecId === recordId)
+    );
+  });
+}
+
+async function filterLaunchableCandidates(db, candidates, existingAssignment, liveSimRegistry = []) {
   const launchable = [];
   const shouldExcludeExistingMatch = Boolean(existingAssignment) && !assignmentIsDeferred(existingAssignment);
 
   for (const candidate of candidates || []) {
     if (shouldExcludeExistingMatch && candidateMatchesAssignment(candidate, existingAssignment)) {
+      continue;
+    }
+
+    if (hasPublishedSimModuleForCandidate(candidate, liveSimRegistry)) {
+      launchable.push(candidate);
       continue;
     }
 
@@ -397,7 +430,8 @@ exports.handler = async (event) => {
       const launchableCandidates = await filterLaunchableCandidates(
         db,
         baseCandidateSet.candidates,
-        existingAssignment
+        existingAssignment,
+        liveSimRegistry
       );
 
       if (!launchableCandidates.length) {
