@@ -1,5 +1,5 @@
 const PULSE_WEB_ORIGIN = 'https://fitwithpulse.ai';
-const APPS_FLYER_SUBDOMAIN = 'fitwithpulse.onelink.me';
+const APPS_FLYER_SUBDOMAIN = 'pulsecheckapp.onelink.me';
 const APPS_FLYER_TEMPLATE_ID = 'uT14';
 const APPS_FLYER_DEEP_LINK_VALUE = 'pulsecheck_team_invite';
 const DEFAULT_INVITE_PREVIEW_IMAGE = `${PULSE_WEB_ORIGIN}/round-preview.png`;
@@ -78,7 +78,7 @@ export const buildPulseCheckTeamInviteOneLink = ({
     ['af_r', fallbackUrl],
     ['af_og_title', encodeURIComponent(title)],
     ['af_og_description', encodeURIComponent(description)],
-    ['af_og_image', ogImageUrl],
+    ['af_og_image', encodeURIComponent(ogImageUrl)],
   ];
 
   return `${baseUrl}?${pairs.map(([key, value]) => `${key}=${value}`).join('&')}`;
