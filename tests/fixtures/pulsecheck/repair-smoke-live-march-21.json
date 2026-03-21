@@ -11,12 +11,12 @@
     "priorProgress": {
       "coachId": null,
       "activeProgram": {
-        "recommendedSimId": "stale_unpublished_sim",
-        "recommendedLegacyExerciseId": "stale-unpublished-sim",
+        "recommendedSimId": "endurance_lock",
+        "recommendedLegacyExerciseId": "focus-endurance-lock",
         "sessionType": "training_rep",
-        "durationMode": "standard_rep",
+        "durationMode": "extended_stress_test",
         "durationSeconds": 480,
-        "rationale": "A later sync drifted away from the saved March 21 recommendation."
+        "rationale": "Taxonomy progress still points at the Endurance Lock family."
       },
       "taxonomyProfile": {
         "modifierScores": {
@@ -27,12 +27,12 @@
     "syncedProgress": {
       "coachId": null,
       "activeProgram": {
-        "recommendedSimId": "stale_unpublished_sim",
-        "recommendedLegacyExerciseId": "stale-unpublished-sim",
+        "recommendedSimId": "endurance_lock",
+        "recommendedLegacyExerciseId": "focus-endurance-lock",
         "sessionType": "training_rep",
-        "durationMode": "standard_rep",
+        "durationMode": "extended_stress_test",
         "durationSeconds": 480,
-        "rationale": "A later sync drifted away from the saved March 21 recommendation."
+        "rationale": "The synced progress still references the generic Endurance Lock family."
       },
       "taxonomyProfile": {
         "modifierScores": {
@@ -55,10 +55,10 @@
       ],
       "rawSignalSummary": {
         "activeProgramContext": {
-          "recommendedSimId": "noise_gate",
-          "recommendedLegacyExerciseId": "focus-noise-gate",
+          "recommendedSimId": "endurance_lock",
+          "recommendedLegacyExerciseId": "focus-endurance-lock",
           "sessionType": "training_rep",
-          "durationMode": "standard_rep"
+          "durationMode": "extended_stress_test"
         }
       }
     },
@@ -73,33 +73,61 @@
     "liveProtocols": [],
     "liveSimModules": [
       {
-        "id": "focus-noise-gate",
-        "simSpecId": "noise_gate",
-        "name": "Noise Gate",
+        "id": "endurance-lock-library-burn-rate",
+        "simSpecId": "endurance-lock-library-burn-rate",
+        "name": "Burn Rate",
         "isActive": true,
-        "publishedFingerprint": "noise-gate-fingerprint",
+        "publishedFingerprint": "endurance-lock-library-burn-rate-fingerprint",
         "syncStatus": "in_sync",
         "buildArtifact": {
-          "sourceFingerprint": "noise-gate-source",
-          "engineKey": "vision-pro"
+          "sourceFingerprint": "endurance-lock-library-burn-rate-source",
+          "engineKey": "endurance_lock"
         },
-        "engineKey": "vision-pro",
+        "engineKey": "endurance_lock",
         "runtimeConfig": {
           "mode": "bounded"
         },
         "variantSource": {
-          "family": "Noise Gate",
-          "variantName": "Noise Gate",
+          "family": "Endurance Lock",
+          "variantName": "Burn Rate",
           "publishedAt": 1774000000000
         },
         "sortOrder": 1
+      },
+      {
+        "id": "endurance-lock-library-grind-line",
+        "simSpecId": "endurance-lock-library-grind-line",
+        "name": "Grind Line",
+        "isActive": true,
+        "publishedFingerprint": "endurance-lock-library-grind-line-fingerprint",
+        "syncStatus": "in_sync",
+        "buildArtifact": {
+          "sourceFingerprint": "endurance-lock-library-grind-line-source",
+          "engineKey": "endurance_lock"
+        },
+        "engineKey": "endurance_lock",
+        "runtimeConfig": {
+          "mode": "bounded"
+        },
+        "variantSource": {
+          "family": "Endurance Lock",
+          "variantName": "Grind Line",
+          "publishedAt": 1774000001000
+        },
+        "sortOrder": 2
       }
     ],
     "launchableLegacyExerciseIds": [
-      "focus-noise-gate"
+      "endurance-lock-library-burn-rate",
+      "endurance-lock-library-grind-line"
     ],
     "launchableSimSpecIds": [
-      "noise_gate"
+      "endurance-lock-library-burn-rate",
+      "endurance-lock-library-grind-line"
+    ],
+    "launchableLabels": [
+      "burn rate",
+      "grind line"
     ]
   },
   "chatRecoveryResult": {
@@ -120,10 +148,10 @@
       ],
       "rawSignalSummary": {
         "activeProgramContext": {
-          "recommendedSimId": "noise_gate",
-          "recommendedLegacyExerciseId": "focus-noise-gate",
+          "recommendedSimId": "endurance_lock",
+          "recommendedLegacyExerciseId": "focus-endurance-lock",
           "sessionType": "training_rep",
-          "durationMode": "standard_rep"
+          "durationMode": "extended_stress_test"
         }
       }
     }
@@ -136,7 +164,8 @@
       "dailyAssignment.sourceCheckInId": "gybbyN3JBAepdM0YXrT0",
       "dailyAssignment.actionType": "lighter_sim",
       "dailyAssignment.status": "assigned",
-      "dailyAssignment.simSpecId": "noise_gate",
+      "dailyAssignment.simSpecId": "endurance-lock-library-burn-rate",
+      "dailyAssignment.legacyExerciseId": "endurance-lock-library-burn-rate",
       "debugTrace.candidateCount": 1,
       "debugTrace.conversationRecoveryApplied": true,
       "debugTrace.snapshotRecommendedRouting": "sim_only",
