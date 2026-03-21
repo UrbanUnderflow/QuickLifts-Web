@@ -1018,6 +1018,56 @@ test('buildAssignmentCandidateSet excludes unpublished sim recommendations', asy
   assert.match(candidateSet.inventoryGaps[0], /not currently published and launchable/i);
 });
 
+test('buildAssignmentCandidateSet falls back to the snapshot active program context when synced progress drifts', async () => {
+  const runtimeHelpers = loadRuntimeHelpers();
+
+  const candidateSet = runtimeHelpers.buildAssignmentCandidateSet({
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-21',
+    snapshot: {
+      id: 'athlete-1_2026-03-21',
+      athleteId: 'athlete-1',
+      sourceDate: '2026-03-21',
+      recommendedRouting: 'sim_only',
+      candidateClassHints: ['sim'],
+      overallReadiness: 'green',
+      rawSignalSummary: {
+        activeProgramContext: {
+          recommendedSimId: 'noise_gate',
+          recommendedLegacyExerciseId: 'focus-noise-gate',
+          sessionType: 'training_rep',
+          durationMode: 'standard_rep',
+        },
+      },
+    },
+    progress: {
+      activeProgram: {
+        recommendedSimId: 'stale_unpublished_sim',
+        recommendedLegacyExerciseId: 'stale-unpublished-sim',
+        sessionType: 'training_rep',
+        durationMode: 'standard_rep',
+        durationSeconds: 480,
+        rationale: 'A later profile sync drifted to a different recommendation.',
+      },
+    },
+    liveProtocolRegistry: [],
+    liveSimRegistry: [
+      {
+        id: 'focus-noise-gate',
+        simSpecId: 'noise_gate',
+        name: 'Noise Gate',
+      },
+    ],
+    responsivenessProfile: null,
+  });
+
+  assert.equal(candidateSet.candidates.length, 1);
+  assert.equal(candidateSet.candidates[0].type, 'sim');
+  assert.equal(candidateSet.candidates[0].simSpecId, 'noise_gate');
+  assert.equal(candidateSet.candidates[0].legacyExerciseId, 'focus-noise-gate');
+  assert.equal(candidateSet.inventoryGaps.length, 0);
+});
+
 test('buildAssignmentCandidateSet includes protocol alternatives for deferred alternate-path routing and prefers matching visualization category', async () => {
   const runtimeHelpers = loadRuntimeHelpers();
 

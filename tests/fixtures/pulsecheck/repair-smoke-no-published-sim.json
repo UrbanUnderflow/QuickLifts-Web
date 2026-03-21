@@ -1,0 +1,127 @@
+{
+  "name": "repair-smoke-no-published-sim",
+  "userId": "athlete-1",
+  "decodedUid": "athlete-1",
+  "request": {
+    "sourceDate": "2026-03-21",
+    "preferLaunchableAlternative": true,
+    "recoverFromConversation": true
+  },
+  "db": {
+    "priorProgress": {
+      "coachId": null,
+      "activeProgram": {
+        "recommendedSimId": "noise_gate",
+        "recommendedLegacyExerciseId": "focus-noise-gate",
+        "sessionType": "training_rep",
+        "durationMode": "standard_rep",
+        "durationSeconds": 480,
+        "rationale": "The athlete should receive Noise Gate when inventory is available."
+      },
+      "taxonomyProfile": {
+        "modifierScores": {
+          "readiness": 62
+        }
+      }
+    },
+    "syncedProgress": {
+      "coachId": null,
+      "activeProgram": {
+        "recommendedSimId": "noise_gate",
+        "recommendedLegacyExerciseId": "focus-noise-gate",
+        "sessionType": "training_rep",
+        "durationMode": "standard_rep",
+        "durationSeconds": 480,
+        "rationale": "The athlete should receive Noise Gate when inventory is available."
+      },
+      "taxonomyProfile": {
+        "modifierScores": {
+          "readiness": 62
+        }
+      }
+    },
+    "snapshot": {
+      "id": "athlete-1_2026-03-21",
+      "athleteId": "athlete-1",
+      "sourceDate": "2026-03-21",
+      "sourceCheckInId": "checkin-1",
+      "recommendedRouting": "defer_alternate_path",
+      "recommendedProtocolClass": "priming",
+      "overallReadiness": "yellow",
+      "confidence": "medium",
+      "supportFlag": false,
+      "candidateClassHints": [
+        "protocol"
+      ],
+      "rawSignalSummary": {
+        "activeProgramContext": {
+          "recommendedSimId": "noise_gate",
+          "recommendedLegacyExerciseId": "focus-noise-gate",
+          "sessionType": "training_rep",
+          "durationMode": "standard_rep"
+        }
+      }
+    },
+    "existingAssignment": {
+      "athleteId": "athlete-1",
+      "sourceDate": "2026-03-21",
+      "sourceCheckInId": "checkin-1",
+      "status": "deferred",
+      "actionType": "defer",
+      "chosenCandidateId": "athlete-1_2026-03-21_noise_gate",
+      "simSpecId": "noise_gate",
+      "legacyExerciseId": "focus-noise-gate"
+    },
+    "liveProtocols": [],
+    "liveSimModules": [],
+    "launchableLegacyExerciseIds": [],
+    "launchableSimSpecIds": []
+  },
+  "chatRecoveryResult": {
+    "applied": true,
+    "detail": "Recovered today's sim recommendation from the saved Nora conversation.",
+    "stateSnapshot": {
+      "id": "athlete-1_2026-03-21",
+      "athleteId": "athlete-1",
+      "sourceDate": "2026-03-21",
+      "sourceCheckInId": "checkin-1",
+      "recommendedRouting": "sim_only",
+      "recommendedProtocolClass": "none",
+      "overallReadiness": "yellow",
+      "confidence": "medium",
+      "supportFlag": false,
+      "candidateClassHints": [
+        "sim"
+      ],
+      "rawSignalSummary": {
+        "activeProgramContext": {
+          "recommendedSimId": "noise_gate",
+          "recommendedLegacyExerciseId": "focus-noise-gate",
+          "sessionType": "training_rep",
+          "durationMode": "standard_rep"
+        }
+      }
+    }
+  },
+  "expected": {
+    "equals": {
+      "repairApplied": false,
+      "detail": "No alternate launchable PulseCheck assignment is ready right now.",
+      "dailyAssignment.actionType": "defer",
+      "dailyAssignment.status": "deferred",
+      "debugTrace.candidateCount": 0,
+      "debugTrace.conversationRecoveryApplied": true,
+      "debugTrace.snapshotRecommendedRouting": "sim_only",
+      "debugTrace.plannerActionType": null,
+      "debugTrace.finalAssignmentActionType": "defer"
+    },
+    "includes": {
+      "debugTrace.summary": [
+        "conversationApplied=true",
+        "snapshotRouting=sim_only",
+        "candidateCount=0",
+        "finalAction=defer"
+      ]
+    }
+  }
+}

@@ -136,6 +136,54 @@ async function listLivePublishedSimModules(db) {
     });
 }
 
+function normalizeActiveProgramContext(activeProgram) {
+  if (!activeProgram || typeof activeProgram !== 'object') {
+    return null;
+  }
+
+  const normalized = {};
+
+  if (hasNonEmptyString(activeProgram.recommendedSimId)) {
+    normalized.recommendedSimId = activeProgram.recommendedSimId.trim();
+  }
+
+  if (hasNonEmptyString(activeProgram.recommendedLegacyExerciseId)) {
+    normalized.recommendedLegacyExerciseId = activeProgram.recommendedLegacyExerciseId.trim();
+  }
+
+  if (hasNonEmptyString(activeProgram.sessionType)) {
+    normalized.sessionType = activeProgram.sessionType.trim();
+  }
+
+  if (hasNonEmptyString(activeProgram.durationMode)) {
+    normalized.durationMode = activeProgram.durationMode.trim();
+  }
+
+  if (typeof activeProgram.durationSeconds === 'number' && Number.isFinite(activeProgram.durationSeconds)) {
+    normalized.durationSeconds = activeProgram.durationSeconds;
+  }
+
+  if (hasNonEmptyString(activeProgram.rationale)) {
+    normalized.rationale = activeProgram.rationale.trim();
+  }
+
+  return Object.keys(normalized).length ? normalized : null;
+}
+
+function resolveActiveProgramContext({ snapshot, progress }) {
+  const progressActiveProgram = normalizeActiveProgramContext(progress?.activeProgram);
+  const snapshotActiveProgram = normalizeActiveProgramContext(snapshot?.rawSignalSummary?.activeProgramContext);
+
+  if (progressActiveProgram && snapshotActiveProgram) {
+    return {
+      ...progressActiveProgram,
+      ...snapshotActiveProgram,
+    };
+  }
+
+  return snapshotActiveProgram || progressActiveProgram || null;
+}
+
 function resolvePublishedSimCandidate(activeProgram, liveSimRegistry) {
   if (!activeProgram || (!activeProgram.recommendedSimId && !activeProgram.recommendedLegacyExerciseId)) {
     return {
@@ -1285,7 +1333,7 @@ function buildAssignmentCandidateSet({ athleteId, sourceDate, snapshot, progress
   const candidates = [];
   const constraintReasons = [];
   const inventoryGaps = [];
-  const activeProgram = progress?.activeProgram;
+  const activeProgram = resolveActiveProgramContext({ snapshot, progress });
   const wantsProtocol = (snapshot.candidateClassHints || []).includes('protocol')
     || snapshot.recommendedRouting === 'protocol_only'
     || snapshot.recommendedRouting === 'protocol_then_sim'
@@ -1433,7 +1481,7 @@ async function planAssignmentWithAI({ snapshot, candidateSet, progress, responsi
       userPayload: {
         stateSnapshot: snapshot,
         candidateSet,
-        activeProgram: progress?.activeProgram || null,
+        activeProgram: resolveActiveProgramContext({ snapshot, progress }),
         protocolResponsivenessProfile: responsivenessProfile || null,
       },
     });
@@ -1879,7 +1927,7 @@ async function orchestratePostCheckIn({
     }, { merge: true });
   }
 
-  const activeProgram = progress?.activeProgram || null;
+  const activeProgram = resolveActiveProgramContext({ snapshot, progress }) || null;
   if (!activeProgram) {
     console.warn('[submit-pulsecheck-checkin] No activeProgram was available during assignment orchestration; continuing with bounded candidates and fallback rules only.', {
       athleteId,
@@ -2291,6 +2339,7 @@ exports.runtimeHelpers = {
   listLiveProtocolRegistry,
   listLivePublishedSimModules,
   isPublishedSimModuleRecord,
+  resolveActiveProgramContext,
   resolvePublishedSimCandidate,
   getOrRefreshProtocolResponsivenessProfile,
   buildAssignmentCandidateSet,
