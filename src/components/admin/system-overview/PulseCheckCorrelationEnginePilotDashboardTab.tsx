@@ -179,11 +179,18 @@ const PulseCheckCorrelationEnginePilotDashboardTab: React.FC = () => {
       </SectionBlock>
 
       <SectionBlock icon={ShieldCheck} title="Design Principle">
-        <InfoCard
-          title="Pilot Intelligence, Not Infra Logging"
-          accent="blue"
-          body="The pilot dashboard should feel like a pilot intelligence surface: what this pilot is learning, whether the learning can be trusted, and whether it is helping athletes. Raw operational counters matter, but they belong in support of that bigger evaluation question."
-        />
+        <CardGrid columns="md:grid-cols-2">
+          <InfoCard
+            title="Pilot Intelligence, Not Infra Logging"
+            accent="blue"
+            body="The pilot dashboard should feel like a pilot intelligence surface: what this pilot is learning, whether the learning can be trusted, and whether it is helping athletes. Raw operational counters matter, but they belong in support of that bigger evaluation question."
+          />
+          <InfoCard
+            title="Intentional Feedback And Motion"
+            accent="green"
+            body="Important user actions should acknowledge themselves immediately and clearly. Copy, save, generate, refresh, and review actions should produce visible feedback on the control itself or nearby. Motion should stay subtle and intentional: enough to confirm state change and guide attention, never enough to feel decorative, noisy, or ambiguous."
+          />
+        </CardGrid>
       </SectionBlock>
     </div>
   );

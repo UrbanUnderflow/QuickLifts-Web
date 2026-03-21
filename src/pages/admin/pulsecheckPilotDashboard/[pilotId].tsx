@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
@@ -287,6 +287,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [seedingDefaults, setSeedingDefaults] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [revokingInviteId, setRevokingInviteId] = useState<string | null>(null);
+  const [copiedInviteId, setCopiedInviteId] = useState<string | null>(null);
   const [demoModeEnabled, setDemoModeEnabled] = useState(false);
   const [generatingResearchReadout, setGeneratingResearchReadout] = useState(false);
   const [savingResearchReadoutReview, setSavingResearchReadoutReview] = useState(false);
@@ -302,6 +303,7 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   const [historyCohortScopeFilter, setHistoryCohortScopeFilter] = useState<'all' | 'whole-pilot' | 'cohort-only'>('all');
   const [historyWindowStartFilter, setHistoryWindowStartFilter] = useState('');
   const [historyWindowEndFilter, setHistoryWindowEndFilter] = useState('');
+  const copyFeedbackTimeoutRef = useRef<number | null>(null);
 
   const load = async (mode: 'initial' | 'refresh' = 'initial') => {
     if (!pilotId) return;
@@ -348,6 +350,14 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
   useEffect(() => {
     void load();
   }, [pilotId]);
+
+  useEffect(() => {
+    return () => {
+      if (copyFeedbackTimeoutRef.current) {
+        window.clearTimeout(copyFeedbackTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const toggleDemoMode = async () => {
     const nextValue = !pulseCheckPilotDashboardService.isDemoModeEnabled();
@@ -846,9 +856,16 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
     }
   };
 
-  const copyInviteLink = async (activationUrl: string, successText: string) => {
+  const copyInviteLink = async (inviteId: string, activationUrl: string, successText: string) => {
     try {
       await navigator.clipboard.writeText(activationUrl);
+      setCopiedInviteId(inviteId);
+      if (copyFeedbackTimeoutRef.current) {
+        window.clearTimeout(copyFeedbackTimeoutRef.current);
+      }
+      copyFeedbackTimeoutRef.current = window.setTimeout(() => {
+        setCopiedInviteId((current) => (current === inviteId ? null : current));
+      }, 1800);
       setPageMessage({ type: 'success', text: successText });
     } catch (copyError) {
       console.error('[PulseCheckPilotDashboard] Failed to copy invite link:', copyError);
@@ -1347,11 +1364,15 @@ const PulseCheckPilotDashboardDetailPage: React.FC = () => {
                               </div>
                               <div className="flex flex-wrap gap-2">
                                 <button
-                                  onClick={() => void copyInviteLink(invite.activationUrl, 'Pilot athlete share link copied to clipboard.')}
-                                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white transition hover:bg-white/10"
+                                  onClick={() => void copyInviteLink(invite.id, invite.activationUrl, 'Pilot athlete share link copied to clipboard.')}
+                                  className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm transition-all duration-200 ${
+                                    copiedInviteId === invite.id
+                                      ? 'border-emerald-400/30 bg-emerald-400/15 text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.08)]'
+                                      : 'border-white/10 bg-white/5 text-white hover:bg-white/10'
+                                  }`}
                                 >
-                                  <Clipboard className="h-4 w-4" />
-                                  Copy Share Link
+                                  {copiedInviteId === invite.id ? <CheckCircle2 className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
+                                  {copiedInviteId === invite.id ? 'Copied to Clipboard' : 'Copy Share Link'}
                                 </button>
                                 <a
                                   href={invite.activationUrl}
