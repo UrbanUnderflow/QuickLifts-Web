@@ -68,7 +68,7 @@ export const buildPulseCheckTeamInviteOneLink = ({
     deep_link_sub1: 'pulsecheck_team_invite',
     deep_link_sub2: token,
     inviteToken: token,
-    af_r: encodeURIComponent(toAbsoluteUrl(fallbackPath)),
+    af_r: toAbsoluteUrl(fallbackPath),
     af_og_title: title,
     af_og_description: description,
     af_og_image: resolvePulseCheckInvitePreviewImage(imageUrl),
