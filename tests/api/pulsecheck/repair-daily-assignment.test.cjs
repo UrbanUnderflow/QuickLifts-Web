@@ -595,6 +595,109 @@ test('preferLaunchableAlternative does not filter out a launchable sim just beca
   assert.equal(body.debugTrace.plannerActionType, 'sim');
 });
 
+test('preferLaunchableAlternative treats published sim-module variants as launchable even without a mental-exercises record', async () => {
+  let orchestrateCalled = false;
+  const snapshot = {
+    id: 'athlete-1_2026-03-21',
+    athleteId: 'athlete-1',
+    sourceDate: '2026-03-21',
+    sourceCheckInId: 'checkin-1',
+    overallReadiness: 'yellow',
+    confidence: 'medium',
+    recommendedRouting: 'sim_only',
+    supportFlag: false,
+  };
+  const candidateSet = {
+    id: 'candidate-set-variant-sim',
+    candidates: [
+      {
+        id: 'athlete-1_2026-03-21_endurance-lock-library-burn-rate',
+        type: 'sim',
+        label: 'Burn Rate',
+        variantLabel: 'Burn Rate',
+        actionType: 'lighter_sim',
+        simSpecId: 'endurance-lock-library-burn-rate',
+        legacyExerciseId: 'endurance-lock-library-burn-rate',
+      },
+    ],
+    candidateIds: ['athlete-1_2026-03-21_endurance-lock-library-burn-rate'],
+    plannerEligible: true,
+  };
+  const liveSimRegistry = [
+    {
+      id: 'endurance-lock-library-burn-rate',
+      simSpecId: 'endurance-lock-library-burn-rate',
+      name: 'Burn Rate',
+      engineKey: 'endurance_lock',
+      variantSource: {
+        family: 'Endurance Lock',
+        variantName: 'Burn Rate',
+      },
+    },
+  ];
+
+  const handler = loadHandler({
+    db: createDb({
+      existingAssignment: {
+        athleteId: 'athlete-1',
+        sourceDate: '2026-03-21',
+        status: 'deferred',
+        actionType: 'defer',
+      },
+    }),
+    runtimeHelpers: {
+      stripUndefinedDeep: (value) => value,
+      getSnapshotById: async () => snapshot,
+      loadOrInitializeProgress: async () => ({ athleteId: 'athlete-1' }),
+      syncTaxonomyProfile: async (_db, athleteId, progress) => ({
+        ...progress,
+        athleteId,
+        activeProgram: {
+          recommendedSimId: 'endurance_lock',
+          recommendedLegacyExerciseId: 'focus-endurance-lock',
+          sessionType: 'training_rep',
+          durationMode: 'extended_stress_test',
+          durationSeconds: 480,
+        },
+      }),
+      listLiveProtocolRegistry: async () => [],
+      listLivePublishedSimModules: async () => liveSimRegistry,
+      getOrRefreshProtocolResponsivenessProfile: async () => null,
+      buildAssignmentCandidateSet: () => candidateSet,
+      orchestratePostCheckIn: async ({ candidateSet: incomingCandidateSet, plannerDecision }) => {
+        orchestrateCalled = true;
+        assert.equal(incomingCandidateSet.candidates.length, 1);
+        assert.equal(plannerDecision.decisionSource, 'repair_launchable_preference');
+        assert.equal(plannerDecision.selectedCandidateId, 'athlete-1_2026-03-21_endurance-lock-library-burn-rate');
+        assert.equal(plannerDecision.actionType, 'lighter_sim');
+        return {
+          id: 'athlete-1_2026-03-21',
+          athleteId: 'athlete-1',
+          sourceDate: '2026-03-21',
+          status: 'assigned',
+          actionType: 'lighter_sim',
+          chosenCandidateId: 'athlete-1_2026-03-21_endurance-lock-library-burn-rate',
+          simSpecId: 'endurance-lock-library-burn-rate',
+          legacyExerciseId: 'endurance-lock-library-burn-rate',
+        };
+      },
+    },
+  });
+
+  const body = parseBody(await handler({
+    httpMethod: 'POST',
+    headers: { authorization: 'Bearer fake-token' },
+    body: JSON.stringify({ sourceDate: '2026-03-21', preferLaunchableAlternative: true }),
+  }));
+
+  assert.equal(orchestrateCalled, true);
+  assert.equal(body.repairApplied, true);
+  assert.equal(body.dailyAssignment.actionType, 'lighter_sim');
+  assert.equal(body.dailyAssignment.simSpecId, 'endurance-lock-library-burn-rate');
+  assert.equal(body.debugTrace.candidateCount, 1);
+  assert.equal(body.debugTrace.plannerActionType, 'lighter_sim');
+});
+
 test('preferLaunchableAlternative returns debug trace when no launchable candidate survives filtering', async () => {
   const snapshot = {
     id: 'athlete-1_2026-03-21',
