@@ -2533,7 +2533,7 @@ const SignInModal: React.FC<SignInModalProps> = ({
   // }
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black z-50 sm:p-6">
+    <div className="fixed inset-0 flex items-center justify-center bg-black z-[200] sm:p-6">
       <div className="relative bg-zinc-900 w-full h-full sm:h-auto sm:w-[480px] sm:rounded-xl p-6 sm:p-8 border-none sm:border sm:border-zinc-700 shadow-xl overflow-y-auto">
         {mounted && window.location.hostname === 'localhost' && <DevModeToggle />}
         {/* iPhone App Download Banner */}

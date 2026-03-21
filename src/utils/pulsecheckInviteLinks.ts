@@ -1,6 +1,7 @@
 const PULSE_WEB_ORIGIN = 'https://fitwithpulse.ai';
 const APPS_FLYER_SUBDOMAIN = 'fitwithpulse.onelink.me';
 const APPS_FLYER_TEMPLATE_ID = 'yffD';
+const APPS_FLYER_DEEP_LINK_VALUE = 'pulsecheck_team_invite';
 const DEFAULT_INVITE_PREVIEW_IMAGE = `${PULSE_WEB_ORIGIN}/round-preview.png`;
 
 const toAbsoluteUrl = (pathOrUrl?: string | null): string => {
@@ -18,6 +19,11 @@ const toAbsoluteUrl = (pathOrUrl?: string | null): string => {
 
 export const resolvePulseCheckInvitePreviewImage = (teamImageUrl?: string | null, organizationImageUrl?: string | null) =>
   toAbsoluteUrl(teamImageUrl || organizationImageUrl || DEFAULT_INVITE_PREVIEW_IMAGE);
+
+export const isPulseCheckInviteOneLink = (url?: string | null) => {
+  const value = String(url || '').trim();
+  return value.includes(`${APPS_FLYER_SUBDOMAIN}/${APPS_FLYER_TEMPLATE_ID}`);
+};
 
 export const buildPulseCheckTeamInviteOneLink = ({
   token,
@@ -57,7 +63,10 @@ export const buildPulseCheckTeamInviteOneLink = ({
   const params = new URLSearchParams({
     pid: 'pulsecheck_team_invite',
     c: pilotName?.trim() ? 'pulsecheck_pilot_invite' : 'pulsecheck_team_invite',
-    deep_link_value: 'pulsecheck_team_invite',
+    deep_link_value: APPS_FLYER_DEEP_LINK_VALUE,
+    linkType: 'pulsecheck_team_invite',
+    deep_link_sub1: 'pulsecheck_team_invite',
+    deep_link_sub2: token,
     inviteToken: token,
     af_r: encodeURIComponent(toAbsoluteUrl(fallbackPath)),
     af_og_title: title,
