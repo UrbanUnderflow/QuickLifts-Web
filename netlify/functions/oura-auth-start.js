@@ -4,6 +4,7 @@ const {
   DEFAULT_RETURN_TO,
   OAUTH_STATES_COLLECTION,
   RESPONSE_HEADERS,
+  buildOuraErrorResponse,
   buildAuthorizeUrl,
   buildStateToken,
   getConfiguredScopes,
@@ -74,12 +75,9 @@ exports.handler = async (event) => {
     };
   } catch (error) {
     console.error('[oura-auth-start] Failed:', error);
-    return {
-      statusCode: error.statusCode || 500,
-      headers: RESPONSE_HEADERS,
-      body: JSON.stringify({
-        error: error?.message || 'Failed to start Oura authentication.',
-      }),
-    };
+    return buildOuraErrorResponse(error, {
+      errorCode: 'OURA_CONNECT_FAILED',
+      message: 'We could not start the Oura connection right now.',
+    });
   }
 };

@@ -16,7 +16,11 @@ import {
   Waves,
 } from 'lucide-react';
 import { auth } from '../../api/firebase/config';
-import { ouraIntegrationService, type OuraConnectionStatus } from '../../api/firebase/mentaltraining/ouraIntegrationService';
+import {
+  OuraIntegrationError,
+  ouraIntegrationService,
+  type OuraConnectionStatus,
+} from '../../api/firebase/mentaltraining/ouraIntegrationService';
 
 type BannerMessage = {
   tone: 'success' | 'error' | 'info';
@@ -24,6 +28,77 @@ type BannerMessage = {
 };
 
 const DEFAULT_SCOPES = ['daily'];
+
+type OuraUiAction = 'connect' | 'disconnect' | 'status' | 'refresh';
+
+function withSupportCode(message: string, code: string) {
+  return `${message} Code: ${code}.`;
+}
+
+function callbackErrorMessage(code: string) {
+  switch (code) {
+    case 'OURA_CALLBACK_EXPIRED':
+    case 'missing_state':
+      return withSupportCode('That Oura connection request expired. Start the connection again from this page.', 'OURA_CALLBACK_EXPIRED');
+    case 'OURA_CALLBACK_INVALID_STATE':
+      return withSupportCode('That Oura connection request is no longer active. Start the connection again from this page.', 'OURA_CALLBACK_INVALID_STATE');
+    case 'OURA_CALLBACK_FAILED':
+    case 'token_exchange_failed':
+      return withSupportCode('We could not finish the Oura connection right now. Try again in a minute.', 'OURA_CALLBACK_FAILED');
+    case 'missing_code':
+      return withSupportCode('Oura returned without a sign-in code. Start the connection again from this page.', 'OURA_CALLBACK_MISSING_CODE');
+    default:
+      return withSupportCode('We could not finish the Oura connection right now. Try again in a minute.', code || 'OURA_CALLBACK_FAILED');
+  }
+}
+
+function ouraBannerErrorMessage(error: unknown, action: OuraUiAction) {
+  const fallbackCode =
+    action === 'connect'
+      ? 'OURA_CONNECT_FAILED'
+      : action === 'disconnect'
+      ? 'OURA_DISCONNECT_FAILED'
+      : action === 'refresh'
+      ? 'OURA_SYNC_FAILED'
+      : 'OURA_STATUS_FAILED';
+  const code =
+    error instanceof OuraIntegrationError
+      ? error.code || fallbackCode
+      : error instanceof TypeError
+      ? 'OURA_NETWORK_UNAVAILABLE'
+      : fallbackCode;
+
+  switch (code) {
+    case 'OURA_AUTH_REQUIRED':
+      return withSupportCode(
+        action === 'connect'
+          ? 'Sign in to PulseCheck again, then start your Oura connection one more time.'
+          : 'Sign in to PulseCheck again, then try this Oura step one more time.',
+        code
+      );
+    case 'OURA_NETWORK_UNAVAILABLE':
+      return withSupportCode('We could not reach Oura right now. Check your connection and try again.', code);
+    case 'OURA_FIREBASE_NOT_READY':
+      return withSupportCode('This Oura page is still getting ready. Refresh the page and try again.', code);
+    case 'OURA_CONFIG_UNAVAILABLE':
+      return withSupportCode('The Oura connection is unavailable right now. Try again a little later.', code);
+    case 'OURA_CALLBACK_FAILED':
+      return withSupportCode('We could not finish the Oura connection right now. Try again in a minute.', code);
+    case 'OURA_INVALID_REQUEST':
+      return withSupportCode('That Oura request was missing a detail. Try again.', code);
+    default:
+      return withSupportCode(
+        action === 'connect'
+          ? 'We could not start the Oura connection right now. Try again in a minute.'
+          : action === 'disconnect'
+          ? 'We could not disconnect Oura right now. Try again in a minute.'
+          : action === 'refresh'
+          ? 'We could not refresh your Oura recovery data right now. Try again in a minute.'
+          : 'We could not check your Oura connection right now. Try again in a minute.',
+        code
+      );
+  }
+}
 
 function formatTimestamp(value?: number | null) {
   if (!value) return 'Not available';
@@ -191,7 +266,7 @@ export default function PulseCheckOuraPage() {
     if (status === 'error') {
       return {
         tone: 'error' as const,
-        text: error ? `We could not finish the connection: ${error.replace(/_/g, ' ')}.` : 'We could not finish the Oura connection.',
+        text: callbackErrorMessage(error),
       };
     }
     return null;
@@ -211,7 +286,7 @@ export default function PulseCheckOuraPage() {
       console.error('[PulseCheck Oura page] Failed to load status:', error);
       setMessage({
         tone: 'error',
-        text: error instanceof Error ? error.message : 'We could not load your Oura connection status.',
+        text: ouraBannerErrorMessage(error, mode === 'refresh' ? 'refresh' : 'status'),
       });
     } finally {
       if (mode === 'refresh') {
@@ -264,7 +339,7 @@ export default function PulseCheckOuraPage() {
       setActionLoading(null);
       setMessage({
         tone: 'error',
-        text: error instanceof Error ? error.message : 'We could not start the Oura connection flow.',
+        text: ouraBannerErrorMessage(error, 'connect'),
       });
     }
   };
@@ -280,7 +355,7 @@ export default function PulseCheckOuraPage() {
       console.error('[PulseCheck Oura page] Failed to disconnect:', error);
       setMessage({
         tone: 'error',
-        text: error instanceof Error ? error.message : 'We could not disconnect Oura.',
+        text: ouraBannerErrorMessage(error, 'disconnect'),
       });
     } finally {
       setActionLoading(null);

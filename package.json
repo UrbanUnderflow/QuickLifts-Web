@@ -93,6 +93,8 @@
     "smoke:pulsecheck:repair": "node scripts/pulsecheck-repair-smoke.cjs",
     "test:pulsecheck:predeploy": "npm run test:pulsecheck:gate && npm run smoke:pulsecheck:repair",
     "probe:pulsecheck:repair-live": "node scripts/probe-pulsecheck-repair-live.cjs",
+    "audit:pulsecheck:ios-runtime": "node scripts/audit-pulsecheck-ios-runtime-live.cjs",
+    "backfill:pulsecheck:ios-bridge": "node scripts/backfill-pulsecheck-ios-runtime-bridge.cjs",
     "agent:setup-hooks": "git config core.hooksPath .githooks",
     "agent:commit": "node scripts/agent-commit.js",
     "deliverables:backfill-reasons": "node scripts/backfillDeliverableReviewReasons.js --dry-run",

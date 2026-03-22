@@ -2,6 +2,7 @@ const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const {
   CONNECTIONS_COLLECTION,
   RESPONSE_HEADERS,
+  buildOuraErrorResponse,
   buildConnectionDocId,
   revokeAccessToken,
   toConnectionStatus,
@@ -75,12 +76,9 @@ exports.handler = async (event) => {
     };
   } catch (error) {
     console.error('[oura-disconnect] Failed:', error);
-    return {
-      statusCode: error.statusCode || 500,
-      headers: RESPONSE_HEADERS,
-      body: JSON.stringify({
-        error: error?.message || 'Failed to disconnect Oura.',
-      }),
-    };
+    return buildOuraErrorResponse(error, {
+      errorCode: 'OURA_DISCONNECT_FAILED',
+      message: 'We could not disconnect Oura right now.',
+    });
   }
 };
