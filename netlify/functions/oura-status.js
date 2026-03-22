@@ -2,6 +2,7 @@ const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const {
   CONNECTIONS_COLLECTION,
   RESPONSE_HEADERS,
+  buildOuraErrorResponse,
   buildConnectionDocId,
   toConnectionStatus,
   verifyAuth,
@@ -36,12 +37,9 @@ exports.handler = async (event) => {
     };
   } catch (error) {
     console.error('[oura-status] Failed:', error);
-    return {
-      statusCode: error.statusCode || 500,
-      headers: RESPONSE_HEADERS,
-      body: JSON.stringify({
-        error: error?.message || 'Failed to load Oura connection status.',
-      }),
-    };
+    return buildOuraErrorResponse(error, {
+      errorCode: 'OURA_STATUS_FAILED',
+      message: 'We could not load your Oura connection right now.',
+    });
   }
 };

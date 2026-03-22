@@ -1,6 +1,19 @@
 import { auth } from '../config';
 import { resolvePulseCheckFunctionUrl } from './pulseCheckFunctionsUrl';
 
+export class OuraIntegrationError extends Error {
+  code: string;
+  status: number;
+
+  constructor(message: string, code = 'OURA_UNKNOWN', status = 500) {
+    super(message);
+    this.name = 'OuraIntegrationError';
+    this.code = code;
+    this.status = status;
+    Object.setPrototypeOf(this, OuraIntegrationError.prototype);
+  }
+}
+
 export type OuraConnectionStatus = {
   connected: boolean;
   status: 'connected' | 'disconnected' | 'error' | 'not_connected' | string;
@@ -36,9 +49,18 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {
-  const data = await response.json().catch(() => ({}));
+  const data = await response.json().catch(() => ({})) as {
+    error?: string;
+    detail?: string;
+    message?: string;
+    errorCode?: string;
+  };
   if (!response.ok) {
-    throw new Error((data as { error?: string })?.error || `Request failed with status ${response.status}`);
+    throw new OuraIntegrationError(
+      data?.error || data?.detail || data?.message || `Request failed with status ${response.status}`,
+      data?.errorCode || 'OURA_UNKNOWN',
+      response.status
+    );
   }
   return data as T;
 }

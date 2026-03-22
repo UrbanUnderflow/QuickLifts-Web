@@ -9,6 +9,7 @@ const {
   exchangeCodeForToken,
   getQueryParams,
   getRedirectUri,
+  normalizeOuraError,
   redirectHtml,
   sanitizeReturnTo,
 } = require('./oura-utils');
@@ -96,12 +97,17 @@ exports.handler = async (event) => {
       return { id: stateSnap.id, ...data };
     });
   } catch (error) {
+    const resolvedError = normalizeOuraError(error, {
+      errorCode: 'OURA_CALLBACK_INVALID_STATE',
+      message: 'This Oura connection request is no longer active.',
+      statusCode: 400,
+    });
     return buildHtmlResponse(
-      error.statusCode || 400,
+      resolvedError.statusCode,
       redirectHtml({
         title: 'Connection Expired',
-        message: error?.message || 'The Oura connection request is no longer valid.',
-        redirectTo: buildRedirectTarget(DEFAULT_RETURN_TO, { status: 'error', error: 'invalid_state' }),
+        message: resolvedError.message,
+        redirectTo: buildRedirectTarget(DEFAULT_RETURN_TO, { status: 'error', error: resolvedError.errorCode }),
       })
     );
   }
@@ -184,6 +190,11 @@ exports.handler = async (event) => {
     );
   } catch (error) {
     console.error('[oura-callback] Failed:', error);
+    const resolvedError = normalizeOuraError(error, {
+      errorCode: 'OURA_CALLBACK_FAILED',
+      message: 'We could not finish the Oura connection right now.',
+      statusCode: 500,
+    });
 
     if (stateData?.userId) {
       await db.collection(CONNECTIONS_COLLECTION).doc(buildConnectionDocId(stateData.userId)).set(
@@ -211,13 +222,12 @@ exports.handler = async (event) => {
       { merge: true }
     );
 
-    const target = buildRedirectTarget(returnTo, { status: 'error', error: 'token_exchange_failed' });
     return buildHtmlResponse(
-      error.statusCode || 500,
+      resolvedError.statusCode,
       redirectHtml({
         title: 'Connection Failed',
-        message: error?.message || 'Pulse could not finish the Oura connection.',
-        redirectTo: target,
+        message: resolvedError.message,
+        redirectTo: buildRedirectTarget(returnTo, { status: 'error', error: resolvedError.errorCode }),
       })
     );
   }

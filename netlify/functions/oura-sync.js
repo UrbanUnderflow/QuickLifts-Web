@@ -2,6 +2,7 @@ const { initializeFirebaseAdmin, admin } = require('./config/firebase');
 const {
   CONNECTIONS_COLLECTION,
   RESPONSE_HEADERS,
+  buildOuraErrorResponse,
   buildConnectionDocId,
   createError,
   getOauthCredentials,
@@ -118,24 +119,211 @@ function shiftDateKey(dateKey, offsetDays) {
   return isoDateKey(date);
 }
 
+function isValidDateKey(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').trim());
+}
+
+function resolveTimeZone(value) {
+  const candidate = typeof value === 'string' && value.trim() ? value.trim() : 'UTC';
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: candidate }).format(new Date());
+    return candidate;
+  } catch (error) {
+    return 'UTC';
+  }
+}
+
+function dateKeyInTimeZone(date = new Date(), timezone = 'UTC') {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const parts = formatter.formatToParts(date);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${map.year}-${map.month}-${map.day}`;
+}
+
+function getTimeZoneOffsetMs(timeZone, date) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(date);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const asUtc = Date.UTC(
+    Number(map.year),
+    Number(map.month) - 1,
+    Number(map.day),
+    Number(map.hour),
+    Number(map.minute),
+    Number(map.second)
+  );
+  return asUtc - date.getTime();
+}
+
+function convertLocalDateTimeToUtcMs(dateKey, hours, minutes, timeZone) {
+  const [yearRaw, monthRaw, dayRaw] = dateKey.split('-');
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  const day = Number(dayRaw);
+
+  let utcGuess = Date.UTC(year, month - 1, day, hours, minutes, 0);
+  for (let iteration = 0; iteration < 4; iteration += 1) {
+    const offsetMs = getTimeZoneOffsetMs(timeZone, new Date(utcGuess));
+    const corrected = Date.UTC(year, month - 1, day, hours, minutes, 0) - offsetMs;
+    if (corrected === utcGuess) break;
+    utcGuess = corrected;
+  }
+
+  return utcGuess;
+}
+
 function buildDayWindow(dateKey, timezone = 'UTC') {
-  const startAt = Date.parse(`${dateKey}T00:00:00.000Z`) / 1000;
+  const resolvedTimezone = resolveTimeZone(timezone);
+  const startAt = convertLocalDateTimeToUtcMs(dateKey, 0, 0, resolvedTimezone) / 1000;
+  const endAt = convertLocalDateTimeToUtcMs(shiftDateKey(dateKey, 1), 0, 0, resolvedTimezone) / 1000;
   return {
     startAt,
-    endAt: startAt + 24 * 60 * 60,
-    timezone,
+    endAt,
+    timezone: resolvedTimezone,
     windowType: 'daily',
   };
 }
 
-function chooseLatestRecord(records) {
+function compareNumberDescending(left, right) {
+  const leftValue = numberValue(left);
+  const rightValue = numberValue(right);
+
+  if (leftValue === null && rightValue === null) return 0;
+  if (leftValue === null) return 1;
+  if (rightValue === null) return -1;
+  return rightValue - leftValue;
+}
+
+function compareStringDescending(left, right) {
+  const leftValue = typeof left === 'string' ? left.trim() : '';
+  const rightValue = typeof right === 'string' ? right.trim() : '';
+
+  if (!leftValue && !rightValue) return 0;
+  if (!leftValue) return 1;
+  if (!rightValue) return -1;
+  return rightValue.localeCompare(leftValue);
+}
+
+function chooseLatestRecord(records, options = {}) {
+  const timestampKeys = Array.isArray(options.timestampKeys) && options.timestampKeys.length > 0
+    ? options.timestampKeys
+    : ['timestamp'];
+
   return (records || [])
     .filter(Boolean)
     .sort((left, right) => {
-      const leftDay = firstString(left, ['day']) || '';
-      const rightDay = firstString(right, ['day']) || '';
-      return rightDay.localeCompare(leftDay);
+      const byDay = compareStringDescending(firstString(left, ['day']), firstString(right, ['day']));
+      if (byDay !== 0) return byDay;
+
+      const byTimestamp = compareStringDescending(firstString(left, timestampKeys), firstString(right, timestampKeys));
+      if (byTimestamp !== 0) return byTimestamp;
+
+      return compareStringDescending(firstString(left, ['id']), firstString(right, ['id']));
     })[0] || null;
+}
+
+function sleepRecordTypePriority(record) {
+  switch ((firstString(record, ['type']) || '').toLowerCase()) {
+    case 'long_sleep':
+      return 3;
+    case 'sleep':
+      return 2;
+    case 'late_nap':
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+function isUsableSleepRecord(record) {
+  const type = (firstString(record, ['type']) || '').toLowerCase();
+  return Boolean(record) && type !== 'deleted' && type !== 'rest';
+}
+
+function compareSleepRecords(left, right) {
+  const byDay = compareStringDescending(firstString(left, ['day']), firstString(right, ['day']));
+  if (byDay !== 0) return byDay;
+
+  const byTypePriority = compareNumberDescending(sleepRecordTypePriority(left), sleepRecordTypePriority(right));
+  if (byTypePriority !== 0) return byTypePriority;
+
+  const byTotalSleep = compareNumberDescending(
+    firstNumber(left, ['total_sleep_duration']),
+    firstNumber(right, ['total_sleep_duration'])
+  );
+  if (byTotalSleep !== 0) return byTotalSleep;
+
+  const byTimeInBed = compareNumberDescending(
+    firstNumber(left, ['time_in_bed']),
+    firstNumber(right, ['time_in_bed'])
+  );
+  if (byTimeInBed !== 0) return byTimeInBed;
+
+  const byBedtimeEnd = compareStringDescending(firstString(left, ['bedtime_end']), firstString(right, ['bedtime_end']));
+  if (byBedtimeEnd !== 0) return byBedtimeEnd;
+
+  const byBedtimeStart = compareStringDescending(firstString(left, ['bedtime_start']), firstString(right, ['bedtime_start']));
+  if (byBedtimeStart !== 0) return byBedtimeStart;
+
+  return compareStringDescending(firstString(left, ['id']), firstString(right, ['id']));
+}
+
+// Oura can return multiple sleep periods for the same day; prefer the main overnight sleep.
+function chooseBestSleepRecord(records, preferredDateKey) {
+  const candidates = (records || []).filter(isUsableSleepRecord);
+  if (candidates.length === 0) return null;
+
+  const preferredDayCandidates = isValidDateKey(preferredDateKey)
+    ? candidates.filter((record) => firstString(record, ['day']) === preferredDateKey)
+    : [];
+
+  const pool = preferredDayCandidates.length > 0 ? preferredDayCandidates : candidates;
+  return pool.sort(compareSleepRecords)[0] || null;
+}
+
+function summarizeSleepRecord(record) {
+  if (!record) return null;
+
+  return compactObject({
+    id: firstString(record, ['id']),
+    day: firstString(record, ['day']),
+    type: firstString(record, ['type']),
+    bedtimeStart: firstString(record, ['bedtime_start']),
+    bedtimeEnd: firstString(record, ['bedtime_end']),
+    totalSleepMinutes: Math.round((firstNumber(record, ['total_sleep_duration']) || 0) / 60),
+    timeInBedMinutes: Math.round((firstNumber(record, ['time_in_bed']) || 0) / 60),
+    efficiency: firstNumber(record, ['efficiency']),
+  });
+}
+
+function buildSleepSelectionDebug(records, selectedRecord, preferredDateKey) {
+  const candidates = (records || [])
+    .filter(isUsableSleepRecord)
+    .sort(compareSleepRecords)
+    .slice(0, 6)
+    .map((record) => summarizeSleepRecord(record));
+
+  return compactObject({
+    preferredDateKey,
+    candidateCount: (records || []).filter(isUsableSleepRecord).length,
+    selectedRecord: summarizeSleepRecord(selectedRecord),
+    candidatePreview: candidates,
+  });
 }
 
 function buildDefaultSourceStatus(existingMap = {}) {
@@ -422,6 +610,8 @@ function buildSnapshotArtifacts({
   dateKey,
   timezone,
   syncAt,
+  requestedDateKey,
+  observedDateKey,
   sourceStatusDoc,
   sourceRecordDocs,
   sleepPayload,
@@ -483,6 +673,8 @@ function buildSnapshotArtifacts({
       sourcesUsed: nextSourcesUsed,
       sourceRecordIds: nextSourceRecordIds,
       domainWinners: nextDomainWinners,
+      requestedSnapshotDateKey: requestedDateKey || dateKey,
+      latestObservedOuraDateKey: observedDateKey || dateKey,
     },
     domains: {
       ...existingDomains,
@@ -501,6 +693,8 @@ function buildSnapshotArtifacts({
         lastSyncTimestamp: syncAt,
         syncOrigin: 'pulsecheck_oura_refresh',
         ouraLastSyncTimestamp: syncAt,
+        ouraRequestedSnapshotDateKey: requestedDateKey || dateKey,
+        ouraObservedDateKey: observedDateKey || dateKey,
         ...readinessPayload,
       }),
     },
@@ -518,6 +712,8 @@ function buildSnapshotArtifacts({
       sourceFamily: 'oura',
       syncOrigin: 'pulsecheck_oura_refresh',
       snapshotDateKey: dateKey,
+      requestedDateKey: requestedDateKey || dateKey,
+      observedDateKey: observedDateKey || dateKey,
     },
   };
 
@@ -556,10 +752,11 @@ exports.handler = async (event) => {
     const decoded = await verifyAuth(event);
     const body = parseJsonBody(event);
     const userId = decoded.uid;
-    const requestedDateKey = typeof body.snapshotDateKey === 'string' && body.snapshotDateKey.trim()
+    const timezone = resolveTimeZone(body.timezone);
+    const includeDebug = body.includeDebug === true;
+    const requestedDateKey = typeof body.snapshotDateKey === 'string' && isValidDateKey(body.snapshotDateKey)
       ? body.snapshotDateKey.trim()
-      : isoDateKey();
-    const timezone = typeof body.timezone === 'string' && body.timezone.trim() ? body.timezone.trim() : 'UTC';
+      : dateKeyInTimeZone(new Date(), timezone);
     const syncAt = Date.now() / 1000;
 
     const connectionRef = admin.firestore().collection(CONNECTIONS_COLLECTION).doc(buildConnectionDocId(userId));
@@ -571,12 +768,22 @@ exports.handler = async (event) => {
     }
 
     const { sleepRecords, readinessRecords } = await fetchOuraData(connectionRef, connection, requestedDateKey);
-    const latestSleep = chooseLatestRecord(sleepRecords);
-    const latestReadiness = chooseLatestRecord(readinessRecords);
-    const latestDateKey = firstString(latestSleep, ['day']) || firstString(latestReadiness, ['day']) || requestedDateKey;
+    const latestSleep = chooseBestSleepRecord(sleepRecords, requestedDateKey);
+    const latestReadiness = chooseLatestRecord(readinessRecords, { timestampKeys: ['timestamp'] });
+    const resolvedLatestDateKey = firstString(latestSleep, ['day']) || firstString(latestReadiness, ['day']) || requestedDateKey;
+    const latestDateKey = isValidDateKey(resolvedLatestDateKey) ? resolvedLatestDateKey : requestedDateKey;
+    const sleepSelectionDebug = buildSleepSelectionDebug(sleepRecords, latestSleep, requestedDateKey);
     const sleepPayload = mapSleepPayload(latestSleep || {});
     const readinessPayload = mapReadinessPayload(latestReadiness || {});
     const hasPayload = Object.keys(sleepPayload).length > 0 || Object.keys(readinessPayload).length > 0;
+
+    console.log('[oura-sync] Sleep selection summary', {
+      userId,
+      timezone,
+      requestedDateKey,
+      observedDateKey: latestDateKey,
+      sleepSelectionDebug,
+    });
 
     const sourceStatusDoc = buildSourceStatusDocument({
       userId,
@@ -600,6 +807,7 @@ exports.handler = async (event) => {
           status: 'waiting_for_data',
           snapshotDateKey: requestedDateKey,
           detail: 'Oura is connected, but no fresh recovery payload was available yet. Open the Oura app and sync the ring, then try refresh again.',
+          ...(includeDebug ? { debug: { sleepSelection: sleepSelectionDebug } } : {}),
         }),
       };
     }
@@ -623,37 +831,53 @@ exports.handler = async (event) => {
       );
     }
 
-    const snapshotId = `${userId}_daily_${latestDateKey}`;
-    const existingSnapshot = (await admin.firestore().collection(HEALTH_CONTEXT_COLLECTIONS.snapshots).doc(snapshotId).get()).data() || null;
-    const artifacts = buildSnapshotArtifacts({
-      userId,
-      dateKey: latestDateKey,
-      timezone,
-      syncAt,
-      sourceStatusDoc,
-      sourceRecordDocs,
-      sleepPayload,
-      readinessPayload,
-      existingSnapshot,
-    });
+    const snapshotDateKeys = uniqueStrings([requestedDateKey, latestDateKey]);
+    const existingSnapshots = await Promise.all(
+      snapshotDateKeys.map(async (snapshotDateKey) => {
+        const snapshotId = `${userId}_daily_${snapshotDateKey}`;
+        const snapshot = await admin.firestore().collection(HEALTH_CONTEXT_COLLECTIONS.snapshots).doc(snapshotId).get();
+        return snapshot.data() || null;
+      })
+    );
 
-    batch.set(
-      admin.firestore().collection(HEALTH_CONTEXT_COLLECTIONS.snapshots).doc(artifacts.snapshot.id),
-      artifacts.snapshot,
-      { merge: true }
+    const snapshotArtifacts = snapshotDateKeys.map((snapshotDateKey, index) =>
+      buildSnapshotArtifacts({
+        userId,
+        dateKey: snapshotDateKey,
+        timezone,
+        syncAt,
+        requestedDateKey,
+        observedDateKey: latestDateKey,
+        sourceStatusDoc,
+        sourceRecordDocs,
+        sleepPayload,
+        readinessPayload,
+        existingSnapshot: existingSnapshots[index],
+      })
     );
-    batch.set(
-      admin.firestore().collection(HEALTH_CONTEXT_COLLECTIONS.snapshotRevisions).doc(artifacts.snapshotRevision.id),
-      artifacts.snapshotRevision,
-      { merge: true }
-    );
-    batch.set(
-      admin.firestore().collection(HEALTH_CONTEXT_COLLECTIONS.assemblyTraces).doc(artifacts.assemblyTrace.id),
-      artifacts.assemblyTrace,
-      { merge: true }
-    );
+
+    for (const artifacts of snapshotArtifacts) {
+      batch.set(
+        admin.firestore().collection(HEALTH_CONTEXT_COLLECTIONS.snapshots).doc(artifacts.snapshot.id),
+        artifacts.snapshot,
+        { merge: true }
+      );
+      batch.set(
+        admin.firestore().collection(HEALTH_CONTEXT_COLLECTIONS.snapshotRevisions).doc(artifacts.snapshotRevision.id),
+        artifacts.snapshotRevision,
+        { merge: true }
+      );
+      batch.set(
+        admin.firestore().collection(HEALTH_CONTEXT_COLLECTIONS.assemblyTraces).doc(artifacts.assemblyTrace.id),
+        artifacts.assemblyTrace,
+        { merge: true }
+      );
+    }
 
     await batch.commit();
+
+    const requestedSnapshot = snapshotArtifacts.find((artifacts) => artifacts.snapshot.snapshotDateKey === requestedDateKey)
+      || snapshotArtifacts[0];
 
     return {
       statusCode: 200,
@@ -661,21 +885,35 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         ok: true,
         status: 'synced',
-        snapshotId: artifacts.snapshot.id,
-        snapshotDateKey: latestDateKey,
+        snapshotId: requestedSnapshot?.snapshot.id,
+        snapshotDateKey: requestedDateKey,
+        observedDateKey: latestDateKey,
+        updatedSnapshotDateKeys: snapshotArtifacts.map((artifacts) => artifacts.snapshot.snapshotDateKey),
         sourceRecordIds: sourceRecordDocs.map((record) => record.id),
-        sourcesUsed: artifacts.snapshot.provenance.sourcesUsed,
+        sourcesUsed: requestedSnapshot?.snapshot.provenance.sourcesUsed || ['oura'],
         detail: 'PulseCheck imported the latest Oura recovery context.',
+        ...(includeDebug ? {
+          debug: {
+            requestedDateKey,
+            observedDateKey: latestDateKey,
+            sleepSelection: sleepSelectionDebug,
+          },
+        } : {}),
       }),
     };
   } catch (error) {
     console.error('[oura-sync] Failed:', error);
-    return {
-      statusCode: error.statusCode || 500,
-      headers: RESPONSE_HEADERS,
-      body: JSON.stringify({
-        error: error?.message || 'Failed to refresh Oura recovery data.',
-      }),
-    };
+    return buildOuraErrorResponse(error, {
+      errorCode: 'OURA_SYNC_FAILED',
+      message: 'We could not refresh your Oura recovery data right now.',
+    });
   }
+};
+
+exports.__test = {
+  chooseLatestRecord,
+  chooseBestSleepRecord,
+  compareSleepRecords,
+  isUsableSleepRecord,
+  sleepRecordTypePriority,
 };

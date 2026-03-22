@@ -33,6 +33,120 @@ function createError(statusCode, message) {
   return error;
 }
 
+function normalizeOuraError(error, fallback = {}) {
+  const rawMessage = String(error?.message || '').trim();
+  const normalizedMessage = rawMessage.toLowerCase();
+  const statusCode = Number.isFinite(error?.statusCode) ? error.statusCode : fallback.statusCode || 500;
+  const fallbackCode = fallback.errorCode || 'OURA_UNKNOWN';
+  const fallbackMessage = fallback.message || 'We could not complete the Oura request right now.';
+
+  if (typeof error?.errorCode === 'string' && error.errorCode.trim()) {
+    return {
+      statusCode,
+      errorCode: error.errorCode.trim(),
+      message: typeof error?.publicMessage === 'string' && error.publicMessage.trim()
+        ? error.publicMessage.trim()
+        : fallbackMessage,
+    };
+  }
+
+  if (normalizedMessage.includes('missing authorization header')) {
+    return {
+      statusCode: 401,
+      errorCode: 'OURA_AUTH_REQUIRED',
+      message: 'Sign in to PulseCheck to keep using Oura.',
+    };
+  }
+
+  if (normalizedMessage.includes('request body must be valid json')) {
+    return {
+      statusCode: 400,
+      errorCode: 'OURA_INVALID_REQUEST',
+      message: 'This Oura request was missing some details. Please try again.',
+    };
+  }
+
+  if (
+    normalizedMessage.includes('missing oura_client_id')
+    || normalizedMessage.includes('missing oura_client_secret')
+    || normalizedMessage.includes('environment variables')
+  ) {
+    return {
+      statusCode: 500,
+      errorCode: 'OURA_CONFIG_UNAVAILABLE',
+      message: 'The Oura connection is unavailable right now.',
+    };
+  }
+
+  if (normalizedMessage.includes('token exchange failed')) {
+    return {
+      statusCode: 502,
+      errorCode: 'OURA_CALLBACK_FAILED',
+      message: 'We could not finish the Oura connection right now.',
+    };
+  }
+
+  if (normalizedMessage.includes('refresh oura access token')) {
+    return {
+      statusCode: 502,
+      errorCode: 'OURA_SYNC_FAILED',
+      message: 'We could not refresh your Oura recovery data right now.',
+    };
+  }
+
+  if (normalizedMessage.includes('revoke failed')) {
+    return {
+      statusCode: 502,
+      errorCode: 'OURA_DISCONNECT_FAILED',
+      message: 'We could not disconnect Oura right now.',
+    };
+  }
+
+  if (normalizedMessage.includes('connection request') && normalizedMessage.includes('expired')) {
+    return {
+      statusCode: 400,
+      errorCode: 'OURA_CALLBACK_EXPIRED',
+      message: 'This Oura connection request expired. Start the connection again.',
+    };
+  }
+
+  if (normalizedMessage.includes('connection request') && normalizedMessage.includes('not found')) {
+    return {
+      statusCode: 400,
+      errorCode: 'OURA_CALLBACK_INVALID_STATE',
+      message: 'This Oura connection request is no longer active.',
+    };
+  }
+
+  if (normalizedMessage.includes('initializeapp') || normalizedMessage.includes('firebase app')) {
+    return {
+      statusCode: 503,
+      errorCode: 'OURA_FIREBASE_NOT_READY',
+      message: fallbackMessage,
+    };
+  }
+
+  return {
+    statusCode,
+    errorCode: fallbackCode,
+    message: typeof error?.publicMessage === 'string' && error.publicMessage.trim()
+      ? error.publicMessage.trim()
+      : fallbackMessage,
+  };
+}
+
+function buildOuraErrorResponse(error, fallback) {
+  const resolved = normalizeOuraError(error, fallback);
+  return {
+    statusCode: resolved.statusCode,
+    headers: RESPONSE_HEADERS,
+    body: JSON.stringify({
+      error: resolved.message,
+      errorCode: resolved.errorCode,
+    }),
+  };
+}
+
 function getQueryParams(event) {
   return event?.queryStringParameters || {};
 }
@@ -295,6 +409,7 @@ module.exports = {
   appendQueryParams,
   buildAuthorizeUrl,
   buildConnectionDocId,
+  buildOuraErrorResponse,
   buildStateToken,
   createError,
   exchangeCodeForToken,
@@ -308,6 +423,7 @@ module.exports = {
   redirectHtml,
   revokeAccessToken,
   sanitizeReturnTo,
+  normalizeOuraError,
   toConnectionStatus,
   verifyAuth,
 };
