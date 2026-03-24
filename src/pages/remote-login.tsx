@@ -16,16 +16,47 @@ const RemoteLogin: React.FC = () => {
   useEffect(() => {
     const handleRemoteLogin = async () => {
       try {
-        const { token, userId, email } = router.query;
+        const { token, userId, email, next } = router.query;
+        const nextPath = typeof next === 'string' && next.startsWith('/') ? next : '/';
 
-        if (!token || !userId || !email) {
-          throw new Error('Missing required parameters');
+        if (!token || typeof token !== 'string') {
+          throw new Error('Missing required token parameter');
         }
 
-        setUserInfo({ id: userId as string, email: email as string });
+        let customToken = token;
+        let resolvedUserId = typeof userId === 'string' ? userId : '';
+        let resolvedEmail = typeof email === 'string' ? email : '';
+
+        if (!resolvedUserId || !resolvedEmail) {
+          try {
+            const response = await fetch('/.netlify/functions/consume-remote-login-token', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ token }),
+            });
+
+            if (response.ok) {
+              const payload = await response.json();
+              customToken = payload.customToken;
+              resolvedUserId = payload.user?.id || '';
+              resolvedEmail = payload.user?.email || '';
+            }
+          } catch (consumeError) {
+            console.warn('[RemoteLogin] Remote-login token consume fallback unavailable, trying direct Firebase custom-token sign-in.', consumeError);
+          }
+        }
+
+        if (resolvedUserId || resolvedEmail) {
+          setUserInfo({
+            id: resolvedUserId,
+            email: resolvedEmail,
+          });
+        }
 
         // Sign in with the custom token
-        const userCredential = await signInWithCustomToken(auth, token as string);
+        const userCredential = await signInWithCustomToken(auth, customToken);
         const user = userCredential.user;
 
         console.log('[RemoteLogin] Successfully authenticated as:', {
@@ -35,11 +66,11 @@ const RemoteLogin: React.FC = () => {
         });
 
         setStatus('success');
-        setMessage(`Successfully logged in as ${email}`);
+        setMessage(`Successfully logged in as ${resolvedEmail || user.email || user.uid}`);
 
         // Redirect to web app after a short delay
         setTimeout(() => {
-          router.push('/');
+          router.push(nextPath);
         }, 2000);
 
       } catch (error) {

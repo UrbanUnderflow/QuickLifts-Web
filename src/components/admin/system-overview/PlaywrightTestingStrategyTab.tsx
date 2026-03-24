@@ -11,7 +11,8 @@ const POSITION_ROWS = [
 
 const COMMAND_ROWS = [
   ['Install browser', '`npm run test:e2e:install`', 'Installs Chromium for Playwright.'],
-  ['Capture admin auth state', '`npm run test:e2e:auth`', 'Opens a browser, lets an admin log in, and saves `.playwright/admin-storage-state.json`.'],
+  ['Check machine bootstrap readiness', '`npm run test:e2e:bootstrap:check`', 'Verifies local dev Firebase env, Secret Manager access, bootstrap payload validity, and Firebase custom-token minting before attempting auth capture.'],
+  ['Capture admin auth state', '`npm run test:e2e:auth`', 'Default behavior opens a browser for manual admin login; when Secret Manager bootstrap env is present it mints a fresh admin session automatically and saves `.playwright/admin-storage-state.json`.'],
   ['Grant dev admin from saved auth', '`npm run test:e2e:grant-admin`', 'Utility for local/dev admin bootstrap when needed.'],
   ['Run read-only smoke coverage', '`npm run test:e2e:smoke`', 'Runs only tests tagged `@smoke`, keeping the default pass on route/render validation without mutation paths.'],
   ['Run full PulseCheck regression', '`npm run test:e2e:pulsecheck:full`', 'Runs the onboarding/workspace suite and athlete-journey suite together for the full PulseCheck regression pass.'],
@@ -23,7 +24,11 @@ const COMMAND_ROWS = [
 
 const ENV_ROWS = [
   ['`PLAYWRIGHT_STORAGE_STATE`', 'Path to saved authenticated browser state', 'Lets suites reuse admin login instead of re-authing every run.'],
-  ['`PLAYWRIGHT_REMOTE_LOGIN_TOKEN`', 'Remote-login token fallback', 'Alternative auth path when storage state is not used.'],
+  ['`PLAYWRIGHT_REMOTE_LOGIN_TOKEN`', 'Direct custom-token fallback', 'Useful when a Firebase custom token is already available and you want to skip the local browser login capture flow.'],
+  ['`PLAYWRIGHT_BOOTSTRAP_SECRET_NAME`', 'Secret Manager secret containing Playwright bootstrap JSON', 'Lets `npm run test:e2e:auth` mint a fresh local admin session on a new machine without copying `.playwright/admin-storage-state.json`.'],
+  ['`PLAYWRIGHT_BOOTSTRAP_JSON`', 'Inline JSON override for the same bootstrap payload', 'Useful for quick local validation without creating a Google Cloud secret first.'],
+  ['`GOOGLE_SECRET_MANAGER_PROJECT_ID`', 'Google Cloud project that stores the bootstrap secret', 'Required when the local machine can authenticate to GCP but the project id is not already implicit in the runtime credentials.'],
+  ['`GCP_SECRET_MANAGER_SERVICE_ACCOUNT_JSON`', 'Optional inline service-account JSON for Secret Manager access', 'Use this only when ADC is unavailable; otherwise prefer application-default credentials on the machine.'],
   ['`PLAYWRIGHT_ALLOW_WRITE_TESTS=true`', 'Enables mutation paths', 'Required before suites are allowed to create/revoke invites or publish artifacts.'],
   ['`PLAYWRIGHT_E2E_NAMESPACE`', 'Namespace prefix for seeded fixture ids', 'Keeps dev-db write records identifiable and lets cleanup helpers remove the exact test namespace afterward.'],
   ['`PLAYWRIGHT_PULSECHECK_ORG_ID`', 'PulseCheck organization id under test', 'Required for team-specific PulseCheck onboarding/workspace coverage.'],
@@ -72,13 +77,18 @@ const MANUAL_ROWS = [
 
 const RUN_STEPS = [
   {
-    title: 'Capture authenticated admin state once',
-    body: 'Run the auth capture command, sign in as an admin, and save the reusable browser session to `.playwright/admin-storage-state.json`.',
+    title: 'Bootstrap local admin auth',
+    body: 'Run `npm run test:e2e:auth`. With no bootstrap env it opens the browser for manual login; with Secret Manager bootstrap env it mints a fresh admin session automatically and still writes `.playwright/admin-storage-state.json` locally.',
     owner: 'Local operator',
   },
   {
-    title: 'Provide environment-target ids',
-    body: 'Set the PulseCheck org id and team id environment variables so the suites target the real container under test.',
+    title: 'Source the generated helper exports when available',
+    body: 'If the bootstrap secret includes org/team ids or namespace values, the auth command also writes `.playwright/bootstrap.env`; source it before running suites so the machine picks up the right state path and fixture ids.',
+    owner: 'Local operator',
+  },
+  {
+    title: 'Provide or confirm environment-target ids',
+    body: 'Set or confirm the PulseCheck org id and team id environment variables so the suites target the real container under test.',
     owner: 'Local operator',
   },
   {
@@ -104,8 +114,8 @@ const PlaywrightTestingStrategyTab: React.FC = () => {
       <DocHeader
         eyebrow="Playwright Testing"
         title="Playwright Testing Strategy"
-        version="Version 1.0 | March 11, 2026"
-        summary="Operational testing artifact for how this repo uses Playwright for authenticated UI regression coverage, safe write-path testing, and PulseCheck onboarding/workspace validation. This page defines the harness model, commands, environment variables, current suites, and where manual QA still matters."
+        version="Version 1.1 | March 23, 2026"
+        summary="Operational testing artifact for how this repo uses Playwright for authenticated UI regression coverage, safe write-path testing, and PulseCheck onboarding/workspace validation. This page defines the harness model, commands, environment variables, cross-machine bootstrap strategy, current suites, and where manual QA still matters."
         highlights={[
           {
             title: 'Use The Existing Harness',
@@ -118,6 +128,10 @@ const PlaywrightTestingStrategyTab: React.FC = () => {
           {
             title: 'Write Paths Stay Intentional',
             body: 'Mutating tests should remain opt-in through environment flags so local and CI runs do not accidentally create or publish records.',
+          },
+          {
+            title: 'Bootstrap Fresh Machines, Do Not Share Browser Snapshots',
+            body: 'Cross-machine setup should use Secret Manager-backed bootstrap config to mint a fresh local storage state, not copy `.playwright/admin-storage-state.json` between machines.',
           },
         ]}
       />
@@ -141,6 +155,127 @@ const PlaywrightTestingStrategyTab: React.FC = () => {
         <DataTable columns={['Variable', 'Purpose', 'Why It Matters']} rows={ENV_ROWS} />
       </SectionBlock>
 
+      <SectionBlock icon={KeyRound} title="Cross-Machine Bootstrap">
+        <CardGrid columns="md:grid-cols-2">
+          <InfoCard
+            title="Secret Payload Shape"
+            accent="green"
+            body={
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
+                {`{
+  "adminEmail": "admin@example.com",
+  "nextPath": "/admin/systemOverview#variant-registry",
+  "pulseCheckOrganizationId": "<org-id>",
+  "pulseCheckTeamId": "<team-id>",
+  "namespace": "e2e-pulsecheck"
+}`}
+              </pre>
+            }
+          />
+          <InfoCard
+            title="Fresh Machine Setup"
+            accent="blue"
+            body={
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
+                {`export GOOGLE_SECRET_MANAGER_PROJECT_ID=<gcp-project-id>
+export PLAYWRIGHT_BOOTSTRAP_SECRET_NAME=PLAYWRIGHT_E2E_ADMIN_BOOTSTRAP
+npm run test:e2e:install
+npm run test:e2e:bootstrap:check
+npm run test:e2e:auth
+source .playwright/bootstrap.env
+npm run test:e2e:smoke`}
+              </pre>
+            }
+          />
+          <InfoCard
+            title="Bootstrap Rules"
+            accent="amber"
+            body={<BulletList items={[
+              'Store a small bootstrap JSON secret in Google Cloud Secret Manager, not the raw `.playwright/admin-storage-state.json` file.',
+              'The machine still needs GCP access to read the secret. Prefer ADC; only fall back to inline `GCP_SECRET_MANAGER_SERVICE_ACCOUNT_JSON` when necessary.',
+              '`npm run test:e2e:auth` now mints a fresh Firebase custom-token session from the bootstrap config and writes `.playwright/admin-storage-state.json` locally.',
+              'If org/team ids are included in the secret, the command also writes `.playwright/bootstrap.env` so the machine can source consistent suite env vars.',
+              'Use `docs/testing/local-machine-setup.md` as the central handoff runbook for another machine.',
+            ]} />}
+          />
+          <InfoCard
+            title="Copy/Paste Setup Prompt"
+            accent="purple"
+            body={
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
+                {`Set up Playwright E2E for this repo on this machine using the Secret Manager bootstrap flow already built into the project. Work in QuickLifts-Web. Verify Playwright browsers are installed, confirm the machine can read Google Cloud Secret Manager, export GOOGLE_SECRET_MANAGER_PROJECT_ID and PLAYWRIGHT_BOOTSTRAP_SECRET_NAME if they are missing, run npm run test:e2e:auth, source .playwright/bootstrap.env if it exists, then run a safe smoke pass. Do not copy a storage-state file from another machine. If the bootstrap secret is missing, tell me the exact JSON shape to create.`}
+              </pre>
+            }
+          />
+        </CardGrid>
+      </SectionBlock>
+
+      <SectionBlock icon={ShieldCheck} title="GCP Access Setup">
+        <CardGrid columns="md:grid-cols-2">
+          <InfoCard
+            title="Required Access"
+            accent="green"
+            body={<BulletList items={[
+              'Grant the machine identity access to the Secret Manager secret that stores the Playwright bootstrap JSON.',
+              'Preferred IAM scope: `roles/secretmanager.secretAccessor` on the single secret, not the whole project.',
+              'The machine also still needs working Firebase Admin credentials for custom-token minting; Secret Manager access alone is not enough.',
+              'Do not copy service-account JSON or Playwright storage-state files into the repo.',
+            ]} />}
+          />
+          <InfoCard
+            title="Preferred Machine Auth"
+            accent="blue"
+            body={
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
+                {`gcloud auth login
+gcloud auth application-default login
+gcloud config set project <gcp-project-id>
+export GOOGLE_SECRET_MANAGER_PROJECT_ID=<gcp-project-id>
+export PLAYWRIGHT_BOOTSTRAP_SECRET_NAME=PLAYWRIGHT_E2E_ADMIN_BOOTSTRAP
+gcloud secrets versions access latest --secret=$PLAYWRIGHT_BOOTSTRAP_SECRET_NAME --project=$GOOGLE_SECRET_MANAGER_PROJECT_ID`}
+              </pre>
+            }
+          />
+          <InfoCard
+            title="Fallback Env Keys"
+            accent="amber"
+            body={
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
+                {`GOOGLE_SECRET_MANAGER_PROJECT_ID
+PLAYWRIGHT_BOOTSTRAP_SECRET_NAME
+GOOGLE_APPLICATION_CREDENTIALS
+GCP_SECRET_MANAGER_SERVICE_ACCOUNT_JSON
+FIREBASE_CLIENT_EMAIL
+FIREBASE_SECRET_KEY
+DEV_FIREBASE_CLIENT_EMAIL
+DEV_FIREBASE_SECRET_KEY`}
+              </pre>
+            }
+          />
+          <InfoCard
+            title="Access Verification"
+            accent="purple"
+            body={
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
+                {`gcloud secrets versions access latest --secret=$PLAYWRIGHT_BOOTSTRAP_SECRET_NAME --project=$GOOGLE_SECRET_MANAGER_PROJECT_ID
+npm run test:e2e:auth
+source .playwright/bootstrap.env
+npm run test:e2e:smoke -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts`}
+              </pre>
+            }
+          />
+          <InfoCard
+            title="Prompt For Another Machine"
+            accent="red"
+            body={
+              <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
+                {`Use docs/testing/local-machine-setup.md and the Playwright Testing Strategy doc in System Overview, especially the "Cross-Machine Bootstrap" and "GCP Access Setup" sections. Set up Google Cloud access for this machine with application-default credentials, verify the machine can read the Playwright bootstrap secret from Secret Manager, export GOOGLE_SECRET_MANAGER_PROJECT_ID and PLAYWRIGHT_BOOTSTRAP_SECRET_NAME, run npm run test:e2e:bootstrap:check, then npm run test:e2e:auth, source .playwright/bootstrap.env if it exists, and finish with a safe smoke run. If access fails, report exactly which credential, IAM role, env key, or secret is missing.`}
+              </pre>
+            }
+          />
+        </CardGrid>
+      </SectionBlock>
+
       <SectionBlock icon={TestTube2} title="Current Suite Inventory">
         <DataTable columns={['Suite', 'Path', 'Coverage']} rows={SUITE_ROWS} />
       </SectionBlock>
@@ -157,9 +292,7 @@ const PlaywrightTestingStrategyTab: React.FC = () => {
             accent="blue"
             body={
               <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
-                {`PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json
-PLAYWRIGHT_PULSECHECK_ORG_ID=<org-id>
-PLAYWRIGHT_PULSECHECK_TEAM_ID=<team-id>
+                {`source .playwright/bootstrap.env
 npm run test:e2e:smoke -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts`}
               </pre>
             }
@@ -169,9 +302,7 @@ npm run test:e2e:smoke -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts`}
             accent="amber"
             body={
               <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
-                {`PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json
-PLAYWRIGHT_PULSECHECK_ORG_ID=<org-id>
-PLAYWRIGHT_PULSECHECK_TEAM_ID=<team-id>
+                {`source .playwright/bootstrap.env
 PLAYWRIGHT_ALLOW_WRITE_TESTS=true
 npm run test:e2e -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts`}
               </pre>
@@ -182,9 +313,7 @@ npm run test:e2e -- tests/e2e/pulsecheck-onboarding-workspace.spec.ts`}
             accent="green"
             body={
               <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
-                {`PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json
-PLAYWRIGHT_PULSECHECK_ORG_ID=<org-id>
-PLAYWRIGHT_PULSECHECK_TEAM_ID=<team-id>
+                {`source .playwright/bootstrap.env
 PLAYWRIGHT_ALLOW_WRITE_TESTS=true
 npm run test:e2e -- tests/e2e/pulsecheck-athlete-journey.spec.ts`}
               </pre>
@@ -195,9 +324,7 @@ npm run test:e2e -- tests/e2e/pulsecheck-athlete-journey.spec.ts`}
             accent="amber"
             body={
               <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
-                {`PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json
-PLAYWRIGHT_PULSECHECK_ORG_ID=<org-id>
-PLAYWRIGHT_PULSECHECK_TEAM_ID=<team-id>
+                {`source .playwright/bootstrap.env
 PLAYWRIGHT_ALLOW_WRITE_TESTS=true
 npm run test:e2e:pulsecheck:full`}
               </pre>
@@ -208,10 +335,7 @@ npm run test:e2e:pulsecheck:full`}
             accent="red"
             body={
               <pre className="overflow-x-auto whitespace-pre-wrap rounded-xl bg-black/30 p-3 text-xs text-zinc-200">
-                {`PLAYWRIGHT_STORAGE_STATE=/absolute/path/to/admin-storage-state.json
-PLAYWRIGHT_PULSECHECK_ORG_ID=<org-id>
-PLAYWRIGHT_PULSECHECK_TEAM_ID=<team-id>
-PLAYWRIGHT_E2E_NAMESPACE=e2e-pulsecheck
+                {`source .playwright/bootstrap.env
 PLAYWRIGHT_ALLOW_WRITE_TESTS=true
 npm run test:e2e:pulsecheck:write`}
               </pre>

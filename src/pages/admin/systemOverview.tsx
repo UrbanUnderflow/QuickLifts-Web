@@ -538,6 +538,7 @@ const SystemOverviewPage: React.FC = () => {
       ),
     [activeSectionId],
   );
+  const isPlaywrightSystem = activeSystemId === "playwright";
 
   // Read initial section from URL hash if present
   useEffect(() => {
@@ -1837,6 +1838,36 @@ const SystemOverviewPage: React.FC = () => {
               )
             ) : null}
           </section>
+
+          {isPlaywrightSystem ? (
+            <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-300/80">
+                    Machine Setup
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-white">
+                    New machine handoff lives in the Playwright docs and local setup runbook.
+                  </p>
+                  <p className="mt-1 text-xs text-emerald-50/80">
+                    Start with <code className="rounded bg-black/20 px-1.5 py-0.5 text-[11px] text-emerald-100">docs/testing/local-machine-setup.md</code>, then run <code className="rounded bg-black/20 px-1.5 py-0.5 text-[11px] text-emerald-100">npm run test:e2e:bootstrap:check</code> before auth capture.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {activeSectionId !== "playwright-testing-strategy" ? (
+                    <button
+                      type="button"
+                      onClick={() => handleSectionChange("playwright-testing-strategy")}
+                      className="inline-flex items-center gap-2 rounded-xl border border-emerald-300/30 bg-black/20 px-4 py-2 text-sm font-medium text-emerald-50 transition-colors hover:border-emerald-200/60 hover:bg-black/30"
+                    >
+                      <TestTube2 className="h-4 w-4" />
+                      Open Playwright Strategy
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           <main className="grid grid-cols-1 xl:grid-cols-[260px_minmax(0,1fr)] gap-6 items-start min-w-0">
             <SectionNav
