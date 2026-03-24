@@ -3,7 +3,6 @@ const path = require('path');
 const readline = require('readline');
 const { chromium } = require('@playwright/test');
 const { GoogleAuth, JWT } = require('google-auth-library');
-const { getFirebaseAdminApp } = require('../netlify/functions/config/firebase');
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
 const outputPath = process.env.PLAYWRIGHT_STORAGE_STATE
@@ -15,6 +14,44 @@ const bootstrapJson = process.env.PLAYWRIGHT_BOOTSTRAP_JSON || '';
 const bootstrapEnvPath = path.resolve(process.cwd(), '.playwright/bootstrap.env');
 const bootstrapDefaultNextPath = '/admin/systemOverview#variant-registry';
 const secretManagerScope = 'https://www.googleapis.com/auth/cloud-platform';
+
+function parseEnvValue(rawValue) {
+  let value = rawValue.trim();
+
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1);
+  }
+
+  return value.replace(/\\n/g, '\n');
+}
+
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return;
+  }
+
+  const content = fs.readFileSync(filePath, 'utf8');
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+
+    const normalized = line.startsWith('export ') ? line.slice(7).trim() : line;
+    const separatorIndex = normalized.indexOf('=');
+    if (separatorIndex <= 0) continue;
+
+    const key = normalized.slice(0, separatorIndex).trim();
+    const value = parseEnvValue(normalized.slice(separatorIndex + 1));
+    if (!(key in process.env)) {
+      process.env[key] = value;
+    }
+  }
+}
+
+loadEnvFile(path.resolve(process.cwd(), '.env.local'));
+loadEnvFile(bootstrapEnvPath);
 
 function ensureDir(filePath) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -274,6 +311,7 @@ async function loadBootstrapConfig() {
 }
 
 async function buildBootstrapCustomToken(bootstrapConfig) {
+  const { getFirebaseAdminApp } = require('../netlify/functions/config/firebase');
   const request = {
     headers: {
       origin: baseURL,
